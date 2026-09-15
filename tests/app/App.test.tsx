@@ -81,14 +81,6 @@ function findByTestIdPrefix(renderer: ReturnType<typeof createTestRoot>['rendere
 
 const waitForAppUpdate = () => new Promise((resolve) => setTimeout(resolve, 50))
 
-async function submitRegistration(renderer: ReturnType<typeof createTestRoot>['renderer']) {
-  const app = await connectTest(renderer)
-  await app.getByTestId('register-project-button').click()
-  await waitForAppUpdate()
-  renderer.flush()
-  await app.close()
-}
-
 describeNative('Raphie App', () => {
   it('shows the empty-state hint with no registered projects', () => {
     const { render, renderer } = createTestRoot()
@@ -111,7 +103,6 @@ describeNative('Raphie App', () => {
 
     await waitForAppUpdate()
     renderer.flush()
-    await submitRegistration(renderer)
 
     expect(renderer.getPaintedText().join('\n')).toContain(projectFolder)
   })
@@ -129,8 +120,6 @@ describeNative('Raphie App', () => {
 
     await waitForAppUpdate()
     renderer.flush()
-    await submitRegistration(renderer)
-    await submitRegistration(renderer)
 
     const painted = renderer.getPaintedText().join('\n')
     expect(painted).toContain(projectFolder)
@@ -138,50 +127,6 @@ describeNative('Raphie App', () => {
     expect((await run(listProjects)).map((project) => project.folderPath)).toEqual([projectFolder, secondFolder])
 
     await removeDir(secondFolder)
-  })
-
-  it('does not persist a duplicate Project when registration is submitted twice', async () => {
-    const { render, renderer } = createTestRoot()
-    render(<App />)
-    renderer.flush()
-
-    const sidebar = renderer.findByTestId('sidebar')!
-    const sidebarBounds = renderer.getElementBounds(sidebar.id)!
-    renderer.nativeSimulateFileDrop(sidebarBounds.x + 5, sidebarBounds.y + 5, [projectFolder])
-    await waitForAppUpdate()
-    renderer.flush()
-
-    const button = renderer.findByTestId('register-project-button')!
-    const buttonBounds = renderer.getElementBounds(button.id)!
-    renderer.nativeSimulateClick(buttonBounds.x + 5, buttonBounds.y + 5)
-    renderer.nativeSimulateClick(buttonBounds.x + 5, buttonBounds.y + 5)
-    await waitForAppUpdate()
-    renderer.flush()
-
-    expect(await run(listProjects)).toHaveLength(1)
-  })
-
-  it('lets the user set a Project display name before registration', async () => {
-    const { render, renderer } = createTestRoot()
-    render(<App />)
-    renderer.flush()
-
-    const sidebar = renderer.findByTestId('sidebar')!
-    const bounds = renderer.getElementBounds(sidebar.id)!
-    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
-
-    await waitForAppUpdate()
-    renderer.flush()
-
-    const app = await connectTest(renderer)
-    await app.getByTestId('registration-name').fill('Personal Raphie')
-    await app.getByTestId('register-project-button').click()
-
-    await waitForAppUpdate()
-    renderer.flush()
-
-    expect(renderer.getPaintedText().join('\n')).toContain('Personal Raphie')
-    await app.close()
   })
 
   it('shows the selected project’s name and location in the main pane and top bar', async () => {
@@ -194,7 +139,6 @@ describeNative('Raphie App', () => {
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
     await waitForAppUpdate()
     renderer.flush()
-    await submitRegistration(renderer)
 
     expect(renderer.getPaintedText().join('\n')).toContain('Select a project')
 
@@ -214,6 +158,56 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('title-bar-project-name')).toBeDefined()
   })
 
+  it('removes the selected Project and copies its Central env into the project folder', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    const envContent = 'FROM_CENTRAL=1\n'
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, envContent)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('remove-project-button').click()
+    await app.getByTestId('confirm-remove-project').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.getPaintedText().join('\n')).toContain('Select a project')
+    expect(renderer.getPaintedText().join('\n')).not.toContain(projectFolder)
+    expect(await run(listProjects)).toEqual([])
+    expect(
+      await runFs(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem
+          return {
+            centralExists: yield* fs.exists(project!.centralEnvFile),
+            projectEnv: yield* fs.readFileString(`${projectFolder}/.env`),
+          }
+        }),
+      ),
+    ).toEqual({ centralExists: false, projectEnv: envContent })
+
+    await app.close()
+  })
+
   it('filters the project list by name or folder path', async () => {
     const secondFolder = await makeTempDir('raphie-app-second-')
 
@@ -226,8 +220,6 @@ describeNative('Raphie App', () => {
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder, secondFolder])
     await waitForAppUpdate()
     renderer.flush()
-    await submitRegistration(renderer)
-    await submitRegistration(renderer)
 
     const app = await connectTest(renderer)
     const firstName = projectFolder.split('/').pop()!
@@ -340,7 +332,6 @@ describeNative('Raphie App', () => {
 
       await waitForAppUpdate()
       renderer.flush()
-      await submitRegistration(renderer)
 
       expect(renderer.getPaintedText().join('\n')).toContain(projectFolder)
     }))

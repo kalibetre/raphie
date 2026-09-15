@@ -32,31 +32,6 @@ describe('registerProject', () => {
       }),
     ))
 
-  it('accepts a custom display name instead of the folder basename', () =>
-    withProjectFixtures(({ projectFolder }) =>
-      Effect.gen(function* () {
-        const project = yield* registerProject({ folderPath: projectFolder, name: 'Custom Name' })
-        expect(project.name).toBe('Custom Name')
-      }),
-    ))
-
-  it('trims whitespace from a custom display name', () =>
-    withProjectFixtures(({ projectFolder }) =>
-      Effect.gen(function* () {
-        const project = yield* registerProject({ folderPath: projectFolder, name: '  Custom Name  ' })
-        expect(project.name).toBe('Custom Name')
-      }),
-    ))
-
-  it('falls back to the folder basename when the given name is blank', () =>
-    withProjectFixtures(({ projectFolder }) =>
-      Effect.gen(function* () {
-        const path = yield* Path.Path
-        const project = yield* registerProject({ folderPath: projectFolder, name: '   ' })
-        expect(project.name).toBe(path.basename(projectFolder))
-      }),
-    ))
-
   it('registers a plain non-git folder', () =>
     withProjectFixtures(({ projectFolder }) =>
       Effect.gen(function* () {

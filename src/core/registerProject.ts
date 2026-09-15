@@ -7,7 +7,6 @@ import * as ProjectsFile from './ProjectsFile.ts'
 
 export const registerProject = (input: {
   readonly folderPath: string
-  readonly name?: string
 }) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
@@ -15,7 +14,7 @@ export const registerProject = (input: {
     const home = yield* AppHome
 
     const id = generateProjectId()
-    const name = input.name?.trim() || path.basename(input.folderPath)
+    const name = path.basename(input.folderPath)
     const centralEnvFile = path.join(home, id, '.env')
 
     yield* fs.makeDirectory(path.dirname(centralEnvFile), { recursive: true })
