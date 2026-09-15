@@ -7,6 +7,7 @@
     "dev": "bun --hot app.tsx",
     "build": "bun build --compile app.tsx --outfile dist/raphie",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@types/bun": "^1.2.0",
     "@types/react": "^19.2.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "typescript": "^5.3.0",
     "vitest": "^4.0.18"
   }

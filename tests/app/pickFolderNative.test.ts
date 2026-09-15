@@ -34,4 +34,12 @@ describe('pickFolderNative', () => {
 
     expect(await pickFolderNative()).toBeNull()
   })
+
+  it('returns null for a blank result instead of an empty string', async () => {
+    ;(globalThis as { Bun?: unknown }).Bun = {
+      $: () => ({ text: () => Promise.resolve('   \n') }),
+    }
+
+    expect(await pickFolderNative()).toBeNull()
+  })
 })

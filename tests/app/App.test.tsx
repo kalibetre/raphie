@@ -50,6 +50,19 @@ afterEach(async () => {
   await removeDir(projectFolder)
 })
 
+/** Stubs the global Bun.$ so pickFolderNative resolves `result` without a real osascript dialog. */
+async function withStubbedPicker<A>(result: string | Error, fn: () => Promise<A> | A): Promise<A> {
+  const originalBun = (globalThis as { Bun?: unknown }).Bun
+  ;(globalThis as { Bun?: unknown }).Bun = {
+    $: () => ({ text: () => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)) }),
+  }
+  try {
+    return await fn()
+  } finally {
+    ;(globalThis as { Bun?: unknown }).Bun = originalBun
+  }
+}
+
 /** No wildcard lookup on the test renderer, so walk the retained tree by hand. */
 function findByTestIdPrefix(renderer: ReturnType<typeof createTestRoot>['renderer'], prefix: string) {
   const stack = [renderer.getRoot()]
@@ -254,5 +267,50 @@ describeNative('Raphie App', () => {
 
     const mainPaneRestored = renderer.getElementBounds(renderer.findByTestId('main-pane')!.id)!
     expect(mainPaneRestored.width).toBe(mainPaneBefore.width)
+  })
+
+  it('registers the folder chosen through "Add Project" (native picker)', async () =>
+    withStubbedPicker(`${projectFolder}\n`, async () => {
+      const { render, renderer } = createTestRoot()
+      render(<App />)
+      renderer.flush()
+
+      const addProjectBounds = renderer.getElementBounds(renderer.findByTestId('add-project-button')!.id)!
+      renderer.nativeSimulateClick(addProjectBounds.x + 5, addProjectBounds.y + 5)
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      renderer.flush()
+
+      expect(renderer.getPaintedText().join('\n')).toContain(projectFolder)
+    }))
+
+  it('adds no Project when "Add Project" is cancelled', async () =>
+    withStubbedPicker(new Error('user cancelled'), async () => {
+      const { render, renderer } = createTestRoot()
+      render(<App />)
+      renderer.flush()
+
+      const addProjectBounds = renderer.getElementBounds(renderer.findByTestId('add-project-button')!.id)!
+      renderer.nativeSimulateClick(addProjectBounds.x + 5, addProjectBounds.y + 5)
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      renderer.flush()
+
+      expect(renderer.getPaintedText().join('\n')).toContain('Drag a project folder here')
+    }))
+
+  it('ignores a file-drop event with no paths', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [])
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    renderer.flush()
+
+    expect(renderer.getPaintedText().join('\n')).toContain('Drag a project folder here')
   })
 })
