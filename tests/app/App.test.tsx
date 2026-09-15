@@ -425,6 +425,48 @@ describeNative('Raphie App', () => {
     expect(painted.filter((text) => text === 'Duplicate')).toHaveLength(2)
   })
 
+  it('searches EnvVars by key or value without changing action targets', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'FIRST=one\nSECOND=two\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-search').fill('TWO')
+    renderer.flush()
+
+    expect(renderer.findByTestId('envvar-row-FIRST')).toBeUndefined()
+    expect(renderer.findByTestId('envvar-row-SECOND')).toBeDefined()
+
+    await app.getByTestId('envvar-edit-SECOND').click()
+    renderer.flush()
+    const painted = renderer.getPaintedText().join('\n')
+    expect(painted).toContain('SECOND')
+    expect(painted).toContain('two')
+    await app.getByTestId('envvar-editor-close').click()
+    await app.close()
+  })
+
   it('cancels out of the remove-Project confirmation without removing anything', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)

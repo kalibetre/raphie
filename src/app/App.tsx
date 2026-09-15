@@ -47,6 +47,7 @@ export function App() {
   const [removalMode, setRemovalMode] = useState<ProjectRemovalMode>('copy')
   const [removalInFlight, setRemovalInFlight] = useState(false)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
+  const [envVarSearchQuery, setEnvVarSearchQuery] = useState('')
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   const [envVarEditor, setEnvVarEditor] = useState<EnvVarEditorState | null>(null)
   const [envVarSaveInFlight, setEnvVarSaveInFlight] = useState(false)
@@ -69,6 +70,7 @@ export function App() {
 
   useEffect(() => {
     setRevealedKeys(new Set())
+    setEnvVarSearchQuery('')
     setEnvVarEditor(null)
     setEnvVarDelete(null)
     if (!selectedCentralEnvFile) {
@@ -308,12 +310,14 @@ export function App() {
             envVars={envVars}
             revealedKeys={revealedKeys}
             duplicateKeys={duplicateKeys}
+            searchQuery={envVarSearchQuery}
             isRemoving={removeCandidateId === selectedProject?.id}
             removalMode={removalMode}
             removalInFlight={removalInFlight}
             onFileDrop={handleFileDrop}
             onToggleReveal={handleToggleReveal}
             onCopy={handleCopyEnvVar}
+            onSearchQueryChange={setEnvVarSearchQuery}
             onStartAdd={handleStartAddEnvVar}
             onEdit={handleStartEditEnvVar}
             onDelete={handleStartDeleteEnvVar}

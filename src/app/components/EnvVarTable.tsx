@@ -1,11 +1,13 @@
 import type { EnvVar } from '../../core/index.ts'
 import { ACTIONS_COLUMN_WIDTH, C, KEY_COLUMN_WIDTH } from '../theme.ts'
+import { filterEnvVars } from '../utils/filterEnvVars.ts'
 import { EnvVarRow } from './EnvVarRow.tsx'
 
 export function EnvVarTable({
   envVars,
   revealedKeys,
   duplicateKeys,
+  searchQuery,
   onToggleReveal,
   onCopy,
   onEdit,
@@ -14,6 +16,7 @@ export function EnvVarTable({
   envVars: EnvVar[]
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
+  searchQuery: string
   onToggleReveal: (key: string) => void
   onCopy: (envVar: EnvVar) => void
   onEdit: (index: number) => void
@@ -23,6 +26,16 @@ export function EnvVarTable({
     return (
       <text testId="envvar-empty-hint" style={{ fontSize: 12, color: C.ghost }}>
         No EnvVars in this Project's Central env file
+      </text>
+    )
+  }
+
+  const visibleEnvVars = filterEnvVars(envVars, searchQuery)
+
+  if (visibleEnvVars.length === 0) {
+    return (
+      <text testId="envvar-no-search-results" style={{ fontSize: 12, color: C.ghost }}>
+        No matching EnvVars
       </text>
     )
   }
@@ -58,14 +71,14 @@ export function EnvVarTable({
         <text style={{ fontSize: 11, color: C.secondary, flexGrow: 1 }}>Value</text>
         <div style={{ width: ACTIONS_COLUMN_WIDTH, flexShrink: 0 }} />
       </div>
-      {envVars.map((envVar, index) => (
+      {visibleEnvVars.map(({ envVar, index }, visibleIndex) => (
         <EnvVarRow
           key={`${envVar.key}-${index}`}
           envVar={envVar}
           index={index}
           revealed={revealedKeys.has(envVar.key)}
           isDuplicate={duplicateKeys.has(envVar.key)}
-          isLast={index === envVars.length - 1}
+          isLast={visibleIndex === visibleEnvVars.length - 1}
           onToggleReveal={() => onToggleReveal(envVar.key)}
           onCopy={() => onCopy(envVar)}
           onEdit={() => onEdit(index)}
