@@ -67,4 +67,33 @@ describe('removeProject', () => {
         expect(yield* removeProject('missing-project')).toBe(false)
       }),
     ))
+
+  it('succeeds in remove mode even when the project has no .env yet', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const project = yield* registerProject({ folderPath: projectFolder })
+        // No .env written to the project folder at all — removeIfPresent's
+        // "not a symlink and doesn't exist" branch.
+        expect(yield* removeProject(project.id, 'remove')).toBe(true)
+        expect(yield* listProjects).toEqual([])
+      }),
+    ))
+
+  it('skips copying into a Project folder that no longer exists', () =>
+    withProjectFixtures(() =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        // Unscoped, not the fixture's own `projectFolder` — this one gets
+        // deleted mid-test, and the fixture's scope finalizer would error
+        // trying to clean up a directory that's already gone.
+        const disappearingFolder = yield* fs.makeTempDirectory({ prefix: 'raphie-project-' })
+        const project = yield* registerProject({ folderPath: disappearingFolder })
+        yield* fs.writeFileString(project.centralEnvFile, 'FROM_CENTRAL=1\n')
+        yield* fs.remove(disappearingFolder, { recursive: true })
+
+        expect(yield* removeProject(project.id)).toBe(true)
+        expect(yield* fs.exists(project.centralEnvFile)).toBe(false)
+        expect(yield* listProjects).toEqual([])
+      }),
+    ))
 })
