@@ -32,8 +32,8 @@ const C = {
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 260
-const MIN_SIDEBAR_WIDTH = 180
-const MAX_SIDEBAR_WIDTH = 440
+export const MIN_SIDEBAR_WIDTH = 180
+export const MAX_SIDEBAR_WIDTH = 440
 const RESIZE_HANDLE_WIDTH = 4
 // 48, not a round 40: trafficLightY=17 plus the ~14px dot height centers on a
 // 48px-tall bar. This is also the exact height GPUIX's own chat.tsx example
@@ -48,7 +48,7 @@ const TITLEBAR_CLEARANCE = typeof process !== 'undefined' && process.platform ==
  * from 'bun'` so this file can still load under vitest, which has no `bun`
  * package in its module graph.
  */
-async function pickFolderNative(): Promise<string | null> {
+export async function pickFolderNative(): Promise<string | null> {
   if (typeof Bun === 'undefined') return null
   try {
     const output = await Bun.$`osascript -e 'POSIX path of (choose folder)'`.text()

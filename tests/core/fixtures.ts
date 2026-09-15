@@ -1,7 +1,7 @@
 import { FileSystem, Path } from '@effect/platform'
 import { BunContext } from '@effect/platform-bun'
 import { Effect, Layer, type Scope } from 'effect'
-import { AppHome } from '../AppHome.ts'
+import { AppHome } from '../../src/core/AppHome.ts'
 
 /**
  * Runs `test` against a real temp AppHome and a real temp Project folder,

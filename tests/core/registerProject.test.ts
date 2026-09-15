@@ -1,8 +1,8 @@
 import { FileSystem, Path } from '@effect/platform'
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
-import { registerProject } from './registerProject.ts'
-import { withProjectFixtures } from './test/fixtures.ts'
+import { registerProject } from '../../src/core/registerProject.ts'
+import { withProjectFixtures } from './fixtures.ts'
 
 describe('registerProject', () => {
   it('creates a Central env file with 0600 permissions', () =>
@@ -40,6 +40,23 @@ describe('registerProject', () => {
       }),
     ))
 
+  it('trims whitespace from a custom display name', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const project = yield* registerProject({ folderPath: projectFolder, name: '  Custom Name  ' })
+        expect(project.name).toBe('Custom Name')
+      }),
+    ))
+
+  it('falls back to the folder basename when the given name is blank', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path
+        const project = yield* registerProject({ folderPath: projectFolder, name: '   ' })
+        expect(project.name).toBe(path.basename(projectFolder))
+      }),
+    ))
+
   it('registers a plain non-git folder', () =>
     withProjectFixtures(({ projectFolder }) =>
       Effect.gen(function* () {
@@ -57,6 +74,35 @@ describe('registerProject', () => {
 
         const stored = JSON.parse(yield* fs.readFileString(path.join(home, 'projects.json')))
         expect(stored).toEqual([project])
+      }),
+    ))
+
+  it('appends to existing projects without clobbering them', () =>
+    withProjectFixtures(({ home, projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const path = yield* Path.Path
+        const other = yield* fs.makeTempDirectoryScoped({ prefix: 'raphie-project-' })
+
+        const first = yield* registerProject({ folderPath: projectFolder })
+        const second = yield* registerProject({ folderPath: other })
+
+        const stored = JSON.parse(yield* fs.readFileString(path.join(home, 'projects.json')))
+        expect(stored).toEqual([first, second])
+      }),
+    ))
+
+  it('gives each registration a distinct Project ID and Central env file', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const other = yield* fs.makeTempDirectoryScoped({ prefix: 'raphie-project-' })
+
+        const first = yield* registerProject({ folderPath: projectFolder })
+        const second = yield* registerProject({ folderPath: other })
+
+        expect(first.id).not.toBe(second.id)
+        expect(first.centralEnvFile).not.toBe(second.centralEnvFile)
       }),
     ))
 })

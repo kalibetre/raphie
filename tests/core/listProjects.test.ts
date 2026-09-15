@@ -1,9 +1,9 @@
 import { FileSystem } from '@effect/platform'
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
-import { listProjects } from './listProjects.ts'
-import { registerProject } from './registerProject.ts'
-import { withProjectFixtures } from './test/fixtures.ts'
+import { listProjects } from '../../src/core/listProjects.ts'
+import { registerProject } from '../../src/core/registerProject.ts'
+import { withProjectFixtures } from './fixtures.ts'
 
 describe('listProjects', () => {
   it('returns every registered project', () =>
