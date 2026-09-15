@@ -3,7 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { EnvVar, Project, ProjectRemovalMode } from '../core/index.ts'
 import { listEnvVars, listProjects, registerProject, removeProject, run } from '../core/index.ts'
 
+import iconCopy from '../../assets/icons/copy.svg' with { type: 'text' }
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
+import iconTriangleAlert from '../../assets/icons/triangle-alert.svg' with { type: 'text' }
+import iconX from '../../assets/icons/x.svg' with { type: 'text' }
 
 // Icon source: Lucide (via `lucide-static`, vendored per-icon into assets/icons/),
 // matching the icon set GPUIX's own example apps already standardize on.
@@ -11,6 +14,9 @@ import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text
 // into assets/icons/, then add it to this map — one place to keep icon usage uniform.
 const ICONS = {
   panelLeft: iconPanelLeft,
+  copy: iconCopy,
+  x: iconX,
+  triangleAlert: iconTriangleAlert,
 } as const
 
 function Icon({ name, size = 14, color }: { name: keyof typeof ICONS; size?: number; color: string }) {
@@ -29,7 +35,12 @@ const C = {
   ghost: '#5C5C5C',
   accent: '#E2795B',
   onAccent: '#17181C',
+  warning: '#D9A03D',
+  warningBg: '#D9A03D1A',
 }
+
+const KEY_COLUMN_WIDTH = 240
+const ACTIONS_COLUMN_WIDTH = 28
 
 const DEFAULT_SIDEBAR_WIDTH = 260
 export const MIN_SIDEBAR_WIDTH = 180
@@ -136,6 +147,48 @@ function ResizeHandle({ width, onResize }: { width: number; onResize: (width: nu
   )
 }
 
+function Toast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div
+      testId="toast"
+      style={{
+        position: 'absolute',
+        right: 16,
+        bottom: 16,
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingLeft: 12,
+        paddingRight: 8,
+        height: 36,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: C.border,
+        backgroundColor: C.raised,
+      }}
+    >
+      <text style={{ fontSize: 12, color: C.text }}>{message}</text>
+      <div
+        testId="toast-dismiss"
+        onClick={onDismiss}
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: 5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          hover: { backgroundColor: C.overlay },
+        }}
+      >
+        <Icon name="x" size={11} color={C.secondary} />
+      </div>
+    </div>
+  )
+}
+
 function ProjectRow({
   project,
   selected,
@@ -173,16 +226,41 @@ function ProjectRow({
   )
 }
 
+function DuplicateBadge() {
+  return (
+    <div
+      style={{
+        flexShrink: 0,
+        height: 16,
+        paddingLeft: 6,
+        paddingRight: 6,
+        borderRadius: 4,
+        display: 'flex',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: C.warning,
+        backgroundColor: C.warningBg,
+      }}
+    >
+      <text style={{ fontSize: 9, color: C.warning }}>Duplicate</text>
+    </div>
+  )
+}
+
 function EnvVarRow({
   envVar,
   revealed,
+  isDuplicate,
   isLast,
   onToggleReveal,
+  onCopy,
 }: {
   envVar: EnvVar
   revealed: boolean
+  isDuplicate: boolean
   isLast: boolean
   onToggleReveal: () => void
+  onCopy: () => void
 }) {
   return (
     <div
@@ -201,7 +279,10 @@ function EnvVarRow({
         hover: { backgroundColor: C.overlay },
       }}
     >
-      <text style={{ fontSize: 13, color: C.text, width: 240, flexShrink: 0 }}>{envVar.key}</text>
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 6, width: KEY_COLUMN_WIDTH, flexShrink: 0 }}>
+        <text style={{ fontSize: 13, color: C.text }}>{envVar.key}</text>
+        {isDuplicate ? <DuplicateBadge /> : null}
+      </div>
       <div
         testId={`envvar-value-${envVar.key}`}
         onClick={onToggleReveal}
@@ -224,22 +305,21 @@ function EnvVarRow({
       </div>
       <div
         testId={`envvar-copy-${envVar.key}`}
-        onClick={() => {
-          copyToClipboard(envVar.value)
-        }}
+        onClick={onCopy}
+        aria-label={`Copy ${envVar.key} value`}
         style={{
           flexShrink: 0,
+          width: ACTIONS_COLUMN_WIDTH,
           height: 24,
-          paddingLeft: 10,
-          paddingRight: 10,
           borderRadius: 6,
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'center',
           cursor: 'pointer',
           hover: { backgroundColor: C.overlay },
         }}
       >
-        <text style={{ fontSize: 12, color: C.secondary }}>Copy</text>
+        <Icon name="copy" size={13} color={C.secondary} />
       </div>
     </div>
   )
@@ -258,10 +338,17 @@ export function App() {
   const [removalInFlight, setRemovalInFlight] = useState(false)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
     run(listProjects).then(setProjects)
   }, [])
+
+  useEffect(() => {
+    if (!toastMessage) return
+    const id = setTimeout(() => setToastMessage(null), 2500)
+    return () => clearTimeout(id)
+  }, [toastMessage])
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
   const selectedCentralEnvFile = selectedProject?.centralEnvFile ?? null
@@ -302,6 +389,20 @@ export function App() {
     )
   }, [projects, query])
 
+  // A Central env file can genuinely have the same key written twice (hand
+  // edited outside Raphie); flag every instance rather than silently
+  // dropping one, since which value "wins" isn't ours to decide here.
+  const duplicateKeys = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const envVar of envVars) counts.set(envVar.key, (counts.get(envVar.key) ?? 0) + 1)
+    return new Set([...counts].filter(([, count]) => count > 1).map(([key]) => key))
+  }, [envVars])
+
+  const handleCopyEnvVar = (envVar: EnvVar) => {
+    copyToClipboard(envVar.value)
+    setToastMessage(`Copied ${envVar.key} to clipboard`)
+  }
+
   const queueFolders = (folderPaths: string[]) => {
     const paths = folderPaths.filter(Boolean)
     if (paths.length === 0) return
@@ -334,7 +435,14 @@ export function App() {
   return (
     <div
       testId="app-root"
-      style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', backgroundColor: C.canvas }}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        backgroundColor: C.canvas,
+      }}
     >
       <div
         testId="top-bar"
@@ -493,6 +601,9 @@ export function App() {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 16,
+                width: '100%',
+                maxWidth: 1040,
+                alignSelf: 'center',
                 paddingLeft: 32,
                 paddingRight: 32,
                 paddingTop: 28,
@@ -642,6 +753,29 @@ export function App() {
                 </div>
               </div>
 
+              {duplicateKeys.size > 0 ? (
+                <div
+                  testId="duplicate-keys-warning"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: 10,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: C.warning,
+                    backgroundColor: C.warningBg,
+                  }}
+                >
+                  <Icon name="triangleAlert" size={14} color={C.warning} />
+                  <text style={{ fontSize: 12, color: C.text }}>
+                    This Central env file has {duplicateKeys.size} duplicate key{duplicateKeys.size > 1 ? 's' : ''}:{' '}
+                    {[...duplicateKeys].join(', ')}. Every instance is shown below — fix the file directly to resolve it.
+                  </text>
+                </div>
+              ) : null}
+
               {envVars.length === 0 ? (
                 <text testId="envvar-empty-hint" style={{ fontSize: 12, color: C.ghost }}>
                   No EnvVars in this Project's Central env file
@@ -662,6 +796,8 @@ export function App() {
                     style={{
                       display: 'flex',
                       flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
                       paddingLeft: 16,
                       paddingRight: 16,
                       paddingTop: 8,
@@ -671,14 +807,16 @@ export function App() {
                       borderColor: C.border,
                     }}
                   >
-                    <text style={{ fontSize: 11, color: C.secondary, width: 240, flexShrink: 0 }}>Key</text>
+                    <text style={{ fontSize: 11, color: C.secondary, width: KEY_COLUMN_WIDTH, flexShrink: 0 }}>Key</text>
                     <text style={{ fontSize: 11, color: C.secondary, flexGrow: 1 }}>Value</text>
+                    <div style={{ width: ACTIONS_COLUMN_WIDTH, flexShrink: 0 }} />
                   </div>
                   {envVars.map((envVar, index) => (
                     <EnvVarRow
-                      key={envVar.key}
+                      key={`${envVar.key}-${index}`}
                       envVar={envVar}
                       revealed={revealedKeys.has(envVar.key)}
+                      isDuplicate={duplicateKeys.has(envVar.key)}
                       isLast={index === envVars.length - 1}
                       onToggleReveal={() =>
                         setRevealedKeys((current) => {
@@ -688,6 +826,7 @@ export function App() {
                           return next
                         })
                       }
+                      onCopy={() => handleCopyEnvVar(envVar)}
                     />
                   ))}
                 </div>
@@ -700,6 +839,8 @@ export function App() {
           )}
         </div>
       </div>
+
+      {toastMessage ? <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} /> : null}
     </div>
   )
 }
