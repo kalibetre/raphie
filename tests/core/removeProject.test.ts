@@ -1,0 +1,70 @@
+import { FileSystem, Path } from '@effect/platform'
+import { Effect } from 'effect'
+import { describe, expect, it } from 'vitest'
+import { listProjects } from '../../src/core/listProjects.ts'
+import { registerProject } from '../../src/core/registerProject.ts'
+import { removeProject } from '../../src/core/removeProject.ts'
+import { withProjectFixtures } from './fixtures.ts'
+
+describe('removeProject', () => {
+  it('copies the Central env into the project and removes Raphie-owned files by default', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const path = yield* Path.Path
+        const project = yield* registerProject({ folderPath: projectFolder })
+        const projectEnvFile = path.join(projectFolder, '.env')
+        const centralDirectory = path.dirname(project.centralEnvFile)
+
+        yield* fs.writeFileString(project.centralEnvFile, 'FROM_CENTRAL=1\n')
+        expect(yield* removeProject(project.id)).toBe(true)
+
+        expect(yield* fs.readFileString(projectEnvFile)).toBe('FROM_CENTRAL=1\n')
+        expect(yield* fs.exists(project.centralEnvFile)).toBe(false)
+        expect(yield* fs.exists(centralDirectory)).toBe(false)
+        expect(yield* listProjects).toEqual([])
+      }),
+    ))
+
+  it('replaces a project .env symlink with a standalone copy', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const path = yield* Path.Path
+        const project = yield* registerProject({ folderPath: projectFolder })
+        const projectEnvFile = path.join(projectFolder, '.env')
+
+        yield* fs.writeFileString(project.centralEnvFile, 'LINKED=before-removal\n')
+        yield* fs.symlink(project.centralEnvFile, projectEnvFile)
+
+        expect(yield* removeProject(project.id)).toBe(true)
+        expect(yield* fs.readFileString(projectEnvFile)).toBe('LINKED=before-removal\n')
+        expect(yield* fs.exists(project.centralEnvFile)).toBe(false)
+      }),
+    ))
+
+  it('removes the project .env when requested', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const path = yield* Path.Path
+        const project = yield* registerProject({ folderPath: projectFolder })
+        const projectEnvFile = path.join(projectFolder, '.env')
+
+        yield* fs.writeFileString(project.centralEnvFile, 'REMOVE_ME=1\n')
+        yield* fs.writeFileString(projectEnvFile, 'LOCAL=1\n')
+
+        expect(yield* removeProject(project.id, 'remove')).toBe(true)
+        expect(yield* fs.exists(projectEnvFile)).toBe(false)
+        expect(yield* fs.exists(project.centralEnvFile)).toBe(false)
+        expect(yield* listProjects).toEqual([])
+      }),
+    ))
+
+  it('returns false when the Project is not registered', () =>
+    withProjectFixtures(() =>
+      Effect.gen(function* () {
+        expect(yield* removeProject('missing-project')).toBe(false)
+      }),
+    ))
+})

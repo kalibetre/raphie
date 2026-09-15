@@ -20,10 +20,15 @@ export const readAll = Effect.gen(function* () {
   return JSON.parse(content) as Project[]
 })
 
-export const append = (project: Project) =>
+export const writeAll = (projects: readonly Project[]) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const file = yield* path_
+    yield* fs.writeFileString(file, JSON.stringify(projects, null, 2))
+  })
+
+export const append = (project: Project) =>
+  Effect.gen(function* () {
     const projects = yield* readAll
-    yield* fs.writeFileString(file, JSON.stringify([...projects, project], null, 2))
+    yield* writeAll([...projects, project])
   })

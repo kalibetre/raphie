@@ -1,7 +1,7 @@
 import { motion } from '@gpuix/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Project } from '../core/index.ts'
-import { listProjects, registerProject, run } from '../core/index.ts'
+import type { Project, ProjectRemovalMode } from '../core/index.ts'
+import { listProjects, registerProject, removeProject, run } from '../core/index.ts'
 
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
 
@@ -162,10 +162,26 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [collapsed, setCollapsed] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [registrationQueue, setRegistrationQueue] = useState<string[]>([])
+  const [registrationInFlight, setRegistrationInFlight] = useState(false)
+  const [removeCandidateId, setRemoveCandidateId] = useState<string | null>(null)
+  const [removalMode, setRemovalMode] = useState<ProjectRemovalMode>('copy')
+  const [removalInFlight, setRemovalInFlight] = useState(false)
 
   useEffect(() => {
     run(listProjects).then(setProjects)
   }, [])
+
+  useEffect(() => {
+    if (registrationInFlight || registrationQueue.length === 0) return
+    const folderPath = registrationQueue[0]!
+    setRegistrationQueue((current) => current.slice(1))
+    setRegistrationInFlight(true)
+    run(registerProject({ folderPath }))
+      .then((project) => setProjects((current) => [...current, project]))
+      .catch(() => undefined)
+      .finally(() => setRegistrationInFlight(false))
+  }, [registrationInFlight, registrationQueue])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -177,19 +193,33 @@ export function App() {
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
 
-  const registerFolders = (folderPaths: string[]) => {
-    if (folderPaths.length === 0) return
-    Promise.all(folderPaths.map((folderPath) => run(registerProject({ folderPath })))).then((registered) =>
-      setProjects((current) => [...current, ...registered]),
-    )
+  const queueFolders = (folderPaths: string[]) => {
+    const paths = folderPaths.filter(Boolean)
+    if (paths.length === 0) return
+    setRegistrationQueue((current) => [...current, ...paths])
   }
 
-  const handleFileDrop = (event: { paths?: string[] }) => registerFolders(event.paths ?? [])
+  const handleFileDrop = (event: { paths?: string[] }) => queueFolders(event.paths ?? [])
 
   const handleBrowse = () => {
     pickFolderNative().then((folderPath) => {
-      if (folderPath) registerFolders([folderPath])
+      if (folderPath) queueFolders([folderPath])
     })
+  }
+
+  const handleRemoveProject = () => {
+    if (!removeCandidateId || registrationInFlight || removalInFlight) return
+    const projectId = removeCandidateId
+    setRemovalInFlight(true)
+    run(removeProject(projectId, removalMode))
+      .then((removed) => {
+        if (!removed) return
+        setProjects((current) => current.filter((project) => project.id !== projectId))
+        setSelectedId((current) => (current === projectId ? null : current))
+        setRemoveCandidateId(null)
+      })
+      .catch(() => undefined)
+      .finally(() => setRemovalInFlight(false))
   }
 
   return (
@@ -315,7 +345,10 @@ export function App() {
                     key={project.id}
                     project={project}
                     selected={project.id === selectedId}
-                    onSelect={() => setSelectedId(project.id)}
+                    onSelect={() => {
+                      setSelectedId(project.id)
+                      setRemoveCandidateId(null)
+                    }}
                   />
                 ))}
               </div>
@@ -327,12 +360,151 @@ export function App() {
         <div
           testId="main-pane"
           onFileDrop={handleFileDrop}
-          style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
+          {registrationInFlight ? (
+            <text testId="registration-status" style={{ fontSize: 12, color: C.secondary }}>
+              Registering project…
+            </text>
+          ) : null}
           {selectedProject ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
               <text style={{ fontSize: 16, color: C.text }}>{selectedProject.name}</text>
               <text style={{ fontSize: 12, color: C.ghost }}>{selectedProject.folderPath}</text>
+              {removeCandidateId === selectedProject.id ? (
+                <div
+                  testId="remove-project-confirmation"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginTop: 8,
+                    padding: 12,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: C.border,
+                    backgroundColor: C.sidebar,
+                  }}
+                >
+                  <text style={{ fontSize: 11, color: C.secondary }}>Remove this Project from Raphie?</text>
+                  <text style={{ fontSize: 10, color: C.ghost }}>Choose what to do with the project’s .env:</text>
+                  <div
+                    testId="remove-env-copy-option"
+                    onClick={() => {
+                      if (!removalInFlight) setRemovalMode('copy')
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      width: 300,
+                      padding: 8,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: removalMode === 'copy' ? C.accent : C.border,
+                      backgroundColor: removalMode === 'copy' ? C.overlay : undefined,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <text style={{ fontSize: 11, color: C.text }}>Copy .env into the project folder</text>
+                    <text style={{ fontSize: 10, color: C.ghost }}>Recommended: keep the project’s current env values.</text>
+                  </div>
+                  <div
+                    testId="remove-env-delete-option"
+                    onClick={() => {
+                      if (!removalInFlight) setRemovalMode('remove')
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      width: 300,
+                      padding: 8,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: removalMode === 'remove' ? C.accent : C.border,
+                      backgroundColor: removalMode === 'remove' ? C.overlay : undefined,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <text style={{ fontSize: 11, color: C.text }}>Remove .env entirely</text>
+                    <text style={{ fontSize: 10, color: C.ghost }}>Delete the project’s .env and Raphie’s Central copy.</text>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
+                    <div
+                      testId="cancel-remove-project"
+                      onClick={() => {
+                        if (!removalInFlight) setRemoveCandidateId(null)
+                      }}
+                      style={{
+                        height: 26,
+                        paddingLeft: 10,
+                        paddingRight: 10,
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        hover: { backgroundColor: C.overlay },
+                      }}
+                    >
+                      <text style={{ fontSize: 12, color: C.secondary }}>Cancel</text>
+                    </div>
+                    <div
+                      testId="confirm-remove-project"
+                      onClick={handleRemoveProject}
+                      style={{
+                        height: 26,
+                        paddingLeft: 10,
+                        paddingRight: 10,
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        backgroundColor: C.accent,
+                        opacity: removalInFlight ? 0.6 : 1,
+                      }}
+                    >
+                      <text style={{ fontSize: 12, color: C.onAccent }}>
+                        {removalInFlight ? 'Removing…' : 'Remove'}
+                      </text>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  testId="remove-project-button"
+                  onClick={() => {
+                    if (!registrationInFlight) {
+                      setRemovalMode('copy')
+                      setRemoveCandidateId(selectedProject.id)
+                    }
+                  }}
+                  style={{
+                    height: 26,
+                    marginTop: 8,
+                    paddingLeft: 10,
+                    paddingRight: 10,
+                    borderRadius: 6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    borderWidth: 1,
+                    borderColor: C.border,
+                    opacity: registrationInFlight ? 0.6 : 1,
+                    hover: { backgroundColor: C.overlay },
+                  }}
+                >
+                  <text style={{ fontSize: 12, color: C.secondary }}>Remove Project</text>
+                </div>
+              )}
             </div>
           ) : (
             <text style={{ fontSize: 13, color: C.ghost }}>Select a project</text>

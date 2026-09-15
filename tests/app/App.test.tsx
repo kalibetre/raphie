@@ -13,6 +13,7 @@ import { Effect } from 'effect'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from '../../src/app/App.tsx'
+import { listProjects, run } from '../../src/core/index.ts'
 
 const describeNative = hasNativeTestRenderer ? describe : describe.skip
 
@@ -78,6 +79,8 @@ function findByTestIdPrefix(renderer: ReturnType<typeof createTestRoot>['rendere
   throw new Error(`No element with testId prefix "${prefix}" found`)
 }
 
+const waitForAppUpdate = () => new Promise((resolve) => setTimeout(resolve, 50))
+
 describeNative('Raphie App', () => {
   it('shows the empty-state hint with no registered projects', () => {
     const { render, renderer } = createTestRoot()
@@ -98,9 +101,7 @@ describeNative('Raphie App', () => {
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
 
-    // registerProject crosses an async boundary (Effect.runPromise); poll for
-    // the resulting state update instead of asserting immediately.
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
 
     expect(renderer.getPaintedText().join('\n')).toContain(projectFolder)
@@ -117,12 +118,13 @@ describeNative('Raphie App', () => {
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder, secondFolder])
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
 
     const painted = renderer.getPaintedText().join('\n')
     expect(painted).toContain(projectFolder)
     expect(painted).toContain(secondFolder)
+    expect((await run(listProjects)).map((project) => project.folderPath)).toEqual([projectFolder, secondFolder])
 
     await removeDir(secondFolder)
   })
@@ -135,7 +137,7 @@ describeNative('Raphie App', () => {
     const sidebar = renderer.findByTestId('sidebar')!
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
 
     expect(renderer.getPaintedText().join('\n')).toContain('Select a project')
@@ -156,6 +158,56 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('title-bar-project-name')).toBeDefined()
   })
 
+  it('removes the selected Project and copies its Central env into the project folder', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    const envContent = 'FROM_CENTRAL=1\n'
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, envContent)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('remove-project-button').click()
+    await app.getByTestId('confirm-remove-project').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.getPaintedText().join('\n')).toContain('Select a project')
+    expect(renderer.getPaintedText().join('\n')).not.toContain(projectFolder)
+    expect(await run(listProjects)).toEqual([])
+    expect(
+      await runFs(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem
+          return {
+            centralExists: yield* fs.exists(project!.centralEnvFile),
+            projectEnv: yield* fs.readFileString(`${projectFolder}/.env`),
+          }
+        }),
+      ),
+    ).toEqual({ centralExists: false, projectEnv: envContent })
+
+    await app.close()
+  })
+
   it('filters the project list by name or folder path', async () => {
     const secondFolder = await makeTempDir('raphie-app-second-')
 
@@ -166,7 +218,7 @@ describeNative('Raphie App', () => {
     const sidebar = renderer.findByTestId('sidebar')!
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder, secondFolder])
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
 
     const app = await connectTest(renderer)
@@ -278,7 +330,7 @@ describeNative('Raphie App', () => {
       const addProjectBounds = renderer.getElementBounds(renderer.findByTestId('add-project-button')!.id)!
       renderer.nativeSimulateClick(addProjectBounds.x + 5, addProjectBounds.y + 5)
 
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await waitForAppUpdate()
       renderer.flush()
 
       expect(renderer.getPaintedText().join('\n')).toContain(projectFolder)
@@ -293,7 +345,7 @@ describeNative('Raphie App', () => {
       const addProjectBounds = renderer.getElementBounds(renderer.findByTestId('add-project-button')!.id)!
       renderer.nativeSimulateClick(addProjectBounds.x + 5, addProjectBounds.y + 5)
 
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await waitForAppUpdate()
       renderer.flush()
 
       expect(renderer.getPaintedText().join('\n')).toContain('Drag a project folder here')
@@ -308,7 +360,7 @@ describeNative('Raphie App', () => {
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [])
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
 
     expect(renderer.getPaintedText().join('\n')).toContain('Drag a project folder here')

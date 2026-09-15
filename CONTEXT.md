@@ -9,8 +9,8 @@ A registered folder on disk that the app manages env values for. Not required to
 _Avoid_: Repo, app, workspace
 
 **Project ID**:
-A short UUID assigned to a Project at registration, stable even if the Project is renamed or its folder moves. The app's local state (`projects.json`) maps a Project ID to its display name, folder path, and Central env file location.
-_Avoid_: Slug, project name (the name is user-editable and not used for storage paths)
+A short UUID assigned to a Project at registration, stable even if its folder moves. The app's local state (`projects.json`) maps a Project ID to the folder path and Central env file location; the display name is always the folder basename and is not independently editable.
+_Avoid_: Slug, project name (the display name is derived from the folder basename and is not used for storage paths)
 
 **Worktree**:
 A git checkout belonging to a Project — includes the Project's main checkout as well as any additional `git worktree` checkouts. Only applies when the Project is a git repo.

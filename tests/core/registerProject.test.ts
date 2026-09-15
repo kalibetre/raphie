@@ -1,4 +1,4 @@
-import { FileSystem, Path } from '@effect/platform'
+import { Command, FileSystem, Path } from '@effect/platform'
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { registerProject } from '../../src/core/registerProject.ts'
@@ -32,35 +32,24 @@ describe('registerProject', () => {
       }),
     ))
 
-  it('accepts a custom display name instead of the folder basename', () =>
-    withProjectFixtures(({ projectFolder }) =>
-      Effect.gen(function* () {
-        const project = yield* registerProject({ folderPath: projectFolder, name: 'Custom Name' })
-        expect(project.name).toBe('Custom Name')
-      }),
-    ))
-
-  it('trims whitespace from a custom display name', () =>
-    withProjectFixtures(({ projectFolder }) =>
-      Effect.gen(function* () {
-        const project = yield* registerProject({ folderPath: projectFolder, name: '  Custom Name  ' })
-        expect(project.name).toBe('Custom Name')
-      }),
-    ))
-
-  it('falls back to the folder basename when the given name is blank', () =>
-    withProjectFixtures(({ projectFolder }) =>
-      Effect.gen(function* () {
-        const path = yield* Path.Path
-        const project = yield* registerProject({ folderPath: projectFolder, name: '   ' })
-        expect(project.name).toBe(path.basename(projectFolder))
-      }),
-    ))
-
   it('registers a plain non-git folder', () =>
     withProjectFixtures(({ projectFolder }) =>
       Effect.gen(function* () {
         const project = yield* registerProject({ folderPath: projectFolder })
+        expect(project.folderPath).toBe(projectFolder)
+      }),
+    ))
+
+  it('registers a git repository folder', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const path = yield* Path.Path
+        expect(yield* Command.exitCode(Command.make('git', '-C', projectFolder, 'init'))).toBe(0)
+
+        const project = yield* registerProject({ folderPath: projectFolder })
+
+        expect(yield* fs.exists(path.join(projectFolder, '.git'))).toBe(true)
         expect(project.folderPath).toBe(projectFolder)
       }),
     ))
