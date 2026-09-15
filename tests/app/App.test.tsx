@@ -12,7 +12,8 @@ import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing'
 import { Effect } from 'effect'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { App, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from '../../src/app/App.tsx'
+import { App } from '../../src/app/App.tsx'
+import { MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from '../../src/app/theme.ts'
 import { listProjects, run } from '../../src/core/index.ts'
 
 const describeNative = hasNativeTestRenderer ? describe : describe.skip
