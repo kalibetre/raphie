@@ -13,6 +13,7 @@ import { Effect } from 'effect'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from '../../src/app/App.tsx'
+import { listProjects, run } from '../../src/core/index.ts'
 
 const describeNative = hasNativeTestRenderer ? describe : describe.skip
 
@@ -78,6 +79,16 @@ function findByTestIdPrefix(renderer: ReturnType<typeof createTestRoot>['rendere
   throw new Error(`No element with testId prefix "${prefix}" found`)
 }
 
+const waitForAppUpdate = () => new Promise((resolve) => setTimeout(resolve, 50))
+
+async function submitRegistration(renderer: ReturnType<typeof createTestRoot>['renderer']) {
+  const app = await connectTest(renderer)
+  await app.getByTestId('register-project-button').click()
+  await waitForAppUpdate()
+  renderer.flush()
+  await app.close()
+}
+
 describeNative('Raphie App', () => {
   it('shows the empty-state hint with no registered projects', () => {
     const { render, renderer } = createTestRoot()
@@ -98,10 +109,9 @@ describeNative('Raphie App', () => {
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
 
-    // registerProject crosses an async boundary (Effect.runPromise); poll for
-    // the resulting state update instead of asserting immediately.
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
+    await submitRegistration(renderer)
 
     expect(renderer.getPaintedText().join('\n')).toContain(projectFolder)
   })
@@ -117,14 +127,61 @@ describeNative('Raphie App', () => {
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder, secondFolder])
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
+    await submitRegistration(renderer)
+    await submitRegistration(renderer)
 
     const painted = renderer.getPaintedText().join('\n')
     expect(painted).toContain(projectFolder)
     expect(painted).toContain(secondFolder)
+    expect((await run(listProjects)).map((project) => project.folderPath)).toEqual([projectFolder, secondFolder])
 
     await removeDir(secondFolder)
+  })
+
+  it('does not persist a duplicate Project when registration is submitted twice', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const sidebarBounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(sidebarBounds.x + 5, sidebarBounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const button = renderer.findByTestId('register-project-button')!
+    const buttonBounds = renderer.getElementBounds(button.id)!
+    renderer.nativeSimulateClick(buttonBounds.x + 5, buttonBounds.y + 5)
+    renderer.nativeSimulateClick(buttonBounds.x + 5, buttonBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(await run(listProjects)).toHaveLength(1)
+  })
+
+  it('lets the user set a Project display name before registration', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('registration-name').fill('Personal Raphie')
+    await app.getByTestId('register-project-button').click()
+
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.getPaintedText().join('\n')).toContain('Personal Raphie')
+    await app.close()
   })
 
   it('shows the selected project’s name and location in the main pane and top bar', async () => {
@@ -135,8 +192,9 @@ describeNative('Raphie App', () => {
     const sidebar = renderer.findByTestId('sidebar')!
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
+    await submitRegistration(renderer)
 
     expect(renderer.getPaintedText().join('\n')).toContain('Select a project')
 
@@ -166,8 +224,10 @@ describeNative('Raphie App', () => {
     const sidebar = renderer.findByTestId('sidebar')!
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder, secondFolder])
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
+    await submitRegistration(renderer)
+    await submitRegistration(renderer)
 
     const app = await connectTest(renderer)
     const firstName = projectFolder.split('/').pop()!
@@ -278,8 +338,9 @@ describeNative('Raphie App', () => {
       const addProjectBounds = renderer.getElementBounds(renderer.findByTestId('add-project-button')!.id)!
       renderer.nativeSimulateClick(addProjectBounds.x + 5, addProjectBounds.y + 5)
 
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await waitForAppUpdate()
       renderer.flush()
+      await submitRegistration(renderer)
 
       expect(renderer.getPaintedText().join('\n')).toContain(projectFolder)
     }))
@@ -293,7 +354,7 @@ describeNative('Raphie App', () => {
       const addProjectBounds = renderer.getElementBounds(renderer.findByTestId('add-project-button')!.id)!
       renderer.nativeSimulateClick(addProjectBounds.x + 5, addProjectBounds.y + 5)
 
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await waitForAppUpdate()
       renderer.flush()
 
       expect(renderer.getPaintedText().join('\n')).toContain('Drag a project folder here')
@@ -308,7 +369,7 @@ describeNative('Raphie App', () => {
     const bounds = renderer.getElementBounds(sidebar.id)!
     renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [])
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitForAppUpdate()
     renderer.flush()
 
     expect(renderer.getPaintedText().join('\n')).toContain('Drag a project folder here')

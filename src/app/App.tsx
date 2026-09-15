@@ -64,6 +64,11 @@ export function initials(name: string): string {
   return letters.filter(Boolean).join('').toUpperCase()
 }
 
+function folderName(folderPath: string): string {
+  const withoutTrailingSeparators = folderPath.replace(/[\\/]+$/, '')
+  return withoutTrailingSeparators.split(/[\\/]/).filter(Boolean).pop() ?? folderPath
+}
+
 function Badge({ label }: { label: string }) {
   return (
     <div
@@ -156,16 +161,132 @@ function ProjectRow({
   )
 }
 
+function RegistrationForm({
+  folderPath,
+  name,
+  submitting,
+  onNameChange,
+  onCancel,
+  onSubmit,
+}: {
+  folderPath: string
+  name: string
+  submitting: boolean
+  onNameChange: (name: string) => void
+  onCancel: () => void
+  onSubmit: () => void
+}) {
+  return (
+    <div
+      testId="registration-form"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        width: 360,
+        padding: 20,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: C.border,
+        backgroundColor: C.sidebar,
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <text style={{ fontSize: 16, color: C.text }}>Register Project</text>
+        <text style={{ fontSize: 12, color: C.ghost }}>{folderPath}</text>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <text style={{ fontSize: 11, color: C.secondary }}>Display name</text>
+        <input
+          testId="registration-name"
+          autoFocus
+          value={name}
+          readOnly={submitting}
+          onChange={(event) => onNameChange(event.value ?? '')}
+          onSubmit={onSubmit}
+          style={{
+            height: 28,
+            paddingLeft: 8,
+            paddingRight: 8,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: C.border,
+            backgroundColor: C.raised,
+            fontSize: 12,
+            color: C.text,
+          }}
+        />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+        <div
+          testId="registration-cancel-button"
+          onClick={() => {
+            if (!submitting) onCancel()
+          }}
+          style={{
+            height: 26,
+            paddingLeft: 10,
+            paddingRight: 10,
+            borderRadius: 6,
+            display: 'flex',
+            alignItems: 'center',
+            cursor: 'pointer',
+            opacity: submitting ? 0.6 : 1,
+            hover: { backgroundColor: C.overlay },
+          }}
+        >
+          <text style={{ fontSize: 12, color: C.secondary }}>Cancel</text>
+        </div>
+        <div
+          testId="register-project-button"
+          onClick={() => {
+            if (!submitting) onSubmit()
+          }}
+          style={{
+            height: 26,
+            paddingLeft: 10,
+            paddingRight: 10,
+            borderRadius: 6,
+            display: 'flex',
+            alignItems: 'center',
+            cursor: 'pointer',
+            backgroundColor: C.accent,
+            opacity: submitting ? 0.6 : 1,
+            hover: { opacity: 0.85 },
+          }}
+        >
+          <text style={{ fontSize: 12, color: C.onAccent }}>{submitting ? 'Registering…' : 'Register'}</text>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type RegistrationRequest = {
+  readonly folderPath: string
+  readonly name: string
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [collapsed, setCollapsed] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [registration, setRegistration] = useState<RegistrationRequest | null>(null)
+  const [registrationQueue, setRegistrationQueue] = useState<RegistrationRequest[]>([])
+  const [registrationSubmitting, setRegistrationSubmitting] = useState(false)
 
   useEffect(() => {
     run(listProjects).then(setProjects)
   }, [])
+
+  useEffect(() => {
+    if (registration || registrationSubmitting || registrationQueue.length === 0) return
+    const [next, ...remaining] = registrationQueue
+    setRegistration(next ?? null)
+    setRegistrationQueue(remaining)
+  }, [registration, registrationQueue, registrationSubmitting])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -177,19 +298,33 @@ export function App() {
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
 
-  const registerFolders = (folderPaths: string[]) => {
-    if (folderPaths.length === 0) return
-    Promise.all(folderPaths.map((folderPath) => run(registerProject({ folderPath })))).then((registered) =>
-      setProjects((current) => [...current, ...registered]),
-    )
+  const queueFolders = (folderPaths: string[]) => {
+    const registrations = folderPaths.filter(Boolean).map((folderPath) => ({
+      folderPath,
+      name: folderName(folderPath),
+    }))
+    if (registrations.length === 0) return
+    setRegistrationQueue((current) => [...current, ...registrations])
   }
 
-  const handleFileDrop = (event: { paths?: string[] }) => registerFolders(event.paths ?? [])
+  const handleFileDrop = (event: { paths?: string[] }) => queueFolders(event.paths ?? [])
 
   const handleBrowse = () => {
     pickFolderNative().then((folderPath) => {
-      if (folderPath) registerFolders([folderPath])
+      if (folderPath) queueFolders([folderPath])
     })
+  }
+
+  const handleRegistrationSubmit = () => {
+    if (!registration || registrationSubmitting) return
+    const request = registration
+    setRegistrationSubmitting(true)
+    run(registerProject(request))
+      .then((project) => {
+        setProjects((current) => [...current, project])
+        setRegistration(null)
+      })
+      .finally(() => setRegistrationSubmitting(false))
   }
 
   return (
@@ -329,7 +464,18 @@ export function App() {
           onFileDrop={handleFileDrop}
           style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          {selectedProject ? (
+          {registration ? (
+            <RegistrationForm
+              folderPath={registration.folderPath}
+              name={registration.name}
+              submitting={registrationSubmitting}
+              onNameChange={(name) => setRegistration((current) => (current ? { ...current, name } : current))}
+              onCancel={() => {
+                if (!registrationSubmitting) setRegistration(null)
+              }}
+              onSubmit={handleRegistrationSubmit}
+            />
+          ) : selectedProject ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
               <text style={{ fontSize: 16, color: C.text }}>{selectedProject.name}</text>
               <text style={{ fontSize: 12, color: C.ghost }}>{selectedProject.folderPath}</text>

@@ -1,4 +1,4 @@
-import { FileSystem, Path } from '@effect/platform'
+import { Command, FileSystem, Path } from '@effect/platform'
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { registerProject } from '../../src/core/registerProject.ts'
@@ -61,6 +61,20 @@ describe('registerProject', () => {
     withProjectFixtures(({ projectFolder }) =>
       Effect.gen(function* () {
         const project = yield* registerProject({ folderPath: projectFolder })
+        expect(project.folderPath).toBe(projectFolder)
+      }),
+    ))
+
+  it('registers a git repository folder', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const path = yield* Path.Path
+        expect(yield* Command.exitCode(Command.make('git', '-C', projectFolder, 'init'))).toBe(0)
+
+        const project = yield* registerProject({ folderPath: projectFolder })
+
+        expect(yield* fs.exists(path.join(projectFolder, '.git'))).toBe(true)
         expect(project.folderPath).toBe(projectFolder)
       }),
     ))

@@ -1,4 +1,4 @@
-import { FileSystem, Path } from '@effect/platform'
+import { CommandExecutor, FileSystem, Path } from '@effect/platform'
 import { BunContext } from '@effect/platform-bun'
 import { Effect, Layer, type Scope } from 'effect'
 import { AppHome } from '../../src/core/AppHome.ts'
@@ -14,7 +14,7 @@ export const withProjectFixtures = <A, E>(
   test: (fixtures: {
     readonly home: string
     readonly projectFolder: string
-  }) => Effect.Effect<A, E, AppHome | FileSystem.FileSystem | Path.Path | Scope.Scope>,
+  }) => Effect.Effect<A, E, AppHome | FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor | Scope.Scope>,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {

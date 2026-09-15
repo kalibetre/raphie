@@ -1,4 +1,4 @@
-import { FileSystem } from '@effect/platform'
+import { Command, FileSystem } from '@effect/platform'
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { listProjects } from '../../src/core/listProjects.ts'
@@ -11,6 +11,7 @@ describe('listProjects', () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem
         const other = yield* fs.makeTempDirectoryScoped({ prefix: 'raphie-project-' })
+        expect(yield* Command.exitCode(Command.make('git', '-C', projectFolder, 'init'))).toBe(0)
 
         const first = yield* registerProject({ folderPath: projectFolder })
         const second = yield* registerProject({ folderPath: other })
