@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { pickFolderNative } from '../../src/app/App.tsx'
+import { pickFolderNative } from '../../src/app/utils/pickFolder.ts'
 
 // vitest's test workers run without a `Bun` global (confirmed while building
 // AppHome — see its comment), so pickFolderNative's own `typeof Bun ===
