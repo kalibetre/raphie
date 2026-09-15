@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initials } from '../../src/app/App.tsx'
+import { initials } from '../../src/app/utils/initials.ts'
 
 describe('initials', () => {
   it('takes the first letter of the first two words for a multi-word name', () => {
