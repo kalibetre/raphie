@@ -1,0 +1,25 @@
+{
+  "name": "raphie",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot app.tsx",
+    "build": "bun build --compile app.tsx --outfile dist/raphie",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform": "^0.97.2",
+    "@effect/platform-bun": "^0.91.2",
+    "@gpuix/react": "^0.8.0",
+    "effect": "^3.22.2",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.18"
+  }
+}
