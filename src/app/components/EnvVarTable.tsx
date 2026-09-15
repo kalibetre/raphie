@@ -8,12 +8,16 @@ export function EnvVarTable({
   duplicateKeys,
   onToggleReveal,
   onCopy,
+  onEdit,
+  onDelete,
 }: {
   envVars: EnvVar[]
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
   onToggleReveal: (key: string) => void
   onCopy: (envVar: EnvVar) => void
+  onEdit: (index: number) => void
+  onDelete: (index: number) => void
 }) {
   if (envVars.length === 0) {
     return (
@@ -58,11 +62,14 @@ export function EnvVarTable({
         <EnvVarRow
           key={`${envVar.key}-${index}`}
           envVar={envVar}
+          index={index}
           revealed={revealedKeys.has(envVar.key)}
           isDuplicate={duplicateKeys.has(envVar.key)}
           isLast={index === envVars.length - 1}
           onToggleReveal={() => onToggleReveal(envVar.key)}
           onCopy={() => onCopy(envVar)}
+          onEdit={() => onEdit(index)}
+          onDelete={() => onDelete(index)}
         />
       ))}
     </div>
