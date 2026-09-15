@@ -15,6 +15,9 @@ export function ProjectDetail({
   registrationInFlight,
   onToggleReveal,
   onCopy,
+  onStartAdd,
+  onEdit,
+  onDelete,
   onStartRemove,
   onSelectRemovalMode,
   onCancelRemove,
@@ -30,6 +33,9 @@ export function ProjectDetail({
   registrationInFlight: boolean
   onToggleReveal: (key: string) => void
   onCopy: (envVar: EnvVar) => void
+  onStartAdd: () => void
+  onEdit: (index: number) => void
+  onDelete: (index: number) => void
   onStartRemove: () => void
   onSelectRemovalMode: (mode: ProjectRemovalMode) => void
   onCancelRemove: () => void
@@ -72,12 +78,39 @@ export function ProjectDetail({
 
       <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
 
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <text style={{ fontSize: 13, color: C.secondary }}>Environment variables</text>
+        <div
+          testId="add-envvar-button"
+          role="button"
+          aria-label="Add EnvVar"
+          onClick={onStartAdd}
+          style={{
+            height: 28,
+            paddingLeft: 10,
+            paddingRight: 10,
+            borderRadius: 6,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            borderWidth: 1,
+            borderColor: C.border,
+            hover: { backgroundColor: C.overlay },
+          }}
+        >
+          <text style={{ fontSize: 12, color: C.secondary }}>Add EnvVar</text>
+        </div>
+      </div>
+
       <EnvVarTable
         envVars={envVars}
         revealedKeys={revealedKeys}
         duplicateKeys={duplicateKeys}
         onToggleReveal={onToggleReveal}
         onCopy={onCopy}
+        onEdit={onEdit}
+        onDelete={onDelete}
       />
     </div>
   )

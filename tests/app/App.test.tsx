@@ -14,7 +14,7 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App } from '../../src/app/App.tsx'
 import { MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from '../../src/app/theme.ts'
-import { listProjects, run } from '../../src/core/index.ts'
+import { listEnvVars, listProjects, run } from '../../src/core/index.ts'
 
 const describeNative = hasNativeTestRenderer ? describe : describe.skip
 
@@ -452,6 +452,185 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('remove-project-confirmation')).toBeUndefined()
     expect(renderer.findByTestId('remove-project-button')).toBeDefined()
     expect(await run(listProjects)).toHaveLength(1)
+
+    await app.close()
+  })
+
+  it('edits an EnvVar key and multiline value through an explicit modal', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'SECRET_KEY=old-value\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-edit-SECRET_KEY').click()
+    renderer.flush()
+
+    expect(renderer.findByTestId('envvar-editor-modal')).toBeDefined()
+    expect(renderer.findByTestId('envvar-editor-value')?.type).toBe('textarea')
+
+    await app.getByTestId('envvar-editor-key').fill('RENAMED_KEY')
+    await app.getByTestId('envvar-editor-value').fill('first line\nsecond line')
+    await app.getByTestId('envvar-editor-save').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([
+      { key: 'RENAMED_KEY', value: 'first line\nsecond line' },
+    ])
+    expect(renderer.getPaintedText().join('\n')).toContain('RENAMED_KEY')
+    expect(renderer.getPaintedText().join('\n')).toContain('Saved RENAMED_KEY')
+
+    expect(renderer.findByTestId('envvar-editor-modal')).toBeUndefined()
+
+    await app.close()
+  })
+
+  it('adds a new EnvVar through the editor modal', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('add-envvar-button').click()
+    await app.getByTestId('envvar-editor-key').fill('NEW_KEY')
+    await app.getByTestId('envvar-editor-value').fill('new value')
+    await app.getByTestId('envvar-editor-save').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([{ key: 'NEW_KEY', value: 'new value' }])
+    expect(renderer.getPaintedText().join('\n')).toContain('NEW_KEY')
+
+    expect(renderer.findByTestId('envvar-editor-modal')).toBeUndefined()
+    await app.close()
+  })
+
+  it('rejects a duplicate EnvVar key and shows a toast error', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'FIRST=one\nSECOND=two\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-edit-FIRST').click()
+    await app.getByTestId('envvar-editor-key').fill('SECOND')
+    await app.getByTestId('envvar-editor-save').click()
+    renderer.flush()
+
+    expect(renderer.findByTestId('envvar-editor-modal')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('Duplicate EnvVar key "SECOND" already exists')
+    expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([
+      { key: 'FIRST', value: 'one' },
+      { key: 'SECOND', value: 'two' },
+    ])
+
+    await app.getByTestId('envvar-editor-close').click()
+    await app.close()
+  })
+
+  it('requires confirmation before deleting an EnvVar', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'KEEP=yes\nREMOVE=gone\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-delete-REMOVE').click()
+    renderer.flush()
+    expect(renderer.findByTestId('delete-envvar-confirmation')).toBeDefined()
+    expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([
+      { key: 'KEEP', value: 'yes' },
+      { key: 'REMOVE', value: 'gone' },
+    ])
+
+    await app.getByTestId('delete-envvar-cancel').click()
+    renderer.flush()
+    expect(renderer.findByTestId('delete-envvar-confirmation')).toBeUndefined()
+    expect(renderer.findByTestId('envvar-delete-REMOVE')).toBeDefined()
+
+    await app.getByTestId('envvar-delete-REMOVE').click()
+    await app.getByTestId('delete-envvar-confirm').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.findByTestId('delete-envvar-confirmation')).toBeUndefined()
+    expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([{ key: 'KEEP', value: 'yes' }])
+    expect(renderer.getPaintedText().join('\n')).toContain('Deleted REMOVE')
 
     await app.close()
   })

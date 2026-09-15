@@ -14,6 +14,9 @@ export function MainPane({
   onFileDrop,
   onToggleReveal,
   onCopy,
+  onStartAdd,
+  onEdit,
+  onDelete,
   onStartRemove,
   onSelectRemovalMode,
   onCancelRemove,
@@ -30,6 +33,9 @@ export function MainPane({
   onFileDrop: (event: { paths?: string[] }) => void
   onToggleReveal: (key: string) => void
   onCopy: (envVar: EnvVar) => void
+  onStartAdd: () => void
+  onEdit: (index: number) => void
+  onDelete: (index: number) => void
   onStartRemove: () => void
   onSelectRemovalMode: (mode: ProjectRemovalMode) => void
   onCancelRemove: () => void
@@ -69,6 +75,9 @@ export function MainPane({
           registrationInFlight={registrationInFlight}
           onToggleReveal={onToggleReveal}
           onCopy={onCopy}
+          onStartAdd={onStartAdd}
+          onEdit={onEdit}
+          onDelete={onDelete}
           onStartRemove={onStartRemove}
           onSelectRemovalMode={onSelectRemovalMode}
           onCancelRemove={onCancelRemove}

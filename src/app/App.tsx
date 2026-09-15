@@ -1,7 +1,19 @@
 import { TooltipProvider } from '@gpuix/react'
 import { useEffect, useMemo, useState } from 'react'
+import { Effect } from 'effect'
 import type { EnvVar, Project, ProjectRemovalMode } from '../core/index.ts'
-import { listEnvVars, listProjects, registerProject, removeProject, run } from '../core/index.ts'
+import {
+  deleteEnvVar,
+  DuplicateEnvVarKeyError,
+  listEnvVars,
+  listProjects,
+  registerProject,
+  removeProject,
+  run,
+  setEnvVar,
+} from '../core/index.ts'
+import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
+import { EnvVarEditorModal } from './components/EnvVarEditorModal.tsx'
 import { MainPane } from './components/MainPane.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { Toast } from './components/Toast.tsx'
@@ -9,6 +21,19 @@ import { TopBar } from './components/TopBar.tsx'
 import { C, DEFAULT_SIDEBAR_WIDTH } from './theme.ts'
 import { copyToClipboard } from './utils/clipboard.ts'
 import { pickFolderNative } from './utils/pickFolder.ts'
+
+interface EnvVarEditorState {
+  readonly mode: 'add' | 'edit'
+  readonly index: number | null
+  readonly originalKey: string | null
+  readonly key: string
+  readonly value: string
+}
+
+interface EnvVarDeleteState {
+  readonly index: number
+  readonly envVar: EnvVar
+}
 
 export function App() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -23,6 +48,10 @@ export function App() {
   const [removalInFlight, setRemovalInFlight] = useState(false)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
+  const [envVarEditor, setEnvVarEditor] = useState<EnvVarEditorState | null>(null)
+  const [envVarSaveInFlight, setEnvVarSaveInFlight] = useState(false)
+  const [envVarDelete, setEnvVarDelete] = useState<EnvVarDeleteState | null>(null)
+  const [envVarDeleteInFlight, setEnvVarDeleteInFlight] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,6 +69,8 @@ export function App() {
 
   useEffect(() => {
     setRevealedKeys(new Set())
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
     if (!selectedCentralEnvFile) {
       setEnvVars([])
       return
@@ -96,6 +127,106 @@ export function App() {
       return next
     })
 
+  const handleStartAddEnvVar = () => {
+    if (!selectedProject || registrationInFlight) return
+    setEnvVarDelete(null)
+    setEnvVarEditor({ mode: 'add', index: null, originalKey: null, key: '', value: '' })
+  }
+
+  const handleStartEditEnvVar = (index: number) => {
+    const envVar = envVars[index]
+    if (!selectedProject || !envVar || registrationInFlight) return
+    setEnvVarDelete(null)
+    setEnvVarEditor({ mode: 'edit', index, originalKey: envVar.key, key: envVar.key, value: envVar.value })
+  }
+
+  const handleStartDeleteEnvVar = (index: number) => {
+    const envVar = envVars[index]
+    if (!selectedProject || !envVar || registrationInFlight) return
+    setEnvVarEditor(null)
+    setEnvVarDelete({ index, envVar })
+  }
+
+  const handleSaveEnvVar = () => {
+    if (!envVarEditor || !selectedCentralEnvFile || envVarSaveInFlight) return
+
+    const key = envVarEditor.key.trim()
+    const duplicate = envVars.some((envVar, index) => index !== envVarEditor.index && envVar.key === key)
+    if (duplicate) {
+      setToastMessage('Duplicate EnvVar key "' + key + '" already exists')
+      return
+    }
+    if (!key) {
+      setToastMessage('EnvVar key cannot be empty')
+      return
+    }
+
+    const occurrence =
+      envVarEditor.index === null || envVarEditor.originalKey === null
+        ? undefined
+        : envVars.slice(0, envVarEditor.index).filter((envVar) => envVar.key === envVarEditor.originalKey).length
+
+    setEnvVarSaveInFlight(true)
+    run(
+      Effect.either(
+        setEnvVar(
+          selectedCentralEnvFile,
+          { key, value: envVarEditor.value },
+          envVarEditor.mode === 'edit' && envVarEditor.originalKey !== null
+            ? { previousKey: envVarEditor.originalKey, occurrence }
+            : undefined,
+        ),
+      ),
+    )
+      .then((result) => {
+        if (result._tag === 'Left') {
+          if (result.left instanceof DuplicateEnvVarKeyError) {
+            setToastMessage('Duplicate EnvVar key "' + key + '" already exists')
+          } else {
+            setToastMessage('Could not save EnvVar')
+          }
+          return
+        }
+
+        const saved = result.right
+        setEnvVars((current) =>
+          envVarEditor.index === null
+            ? [...current, saved]
+            : current.map((envVar, index) => (index === envVarEditor.index ? saved : envVar)),
+        )
+        setEnvVarEditor(null)
+        setToastMessage('Saved ' + saved.key)
+      })
+      .catch(() => setToastMessage('Could not save EnvVar'))
+      .finally(() => setEnvVarSaveInFlight(false))
+  }
+
+  const handleCancelDeleteEnvVar = () => {
+    if (!envVarDeleteInFlight) setEnvVarDelete(null)
+  }
+
+  const handleConfirmDeleteEnvVar = () => {
+    if (!envVarDelete || !selectedCentralEnvFile || envVarDeleteInFlight) return
+
+    const occurrence = envVars
+      .slice(0, envVarDelete.index)
+      .filter((envVar) => envVar.key === envVarDelete.envVar.key).length
+    const deletedKey = envVarDelete.envVar.key
+    setEnvVarDeleteInFlight(true)
+    run(deleteEnvVar(selectedCentralEnvFile, { key: deletedKey, occurrence }))
+      .then((deleted) => {
+        if (!deleted) {
+          setToastMessage('Could not delete ' + deletedKey)
+          return
+        }
+        setEnvVars((current) => current.filter((_, index) => index !== envVarDelete.index))
+        setEnvVarDelete(null)
+        setToastMessage('Deleted ' + deletedKey)
+      })
+      .catch(() => setToastMessage('Could not delete ' + deletedKey))
+      .finally(() => setEnvVarDeleteInFlight(false))
+  }
+
   const queueFolders = (folderPaths: string[]) => {
     const paths = folderPaths.filter(Boolean)
     if (paths.length === 0) return
@@ -113,6 +244,8 @@ export function App() {
   const handleSelectProject = (id: string) => {
     setSelectedId(id)
     setRemoveCandidateId(null)
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
   }
 
   const handleStartRemove = () => {
@@ -181,12 +314,38 @@ export function App() {
             onFileDrop={handleFileDrop}
             onToggleReveal={handleToggleReveal}
             onCopy={handleCopyEnvVar}
+            onStartAdd={handleStartAddEnvVar}
+            onEdit={handleStartEditEnvVar}
+            onDelete={handleStartDeleteEnvVar}
             onStartRemove={handleStartRemove}
             onSelectRemovalMode={setRemovalMode}
             onCancelRemove={handleCancelRemove}
             onConfirmRemove={handleRemoveProject}
           />
         </div>
+
+        {envVarEditor ? (
+          <EnvVarEditorModal
+            mode={envVarEditor.mode}
+            envVar={{ key: envVarEditor.key, value: envVarEditor.value }}
+            saving={envVarSaveInFlight}
+            onKeyChange={(key) => setEnvVarEditor((current) => (current ? { ...current, key } : current))}
+            onValueChange={(value) => setEnvVarEditor((current) => (current ? { ...current, value } : current))}
+            onSave={handleSaveEnvVar}
+            onClose={() => {
+              if (!envVarSaveInFlight) setEnvVarEditor(null)
+            }}
+          />
+        ) : null}
+
+        {envVarDelete ? (
+          <DeleteEnvVarConfirmation
+            envVar={envVarDelete.envVar}
+            deleting={envVarDeleteInFlight}
+            onCancel={handleCancelDeleteEnvVar}
+            onConfirm={handleConfirmDeleteEnvVar}
+          />
+        ) : null}
 
         {toastMessage ? <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} /> : null}
       </div>
