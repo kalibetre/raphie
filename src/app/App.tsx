@@ -119,10 +119,19 @@ function ResizeHandle({ width, onResize }: { width: number; onResize: (width: nu
   )
 }
 
-function ProjectRow({ project }: { project: Project }) {
+function ProjectRow({
+  project,
+  selected,
+  onSelect,
+}: {
+  project: Project
+  selected: boolean
+  onSelect: () => void
+}) {
   return (
     <div
       testId={`project-${project.id}`}
+      onClick={onSelect}
       style={{
         display: 'flex',
         flexDirection: 'row',
@@ -133,6 +142,8 @@ function ProjectRow({ project }: { project: Project }) {
         paddingTop: 6,
         paddingBottom: 6,
         borderRadius: 6,
+        cursor: 'pointer',
+        backgroundColor: selected ? C.overlay : undefined,
         hover: { backgroundColor: C.overlay },
       }}
     >
@@ -150,6 +161,7 @@ export function App() {
   const [query, setQuery] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [collapsed, setCollapsed] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
     run(listProjects).then(setProjects)
@@ -162,6 +174,8 @@ export function App() {
       (project) => project.name.toLowerCase().includes(q) || project.folderPath.toLowerCase().includes(q),
     )
   }, [projects, query])
+
+  const selectedProject = projects.find((project) => project.id === selectedId) ?? null
 
   const registerFolders = (folderPaths: string[]) => {
     if (folderPaths.length === 0) return
@@ -217,7 +231,15 @@ export function App() {
         </div>
         <text style={{ fontSize: 12, color: C.secondary }}>Raphie</text>
         <text style={{ fontSize: 12, color: C.ghost }}>/</text>
-        <text style={{ fontSize: 13, color: C.text }}>Projects</text>
+        <text style={{ fontSize: 13, color: selectedProject ? C.secondary : C.text }}>Projects</text>
+        {selectedProject ? (
+          <>
+            <text style={{ fontSize: 12, color: C.ghost }}>/</text>
+            <text testId="title-bar-project-name" style={{ fontSize: 13, color: C.text }}>
+              {selectedProject.name}
+            </text>
+          </>
+        ) : null}
         <div style={{ flexGrow: 1 }} />
         <div
           testId="add-project-button"
@@ -289,7 +311,12 @@ export function App() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {visible.map((project) => (
-                  <ProjectRow key={project.id} project={project} />
+                  <ProjectRow
+                    key={project.id}
+                    project={project}
+                    selected={project.id === selectedId}
+                    onSelect={() => setSelectedId(project.id)}
+                  />
                 ))}
               </div>
             )}
@@ -302,7 +329,14 @@ export function App() {
           onFileDrop={handleFileDrop}
           style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          <text style={{ fontSize: 13, color: C.ghost }}>Select a project</text>
+          {selectedProject ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+              <text style={{ fontSize: 16, color: C.text }}>{selectedProject.name}</text>
+              <text style={{ fontSize: 12, color: C.ghost }}>{selectedProject.folderPath}</text>
+            </div>
+          ) : (
+            <text style={{ fontSize: 13, color: C.ghost }}>Select a project</text>
+          )}
         </div>
       </div>
     </div>
