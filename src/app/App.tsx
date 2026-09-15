@@ -3,6 +3,20 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Project } from '../core/index.ts'
 import { listProjects, registerProject, run } from '../core/index.ts'
 
+import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
+
+// Icon source: Lucide (via `lucide-static`, vendored per-icon into assets/icons/),
+// matching the icon set GPUIX's own example apps already standardize on.
+// Add new icons the same way: copy the raw SVG from node_modules/lucide-static/icons/
+// into assets/icons/, then add it to this map — one place to keep icon usage uniform.
+const ICONS = {
+  panelLeft: iconPanelLeft,
+} as const
+
+function Icon({ name, size = 14, color }: { name: keyof typeof ICONS; size?: number; color: string }) {
+  return <svg source={ICONS[name]} style={{ width: size, height: size, flexShrink: 0, color }} />
+}
+
 const C = {
   canvas: '#1A1A1A',
   sidebar: '#181818',
@@ -199,7 +213,7 @@ export function App() {
             hover: { backgroundColor: C.overlay },
           }}
         >
-          <text style={{ fontSize: 11, color: C.secondary }}>{collapsed ? '▸' : '◂'}</text>
+          <Icon name="panelLeft" color={C.secondary} />
         </div>
         <text style={{ fontSize: 12, color: C.secondary }}>Raphie</text>
         <text style={{ fontSize: 12, color: C.ghost }}>/</text>
