@@ -12,7 +12,8 @@ import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing'
 import { Effect } from 'effect'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { App, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from '../../src/app/App.tsx'
+import { App } from '../../src/app/App.tsx'
+import { MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from '../../src/app/theme.ts'
 import { listProjects, run } from '../../src/core/index.ts'
 
 const describeNative = hasNativeTestRenderer ? describe : describe.skip
@@ -51,17 +52,37 @@ afterEach(async () => {
   await removeDir(projectFolder)
 })
 
-/** Stubs the global Bun.$ so pickFolderNative resolves `result` without a real osascript dialog. */
-async function withStubbedPicker<A>(result: string | Error, fn: () => Promise<A> | A): Promise<A> {
+/** Swaps the global Bun for `bunStub` for the duration of `fn`, then restores it. */
+async function withStubbedBun<A>(bunStub: unknown, fn: () => Promise<A> | A): Promise<A> {
   const originalBun = (globalThis as { Bun?: unknown }).Bun
-  ;(globalThis as { Bun?: unknown }).Bun = {
-    $: () => ({ text: () => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)) }),
-  }
+  ;(globalThis as { Bun?: unknown }).Bun = bunStub
   try {
     return await fn()
   } finally {
     ;(globalThis as { Bun?: unknown }).Bun = originalBun
   }
+}
+
+/** Stubs the global Bun.$ so pickFolderNative resolves `result` without a real osascript dialog. */
+const withStubbedPicker = <A,>(result: string | Error, fn: () => Promise<A> | A) =>
+  withStubbedBun(
+    { $: () => ({ text: () => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)) }) },
+    fn,
+  )
+
+/** Stubs the global Bun.$ so copyToClipboard's `pbcopy` shell-out records the copied value instead of touching the real clipboard. */
+function withStubbedClipboard<A>(fn: (copiedValues: string[]) => Promise<A> | A): Promise<A> {
+  const copiedValues: string[] = []
+  return withStubbedBun(
+    {
+      $: (_strings: TemplateStringsArray, value: string) => {
+        copiedValues.push(value)
+        const promise = Promise.resolve()
+        return Object.assign(promise, { quiet: () => promise })
+      },
+    },
+    () => fn(copiedValues),
+  )
 }
 
 /** No wildcard lookup on the test renderer, so walk the retained tree by hand. */
@@ -129,6 +150,38 @@ describeNative('Raphie App', () => {
     await removeDir(secondFolder)
   })
 
+  it('leaves the project list untouched when registration fails', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    // Point RAPHIE_HOME at a file instead of a directory only after the
+    // initial (successful) load, so just registerProject's own makeDirectory
+    // call fails (ENOTDIR) — exercising the registration effect's .catch,
+    // not the unrelated initial listProjects load.
+    const blockedHome = `${home}/blocked`
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(blockedHome, 'a file, not a directory')
+      }),
+    )
+    process.env.RAPHIE_HOME = blockedHome
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const painted = renderer.getPaintedText().join('\n')
+    expect(painted).toContain('Drag a project folder here')
+    expect(painted).not.toContain(projectFolder)
+  })
+
   it('shows the selected project’s name and location in the main pane and top bar', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)
@@ -156,6 +209,297 @@ describeNative('Raphie App', () => {
     // Sidebar row, main pane heading, and the top-bar breadcrumb.
     expect(painted.filter((text) => text === projectName)).toHaveLength(3)
     expect(renderer.findByTestId('title-bar-project-name')).toBeDefined()
+  })
+
+  it('shows the selected Project’s EnvVars masked, and reveals a value on click', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'SECRET_KEY=supersecret\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    let painted = renderer.getPaintedText().join('\n')
+    expect(painted).toContain('SECRET_KEY')
+    expect(painted).not.toContain('supersecret')
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-value-SECRET_KEY').click()
+    renderer.flush()
+
+    painted = renderer.getPaintedText().join('\n')
+    expect(painted).toContain('supersecret')
+
+    await app.close()
+  })
+
+  it('keeps the page header fixed in place after revealing a long EnvVar value', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        // A value with no natural break point can be wider than the whole
+        // window — the header must not grow to fit it (regression: it used
+        // to push "Remove Project" off-screen, see App.tsx main-pane minWidth).
+        yield* fs.writeFileString(project!.centralEnvFile, `LONG_SECRET=${'x'.repeat(500)}\n`)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const removeButtonBefore = renderer.getElementBounds(renderer.findByTestId('remove-project-button')!.id)!
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-value-LONG_SECRET').click()
+    renderer.flush()
+
+    const removeButtonAfter = renderer.getElementBounds(renderer.findByTestId('remove-project-button')!.id)!
+    expect(removeButtonAfter).toEqual(removeButtonBefore)
+
+    await app.close()
+  })
+
+  it('copies an EnvVar’s value to the clipboard without revealing it', async () =>
+    withStubbedClipboard(async (copiedValues) => {
+      const { render, renderer } = createTestRoot()
+      render(<App />)
+      renderer.flush()
+
+      const sidebar = renderer.findByTestId('sidebar')!
+      const bounds = renderer.getElementBounds(sidebar.id)!
+      renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+      await waitForAppUpdate()
+      renderer.flush()
+
+      const [project] = await run(listProjects)
+      expect(project).toBeDefined()
+      await runFs(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem
+          yield* fs.writeFileString(project!.centralEnvFile, 'SECRET_KEY=supersecret\n')
+        }),
+      )
+
+      const row = findByTestIdPrefix(renderer, 'project-')
+      const rowBounds = renderer.getElementBounds(row.id)!
+      renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+      await waitForAppUpdate()
+      renderer.flush()
+
+      const app = await connectTest(renderer)
+      await app.getByTestId('envvar-copy-SECRET_KEY').click()
+      renderer.flush()
+
+      expect(copiedValues).toContain('supersecret')
+      expect(renderer.getPaintedText().join('\n')).not.toContain('supersecret')
+
+      await app.close()
+    }))
+
+  it('shows a copy-confirmation toast that can be dismissed immediately', async () =>
+    withStubbedClipboard(async () => {
+      const { render, renderer } = createTestRoot()
+      render(<App />)
+      renderer.flush()
+
+      const sidebar = renderer.findByTestId('sidebar')!
+      const bounds = renderer.getElementBounds(sidebar.id)!
+      renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+      await waitForAppUpdate()
+      renderer.flush()
+
+      const [project] = await run(listProjects)
+      expect(project).toBeDefined()
+      await runFs(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem
+          yield* fs.writeFileString(project!.centralEnvFile, 'SECRET_KEY=supersecret\n')
+        }),
+      )
+
+      const row = findByTestIdPrefix(renderer, 'project-')
+      const rowBounds = renderer.getElementBounds(row.id)!
+      renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+      await waitForAppUpdate()
+      renderer.flush()
+
+      const app = await connectTest(renderer)
+      await app.getByTestId('envvar-copy-SECRET_KEY').click()
+      renderer.flush()
+
+      expect(renderer.findByTestId('toast')).toBeDefined()
+      expect(renderer.getPaintedText().join('\n')).toContain('Copied SECRET_KEY to clipboard')
+
+      await app.getByTestId('toast-dismiss').click()
+      renderer.flush()
+
+      expect(renderer.findByTestId('toast')).toBeUndefined()
+
+      await app.close()
+    }))
+
+  it('shows a hint when the selected Project has no EnvVars', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.getPaintedText().join('\n')).toContain("No EnvVars in this Project's Central env file")
+  })
+
+  it('warns about duplicate EnvVar keys and badges every occurrence', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'DUPLICATE_KEY=first\nDUPLICATE_KEY=second\nUNIQUE_KEY=only\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.findByTestId('duplicate-keys-warning')).toBeDefined()
+    const painted = renderer.getPaintedText()
+    expect(painted.join('\n')).toContain('Duplicate EnvVars found. Remove or rename them below.')
+    expect(painted.join('\n')).toContain('DUPLICATE_KEY')
+    // One "Duplicate" badge per duplicated row (two DUPLICATE_KEY rows), none on UNIQUE_KEY.
+    expect(painted.filter((text) => text === 'Duplicate')).toHaveLength(2)
+  })
+
+  it('cancels out of the remove-Project confirmation without removing anything', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('remove-project-button').click()
+    renderer.flush()
+    expect(renderer.findByTestId('remove-project-confirmation')).toBeDefined()
+
+    await app.getByTestId('cancel-remove-project').click()
+    renderer.flush()
+
+    expect(renderer.findByTestId('remove-project-confirmation')).toBeUndefined()
+    expect(renderer.findByTestId('remove-project-button')).toBeDefined()
+    expect(await run(listProjects)).toHaveLength(1)
+
+    await app.close()
+  })
+
+  it('removes the Project .env entirely instead of copying it, when that mode is selected', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'REMOVE_ME=1\n')
+        yield* fs.writeFileString(`${projectFolder}/.env`, 'LOCAL=1\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('remove-project-button').click()
+    await app.getByTestId('remove-env-delete-option').click()
+    await app.getByTestId('confirm-remove-project').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(await run(listProjects)).toEqual([])
+    expect(
+      await runFs(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem
+          return yield* fs.exists(`${projectFolder}/.env`)
+        }),
+      ),
+    ).toBe(false)
+
+    await app.close()
   })
 
   it('removes the selected Project and copies its Central env into the project folder', async () => {
@@ -186,6 +530,10 @@ describeNative('Raphie App', () => {
 
     const app = await connectTest(renderer)
     await app.getByTestId('remove-project-button').click()
+    // 'copy' is already the default mode — click it explicitly anyway, so
+    // this exercises the option's own click handler rather than relying on
+    // initial state.
+    await app.getByTestId('remove-env-copy-option').click()
     await app.getByTestId('confirm-remove-project').click()
     await waitForAppUpdate()
     renderer.flush()
@@ -260,6 +608,21 @@ describeNative('Raphie App', () => {
 
     const sidebarAfter = renderer.getElementBounds(renderer.findByTestId('sidebar')!.id)!
     expect(sidebarAfter.width).toBe(sidebarBefore.width + 80)
+  })
+
+  it('ignores mouse moves over the resize handle without a preceding mouse down', () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebarBefore = renderer.getElementBounds(renderer.findByTestId('sidebar')!.id)!
+    const handleBounds = renderer.getElementBounds(renderer.findByTestId('sidebar-resize-handle')!.id)!
+
+    renderer.nativeSimulateMouseMove(handleBounds.x + 80, handleBounds.y + 100)
+    renderer.flush()
+
+    const sidebarAfter = renderer.getElementBounds(renderer.findByTestId('sidebar')!.id)!
+    expect(sidebarAfter.width).toBe(sidebarBefore.width)
   })
 
   it('clamps sidebar resize to the minimum width', () => {
