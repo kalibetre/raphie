@@ -1,4 +1,4 @@
-import { motion } from '@gpuix/react'
+import { motion, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@gpuix/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { EnvVar, Project, ProjectRemovalMode } from '../core/index.ts'
 import { listEnvVars, listProjects, registerProject, removeProject, run } from '../core/index.ts'
@@ -279,8 +279,53 @@ function EnvVarRow({
         hover: { backgroundColor: C.overlay },
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 6, width: KEY_COLUMN_WIDTH, flexShrink: 0 }}>
-        <text style={{ fontSize: 13, color: C.text }}>{envVar.key}</text>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          width: KEY_COLUMN_WIDTH,
+          flexShrink: 0,
+          overflow: 'hidden',
+        }}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* No word-break primitive here, and env var names have no
+                spaces to wrap on anyway — truncate long ones and let the
+                tooltip carry the full name instead. */}
+            <text
+              style={{
+                fontSize: 13,
+                color: C.text,
+                flexGrow: 1,
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {envVar.key}
+            </text>
+          </TooltipTrigger>
+          <TooltipContent
+            side="top"
+            sideOffset={6}
+            style={{
+              paddingLeft: 8,
+              paddingRight: 8,
+              paddingTop: 6,
+              paddingBottom: 6,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: C.border,
+              backgroundColor: C.raised,
+            }}
+          >
+            <text style={{ fontSize: 11, color: C.text }}>{envVar.key}</text>
+          </TooltipContent>
+        </Tooltip>
         {isDuplicate ? <DuplicateBadge /> : null}
       </div>
       <div
@@ -433,6 +478,7 @@ export function App() {
   }
 
   return (
+    <TooltipProvider>
     <div
       testId="app-root"
       style={{
@@ -771,7 +817,7 @@ export function App() {
                   <Icon name="triangleAlert" size={14} color={C.warning} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                     <text style={{ fontSize: 12, color: C.text }}>
-                      This Central env file has duplicate EnvVars. Remove or rename them below.
+                      Duplicate EnvVars found. Remove or rename them below.
                     </text>
                     <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                       {[...duplicateKeys].map((key) => (
@@ -863,5 +909,6 @@ export function App() {
 
       {toastMessage ? <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} /> : null}
     </div>
+    </TooltipProvider>
   )
 }
