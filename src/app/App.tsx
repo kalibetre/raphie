@@ -759,7 +759,7 @@ export function App() {
                   style={{
                     display: 'flex',
                     flexDirection: 'row',
-                    alignItems: 'center',
+                    alignItems: 'flex-start',
                     gap: 8,
                     padding: 10,
                     borderRadius: 8,
@@ -769,10 +769,31 @@ export function App() {
                   }}
                 >
                   <Icon name="triangleAlert" size={14} color={C.warning} />
-                  <text style={{ fontSize: 12, color: C.text }}>
-                    This Central env file has {duplicateKeys.size} duplicate key{duplicateKeys.size > 1 ? 's' : ''}:{' '}
-                    {[...duplicateKeys].join(', ')}. Every instance is shown below — fix the file directly to resolve it.
-                  </text>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                    <text style={{ fontSize: 12, color: C.text }}>
+                      This Central env file has duplicate EnvVars. Remove or rename them below.
+                    </text>
+                    <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {[...duplicateKeys].map((key) => (
+                        <div
+                          key={key}
+                          style={{
+                            height: 18,
+                            paddingLeft: 6,
+                            paddingRight: 6,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: C.warning,
+                            backgroundColor: C.canvas,
+                          }}
+                        >
+                          <text style={{ fontSize: 10, color: C.warning }}>{key}</text>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
