@@ -51,17 +51,37 @@ afterEach(async () => {
   await removeDir(projectFolder)
 })
 
-/** Stubs the global Bun.$ so pickFolderNative resolves `result` without a real osascript dialog. */
-async function withStubbedPicker<A>(result: string | Error, fn: () => Promise<A> | A): Promise<A> {
+/** Swaps the global Bun for `bunStub` for the duration of `fn`, then restores it. */
+async function withStubbedBun<A>(bunStub: unknown, fn: () => Promise<A> | A): Promise<A> {
   const originalBun = (globalThis as { Bun?: unknown }).Bun
-  ;(globalThis as { Bun?: unknown }).Bun = {
-    $: () => ({ text: () => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)) }),
-  }
+  ;(globalThis as { Bun?: unknown }).Bun = bunStub
   try {
     return await fn()
   } finally {
     ;(globalThis as { Bun?: unknown }).Bun = originalBun
   }
+}
+
+/** Stubs the global Bun.$ so pickFolderNative resolves `result` without a real osascript dialog. */
+const withStubbedPicker = <A,>(result: string | Error, fn: () => Promise<A> | A) =>
+  withStubbedBun(
+    { $: () => ({ text: () => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)) }) },
+    fn,
+  )
+
+/** Stubs the global Bun.$ so copyToClipboard's `pbcopy` shell-out records the copied value instead of touching the real clipboard. */
+function withStubbedClipboard<A>(fn: (copiedValues: string[]) => Promise<A> | A): Promise<A> {
+  const copiedValues: string[] = []
+  return withStubbedBun(
+    {
+      $: (_strings: TemplateStringsArray, value: string) => {
+        copiedValues.push(value)
+        const promise = Promise.resolve()
+        return Object.assign(promise, { quiet: () => promise })
+      },
+    },
+    () => fn(copiedValues),
+  )
 }
 
 /** No wildcard lookup on the test renderer, so walk the retained tree by hand. */
@@ -156,6 +176,103 @@ describeNative('Raphie App', () => {
     // Sidebar row, main pane heading, and the top-bar breadcrumb.
     expect(painted.filter((text) => text === projectName)).toHaveLength(3)
     expect(renderer.findByTestId('title-bar-project-name')).toBeDefined()
+  })
+
+  it('shows the selected Project’s EnvVars masked, and reveals a value on click', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'SECRET_KEY=supersecret\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    let painted = renderer.getPaintedText().join('\n')
+    expect(painted).toContain('SECRET_KEY')
+    expect(painted).not.toContain('supersecret')
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-value-SECRET_KEY').click()
+    renderer.flush()
+
+    painted = renderer.getPaintedText().join('\n')
+    expect(painted).toContain('supersecret')
+
+    await app.close()
+  })
+
+  it('copies an EnvVar’s value to the clipboard without revealing it', async () =>
+    withStubbedClipboard(async (copiedValues) => {
+      const { render, renderer } = createTestRoot()
+      render(<App />)
+      renderer.flush()
+
+      const sidebar = renderer.findByTestId('sidebar')!
+      const bounds = renderer.getElementBounds(sidebar.id)!
+      renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+      await waitForAppUpdate()
+      renderer.flush()
+
+      const [project] = await run(listProjects)
+      expect(project).toBeDefined()
+      await runFs(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem
+          yield* fs.writeFileString(project!.centralEnvFile, 'SECRET_KEY=supersecret\n')
+        }),
+      )
+
+      const row = findByTestIdPrefix(renderer, 'project-')
+      const rowBounds = renderer.getElementBounds(row.id)!
+      renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+      await waitForAppUpdate()
+      renderer.flush()
+
+      const app = await connectTest(renderer)
+      await app.getByTestId('envvar-copy-SECRET_KEY').click()
+      renderer.flush()
+
+      expect(copiedValues).toContain('supersecret')
+      expect(renderer.getPaintedText().join('\n')).not.toContain('supersecret')
+
+      await app.close()
+    }))
+
+  it('shows a hint when the selected Project has no EnvVars', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.getPaintedText().join('\n')).toContain("No EnvVars in this Project's Central env file")
   })
 
   it('removes the selected Project and copies its Central env into the project folder', async () => {

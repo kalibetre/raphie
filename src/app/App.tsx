@@ -1,7 +1,7 @@
 import { motion } from '@gpuix/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Project, ProjectRemovalMode } from '../core/index.ts'
-import { listProjects, registerProject, removeProject, run } from '../core/index.ts'
+import type { EnvVar, Project, ProjectRemovalMode } from '../core/index.ts'
+import { listEnvVars, listProjects, registerProject, removeProject, run } from '../core/index.ts'
 
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
 
@@ -57,6 +57,23 @@ export async function pickFolderNative(): Promise<string | null> {
     return null // user cancelled
   }
 }
+
+/**
+ * Copies a value to the system clipboard via `pbcopy`, the same native
+ * shell-out pattern as `pickFolderNative`. `printf '%s'` (not `echo`) so no
+ * trailing newline is added to a copied EnvVar value. Bun's shell escapes
+ * interpolated `${}` values, so this is safe against shell injection.
+ */
+export async function copyToClipboard(value: string): Promise<void> {
+  if (typeof Bun === 'undefined') return
+  try {
+    await Bun.$`printf '%s' ${value} | pbcopy`.quiet()
+  } catch {
+    // clipboard unavailable — nothing more to do
+  }
+}
+
+const MASKED_VALUE = '••••••••'
 
 export function initials(name: string): string {
   const words = name.split(/[\s-_]+/).filter(Boolean)
@@ -156,6 +173,64 @@ function ProjectRow({
   )
 }
 
+function EnvVarRow({
+  envVar,
+  revealed,
+  onToggleReveal,
+}: {
+  envVar: EnvVar
+  revealed: boolean
+  onToggleReveal: () => void
+}) {
+  return (
+    <div
+      testId={`envvar-row-${envVar.key}`}
+      style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4, paddingBottom: 4 }}
+    >
+      <text style={{ fontSize: 12, color: C.text, width: 140, flexShrink: 0 }}>{envVar.key}</text>
+      <div
+        testId={`envvar-value-${envVar.key}`}
+        onClick={onToggleReveal}
+        style={{
+          flexGrow: 1,
+          minWidth: 0,
+          paddingLeft: 8,
+          paddingRight: 8,
+          height: 24,
+          borderRadius: 6,
+          display: 'flex',
+          alignItems: 'center',
+          cursor: 'pointer',
+          backgroundColor: C.raised,
+          hover: { backgroundColor: C.overlay },
+        }}
+      >
+        <text style={{ fontSize: 12, color: revealed ? C.text : C.ghost }}>
+          {revealed ? envVar.value : MASKED_VALUE}
+        </text>
+      </div>
+      <div
+        testId={`envvar-copy-${envVar.key}`}
+        onClick={() => {
+          copyToClipboard(envVar.value)
+        }}
+        style={{
+          height: 24,
+          paddingLeft: 8,
+          paddingRight: 8,
+          borderRadius: 6,
+          display: 'flex',
+          alignItems: 'center',
+          cursor: 'pointer',
+          hover: { backgroundColor: C.overlay },
+        }}
+      >
+        <text style={{ fontSize: 11, color: C.secondary }}>Copy</text>
+      </div>
+    </div>
+  )
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState('')
@@ -167,10 +242,32 @@ export function App() {
   const [removeCandidateId, setRemoveCandidateId] = useState<string | null>(null)
   const [removalMode, setRemovalMode] = useState<ProjectRemovalMode>('copy')
   const [removalInFlight, setRemovalInFlight] = useState(false)
+  const [envVars, setEnvVars] = useState<EnvVar[]>([])
+  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     run(listProjects).then(setProjects)
   }, [])
+
+  const selectedProject = projects.find((project) => project.id === selectedId) ?? null
+  const selectedCentralEnvFile = selectedProject?.centralEnvFile ?? null
+
+  useEffect(() => {
+    setRevealedKeys(new Set())
+    if (!selectedCentralEnvFile) {
+      setEnvVars([])
+      return
+    }
+    // Guard against a stale response landing after the user has already
+    // switched to (or back to) a different Project.
+    let stale = false
+    run(listEnvVars(selectedCentralEnvFile)).then((vars) => {
+      if (!stale) setEnvVars(vars)
+    })
+    return () => {
+      stale = true
+    }
+  }, [selectedCentralEnvFile])
 
   useEffect(() => {
     if (registrationInFlight || registrationQueue.length === 0) return
@@ -190,8 +287,6 @@ export function App() {
       (project) => project.name.toLowerCase().includes(q) || project.folderPath.toLowerCase().includes(q),
     )
   }, [projects, query])
-
-  const selectedProject = projects.find((project) => project.id === selectedId) ?? null
 
   const queueFolders = (folderPaths: string[]) => {
     const paths = folderPaths.filter(Boolean)
@@ -378,6 +473,29 @@ export function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
               <text style={{ fontSize: 16, color: C.text }}>{selectedProject.name}</text>
               <text style={{ fontSize: 12, color: C.ghost }}>{selectedProject.folderPath}</text>
+              {envVars.length === 0 ? (
+                <text testId="envvar-empty-hint" style={{ fontSize: 11, color: C.ghost, marginTop: 8 }}>
+                  No EnvVars in this Project's Central env file
+                </text>
+              ) : (
+                <div testId="envvar-table" style={{ display: 'flex', flexDirection: 'column', width: 360, marginTop: 8 }}>
+                  {envVars.map((envVar) => (
+                    <EnvVarRow
+                      key={envVar.key}
+                      envVar={envVar}
+                      revealed={revealedKeys.has(envVar.key)}
+                      onToggleReveal={() =>
+                        setRevealedKeys((current) => {
+                          const next = new Set(current)
+                          if (next.has(envVar.key)) next.delete(envVar.key)
+                          else next.add(envVar.key)
+                          return next
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              )}
               {removeCandidateId === selectedProject.id ? (
                 <div
                   testId="remove-project-confirmation"
