@@ -1,0 +1,5 @@
+# Central env file + manual symlink, not schema-based or copied
+
+We need to share env values across a project's git worktrees. We evaluated varlock (`.env.schema`-based, type-checked, validated) and rejected it: it assumes no `.env` exists and expects values copied/generated per consumer, which doesn't fit a docker-compose workflow that just wants one real `.env` per worktree with no drift between copies. Instead, each Project has one Central env file (plain string key=value, no schema, no types) stored outside the repo; every Worktree's `.env` is a symlink to it, created by an explicit, user-triggered Link action (no auto-detection or file watching). This trades away type validation and per-worktree override support (deferred) for zero copying and zero drift by construction — editing one value updates every linked worktree instantly.
+
+**Considered**: varlock/schema-based generation (rejected — solves a problem we don't have, adds type/schema maintenance for no benefit here); per-worktree copied `.env` files (rejected — reintroduces the drift problem the symlink approach exists to avoid).

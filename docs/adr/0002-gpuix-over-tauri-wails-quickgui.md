@@ -1,0 +1,5 @@
+# GPUIX chosen over Tauri, Wails, and quickgui.dev
+
+We need a native desktop GUI framework for a personal tool with a project/worktree tree, a masked key-value table, and file dialogs. quickgui.dev was the initial pick but is pre-alpha with no flagship app validating it — too much risk for a tool meant for daily use. Tauri and Wails are stable and battle-tested but render through an OS webview, meaning the table/tree/masked-field UI has to be hand-built in HTML/CSS. We chose GPUIX instead: a React/TypeScript binding over GPUI, the GPU-rendering core that powers Zed in production, so the rendering layer has real production mileage despite GPUIX itself being newer. It ships virtual lists, combobox/select, and native text-selection primitives out of the box, which map directly onto this app's screens.
+
+**Considered**: Tauri (rejected — more mature ecosystem, but webview-based UI work is pure overhead for this app's component needs); Wails (same rejection as Tauri, Go backend didn't outweigh it); Electron (rejected — the resource bloat this project is explicitly trying to avoid); quickgui.dev (rejected — pre-alpha, no production track record).
