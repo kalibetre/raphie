@@ -218,6 +218,47 @@ describeNative('Raphie App', () => {
     await app.close()
   })
 
+  it('keeps the page header fixed in place after revealing a long EnvVar value', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        // A value with no natural break point can be wider than the whole
+        // window — the header must not grow to fit it (regression: it used
+        // to push "Remove Project" off-screen, see App.tsx main-pane minWidth).
+        yield* fs.writeFileString(project!.centralEnvFile, `LONG_SECRET=${'x'.repeat(500)}\n`)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const removeButtonBefore = renderer.getElementBounds(renderer.findByTestId('remove-project-button')!.id)!
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-value-LONG_SECRET').click()
+    renderer.flush()
+
+    const removeButtonAfter = renderer.getElementBounds(renderer.findByTestId('remove-project-button')!.id)!
+    expect(removeButtonAfter).toEqual(removeButtonBefore)
+
+    await app.close()
+  })
+
   it('copies an EnvVar’s value to the clipboard without revealing it', async () =>
     withStubbedClipboard(async (copiedValues) => {
       const { render, renderer } = createTestRoot()

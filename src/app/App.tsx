@@ -176,42 +176,43 @@ function ProjectRow({
 function EnvVarRow({
   envVar,
   revealed,
+  isLast,
   onToggleReveal,
 }: {
   envVar: EnvVar
   revealed: boolean
+  isLast: boolean
   onToggleReveal: () => void
 }) {
   return (
     <div
       testId={`envvar-row-${envVar.key}`}
-      style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4, paddingBottom: 4 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingLeft: 16,
+        paddingRight: 16,
+        paddingTop: 10,
+        paddingBottom: 10,
+        borderBottomWidth: isLast ? 0 : 1,
+        borderColor: C.border,
+        hover: { backgroundColor: C.overlay },
+      }}
     >
-      <text style={{ fontSize: 12, color: C.text, width: 140, flexShrink: 0 }}>{envVar.key}</text>
+      <text style={{ fontSize: 13, color: C.text, width: 240, flexShrink: 0 }}>{envVar.key}</text>
       <div
         testId={`envvar-value-${envVar.key}`}
         onClick={onToggleReveal}
-        style={{
-          flexGrow: 1,
-          minWidth: 0,
-          paddingLeft: 8,
-          paddingRight: 8,
-          height: 24,
-          borderRadius: 6,
-          display: 'flex',
-          alignItems: 'center',
-          overflow: 'hidden',
-          cursor: 'pointer',
-          backgroundColor: C.raised,
-          hover: { backgroundColor: C.overlay },
-        }}
+        style={{ flexGrow: 1, minWidth: 0, overflow: 'hidden', cursor: 'pointer' }}
       >
         {/* A revealed secret can be far longer than 8 mask dots (a path, a
             key) — truncate instead of forcing the row wider and pushing
             Copy out of view. */}
         <text
           style={{
-            fontSize: 12,
+            fontSize: 13,
             color: revealed ? C.text : C.ghost,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -229,8 +230,8 @@ function EnvVarRow({
         style={{
           flexShrink: 0,
           height: 24,
-          paddingLeft: 8,
-          paddingRight: 8,
+          paddingLeft: 10,
+          paddingRight: 10,
           borderRadius: 6,
           display: 'flex',
           alignItems: 'center',
@@ -238,7 +239,7 @@ function EnvVarRow({
           hover: { backgroundColor: C.overlay },
         }}
       >
-        <text style={{ fontSize: 11, color: C.secondary }}>Copy</text>
+        <text style={{ fontSize: 12, color: C.secondary }}>Copy</text>
       </div>
     </div>
   )
@@ -470,38 +471,215 @@ export function App() {
           onFileDrop={handleFileDrop}
           style={{
             flexGrow: 1,
+            // A flex item's implicit min-width is its content's min-content
+            // size, so a long revealed EnvVar value (which paints truncated,
+            // but is still "wide" for sizing purposes) would otherwise stop
+            // this pane from shrinking to the window and push everything in
+            // it — including the Remove Project button — off-screen.
+            minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: 12,
-            alignItems: 'center',
-            // Centering a taller-than-viewport EnvVars table clips both ends
-            // with no way to scroll to them, so only center the empty state.
-            justifyContent: selectedProject ? 'flex-start' : 'center',
             overflowY: 'scroll',
-            paddingTop: 24,
-            paddingBottom: 24,
           }}
         >
           {registrationInFlight ? (
-            <text testId="registration-status" style={{ fontSize: 12, color: C.secondary }}>
+            <text testId="registration-status" style={{ fontSize: 12, color: C.secondary, padding: 24 }}>
               Registering project…
             </text>
           ) : null}
           {selectedProject ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-              <text style={{ fontSize: 16, color: C.text }}>{selectedProject.name}</text>
-              <text style={{ fontSize: 12, color: C.ghost }}>{selectedProject.folderPath}</text>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+                paddingLeft: 32,
+                paddingRight: 32,
+                paddingTop: 28,
+                paddingBottom: 28,
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                  <text style={{ fontSize: 20, color: C.text }}>{selectedProject.name}</text>
+                  <text style={{ fontSize: 12, color: C.ghost }}>{selectedProject.folderPath}</text>
+                </div>
+
+                {removeCandidateId === selectedProject.id ? (
+                  <div
+                    testId="remove-project-confirmation"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: 12,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      backgroundColor: C.sidebar,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <text style={{ fontSize: 11, color: C.secondary }}>Remove this Project from Raphie?</text>
+                    <text style={{ fontSize: 10, color: C.ghost }}>Choose what to do with the project’s .env:</text>
+                    <div
+                      testId="remove-env-copy-option"
+                      onClick={() => {
+                        if (!removalInFlight) setRemovalMode('copy')
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        width: 300,
+                        padding: 8,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: removalMode === 'copy' ? C.accent : C.border,
+                        backgroundColor: removalMode === 'copy' ? C.overlay : undefined,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <text style={{ fontSize: 11, color: C.text }}>Copy .env into the project folder</text>
+                      <text style={{ fontSize: 10, color: C.ghost }}>Recommended: keep the project’s current env values.</text>
+                    </div>
+                    <div
+                      testId="remove-env-delete-option"
+                      onClick={() => {
+                        if (!removalInFlight) setRemovalMode('remove')
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        width: 300,
+                        padding: 8,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: removalMode === 'remove' ? C.accent : C.border,
+                        backgroundColor: removalMode === 'remove' ? C.overlay : undefined,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <text style={{ fontSize: 11, color: C.text }}>Remove .env entirely</text>
+                      <text style={{ fontSize: 10, color: C.ghost }}>Delete the project’s .env and Raphie’s Central copy.</text>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
+                      <div
+                        testId="cancel-remove-project"
+                        onClick={() => {
+                          if (!removalInFlight) setRemoveCandidateId(null)
+                        }}
+                        style={{
+                          height: 26,
+                          paddingLeft: 10,
+                          paddingRight: 10,
+                          borderRadius: 6,
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          hover: { backgroundColor: C.overlay },
+                        }}
+                      >
+                        <text style={{ fontSize: 12, color: C.secondary }}>Cancel</text>
+                      </div>
+                      <div
+                        testId="confirm-remove-project"
+                        onClick={handleRemoveProject}
+                        style={{
+                          height: 26,
+                          paddingLeft: 10,
+                          paddingRight: 10,
+                          borderRadius: 6,
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          backgroundColor: C.accent,
+                          opacity: removalInFlight ? 0.6 : 1,
+                        }}
+                      >
+                        <text style={{ fontSize: 12, color: C.onAccent }}>
+                          {removalInFlight ? 'Removing…' : 'Remove'}
+                        </text>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    testId="remove-project-button"
+                    onClick={() => {
+                      if (!registrationInFlight) {
+                        setRemovalMode('copy')
+                        setRemoveCandidateId(selectedProject.id)
+                      }
+                    }}
+                    style={{
+                      height: 26,
+                      paddingLeft: 10,
+                      paddingRight: 10,
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      opacity: registrationInFlight ? 0.6 : 1,
+                      flexShrink: 0,
+                      hover: { backgroundColor: C.overlay },
+                    }}
+                  >
+                    <text style={{ fontSize: 12, color: C.secondary }}>Remove Project</text>
+                  </div>
+                )}
+              </div>
+
+              {/* Single tab for now — a placeholder for Worktrees and other
+                  per-Project screens to join later as siblings. */}
+              <div style={{ display: 'flex', flexDirection: 'row', borderBottomWidth: 1, borderColor: C.border }}>
+                <div testId="tab-env-vars" style={{ paddingBottom: 10, borderBottomWidth: 2, borderColor: C.accent }}>
+                  <text style={{ fontSize: 13, color: C.text }}>Env Vars</text>
+                </div>
+              </div>
+
               {envVars.length === 0 ? (
-                <text testId="envvar-empty-hint" style={{ fontSize: 11, color: C.ghost, marginTop: 8 }}>
+                <text testId="envvar-empty-hint" style={{ fontSize: 12, color: C.ghost }}>
                   No EnvVars in this Project's Central env file
                 </text>
               ) : (
-                <div testId="envvar-table" style={{ display: 'flex', flexDirection: 'column', width: 360, marginTop: 8 }}>
-                  {envVars.map((envVar) => (
+                <div
+                  testId="envvar-table"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    borderWidth: 1,
+                    borderColor: C.border,
+                    borderRadius: 8,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      paddingLeft: 16,
+                      paddingRight: 16,
+                      paddingTop: 8,
+                      paddingBottom: 8,
+                      backgroundColor: C.sidebar,
+                      borderBottomWidth: 1,
+                      borderColor: C.border,
+                    }}
+                  >
+                    <text style={{ fontSize: 11, color: C.secondary, width: 240, flexShrink: 0 }}>Key</text>
+                    <text style={{ fontSize: 11, color: C.secondary, flexGrow: 1 }}>Value</text>
+                  </div>
+                  {envVars.map((envVar, index) => (
                     <EnvVarRow
                       key={envVar.key}
                       envVar={envVar}
                       revealed={revealedKeys.has(envVar.key)}
+                      isLast={index === envVars.length - 1}
                       onToggleReveal={() =>
                         setRevealedKeys((current) => {
                           const next = new Set(current)
@@ -514,136 +692,11 @@ export function App() {
                   ))}
                 </div>
               )}
-              {removeCandidateId === selectedProject.id ? (
-                <div
-                  testId="remove-project-confirmation"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginTop: 8,
-                    padding: 12,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: C.border,
-                    backgroundColor: C.sidebar,
-                  }}
-                >
-                  <text style={{ fontSize: 11, color: C.secondary }}>Remove this Project from Raphie?</text>
-                  <text style={{ fontSize: 10, color: C.ghost }}>Choose what to do with the project’s .env:</text>
-                  <div
-                    testId="remove-env-copy-option"
-                    onClick={() => {
-                      if (!removalInFlight) setRemovalMode('copy')
-                    }}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2,
-                      width: 300,
-                      padding: 8,
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: removalMode === 'copy' ? C.accent : C.border,
-                      backgroundColor: removalMode === 'copy' ? C.overlay : undefined,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <text style={{ fontSize: 11, color: C.text }}>Copy .env into the project folder</text>
-                    <text style={{ fontSize: 10, color: C.ghost }}>Recommended: keep the project’s current env values.</text>
-                  </div>
-                  <div
-                    testId="remove-env-delete-option"
-                    onClick={() => {
-                      if (!removalInFlight) setRemovalMode('remove')
-                    }}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2,
-                      width: 300,
-                      padding: 8,
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: removalMode === 'remove' ? C.accent : C.border,
-                      backgroundColor: removalMode === 'remove' ? C.overlay : undefined,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <text style={{ fontSize: 11, color: C.text }}>Remove .env entirely</text>
-                    <text style={{ fontSize: 10, color: C.ghost }}>Delete the project’s .env and Raphie’s Central copy.</text>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
-                    <div
-                      testId="cancel-remove-project"
-                      onClick={() => {
-                        if (!removalInFlight) setRemoveCandidateId(null)
-                      }}
-                      style={{
-                        height: 26,
-                        paddingLeft: 10,
-                        paddingRight: 10,
-                        borderRadius: 6,
-                        display: 'flex',
-                        alignItems: 'center',
-                        cursor: 'pointer',
-                        hover: { backgroundColor: C.overlay },
-                      }}
-                    >
-                      <text style={{ fontSize: 12, color: C.secondary }}>Cancel</text>
-                    </div>
-                    <div
-                      testId="confirm-remove-project"
-                      onClick={handleRemoveProject}
-                      style={{
-                        height: 26,
-                        paddingLeft: 10,
-                        paddingRight: 10,
-                        borderRadius: 6,
-                        display: 'flex',
-                        alignItems: 'center',
-                        cursor: 'pointer',
-                        backgroundColor: C.accent,
-                        opacity: removalInFlight ? 0.6 : 1,
-                      }}
-                    >
-                      <text style={{ fontSize: 12, color: C.onAccent }}>
-                        {removalInFlight ? 'Removing…' : 'Remove'}
-                      </text>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  testId="remove-project-button"
-                  onClick={() => {
-                    if (!registrationInFlight) {
-                      setRemovalMode('copy')
-                      setRemoveCandidateId(selectedProject.id)
-                    }
-                  }}
-                  style={{
-                    height: 26,
-                    marginTop: 8,
-                    paddingLeft: 10,
-                    paddingRight: 10,
-                    borderRadius: 6,
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    borderWidth: 1,
-                    borderColor: C.border,
-                    opacity: registrationInFlight ? 0.6 : 1,
-                    hover: { backgroundColor: C.overlay },
-                  }}
-                >
-                  <text style={{ fontSize: 12, color: C.secondary }}>Remove Project</text>
-                </div>
-              )}
             </div>
           ) : (
-            <text style={{ fontSize: 13, color: C.ghost }}>Select a project</text>
+            <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <text style={{ fontSize: 13, color: C.ghost }}>Select a project</text>
+            </div>
           )}
         </div>
       </div>
