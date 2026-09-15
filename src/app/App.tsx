@@ -200,12 +200,24 @@ function EnvVarRow({
           borderRadius: 6,
           display: 'flex',
           alignItems: 'center',
+          overflow: 'hidden',
           cursor: 'pointer',
           backgroundColor: C.raised,
           hover: { backgroundColor: C.overlay },
         }}
       >
-        <text style={{ fontSize: 12, color: revealed ? C.text : C.ghost }}>
+        {/* A revealed secret can be far longer than 8 mask dots (a path, a
+            key) — truncate instead of forcing the row wider and pushing
+            Copy out of view. */}
+        <text
+          style={{
+            fontSize: 12,
+            color: revealed ? C.text : C.ghost,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
           {revealed ? envVar.value : MASKED_VALUE}
         </text>
       </div>
@@ -215,6 +227,7 @@ function EnvVarRow({
           copyToClipboard(envVar.value)
         }}
         style={{
+          flexShrink: 0,
           height: 24,
           paddingLeft: 8,
           paddingRight: 8,
@@ -461,7 +474,12 @@ export function App() {
             flexDirection: 'column',
             gap: 12,
             alignItems: 'center',
-            justifyContent: 'center',
+            // Centering a taller-than-viewport EnvVars table clips both ends
+            // with no way to scroll to them, so only center the empty state.
+            justifyContent: selectedProject ? 'flex-start' : 'center',
+            overflowY: 'scroll',
+            paddingTop: 24,
+            paddingBottom: 24,
           }}
         >
           {registrationInFlight ? (
