@@ -582,6 +582,57 @@ describeNative('Raphie App', () => {
     await app.close()
   })
 
+  it('rejects empty EnvVar values when adding or editing', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'EXISTING=original\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('envvar-edit-EXISTING').click()
+    await app.getByTestId('envvar-editor-value').fill('')
+    await app.getByTestId('envvar-editor-save').click()
+    renderer.flush()
+
+    expect(renderer.findByTestId('envvar-editor-modal')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('EnvVar value cannot be empty')
+    expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([{ key: 'EXISTING', value: 'original' }])
+
+    await app.getByTestId('envvar-editor-close').click()
+    await app.getByTestId('add-envvar-button').click()
+    await app.getByTestId('envvar-editor-key').fill('NEW_KEY')
+    await app.getByTestId('envvar-editor-value').fill('')
+    await app.getByTestId('envvar-editor-save').click()
+    renderer.flush()
+
+    expect(renderer.findByTestId('envvar-editor-modal')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('EnvVar value cannot be empty')
+    expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([{ key: 'EXISTING', value: 'original' }])
+
+    await app.getByTestId('envvar-editor-close').click()
+    await app.close()
+  })
+
   it('rejects a duplicate EnvVar key and shows a toast error', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)

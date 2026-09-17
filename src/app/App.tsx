@@ -162,6 +162,10 @@ export function App() {
       setToastMessage('EnvVar key cannot be empty')
       return
     }
+    if (!envVarEditor.value.trim()) {
+      setToastMessage('EnvVar value cannot be empty')
+      return
+    }
 
     const occurrence =
       envVarEditor.index === null || envVarEditor.originalKey === null
