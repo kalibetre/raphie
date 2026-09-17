@@ -282,6 +282,7 @@ describeNative('Raphie App', () => {
 
     const app = await connectTest(renderer)
     await app.getByTestId('tab-worktrees').click()
+    await waitForAppUpdate()
     renderer.flush()
 
     const worktreePainted = renderer.getPaintedText().join('\n')

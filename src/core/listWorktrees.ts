@@ -77,13 +77,15 @@ const isLinkedToCentralEnv = (
 
 /**
  * Lists every Worktree Git reports for a Project, including the main Worktree.
+ * This is the fast discovery phase: metadata is loaded separately so callers
+ * can render the paths immediately and enrich each Worktree independently.
  * Link status is derived from the current filesystem on every call; it is not
  * persisted with the Project.
  *
  * A Project that is not a Git repository has no Worktrees and therefore returns
  * an empty list.
  */
-export const listWorktrees = (project: Project) =>
+export const discoverWorktrees = (project: Project) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
@@ -94,9 +96,23 @@ export const listWorktrees = (project: Project) =>
     const centralEnvPath = yield* canonicalPath(fs, project.centralEnvFile)
 
     return yield* Effect.forEach(worktreePaths, (worktreePath) =>
-      Effect.all({
-        linked: isLinkedToCentralEnv(fs, path, worktreePath, centralEnvPath),
-        metadata: readWorktreeMetadata(worktreePath),
-      }).pipe(Effect.map(({ linked, metadata }): Worktree => ({ path: worktreePath, linked, ...metadata }))),
+      isLinkedToCentralEnv(fs, path, worktreePath, centralEnvPath).pipe(
+        Effect.map((linked): Worktree => ({ path: worktreePath, linked, metadata: null })),
+      ),
+      { concurrency: 'unbounded' },
+    )
+  })
+
+/** Loads the expensive size and Git status details for one discovered Worktree. */
+export const loadWorktreeMetadata = (worktree: Pick<Worktree, 'path'>) => readWorktreeMetadata(worktree.path)
+
+/** Lists Worktrees with all metadata loaded for non-UI callers. */
+export const listWorktrees = (project: Project) =>
+  Effect.gen(function* () {
+    const discovered = yield* discoverWorktrees(project)
+    return yield* Effect.forEach(
+      discovered,
+      (worktree) => loadWorktreeMetadata(worktree).pipe(Effect.map((metadata) => ({ ...worktree, metadata }))),
+      { concurrency: 'unbounded' },
     )
   })

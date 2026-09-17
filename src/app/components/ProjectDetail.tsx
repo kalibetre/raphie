@@ -61,6 +61,8 @@ export function ProjectDetail({
       style={{
         display: 'flex',
         flexDirection: 'column',
+        flexGrow: 1,
+        minHeight: 0,
         gap: 16,
         width: '100%',
         maxWidth: 1040,
@@ -115,69 +117,80 @@ export function ProjectDetail({
         </div>
       </div>
 
-      {showingWorktrees ? (
-        <WorktreeList worktrees={worktrees} loading={worktreesLoading} />
-      ) : (
-        <>
-          <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flexGrow: 1,
+          minHeight: 0,
+          gap: 16,
+          overflowY: showingWorktrees ? 'hidden' : 'scroll',
+        }}
+      >
+        {showingWorktrees ? (
+          <WorktreeList worktrees={worktrees} loading={worktreesLoading} />
+        ) : (
+          <>
+            <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
 
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <text style={{ fontSize: 13, color: C.secondary }}>Environment variables</text>
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <input
-                testId="envvar-search"
-                value={searchQuery}
-                placeholder="Search EnvVars"
-                onChange={(event) => onSearchQueryChange(event.value ?? '')}
-                style={{
-                  width: 220,
-                  height: 28,
-                  paddingLeft: 8,
-                  paddingRight: 8,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: C.border,
-                  backgroundColor: C.raised,
-                  fontSize: 12,
-                  color: C.text,
-                }}
-              />
-              <div
-                testId="add-envvar-button"
-                role="button"
-                aria-label="Add EnvVar"
-                onClick={onStartAdd}
-                style={{
-                  height: 28,
-                  paddingLeft: 10,
-                  paddingRight: 10,
-                  borderRadius: 6,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  borderWidth: 1,
-                  borderColor: C.border,
-                  hover: { backgroundColor: C.overlay },
-                }}
-              >
-                <text style={{ fontSize: 12, color: C.secondary }}>Add EnvVar</text>
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <text style={{ fontSize: 13, color: C.secondary }}>Environment variables</text>
+              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <input
+                  testId="envvar-search"
+                  value={searchQuery}
+                  placeholder="Search EnvVars"
+                  onChange={(event) => onSearchQueryChange(event.value ?? '')}
+                  style={{
+                    width: 220,
+                    height: 28,
+                    paddingLeft: 8,
+                    paddingRight: 8,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: C.border,
+                    backgroundColor: C.raised,
+                    fontSize: 12,
+                    color: C.text,
+                  }}
+                />
+                <div
+                  testId="add-envvar-button"
+                  role="button"
+                  aria-label="Add EnvVar"
+                  onClick={onStartAdd}
+                  style={{
+                    height: 28,
+                    paddingLeft: 10,
+                    paddingRight: 10,
+                    borderRadius: 6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    borderWidth: 1,
+                    borderColor: C.border,
+                    hover: { backgroundColor: C.overlay },
+                  }}
+                >
+                  <text style={{ fontSize: 12, color: C.secondary }}>Add EnvVar</text>
+                </div>
               </div>
             </div>
-          </div>
 
-          <EnvVarTable
-            envVars={envVars}
-            revealedKeys={revealedKeys}
-            duplicateKeys={duplicateKeys}
-            searchQuery={searchQuery}
-            onToggleReveal={onToggleReveal}
-            onCopy={onCopy}
-            onEdit={onEdit}
-            onDelete={onDelete}
-          />
-        </>
-      )}
+            <EnvVarTable
+              envVars={envVars}
+              revealedKeys={revealedKeys}
+              duplicateKeys={duplicateKeys}
+              searchQuery={searchQuery}
+              onToggleReveal={onToggleReveal}
+              onCopy={onCopy}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          </>
+        )}
+      </div>
     </div>
   )
 }

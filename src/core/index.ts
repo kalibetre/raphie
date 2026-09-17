@@ -1,7 +1,7 @@
-export type { EnvVar, Project, Worktree, WorktreeCommit } from './Domain.ts'
+export type { EnvVar, Project, Worktree, WorktreeCommit, WorktreeMetadata } from './Domain.ts'
 export { registerProject } from './registerProject.ts'
 export { listProjects } from './listProjects.ts'
-export { listWorktrees } from './listWorktrees.ts'
+export { discoverWorktrees, listWorktrees, loadWorktreeMetadata } from './listWorktrees.ts'
 export { listEnvVars } from './listEnvVars.ts'
 export {
   DuplicateEnvVarKeyError,

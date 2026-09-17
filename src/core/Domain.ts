@@ -11,14 +11,18 @@ export interface WorktreeCommit {
   readonly date: string
 }
 
-export interface Worktree {
-  readonly path: string
-  readonly linked: boolean
+export interface WorktreeMetadata {
   readonly size: number
   readonly branch: string | null
   readonly lastCommit: WorktreeCommit | null
   readonly stagedChanges: number
   readonly unstagedChanges: number
+}
+
+export interface Worktree {
+  readonly path: string
+  readonly linked: boolean
+  readonly metadata: WorktreeMetadata | null
 }
 
 export interface EnvVar {

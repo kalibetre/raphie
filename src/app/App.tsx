@@ -1,13 +1,14 @@
 import { TooltipProvider } from '@gpuix/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Effect } from 'effect'
-import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../core/index.ts'
+import type { EnvVar, Project, ProjectRemovalMode, Worktree, WorktreeMetadata } from '../core/index.ts'
 import {
   deleteEnvVar,
   DuplicateEnvVarKeyError,
   listEnvVars,
   listProjects,
-  listWorktrees,
+  discoverWorktrees,
+  loadWorktreeMetadata,
   registerProject,
   removeProject,
   run,
@@ -23,6 +24,7 @@ import { TopBar } from './components/TopBar.tsx'
 import { C, DEFAULT_SIDEBAR_WIDTH } from './theme.ts'
 import { copyToClipboard } from './utils/clipboard.ts'
 import { pickFolderNative } from './utils/pickFolder.ts'
+import { readWorktreeCache, type WorktreeCache, writeWorktreeCache } from './worktreeCache.ts'
 
 interface EnvVarEditorState {
   readonly mode: 'add' | 'edit'
@@ -52,6 +54,9 @@ export function App() {
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoading, setWorktreesLoading] = useState(false)
+  const worktreeCache = useRef<WorktreeCache>(new Map())
+  const worktreeDiscoveryRequests = useRef(new Map<string, Promise<Worktree[]>>())
+  const worktreeMetadataRequests = useRef(new Map<string, Promise<WorktreeMetadata>>())
   const [envVarSearchQuery, setEnvVarSearchQuery] = useState('')
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   const [envVarEditor, setEnvVarEditor] = useState<EnvVarEditorState | null>(null)
@@ -78,29 +83,92 @@ export function App() {
     setEnvVarSearchQuery('')
     setEnvVarEditor(null)
     setEnvVarDelete(null)
-    setWorktrees([])
-    setWorktreesLoading(Boolean(selectedProject && selectedCentralEnvFile))
     if (!selectedProject || !selectedCentralEnvFile) {
       setEnvVars([])
+      setWorktrees([])
+      setWorktreesLoading(false)
       return
     }
     const project = selectedProject
+    const cached = readWorktreeCache(worktreeCache.current, project.id)
+    setWorktrees(cached?.worktrees ?? [])
+    setWorktreesLoading(cached === null)
     // Guard against a stale response landing after the user has already
     // switched to (or back to) a different Project.
     let stale = false
     run(listEnvVars(selectedCentralEnvFile)).then((vars) => {
       if (!stale) setEnvVars(vars)
     })
-    run(listWorktrees(project))
-      .then((current) => {
+    const applyMetadata = (worktree: Worktree, metadata: WorktreeMetadata) => {
+      const cacheEntry = worktreeCache.current.get(project.id)
+      const snapshot = cacheEntry?.worktrees ?? [worktree]
+      const next = snapshot.map((current) =>
+        current.path === worktree.path ? { ...current, metadata } : current,
+      )
+      writeWorktreeCache(worktreeCache.current, project.id, next, cacheEntry?.loadedAt)
+      if (!stale) {
+        setWorktrees((current) =>
+          current.map((item) => (item.path === worktree.path ? { ...item, metadata } : item)),
+        )
+      }
+    }
+
+    const loadMetadata = (discovered: Worktree[]) => {
+      for (const worktree of discovered) {
+        if (worktree.metadata !== null) continue
+        const requestKey = `${project.id}:${worktree.path}`
+        const existing = worktreeMetadataRequests.current.get(requestKey)
+        const request = existing ?? run(loadWorktreeMetadata(worktree))
+        if (!existing) {
+          worktreeMetadataRequests.current.set(requestKey, request)
+          const clearRequest = () => {
+            if (worktreeMetadataRequests.current.get(requestKey) === request) {
+              worktreeMetadataRequests.current.delete(requestKey)
+            }
+          }
+          request.then(clearRequest, clearRequest)
+        }
+        request.then((metadata) => applyMetadata(worktree, metadata)).catch(() => undefined)
+      }
+    }
+
+    if (cached && !cached.stale) {
+      loadMetadata(cached.worktrees)
+      return () => {
+        stale = true
+      }
+    }
+
+    const existing = worktreeDiscoveryRequests.current.get(project.id)
+    const request = existing ?? run(discoverWorktrees(project))
+    if (!existing) {
+      worktreeDiscoveryRequests.current.set(project.id, request)
+      const clearRequest = () => {
+        if (worktreeDiscoveryRequests.current.get(project.id) === request) {
+          worktreeDiscoveryRequests.current.delete(project.id)
+        }
+      }
+      request.then(clearRequest, clearRequest)
+    }
+
+    request
+      .then((discovered) => {
+        const previous = worktreeCache.current.get(project.id)
+        const previousByPath = new Map(previous?.worktrees.map((worktree) => [worktree.path, worktree]) ?? [])
+        const next = discovered.map((worktree) => ({
+          ...worktree,
+          metadata: previousByPath.get(worktree.path)?.metadata ?? null,
+        }))
+        writeWorktreeCache(worktreeCache.current, project.id, next, Date.now())
         if (!stale) {
-          setWorktrees(current)
+          setWorktrees(next)
           setWorktreesLoading(false)
         }
+        loadMetadata(next)
       })
       .catch(() => {
         if (!stale) {
-          setWorktrees([])
+          if (!cached) setWorktrees([])
           setWorktreesLoading(false)
         }
       })

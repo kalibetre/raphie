@@ -1,7 +1,7 @@
 import { Command, FileSystem, Path } from '@effect/platform'
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
-import { listWorktrees } from '../../src/core/listWorktrees.ts'
+import { discoverWorktrees, listWorktrees } from '../../src/core/listWorktrees.ts'
 import { registerProject } from '../../src/core/registerProject.ts'
 import { withProjectFixtures } from './fixtures.ts'
 
@@ -34,28 +34,37 @@ describe('listWorktrees', () => {
         yield* fs.writeFileString(path.join(projectFolder, 'staged.txt'), 'staged\n')
         expect(yield* git(projectFolder, 'add', 'staged.txt')).toBe(0)
 
-        const worktrees = yield* listWorktrees(project)
+        const discoveredWorktrees = yield* discoverWorktrees(project)
         const mainPath = yield* fs.realPath(projectFolder)
         const additionalPath = yield* fs.realPath(worktreeFolder)
-        expect(worktrees).toHaveLength(2)
+        expect(discoveredWorktrees).toEqual([
+          { path: mainPath, linked: true, metadata: null },
+          { path: additionalPath, linked: false, metadata: null },
+        ])
+
+        const worktrees = yield* listWorktrees(project)
         expect(worktrees[0]).toMatchObject({
           path: mainPath,
           linked: true,
-          branch: 'main',
-          stagedChanges: 1,
-          unstagedChanges: 2,
-          size: expect.any(Number),
-          lastCommit: {
-            subject: 'initial',
-            date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          metadata: {
+            branch: 'main',
+            stagedChanges: 1,
+            unstagedChanges: 2,
+            size: expect.any(Number),
+            lastCommit: {
+              subject: 'initial',
+              date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+            },
           },
         })
-        expect(worktrees[0]!.size).toBeGreaterThan(0)
+        expect(worktrees[0]!.metadata!.size).toBeGreaterThan(0)
         expect(worktrees[1]).toMatchObject({
           path: additionalPath,
           linked: false,
-          branch: 'feature',
-          lastCommit: { subject: 'initial' },
+          metadata: {
+            branch: 'feature',
+            lastCommit: { subject: 'initial' },
+          },
         })
 
         yield* fs.remove(path.join(projectFolder, '.env'))

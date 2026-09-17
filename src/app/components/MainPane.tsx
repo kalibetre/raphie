@@ -63,7 +63,7 @@ export function MainPane({
         minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
-        overflowY: 'scroll',
+        overflowY: 'hidden',
       }}
     >
       {registrationInFlight ? (
