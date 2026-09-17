@@ -1,9 +1,12 @@
 import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../../core/index.ts'
+import { useState } from 'react'
 import { C } from '../theme.ts'
 import { DuplicateKeysWarning } from './DuplicateKeysWarning.tsx'
 import { EnvVarTable } from './EnvVarTable.tsx'
 import { ProjectHeader } from './ProjectHeader.tsx'
 import { WorktreeList } from './WorktreeList.tsx'
+
+type ProjectTab = 'env-vars' | 'worktrees'
 
 export function ProjectDetail({
   project,
@@ -48,6 +51,10 @@ export function ProjectDetail({
   onCancelRemove: () => void
   onConfirmRemove: () => void
 }) {
+  const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
+  const hasWorktrees = worktrees.length > 0
+  const showingWorktrees = activeTab === 'worktrees' && hasWorktrees
+
   return (
     <div
       style={{
@@ -75,73 +82,103 @@ export function ProjectDetail({
         onConfirmRemove={onConfirmRemove}
       />
 
-      {/* Single tab for now — a placeholder for Worktrees and other
-          per-Project screens to join later as siblings. */}
       <div style={{ display: 'flex', flexDirection: 'row', borderBottomWidth: 1, borderColor: C.border }}>
-        <div testId="tab-env-vars" style={{ paddingBottom: 10, borderBottomWidth: 2, borderColor: C.accent }}>
+        <div
+          testId="tab-env-vars"
+          role="button"
+          onClick={() => setActiveTab('env-vars')}
+          style={{
+            paddingBottom: 10,
+            paddingRight: 16,
+            borderBottomWidth: showingWorktrees ? 0 : 2,
+            borderColor: C.accent,
+            cursor: 'pointer',
+          }}
+        >
           <text style={{ fontSize: 13, color: C.text }}>Env Vars</text>
         </div>
-      </div>
-
-      <WorktreeList worktrees={worktrees} />
-
-      <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
-
-      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <text style={{ fontSize: 13, color: C.secondary }}>Environment variables</text>
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <input
-            testId="envvar-search"
-            value={searchQuery}
-            placeholder="Search EnvVars"
-            onChange={(event) => onSearchQueryChange(event.value ?? '')}
-            style={{
-              width: 220,
-              height: 28,
-              paddingLeft: 8,
-              paddingRight: 8,
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: C.border,
-              backgroundColor: C.raised,
-              fontSize: 12,
-              color: C.text,
-            }}
-          />
+        {hasWorktrees ? (
           <div
-            testId="add-envvar-button"
+            testId="tab-worktrees"
             role="button"
-            aria-label="Add EnvVar"
-            onClick={onStartAdd}
+            onClick={() => setActiveTab('worktrees')}
             style={{
-              height: 28,
-              paddingLeft: 10,
-              paddingRight: 10,
-              borderRadius: 6,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              paddingBottom: 10,
+              paddingLeft: 16,
+              paddingRight: 16,
+              borderBottomWidth: showingWorktrees ? 2 : 0,
+              borderColor: C.accent,
               cursor: 'pointer',
-              borderWidth: 1,
-              borderColor: C.border,
-              hover: { backgroundColor: C.overlay },
             }}
           >
-            <text style={{ fontSize: 12, color: C.secondary }}>Add EnvVar</text>
+            <text style={{ fontSize: 13, color: C.text }}>Worktrees</text>
           </div>
-        </div>
+        ) : null}
       </div>
 
-      <EnvVarTable
-        envVars={envVars}
-        revealedKeys={revealedKeys}
-        duplicateKeys={duplicateKeys}
-        searchQuery={searchQuery}
-        onToggleReveal={onToggleReveal}
-        onCopy={onCopy}
-        onEdit={onEdit}
-        onDelete={onDelete}
-      />
+      {showingWorktrees ? (
+        <WorktreeList worktrees={worktrees} />
+      ) : (
+        <>
+          <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
+
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <text style={{ fontSize: 13, color: C.secondary }}>Environment variables</text>
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <input
+                testId="envvar-search"
+                value={searchQuery}
+                placeholder="Search EnvVars"
+                onChange={(event) => onSearchQueryChange(event.value ?? '')}
+                style={{
+                  width: 220,
+                  height: 28,
+                  paddingLeft: 8,
+                  paddingRight: 8,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  backgroundColor: C.raised,
+                  fontSize: 12,
+                  color: C.text,
+                }}
+              />
+              <div
+                testId="add-envvar-button"
+                role="button"
+                aria-label="Add EnvVar"
+                onClick={onStartAdd}
+                style={{
+                  height: 28,
+                  paddingLeft: 10,
+                  paddingRight: 10,
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  hover: { backgroundColor: C.overlay },
+                }}
+              >
+                <text style={{ fontSize: 12, color: C.secondary }}>Add EnvVar</text>
+              </div>
+            </div>
+          </div>
+
+          <EnvVarTable
+            envVars={envVars}
+            revealedKeys={revealedKeys}
+            duplicateKeys={duplicateKeys}
+            searchQuery={searchQuery}
+            onToggleReveal={onToggleReveal}
+            onCopy={onCopy}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        </>
+      )}
     </div>
   )
 }

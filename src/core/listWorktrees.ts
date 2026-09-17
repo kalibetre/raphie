@@ -1,9 +1,54 @@
 import { Command, FileSystem, Path } from '@effect/platform'
 import { Effect } from 'effect'
-import type { Project, Worktree } from './Domain.ts'
+import type { Project, Worktree, WorktreeCommit } from './Domain.ts'
 
 const parseWorktreePaths = (lines: readonly string[]) =>
   lines.filter((line) => line.startsWith('worktree ')).map((line) => line.slice('worktree '.length))
+
+const commandText = (command: Command.Command) =>
+  Command.string(command).pipe(
+    Effect.map((output) => output.trim()),
+    Effect.catchAll(() => Effect.succeed('')),
+  )
+
+const commandLines = (command: Command.Command) =>
+  Command.lines(command).pipe(Effect.catchAll(() => Effect.succeed([])))
+
+const parseLastCommit = (output: string): WorktreeCommit | null => {
+  const [hash, date, subject] = output.split('\x1f')
+  if (!hash || !date || subject === undefined) return null
+  return { hash, date, subject }
+}
+
+const countStagedChanges = (lines: readonly string[]) =>
+  lines.filter((line) => {
+    const indexStatus = line.charAt(0)
+    return indexStatus !== '' && indexStatus !== ' ' && indexStatus !== '?'
+  }).length
+
+const countUnstagedChanges = (lines: readonly string[]) =>
+  lines.filter((line) => line.startsWith('??') || line.charAt(1) !== ' ').length
+
+const readWorktreeMetadata = (worktreePath: string) =>
+  Effect.gen(function* () {
+    const branchOutput = yield* commandText(Command.make('git', '-C', worktreePath, 'branch', '--show-current'))
+    const commitOutput = yield* commandText(
+      Command.make('git', '-C', worktreePath, 'log', '-1', '--date=iso-strict', '--format=%h%x1f%ad%x1f%s'),
+    )
+    const statusLines = yield* commandLines(
+      Command.make('git', '-C', worktreePath, 'status', '--porcelain=v1', '--untracked-files=all'),
+    )
+    const sizeOutput = yield* commandText(Command.make('du', '-sk', worktreePath))
+    const kilobytes = Number(sizeOutput.split(/\s+/)[0])
+
+    return {
+      size: Number.isFinite(kilobytes) ? kilobytes * 1024 : 0,
+      branch: branchOutput || null,
+      lastCommit: parseLastCommit(commitOutput),
+      stagedChanges: countStagedChanges(statusLines),
+      unstagedChanges: countUnstagedChanges(statusLines),
+    }
+  })
 
 const canonicalPath = (fs: FileSystem.FileSystem, filePath: string) =>
   fs.realPath(filePath).pipe(
@@ -49,8 +94,9 @@ export const listWorktrees = (project: Project) =>
     const centralEnvPath = yield* canonicalPath(fs, project.centralEnvFile)
 
     return yield* Effect.forEach(worktreePaths, (worktreePath) =>
-      isLinkedToCentralEnv(fs, path, worktreePath, centralEnvPath).pipe(
-        Effect.map((linked): Worktree => ({ path: worktreePath, linked })),
-      ),
+      Effect.all({
+        linked: isLinkedToCentralEnv(fs, path, worktreePath, centralEnvPath),
+        metadata: readWorktreeMetadata(worktreePath),
+      }).pipe(Effect.map(({ linked, metadata }): Worktree => ({ path: worktreePath, linked, ...metadata }))),
     )
   })

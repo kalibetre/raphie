@@ -71,6 +71,7 @@ export function MainPane({
       ) : null}
       {selectedProject ? (
         <ProjectDetail
+          key={selectedProject.id}
           project={selectedProject}
           envVars={envVars}
           worktrees={worktrees}

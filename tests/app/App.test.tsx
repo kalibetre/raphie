@@ -39,6 +39,7 @@ const removeDir = (path: string) =>
 
 let home: string
 let projectFolder: string
+const disposableFolders: string[] = []
 
 beforeEach(async () => {
   home = await makeTempDir('raphie-app-home-')
@@ -50,6 +51,7 @@ afterEach(async () => {
   delete process.env.RAPHIE_HOME
   await removeDir(home)
   await removeDir(projectFolder)
+  for (const folder of disposableFolders.splice(0)) await removeDir(folder)
 })
 
 /** Swaps the global Bun for `bunStub` for the duration of `fn`, then restores it. */
@@ -218,6 +220,7 @@ describeNative('Raphie App', () => {
 
   it('shows every git Worktree with its current Central env link status', async () => {
     const worktreeFolder = await makeTempDir('raphie-app-worktree-')
+    disposableFolders.push(worktreeFolder)
     await runGit('-C', projectFolder, 'init')
     await runGit('-C', projectFolder, 'config', 'user.email', 'raphie-tests@example.com')
     await runGit('-C', projectFolder, 'config', 'user.name', 'Raphie Tests')
@@ -274,13 +277,33 @@ describeNative('Raphie App', () => {
         return yield* fs.realPath(worktreeFolder)
       }),
     )
-    const painted = renderer.getPaintedText().join('\n')
+    expect(renderer.findByTestId('tab-worktrees')).toBeDefined()
+    expect(renderer.findByTestId('worktrees-section')).toBeUndefined()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('tab-worktrees').click()
+    renderer.flush()
+
+    const worktreePainted = renderer.getPaintedText().join('\n')
     expect(renderer.findByTestId('worktrees-section')).toBeDefined()
-    expect(painted).toContain('Worktrees')
-    expect(painted).toContain(mainPath)
-    expect(painted).toContain(additionalPath)
-    expect(painted).toContain('Linked')
-    expect(painted).toContain('Not Linked')
+    expect(worktreePainted).toContain('Worktrees')
+    expect(worktreePainted).toContain(mainPath)
+    expect(worktreePainted).toContain(additionalPath)
+    expect(worktreePainted).toContain('Linked')
+    expect(worktreePainted).toContain('Not Linked')
+    expect(worktreePainted).toContain('Size')
+    expect(worktreePainted).toContain('Branch')
+    expect(worktreePainted).toContain('main')
+    expect(worktreePainted).toContain('Last commit')
+    expect(worktreePainted).toContain('Last commit date')
+    expect(worktreePainted).toMatch(/\d{4}-\d{2}-\d{2}/)
+    expect(worktreePainted).toContain('Staged changes')
+    expect(worktreePainted).toContain('Unstaged changes')
+
+    await app.getByTestId('tab-env-vars').click()
+    renderer.flush()
+    expect(renderer.findByTestId('worktrees-section')).toBeUndefined()
+    await app.close()
   })
 
   it('shows no Worktree UI for a non-git Project', async () => {
@@ -301,6 +324,7 @@ describeNative('Raphie App', () => {
     renderer.flush()
 
     expect(renderer.findByTestId('worktrees-section')).toBeUndefined()
+    expect(renderer.findByTestId('tab-worktrees')).toBeUndefined()
     expect(renderer.getPaintedText().join('\n')).not.toContain('Worktrees')
   })
 

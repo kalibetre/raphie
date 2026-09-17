@@ -23,24 +23,44 @@ describe('listWorktrees', () => {
         // The developer environment may globally require SSH commit signing;
         // this integration test only needs a real commit for worktree setup.
         expect(yield* git(projectFolder, '-c', 'commit.gpgSign=false', 'commit', '-m', 'initial')).toBe(0)
+        expect(yield* git(projectFolder, 'branch', '-M', 'main')).toBe(0)
 
         const project = yield* registerProject({ folderPath: projectFolder })
         yield* fs.symlink(project.centralEnvFile, path.join(projectFolder, '.env'))
 
         expect(yield* git(projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)).toBe(0)
         yield* fs.writeFileString(path.join(worktreeFolder, '.env'), 'LOCAL_ONLY=yes\n')
+        yield* fs.writeFileString(path.join(projectFolder, 'README.md'), 'changed\n')
+        yield* fs.writeFileString(path.join(projectFolder, 'staged.txt'), 'staged\n')
+        expect(yield* git(projectFolder, 'add', 'staged.txt')).toBe(0)
 
         const worktrees = yield* listWorktrees(project)
         const mainPath = yield* fs.realPath(projectFolder)
         const additionalPath = yield* fs.realPath(worktreeFolder)
-        expect(worktrees).toEqual([
-          { path: mainPath, linked: true },
-          { path: additionalPath, linked: false },
-        ])
+        expect(worktrees).toHaveLength(2)
+        expect(worktrees[0]).toMatchObject({
+          path: mainPath,
+          linked: true,
+          branch: 'main',
+          stagedChanges: 1,
+          unstagedChanges: 2,
+          size: expect.any(Number),
+          lastCommit: {
+            subject: 'initial',
+            date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          },
+        })
+        expect(worktrees[0]!.size).toBeGreaterThan(0)
+        expect(worktrees[1]).toMatchObject({
+          path: additionalPath,
+          linked: false,
+          branch: 'feature',
+          lastCommit: { subject: 'initial' },
+        })
 
         yield* fs.remove(path.join(projectFolder, '.env'))
         yield* fs.writeFileString(path.join(projectFolder, '.env'), 'LOCAL_ONLY=yes\n')
-        expect((yield* listWorktrees(project))[0]).toEqual({ path: mainPath, linked: false })
+        expect((yield* listWorktrees(project))[0]).toMatchObject({ path: mainPath, linked: false })
       }),
     ))
 

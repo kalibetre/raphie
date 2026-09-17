@@ -1,4 +1,4 @@
-export type { EnvVar, Project, Worktree } from './Domain.ts'
+export type { EnvVar, Project, Worktree, WorktreeCommit } from './Domain.ts'
 export { registerProject } from './registerProject.ts'
 export { listProjects } from './listProjects.ts'
 export { listWorktrees } from './listWorktrees.ts'
