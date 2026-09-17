@@ -14,6 +14,7 @@ import {
 } from '../core/index.ts'
 import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
 import { EnvVarEditorModal } from './components/EnvVarEditorModal.tsx'
+import type { EnvVarEditorValidationError } from './components/EnvVarEditorModal.tsx'
 import { MainPane } from './components/MainPane.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { Toast } from './components/Toast.tsx'
@@ -28,6 +29,7 @@ interface EnvVarEditorState {
   readonly originalKey: string | null
   readonly key: string
   readonly value: string
+  readonly validationError: EnvVarEditorValidationError | null
 }
 
 interface EnvVarDeleteState {
@@ -132,14 +134,21 @@ export function App() {
   const handleStartAddEnvVar = () => {
     if (!selectedProject || registrationInFlight) return
     setEnvVarDelete(null)
-    setEnvVarEditor({ mode: 'add', index: null, originalKey: null, key: '', value: '' })
+    setEnvVarEditor({ mode: 'add', index: null, originalKey: null, key: '', value: '', validationError: null })
   }
 
   const handleStartEditEnvVar = (index: number) => {
     const envVar = envVars[index]
     if (!selectedProject || !envVar || registrationInFlight) return
     setEnvVarDelete(null)
-    setEnvVarEditor({ mode: 'edit', index, originalKey: envVar.key, key: envVar.key, value: envVar.value })
+    setEnvVarEditor({
+      mode: 'edit',
+      index,
+      originalKey: envVar.key,
+      key: envVar.key,
+      value: envVar.value,
+      validationError: null,
+    })
   }
 
   const handleStartDeleteEnvVar = (index: number) => {
@@ -149,21 +158,27 @@ export function App() {
     setEnvVarDelete({ index, envVar })
   }
 
+  const setEnvVarEditorValidationError = (validationError: EnvVarEditorValidationError) => {
+    setEnvVarEditor((current) => (current ? { ...current, validationError } : current))
+  }
+
   const handleSaveEnvVar = () => {
     if (!envVarEditor || !selectedCentralEnvFile || envVarSaveInFlight) return
 
     const key = envVarEditor.key.trim()
     const duplicate = envVars.some((envVar, index) => index !== envVarEditor.index && envVar.key === key)
     if (duplicate) {
-      setToastMessage('Duplicate EnvVar key "' + key + '" already exists')
+      const message = 'Duplicate EnvVar key "' + key + '" already exists'
+      setEnvVarEditorValidationError({ field: 'key', message })
+      setToastMessage(message)
       return
     }
     if (!key) {
-      setToastMessage('EnvVar key cannot be empty')
+      setEnvVarEditorValidationError({ field: 'key', message: 'EnvVar key cannot be empty' })
       return
     }
     if (!envVarEditor.value.trim()) {
-      setToastMessage('EnvVar value cannot be empty')
+      setEnvVarEditorValidationError({ field: 'value', message: 'EnvVar value cannot be empty' })
       return
     }
 
@@ -187,7 +202,9 @@ export function App() {
       .then((result) => {
         if (result._tag === 'Left') {
           if (result.left instanceof DuplicateEnvVarKeyError) {
-            setToastMessage('Duplicate EnvVar key "' + key + '" already exists')
+            const message = 'Duplicate EnvVar key "' + key + '" already exists'
+            setEnvVarEditorValidationError({ field: 'key', message })
+            setToastMessage(message)
           } else {
             setToastMessage('Could not save EnvVar')
           }
@@ -336,9 +353,14 @@ export function App() {
           <EnvVarEditorModal
             mode={envVarEditor.mode}
             envVar={{ key: envVarEditor.key, value: envVarEditor.value }}
+            validationError={envVarEditor.validationError}
             saving={envVarSaveInFlight}
-            onKeyChange={(key) => setEnvVarEditor((current) => (current ? { ...current, key } : current))}
-            onValueChange={(value) => setEnvVarEditor((current) => (current ? { ...current, value } : current))}
+            onKeyChange={(key) =>
+              setEnvVarEditor((current) => (current ? { ...current, key, validationError: null } : current))
+            }
+            onValueChange={(value) =>
+              setEnvVarEditor((current) => (current ? { ...current, value, validationError: null } : current))
+            }
             onSave={handleSaveEnvVar}
             onClose={() => {
               if (!envVarSaveInFlight) setEnvVarEditor(null)

@@ -615,6 +615,7 @@ describeNative('Raphie App', () => {
     renderer.flush()
 
     expect(renderer.findByTestId('envvar-editor-modal')).toBeDefined()
+    expect(renderer.findByTestId('envvar-editor-validation-error')).toBeDefined()
     expect(renderer.getPaintedText().join('\n')).toContain('EnvVar value cannot be empty')
     expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([{ key: 'EXISTING', value: 'original' }])
 
@@ -626,6 +627,7 @@ describeNative('Raphie App', () => {
     renderer.flush()
 
     expect(renderer.findByTestId('envvar-editor-modal')).toBeDefined()
+    expect(renderer.findByTestId('envvar-editor-validation-error')).toBeDefined()
     expect(renderer.getPaintedText().join('\n')).toContain('EnvVar value cannot be empty')
     expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([{ key: 'EXISTING', value: 'original' }])
 
@@ -666,6 +668,7 @@ describeNative('Raphie App', () => {
     renderer.flush()
 
     expect(renderer.findByTestId('envvar-editor-modal')).toBeDefined()
+    expect(renderer.findByTestId('envvar-editor-validation-error')).toBeDefined()
     expect(renderer.getPaintedText().join('\n')).toContain('Duplicate EnvVar key "SECOND" already exists')
     expect(await run(listEnvVars(project!.centralEnvFile))).toEqual([
       { key: 'FIRST', value: 'one' },

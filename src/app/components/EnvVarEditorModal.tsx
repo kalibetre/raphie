@@ -3,9 +3,15 @@ import { C } from '../theme.ts'
 import { DialogButton } from './DialogButton.tsx'
 import { IconButton } from './IconButton.tsx'
 
+export interface EnvVarEditorValidationError {
+  readonly field: 'key' | 'value'
+  readonly message: string
+}
+
 export function EnvVarEditorModal({
   mode,
   envVar,
+  validationError,
   saving,
   onKeyChange,
   onValueChange,
@@ -14,6 +20,7 @@ export function EnvVarEditorModal({
 }: {
   mode: 'add' | 'edit'
   envVar: EnvVar
+  validationError: EnvVarEditorValidationError | null
   saving: boolean
   onKeyChange: (key: string) => void
   onValueChange: (value: string) => void
@@ -75,13 +82,18 @@ export function EnvVarEditorModal({
               paddingLeft: 10,
               paddingRight: 10,
               borderWidth: 1,
-              borderColor: C.border,
+              borderColor: validationError?.field === 'key' ? C.warning : C.border,
               borderRadius: 6,
               backgroundColor: C.canvas,
               color: C.text,
               fontSize: 13,
             }}
           />
+          {validationError?.field === 'key' ? (
+            <text testId="envvar-editor-validation-error" style={{ fontSize: 11, color: C.warning }}>
+              {validationError.message}
+            </text>
+          ) : null}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -98,7 +110,7 @@ export function EnvVarEditorModal({
               minHeight: 132,
               padding: 10,
               borderWidth: 1,
-              borderColor: C.border,
+              borderColor: validationError?.field === 'value' ? C.warning : C.border,
               borderRadius: 6,
               backgroundColor: C.canvas,
               color: C.text,
@@ -106,6 +118,11 @@ export function EnvVarEditorModal({
               lineHeight: 20,
             }}
           />
+          {validationError?.field === 'value' ? (
+            <text testId="envvar-editor-validation-error" style={{ fontSize: 11, color: C.warning }}>
+              {validationError.message}
+            </text>
+          ) : null}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
