@@ -1,7 +1,9 @@
 import type { Worktree } from '../../core/index.ts'
 import { useEffect, useState } from 'react'
 import { C } from '../theme.ts'
+import { type WorktreeOpenTarget } from '../utils/openWorktree.ts'
 import { INITIAL_WORKTREE_WINDOW_SIZE, selectWorktreeWindow, type WorktreeWindow } from '../worktreeWindow.ts'
+import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
 
 const formatSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`
@@ -62,7 +64,15 @@ function WorktreeMetadataSkeleton({ index }: { index: number }) {
   )
 }
 
-function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number }) {
+function WorktreeRow({
+  worktree,
+  index,
+  onOpenWorktree,
+}: {
+  worktree: Worktree
+  index: number
+  onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
+}) {
   const metadata = worktree.metadata
   const commit = metadata?.lastCommit
 
@@ -72,6 +82,9 @@ function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number })
       style={{
         display: 'flex',
         flexDirection: 'column',
+        width: '100%',
+        alignSelf: 'stretch',
+        flexShrink: 0,
         gap: 10,
         paddingLeft: 16,
         paddingRight: 16,
@@ -89,12 +102,18 @@ function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number })
           </text>
           {metadata ? <text style={{ fontSize: 11, color: C.ghost }}>{formatSize(metadata.size)}</text> : <Skeleton width={42} />}
         </div>
-        <text
-          testId={`worktree-status-${index}`}
-          style={{ fontSize: 12, color: worktree.linked ? C.accent : C.secondary }}
-        >
-          {worktree.linked ? 'Linked' : 'Not Linked'}
-        </text>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <text
+            testId={`worktree-status-${index}`}
+            style={{ fontSize: 12, color: worktree.linked ? C.accent : C.secondary }}
+          >
+            {worktree.linked ? 'Linked' : 'Not Linked'}
+          </text>
+          <WorktreeOpenMenu
+            index={index}
+            onOpen={(target) => onOpenWorktree(worktree.path, target)}
+          />
+        </div>
       </div>
 
       {metadata ? (
@@ -143,7 +162,15 @@ function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number })
   )
 }
 
-export function WorktreeList({ worktrees, loading }: { worktrees: Worktree[]; loading: boolean }) {
+export function WorktreeList({
+  worktrees,
+  loading,
+  onOpenWorktree,
+}: {
+  worktrees: Worktree[]
+  loading: boolean
+  onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
+}) {
   const [window, setWindow] = useState<WorktreeWindow>(() =>
     selectWorktreeWindow(worktrees.length, 0, INITIAL_WORKTREE_WINDOW_SIZE),
   )
@@ -164,7 +191,7 @@ export function WorktreeList({ worktrees, loading }: { worktrees: Worktree[]; lo
   return (
     <div
       testId="worktrees-section"
-      style={{ display: 'flex', flexDirection: 'column', gap: 8, flexGrow: 1, minHeight: 0 }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 8, flexGrow: 1, minHeight: 0, width: '100%', alignSelf: 'stretch' }}
     >
       {loading ? (
         <text testId="worktrees-loading" style={{ fontSize: 12, color: C.ghost }}>
@@ -184,18 +211,30 @@ export function WorktreeList({ worktrees, loading }: { worktrees: Worktree[]; lo
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
+            alignItems: 'stretch',
+            alignSelf: 'stretch',
+            width: '100%',
             flexGrow: 1,
             minHeight: 0,
           }}
         >
-          {worktrees.slice(renderedWindow.start, renderedWindow.end).map((worktree, offset) => (
-            <WorktreeRow
-              key={worktree.path}
-              worktree={worktree}
-              index={renderedWindow.start + offset}
-            />
-          ))}
+          {worktrees.slice(renderedWindow.start, renderedWindow.end).map((worktree, offset) => {
+            const index = renderedWindow.start + offset
+            return (
+              <div
+                key={worktree.path}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '100%',
+                  alignSelf: 'stretch',
+                  paddingBottom: 8,
+                }}
+              >
+                <WorktreeRow worktree={worktree} index={index} onOpenWorktree={onOpenWorktree} />
+              </div>
+            )
+          })}
         </virtual-list>
       )}
     </div>

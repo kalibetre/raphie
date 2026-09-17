@@ -1,5 +1,6 @@
 import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../../core/index.ts'
 import { C } from '../theme.ts'
+import type { WorktreeOpenTarget } from '../utils/openWorktree.ts'
 import { ProjectDetail } from './ProjectDetail.tsx'
 
 export function MainPane({
@@ -25,6 +26,7 @@ export function MainPane({
   onSelectRemovalMode,
   onCancelRemove,
   onConfirmRemove,
+  onOpenWorktree,
 }: {
   selectedProject: Project | null
   registrationInFlight: boolean
@@ -48,6 +50,7 @@ export function MainPane({
   onSelectRemovalMode: (mode: ProjectRemovalMode) => void
   onCancelRemove: () => void
   onConfirmRemove: () => void
+  onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void
 }) {
   return (
     <div
@@ -95,6 +98,7 @@ export function MainPane({
           onSelectRemovalMode={onSelectRemovalMode}
           onCancelRemove={onCancelRemove}
           onConfirmRemove={onConfirmRemove}
+          onOpenWorktree={onOpenWorktree}
         />
       ) : (
         <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

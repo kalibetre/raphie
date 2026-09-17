@@ -23,6 +23,11 @@ import { Toast } from './components/Toast.tsx'
 import { TopBar } from './components/TopBar.tsx'
 import { C, DEFAULT_SIDEBAR_WIDTH } from './theme.ts'
 import { copyToClipboard } from './utils/clipboard.ts'
+import {
+  getOpenWorktreeOptions,
+  openWorktree,
+  type WorktreeOpenTarget,
+} from './utils/openWorktree.ts'
 import { pickFolderNative } from './utils/pickFolder.ts'
 import { readWorktreeCache, type WorktreeCache, writeWorktreeCache } from './worktreeCache.ts'
 
@@ -351,6 +356,12 @@ export function App() {
     })
   }
 
+  const handleOpenWorktree = (path: string, target: WorktreeOpenTarget) => {
+    if (openWorktree(target, path)) return
+    const label = getOpenWorktreeOptions().find((option) => option.value === target)?.label ?? target
+    setToastMessage(`Could not open Worktree in ${label}`)
+  }
+
   const handleSelectProject = (id: string) => {
     setSelectedId(id)
     setRemoveCandidateId(null)
@@ -435,6 +446,7 @@ export function App() {
             onSelectRemovalMode={setRemovalMode}
             onCancelRemove={handleCancelRemove}
             onConfirmRemove={handleRemoveProject}
+            onOpenWorktree={handleOpenWorktree}
           />
         </div>
 

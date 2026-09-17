@@ -1,6 +1,7 @@
 import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../../core/index.ts'
 import { useState } from 'react'
 import { C } from '../theme.ts'
+import type { WorktreeOpenTarget } from '../utils/openWorktree.ts'
 import { DuplicateKeysWarning } from './DuplicateKeysWarning.tsx'
 import { EnvVarTable } from './EnvVarTable.tsx'
 import { ProjectHeader } from './ProjectHeader.tsx'
@@ -30,6 +31,7 @@ export function ProjectDetail({
   onSelectRemovalMode,
   onCancelRemove,
   onConfirmRemove,
+  onOpenWorktree,
 }: {
   project: Project
   envVars: EnvVar[]
@@ -52,6 +54,7 @@ export function ProjectDetail({
   onSelectRemovalMode: (mode: ProjectRemovalMode) => void
   onCancelRemove: () => void
   onConfirmRemove: () => void
+  onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void
 }) {
   const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
   const showingWorktrees = activeTab === 'worktrees'
@@ -128,7 +131,7 @@ export function ProjectDetail({
         }}
       >
         {showingWorktrees ? (
-          <WorktreeList worktrees={worktrees} loading={worktreesLoading} />
+          <WorktreeList worktrees={worktrees} loading={worktreesLoading} onOpenWorktree={onOpenWorktree} />
         ) : (
           <>
             <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
