@@ -9,12 +9,17 @@ export function ProjectDetail({
   envVars,
   revealedKeys,
   duplicateKeys,
+  searchQuery,
+  onSearchQueryChange,
   isRemoving,
   removalMode,
   removalInFlight,
   registrationInFlight,
   onToggleReveal,
   onCopy,
+  onStartAdd,
+  onEdit,
+  onDelete,
   onStartRemove,
   onSelectRemovalMode,
   onCancelRemove,
@@ -24,12 +29,17 @@ export function ProjectDetail({
   envVars: EnvVar[]
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
+  searchQuery: string
   isRemoving: boolean
   removalMode: ProjectRemovalMode
   removalInFlight: boolean
   registrationInFlight: boolean
   onToggleReveal: (key: string) => void
   onCopy: (envVar: EnvVar) => void
+  onSearchQueryChange: (query: string) => void
+  onStartAdd: () => void
+  onEdit: (index: number) => void
+  onDelete: (index: number) => void
   onStartRemove: () => void
   onSelectRemovalMode: (mode: ProjectRemovalMode) => void
   onCancelRemove: () => void
@@ -72,12 +82,60 @@ export function ProjectDetail({
 
       <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
 
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <text style={{ fontSize: 13, color: C.secondary }}>Environment variables</text>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <input
+            testId="envvar-search"
+            value={searchQuery}
+            placeholder="Search EnvVars"
+            onChange={(event) => onSearchQueryChange(event.value ?? '')}
+            style={{
+              width: 220,
+              height: 28,
+              paddingLeft: 8,
+              paddingRight: 8,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: C.border,
+              backgroundColor: C.raised,
+              fontSize: 12,
+              color: C.text,
+            }}
+          />
+          <div
+            testId="add-envvar-button"
+            role="button"
+            aria-label="Add EnvVar"
+            onClick={onStartAdd}
+            style={{
+              height: 28,
+              paddingLeft: 10,
+              paddingRight: 10,
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              borderWidth: 1,
+              borderColor: C.border,
+              hover: { backgroundColor: C.overlay },
+            }}
+          >
+            <text style={{ fontSize: 12, color: C.secondary }}>Add EnvVar</text>
+          </div>
+        </div>
+      </div>
+
       <EnvVarTable
         envVars={envVars}
         revealedKeys={revealedKeys}
         duplicateKeys={duplicateKeys}
+        searchQuery={searchQuery}
         onToggleReveal={onToggleReveal}
         onCopy={onCopy}
+        onEdit={onEdit}
+        onDelete={onDelete}
       />
     </div>
   )

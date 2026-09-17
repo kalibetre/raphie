@@ -8,12 +8,17 @@ export function MainPane({
   envVars,
   revealedKeys,
   duplicateKeys,
+  searchQuery,
   isRemoving,
   removalMode,
   removalInFlight,
   onFileDrop,
   onToggleReveal,
   onCopy,
+  onSearchQueryChange,
+  onStartAdd,
+  onEdit,
+  onDelete,
   onStartRemove,
   onSelectRemovalMode,
   onCancelRemove,
@@ -24,12 +29,17 @@ export function MainPane({
   envVars: EnvVar[]
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
+  searchQuery: string
   isRemoving: boolean
   removalMode: ProjectRemovalMode
   removalInFlight: boolean
   onFileDrop: (event: { paths?: string[] }) => void
   onToggleReveal: (key: string) => void
   onCopy: (envVar: EnvVar) => void
+  onSearchQueryChange: (query: string) => void
+  onStartAdd: () => void
+  onEdit: (index: number) => void
+  onDelete: (index: number) => void
   onStartRemove: () => void
   onSelectRemovalMode: (mode: ProjectRemovalMode) => void
   onCancelRemove: () => void
@@ -63,12 +73,17 @@ export function MainPane({
           envVars={envVars}
           revealedKeys={revealedKeys}
           duplicateKeys={duplicateKeys}
+          searchQuery={searchQuery}
           isRemoving={isRemoving}
           removalMode={removalMode}
           removalInFlight={removalInFlight}
           registrationInFlight={registrationInFlight}
           onToggleReveal={onToggleReveal}
           onCopy={onCopy}
+          onSearchQueryChange={onSearchQueryChange}
+          onStartAdd={onStartAdd}
+          onEdit={onEdit}
+          onDelete={onDelete}
           onStartRemove={onStartRemove}
           onSelectRemovalMode={onSelectRemovalMode}
           onCancelRemove={onCancelRemove}

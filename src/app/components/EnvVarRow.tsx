@@ -1,24 +1,32 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 import type { EnvVar } from '../../core/index.ts'
-import { Icon } from '../icons.tsx'
 import { ACTIONS_COLUMN_WIDTH, C, KEY_COLUMN_WIDTH, MASKED_VALUE } from '../theme.ts'
 import { DuplicateBadge } from './DuplicateBadge.tsx'
+import { IconButton } from './IconButton.tsx'
 
 export function EnvVarRow({
   envVar,
   revealed,
   isDuplicate,
+  index,
   isLast,
   onToggleReveal,
   onCopy,
+  onEdit,
+  onDelete,
 }: {
   envVar: EnvVar
   revealed: boolean
   isDuplicate: boolean
+  index: number
   isLast: boolean
   onToggleReveal: () => void
   onCopy: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
+  const actionKey = isDuplicate ? envVar.key + '-' + index : envVar.key
+
   return (
     <div
       testId={`envvar-row-${envVar.key}`}
@@ -106,22 +114,35 @@ export function EnvVarRow({
         </text>
       </div>
       <div
-        testId={`envvar-copy-${envVar.key}`}
-        onClick={onCopy}
-        aria-label={`Copy ${envVar.key} value`}
         style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: 2,
           flexShrink: 0,
           width: ACTIONS_COLUMN_WIDTH,
-          height: 24,
-          borderRadius: 6,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          hover: { backgroundColor: C.overlay },
         }}
       >
-        <Icon name="copy" size={13} color={C.secondary} />
+        <IconButton
+          testId={'envvar-copy-' + actionKey}
+          label={'Copy ' + envVar.key + ' value'}
+          icon="copy"
+          onClick={onCopy}
+        />
+        <IconButton
+          testId={'envvar-edit-' + actionKey}
+          label={'Edit ' + envVar.key}
+          icon="pencil"
+          onClick={onEdit}
+        />
+        <IconButton
+          testId={'envvar-delete-' + actionKey}
+          label={'Delete ' + envVar.key}
+          icon="trash2"
+          color={C.warning}
+          onClick={onDelete}
+        />
       </div>
     </div>
   )

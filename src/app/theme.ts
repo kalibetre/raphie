@@ -14,10 +14,14 @@ export const C = {
   onAccent: '#17181C',
   warning: '#D9A03D',
   warningBg: '#D9A03D1A',
-}
+  dialogScrim: '#00000099',
+  dialogShadow: '#00000066',
+} as const
+
+export type ThemeColor = (typeof C)[keyof typeof C]
 
 export const KEY_COLUMN_WIDTH = 240
-export const ACTIONS_COLUMN_WIDTH = 28
+export const ACTIONS_COLUMN_WIDTH = 94
 
 export const DEFAULT_SIDEBAR_WIDTH = 260
 export const MIN_SIDEBAR_WIDTH = 180
