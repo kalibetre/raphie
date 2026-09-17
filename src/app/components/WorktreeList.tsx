@@ -17,6 +17,19 @@ const formatSize = (bytes: number) => {
   return `${value.toFixed(precision)} ${unit}`
 }
 
+const formatCommitDate = (date: string) => {
+  const parsed = new Date(date)
+  if (Number.isNaN(parsed.getTime())) return date
+
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(parsed)
+}
+
 function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number }) {
   const commit = worktree.lastCommit
 
@@ -34,7 +47,6 @@ function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number })
         borderWidth: 1,
         borderRadius: 8,
         borderColor: C.border,
-        backgroundColor: C.raised,
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -42,7 +54,7 @@ function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number })
           <text testId={`worktree-path-${index}`} style={{ fontSize: 12, color: C.text }}>
             {worktree.path}
           </text>
-          <text style={{ fontSize: 11, color: C.ghost }}>Size: {formatSize(worktree.size)}</text>
+          <text style={{ fontSize: 11, color: C.ghost }}>{formatSize(worktree.size)}</text>
         </div>
         <text
           testId={`worktree-status-${index}`}
@@ -63,7 +75,6 @@ function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number })
           paddingTop: 8,
           paddingBottom: 8,
           borderRadius: 6,
-          backgroundColor: C.sidebar,
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
@@ -79,7 +90,7 @@ function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number })
         <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
           <text style={{ fontSize: 11, color: C.secondary }}>Last commit date:</text>
           <text testId={`worktree-commit-date-${index}`} style={{ fontSize: 11, color: C.text }}>
-            {commit?.date ?? 'No commits'}
+            {commit ? formatCommitDate(commit.date) : 'No commits'}
           </text>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
@@ -95,24 +106,31 @@ function WorktreeRow({ worktree, index }: { worktree: Worktree; index: number })
   )
 }
 
-export function WorktreeList({ worktrees }: { worktrees: Worktree[] }) {
-  if (worktrees.length === 0) return null
-
+export function WorktreeList({ worktrees, loading }: { worktrees: Worktree[]; loading: boolean }) {
   return (
     <div testId="worktrees-section" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <text style={{ fontSize: 13, color: C.secondary }}>Worktrees</text>
-      <div
-        testId="worktrees-list"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        {worktrees.map((worktree, index) => (
-          <WorktreeRow key={worktree.path} worktree={worktree} index={index} />
-        ))}
-      </div>
+      {loading ? (
+        <text testId="worktrees-loading" style={{ fontSize: 12, color: C.ghost }}>
+          Loading Worktrees…
+        </text>
+      ) : worktrees.length === 0 ? (
+        <text testId="worktrees-empty" style={{ fontSize: 12, color: C.ghost }}>
+          No Git Worktrees found.
+        </text>
+      ) : (
+        <div
+          testId="worktrees-list"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          {worktrees.map((worktree, index) => (
+            <WorktreeRow key={worktree.path} worktree={worktree} index={index} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

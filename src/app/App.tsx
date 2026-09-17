@@ -51,6 +51,7 @@ export function App() {
   const [removalInFlight, setRemovalInFlight] = useState(false)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
+  const [worktreesLoading, setWorktreesLoading] = useState(false)
   const [envVarSearchQuery, setEnvVarSearchQuery] = useState('')
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   const [envVarEditor, setEnvVarEditor] = useState<EnvVarEditorState | null>(null)
@@ -78,6 +79,7 @@ export function App() {
     setEnvVarEditor(null)
     setEnvVarDelete(null)
     setWorktrees([])
+    setWorktreesLoading(Boolean(selectedProject && selectedCentralEnvFile))
     if (!selectedProject || !selectedCentralEnvFile) {
       setEnvVars([])
       return
@@ -89,9 +91,19 @@ export function App() {
     run(listEnvVars(selectedCentralEnvFile)).then((vars) => {
       if (!stale) setEnvVars(vars)
     })
-    run(listWorktrees(project)).then((current) => {
-      if (!stale) setWorktrees(current)
-    })
+    run(listWorktrees(project))
+      .then((current) => {
+        if (!stale) {
+          setWorktrees(current)
+          setWorktreesLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setWorktrees([])
+          setWorktreesLoading(false)
+        }
+      })
     return () => {
       stale = true
     }
@@ -337,6 +349,7 @@ export function App() {
             registrationInFlight={registrationInFlight}
             envVars={envVars}
             worktrees={worktrees}
+            worktreesLoading={worktreesLoading}
             revealedKeys={revealedKeys}
             duplicateKeys={duplicateKeys}
             searchQuery={envVarSearchQuery}

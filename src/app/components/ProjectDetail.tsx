@@ -12,6 +12,7 @@ export function ProjectDetail({
   project,
   envVars,
   worktrees,
+  worktreesLoading,
   revealedKeys,
   duplicateKeys,
   searchQuery,
@@ -33,6 +34,7 @@ export function ProjectDetail({
   project: Project
   envVars: EnvVar[]
   worktrees: Worktree[]
+  worktreesLoading: boolean
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
   searchQuery: string
@@ -52,8 +54,7 @@ export function ProjectDetail({
   onConfirmRemove: () => void
 }) {
   const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
-  const hasWorktrees = worktrees.length > 0
-  const showingWorktrees = activeTab === 'worktrees' && hasWorktrees
+  const showingWorktrees = activeTab === 'worktrees'
 
   return (
     <div
@@ -97,27 +98,25 @@ export function ProjectDetail({
         >
           <text style={{ fontSize: 13, color: C.text }}>Env Vars</text>
         </div>
-        {hasWorktrees ? (
-          <div
-            testId="tab-worktrees"
-            role="button"
-            onClick={() => setActiveTab('worktrees')}
-            style={{
-              paddingBottom: 10,
-              paddingLeft: 16,
-              paddingRight: 16,
-              borderBottomWidth: showingWorktrees ? 2 : 0,
-              borderColor: C.accent,
-              cursor: 'pointer',
-            }}
-          >
-            <text style={{ fontSize: 13, color: C.text }}>Worktrees</text>
-          </div>
-        ) : null}
+        <div
+          testId="tab-worktrees"
+          role="button"
+          onClick={() => setActiveTab('worktrees')}
+          style={{
+            paddingBottom: 10,
+            paddingLeft: 16,
+            paddingRight: 16,
+            borderBottomWidth: showingWorktrees ? 2 : 0,
+            borderColor: C.accent,
+            cursor: 'pointer',
+          }}
+        >
+          <text style={{ fontSize: 13, color: C.text }}>Worktrees</text>
+        </div>
       </div>
 
       {showingWorktrees ? (
-        <WorktreeList worktrees={worktrees} />
+        <WorktreeList worktrees={worktrees} loading={worktreesLoading} />
       ) : (
         <>
           <DuplicateKeysWarning duplicateKeys={duplicateKeys} />

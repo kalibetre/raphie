@@ -291,12 +291,12 @@ describeNative('Raphie App', () => {
     expect(worktreePainted).toContain(additionalPath)
     expect(worktreePainted).toContain('Linked')
     expect(worktreePainted).toContain('Not Linked')
-    expect(worktreePainted).toContain('Size')
+    expect(worktreePainted).toMatch(/\d+(?:\.\d+)? (?:B|KB|MB|GB|TB)/)
     expect(worktreePainted).toContain('Branch')
     expect(worktreePainted).toContain('main')
     expect(worktreePainted).toContain('Last commit')
     expect(worktreePainted).toContain('Last commit date')
-    expect(worktreePainted).toMatch(/\d{4}-\d{2}-\d{2}/)
+    expect(worktreePainted).toMatch(/[A-Z][a-z]{2} \d{1,2}, \d{4}/)
     expect(worktreePainted).toContain('Staged changes')
     expect(worktreePainted).toContain('Unstaged changes')
 
@@ -306,7 +306,7 @@ describeNative('Raphie App', () => {
     await app.close()
   })
 
-  it('shows no Worktree UI for a non-git Project', async () => {
+  it('shows an empty Worktrees state for a non-git Project', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)
     renderer.flush()
@@ -324,8 +324,13 @@ describeNative('Raphie App', () => {
     renderer.flush()
 
     expect(renderer.findByTestId('worktrees-section')).toBeUndefined()
-    expect(renderer.findByTestId('tab-worktrees')).toBeUndefined()
-    expect(renderer.getPaintedText().join('\n')).not.toContain('Worktrees')
+    expect(renderer.findByTestId('tab-worktrees')).toBeDefined()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('tab-worktrees').click()
+    renderer.flush()
+    expect(renderer.findByTestId('worktrees-empty')).toBeDefined()
+    await app.close()
   })
 
   it('shows the selected Project’s EnvVars masked, and reveals a value on click', async () => {

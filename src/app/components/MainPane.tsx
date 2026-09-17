@@ -7,6 +7,7 @@ export function MainPane({
   registrationInFlight,
   envVars,
   worktrees,
+  worktreesLoading,
   revealedKeys,
   duplicateKeys,
   searchQuery,
@@ -29,6 +30,7 @@ export function MainPane({
   registrationInFlight: boolean
   envVars: EnvVar[]
   worktrees: Worktree[]
+  worktreesLoading: boolean
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
   searchQuery: string
@@ -75,6 +77,7 @@ export function MainPane({
           project={selectedProject}
           envVars={envVars}
           worktrees={worktrees}
+          worktreesLoading={worktreesLoading}
           revealedKeys={revealedKeys}
           duplicateKeys={duplicateKeys}
           searchQuery={searchQuery}
