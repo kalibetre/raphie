@@ -1,6 +1,7 @@
-export type { EnvVar, Project } from './Domain.ts'
+export type { EnvVar, Project, Worktree } from './Domain.ts'
 export { registerProject } from './registerProject.ts'
 export { listProjects } from './listProjects.ts'
+export { listWorktrees } from './listWorktrees.ts'
 export { listEnvVars } from './listEnvVars.ts'
 export {
   DuplicateEnvVarKeyError,

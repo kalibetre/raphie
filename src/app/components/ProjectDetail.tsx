@@ -1,12 +1,14 @@
-import type { EnvVar, Project, ProjectRemovalMode } from '../../core/index.ts'
+import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../../core/index.ts'
 import { C } from '../theme.ts'
 import { DuplicateKeysWarning } from './DuplicateKeysWarning.tsx'
 import { EnvVarTable } from './EnvVarTable.tsx'
 import { ProjectHeader } from './ProjectHeader.tsx'
+import { WorktreeList } from './WorktreeList.tsx'
 
 export function ProjectDetail({
   project,
   envVars,
+  worktrees,
   revealedKeys,
   duplicateKeys,
   searchQuery,
@@ -27,6 +29,7 @@ export function ProjectDetail({
 }: {
   project: Project
   envVars: EnvVar[]
+  worktrees: Worktree[]
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
   searchQuery: string
@@ -79,6 +82,8 @@ export function ProjectDetail({
           <text style={{ fontSize: 13, color: C.text }}>Env Vars</text>
         </div>
       </div>
+
+      <WorktreeList worktrees={worktrees} />
 
       <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
 

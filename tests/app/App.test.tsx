@@ -5,7 +5,7 @@
  *   bun run test
  */
 
-import { FileSystem } from '@effect/platform'
+import { Command, FileSystem } from '@effect/platform'
 import { BunContext } from '@effect/platform-bun'
 import { connectTest } from '@gpuix/react/automation'
 import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing'
@@ -101,6 +101,11 @@ function findByTestIdPrefix(renderer: ReturnType<typeof createTestRoot>['rendere
 }
 
 const waitForAppUpdate = () => new Promise((resolve) => setTimeout(resolve, 50))
+
+const runGit = async (...args: string[]) => {
+  const exitCode = await run(Command.exitCode(Command.make('git', ...args)))
+  if (exitCode !== 0) throw new Error(`git ${args.join(' ')} exited with ${exitCode}`)
+}
 
 describeNative('Raphie App', () => {
   it('shows the empty-state hint with no registered projects', () => {
@@ -209,6 +214,94 @@ describeNative('Raphie App', () => {
     // Sidebar row, main pane heading, and the top-bar breadcrumb.
     expect(painted.filter((text) => text === projectName)).toHaveLength(3)
     expect(renderer.findByTestId('title-bar-project-name')).toBeDefined()
+  })
+
+  it('shows every git Worktree with its current Central env link status', async () => {
+    const worktreeFolder = await makeTempDir('raphie-app-worktree-')
+    await runGit('-C', projectFolder, 'init')
+    await runGit('-C', projectFolder, 'config', 'user.email', 'raphie-tests@example.com')
+    await runGit('-C', projectFolder, 'config', 'user.name', 'Raphie Tests')
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${projectFolder}/README.md`, 'initial\n')
+      }),
+    )
+    await runGit('-C', projectFolder, 'add', 'README.md')
+    await runGit('-C', projectFolder, '-c', 'commit.gpgSign=false', 'commit', '-m', 'initial')
+
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.symlink(project!.centralEnvFile, `${projectFolder}/.env`)
+      }),
+    )
+    await runGit('-C', projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${worktreeFolder}/.env`, 'LOCAL_ONLY=yes\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const mainPath = await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        return yield* fs.realPath(projectFolder)
+      }),
+    )
+    const additionalPath = await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        return yield* fs.realPath(worktreeFolder)
+      }),
+    )
+    const painted = renderer.getPaintedText().join('\n')
+    expect(renderer.findByTestId('worktrees-section')).toBeDefined()
+    expect(painted).toContain('Worktrees')
+    expect(painted).toContain(mainPath)
+    expect(painted).toContain(additionalPath)
+    expect(painted).toContain('Linked')
+    expect(painted).toContain('Not Linked')
+  })
+
+  it('shows no Worktree UI for a non-git Project', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.findByTestId('worktrees-section')).toBeUndefined()
+    expect(renderer.getPaintedText().join('\n')).not.toContain('Worktrees')
   })
 
   it('shows the selected Project’s EnvVars masked, and reveals a value on click', async () => {

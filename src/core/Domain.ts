@@ -5,6 +5,11 @@ export interface Project {
   readonly centralEnvFile: string
 }
 
+export interface Worktree {
+  readonly path: string
+  readonly linked: boolean
+}
+
 export interface EnvVar {
   readonly key: string
   readonly value: string

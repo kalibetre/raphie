@@ -1,12 +1,13 @@
 import { TooltipProvider } from '@gpuix/react'
 import { useEffect, useMemo, useState } from 'react'
 import { Effect } from 'effect'
-import type { EnvVar, Project, ProjectRemovalMode } from '../core/index.ts'
+import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../core/index.ts'
 import {
   deleteEnvVar,
   DuplicateEnvVarKeyError,
   listEnvVars,
   listProjects,
+  listWorktrees,
   registerProject,
   removeProject,
   run,
@@ -49,6 +50,7 @@ export function App() {
   const [removalMode, setRemovalMode] = useState<ProjectRemovalMode>('copy')
   const [removalInFlight, setRemovalInFlight] = useState(false)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
+  const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [envVarSearchQuery, setEnvVarSearchQuery] = useState('')
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   const [envVarEditor, setEnvVarEditor] = useState<EnvVarEditorState | null>(null)
@@ -75,20 +77,25 @@ export function App() {
     setEnvVarSearchQuery('')
     setEnvVarEditor(null)
     setEnvVarDelete(null)
-    if (!selectedCentralEnvFile) {
+    setWorktrees([])
+    if (!selectedProject || !selectedCentralEnvFile) {
       setEnvVars([])
       return
     }
+    const project = selectedProject
     // Guard against a stale response landing after the user has already
     // switched to (or back to) a different Project.
     let stale = false
     run(listEnvVars(selectedCentralEnvFile)).then((vars) => {
       if (!stale) setEnvVars(vars)
     })
+    run(listWorktrees(project)).then((current) => {
+      if (!stale) setWorktrees(current)
+    })
     return () => {
       stale = true
     }
-  }, [selectedCentralEnvFile])
+  }, [selectedCentralEnvFile, selectedProject])
 
   useEffect(() => {
     if (registrationInFlight || registrationQueue.length === 0) return
@@ -329,6 +336,7 @@ export function App() {
             selectedProject={selectedProject}
             registrationInFlight={registrationInFlight}
             envVars={envVars}
+            worktrees={worktrees}
             revealedKeys={revealedKeys}
             duplicateKeys={duplicateKeys}
             searchQuery={envVarSearchQuery}

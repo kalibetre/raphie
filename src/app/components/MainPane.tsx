@@ -1,4 +1,4 @@
-import type { EnvVar, Project, ProjectRemovalMode } from '../../core/index.ts'
+import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../../core/index.ts'
 import { C } from '../theme.ts'
 import { ProjectDetail } from './ProjectDetail.tsx'
 
@@ -6,6 +6,7 @@ export function MainPane({
   selectedProject,
   registrationInFlight,
   envVars,
+  worktrees,
   revealedKeys,
   duplicateKeys,
   searchQuery,
@@ -27,6 +28,7 @@ export function MainPane({
   selectedProject: Project | null
   registrationInFlight: boolean
   envVars: EnvVar[]
+  worktrees: Worktree[]
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
   searchQuery: string
@@ -71,6 +73,7 @@ export function MainPane({
         <ProjectDetail
           project={selectedProject}
           envVars={envVars}
+          worktrees={worktrees}
           revealedKeys={revealedKeys}
           duplicateKeys={duplicateKeys}
           searchQuery={searchQuery}
