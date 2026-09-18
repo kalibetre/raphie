@@ -37,6 +37,7 @@ export function ProjectDetail({
   onSelectOpenWorktreeTarget,
   onDeleteWorktree,
   onLinkWorktree,
+  onUnlinkWorktree,
   onRefreshWorktrees,
 }: {
   project: Project
@@ -66,6 +67,7 @@ export function ProjectDetail({
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
   onDeleteWorktree: (path: string) => void
   onLinkWorktree: (path: string) => void
+  onUnlinkWorktree: (path: string) => void
   onRefreshWorktrees: () => void
 }) {
   const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
@@ -159,6 +161,7 @@ export function ProjectDetail({
             onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
             onDeleteWorktree={onDeleteWorktree}
             onLinkWorktree={onLinkWorktree}
+            onUnlinkWorktree={onUnlinkWorktree}
             onRefresh={onRefreshWorktrees}
           />
         ) : (

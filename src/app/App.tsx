@@ -8,6 +8,7 @@ import type {
   Worktree,
   WorktreeMetadata,
   WorktreeRemovalFailure,
+  WorktreeUnlinkMode,
 } from '../core/index.ts'
 import {
   deleteEnvVar,
@@ -22,6 +23,7 @@ import {
   forceRemoveWorktree,
   removeProject,
   removeWorktree,
+  unlinkWorktree,
   run,
   setEnvVar,
 } from '../core/index.ts'
@@ -34,6 +36,7 @@ import { MainPane } from './components/MainPane.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { Toast } from './components/Toast.tsx'
 import { TopBar } from './components/TopBar.tsx'
+import { UnlinkWorktreeConfirmation } from './components/UnlinkWorktreeConfirmation.tsx'
 import { C, DEFAULT_SIDEBAR_WIDTH } from './theme.ts'
 import { copyToClipboard } from './utils/clipboard.ts'
 import {
@@ -60,6 +63,11 @@ interface EnvVarDeleteState {
 interface WorktreeDeleteState {
   readonly path: string
   readonly error: WorktreeRemovalFailure | null
+}
+
+interface WorktreeUnlinkState {
+  readonly path: string
+  readonly mode: WorktreeUnlinkMode | null
 }
 
 export function App() {
@@ -93,6 +101,8 @@ export function App() {
   const [worktreeForceDeleteInFlight, setWorktreeForceDeleteInFlight] = useState(false)
   const [worktreeLink, setWorktreeLink] = useState<LinkWorktreeConflictError | null>(null)
   const [worktreeLinkInFlight, setWorktreeLinkInFlight] = useState(false)
+  const [worktreeUnlink, setWorktreeUnlink] = useState<WorktreeUnlinkState | null>(null)
+  const [worktreeUnlinkInFlight, setWorktreeUnlinkInFlight] = useState(false)
   const [lastOpenWorktreeTarget, setLastOpenWorktreeTarget] = useState<WorktreeOpenTarget | null>(null)
   const selectedProjectIdRef = useRef<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -118,6 +128,7 @@ export function App() {
     setEnvVarDelete(null)
     setWorktreeDelete(null)
     setWorktreeLink(null)
+    setWorktreeUnlink(null)
     if (!selectedProject || !selectedCentralEnvFile) {
       setEnvVars([])
       setWorktrees([])
@@ -294,6 +305,17 @@ export function App() {
     setWorktreeDelete({ path, error: null })
   }
 
+  const handleStartUnlinkWorktree = (path: string) => {
+    if (!selectedProject || registrationInFlight || worktreeUnlinkInFlight) return
+    const worktree = worktrees.find((candidate) => candidate.path === path)
+    if (!worktree?.linked) return
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
+    setWorktreeDelete(null)
+    setWorktreeLink(null)
+    setWorktreeUnlink({ path, mode: null })
+  }
+
   const handleRefreshWorktrees = () => {
     if (!selectedProject || registrationInFlight || worktreesRefreshing) return
     worktreeRefreshProjectRef.current = selectedProject.id
@@ -448,6 +470,41 @@ export function App() {
     performWorktreeLink(selectedProject, worktreePath, true)
   }
 
+  const finishWorktreeUnlink = (project: Project, worktreePath: string, mode: WorktreeUnlinkMode) => {
+    const updateUnlinked = (current: Worktree[]) =>
+      current.map((worktree) =>
+        worktree.path === worktreePath
+          ? { ...worktree, linked: false, hasEnvFile: mode === 'copy' }
+          : worktree,
+      )
+    const cacheEntry = worktreeCache.current.get(project.id)
+    if (cacheEntry) {
+      writeWorktreeCache(worktreeCache.current, project.id, updateUnlinked(cacheEntry.worktrees), cacheEntry.loadedAt)
+    }
+    if (selectedProjectIdRef.current !== project.id) return
+    setWorktrees(updateUnlinked)
+    setWorktreeUnlink(null)
+    setToastMessage(mode === 'copy' ? 'Unlinked Worktree and kept a copy of .env' : 'Unlinked Worktree and removed .env')
+  }
+
+  const handleConfirmUnlinkWorktree = () => {
+    if (!worktreeUnlink || worktreeUnlink.mode === null || !selectedProject || worktreeUnlinkInFlight) return
+    const project = selectedProject
+    const worktreePath = worktreeUnlink.path
+    const mode = worktreeUnlink.mode
+    if (!worktrees.some((worktree) => worktree.path === worktreePath && worktree.linked)) {
+      setWorktreeUnlink(null)
+      return
+    }
+    setWorktreeUnlinkInFlight(true)
+    run(unlinkWorktree(project, worktreePath, mode))
+      .then(() => finishWorktreeUnlink(project, worktreePath, mode))
+      .catch(() => {
+        if (selectedProjectIdRef.current === project.id) setToastMessage('Could not unlink Worktree')
+      })
+      .finally(() => setWorktreeUnlinkInFlight(false))
+  }
+
   const finishWorktreeDeletion = (project: Project, worktreePath: string, message: string) => {
     const cacheEntry = worktreeCache.current.get(project.id)
     if (cacheEntry) {
@@ -569,6 +626,7 @@ export function App() {
     setEnvVarEditor(null)
     setEnvVarDelete(null)
     setWorktreeLink(null)
+    setWorktreeUnlink(null)
   }
 
   const handleStartRemove = () => {
@@ -654,6 +712,7 @@ export function App() {
             onSelectOpenWorktreeTarget={handleSelectOpenWorktreeTarget}
             onDeleteWorktree={handleStartDeleteWorktree}
             onLinkWorktree={handleLinkWorktree}
+            onUnlinkWorktree={handleStartUnlinkWorktree}
             onRefreshWorktrees={handleRefreshWorktrees}
           />
         </div>
@@ -706,6 +765,19 @@ export function App() {
               if (!worktreeLinkInFlight) setWorktreeLink(null)
             }}
             onLinkAnyway={handleLinkWorktreeAnyway}
+          />
+        ) : null}
+
+        {worktreeUnlink ? (
+          <UnlinkWorktreeConfirmation
+            worktreePath={worktreeUnlink.path}
+            mode={worktreeUnlink.mode}
+            unlinking={worktreeUnlinkInFlight}
+            onSelectMode={(mode) => setWorktreeUnlink((current) => (current ? { ...current, mode } : current))}
+            onCancel={() => {
+              if (!worktreeUnlinkInFlight) setWorktreeUnlink(null)
+            }}
+            onConfirm={handleConfirmUnlinkWorktree}
           />
         ) : null}
 
