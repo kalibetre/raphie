@@ -12,6 +12,7 @@ import {
   ESTIMATED_WORKTREE_ITEM_HEIGHT,
   INITIAL_WORKTREE_WINDOW_SIZE,
   selectWorktreeWindow,
+  selectWorktreeWindowAroundVisibleRange,
   type WorktreeWindow,
 } from '../worktreeWindow.ts'
 import { IconButton } from './IconButton.tsx'
@@ -311,8 +312,10 @@ export function WorktreeList({
 
   const handleVisibleRange = (event: { startIndex?: number; endIndex?: number }) => {
     if (event.startIndex === undefined || event.endIndex === undefined) return
+    const startIndex = event.startIndex
+    const endIndex = event.endIndex
     setWindow((current) => {
-      const next = selectWorktreeWindow(worktrees.length, event.startIndex!, event.endIndex!)
+      const next = selectWorktreeWindowAroundVisibleRange(worktrees.length, startIndex, endIndex)
       return current.start === next.start && current.end === next.end ? current : next
     })
   }
