@@ -3,6 +3,11 @@ export { registerProject } from './registerProject.ts'
 export { listProjects } from './listProjects.ts'
 export { discoverWorktrees, listWorktrees, loadWorktreeMetadata } from './listWorktrees.ts'
 export { removeWorktree } from './removeWorktree.ts'
+export type {
+  RemoveWorktreeResult,
+  WorktreeRemovalFailure,
+  WorktreeRemovalFailureCode,
+} from './removeWorktree.ts'
 export { listEnvVars } from './listEnvVars.ts'
 export {
   DuplicateEnvVarKeyError,

@@ -1,7 +1,14 @@
 import { TooltipProvider } from '@gpuix/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Effect } from 'effect'
-import type { EnvVar, Project, ProjectRemovalMode, Worktree, WorktreeMetadata } from '../core/index.ts'
+import type {
+  EnvVar,
+  Project,
+  ProjectRemovalMode,
+  Worktree,
+  WorktreeMetadata,
+  WorktreeRemovalFailure,
+} from '../core/index.ts'
 import {
   deleteEnvVar,
   DuplicateEnvVarKeyError,
@@ -48,6 +55,7 @@ interface EnvVarDeleteState {
 
 interface WorktreeDeleteState {
   readonly path: string
+  readonly error: WorktreeRemovalFailure | null
 }
 
 export function App() {
@@ -266,7 +274,7 @@ export function App() {
     if (path === selectedProject.folderPath || !worktrees.some((worktree) => worktree.path === path)) return
     setEnvVarEditor(null)
     setEnvVarDelete(null)
-    setWorktreeDelete({ path })
+    setWorktreeDelete({ path, error: null })
   }
 
   const setEnvVarEditorValidationError = (validationError: EnvVarEditorValidationError) => {
@@ -369,11 +377,12 @@ export function App() {
     if (!worktreeDelete || !selectedProject || worktreeDeleteInFlight) return
     const project = selectedProject
     const worktreePath = worktreeDelete.path
+    setWorktreeDelete((current) => (current ? { ...current, error: null } : current))
     setWorktreeDeleteInFlight(true)
     run(removeWorktree(project, worktreePath))
-      .then((removed) => {
-        if (!removed) {
-          setToastMessage('Could not delete Worktree')
+      .then((result) => {
+        if (!result.removed) {
+          setWorktreeDelete((current) => (current ? { ...current, error: result.error } : current))
           return
         }
 
@@ -392,7 +401,20 @@ export function App() {
         setWorktreeDelete(null)
         setToastMessage('Deleted Worktree and its files')
       })
-      .catch(() => setToastMessage('Could not delete Worktree'))
+      .catch((error) => {
+        setWorktreeDelete((current) =>
+          current
+            ? {
+                ...current,
+                error: {
+                  code: 'unknown',
+                  message: 'An unexpected error prevented Git from deleting this Worktree.',
+                  detail: error instanceof Error ? error.message : String(error),
+                },
+              }
+            : current,
+        )
+      })
       .finally(() => setWorktreeDeleteInFlight(false))
   }
 
@@ -544,6 +566,7 @@ export function App() {
         {worktreeDelete ? (
           <DeleteWorktreeConfirmation
             worktreePath={worktreeDelete.path}
+            error={worktreeDelete.error}
             deleting={worktreeDeleteInFlight}
             onCancel={handleCancelDeleteWorktree}
             onConfirm={handleConfirmDeleteWorktree}

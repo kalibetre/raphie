@@ -36,7 +36,7 @@ describe('removeWorktree', () => {
         expect(yield* git(projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)).toBe(0)
         yield* fs.writeFileString(untrackedFile, 'remove me\n')
 
-        expect(yield* removeWorktree(project, worktreeFolder)).toBe(true)
+        expect(yield* removeWorktree(project, worktreeFolder)).toEqual({ removed: true })
         expect(yield* fs.exists(worktreeFolder)).toBe(false)
         expect(yield* discoverWorktrees(project)).toHaveLength(1)
       }),
@@ -47,8 +47,29 @@ describe('removeWorktree', () => {
       Effect.gen(function* () {
         const project = yield* createGitProject(projectFolder)
 
-        expect(yield* removeWorktree(project, projectFolder)).toBe(false)
+        expect(yield* removeWorktree(project, projectFolder)).toMatchObject({
+          removed: false,
+          error: { code: 'main-worktree' },
+        })
         expect(yield* Command.exitCode(Command.make('git', '-C', projectFolder, 'status', '--porcelain'))).toBe(0)
+      }),
+    ))
+
+  it('returns Git’s reason when a Worktree is locked', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const project = yield* createGitProject(projectFolder)
+        const worktreeFolder = yield* fs.makeTempDirectoryScoped({ prefix: 'raphie-locked-worktree-' })
+
+        expect(yield* git(projectFolder, 'worktree', 'add', '-b', 'locked', worktreeFolder)).toBe(0)
+        expect(yield* git(projectFolder, 'worktree', 'lock', worktreeFolder)).toBe(0)
+
+        const result = yield* removeWorktree(project, worktreeFolder)
+        expect(result.removed).toBe(false)
+        if (result.removed) return
+        expect(result.error.code).toBe('locked')
+        expect(result.error.detail).toContain('cannot remove a locked working tree')
       }),
     ))
 })
