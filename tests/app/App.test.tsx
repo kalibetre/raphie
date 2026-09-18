@@ -372,7 +372,7 @@ describeNative('Raphie App', () => {
     await app.close()
   })
 
-  it('links a Worktree and backs up its existing .env after confirmation', async () => {
+  it('links a Worktree, then unlinks it by replacing .env with a copy', async () => {
     const worktreeFolder = await makeTempDir('raphie-app-worktree-')
     disposableFolders.push(worktreeFolder)
     await runGit('-C', projectFolder, 'init')
@@ -399,6 +399,13 @@ describeNative('Raphie App', () => {
 
     const [project] = await run(listProjects)
     expect(project).toBeDefined()
+    const centralValues = 'FROM_CENTRAL=yes\n'
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, centralValues)
+      }),
+    )
     await runGit('-C', projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)
     const original = 'LOCAL_ONLY=yes\n'
     await runFs(
@@ -456,6 +463,44 @@ describeNative('Raphie App', () => {
     )
     expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeUndefined()
     expect(renderer.findByTestId('link-worktree-confirmation')).toBeUndefined()
+
+    await app.getByTestId('unlink-worktree-1').click()
+    renderer.flush()
+    expect(renderer.findByTestId('unlink-worktree-confirmation')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('Replace with a copy')
+    expect(renderer.getPaintedText().join('\n')).toContain('Remove .env')
+
+    await app.getByTestId('unlink-worktree-confirm').click()
+    renderer.flush()
+    expect(renderer.findByTestId('unlink-worktree-confirmation')).toBeDefined()
+
+    await app.getByTestId('unlink-worktree-copy-option').click()
+    await app.getByTestId('unlink-worktree-confirm').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        expect((yield* fs.readLink(`${worktreeFolder}/.env`).pipe(Effect.either))._tag).toBe('Left')
+        expect(yield* fs.readFileString(`${worktreeFolder}/.env`)).toBe(centralValues)
+      }),
+    )
+    expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeDefined()
+    expect(renderer.findByTestId('unlink-worktree-confirmation')).toBeUndefined()
+
+    await app.getByTestId('unlink-worktree-0').click()
+    await app.getByTestId('unlink-worktree-remove-option').click()
+    await app.getByTestId('unlink-worktree-confirm').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        expect(yield* fs.exists(`${projectFolder}/.env`)).toBe(false)
+      }),
+    )
+    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeUndefined()
+    expect(renderer.findByTestId('unlink-worktree-confirmation')).toBeUndefined()
     await app.close()
   })
 

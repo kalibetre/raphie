@@ -4,6 +4,8 @@ export { listProjects } from './listProjects.ts'
 export { discoverWorktrees, listWorktrees, loadWorktreeMetadata } from './listWorktrees.ts'
 export { forceLinkWorktree, linkWorktree, LinkWorktreeConflictError } from './linkWorktree.ts'
 export type { LinkWorktreeOptions, LinkWorktreeResult } from './linkWorktree.ts'
+export { InvalidWorktreeUnlinkModeError, unlinkWorktree, WorktreeNotLinkedError } from './unlinkWorktree.ts'
+export type { WorktreeUnlinkMode } from './unlinkWorktree.ts'
 export { forceRemoveWorktree, removeWorktree } from './removeWorktree.ts'
 export type {
   RemoveWorktreeResult,
