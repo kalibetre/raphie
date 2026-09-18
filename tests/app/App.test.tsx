@@ -308,6 +308,7 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('worktree-unstaged-0')).toBeDefined()
     expect(renderer.findByTestId('worktree-open-1')).toBeDefined()
     expect(renderer.findByTestId('worktree-open-menu-1')).toBeDefined()
+    expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-0')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-1')).toBeDefined()
     expect(renderer.findByTestId('worktrees-sort-size')).toBeDefined()
@@ -414,9 +415,11 @@ describeNative('Raphie App', () => {
     await waitForAppUpdate()
     renderer.flush()
 
+    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeUndefined()
     await app.getByTestId('link-worktree-0').click()
     await waitForAppUpdate()
     renderer.flush()
+    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeDefined()
     await runFs(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem

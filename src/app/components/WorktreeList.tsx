@@ -18,6 +18,7 @@ import {
   type WorktreeWindow,
 } from '../worktreeWindow.ts'
 import { IconButton } from './IconButton.tsx'
+import { EnvFileBadge } from './EnvFileBadge.tsx'
 import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
 import { WorktreeSortButtons } from './WorktreeSortButtons.tsx'
 
@@ -218,6 +219,7 @@ function WorktreeRow({
                 {worktree.linked ? 'Linked' : 'Not Linked'}
               </text>
             </div>
+            {worktree.hasEnvFile ? <EnvFileBadge index={index} linked={worktree.linked} /> : null}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>

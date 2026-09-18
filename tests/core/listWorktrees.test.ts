@@ -29,23 +29,28 @@ describe('listWorktrees', () => {
         yield* fs.symlink(project.centralEnvFile, path.join(projectFolder, '.env'))
 
         expect(yield* git(projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)).toBe(0)
+        const mainPath = yield* fs.realPath(projectFolder)
+        const additionalPath = yield* fs.realPath(worktreeFolder)
+        expect(yield* discoverWorktrees(project)).toEqual([
+          { path: mainPath, linked: true, hasEnvFile: true, metadata: null },
+          { path: additionalPath, linked: false, hasEnvFile: false, metadata: null },
+        ])
         yield* fs.writeFileString(path.join(worktreeFolder, '.env'), 'LOCAL_ONLY=yes\n')
         yield* fs.writeFileString(path.join(projectFolder, 'README.md'), 'changed\n')
         yield* fs.writeFileString(path.join(projectFolder, 'staged.txt'), 'staged\n')
         expect(yield* git(projectFolder, 'add', 'staged.txt')).toBe(0)
 
         const discoveredWorktrees = yield* discoverWorktrees(project)
-        const mainPath = yield* fs.realPath(projectFolder)
-        const additionalPath = yield* fs.realPath(worktreeFolder)
         expect(discoveredWorktrees).toEqual([
-          { path: mainPath, linked: true, metadata: null },
-          { path: additionalPath, linked: false, metadata: null },
+          { path: mainPath, linked: true, hasEnvFile: true, metadata: null },
+          { path: additionalPath, linked: false, hasEnvFile: true, metadata: null },
         ])
 
         const worktrees = yield* listWorktrees(project)
         expect(worktrees[0]).toMatchObject({
           path: mainPath,
           linked: true,
+          hasEnvFile: true,
           metadata: {
             branch: 'main',
             stagedChanges: 1,
@@ -61,6 +66,7 @@ describe('listWorktrees', () => {
         expect(worktrees[1]).toMatchObject({
           path: additionalPath,
           linked: false,
+          hasEnvFile: true,
           metadata: {
             branch: 'feature',
             lastCommit: { subject: 'initial' },
@@ -69,7 +75,7 @@ describe('listWorktrees', () => {
 
         yield* fs.remove(path.join(projectFolder, '.env'))
         yield* fs.writeFileString(path.join(projectFolder, '.env'), 'LOCAL_ONLY=yes\n')
-        expect((yield* listWorktrees(project))[0]).toMatchObject({ path: mainPath, linked: false })
+        expect((yield* listWorktrees(project))[0]).toMatchObject({ path: mainPath, linked: false, hasEnvFile: true })
       }),
     ))
 
