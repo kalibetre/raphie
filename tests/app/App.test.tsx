@@ -310,6 +310,17 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('worktree-open-menu-1')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-0')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-1')).toBeDefined()
+    expect(renderer.findByTestId('worktrees-sort-trigger')).toBeDefined()
+
+    await app.getByTestId('worktrees-sort-trigger').click()
+    renderer.flush()
+    expect(renderer.findByTestId('worktrees-sort-option-size-desc')).toBeDefined()
+    await app.getByTestId('worktrees-sort-option-size-desc').click()
+    renderer.flush()
+    expect(renderer.getPaintedText().join('\n')).toContain('Size · largest first')
+    await app.getByTestId('worktrees-sort-trigger').click()
+    await app.getByTestId('worktrees-sort-option-default').click()
+    renderer.flush()
 
     await runGit('-C', projectFolder, 'worktree', 'lock', additionalPath)
     await app.getByTestId('delete-worktree-1').click()

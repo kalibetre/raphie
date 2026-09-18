@@ -1,8 +1,9 @@
 import type { Worktree } from '../../core/index.ts'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../icons.tsx'
 import type { IconName } from '../icons.tsx'
 import { C, type ThemeColor } from '../theme.ts'
+import { sortWorktrees, type WorktreeSort } from '../worktreeSort.ts'
 import {
   discoverAvailableOpenWorktreeOptions,
   type WorktreeOpenOption,
@@ -17,6 +18,7 @@ import {
 } from '../worktreeWindow.ts'
 import { IconButton } from './IconButton.tsx'
 import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
+import { WorktreeSortMenu } from './WorktreeSortMenu.tsx'
 
 const formatSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`
@@ -291,10 +293,12 @@ export function WorktreeList({
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
 }) {
   const [openWorktreeOptions, setOpenWorktreeOptions] = useState<readonly WorktreeOpenOption[]>([])
+  const [sort, setSort] = useState<WorktreeSort>('default')
+  const sortedWorktrees = useMemo(() => sortWorktrees(worktrees, sort), [sort, worktrees])
   const [window, setWindow] = useState<WorktreeWindow>(() =>
     selectWorktreeWindow(worktrees.length, 0, INITIAL_WORKTREE_WINDOW_SIZE),
   )
-  const renderedWindow = selectWorktreeWindow(worktrees.length, window.start, window.end)
+  const renderedWindow = selectWorktreeWindow(sortedWorktrees.length, window.start, window.end)
 
   useEffect(() => {
     setWindow((current) => selectWorktreeWindow(worktrees.length, current.start, current.end))
@@ -315,9 +319,14 @@ export function WorktreeList({
     const startIndex = event.startIndex
     const endIndex = event.endIndex
     setWindow((current) => {
-      const next = selectWorktreeWindowAroundVisibleRange(worktrees.length, startIndex, endIndex)
+      const next = selectWorktreeWindowAroundVisibleRange(sortedWorktrees.length, startIndex, endIndex)
       return current.start === next.start && current.end === next.end ? current : next
     })
+  }
+
+  const handleSortChange = (nextSort: WorktreeSort) => {
+    setSort(nextSort)
+    setWindow(selectWorktreeWindow(sortedWorktrees.length, 0, INITIAL_WORKTREE_WINDOW_SIZE))
   }
 
   return (
@@ -334,49 +343,55 @@ export function WorktreeList({
           No Git Worktrees found.
         </text>
       ) : (
-        <virtual-list
-          testId="worktrees-list"
-          itemCount={worktrees.length}
-          estimatedItemHeight={ESTIMATED_WORKTREE_ITEM_HEIGHT}
-          windowStart={renderedWindow.start}
-          onVisibleRange={handleVisibleRange}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'stretch',
-            alignSelf: 'stretch',
-            width: '100%',
-            flexGrow: 1,
-            minHeight: 0,
-          }}
-        >
-          {worktrees.slice(renderedWindow.start, renderedWindow.end).map((worktree, offset) => {
-            const index = renderedWindow.start + offset
-            return (
-              <div
-                key={worktree.path}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  width: '100%',
-                  alignSelf: 'stretch',
-                  paddingBottom: 8,
-                }}
-              >
-                <WorktreeRow
-                  worktree={worktree}
-                  index={index}
-                  projectFolderPath={projectFolderPath}
-                  openWorktreeOptions={openWorktreeOptions}
-                  lastOpenWorktreeTarget={lastOpenWorktreeTarget}
-                  onOpenWorktree={onOpenWorktree}
-                  onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
-                  onDeleteWorktree={onDeleteWorktree}
-                />
-              </div>
-            )
-          })}
-        </virtual-list>
+        <>
+          <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', flexShrink: 0 }}>
+            <WorktreeSortMenu value={sort} onChange={handleSortChange} />
+          </div>
+          <virtual-list
+            key={`worktrees-${sort}`}
+            testId="worktrees-list"
+            itemCount={sortedWorktrees.length}
+            estimatedItemHeight={ESTIMATED_WORKTREE_ITEM_HEIGHT}
+            windowStart={renderedWindow.start}
+            onVisibleRange={handleVisibleRange}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'stretch',
+              alignSelf: 'stretch',
+              width: '100%',
+              flexGrow: 1,
+              minHeight: 0,
+            }}
+          >
+            {sortedWorktrees.slice(renderedWindow.start, renderedWindow.end).map((worktree, offset) => {
+              const index = renderedWindow.start + offset
+              return (
+                <div
+                  key={worktree.path}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    width: '100%',
+                    alignSelf: 'stretch',
+                    paddingBottom: 8,
+                  }}
+                >
+                  <WorktreeRow
+                    worktree={worktree}
+                    index={index}
+                    projectFolderPath={projectFolderPath}
+                    openWorktreeOptions={openWorktreeOptions}
+                    lastOpenWorktreeTarget={lastOpenWorktreeTarget}
+                    onOpenWorktree={onOpenWorktree}
+                    onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
+                    onDeleteWorktree={onDeleteWorktree}
+                  />
+                </div>
+              )
+            })}
+          </virtual-list>
+        </>
       )}
     </div>
   )
