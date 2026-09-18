@@ -1,6 +1,8 @@
 import type { Worktree } from '../../core/index.ts'
 import { useEffect, useState } from 'react'
-import { C } from '../theme.ts'
+import { Icon } from '../icons.tsx'
+import type { IconName } from '../icons.tsx'
+import { C, type ThemeColor } from '../theme.ts'
 import {
   discoverAvailableOpenWorktreeOptions,
   type WorktreeOpenOption,
@@ -41,6 +43,44 @@ const formatCommitDate = (date: string) => {
   return commitDateFormatter.format(parsed)
 }
 
+function WorktreeMetaItem({
+  icon,
+  label,
+  value,
+  testId,
+  color = C.text,
+  iconColor = C.secondary,
+  grow = false,
+}: {
+  icon: IconName
+  label: string
+  value: string
+  testId?: string
+  color?: ThemeColor
+  iconColor?: ThemeColor
+  grow?: boolean
+}) {
+  return (
+    <div
+      aria-label={`${label}: ${value}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        minWidth: 0,
+        flexGrow: grow ? 1 : 0,
+        flexShrink: grow ? 1 : 0,
+      }}
+    >
+      <Icon name={icon} size={12} color={iconColor} />
+      <text testId={testId} style={{ fontSize: 11, color, minWidth: 0 }}>
+        {value}
+      </text>
+    </div>
+  )
+}
+
 const Skeleton = ({ width }: { width: number }) => (
   <div style={{ width, height: 11, borderRadius: 4, backgroundColor: C.raised }} />
 )
@@ -52,19 +92,22 @@ function WorktreeMetadataSkeleton({ index }: { index: number }) {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 4,
-        paddingLeft: 12,
-        paddingRight: 12,
-        paddingTop: 8,
-        paddingBottom: 8,
-        borderRadius: 6,
+        gap: 8,
+        paddingLeft: 2,
+        paddingRight: 2,
+        paddingTop: 2,
+        paddingBottom: 2,
       }}
     >
-      <Skeleton width={180} />
-      <Skeleton width={280} />
-      <Skeleton width={220} />
-      <Skeleton width={90} />
-      <Skeleton width={110} />
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 12 }}>
+        <Skeleton width={180} />
+        <Skeleton width={280} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 12 }}>
+        <Skeleton width={140} />
+        <Skeleton width={70} />
+        <Skeleton width={90} />
+      </div>
     </div>
   )
 }
@@ -105,9 +148,9 @@ function WorktreeRow({
         width: '100%',
         alignSelf: 'stretch',
         flexShrink: 0,
-        gap: 10,
-        paddingLeft: 16,
-        paddingRight: 16,
+        gap: 8,
+        paddingLeft: 12,
+        paddingRight: 12,
         paddingTop: 10,
         paddingBottom: 10,
         borderWidth: 1,
@@ -120,15 +163,32 @@ function WorktreeRow({
           <text testId={`worktree-path-${index}`} style={{ fontSize: 12, color: C.text }}>
             {worktree.path}
           </text>
-          {metadata ? <text style={{ fontSize: 11, color: C.ghost }}>{formatSize(metadata.size)}</text> : <Skeleton width={42} />}
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {metadata ? (
+              <WorktreeMetaItem
+                icon="hardDrive"
+                label="Size"
+                value={formatSize(metadata.size)}
+                testId={`worktree-size-${index}`}
+                color={C.ghost}
+                iconColor={C.ghost}
+              />
+            ) : (
+              <Skeleton width={42} />
+            )}
+            <div
+              testId={`worktree-status-${index}`}
+              aria-label={worktree.linked ? 'Linked' : 'Not Linked'}
+              style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5 }}
+            >
+              <Icon name={worktree.linked ? 'link' : 'unlink'} size={12} color={worktree.linked ? C.accent : C.secondary} />
+              <text style={{ fontSize: 11, color: worktree.linked ? C.accent : C.secondary }}>
+                {worktree.linked ? 'Linked' : 'Not Linked'}
+              </text>
+            </div>
+          </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <text
-            testId={`worktree-status-${index}`}
-            style={{ fontSize: 12, color: worktree.linked ? C.accent : C.secondary }}
-          >
-            {worktree.linked ? 'Linked' : 'Not Linked'}
-          </text>
           <WorktreeOpenMenu
             index={index}
             options={openWorktreeOptions}
@@ -153,37 +213,51 @@ function WorktreeRow({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 4,
-            paddingLeft: 12,
-            paddingRight: 12,
-            paddingTop: 8,
-            paddingBottom: 8,
-            borderRadius: 6,
+            gap: 6,
+            paddingLeft: 2,
+            paddingRight: 2,
+            paddingTop: 2,
+            paddingBottom: 2,
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
-            <text style={{ fontSize: 11, color: C.secondary }}>Branch:</text>
-            <text style={{ fontSize: 11, color: C.text }}>{metadata.branch ?? 'Detached HEAD'}</text>
+          <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+            <WorktreeMetaItem
+              icon="gitBranch"
+              label="Branch"
+              value={metadata.branch ?? 'Detached HEAD'}
+              testId={`worktree-branch-${index}`}
+            />
+            <WorktreeMetaItem
+              icon="gitCommit"
+              label="Last commit"
+              value={commit ? `${commit.hash} · ${commit.subject}` : 'No commits'}
+              testId={`worktree-commit-${index}`}
+              grow
+            />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
-            <text style={{ fontSize: 11, color: C.secondary }}>Last commit:</text>
-            <text style={{ fontSize: 11, color: C.text }}>
-              {commit ? `${commit.hash} · ${commit.subject}` : 'No commits'}
-            </text>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
-            <text style={{ fontSize: 11, color: C.secondary }}>Last commit date:</text>
-            <text testId={`worktree-commit-date-${index}`} style={{ fontSize: 11, color: C.text }}>
-              {commit ? formatCommitDate(commit.date) : 'No commits'}
-            </text>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
-            <text style={{ fontSize: 11, color: C.secondary }}>Staged changes:</text>
-            <text style={{ fontSize: 11, color: C.text }}>{metadata.stagedChanges}</text>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
-            <text style={{ fontSize: 11, color: C.secondary }}>Unstaged changes:</text>
-            <text style={{ fontSize: 11, color: C.text }}>{metadata.unstagedChanges}</text>
+          <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+            <WorktreeMetaItem
+              icon="calendar"
+              label="Last commit date"
+              value={commit ? formatCommitDate(commit.date) : 'No commits'}
+              testId={`worktree-commit-date-${index}`}
+            />
+            <WorktreeMetaItem
+              icon="filePlus"
+              label="Staged changes"
+              value={`${metadata.stagedChanges}`}
+              testId={`worktree-staged-${index}`}
+              color={metadata.stagedChanges > 0 ? C.accent : C.secondary}
+              iconColor={metadata.stagedChanges > 0 ? C.accent : C.secondary}
+            />
+            <WorktreeMetaItem
+              icon="fileMinus"
+              label="Unstaged changes"
+              value={`${metadata.unstagedChanges}`}
+              testId={`worktree-unstaged-${index}`}
+              color={metadata.unstagedChanges > 0 ? C.accent : C.secondary}
+              iconColor={metadata.unstagedChanges > 0 ? C.accent : C.secondary}
+            />
           </div>
         </div>
       ) : (

@@ -1,9 +1,17 @@
 import iconCopy from '../../assets/icons/copy.svg' with { type: 'text' }
 import iconChevronDown from '../../assets/icons/chevron-down.svg' with { type: 'text' }
+import iconCalendar from '../../assets/icons/calendar.svg' with { type: 'text' }
+import iconFileMinus from '../../assets/icons/file-minus.svg' with { type: 'text' }
+import iconFilePlus from '../../assets/icons/file-plus.svg' with { type: 'text' }
+import iconGitBranch from '../../assets/icons/git-branch.svg' with { type: 'text' }
+import iconGitCommit from '../../assets/icons/git-commit.svg' with { type: 'text' }
+import iconHardDrive from '../../assets/icons/hard-drive.svg' with { type: 'text' }
+import iconLink from '../../assets/icons/link.svg' with { type: 'text' }
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
 import iconPencil from '../../assets/icons/pencil.svg' with { type: 'text' }
 import iconTriangleAlert from '../../assets/icons/triangle-alert.svg' with { type: 'text' }
 import iconTrash2 from '../../assets/icons/trash-2.svg' with { type: 'text' }
+import iconUnlink from '../../assets/icons/unlink.svg' with { type: 'text' }
 import iconX from '../../assets/icons/x.svg' with { type: 'text' }
 
 // Icon source: Lucide (via `lucide-static`, vendored per-icon into assets/icons/),
@@ -14,8 +22,16 @@ const ICONS = {
   panelLeft: iconPanelLeft,
   copy: iconCopy,
   chevronDown: iconChevronDown,
+  calendar: iconCalendar,
+  fileMinus: iconFileMinus,
+  filePlus: iconFilePlus,
+  gitBranch: iconGitBranch,
+  gitCommit: iconGitCommit,
+  hardDrive: iconHardDrive,
+  link: iconLink,
   pencil: iconPencil,
   trash2: iconTrash2,
+  unlink: iconUnlink,
   x: iconX,
   triangleAlert: iconTriangleAlert,
 } as const
