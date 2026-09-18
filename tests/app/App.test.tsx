@@ -220,7 +220,9 @@ describeNative('Raphie App', () => {
 
   it('shows every git Worktree with its current Central env link status', async () => {
     const worktreeFolder = await makeTempDir('raphie-app-worktree-')
+    const legacyEnvFolder = await makeTempDir('raphie-app-legacy-env-')
     disposableFolders.push(worktreeFolder)
+    disposableFolders.push(legacyEnvFolder)
     await runGit('-C', projectFolder, 'init')
     await runGit('-C', projectFolder, 'config', 'user.email', 'raphie-tests@example.com')
     await runGit('-C', projectFolder, 'config', 'user.name', 'Raphie Tests')
@@ -255,7 +257,8 @@ describeNative('Raphie App', () => {
     await runFs(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem
-        yield* fs.writeFileString(`${worktreeFolder}/.env`, 'LOCAL_ONLY=yes\n')
+        yield* fs.writeFileString(`${legacyEnvFolder}/.env`, 'LOCAL_ONLY=yes\n')
+        yield* fs.symlink(`${legacyEnvFolder}/.env`, `${worktreeFolder}/.env`)
       }),
     )
 
@@ -308,6 +311,8 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('worktree-unstaged-0')).toBeDefined()
     expect(renderer.findByTestId('worktree-open-1')).toBeDefined()
     expect(renderer.findByTestId('worktree-open-menu-1')).toBeDefined()
+    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeUndefined()
+    expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-0')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-1')).toBeDefined()
     expect(renderer.findByTestId('worktrees-sort-size')).toBeDefined()
@@ -364,6 +369,93 @@ describeNative('Raphie App', () => {
     await app.getByTestId('tab-worktrees').click()
     renderer.flush()
     expect(renderer.findByTestId('worktrees-empty')).toBeDefined()
+    await app.close()
+  })
+
+  it('links a Worktree and backs up its existing .env after confirmation', async () => {
+    const worktreeFolder = await makeTempDir('raphie-app-worktree-')
+    disposableFolders.push(worktreeFolder)
+    await runGit('-C', projectFolder, 'init')
+    await runGit('-C', projectFolder, 'config', 'user.email', 'raphie-tests@example.com')
+    await runGit('-C', projectFolder, 'config', 'user.name', 'Raphie Tests')
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${projectFolder}/README.md`, 'initial\n')
+      }),
+    )
+    await runGit('-C', projectFolder, 'add', 'README.md')
+    await runGit('-C', projectFolder, '-c', 'commit.gpgSign=false', 'commit', '-m', 'initial')
+
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runGit('-C', projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)
+    const original = 'LOCAL_ONLY=yes\n'
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${worktreeFolder}/.env`, original)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('tab-worktrees').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeUndefined()
+    await app.getByTestId('link-worktree-0').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeUndefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        expect(yield* fs.readLink(`${projectFolder}/.env`)).toBe(project!.centralEnvFile)
+      }),
+    )
+
+    expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeDefined()
+    await app.getByTestId('link-worktree-1').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    expect(renderer.findByTestId('link-worktree-confirmation')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('Existing .env found')
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        expect(yield* fs.readFileString(`${worktreeFolder}/.env`)).toBe(original)
+      }),
+    )
+
+    await app.getByTestId('link-worktree-anyway').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        expect(yield* fs.readLink(`${worktreeFolder}/.env`)).toBe(project!.centralEnvFile)
+        expect(yield* fs.readFileString(`${worktreeFolder}/.env.backup`)).toBe(original)
+      }),
+    )
+    expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeUndefined()
+    expect(renderer.findByTestId('link-worktree-confirmation')).toBeUndefined()
     await app.close()
   })
 

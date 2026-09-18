@@ -18,6 +18,7 @@ import {
   type WorktreeWindow,
 } from '../worktreeWindow.ts'
 import { IconButton } from './IconButton.tsx'
+import { EnvFileBadge } from './EnvFileBadge.tsx'
 import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
 import { WorktreeSortButtons } from './WorktreeSortButtons.tsx'
 
@@ -129,6 +130,7 @@ function WorktreeRow({
   lastOpenWorktreeTarget,
   onOpenWorktree,
   onSelectOpenWorktreeTarget,
+  onLinkWorktree,
   onDeleteWorktree,
 }: {
   worktree: Worktree
@@ -138,6 +140,7 @@ function WorktreeRow({
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
+  onLinkWorktree: (path: string) => void
   onDeleteWorktree: (path: string) => void
 }) {
   const metadata = worktree.metadata
@@ -216,9 +219,19 @@ function WorktreeRow({
                 {worktree.linked ? 'Linked' : 'Not Linked'}
               </text>
             </div>
+            {worktree.hasEnvFile && !worktree.linked ? <EnvFileBadge index={index} /> : null}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {!worktree.linked ? (
+            <IconButton
+              testId={`link-worktree-${index}`}
+              label="Link Worktree to Central env file"
+              icon="link"
+              color={C.accent}
+              onClick={() => onLinkWorktree(worktree.path)}
+            />
+          ) : null}
           <WorktreeOpenMenu
             index={index}
             options={openWorktreeOptions}
@@ -306,6 +319,7 @@ export function WorktreeList({
   lastOpenWorktreeTarget,
   onOpenWorktree,
   onDeleteWorktree,
+  onLinkWorktree,
   onSelectOpenWorktreeTarget,
 }: {
   worktrees: Worktree[]
@@ -315,6 +329,7 @@ export function WorktreeList({
   projectFolderPath: string
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
+  onLinkWorktree: (path: string) => void
   onDeleteWorktree: (path: string) => void
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
 }) {
@@ -427,6 +442,7 @@ export function WorktreeList({
                       openWorktreeOptions={openWorktreeOptions}
                       lastOpenWorktreeTarget={lastOpenWorktreeTarget}
                       onOpenWorktree={onOpenWorktree}
+                      onLinkWorktree={onLinkWorktree}
                       onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
                       onDeleteWorktree={onDeleteWorktree}
                     />

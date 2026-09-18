@@ -56,23 +56,26 @@ const canonicalPath = (fs: FileSystem.FileSystem, filePath: string) =>
     Effect.catchAll(() => Effect.succeed(null)),
   )
 
-const isLinkedToCentralEnv = (
+const inspectEnvFile = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
   worktreePath: string,
   centralEnvPath: string | null,
 ) =>
   Effect.gen(function* () {
-    if (centralEnvPath === null) return false
-
     const envFile = path.join(worktreePath, '.env')
-    const isSymlink = yield* fs.readLink(envFile).pipe(
-      Effect.map(() => true),
-      Effect.catchAll(() => Effect.succeed(false)),
+    const symlinkTarget = yield* fs.readLink(envFile).pipe(
+      Effect.map((target) => target as string | null),
+      Effect.catchAll(() => Effect.succeed(null)),
     )
-    if (!isSymlink) return false
+    const hasEnvFile =
+      symlinkTarget !== null ||
+      (yield* fs.exists(envFile).pipe(Effect.catchAll(() => Effect.succeed(false))))
+    if (centralEnvPath === null || symlinkTarget === null) {
+      return { hasEnvFile, linked: false }
+    }
 
-    return (yield* canonicalPath(fs, envFile)) === centralEnvPath
+    return { hasEnvFile, linked: (yield* canonicalPath(fs, envFile)) === centralEnvPath }
   })
 
 /**
@@ -96,8 +99,13 @@ export const discoverWorktrees = (project: Project) =>
     const centralEnvPath = yield* canonicalPath(fs, project.centralEnvFile)
 
     return yield* Effect.forEach(worktreePaths, (worktreePath) =>
-      isLinkedToCentralEnv(fs, path, worktreePath, centralEnvPath).pipe(
-        Effect.map((linked): Worktree => ({ path: worktreePath, linked, metadata: null })),
+      inspectEnvFile(fs, path, worktreePath, centralEnvPath).pipe(
+        Effect.map(({ linked, hasEnvFile }): Worktree => ({
+          path: worktreePath,
+          linked,
+          hasEnvFile,
+          metadata: null,
+        })),
       ),
       { concurrency: 'unbounded' },
     )
