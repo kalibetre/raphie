@@ -32,8 +32,8 @@ describe('listWorktrees', () => {
         const mainPath = yield* fs.realPath(projectFolder)
         const additionalPath = yield* fs.realPath(worktreeFolder)
         expect(yield* discoverWorktrees(project)).toEqual([
-          { path: mainPath, linked: true, hasRealEnvFile: false, metadata: null },
-          { path: additionalPath, linked: false, hasRealEnvFile: false, metadata: null },
+          { path: mainPath, linked: true, hasEnvFile: true, metadata: null },
+          { path: additionalPath, linked: false, hasEnvFile: false, metadata: null },
         ])
         yield* fs.writeFileString(path.join(worktreeFolder, '.env'), 'LOCAL_ONLY=yes\n')
         yield* fs.writeFileString(path.join(projectFolder, 'README.md'), 'changed\n')
@@ -42,15 +42,15 @@ describe('listWorktrees', () => {
 
         const discoveredWorktrees = yield* discoverWorktrees(project)
         expect(discoveredWorktrees).toEqual([
-          { path: mainPath, linked: true, hasRealEnvFile: false, metadata: null },
-          { path: additionalPath, linked: false, hasRealEnvFile: true, metadata: null },
+          { path: mainPath, linked: true, hasEnvFile: true, metadata: null },
+          { path: additionalPath, linked: false, hasEnvFile: true, metadata: null },
         ])
 
         const worktrees = yield* listWorktrees(project)
         expect(worktrees[0]).toMatchObject({
           path: mainPath,
           linked: true,
-          hasRealEnvFile: false,
+          hasEnvFile: true,
           metadata: {
             branch: 'main',
             stagedChanges: 1,
@@ -66,7 +66,7 @@ describe('listWorktrees', () => {
         expect(worktrees[1]).toMatchObject({
           path: additionalPath,
           linked: false,
-          hasRealEnvFile: true,
+          hasEnvFile: true,
           metadata: {
             branch: 'feature',
             lastCommit: { subject: 'initial' },
@@ -78,8 +78,41 @@ describe('listWorktrees', () => {
         expect((yield* listWorktrees(project))[0]).toMatchObject({
           path: mainPath,
           linked: false,
-          hasRealEnvFile: true,
+          hasEnvFile: true,
         })
+      }),
+    ))
+
+  it('keeps an unlinked symlink visible as an existing env file', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const path = yield* Path.Path
+        const worktreeFolder = yield* fs.makeTempDirectoryScoped({ prefix: 'raphie-worktree-' })
+        const legacyEnvDirectory = yield* fs.makeTempDirectoryScoped({ prefix: 'raphie-legacy-env-' })
+
+        expect(yield* git(projectFolder, 'init')).toBe(0)
+        expect(yield* git(projectFolder, 'config', 'user.email', 'raphie-tests@example.com')).toBe(0)
+        expect(yield* git(projectFolder, 'config', 'user.name', 'Raphie Tests')).toBe(0)
+        yield* fs.writeFileString(path.join(projectFolder, 'README.md'), 'initial\n')
+        expect(yield* git(projectFolder, 'add', 'README.md')).toBe(0)
+        expect(yield* git(projectFolder, '-c', 'commit.gpgSign=false', 'commit', '-m', 'initial')).toBe(0)
+        expect(yield* git(projectFolder, 'branch', '-M', 'main')).toBe(0)
+
+        const project = yield* registerProject({ folderPath: projectFolder })
+        yield* fs.symlink(project.centralEnvFile, path.join(projectFolder, '.env'))
+        expect(yield* git(projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)).toBe(0)
+
+        const legacyEnvFile = path.join(legacyEnvDirectory, '.env')
+        yield* fs.writeFileString(legacyEnvFile, 'LEGACY=yes\n')
+        yield* fs.symlink(legacyEnvFile, path.join(worktreeFolder, '.env'))
+
+        const mainPath = yield* fs.realPath(projectFolder)
+        const additionalPath = yield* fs.realPath(worktreeFolder)
+        expect(yield* discoverWorktrees(project)).toEqual([
+          { path: mainPath, linked: true, hasEnvFile: true, metadata: null },
+          { path: additionalPath, linked: false, hasEnvFile: true, metadata: null },
+        ])
       }),
     ))
 

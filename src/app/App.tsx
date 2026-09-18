@@ -401,7 +401,7 @@ export function App() {
     const updateLinked = (current: Worktree[]) =>
       current.map((worktree) =>
         worktree.path === worktreePath
-          ? { ...worktree, linked: true, hasRealEnvFile: false }
+          ? { ...worktree, linked: true, hasEnvFile: true }
           : worktree,
       )
     const cacheEntry = worktreeCache.current.get(project.id)

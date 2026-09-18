@@ -22,7 +22,8 @@ export interface WorktreeMetadata {
 export interface Worktree {
   readonly path: string
   readonly linked: boolean
-  readonly hasRealEnvFile: boolean
+  /** True when `.env` exists at the Worktree path, including as a symlink. */
+  readonly hasEnvFile: boolean
   readonly metadata: WorktreeMetadata | null
 }
 

@@ -10,7 +10,7 @@ import {
 const worktree = (path: string, size: number | null, date: string | null = null): Worktree => ({
   path,
   linked: false,
-  hasRealEnvFile: false,
+  hasEnvFile: false,
   metadata:
     size === null
       ? null

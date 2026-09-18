@@ -5,7 +5,7 @@ import { readWorktreeCache, writeWorktreeCache, WORKTREE_CACHE_TTL_MS } from '..
 const worktree: Worktree = {
   path: '/tmp/project',
   linked: true,
-  hasRealEnvFile: false,
+  hasEnvFile: true,
   metadata: null,
 }
 

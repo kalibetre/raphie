@@ -220,7 +220,9 @@ describeNative('Raphie App', () => {
 
   it('shows every git Worktree with its current Central env link status', async () => {
     const worktreeFolder = await makeTempDir('raphie-app-worktree-')
+    const legacyEnvFolder = await makeTempDir('raphie-app-legacy-env-')
     disposableFolders.push(worktreeFolder)
+    disposableFolders.push(legacyEnvFolder)
     await runGit('-C', projectFolder, 'init')
     await runGit('-C', projectFolder, 'config', 'user.email', 'raphie-tests@example.com')
     await runGit('-C', projectFolder, 'config', 'user.name', 'Raphie Tests')
@@ -255,7 +257,8 @@ describeNative('Raphie App', () => {
     await runFs(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem
-        yield* fs.writeFileString(`${worktreeFolder}/.env`, 'LOCAL_ONLY=yes\n')
+        yield* fs.writeFileString(`${legacyEnvFolder}/.env`, 'LOCAL_ONLY=yes\n')
+        yield* fs.symlink(`${legacyEnvFolder}/.env`, `${worktreeFolder}/.env`)
       }),
     )
 

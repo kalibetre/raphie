@@ -219,7 +219,7 @@ function WorktreeRow({
                 {worktree.linked ? 'Linked' : 'Not Linked'}
               </text>
             </div>
-            {worktree.hasRealEnvFile ? <EnvFileBadge index={index} /> : null}
+            {worktree.hasEnvFile && !worktree.linked ? <EnvFileBadge index={index} /> : null}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
