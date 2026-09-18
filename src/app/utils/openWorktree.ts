@@ -7,6 +7,7 @@ export type WorktreeOpenTarget =
   | 'sublime'
   | 'intellij'
   | 'file-manager'
+  | 'ghostty'
   | 'terminal'
 
 export interface WorktreeOpenOption {
@@ -24,7 +25,7 @@ export interface OpenWorktreeCommand {
   readonly args: readonly string[]
 }
 
-type EditorTarget = Exclude<WorktreeOpenTarget, 'file-manager' | 'terminal'>
+type EditorTarget = Exclude<WorktreeOpenTarget, 'file-manager' | 'ghostty' | 'terminal'>
 
 const editorDefinitions = [
   {
@@ -89,15 +90,18 @@ const getAvailabilityDefinitions = (platform: WorktreePlatform): readonly Availa
     platform === 'darwin'
       ? [
           { option: { value: 'file-manager', label: 'Finder' }, application: 'Finder' },
+          { option: { value: 'ghostty', label: 'Ghostty' }, application: 'Ghostty' },
           { option: { value: 'terminal', label: 'Terminal' }, application: 'Terminal' },
         ]
       : platform === 'win32'
         ? [
             { option: { value: 'file-manager', label: 'File Explorer' }, command: 'explorer.exe' },
+            { option: { value: 'ghostty', label: 'Ghostty' }, command: 'ghostty.exe' },
             { option: { value: 'terminal', label: 'Windows Terminal' }, command: 'wt.exe' },
           ]
         : [
             { option: { value: 'file-manager', label: 'File Manager' }, command: 'xdg-open' },
+            { option: { value: 'ghostty', label: 'Ghostty' }, command: 'ghostty' },
             { option: { value: 'terminal', label: 'Terminal' }, command: 'x-terminal-emulator' },
           ]
 
@@ -185,6 +189,12 @@ export const getOpenWorktreeCommand = (
     if (platform === 'darwin') return { command: 'open', args: ['-a', 'Terminal', path] }
     if (platform === 'win32') return { command: 'wt.exe', args: ['-d', path] }
     return { command: 'x-terminal-emulator', args: ['--working-directory', path] }
+  }
+
+  if (target === 'ghostty') {
+    if (platform === 'darwin') return { command: 'open', args: ['-a', 'Ghostty', path] }
+    if (platform === 'win32') return { command: 'ghostty.exe', args: ['--working-directory', path] }
+    return { command: 'ghostty', args: ['--working-directory', path] }
   }
 
   return getEditorCommand(target, path, platform)

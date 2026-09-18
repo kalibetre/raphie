@@ -18,7 +18,19 @@ describe('open worktree actions', () => {
       { value: 'sublime', label: 'Sublime Text' },
       { value: 'intellij', label: 'IntelliJ IDEA' },
       { value: 'file-manager', label: 'Finder' },
+      { value: 'ghostty', label: 'Ghostty' },
       { value: 'terminal', label: 'Terminal' },
+    ])
+  })
+
+  it('includes Ghostty when the macOS app is installed', async () => {
+    const probe: WorktreeAvailabilityProbe = {
+      hasCommand: () => false,
+      hasApplication: async (application) => application === 'Ghostty',
+    }
+
+    expect(await discoverAvailableOpenWorktreeOptions('darwin', probe)).toEqual([
+      { value: 'ghostty', label: 'Ghostty' },
     ])
   })
 
@@ -48,6 +60,10 @@ describe('open worktree actions', () => {
     expect(getOpenWorktreeCommand('terminal', '/tmp/my project', 'darwin')).toEqual({
       command: 'open',
       args: ['-a', 'Terminal', '/tmp/my project'],
+    })
+    expect(getOpenWorktreeCommand('ghostty', '/tmp/my project', 'darwin')).toEqual({
+      command: 'open',
+      args: ['-a', 'Ghostty', '/tmp/my project'],
     })
   })
 
