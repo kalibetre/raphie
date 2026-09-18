@@ -14,6 +14,7 @@ import {
   deleteEnvVar,
   DuplicateEnvVarKeyError,
   LinkWorktreeConflictError,
+  ProjectHasLinkedWorktreesError,
   listEnvVars,
   listProjects,
   discoverWorktrees,
@@ -80,6 +81,7 @@ export function App() {
   const [registrationInFlight, setRegistrationInFlight] = useState(false)
   const [removeCandidateId, setRemoveCandidateId] = useState<string | null>(null)
   const [removalMode, setRemovalMode] = useState<ProjectRemovalMode>('copy')
+  const [removalError, setRemovalError] = useState<string | null>(null)
   const [removalInFlight, setRemovalInFlight] = useState(false)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
@@ -129,6 +131,7 @@ export function App() {
     setWorktreeDelete(null)
     setWorktreeLink(null)
     setWorktreeUnlink(null)
+    setRemovalError(null)
     if (!selectedProject || !selectedCentralEnvFile) {
       setEnvVars([])
       setWorktrees([])
@@ -623,6 +626,7 @@ export function App() {
   const handleSelectProject = (id: string) => {
     setSelectedId(id)
     setRemoveCandidateId(null)
+    setRemovalError(null)
     setEnvVarEditor(null)
     setEnvVarDelete(null)
     setWorktreeLink(null)
@@ -632,25 +636,47 @@ export function App() {
   const handleStartRemove = () => {
     if (!selectedProject || registrationInFlight) return
     setRemovalMode('copy')
+    setRemovalError(null)
     setRemoveCandidateId(selectedProject.id)
   }
 
   const handleCancelRemove = () => {
-    if (!removalInFlight) setRemoveCandidateId(null)
+    if (!removalInFlight) {
+      setRemoveCandidateId(null)
+      setRemovalError(null)
+    }
   }
 
   const handleRemoveProject = () => {
     if (!removeCandidateId || registrationInFlight || removalInFlight) return
     const projectId = removeCandidateId
+    setRemovalError(null)
     setRemovalInFlight(true)
-    run(removeProject(projectId, removalMode))
-      .then((removed) => {
-        if (!removed) return
+    run(Effect.either(removeProject(projectId, removalMode)))
+      .then((result) => {
+        if (result._tag === 'Left') {
+          if (result.left instanceof ProjectHasLinkedWorktreesError) {
+            const count = result.left.linkedWorktreeCount
+            const worktreeLabel = count === 1 ? 'Worktree' : 'Worktrees'
+            const pronoun = count === 1 ? 'it' : 'them'
+            const verb = count === 1 ? 'remains' : 'remain'
+            setRemovalError(
+              `Cannot delete the Project’s Central env file while ${count} linked ${worktreeLabel} ${verb}. Unlink ${pronoun} first.`,
+            )
+          } else {
+            setRemovalError('Could not remove the Project.')
+          }
+          return
+        }
+        if (!result.right) {
+          setRemovalError('Could not remove the Project.')
+          return
+        }
         setProjects((current) => current.filter((project) => project.id !== projectId))
         setSelectedId((current) => (current === projectId ? null : current))
         setRemoveCandidateId(null)
       })
-      .catch(() => undefined)
+      .catch(() => setRemovalError('Could not remove the Project.'))
       .finally(() => setRemovalInFlight(false))
   }
 
@@ -695,6 +721,7 @@ export function App() {
             searchQuery={envVarSearchQuery}
             isRemoving={removeCandidateId === selectedProject?.id}
             removalMode={removalMode}
+            removalError={removalError}
             removalInFlight={removalInFlight}
             onFileDrop={handleFileDrop}
             onToggleReveal={handleToggleReveal}

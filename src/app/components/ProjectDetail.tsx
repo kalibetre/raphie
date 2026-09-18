@@ -21,6 +21,7 @@ export function ProjectDetail({
   onSearchQueryChange,
   isRemoving,
   removalMode,
+  removalError,
   removalInFlight,
   registrationInFlight,
   onToggleReveal,
@@ -50,6 +51,7 @@ export function ProjectDetail({
   searchQuery: string
   isRemoving: boolean
   removalMode: ProjectRemovalMode
+  removalError: string | null
   removalInFlight: boolean
   registrationInFlight: boolean
   onToggleReveal: (key: string) => void
@@ -96,6 +98,7 @@ export function ProjectDetail({
         project={project}
         isRemoving={isRemoving}
         removalMode={removalMode}
+        removalError={removalError}
         removalInFlight={removalInFlight}
         registrationInFlight={registrationInFlight}
         onStartRemove={onStartRemove}

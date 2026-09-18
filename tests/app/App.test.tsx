@@ -1171,6 +1171,69 @@ describeNative('Raphie App', () => {
     await app.close()
   })
 
+  it('explains why Central env file deletion is blocked while a Worktree is linked', async () => {
+    await runGit('-C', projectFolder, 'init')
+    await runGit('-C', projectFolder, 'config', 'user.email', 'raphie-tests@example.com')
+    await runGit('-C', projectFolder, 'config', 'user.name', 'Raphie Tests')
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${projectFolder}/README.md`, 'initial\n')
+      }),
+    )
+    await runGit('-C', projectFolder, 'add', 'README.md')
+    await runGit('-C', projectFolder, '-c', 'commit.gpgSign=false', 'commit', '-m', 'initial')
+
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(project!.centralEnvFile, 'CENTRAL=yes\n')
+        yield* fs.symlink(project!.centralEnvFile, `${projectFolder}/.env`)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('remove-project-button').click()
+    await app.getByTestId('remove-env-delete-option').click()
+    await app.getByTestId('confirm-remove-project').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.findByTestId('remove-project-confirmation')).toBeDefined()
+    expect(renderer.findByTestId('remove-project-error')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('1 linked Worktree')
+    expect(renderer.getPaintedText().join('\n')).toContain('Unlink')
+    expect(await run(listProjects)).toEqual([project])
+    expect(
+      await runFs(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem
+          return yield* fs.exists(project!.centralEnvFile)
+        }),
+      ),
+    ).toBe(true)
+
+    await app.close()
+  })
+
   it('filters the project list by name or folder path', async () => {
     const secondFolder = await makeTempDir('raphie-app-second-')
 

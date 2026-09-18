@@ -1,8 +1,14 @@
 import { FileSystem, Path } from '@effect/platform'
-import { Effect } from 'effect'
+import { Data, Effect } from 'effect'
 import * as ProjectsFile from './ProjectsFile.ts'
+import { countLinkedWorktrees } from './listWorktrees.ts'
 
 export type ProjectRemovalMode = 'copy' | 'remove'
+
+export class ProjectHasLinkedWorktreesError extends Data.TaggedError('ProjectHasLinkedWorktreesError')<{
+  readonly projectId: string
+  readonly linkedWorktreeCount: number
+}> {}
 
 const removeIfPresent = (fs: FileSystem.FileSystem, filePath: string) =>
   Effect.gen(function* () {
@@ -31,6 +37,11 @@ export const removeProject = (projectId: string, mode: ProjectRemovalMode = 'cop
     const projects = yield* ProjectsFile.readAll
     const project = projects.find((candidate) => candidate.id === projectId)
     if (!project) return false
+
+    const linkedWorktreeCount = yield* countLinkedWorktrees(project)
+    if (linkedWorktreeCount > 0) {
+      return yield* Effect.fail(new ProjectHasLinkedWorktreesError({ projectId, linkedWorktreeCount }))
+    }
 
     const projectEnvFile = path.join(project.folderPath, '.env')
     if (mode === 'remove') {
