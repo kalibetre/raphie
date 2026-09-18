@@ -418,21 +418,24 @@ describeNative('Raphie App', () => {
     await waitForAppUpdate()
     renderer.flush()
 
-    const projectDetail = renderer.findByTestId('project-detail')!
-    const projectDetailBounds = renderer.getElementBounds(projectDetail.id)!
-    const before = renderer.getScrollOffset(projectDetail.id)
+    const tab = renderer.findByTestId('tab-env-vars')!
+    const tabBefore = renderer.getElementBounds(tab.id)
+    const content = renderer.findByTestId('project-detail-content')!
+    const contentBounds = renderer.getElementBounds(content.id)!
+    const before = renderer.getScrollOffset(content.id)
     expect(before).not.toBeNull()
 
     renderer.nativeSimulateScrollWheel(
-      projectDetailBounds.x + projectDetailBounds.width / 2,
-      projectDetailBounds.y + projectDetailBounds.height / 2,
+      contentBounds.x + contentBounds.width / 2,
+      contentBounds.y + contentBounds.height / 2,
       0,
       -400,
     )
 
-    const after = renderer.getScrollOffset(projectDetail.id)
+    const after = renderer.getScrollOffset(content.id)
     expect(after).not.toBeNull()
     expect(after![1]).toBeLessThan(before![1])
+    expect(renderer.getElementBounds(tab.id)).toEqual(tabBefore)
   })
 
   it('keeps the page header fixed in place after revealing a long EnvVar value', async () => {

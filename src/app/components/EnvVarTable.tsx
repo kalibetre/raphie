@@ -46,6 +46,7 @@ export function EnvVarTable({
       style={{
         display: 'flex',
         flexDirection: 'column',
+        flexShrink: 0,
         borderWidth: 1,
         borderColor: C.border,
         borderRadius: 8,
