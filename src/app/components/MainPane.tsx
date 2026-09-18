@@ -70,9 +70,10 @@ export function MainPane({
         // this pane from shrinking to the window and push everything in
         // it — including the Remove Project button — off-screen.
         minWidth: 0,
+        minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
-        overflowY: 'scroll',
+        overflowY: 'hidden',
       }}
     >
       {registrationInFlight ? (

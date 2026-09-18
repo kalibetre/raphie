@@ -67,6 +67,7 @@ export function ProjectDetail({
 
   return (
     <div
+      testId="project-detail"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -80,6 +81,7 @@ export function ProjectDetail({
         paddingRight: 32,
         paddingTop: 28,
         paddingBottom: 28,
+        overflowY: showingWorktrees ? 'hidden' : 'scroll',
       }}
     >
       <ProjectHeader
@@ -130,8 +132,9 @@ export function ProjectDetail({
         style={{
           display: 'flex',
           flexDirection: 'column',
-          flexGrow: 1,
-          minHeight: 0,
+          flexGrow: showingWorktrees ? 1 : 0,
+          flexShrink: showingWorktrees ? 1 : 0,
+          minHeight: showingWorktrees ? 0 : undefined,
           gap: 16,
           overflowY: showingWorktrees ? 'hidden' : 'visible',
         }}

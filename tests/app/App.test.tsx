@@ -391,7 +391,7 @@ describeNative('Raphie App', () => {
     await app.close()
   })
 
-  it('scrolls a long EnvVars list in the main pane', async () => {
+  it('scrolls a long EnvVars list in the Project detail viewport', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)
     renderer.flush()
@@ -418,19 +418,19 @@ describeNative('Raphie App', () => {
     await waitForAppUpdate()
     renderer.flush()
 
-    const mainPane = renderer.findByTestId('main-pane')!
-    const mainPaneBounds = renderer.getElementBounds(mainPane.id)!
-    const before = renderer.getScrollOffset(mainPane.id)
+    const projectDetail = renderer.findByTestId('project-detail')!
+    const projectDetailBounds = renderer.getElementBounds(projectDetail.id)!
+    const before = renderer.getScrollOffset(projectDetail.id)
     expect(before).not.toBeNull()
 
     renderer.nativeSimulateScrollWheel(
-      mainPaneBounds.x + mainPaneBounds.width / 2,
-      mainPaneBounds.y + mainPaneBounds.height / 2,
+      projectDetailBounds.x + projectDetailBounds.width / 2,
+      projectDetailBounds.y + projectDetailBounds.height / 2,
       0,
       -400,
     )
 
-    const after = renderer.getScrollOffset(mainPane.id)
+    const after = renderer.getScrollOffset(projectDetail.id)
     expect(after).not.toBeNull()
     expect(after![1]).toBeLessThan(before![1])
   })
