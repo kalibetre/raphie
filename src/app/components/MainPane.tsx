@@ -1,11 +1,15 @@
-import type { EnvVar, Project, ProjectRemovalMode } from '../../core/index.ts'
+import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../../core/index.ts'
 import { C } from '../theme.ts'
+import type { WorktreeOpenTarget } from '../utils/openWorktree.ts'
 import { ProjectDetail } from './ProjectDetail.tsx'
 
 export function MainPane({
   selectedProject,
   registrationInFlight,
   envVars,
+  worktrees,
+  worktreesLoading,
+  worktreesRefreshing,
   revealedKeys,
   duplicateKeys,
   searchQuery,
@@ -23,10 +27,18 @@ export function MainPane({
   onSelectRemovalMode,
   onCancelRemove,
   onConfirmRemove,
+  onOpenWorktree,
+  lastOpenWorktreeTarget,
+  onSelectOpenWorktreeTarget,
+  onDeleteWorktree,
+  onRefreshWorktrees,
 }: {
   selectedProject: Project | null
   registrationInFlight: boolean
   envVars: EnvVar[]
+  worktrees: Worktree[]
+  worktreesLoading: boolean
+  worktreesRefreshing: boolean
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
   searchQuery: string
@@ -44,6 +56,11 @@ export function MainPane({
   onSelectRemovalMode: (mode: ProjectRemovalMode) => void
   onCancelRemove: () => void
   onConfirmRemove: () => void
+  onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void
+  lastOpenWorktreeTarget: WorktreeOpenTarget | null
+  onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
+  onDeleteWorktree: (path: string) => void
+  onRefreshWorktrees: () => void
 }) {
   return (
     <div
@@ -57,9 +74,10 @@ export function MainPane({
         // this pane from shrinking to the window and push everything in
         // it — including the Remove Project button — off-screen.
         minWidth: 0,
+        minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
-        overflowY: 'scroll',
+        overflowY: 'hidden',
       }}
     >
       {registrationInFlight ? (
@@ -69,8 +87,12 @@ export function MainPane({
       ) : null}
       {selectedProject ? (
         <ProjectDetail
+          key={selectedProject.id}
           project={selectedProject}
           envVars={envVars}
+          worktrees={worktrees}
+          worktreesLoading={worktreesLoading}
+          worktreesRefreshing={worktreesRefreshing}
           revealedKeys={revealedKeys}
           duplicateKeys={duplicateKeys}
           searchQuery={searchQuery}
@@ -88,6 +110,11 @@ export function MainPane({
           onSelectRemovalMode={onSelectRemovalMode}
           onCancelRemove={onCancelRemove}
           onConfirmRemove={onConfirmRemove}
+          onOpenWorktree={onOpenWorktree}
+          lastOpenWorktreeTarget={lastOpenWorktreeTarget}
+          onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
+          onDeleteWorktree={onDeleteWorktree}
+          onRefreshWorktrees={onRefreshWorktrees}
         />
       ) : (
         <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

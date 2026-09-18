@@ -5,7 +5,7 @@
  *   bun run test
  */
 
-import { FileSystem } from '@effect/platform'
+import { Command, FileSystem } from '@effect/platform'
 import { BunContext } from '@effect/platform-bun'
 import { connectTest } from '@gpuix/react/automation'
 import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing'
@@ -39,6 +39,7 @@ const removeDir = (path: string) =>
 
 let home: string
 let projectFolder: string
+const disposableFolders: string[] = []
 
 beforeEach(async () => {
   home = await makeTempDir('raphie-app-home-')
@@ -50,6 +51,7 @@ afterEach(async () => {
   delete process.env.RAPHIE_HOME
   await removeDir(home)
   await removeDir(projectFolder)
+  for (const folder of disposableFolders.splice(0)) await removeDir(folder)
 })
 
 /** Swaps the global Bun for `bunStub` for the duration of `fn`, then restores it. */
@@ -101,6 +103,11 @@ function findByTestIdPrefix(renderer: ReturnType<typeof createTestRoot>['rendere
 }
 
 const waitForAppUpdate = () => new Promise((resolve) => setTimeout(resolve, 50))
+
+const runGit = async (...args: string[]) => {
+  const exitCode = await run(Command.exitCode(Command.make('git', ...args)))
+  if (exitCode !== 0) throw new Error(`git ${args.join(' ')} exited with ${exitCode}`)
+}
 
 describeNative('Raphie App', () => {
   it('shows the empty-state hint with no registered projects', () => {
@@ -211,6 +218,155 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('title-bar-project-name')).toBeDefined()
   })
 
+  it('shows every git Worktree with its current Central env link status', async () => {
+    const worktreeFolder = await makeTempDir('raphie-app-worktree-')
+    disposableFolders.push(worktreeFolder)
+    await runGit('-C', projectFolder, 'init')
+    await runGit('-C', projectFolder, 'config', 'user.email', 'raphie-tests@example.com')
+    await runGit('-C', projectFolder, 'config', 'user.name', 'Raphie Tests')
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${projectFolder}/README.md`, 'initial\n')
+      }),
+    )
+    await runGit('-C', projectFolder, 'add', 'README.md')
+    await runGit('-C', projectFolder, '-c', 'commit.gpgSign=false', 'commit', '-m', 'initial')
+
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.symlink(project!.centralEnvFile, `${projectFolder}/.env`)
+      }),
+    )
+    await runGit('-C', projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${worktreeFolder}/.env`, 'LOCAL_ONLY=yes\n')
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const mainPath = await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        return yield* fs.realPath(projectFolder)
+      }),
+    )
+    const additionalPath = await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        return yield* fs.realPath(worktreeFolder)
+      }),
+    )
+    expect(renderer.findByTestId('tab-worktrees')).toBeDefined()
+    expect(renderer.findByTestId('worktrees-section')).toBeUndefined()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('tab-worktrees').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const worktreePainted = renderer.getPaintedText().join('\n')
+    expect(renderer.findByTestId('worktrees-section')).toBeDefined()
+    expect(worktreePainted).toContain('Worktrees')
+    expect(worktreePainted).toContain(mainPath)
+    expect(worktreePainted).toContain(additionalPath)
+    expect(worktreePainted).toContain('Linked')
+    expect(worktreePainted).toContain('Not Linked')
+    expect(worktreePainted).toMatch(/\d+(?:\.\d+)? (?:B|KB|MB|GB|TB)/)
+    expect(worktreePainted).toContain('main')
+    expect(worktreePainted).toMatch(/[A-Z][a-z]{2} \d{1,2}, \d{4}/)
+    expect(renderer.findByTestId('worktrees-list')?.customProps?.estimatedItemHeight).toBe(120)
+    expect(worktreePainted).not.toContain('Branch:')
+    expect(worktreePainted).not.toContain('Last commit date:')
+    expect(worktreePainted).not.toContain('Staged changes:')
+    expect(worktreePainted).not.toContain('Unstaged changes:')
+    expect(renderer.findByTestId('worktree-size-0')).toBeDefined()
+    expect(renderer.findByTestId('worktree-branch-0')).toBeDefined()
+    expect(renderer.findByTestId('worktree-commit-0')).toBeDefined()
+    expect(renderer.findByTestId('worktree-commit-date-0')).toBeDefined()
+    expect(renderer.findByTestId('worktree-staged-0')).toBeDefined()
+    expect(renderer.findByTestId('worktree-unstaged-0')).toBeDefined()
+    expect(renderer.findByTestId('worktree-open-1')).toBeDefined()
+    expect(renderer.findByTestId('worktree-open-menu-1')).toBeDefined()
+    expect(renderer.findByTestId('delete-worktree-0')).toBeDefined()
+    expect(renderer.findByTestId('delete-worktree-1')).toBeDefined()
+    expect(renderer.findByTestId('worktrees-sort-size')).toBeDefined()
+    expect(renderer.findByTestId('worktrees-sort-date')).toBeDefined()
+    expect(renderer.findByTestId('worktrees-refresh')).toBeDefined()
+
+    await app.getByTestId('worktrees-sort-size').click()
+    await app.getByTestId('worktrees-sort-date').click()
+    renderer.flush()
+
+    await runGit('-C', projectFolder, 'worktree', 'lock', additionalPath)
+    await app.getByTestId('delete-worktree-1').click()
+    renderer.flush()
+    expect(renderer.findByTestId('delete-worktree-confirmation')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('uncommitted and untracked files')
+    await app.getByTestId('delete-worktree-confirm').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    expect(renderer.findByTestId('delete-worktree-error')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('Worktree marked as locked')
+    expect(renderer.getPaintedText().join('\n')).toContain('cannot remove a locked working tree')
+    await app.getByTestId('delete-worktree-force').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    expect(renderer.findByTestId('delete-worktree-confirmation')).toBeUndefined()
+
+    await app.getByTestId('tab-env-vars').click()
+    renderer.flush()
+    expect(renderer.findByTestId('worktrees-section')).toBeUndefined()
+    await app.close()
+  })
+
+  it('shows an empty Worktrees state for a non-git Project', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.findByTestId('worktrees-section')).toBeUndefined()
+    expect(renderer.findByTestId('tab-worktrees')).toBeDefined()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('tab-worktrees').click()
+    renderer.flush()
+    expect(renderer.findByTestId('worktrees-empty')).toBeDefined()
+    await app.close()
+  })
+
   it('shows the selected Project’s EnvVars masked, and reveals a value on click', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)
@@ -249,6 +405,53 @@ describeNative('Raphie App', () => {
     expect(painted).toContain('supersecret')
 
     await app.close()
+  })
+
+  it('scrolls a long EnvVars list in the Project detail viewport', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const envVars = Array.from({ length: 80 }, (_, index) => `KEY_${index}=value-${index}`).join('\n')
+        yield* fs.writeFileString(project!.centralEnvFile, `${envVars}\n`)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const tab = renderer.findByTestId('tab-env-vars')!
+    const tabBefore = renderer.getElementBounds(tab.id)
+    const content = renderer.findByTestId('project-detail-content')!
+    const contentBounds = renderer.getElementBounds(content.id)!
+    const before = renderer.getScrollOffset(content.id)
+    expect(before).not.toBeNull()
+
+    renderer.nativeSimulateScrollWheel(
+      contentBounds.x + contentBounds.width / 2,
+      contentBounds.y + contentBounds.height / 2,
+      0,
+      -400,
+    )
+
+    const after = renderer.getScrollOffset(content.id)
+    expect(after).not.toBeNull()
+    expect(after![1]).toBeLessThan(before![1])
+    expect(renderer.getElementBounds(tab.id)).toEqual(tabBefore)
   })
 
   it('keeps the page header fixed in place after revealing a long EnvVar value', async () => {

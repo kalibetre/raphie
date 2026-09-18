@@ -1,18 +1,30 @@
 import { TooltipProvider } from '@gpuix/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Effect } from 'effect'
-import type { EnvVar, Project, ProjectRemovalMode } from '../core/index.ts'
+import type {
+  EnvVar,
+  Project,
+  ProjectRemovalMode,
+  Worktree,
+  WorktreeMetadata,
+  WorktreeRemovalFailure,
+} from '../core/index.ts'
 import {
   deleteEnvVar,
   DuplicateEnvVarKeyError,
   listEnvVars,
   listProjects,
+  discoverWorktrees,
+  loadWorktreeMetadata,
   registerProject,
+  forceRemoveWorktree,
   removeProject,
+  removeWorktree,
   run,
   setEnvVar,
 } from '../core/index.ts'
 import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
+import { DeleteWorktreeConfirmation } from './components/DeleteWorktreeConfirmation.tsx'
 import { EnvVarEditorModal } from './components/EnvVarEditorModal.tsx'
 import type { EnvVarEditorValidationError } from './components/EnvVarEditorModal.tsx'
 import { MainPane } from './components/MainPane.tsx'
@@ -21,7 +33,12 @@ import { Toast } from './components/Toast.tsx'
 import { TopBar } from './components/TopBar.tsx'
 import { C, DEFAULT_SIDEBAR_WIDTH } from './theme.ts'
 import { copyToClipboard } from './utils/clipboard.ts'
+import {
+  openWorktree,
+  type WorktreeOpenTarget,
+} from './utils/openWorktree.ts'
 import { pickFolderNative } from './utils/pickFolder.ts'
+import { readWorktreeCache, type WorktreeCache, writeWorktreeCache } from './worktreeCache.ts'
 
 interface EnvVarEditorState {
   readonly mode: 'add' | 'edit'
@@ -37,6 +54,11 @@ interface EnvVarDeleteState {
   readonly envVar: EnvVar
 }
 
+interface WorktreeDeleteState {
+  readonly path: string
+  readonly error: WorktreeRemovalFailure | null
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState('')
@@ -49,12 +71,25 @@ export function App() {
   const [removalMode, setRemovalMode] = useState<ProjectRemovalMode>('copy')
   const [removalInFlight, setRemovalInFlight] = useState(false)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
+  const [worktrees, setWorktrees] = useState<Worktree[]>([])
+  const [worktreesLoading, setWorktreesLoading] = useState(false)
+  const [worktreesRefreshing, setWorktreesRefreshing] = useState(false)
+  const worktreeCache = useRef<WorktreeCache>(new Map())
+  const worktreeDiscoveryRequests = useRef(new Map<string, Promise<Worktree[]>>())
+  const worktreeMetadataRequests = useRef(new Map<string, Promise<WorktreeMetadata>>())
+  const worktreeRefreshProjectRef = useRef<string | null>(null)
+  const [worktreeRefreshVersion, setWorktreeRefreshVersion] = useState(0)
   const [envVarSearchQuery, setEnvVarSearchQuery] = useState('')
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   const [envVarEditor, setEnvVarEditor] = useState<EnvVarEditorState | null>(null)
   const [envVarSaveInFlight, setEnvVarSaveInFlight] = useState(false)
   const [envVarDelete, setEnvVarDelete] = useState<EnvVarDeleteState | null>(null)
   const [envVarDeleteInFlight, setEnvVarDeleteInFlight] = useState(false)
+  const [worktreeDelete, setWorktreeDelete] = useState<WorktreeDeleteState | null>(null)
+  const [worktreeDeleteInFlight, setWorktreeDeleteInFlight] = useState(false)
+  const [worktreeForceDeleteInFlight, setWorktreeForceDeleteInFlight] = useState(false)
+  const [lastOpenWorktreeTarget, setLastOpenWorktreeTarget] = useState<WorktreeOpenTarget | null>(null)
+  const selectedProjectIdRef = useRef<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -69,26 +104,113 @@ export function App() {
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
   const selectedCentralEnvFile = selectedProject?.centralEnvFile ?? null
+  selectedProjectIdRef.current = selectedProject?.id ?? null
 
   useEffect(() => {
     setRevealedKeys(new Set())
     setEnvVarSearchQuery('')
     setEnvVarEditor(null)
     setEnvVarDelete(null)
-    if (!selectedCentralEnvFile) {
+    setWorktreeDelete(null)
+    if (!selectedProject || !selectedCentralEnvFile) {
       setEnvVars([])
+      setWorktrees([])
+      setWorktreesLoading(false)
+      setWorktreesRefreshing(false)
       return
     }
+    const project = selectedProject
+    const cached = readWorktreeCache(worktreeCache.current, project.id)
+    const forceRefresh = worktreeRefreshProjectRef.current === project.id
+    if (forceRefresh) worktreeRefreshProjectRef.current = null
+    setWorktrees(cached?.worktrees ?? [])
+    setWorktreesLoading(cached === null)
+    setWorktreesRefreshing(forceRefresh || cached?.stale === true)
     // Guard against a stale response landing after the user has already
     // switched to (or back to) a different Project.
     let stale = false
     run(listEnvVars(selectedCentralEnvFile)).then((vars) => {
       if (!stale) setEnvVars(vars)
     })
+    const applyMetadata = (worktree: Worktree, metadata: WorktreeMetadata) => {
+      const cacheEntry = worktreeCache.current.get(project.id)
+      const snapshot = cacheEntry?.worktrees ?? [worktree]
+      const next = snapshot.map((current) =>
+        current.path === worktree.path ? { ...current, metadata } : current,
+      )
+      writeWorktreeCache(worktreeCache.current, project.id, next, cacheEntry?.loadedAt)
+      if (!stale) {
+        setWorktrees((current) =>
+          current.map((item) => (item.path === worktree.path ? { ...item, metadata } : item)),
+        )
+      }
+    }
+
+    const loadMetadata = (discovered: Worktree[]) => {
+      for (const worktree of discovered) {
+        if (worktree.metadata !== null) continue
+        const requestKey = `${project.id}:${worktree.path}`
+        const existing = worktreeMetadataRequests.current.get(requestKey)
+        const request = existing ?? run(loadWorktreeMetadata(worktree))
+        if (!existing) {
+          worktreeMetadataRequests.current.set(requestKey, request)
+          const clearRequest = () => {
+            if (worktreeMetadataRequests.current.get(requestKey) === request) {
+              worktreeMetadataRequests.current.delete(requestKey)
+            }
+          }
+          request.then(clearRequest, clearRequest)
+        }
+        request.then((metadata) => applyMetadata(worktree, metadata)).catch(() => undefined)
+      }
+    }
+
+    if (cached && !cached.stale && !forceRefresh) {
+      loadMetadata(cached.worktrees)
+      return () => {
+        stale = true
+      }
+    }
+
+    const existing = worktreeDiscoveryRequests.current.get(project.id)
+    const request = existing ?? run(discoverWorktrees(project))
+    if (!existing) {
+      worktreeDiscoveryRequests.current.set(project.id, request)
+      const clearRequest = () => {
+        if (worktreeDiscoveryRequests.current.get(project.id) === request) {
+          worktreeDiscoveryRequests.current.delete(project.id)
+        }
+      }
+      request.then(clearRequest, clearRequest)
+    }
+
+    request
+      .then((discovered) => {
+        const previous = worktreeCache.current.get(project.id)
+        const previousByPath = new Map(previous?.worktrees.map((worktree) => [worktree.path, worktree]) ?? [])
+        const next = discovered.map((worktree) => ({
+          ...worktree,
+          metadata: previousByPath.get(worktree.path)?.metadata ?? null,
+        }))
+        writeWorktreeCache(worktreeCache.current, project.id, next, Date.now())
+        if (!stale) {
+          setWorktrees(next)
+          setWorktreesLoading(false)
+          setWorktreesRefreshing(false)
+        }
+        loadMetadata(next)
+      })
+      .catch(() => {
+        if (!stale) {
+          if (!cached) setWorktrees([])
+          setWorktreesLoading(false)
+          setWorktreesRefreshing(false)
+        }
+      })
     return () => {
       stale = true
     }
-  }, [selectedCentralEnvFile])
+  }, [selectedCentralEnvFile, selectedProject, worktreeRefreshVersion])
 
   useEffect(() => {
     if (registrationInFlight || registrationQueue.length === 0) return
@@ -156,6 +278,21 @@ export function App() {
     if (!selectedProject || !envVar || registrationInFlight) return
     setEnvVarEditor(null)
     setEnvVarDelete({ index, envVar })
+  }
+
+  const handleStartDeleteWorktree = (path: string) => {
+    if (!selectedProject || registrationInFlight || worktreeDeleteInFlight) return
+    if (path === selectedProject.folderPath || !worktrees.some((worktree) => worktree.path === path)) return
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
+    setWorktreeDelete({ path, error: null })
+  }
+
+  const handleRefreshWorktrees = () => {
+    if (!selectedProject || registrationInFlight || worktreesRefreshing) return
+    worktreeRefreshProjectRef.current = selectedProject.id
+    setWorktreesRefreshing(true)
+    setWorktreeRefreshVersion((current) => current + 1)
   }
 
   const setEnvVarEditorValidationError = (validationError: EnvVarEditorValidationError) => {
@@ -250,6 +387,99 @@ export function App() {
       .finally(() => setEnvVarDeleteInFlight(false))
   }
 
+  const handleCancelDeleteWorktree = () => {
+    if (!worktreeDeleteInFlight) setWorktreeDelete(null)
+  }
+
+  const finishWorktreeDeletion = (project: Project, worktreePath: string, message: string) => {
+    const cacheEntry = worktreeCache.current.get(project.id)
+    if (cacheEntry) {
+      writeWorktreeCache(
+        worktreeCache.current,
+        project.id,
+        cacheEntry.worktrees.filter((worktree) => worktree.path !== worktreePath),
+        cacheEntry.loadedAt,
+      )
+    }
+    if (selectedProjectIdRef.current === project.id) {
+      setWorktrees((current) => current.filter((worktree) => worktree.path !== worktreePath))
+    }
+    setWorktreeDelete(null)
+    setToastMessage(message)
+  }
+
+  const handleConfirmDeleteWorktree = () => {
+    if (!worktreeDelete || !selectedProject || worktreeDeleteInFlight) return
+    const project = selectedProject
+    const worktreePath = worktreeDelete.path
+    setWorktreeDelete((current) => (current ? { ...current, error: null } : current))
+    setWorktreeForceDeleteInFlight(false)
+    setWorktreeDeleteInFlight(true)
+    run(removeWorktree(project, worktreePath))
+      .then((result) => {
+        if (!result.removed) {
+          setWorktreeDelete((current) => (current ? { ...current, error: result.error } : current))
+          return
+        }
+
+        finishWorktreeDeletion(project, worktreePath, 'Deleted Worktree and its files')
+      })
+      .catch((error) => {
+        setWorktreeDelete((current) =>
+          current
+            ? {
+                ...current,
+                error: {
+                  code: 'unknown',
+                  message: 'An unexpected error prevented Git from deleting this Worktree.',
+                  detail: error instanceof Error ? error.message : String(error),
+                },
+              }
+            : current,
+        )
+      })
+      .finally(() => {
+        setWorktreeDeleteInFlight(false)
+        setWorktreeForceDeleteInFlight(false)
+      })
+  }
+
+  const handleForceDeleteWorktree = () => {
+    if (!worktreeDelete?.error || !selectedProject || worktreeDeleteInFlight) return
+    const project = selectedProject
+    const worktreePath = worktreeDelete.path
+    setWorktreeDelete((current) => (current ? { ...current, error: null } : current))
+    setWorktreeForceDeleteInFlight(true)
+    setWorktreeDeleteInFlight(true)
+    run(forceRemoveWorktree(project, worktreePath))
+      .then((result) => {
+        if (!result.removed) {
+          setWorktreeDelete((current) => (current ? { ...current, error: result.error } : current))
+          return
+        }
+
+        finishWorktreeDeletion(project, worktreePath, 'Force deleted Worktree and pruned Git metadata')
+      })
+      .catch((error) => {
+        setWorktreeDelete((current) =>
+          current
+            ? {
+                ...current,
+                error: {
+                  code: 'unknown',
+                  message: 'An unexpected error prevented the Worktree folder from being force deleted.',
+                  detail: error instanceof Error ? error.message : String(error),
+                },
+              }
+            : current,
+        )
+      })
+      .finally(() => {
+        setWorktreeDeleteInFlight(false)
+        setWorktreeForceDeleteInFlight(false)
+      })
+  }
+
   const queueFolders = (folderPaths: string[]) => {
     const paths = folderPaths.filter(Boolean)
     if (paths.length === 0) return
@@ -262,6 +492,18 @@ export function App() {
     pickFolderNative().then((folderPath) => {
       if (folderPath) queueFolders([folderPath])
     })
+  }
+
+  const handleOpenWorktree = (path: string, target: WorktreeOpenTarget) => {
+    if (openWorktree(target, path)) {
+      setLastOpenWorktreeTarget(target)
+      return
+    }
+    setToastMessage('Could not open Worktree')
+  }
+
+  const handleSelectOpenWorktreeTarget = (target: WorktreeOpenTarget) => {
+    setLastOpenWorktreeTarget(target)
   }
 
   const handleSelectProject = (id: string) => {
@@ -329,6 +571,9 @@ export function App() {
             selectedProject={selectedProject}
             registrationInFlight={registrationInFlight}
             envVars={envVars}
+            worktrees={worktrees}
+            worktreesLoading={worktreesLoading}
+            worktreesRefreshing={worktreesRefreshing}
             revealedKeys={revealedKeys}
             duplicateKeys={duplicateKeys}
             searchQuery={envVarSearchQuery}
@@ -346,6 +591,11 @@ export function App() {
             onSelectRemovalMode={setRemovalMode}
             onCancelRemove={handleCancelRemove}
             onConfirmRemove={handleRemoveProject}
+            onOpenWorktree={handleOpenWorktree}
+            lastOpenWorktreeTarget={lastOpenWorktreeTarget}
+            onSelectOpenWorktreeTarget={handleSelectOpenWorktreeTarget}
+            onDeleteWorktree={handleStartDeleteWorktree}
+            onRefreshWorktrees={handleRefreshWorktrees}
           />
         </div>
 
@@ -374,6 +624,18 @@ export function App() {
             deleting={envVarDeleteInFlight}
             onCancel={handleCancelDeleteEnvVar}
             onConfirm={handleConfirmDeleteEnvVar}
+          />
+        ) : null}
+
+        {worktreeDelete ? (
+          <DeleteWorktreeConfirmation
+            worktreePath={worktreeDelete.path}
+            error={worktreeDelete.error}
+            deleting={worktreeDeleteInFlight}
+            forceDeleting={worktreeForceDeleteInFlight}
+            onCancel={handleCancelDeleteWorktree}
+            onConfirm={handleConfirmDeleteWorktree}
+            onForceDelete={handleForceDeleteWorktree}
           />
         ) : null}
 
