@@ -31,6 +31,7 @@ export function MainPane({
   lastOpenWorktreeTarget,
   onSelectOpenWorktreeTarget,
   onDeleteWorktree,
+  onLinkWorktree,
   onRefreshWorktrees,
 }: {
   selectedProject: Project | null
@@ -60,6 +61,7 @@ export function MainPane({
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
   onDeleteWorktree: (path: string) => void
+  onLinkWorktree: (path: string) => void
   onRefreshWorktrees: () => void
 }) {
   return (
@@ -114,6 +116,7 @@ export function MainPane({
           lastOpenWorktreeTarget={lastOpenWorktreeTarget}
           onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
           onDeleteWorktree={onDeleteWorktree}
+          onLinkWorktree={onLinkWorktree}
           onRefreshWorktrees={onRefreshWorktrees}
         />
       ) : (

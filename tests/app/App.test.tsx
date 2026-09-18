@@ -367,6 +367,89 @@ describeNative('Raphie App', () => {
     await app.close()
   })
 
+  it('links a Worktree and backs up its existing .env after confirmation', async () => {
+    const worktreeFolder = await makeTempDir('raphie-app-worktree-')
+    disposableFolders.push(worktreeFolder)
+    await runGit('-C', projectFolder, 'init')
+    await runGit('-C', projectFolder, 'config', 'user.email', 'raphie-tests@example.com')
+    await runGit('-C', projectFolder, 'config', 'user.name', 'Raphie Tests')
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${projectFolder}/README.md`, 'initial\n')
+      }),
+    )
+    await runGit('-C', projectFolder, 'add', 'README.md')
+    await runGit('-C', projectFolder, '-c', 'commit.gpgSign=false', 'commit', '-m', 'initial')
+
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runGit('-C', projectFolder, 'worktree', 'add', '-b', 'feature', worktreeFolder)
+    const original = 'LOCAL_ONLY=yes\n'
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        yield* fs.writeFileString(`${worktreeFolder}/.env`, original)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('tab-worktrees').click()
+    await waitForAppUpdate()
+    renderer.flush()
+
+    await app.getByTestId('link-worktree-0').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        expect(yield* fs.readLink(`${projectFolder}/.env`)).toBe(project!.centralEnvFile)
+      }),
+    )
+
+    await app.getByTestId('link-worktree-1').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    expect(renderer.findByTestId('link-worktree-confirmation')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('Existing .env found')
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        expect(yield* fs.readFileString(`${worktreeFolder}/.env`)).toBe(original)
+      }),
+    )
+
+    await app.getByTestId('link-worktree-anyway').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        expect(yield* fs.readLink(`${worktreeFolder}/.env`)).toBe(project!.centralEnvFile)
+        expect(yield* fs.readFileString(`${worktreeFolder}/.env.backup`)).toBe(original)
+      }),
+    )
+    expect(renderer.findByTestId('link-worktree-confirmation')).toBeUndefined()
+    await app.close()
+  })
+
   it('shows the selected Project’s EnvVars masked, and reveals a value on click', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)

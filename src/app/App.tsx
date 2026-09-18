@@ -12,10 +12,12 @@ import type {
 import {
   deleteEnvVar,
   DuplicateEnvVarKeyError,
+  LinkWorktreeConflictError,
   listEnvVars,
   listProjects,
   discoverWorktrees,
   loadWorktreeMetadata,
+  linkWorktree,
   registerProject,
   forceRemoveWorktree,
   removeProject,
@@ -27,6 +29,7 @@ import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.
 import { DeleteWorktreeConfirmation } from './components/DeleteWorktreeConfirmation.tsx'
 import { EnvVarEditorModal } from './components/EnvVarEditorModal.tsx'
 import type { EnvVarEditorValidationError } from './components/EnvVarEditorModal.tsx'
+import { LinkWorktreeConfirmation } from './components/LinkWorktreeConfirmation.tsx'
 import { MainPane } from './components/MainPane.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { Toast } from './components/Toast.tsx'
@@ -88,6 +91,8 @@ export function App() {
   const [worktreeDelete, setWorktreeDelete] = useState<WorktreeDeleteState | null>(null)
   const [worktreeDeleteInFlight, setWorktreeDeleteInFlight] = useState(false)
   const [worktreeForceDeleteInFlight, setWorktreeForceDeleteInFlight] = useState(false)
+  const [worktreeLink, setWorktreeLink] = useState<LinkWorktreeConflictError | null>(null)
+  const [worktreeLinkInFlight, setWorktreeLinkInFlight] = useState(false)
   const [lastOpenWorktreeTarget, setLastOpenWorktreeTarget] = useState<WorktreeOpenTarget | null>(null)
   const selectedProjectIdRef = useRef<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -112,6 +117,7 @@ export function App() {
     setEnvVarEditor(null)
     setEnvVarDelete(null)
     setWorktreeDelete(null)
+    setWorktreeLink(null)
     if (!selectedProject || !selectedCentralEnvFile) {
       setEnvVars([])
       setWorktrees([])
@@ -391,6 +397,53 @@ export function App() {
     if (!worktreeDeleteInFlight) setWorktreeDelete(null)
   }
 
+  const finishWorktreeLink = (project: Project, worktreePath: string, backupPath: string | null) => {
+    const updateLinked = (current: Worktree[]) =>
+      current.map((worktree) => (worktree.path === worktreePath ? { ...worktree, linked: true } : worktree))
+    const cacheEntry = worktreeCache.current.get(project.id)
+    if (cacheEntry) writeWorktreeCache(worktreeCache.current, project.id, updateLinked(cacheEntry.worktrees), cacheEntry.loadedAt)
+    if (selectedProjectIdRef.current !== project.id) return
+    setWorktrees(updateLinked)
+    setWorktreeLink(null)
+    setToastMessage(backupPath ? 'Linked Worktree and backed up its existing .env' : 'Linked Worktree')
+  }
+
+  const performWorktreeLink = (project: Project, worktreePath: string, force: boolean) => {
+    setWorktreeLinkInFlight(true)
+    run(Effect.either(linkWorktree(project, worktreePath, force ? { force: true } : {})))
+      .then((result) => {
+        if (result._tag === 'Left') {
+          if (result.left instanceof LinkWorktreeConflictError) {
+            if (selectedProjectIdRef.current === project.id) setWorktreeLink(result.left)
+          } else {
+            if (selectedProjectIdRef.current === project.id) setToastMessage('Could not link Worktree')
+          }
+          return
+        }
+        finishWorktreeLink(project, worktreePath, result.right.backupPath)
+      })
+      .catch(() => {
+        if (selectedProjectIdRef.current === project.id) setToastMessage('Could not link Worktree')
+      })
+      .finally(() => setWorktreeLinkInFlight(false))
+  }
+
+  const handleLinkWorktree = (worktreePath: string) => {
+    if (!selectedProject || registrationInFlight || worktreeLinkInFlight) return
+    if (!worktrees.some((worktree) => worktree.path === worktreePath)) return
+    performWorktreeLink(selectedProject, worktreePath, false)
+  }
+
+  const handleLinkWorktreeAnyway = () => {
+    if (!worktreeLink || !selectedProject || worktreeLinkInFlight) return
+    const worktreePath = worktreeLink.worktreePath
+    if (!worktrees.some((worktree) => worktree.path === worktreePath)) {
+      setWorktreeLink(null)
+      return
+    }
+    performWorktreeLink(selectedProject, worktreePath, true)
+  }
+
   const finishWorktreeDeletion = (project: Project, worktreePath: string, message: string) => {
     const cacheEntry = worktreeCache.current.get(project.id)
     if (cacheEntry) {
@@ -511,6 +564,7 @@ export function App() {
     setRemoveCandidateId(null)
     setEnvVarEditor(null)
     setEnvVarDelete(null)
+    setWorktreeLink(null)
   }
 
   const handleStartRemove = () => {
@@ -595,6 +649,7 @@ export function App() {
             lastOpenWorktreeTarget={lastOpenWorktreeTarget}
             onSelectOpenWorktreeTarget={handleSelectOpenWorktreeTarget}
             onDeleteWorktree={handleStartDeleteWorktree}
+            onLinkWorktree={handleLinkWorktree}
             onRefreshWorktrees={handleRefreshWorktrees}
           />
         </div>
@@ -636,6 +691,17 @@ export function App() {
             onCancel={handleCancelDeleteWorktree}
             onConfirm={handleConfirmDeleteWorktree}
             onForceDelete={handleForceDeleteWorktree}
+          />
+        ) : null}
+
+        {worktreeLink ? (
+          <LinkWorktreeConfirmation
+            conflict={worktreeLink}
+            linking={worktreeLinkInFlight}
+            onCancel={() => {
+              if (!worktreeLinkInFlight) setWorktreeLink(null)
+            }}
+            onLinkAnyway={handleLinkWorktreeAnyway}
           />
         ) : null}
 
