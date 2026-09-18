@@ -27,6 +27,7 @@ export function MainPane({
   onCancelRemove,
   onConfirmRemove,
   onOpenWorktree,
+  onDeleteWorktree,
 }: {
   selectedProject: Project | null
   registrationInFlight: boolean
@@ -51,6 +52,7 @@ export function MainPane({
   onCancelRemove: () => void
   onConfirmRemove: () => void
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void
+  onDeleteWorktree: (path: string) => void
 }) {
   return (
     <div
@@ -99,6 +101,7 @@ export function MainPane({
           onCancelRemove={onCancelRemove}
           onConfirmRemove={onConfirmRemove}
           onOpenWorktree={onOpenWorktree}
+          onDeleteWorktree={onDeleteWorktree}
         />
       ) : (
         <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

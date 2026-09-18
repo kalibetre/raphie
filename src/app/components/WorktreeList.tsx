@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { C } from '../theme.ts'
 import { type WorktreeOpenTarget } from '../utils/openWorktree.ts'
 import { INITIAL_WORKTREE_WINDOW_SIZE, selectWorktreeWindow, type WorktreeWindow } from '../worktreeWindow.ts'
+import { IconButton } from './IconButton.tsx'
 import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
 
 const formatSize = (bytes: number) => {
@@ -67,14 +68,19 @@ function WorktreeMetadataSkeleton({ index }: { index: number }) {
 function WorktreeRow({
   worktree,
   index,
+  projectFolderPath,
   onOpenWorktree,
+  onDeleteWorktree,
 }: {
   worktree: Worktree
   index: number
+  projectFolderPath: string
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
+  onDeleteWorktree: (path: string) => void
 }) {
   const metadata = worktree.metadata
   const commit = metadata?.lastCommit
+  const isMainWorktree = worktree.path === projectFolderPath
 
   return (
     <div
@@ -112,6 +118,14 @@ function WorktreeRow({
           <WorktreeOpenMenu
             index={index}
             onOpen={(target) => onOpenWorktree(worktree.path, target)}
+          />
+          <IconButton
+            testId={`delete-worktree-${index}`}
+            label={isMainWorktree ? 'Cannot delete the main Worktree' : 'Delete Worktree'}
+            icon="trash2"
+            color={isMainWorktree ? C.ghost : C.secondary}
+            disabled={isMainWorktree}
+            onClick={() => onDeleteWorktree(worktree.path)}
           />
         </div>
       </div>
@@ -165,11 +179,15 @@ function WorktreeRow({
 export function WorktreeList({
   worktrees,
   loading,
+  projectFolderPath,
   onOpenWorktree,
+  onDeleteWorktree,
 }: {
   worktrees: Worktree[]
   loading: boolean
+  projectFolderPath: string
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
+  onDeleteWorktree: (path: string) => void
 }) {
   const [window, setWindow] = useState<WorktreeWindow>(() =>
     selectWorktreeWindow(worktrees.length, 0, INITIAL_WORKTREE_WINDOW_SIZE),
@@ -231,7 +249,13 @@ export function WorktreeList({
                   paddingBottom: 8,
                 }}
               >
-                <WorktreeRow worktree={worktree} index={index} onOpenWorktree={onOpenWorktree} />
+                <WorktreeRow
+                  worktree={worktree}
+                  index={index}
+                  projectFolderPath={projectFolderPath}
+                  onOpenWorktree={onOpenWorktree}
+                  onDeleteWorktree={onDeleteWorktree}
+                />
               </div>
             )
           })}

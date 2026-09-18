@@ -32,6 +32,7 @@ export function ProjectDetail({
   onCancelRemove,
   onConfirmRemove,
   onOpenWorktree,
+  onDeleteWorktree,
 }: {
   project: Project
   envVars: EnvVar[]
@@ -55,6 +56,7 @@ export function ProjectDetail({
   onCancelRemove: () => void
   onConfirmRemove: () => void
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void
+  onDeleteWorktree: (path: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
   const showingWorktrees = activeTab === 'worktrees'
@@ -131,7 +133,13 @@ export function ProjectDetail({
         }}
       >
         {showingWorktrees ? (
-          <WorktreeList worktrees={worktrees} loading={worktreesLoading} onOpenWorktree={onOpenWorktree} />
+          <WorktreeList
+            worktrees={worktrees}
+            loading={worktreesLoading}
+            projectFolderPath={project.folderPath}
+            onOpenWorktree={onOpenWorktree}
+            onDeleteWorktree={onDeleteWorktree}
+          />
         ) : (
           <>
             <DuplicateKeysWarning duplicateKeys={duplicateKeys} />

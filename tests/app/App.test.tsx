@@ -300,6 +300,16 @@ describeNative('Raphie App', () => {
     expect(worktreePainted).toMatch(/[A-Z][a-z]{2} \d{1,2}, \d{4}/)
     expect(worktreePainted).toContain('Staged changes')
     expect(worktreePainted).toContain('Unstaged changes')
+    expect(renderer.findByTestId('delete-worktree-0')).toBeDefined()
+    expect(renderer.findByTestId('delete-worktree-1')).toBeDefined()
+
+    await app.getByTestId('delete-worktree-1').click()
+    renderer.flush()
+    expect(renderer.findByTestId('delete-worktree-confirmation')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('uncommitted and untracked files')
+    await app.getByTestId('delete-worktree-cancel').click()
+    renderer.flush()
+    expect(renderer.findByTestId('delete-worktree-confirmation')).toBeUndefined()
 
     await app.getByTestId('tab-env-vars').click()
     renderer.flush()

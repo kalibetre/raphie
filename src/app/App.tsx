@@ -11,10 +11,12 @@ import {
   loadWorktreeMetadata,
   registerProject,
   removeProject,
+  removeWorktree,
   run,
   setEnvVar,
 } from '../core/index.ts'
 import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
+import { DeleteWorktreeConfirmation } from './components/DeleteWorktreeConfirmation.tsx'
 import { EnvVarEditorModal } from './components/EnvVarEditorModal.tsx'
 import type { EnvVarEditorValidationError } from './components/EnvVarEditorModal.tsx'
 import { MainPane } from './components/MainPane.tsx'
@@ -45,6 +47,10 @@ interface EnvVarDeleteState {
   readonly envVar: EnvVar
 }
 
+interface WorktreeDeleteState {
+  readonly path: string
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState('')
@@ -68,6 +74,9 @@ export function App() {
   const [envVarSaveInFlight, setEnvVarSaveInFlight] = useState(false)
   const [envVarDelete, setEnvVarDelete] = useState<EnvVarDeleteState | null>(null)
   const [envVarDeleteInFlight, setEnvVarDeleteInFlight] = useState(false)
+  const [worktreeDelete, setWorktreeDelete] = useState<WorktreeDeleteState | null>(null)
+  const [worktreeDeleteInFlight, setWorktreeDeleteInFlight] = useState(false)
+  const selectedProjectIdRef = useRef<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -82,12 +91,14 @@ export function App() {
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
   const selectedCentralEnvFile = selectedProject?.centralEnvFile ?? null
+  selectedProjectIdRef.current = selectedProject?.id ?? null
 
   useEffect(() => {
     setRevealedKeys(new Set())
     setEnvVarSearchQuery('')
     setEnvVarEditor(null)
     setEnvVarDelete(null)
+    setWorktreeDelete(null)
     if (!selectedProject || !selectedCentralEnvFile) {
       setEnvVars([])
       setWorktrees([])
@@ -250,6 +261,14 @@ export function App() {
     setEnvVarDelete({ index, envVar })
   }
 
+  const handleStartDeleteWorktree = (path: string) => {
+    if (!selectedProject || registrationInFlight || worktreeDeleteInFlight) return
+    if (path === selectedProject.folderPath || !worktrees.some((worktree) => worktree.path === path)) return
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
+    setWorktreeDelete({ path })
+  }
+
   const setEnvVarEditorValidationError = (validationError: EnvVarEditorValidationError) => {
     setEnvVarEditor((current) => (current ? { ...current, validationError } : current))
   }
@@ -340,6 +359,41 @@ export function App() {
       })
       .catch(() => setToastMessage('Could not delete ' + deletedKey))
       .finally(() => setEnvVarDeleteInFlight(false))
+  }
+
+  const handleCancelDeleteWorktree = () => {
+    if (!worktreeDeleteInFlight) setWorktreeDelete(null)
+  }
+
+  const handleConfirmDeleteWorktree = () => {
+    if (!worktreeDelete || !selectedProject || worktreeDeleteInFlight) return
+    const project = selectedProject
+    const worktreePath = worktreeDelete.path
+    setWorktreeDeleteInFlight(true)
+    run(removeWorktree(project, worktreePath))
+      .then((removed) => {
+        if (!removed) {
+          setToastMessage('Could not delete Worktree')
+          return
+        }
+
+        const cacheEntry = worktreeCache.current.get(project.id)
+        if (cacheEntry) {
+          writeWorktreeCache(
+            worktreeCache.current,
+            project.id,
+            cacheEntry.worktrees.filter((worktree) => worktree.path !== worktreePath),
+            cacheEntry.loadedAt,
+          )
+        }
+        if (selectedProjectIdRef.current === project.id) {
+          setWorktrees((current) => current.filter((worktree) => worktree.path !== worktreePath))
+        }
+        setWorktreeDelete(null)
+        setToastMessage('Deleted Worktree and its files')
+      })
+      .catch(() => setToastMessage('Could not delete Worktree'))
+      .finally(() => setWorktreeDeleteInFlight(false))
   }
 
   const queueFolders = (folderPaths: string[]) => {
@@ -447,6 +501,7 @@ export function App() {
             onCancelRemove={handleCancelRemove}
             onConfirmRemove={handleRemoveProject}
             onOpenWorktree={handleOpenWorktree}
+            onDeleteWorktree={handleStartDeleteWorktree}
           />
         </div>
 
@@ -475,6 +530,15 @@ export function App() {
             deleting={envVarDeleteInFlight}
             onCancel={handleCancelDeleteEnvVar}
             onConfirm={handleConfirmDeleteEnvVar}
+          />
+        ) : null}
+
+        {worktreeDelete ? (
+          <DeleteWorktreeConfirmation
+            worktreePath={worktreeDelete.path}
+            deleting={worktreeDeleteInFlight}
+            onCancel={handleCancelDeleteWorktree}
+            onConfirm={handleConfirmDeleteWorktree}
           />
         ) : null}
 
