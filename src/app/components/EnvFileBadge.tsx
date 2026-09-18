@@ -1,8 +1,6 @@
 import { C } from '../theme.ts'
 
-export function EnvFileBadge({ index, linked }: { index: number; linked: boolean }) {
-  const color = linked ? C.accent : C.warning
-
+export function EnvFileBadge({ index }: { index: number }) {
   return (
     <div
       testId={`worktree-env-file-badge-${index}`}
@@ -16,11 +14,11 @@ export function EnvFileBadge({ index, linked }: { index: number; linked: boolean
         display: 'flex',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: color,
-        backgroundColor: linked ? C.overlay : C.warningBg,
+        borderColor: C.warning,
+        backgroundColor: C.warningBg,
       }}
     >
-      <text style={{ fontSize: 10, color }}>{'.env found'}</text>
+      <text style={{ fontSize: 10, color: C.warning }}>{'.env found'}</text>
     </div>
   )
 }

@@ -400,7 +400,9 @@ export function App() {
   const finishWorktreeLink = (project: Project, worktreePath: string, backupPath: string | null) => {
     const updateLinked = (current: Worktree[]) =>
       current.map((worktree) =>
-        worktree.path === worktreePath ? { ...worktree, linked: true, hasEnvFile: true } : worktree,
+        worktree.path === worktreePath
+          ? { ...worktree, linked: true, hasRealEnvFile: false }
+          : worktree,
       )
     const cacheEntry = worktreeCache.current.get(project.id)
     if (cacheEntry) writeWorktreeCache(worktreeCache.current, project.id, updateLinked(cacheEntry.worktrees), cacheEntry.loadedAt)

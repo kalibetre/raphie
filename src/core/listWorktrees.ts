@@ -68,12 +68,17 @@ const inspectEnvFile = (
       Effect.map((target) => target as string | null),
       Effect.catchAll(() => Effect.succeed(null)),
     )
-    const hasEnvFile =
-      symlinkTarget !== null ||
-      (yield* fs.exists(envFile).pipe(Effect.catchAll(() => Effect.succeed(false))))
-    if (centralEnvPath === null || symlinkTarget === null) return { hasEnvFile, linked: false }
+    let hasRealEnvFile = false
+    if (symlinkTarget === null) {
+      hasRealEnvFile = yield* fs.exists(envFile).pipe(
+        Effect.catchAll(() => Effect.succeed(false)),
+      )
+    }
+    if (centralEnvPath === null || symlinkTarget === null) {
+      return { hasRealEnvFile, linked: false }
+    }
 
-    return { hasEnvFile, linked: (yield* canonicalPath(fs, envFile)) === centralEnvPath }
+    return { hasRealEnvFile, linked: (yield* canonicalPath(fs, envFile)) === centralEnvPath }
   })
 
 /**
@@ -98,7 +103,12 @@ export const discoverWorktrees = (project: Project) =>
 
     return yield* Effect.forEach(worktreePaths, (worktreePath) =>
       inspectEnvFile(fs, path, worktreePath, centralEnvPath).pipe(
-        Effect.map(({ linked, hasEnvFile }): Worktree => ({ path: worktreePath, linked, hasEnvFile, metadata: null })),
+        Effect.map(({ linked, hasRealEnvFile }): Worktree => ({
+          path: worktreePath,
+          linked,
+          hasRealEnvFile,
+          metadata: null,
+        })),
       ),
       { concurrency: 'unbounded' },
     )

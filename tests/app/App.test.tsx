@@ -308,6 +308,7 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('worktree-unstaged-0')).toBeDefined()
     expect(renderer.findByTestId('worktree-open-1')).toBeDefined()
     expect(renderer.findByTestId('worktree-open-menu-1')).toBeDefined()
+    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeUndefined()
     expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-0')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-1')).toBeDefined()
@@ -419,7 +420,7 @@ describeNative('Raphie App', () => {
     await app.getByTestId('link-worktree-0').click()
     await waitForAppUpdate()
     renderer.flush()
-    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeDefined()
+    expect(renderer.findByTestId('worktree-env-file-badge-0')).toBeUndefined()
     await runFs(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem
@@ -427,6 +428,7 @@ describeNative('Raphie App', () => {
       }),
     )
 
+    expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeDefined()
     await app.getByTestId('link-worktree-1').click()
     await waitForAppUpdate()
     renderer.flush()
@@ -449,6 +451,7 @@ describeNative('Raphie App', () => {
         expect(yield* fs.readFileString(`${worktreeFolder}/.env.backup`)).toBe(original)
       }),
     )
+    expect(renderer.findByTestId('worktree-env-file-badge-1')).toBeUndefined()
     expect(renderer.findByTestId('link-worktree-confirmation')).toBeUndefined()
     await app.close()
   })

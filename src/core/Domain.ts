@@ -22,7 +22,7 @@ export interface WorktreeMetadata {
 export interface Worktree {
   readonly path: string
   readonly linked: boolean
-  readonly hasEnvFile: boolean
+  readonly hasRealEnvFile: boolean
   readonly metadata: WorktreeMetadata | null
 }
 
