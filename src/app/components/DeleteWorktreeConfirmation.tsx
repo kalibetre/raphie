@@ -108,8 +108,8 @@ export function DeleteWorktreeConfirmation({
             <Icon name="triangleAlert" size={15} color={C.warning} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flexGrow: 1, minWidth: 0 }}>
               <text style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Why it failed</text>
-              <text style={{ fontSize: 12, color: C.text }}>{error.message}</text>
-              {error.detail ? <text style={{ fontSize: 11, color: C.secondary }}>{error.detail}</text> : null}
+              <text style={{ fontSize: 12, color: C.text, minWidth: 0 }}>{error.message}</text>
+              {error.detail ? <text style={{ fontSize: 11, color: C.secondary, minWidth: 0 }}>{error.detail}</text> : null}
             </div>
           </div>
         ) : (
@@ -125,9 +125,9 @@ export function DeleteWorktreeConfirmation({
             }}
           >
             <Icon name="triangleAlert" size={15} color={C.warning} />
-            <text style={{ fontSize: 12, color: C.warning }}>
-              All uncommitted and untracked files in this Worktree, including ignored files, will be permanently deleted.
-              Its Git branch will be kept.
+            <text style={{ fontSize: 12, color: C.warning, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
+              All uncommitted and untracked files, including ignored files, will be permanently deleted. The Git branch
+              will be kept.
             </text>
           </div>
         )}
