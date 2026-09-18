@@ -1,4 +1,6 @@
 export const INITIAL_WORKTREE_WINDOW_SIZE = 8
+// Includes the compact card height and the wrapper's bottom spacing.
+export const ESTIMATED_WORKTREE_ITEM_HEIGHT = 120
 
 export interface WorktreeWindow {
   readonly start: number

@@ -295,6 +295,7 @@ describeNative('Raphie App', () => {
     expect(worktreePainted).toMatch(/\d+(?:\.\d+)? (?:B|KB|MB|GB|TB)/)
     expect(worktreePainted).toContain('main')
     expect(worktreePainted).toMatch(/[A-Z][a-z]{2} \d{1,2}, \d{4}/)
+    expect(renderer.findByTestId('worktrees-list')?.customProps?.estimatedItemHeight).toBe(120)
     expect(worktreePainted).not.toContain('Branch:')
     expect(worktreePainted).not.toContain('Last commit date:')
     expect(worktreePainted).not.toContain('Staged changes:')

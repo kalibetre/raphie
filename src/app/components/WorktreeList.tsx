@@ -8,7 +8,12 @@ import {
   type WorktreeOpenOption,
   type WorktreeOpenTarget,
 } from '../utils/openWorktree.ts'
-import { INITIAL_WORKTREE_WINDOW_SIZE, selectWorktreeWindow, type WorktreeWindow } from '../worktreeWindow.ts'
+import {
+  ESTIMATED_WORKTREE_ITEM_HEIGHT,
+  INITIAL_WORKTREE_WINDOW_SIZE,
+  selectWorktreeWindow,
+  type WorktreeWindow,
+} from '../worktreeWindow.ts'
 import { IconButton } from './IconButton.tsx'
 import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
 
@@ -329,7 +334,7 @@ export function WorktreeList({
         <virtual-list
           testId="worktrees-list"
           itemCount={worktrees.length}
-          estimatedItemHeight={210}
+          estimatedItemHeight={ESTIMATED_WORKTREE_ITEM_HEIGHT}
           windowStart={renderedWindow.start}
           onVisibleRange={handleVisibleRange}
           style={{
