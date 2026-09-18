@@ -156,7 +156,7 @@ export function DeleteWorktreeConfirmation({
               testId="delete-worktree-force"
               label={forceDeleting ? 'Force deleting Worktree' : 'Force delete Worktree folder'}
               text={forceDeleting ? 'Force deleting…' : 'Force delete folder'}
-              variant="secondary"
+              variant="primary"
               disabled={deleting}
               onClick={onForceDelete}
             />
