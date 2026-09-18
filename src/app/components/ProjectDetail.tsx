@@ -14,6 +14,7 @@ export function ProjectDetail({
   envVars,
   worktrees,
   worktreesLoading,
+  worktreesRefreshing,
   revealedKeys,
   duplicateKeys,
   searchQuery,
@@ -35,11 +36,13 @@ export function ProjectDetail({
   lastOpenWorktreeTarget,
   onSelectOpenWorktreeTarget,
   onDeleteWorktree,
+  onRefreshWorktrees,
 }: {
   project: Project
   envVars: EnvVar[]
   worktrees: Worktree[]
   worktreesLoading: boolean
+  worktreesRefreshing: boolean
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
   searchQuery: string
@@ -61,6 +64,7 @@ export function ProjectDetail({
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
   onDeleteWorktree: (path: string) => void
+  onRefreshWorktrees: () => void
 }) {
   const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
   const showingWorktrees = activeTab === 'worktrees'
@@ -146,11 +150,13 @@ export function ProjectDetail({
           <WorktreeList
             worktrees={worktrees}
             loading={worktreesLoading}
+            refreshing={worktreesRefreshing}
             projectFolderPath={project.folderPath}
             lastOpenWorktreeTarget={lastOpenWorktreeTarget}
             onOpenWorktree={onOpenWorktree}
             onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
             onDeleteWorktree={onDeleteWorktree}
+            onRefresh={onRefreshWorktrees}
           />
         ) : (
           <>

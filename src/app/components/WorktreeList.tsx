@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../icons.tsx'
 import type { IconName } from '../icons.tsx'
 import { C, type ThemeColor } from '../theme.ts'
-import { sortWorktrees, type WorktreeSort } from '../worktreeSort.ts'
+import { DEFAULT_WORKTREE_SORT, sortWorktrees, type WorktreeSort } from '../worktreeSort.ts'
 import {
   discoverAvailableOpenWorktreeOptions,
   type WorktreeOpenOption,
@@ -18,7 +18,7 @@ import {
 } from '../worktreeWindow.ts'
 import { IconButton } from './IconButton.tsx'
 import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
-import { WorktreeSortMenu } from './WorktreeSortMenu.tsx'
+import { WorktreeSortButtons } from './WorktreeSortButtons.tsx'
 
 const formatSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`
@@ -178,8 +178,8 @@ function WorktreeRow({
                 label="Size"
                 value={formatSize(metadata.size)}
                 testId={`worktree-size-${index}`}
-                color={C.ghost}
-                iconColor={C.ghost}
+                color={C.secondary}
+                iconColor={C.secondary}
               />
             ) : (
               <Skeleton width={42} />
@@ -278,6 +278,8 @@ function WorktreeRow({
 export function WorktreeList({
   worktrees,
   loading,
+  refreshing,
+  onRefresh,
   projectFolderPath,
   lastOpenWorktreeTarget,
   onOpenWorktree,
@@ -286,6 +288,8 @@ export function WorktreeList({
 }: {
   worktrees: Worktree[]
   loading: boolean
+  refreshing: boolean
+  onRefresh: () => void
   projectFolderPath: string
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
@@ -293,7 +297,7 @@ export function WorktreeList({
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
 }) {
   const [openWorktreeOptions, setOpenWorktreeOptions] = useState<readonly WorktreeOpenOption[]>([])
-  const [sort, setSort] = useState<WorktreeSort>('default')
+  const [sort, setSort] = useState<WorktreeSort>(DEFAULT_WORKTREE_SORT)
   const sortedWorktrees = useMemo(() => sortWorktrees(worktrees, sort), [sort, worktrees])
   const [window, setWindow] = useState<WorktreeWindow>(() =>
     selectWorktreeWindow(worktrees.length, 0, INITIAL_WORKTREE_WINDOW_SIZE),
@@ -338,59 +342,77 @@ export function WorktreeList({
         <text testId="worktrees-loading" style={{ fontSize: 12, color: C.ghost }}>
           Loading Worktrees…
         </text>
-      ) : worktrees.length === 0 ? (
-        <text testId="worktrees-empty" style={{ fontSize: 12, color: C.ghost }}>
-          No Git Worktrees found.
-        </text>
       ) : (
         <>
-          <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', flexShrink: 0 }}>
-            <WorktreeSortMenu value={sort} onChange={handleSortChange} />
-          </div>
-          <virtual-list
-            key={`worktrees-${sort}`}
-            testId="worktrees-list"
-            itemCount={sortedWorktrees.length}
-            estimatedItemHeight={ESTIMATED_WORKTREE_ITEM_HEIGHT}
-            windowStart={renderedWindow.start}
-            onVisibleRange={handleVisibleRange}
+          <div
             style={{
               display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'stretch',
-              alignSelf: 'stretch',
-              width: '100%',
-              flexGrow: 1,
-              minHeight: 0,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexShrink: 0,
             }}
           >
-            {sortedWorktrees.slice(renderedWindow.start, renderedWindow.end).map((worktree, offset) => {
-              const index = renderedWindow.start + offset
-              return (
-                <div
-                  key={worktree.path}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    width: '100%',
-                    alignSelf: 'stretch',
-                    paddingBottom: 8,
-                  }}
-                >
-                  <WorktreeRow
-                    worktree={worktree}
-                    index={index}
-                    projectFolderPath={projectFolderPath}
-                    openWorktreeOptions={openWorktreeOptions}
-                    lastOpenWorktreeTarget={lastOpenWorktreeTarget}
-                    onOpenWorktree={onOpenWorktree}
-                    onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
-                    onDeleteWorktree={onDeleteWorktree}
-                  />
-                </div>
-              )
-            })}
-          </virtual-list>
+            <WorktreeSortButtons sort={sort} onChange={handleSortChange} />
+            <IconButton
+              testId="worktrees-refresh"
+              label={refreshing ? 'Refreshing Worktrees' : 'Refresh Worktrees'}
+              icon="refreshCw"
+              color={C.secondary}
+              disabled={refreshing}
+              onClick={onRefresh}
+            />
+          </div>
+          {worktrees.length === 0 ? (
+            <text testId="worktrees-empty" style={{ fontSize: 12, color: C.ghost }}>
+              No Git Worktrees found.
+            </text>
+          ) : (
+            <virtual-list
+              key={`worktrees-${sort.date ?? 'off'}-${sort.size ?? 'off'}`}
+              testId="worktrees-list"
+              itemCount={sortedWorktrees.length}
+              estimatedItemHeight={ESTIMATED_WORKTREE_ITEM_HEIGHT}
+              windowStart={renderedWindow.start}
+              onVisibleRange={handleVisibleRange}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                alignSelf: 'stretch',
+                width: '100%',
+                flexGrow: 1,
+                minHeight: 0,
+              }}
+            >
+              {sortedWorktrees.slice(renderedWindow.start, renderedWindow.end).map((worktree, offset) => {
+                const index = renderedWindow.start + offset
+                return (
+                  <div
+                    key={worktree.path}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      width: '100%',
+                      alignSelf: 'stretch',
+                      paddingBottom: 8,
+                    }}
+                  >
+                    <WorktreeRow
+                      worktree={worktree}
+                      index={index}
+                      projectFolderPath={projectFolderPath}
+                      openWorktreeOptions={openWorktreeOptions}
+                      lastOpenWorktreeTarget={lastOpenWorktreeTarget}
+                      onOpenWorktree={onOpenWorktree}
+                      onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
+                      onDeleteWorktree={onDeleteWorktree}
+                    />
+                  </div>
+                )
+              })}
+            </virtual-list>
+          )}
         </>
       )}
     </div>

@@ -2,7 +2,7 @@ export type { EnvVar, Project, Worktree, WorktreeCommit, WorktreeMetadata } from
 export { registerProject } from './registerProject.ts'
 export { listProjects } from './listProjects.ts'
 export { discoverWorktrees, listWorktrees, loadWorktreeMetadata } from './listWorktrees.ts'
-export { removeWorktree } from './removeWorktree.ts'
+export { forceRemoveWorktree, removeWorktree } from './removeWorktree.ts'
 export type {
   RemoveWorktreeResult,
   WorktreeRemovalFailure,

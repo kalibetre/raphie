@@ -9,6 +9,7 @@ export function MainPane({
   envVars,
   worktrees,
   worktreesLoading,
+  worktreesRefreshing,
   revealedKeys,
   duplicateKeys,
   searchQuery,
@@ -30,12 +31,14 @@ export function MainPane({
   lastOpenWorktreeTarget,
   onSelectOpenWorktreeTarget,
   onDeleteWorktree,
+  onRefreshWorktrees,
 }: {
   selectedProject: Project | null
   registrationInFlight: boolean
   envVars: EnvVar[]
   worktrees: Worktree[]
   worktreesLoading: boolean
+  worktreesRefreshing: boolean
   revealedKeys: Set<string>
   duplicateKeys: Set<string>
   searchQuery: string
@@ -57,6 +60,7 @@ export function MainPane({
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
   onDeleteWorktree: (path: string) => void
+  onRefreshWorktrees: () => void
 }) {
   return (
     <div
@@ -88,6 +92,7 @@ export function MainPane({
           envVars={envVars}
           worktrees={worktrees}
           worktreesLoading={worktreesLoading}
+          worktreesRefreshing={worktreesRefreshing}
           revealedKeys={revealedKeys}
           duplicateKeys={duplicateKeys}
           searchQuery={searchQuery}
@@ -109,6 +114,7 @@ export function MainPane({
           lastOpenWorktreeTarget={lastOpenWorktreeTarget}
           onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
           onDeleteWorktree={onDeleteWorktree}
+          onRefreshWorktrees={onRefreshWorktrees}
         />
       ) : (
         <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -9,6 +9,7 @@ import iconHardDrive from '../../assets/icons/hard-drive.svg' with { type: 'text
 import iconLink from '../../assets/icons/link.svg' with { type: 'text' }
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
 import iconPencil from '../../assets/icons/pencil.svg' with { type: 'text' }
+import iconRefreshCw from '../../assets/icons/refresh-cw.svg' with { type: 'text' }
 import iconTriangleAlert from '../../assets/icons/triangle-alert.svg' with { type: 'text' }
 import iconTrash2 from '../../assets/icons/trash-2.svg' with { type: 'text' }
 import iconUnlink from '../../assets/icons/unlink.svg' with { type: 'text' }
@@ -30,6 +31,7 @@ const ICONS = {
   hardDrive: iconHardDrive,
   link: iconLink,
   pencil: iconPencil,
+  refreshCw: iconRefreshCw,
   trash2: iconTrash2,
   unlink: iconUnlink,
   x: iconX,

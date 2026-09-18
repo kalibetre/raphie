@@ -7,14 +7,18 @@ export function DeleteWorktreeConfirmation({
   worktreePath,
   error,
   deleting,
+  forceDeleting,
   onCancel,
   onConfirm,
+  onForceDelete,
 }: {
   worktreePath: string
   error: WorktreeRemovalFailure | null
   deleting: boolean
+  forceDeleting: boolean
   onCancel: () => void
   onConfirm: () => void
+  onForceDelete: () => void
 }) {
   return (
     <div
@@ -132,6 +136,12 @@ export function DeleteWorktreeConfirmation({
           </div>
         )}
 
+        {error ? (
+          <text style={{ fontSize: 11, color: C.secondary }}>
+            Force delete removes the folder directly, then runs git worktree prune.
+          </text>
+        ) : null}
+
         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
           <DialogButton
             testId="delete-worktree-cancel"
@@ -141,10 +151,20 @@ export function DeleteWorktreeConfirmation({
             disabled={deleting}
             onClick={onCancel}
           />
+          {error ? (
+            <DialogButton
+              testId="delete-worktree-force"
+              label={forceDeleting ? 'Force deleting Worktree' : 'Force delete Worktree folder'}
+              text={forceDeleting ? 'Force deleting…' : 'Force delete folder'}
+              variant="secondary"
+              disabled={deleting}
+              onClick={onForceDelete}
+            />
+          ) : null}
           <DialogButton
             testId="delete-worktree-confirm"
-            label={deleting ? 'Deleting Worktree' : error ? 'Try deleting Worktree again' : 'Delete Worktree'}
-            text={deleting ? 'Deleting…' : error ? 'Try again' : 'Delete Worktree'}
+            label={deleting ? (forceDeleting ? 'Force deleting Worktree' : 'Deleting Worktree') : error ? 'Try deleting Worktree again' : 'Delete Worktree'}
+            text={deleting ? (forceDeleting ? 'Force deleting…' : 'Deleting…') : error ? 'Try again' : 'Delete Worktree'}
             variant="primary"
             disabled={deleting}
             onClick={onConfirm}

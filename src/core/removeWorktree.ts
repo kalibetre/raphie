@@ -20,6 +20,8 @@ export type WorktreeRemovalFailureCode =
   | 'git-list-failed'
   | 'locked'
   | 'git-rejected'
+  | 'force-delete-failed'
+  | 'prune-failed'
   | 'unknown'
 
 export interface WorktreeRemovalFailure {
@@ -107,6 +109,58 @@ const classifyGitFailure = (detail: string | null): WorktreeRemovalFailure => {
   return makeFailure('git-rejected', 'Git rejected the Worktree deletion.', detail)
 }
 
+interface RegisteredWorktree {
+  readonly fs: FileSystem.FileSystem
+  readonly projectPath: string
+  readonly requestedPath: string
+}
+
+type WorktreeInspection =
+  | { readonly ok: true; readonly worktree: RegisteredWorktree }
+  | { readonly ok: false; readonly result: RemoveWorktreeResult }
+
+const inspectWorktree = (project: Project, worktreePath: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const requestedPath = yield* canonicalPath(fs, worktreePath)
+    const projectPath = yield* canonicalPath(fs, project.folderPath)
+    if (projectPath === null) {
+      return { ok: false as const, result: failed('project-unavailable', 'The Project folder is missing or cannot be accessed.') }
+    }
+    if (requestedPath === null) {
+      return { ok: false as const, result: failed('worktree-unavailable', 'The Worktree folder is missing or cannot be accessed.') }
+    }
+    if (requestedPath === projectPath) {
+      return { ok: false as const, result: failed('main-worktree', 'The main Worktree cannot be deleted.') }
+    }
+
+    const listResult = yield* runCommand(Command.make('git', '-C', projectPath, 'worktree', 'list', '--porcelain'))
+    const listDetail = commandDetail(listResult)
+    if (listResult.exitCode !== 0) {
+      return {
+        ok: false as const,
+        result: failed('git-list-failed', 'Git could not inspect the Project’s Worktrees.', listDetail),
+      }
+    }
+
+    const listedPaths = yield* Effect.forEach(parseWorktreePaths(listResult.stdout.split(/\r?\n/)), (path) =>
+      canonicalPath(fs, path),
+      { concurrency: 'unbounded' },
+    )
+    if (!listedPaths.includes(requestedPath)) {
+      return {
+        ok: false as const,
+        result: failed(
+          'not-registered',
+          'Git no longer recognizes this folder as a Worktree. It may already have been removed.',
+          'The path was not returned by git worktree list --porcelain.',
+        ),
+      }
+    }
+
+    return { ok: true as const, worktree: { fs, projectPath, requestedPath } }
+  })
+
 /**
  * Removes a secondary Worktree and its files from a Project.
  *
@@ -117,36 +171,9 @@ const classifyGitFailure = (detail: string | null): WorktreeRemovalFailure => {
  */
 export const removeWorktree = (project: Project, worktreePath: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem
-    const requestedPath = yield* canonicalPath(fs, worktreePath)
-    const projectPath = yield* canonicalPath(fs, project.folderPath)
-    if (projectPath === null) {
-      return failed('project-unavailable', 'The Project folder is missing or cannot be accessed.')
-    }
-    if (requestedPath === null) {
-      return failed('worktree-unavailable', 'The Worktree folder is missing or cannot be accessed.')
-    }
-    if (requestedPath === projectPath) {
-      return failed('main-worktree', 'The main Worktree cannot be deleted.')
-    }
-
-    const listResult = yield* runCommand(Command.make('git', '-C', projectPath, 'worktree', 'list', '--porcelain'))
-    const listDetail = commandDetail(listResult)
-    if (listResult.exitCode !== 0) {
-      return failed('git-list-failed', 'Git could not inspect the Project’s Worktrees.', listDetail)
-    }
-
-    const listedPaths = yield* Effect.forEach(parseWorktreePaths(listResult.stdout.split(/\r?\n/)), (path) =>
-      canonicalPath(fs, path),
-      { concurrency: 'unbounded' },
-    )
-    if (!listedPaths.includes(requestedPath)) {
-      return failed(
-        'not-registered',
-        'Git no longer recognizes this folder as a Worktree. It may already have been removed.',
-        'The path was not returned by git worktree list --porcelain.',
-      )
-    }
+    const inspection = yield* inspectWorktree(project, worktreePath)
+    if (!inspection.ok) return inspection.result
+    const { projectPath, requestedPath } = inspection.worktree
 
     const removeResult = yield* runCommand(
       Command.make('git', '-C', projectPath, 'worktree', 'remove', '--force', requestedPath),
@@ -154,6 +181,49 @@ export const removeWorktree = (project: Project, worktreePath: string) =>
     if (removeResult.exitCode !== 0) {
       const failure = classifyGitFailure(commandDetail(removeResult))
       return { removed: false as const, error: failure }
+    }
+    return { removed: true as const }
+  })
+
+/**
+ * Deletes a Worktree folder directly and asks Git to prune its stale registration.
+ *
+ * This is intentionally separate from `removeWorktree`: it is the escape hatch
+ * for a Worktree Git refuses to remove, and the confirmation UI explains that
+ * local files will be deleted without Git inspecting their state first.
+ */
+export const forceRemoveWorktree = (project: Project, worktreePath: string) =>
+  Effect.gen(function* () {
+    const inspection = yield* inspectWorktree(project, worktreePath)
+    if (!inspection.ok) return inspection.result
+
+    const { fs, projectPath, requestedPath } = inspection.worktree
+
+    // A locked Worktree is deliberately bypassed by this action. Unlocking is
+    // best effort because the folder removal below is the source of truth.
+    yield* runCommand(Command.make('git', '-C', projectPath, 'worktree', 'unlock', requestedPath))
+
+    const removeResult = yield* fs.remove(requestedPath, { recursive: true }).pipe(
+      Effect.map(() => ({ removed: true as const })),
+      Effect.catchAll((error) =>
+        Effect.succeed(
+          failed(
+            'force-delete-failed',
+            'The Worktree folder could not be removed directly.',
+            describeUnknownError(error),
+          ),
+        ),
+      ),
+    )
+    if (!removeResult.removed) return removeResult
+
+    const pruneResult = yield* runCommand(Command.make('git', '-C', projectPath, 'worktree', 'prune'))
+    if (pruneResult.exitCode !== 0) {
+      return failed(
+        'prune-failed',
+        'The Worktree folder was removed, but Git could not prune its registration.',
+        commandDetail(pruneResult),
+      )
     }
     return { removed: true as const }
   })
