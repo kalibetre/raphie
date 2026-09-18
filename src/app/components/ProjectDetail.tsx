@@ -32,6 +32,8 @@ export function ProjectDetail({
   onCancelRemove,
   onConfirmRemove,
   onOpenWorktree,
+  lastOpenWorktreeTarget,
+  onSelectOpenWorktreeTarget,
   onDeleteWorktree,
 }: {
   project: Project
@@ -56,6 +58,8 @@ export function ProjectDetail({
   onCancelRemove: () => void
   onConfirmRemove: () => void
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void
+  lastOpenWorktreeTarget: WorktreeOpenTarget | null
+  onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
   onDeleteWorktree: (path: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
@@ -137,7 +141,9 @@ export function ProjectDetail({
             worktrees={worktrees}
             loading={worktreesLoading}
             projectFolderPath={project.folderPath}
+            lastOpenWorktreeTarget={lastOpenWorktreeTarget}
             onOpenWorktree={onOpenWorktree}
+            onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
             onDeleteWorktree={onDeleteWorktree}
           />
         ) : (

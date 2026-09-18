@@ -14,18 +14,55 @@ export interface WorktreeOpenOption {
   readonly label: string
 }
 
+export interface WorktreeAvailabilityProbe {
+  readonly hasCommand: (command: string) => boolean
+  readonly hasApplication: (application: string) => Promise<boolean>
+}
+
 export interface OpenWorktreeCommand {
   readonly command: string
   readonly args: readonly string[]
 }
 
-const editorOptions = [
-  { value: 'cursor', label: 'Cursor' },
-  { value: 'vscode', label: 'VS Code' },
-  { value: 'zed', label: 'Zed' },
-  { value: 'sublime', label: 'Sublime Text' },
-  { value: 'intellij', label: 'IntelliJ IDEA' },
-] as const satisfies readonly WorktreeOpenOption[]
+type EditorTarget = Exclude<WorktreeOpenTarget, 'file-manager' | 'terminal'>
+
+const editorDefinitions = [
+  {
+    value: 'cursor',
+    label: 'Cursor',
+    application: 'Cursor',
+    commands: { linux: 'cursor', win32: 'cursor.exe' },
+  },
+  {
+    value: 'vscode',
+    label: 'VS Code',
+    application: 'Visual Studio Code',
+    commands: { linux: 'code', win32: 'code.exe' },
+  },
+  {
+    value: 'zed',
+    label: 'Zed',
+    application: 'Zed',
+    commands: { linux: 'zed', win32: 'zed.exe' },
+  },
+  {
+    value: 'sublime',
+    label: 'Sublime Text',
+    application: 'Sublime Text',
+    commands: { linux: 'subl', win32: 'subl.exe' },
+  },
+  {
+    value: 'intellij',
+    label: 'IntelliJ IDEA',
+    application: 'IntelliJ IDEA',
+    commands: { linux: 'idea', win32: 'idea64.exe' },
+  },
+] as const satisfies ReadonlyArray<{
+  readonly value: EditorTarget
+  readonly label: string
+  readonly application: string
+  readonly commands: { readonly linux: string; readonly win32: string }
+}>
 
 const normalizePlatform = (platform: NodeJS.Platform): WorktreePlatform => {
   if (platform === 'darwin') return 'darwin'
@@ -36,52 +73,101 @@ const normalizePlatform = (platform: NodeJS.Platform): WorktreePlatform => {
 export const getCurrentWorktreePlatform = (): WorktreePlatform =>
   normalizePlatform(typeof process === 'undefined' ? 'darwin' : process.platform)
 
-export const getOpenWorktreeOptions = (
-  platform: WorktreePlatform = getCurrentWorktreePlatform(),
-): readonly WorktreeOpenOption[] => [
-  ...editorOptions,
-  {
-    value: 'file-manager',
-    label: platform === 'darwin' ? 'Finder' : platform === 'win32' ? 'File Explorer' : 'File Manager',
+interface AvailabilityDefinition {
+  readonly option: WorktreeOpenOption
+  readonly command?: string
+  readonly application?: string
+}
+
+const getAvailabilityDefinitions = (platform: WorktreePlatform): readonly AvailabilityDefinition[] => {
+  const editors: readonly AvailabilityDefinition[] = editorDefinitions.map((editor) => ({
+    option: { value: editor.value, label: editor.label },
+    ...(platform === 'darwin' ? { application: editor.application } : { command: editor.commands[platform] }),
+  }))
+
+  const systemTools: readonly AvailabilityDefinition[] =
+    platform === 'darwin'
+      ? [
+          { option: { value: 'file-manager', label: 'Finder' }, application: 'Finder' },
+          { option: { value: 'terminal', label: 'Terminal' }, application: 'Terminal' },
+        ]
+      : platform === 'win32'
+        ? [
+            { option: { value: 'file-manager', label: 'File Explorer' }, command: 'explorer.exe' },
+            { option: { value: 'terminal', label: 'Windows Terminal' }, command: 'wt.exe' },
+          ]
+        : [
+            { option: { value: 'file-manager', label: 'File Manager' }, command: 'xdg-open' },
+            { option: { value: 'terminal', label: 'Terminal' }, command: 'x-terminal-emulator' },
+          ]
+
+  return [...editors, ...systemTools]
+}
+
+const createSystemAvailabilityProbe = (): WorktreeAvailabilityProbe => ({
+  hasCommand: (command) => typeof Bun !== 'undefined' && Bun.which(command) !== null,
+  hasApplication: async (application) => {
+    if (typeof Bun === 'undefined') return false
+
+    const home = typeof process === 'undefined' ? null : process.env.HOME
+    const applicationPaths = [
+      `/Applications/${application}.app`,
+      ...(home ? [`${home}/Applications/${application}.app`] : []),
+      `/System/Applications/${application}.app`,
+      ...(application === 'Finder' ? ['/System/Library/CoreServices/Finder.app'] : []),
+      ...(application === 'Terminal' ? ['/System/Applications/Utilities/Terminal.app'] : []),
+    ]
+
+    for (const applicationPath of applicationPaths) {
+      try {
+        const process = Bun.spawn({
+          cmd: ['/bin/test', '-d', applicationPath],
+          stdin: 'ignore',
+          stdout: 'ignore',
+          stderr: 'ignore',
+        })
+        if ((await process.exited) === 0) return true
+      } catch {
+        // Try the next conventional application location.
+      }
+    }
+
+    return false
   },
-  { value: 'terminal', label: platform === 'win32' ? 'Windows Terminal' : 'Terminal' },
-]
+})
+
+export const discoverAvailableOpenWorktreeOptions = async (
+  platform: WorktreePlatform = getCurrentWorktreePlatform(),
+  probe: WorktreeAvailabilityProbe = createSystemAvailabilityProbe(),
+): Promise<readonly WorktreeOpenOption[]> => {
+  const definitions = getAvailabilityDefinitions(platform)
+  const available = await Promise.all(
+    definitions.map(async (definition) => {
+      const isAvailable = definition.application
+        ? await probe.hasApplication(definition.application)
+        : definition.command
+          ? probe.hasCommand(definition.command)
+          : false
+      return isAvailable ? definition.option : null
+    }),
+  )
+  return available.filter((option): option is WorktreeOpenOption => option !== null)
+}
 
 const getEditorCommand = (
-  target: Exclude<WorktreeOpenTarget, 'file-manager' | 'terminal'>,
+  target: EditorTarget,
   path: string,
   platform: WorktreePlatform,
 ): OpenWorktreeCommand => {
   if (platform === 'darwin') {
-    const appNames = {
-      cursor: 'Cursor',
-      vscode: 'Visual Studio Code',
-      zed: 'Zed',
-      sublime: 'Sublime Text',
-      intellij: 'IntelliJ IDEA',
-    } satisfies Record<typeof target, string>
-    return { command: 'open', args: ['-a', appNames[target], path] }
+    const editor = editorDefinitions.find((candidate) => candidate.value === target)
+    if (!editor) throw new Error(`Unknown Worktree editor: ${target}`)
+    return { command: 'open', args: ['-a', editor.application, path] }
   }
 
-  if (platform === 'win32') {
-    const executables = {
-      cursor: 'cursor.exe',
-      vscode: 'code.exe',
-      zed: 'zed.exe',
-      sublime: 'subl.exe',
-      intellij: 'idea64.exe',
-    } satisfies Record<typeof target, string>
-    return { command: executables[target], args: [path] }
-  }
-
-  const executables = {
-    cursor: 'cursor',
-    vscode: 'code',
-    zed: 'zed',
-    sublime: 'subl',
-    intellij: 'idea',
-  } satisfies Record<typeof target, string>
-  return { command: executables[target], args: [path] }
+  const editor = editorDefinitions.find((candidate) => candidate.value === target)
+  if (!editor) throw new Error(`Unknown Worktree editor: ${target}`)
+  return { command: editor.commands[platform], args: [path] }
 }
 
 export const getOpenWorktreeCommand = (

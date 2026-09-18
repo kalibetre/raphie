@@ -1,17 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { getOpenWorktreeCommand, getOpenWorktreeOptions } from '../../src/app/utils/openWorktree.ts'
+import {
+  discoverAvailableOpenWorktreeOptions,
+  getOpenWorktreeCommand,
+  type WorktreeAvailabilityProbe,
+} from '../../src/app/utils/openWorktree.ts'
 
 describe('open worktree actions', () => {
-  it('includes platform-specific file manager and terminal options', () => {
-    expect(getOpenWorktreeOptions('darwin').slice(-2)).toEqual([
+  it('only includes installed macOS apps and built-in tools', async () => {
+    const probe: WorktreeAvailabilityProbe = {
+      hasCommand: () => false,
+      hasApplication: async (application) => application !== 'Cursor',
+    }
+
+    expect(await discoverAvailableOpenWorktreeOptions('darwin', probe)).toEqual([
+      { value: 'vscode', label: 'VS Code' },
+      { value: 'zed', label: 'Zed' },
+      { value: 'sublime', label: 'Sublime Text' },
+      { value: 'intellij', label: 'IntelliJ IDEA' },
       { value: 'file-manager', label: 'Finder' },
       { value: 'terminal', label: 'Terminal' },
     ])
-    expect(getOpenWorktreeOptions('win32').slice(-2)).toEqual([
-      { value: 'file-manager', label: 'File Explorer' },
-      { value: 'terminal', label: 'Windows Terminal' },
-    ])
-    expect(getOpenWorktreeOptions('linux').slice(-2)).toEqual([
+  })
+
+  it('only includes available Linux commands', async () => {
+    const available = new Set(['code', 'xdg-open', 'x-terminal-emulator'])
+    const probe: WorktreeAvailabilityProbe = {
+      hasCommand: (command) => available.has(command),
+      hasApplication: async () => false,
+    }
+
+    expect(await discoverAvailableOpenWorktreeOptions('linux', probe)).toEqual([
+      { value: 'vscode', label: 'VS Code' },
       { value: 'file-manager', label: 'File Manager' },
       { value: 'terminal', label: 'Terminal' },
     ])

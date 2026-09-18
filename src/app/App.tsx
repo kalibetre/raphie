@@ -26,7 +26,6 @@ import { TopBar } from './components/TopBar.tsx'
 import { C, DEFAULT_SIDEBAR_WIDTH } from './theme.ts'
 import { copyToClipboard } from './utils/clipboard.ts'
 import {
-  getOpenWorktreeOptions,
   openWorktree,
   type WorktreeOpenTarget,
 } from './utils/openWorktree.ts'
@@ -76,6 +75,7 @@ export function App() {
   const [envVarDeleteInFlight, setEnvVarDeleteInFlight] = useState(false)
   const [worktreeDelete, setWorktreeDelete] = useState<WorktreeDeleteState | null>(null)
   const [worktreeDeleteInFlight, setWorktreeDeleteInFlight] = useState(false)
+  const [lastOpenWorktreeTarget, setLastOpenWorktreeTarget] = useState<WorktreeOpenTarget | null>(null)
   const selectedProjectIdRef = useRef<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
@@ -411,9 +411,15 @@ export function App() {
   }
 
   const handleOpenWorktree = (path: string, target: WorktreeOpenTarget) => {
-    if (openWorktree(target, path)) return
-    const label = getOpenWorktreeOptions().find((option) => option.value === target)?.label ?? target
-    setToastMessage(`Could not open Worktree in ${label}`)
+    if (openWorktree(target, path)) {
+      setLastOpenWorktreeTarget(target)
+      return
+    }
+    setToastMessage('Could not open Worktree')
+  }
+
+  const handleSelectOpenWorktreeTarget = (target: WorktreeOpenTarget) => {
+    setLastOpenWorktreeTarget(target)
   }
 
   const handleSelectProject = (id: string) => {
@@ -501,6 +507,8 @@ export function App() {
             onCancelRemove={handleCancelRemove}
             onConfirmRemove={handleRemoveProject}
             onOpenWorktree={handleOpenWorktree}
+            lastOpenWorktreeTarget={lastOpenWorktreeTarget}
+            onSelectOpenWorktreeTarget={handleSelectOpenWorktreeTarget}
             onDeleteWorktree={handleStartDeleteWorktree}
           />
         </div>

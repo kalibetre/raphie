@@ -1,7 +1,11 @@
 import type { Worktree } from '../../core/index.ts'
 import { useEffect, useState } from 'react'
 import { C } from '../theme.ts'
-import { type WorktreeOpenTarget } from '../utils/openWorktree.ts'
+import {
+  discoverAvailableOpenWorktreeOptions,
+  type WorktreeOpenOption,
+  type WorktreeOpenTarget,
+} from '../utils/openWorktree.ts'
 import { INITIAL_WORKTREE_WINDOW_SIZE, selectWorktreeWindow, type WorktreeWindow } from '../worktreeWindow.ts'
 import { IconButton } from './IconButton.tsx'
 import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
@@ -69,18 +73,28 @@ function WorktreeRow({
   worktree,
   index,
   projectFolderPath,
+  openWorktreeOptions,
+  lastOpenWorktreeTarget,
   onOpenWorktree,
+  onSelectOpenWorktreeTarget,
   onDeleteWorktree,
 }: {
   worktree: Worktree
   index: number
   projectFolderPath: string
+  openWorktreeOptions: readonly WorktreeOpenOption[]
+  lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
+  onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
   onDeleteWorktree: (path: string) => void
 }) {
   const metadata = worktree.metadata
   const commit = metadata?.lastCommit
   const isMainWorktree = worktree.path === projectFolderPath
+  const selectedOpenTarget =
+    (lastOpenWorktreeTarget && openWorktreeOptions.some((option) => option.value === lastOpenWorktreeTarget)
+      ? lastOpenWorktreeTarget
+      : openWorktreeOptions[0]?.value) ?? null
 
   return (
     <div
@@ -117,7 +131,10 @@ function WorktreeRow({
           </text>
           <WorktreeOpenMenu
             index={index}
+            options={openWorktreeOptions}
+            selectedTarget={selectedOpenTarget}
             onOpen={(target) => onOpenWorktree(worktree.path, target)}
+            onSelect={onSelectOpenWorktreeTarget}
           />
           <IconButton
             testId={`delete-worktree-${index}`}
@@ -180,15 +197,20 @@ export function WorktreeList({
   worktrees,
   loading,
   projectFolderPath,
+  lastOpenWorktreeTarget,
   onOpenWorktree,
   onDeleteWorktree,
+  onSelectOpenWorktreeTarget,
 }: {
   worktrees: Worktree[]
   loading: boolean
   projectFolderPath: string
+  lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
   onDeleteWorktree: (path: string) => void
+  onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
 }) {
+  const [openWorktreeOptions, setOpenWorktreeOptions] = useState<readonly WorktreeOpenOption[]>([])
   const [window, setWindow] = useState<WorktreeWindow>(() =>
     selectWorktreeWindow(worktrees.length, 0, INITIAL_WORKTREE_WINDOW_SIZE),
   )
@@ -197,6 +219,16 @@ export function WorktreeList({
   useEffect(() => {
     setWindow((current) => selectWorktreeWindow(worktrees.length, current.start, current.end))
   }, [worktrees.length])
+
+  useEffect(() => {
+    let active = true
+    discoverAvailableOpenWorktreeOptions().then((options) => {
+      if (active) setOpenWorktreeOptions(options)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const handleVisibleRange = (event: { startIndex?: number; endIndex?: number }) => {
     if (event.startIndex === undefined || event.endIndex === undefined) return
@@ -253,7 +285,10 @@ export function WorktreeList({
                   worktree={worktree}
                   index={index}
                   projectFolderPath={projectFolderPath}
+                  openWorktreeOptions={openWorktreeOptions}
+                  lastOpenWorktreeTarget={lastOpenWorktreeTarget}
                   onOpenWorktree={onOpenWorktree}
+                  onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
                   onDeleteWorktree={onDeleteWorktree}
                 />
               </div>

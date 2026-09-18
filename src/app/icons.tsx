@@ -1,4 +1,5 @@
 import iconCopy from '../../assets/icons/copy.svg' with { type: 'text' }
+import iconChevronDown from '../../assets/icons/chevron-down.svg' with { type: 'text' }
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
 import iconPencil from '../../assets/icons/pencil.svg' with { type: 'text' }
 import iconTriangleAlert from '../../assets/icons/triangle-alert.svg' with { type: 'text' }
@@ -12,6 +13,7 @@ import iconX from '../../assets/icons/x.svg' with { type: 'text' }
 const ICONS = {
   panelLeft: iconPanelLeft,
   copy: iconCopy,
+  chevronDown: iconChevronDown,
   pencil: iconPencil,
   trash2: iconTrash2,
   x: iconX,

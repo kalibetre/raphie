@@ -27,6 +27,8 @@ export function MainPane({
   onCancelRemove,
   onConfirmRemove,
   onOpenWorktree,
+  lastOpenWorktreeTarget,
+  onSelectOpenWorktreeTarget,
   onDeleteWorktree,
 }: {
   selectedProject: Project | null
@@ -52,6 +54,8 @@ export function MainPane({
   onCancelRemove: () => void
   onConfirmRemove: () => void
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void
+  lastOpenWorktreeTarget: WorktreeOpenTarget | null
+  onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
   onDeleteWorktree: (path: string) => void
 }) {
   return (
@@ -101,6 +105,8 @@ export function MainPane({
           onCancelRemove={onCancelRemove}
           onConfirmRemove={onConfirmRemove}
           onOpenWorktree={onOpenWorktree}
+          lastOpenWorktreeTarget={lastOpenWorktreeTarget}
+          onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
           onDeleteWorktree={onDeleteWorktree}
         />
       ) : (

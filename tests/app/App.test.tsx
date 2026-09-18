@@ -300,6 +300,8 @@ describeNative('Raphie App', () => {
     expect(worktreePainted).toMatch(/[A-Z][a-z]{2} \d{1,2}, \d{4}/)
     expect(worktreePainted).toContain('Staged changes')
     expect(worktreePainted).toContain('Unstaged changes')
+    expect(renderer.findByTestId('worktree-open-1')).toBeDefined()
+    expect(renderer.findByTestId('worktree-open-menu-1')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-0')).toBeDefined()
     expect(renderer.findByTestId('delete-worktree-1')).toBeDefined()
 
