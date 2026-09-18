@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../icons.tsx'
 import type { IconName } from '../icons.tsx'
 import { C, type ThemeColor } from '../theme.ts'
+import { isMainWorktreePath } from '../worktreePath.ts'
 import { DEFAULT_WORKTREE_SORT, sortWorktrees, type WorktreeSort } from '../worktreeSort.ts'
 import {
   discoverAvailableOpenWorktreeOptions,
@@ -141,7 +142,7 @@ function WorktreeRow({
 }) {
   const metadata = worktree.metadata
   const commit = metadata?.lastCommit
-  const isMainWorktree = worktree.path === projectFolderPath
+  const isMainWorktree = isMainWorktreePath(worktree.path, projectFolderPath)
   const selectedOpenTarget =
     (lastOpenWorktreeTarget && openWorktreeOptions.some((option) => option.value === lastOpenWorktreeTarget)
       ? lastOpenWorktreeTarget
