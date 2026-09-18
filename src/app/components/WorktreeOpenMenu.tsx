@@ -16,6 +16,7 @@ export function WorktreeOpenMenu({
   onOpen: (target: WorktreeOpenTarget) => void | Promise<void>
   onSelect: (target: WorktreeOpenTarget) => void
 }) {
+  const selectedOption = options.find((option) => option.value === selectedTarget)
   const canOpen = selectedTarget !== null
 
   return (
@@ -23,7 +24,11 @@ export function WorktreeOpenMenu({
       items={options}
       value={selectedTarget ?? undefined}
       disabled={options.length === 0}
-      onValueChange={(value) => onSelect(value as WorktreeOpenTarget)}
+      onValueChange={(value) => {
+        const target = value as WorktreeOpenTarget
+        onSelect(target)
+        void onOpen(target)
+      }}
       style={{ flexDirection: 'row', alignItems: 'stretch', gap: 0 }}
     >
       <div
@@ -51,7 +56,7 @@ export function WorktreeOpenMenu({
           hover: canOpen ? { backgroundColor: C.overlay } : undefined,
         }}
       >
-        <text style={{ fontSize: 11, color: C.secondary }}>Open</text>
+        <text style={{ fontSize: 11, color: C.secondary }}>{selectedOption?.label ?? 'Open'}</text>
       </div>
       <SelectTrigger
         testId={`worktree-open-menu-${index}`}
