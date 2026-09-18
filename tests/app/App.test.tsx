@@ -391,6 +391,50 @@ describeNative('Raphie App', () => {
     await app.close()
   })
 
+  it('scrolls a long EnvVars list in the main pane', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    const sidebar = renderer.findByTestId('sidebar')!
+    const bounds = renderer.getElementBounds(sidebar.id)!
+    renderer.nativeSimulateFileDrop(bounds.x + 5, bounds.y + 5, [projectFolder])
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const [project] = await run(listProjects)
+    expect(project).toBeDefined()
+    await runFs(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const envVars = Array.from({ length: 80 }, (_, index) => `KEY_${index}=value-${index}`).join('\n')
+        yield* fs.writeFileString(project!.centralEnvFile, `${envVars}\n`)
+      }),
+    )
+
+    const row = findByTestIdPrefix(renderer, 'project-')
+    const rowBounds = renderer.getElementBounds(row.id)!
+    renderer.nativeSimulateClick(rowBounds.x + 5, rowBounds.y + 5)
+    await waitForAppUpdate()
+    renderer.flush()
+
+    const mainPane = renderer.findByTestId('main-pane')!
+    const mainPaneBounds = renderer.getElementBounds(mainPane.id)!
+    const before = renderer.getScrollOffset(mainPane.id)
+    expect(before).not.toBeNull()
+
+    renderer.nativeSimulateScrollWheel(
+      mainPaneBounds.x + mainPaneBounds.width / 2,
+      mainPaneBounds.y + mainPaneBounds.height / 2,
+      0,
+      -400,
+    )
+
+    const after = renderer.getScrollOffset(mainPane.id)
+    expect(after).not.toBeNull()
+    expect(after![1]).toBeLessThan(before![1])
+  })
+
   it('keeps the page header fixed in place after revealing a long EnvVar value', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)

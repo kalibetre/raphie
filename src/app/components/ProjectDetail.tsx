@@ -133,7 +133,7 @@ export function ProjectDetail({
           flexGrow: 1,
           minHeight: 0,
           gap: 16,
-          overflowY: showingWorktrees ? 'hidden' : 'scroll',
+          overflowY: showingWorktrees ? 'hidden' : 'visible',
         }}
       >
         {showingWorktrees ? (
