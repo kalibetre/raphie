@@ -1,14 +1,17 @@
 import type { ProjectRemovalMode } from '../../core/index.ts'
+import { Icon } from '../icons.tsx'
 import { C } from '../theme.ts'
 
 export function RemoveProjectConfirmation({
   removalMode,
+  removalError,
   removalInFlight,
   onSelectMode,
   onCancel,
   onConfirm,
 }: {
   removalMode: ProjectRemovalMode
+  removalError: string | null
   removalInFlight: boolean
   onSelectMode: (mode: ProjectRemovalMode) => void
   onCancel: () => void
@@ -74,6 +77,26 @@ export function RemoveProjectConfirmation({
         <text style={{ fontSize: 11, color: C.text }}>Remove .env entirely</text>
         <text style={{ fontSize: 10, color: C.ghost }}>Delete the project’s .env and Raphie’s Central copy.</text>
       </div>
+      {removalError ? (
+        <div
+          testId="remove-project-error"
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: 8,
+            width: 300,
+            padding: 8,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: C.warning,
+            backgroundColor: C.warningBg,
+          }}
+        >
+          <Icon name="triangleAlert" size={14} color={C.warning} />
+          <text style={{ fontSize: 11, color: C.text, flexGrow: 1, flexShrink: 1 }}>{removalError}</text>
+        </div>
+      ) : null}
       <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
         <div
           testId="cancel-remove-project"

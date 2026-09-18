@@ -7,6 +7,7 @@ export function ProjectHeader({
   project,
   isRemoving,
   removalMode,
+  removalError,
   removalInFlight,
   registrationInFlight,
   onStartRemove,
@@ -17,6 +18,7 @@ export function ProjectHeader({
   project: Project
   isRemoving: boolean
   removalMode: ProjectRemovalMode
+  removalError: string | null
   removalInFlight: boolean
   registrationInFlight: boolean
   onStartRemove: () => void
@@ -34,6 +36,7 @@ export function ProjectHeader({
       {isRemoving ? (
         <RemoveProjectConfirmation
           removalMode={removalMode}
+          removalError={removalError}
           removalInFlight={removalInFlight}
           onSelectMode={onSelectRemovalMode}
           onCancel={onCancelRemove}

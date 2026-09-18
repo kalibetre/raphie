@@ -15,6 +15,7 @@ export function MainPane({
   searchQuery,
   isRemoving,
   removalMode,
+  removalError,
   removalInFlight,
   onFileDrop,
   onToggleReveal,
@@ -46,6 +47,7 @@ export function MainPane({
   searchQuery: string
   isRemoving: boolean
   removalMode: ProjectRemovalMode
+  removalError: string | null
   removalInFlight: boolean
   onFileDrop: (event: { paths?: string[] }) => void
   onToggleReveal: (key: string) => void
@@ -102,6 +104,7 @@ export function MainPane({
           searchQuery={searchQuery}
           isRemoving={isRemoving}
           removalMode={removalMode}
+          removalError={removalError}
           removalInFlight={removalInFlight}
           registrationInFlight={registrationInFlight}
           onToggleReveal={onToggleReveal}

@@ -1,6 +1,7 @@
 import { Command, FileSystem, Path } from '@effect/platform'
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
+import { countLinkedWorktrees } from '../../src/core/index.ts'
 import { discoverWorktrees, listWorktrees } from '../../src/core/listWorktrees.ts'
 import { registerProject } from '../../src/core/registerProject.ts'
 import { withProjectFixtures } from './fixtures.ts'
@@ -35,6 +36,7 @@ describe('listWorktrees', () => {
           { path: mainPath, linked: true, hasEnvFile: true, metadata: null },
           { path: additionalPath, linked: false, hasEnvFile: false, metadata: null },
         ])
+        expect(yield* countLinkedWorktrees(project)).toBe(1)
         yield* fs.writeFileString(path.join(worktreeFolder, '.env'), 'LOCAL_ONLY=yes\n')
         yield* fs.writeFileString(path.join(projectFolder, 'README.md'), 'changed\n')
         yield* fs.writeFileString(path.join(projectFolder, 'staged.txt'), 'staged\n')

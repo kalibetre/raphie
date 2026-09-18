@@ -1,6 +1,11 @@
 import { Command, FileSystem, Path } from '@effect/platform'
-import { Effect } from 'effect'
+import { Data, Effect } from 'effect'
 import type { Project, Worktree, WorktreeCommit } from './Domain.ts'
+
+export class WorktreeDiscoveryError extends Data.TaggedError('WorktreeDiscoveryError')<{
+  readonly projectPath: string
+  readonly exitCode: number
+}> {}
 
 const parseWorktreePaths = (lines: readonly string[]) =>
   lines.filter((line) => line.startsWith('worktree ')).map((line) => line.slice('worktree '.length))
@@ -92,9 +97,19 @@ export const discoverWorktrees = (project: Project) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
-    const lines = yield* Command.lines(
-      Command.make('git', '-C', project.folderPath, 'worktree', 'list', '--porcelain'),
-    ).pipe(Effect.catchAll(() => Effect.succeed([])))
+    const isGitProject = yield* fs.exists(path.join(project.folderPath, '.git'))
+    const lines = yield* Effect.gen(function* () {
+      if (!isGitProject) return []
+
+      const command = Command.make('git', '-C', project.folderPath, 'worktree', 'list', '--porcelain')
+      const exitCode = yield* Command.exitCode(command)
+      if (exitCode !== 0) {
+        return yield* Effect.fail(
+          new WorktreeDiscoveryError({ projectPath: project.folderPath, exitCode: Number(exitCode) }),
+        )
+      }
+      return yield* Command.lines(command)
+    })
     const worktreePaths = parseWorktreePaths(lines)
     const centralEnvPath = yield* canonicalPath(fs, project.centralEnvFile)
 
@@ -110,6 +125,10 @@ export const discoverWorktrees = (project: Project) =>
       { concurrency: 'unbounded' },
     )
   })
+
+/** Counts the Worktrees currently Linked to a Project's Central env file. */
+export const countLinkedWorktrees = (project: Project) =>
+  discoverWorktrees(project).pipe(Effect.map((worktrees) => worktrees.filter((worktree) => worktree.linked).length))
 
 /** Loads the expensive size and Git status details for one discovered Worktree. */
 export const loadWorktreeMetadata = (worktree: Pick<Worktree, 'path'>) => readWorktreeMetadata(worktree.path)
