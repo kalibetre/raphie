@@ -163,14 +163,35 @@ function WorktreeRow({
         paddingBottom: 10,
         borderWidth: 1,
         borderRadius: 8,
-        borderColor: C.border,
+        borderColor: isMainWorktree ? C.accent : C.border,
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexGrow: 1, minWidth: 0 }}>
-          <text testId={`worktree-path-${index}`} style={{ fontSize: 12, color: C.text }}>
-            {worktree.path}
-          </text>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 }}>
+            {isMainWorktree ? (
+              <div
+                testId={`worktree-main-badge-${index}`}
+                aria-label="Main Worktree"
+                style={{
+                  width: 19,
+                  height: 19,
+                  borderRadius: 5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: C.accent,
+                  flexShrink: 0,
+                }}
+              >
+                <Icon name="house" size={12} color={C.onAccent} />
+              </div>
+            ) : null}
+            <text testId={`worktree-path-${index}`} style={{ fontSize: 12, color: C.text, minWidth: 0 }}>
+              {worktree.path}
+            </text>
+            {isMainWorktree ? <text style={{ fontSize: 10, color: C.accent, flexShrink: 0 }}>Main</text> : null}
+          </div>
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             {metadata ? (
               <WorktreeMetaItem

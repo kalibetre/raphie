@@ -6,6 +6,7 @@ import iconFilePlus from '../../assets/icons/file-plus.svg' with { type: 'text' 
 import iconGitBranch from '../../assets/icons/git-branch.svg' with { type: 'text' }
 import iconGitCommit from '../../assets/icons/git-commit.svg' with { type: 'text' }
 import iconHardDrive from '../../assets/icons/hard-drive.svg' with { type: 'text' }
+import iconHouse from '../../assets/icons/house.svg' with { type: 'text' }
 import iconLink from '../../assets/icons/link.svg' with { type: 'text' }
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
 import iconPencil from '../../assets/icons/pencil.svg' with { type: 'text' }
@@ -29,6 +30,7 @@ const ICONS = {
   gitBranch: iconGitBranch,
   gitCommit: iconGitCommit,
   hardDrive: iconHardDrive,
+  house: iconHouse,
   link: iconLink,
   pencil: iconPencil,
   refreshCw: iconRefreshCw,
