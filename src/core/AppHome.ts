@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from 'effect'
 
-/** Root directory for raphie's config: `projects.json` and each Project's Central env file. */
+/** Root directory for raphie's local Vault and other application state. */
 export class AppHome extends Context.Tag('AppHome')<AppHome, string>() {}
 
 // ponytail: env override is a one-line test seam, not a general config system —

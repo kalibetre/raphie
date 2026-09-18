@@ -9,6 +9,7 @@ import type {
   WorktreeMetadata,
   WorktreeRemovalFailure,
   WorktreeUnlinkMode,
+  VaultStatus,
 } from '../core/index.ts'
 import {
   deleteEnvVar,
@@ -27,6 +28,7 @@ import {
   unlinkWorktree,
   run,
   setEnvVar,
+  Vault,
 } from '../core/index.ts'
 import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
 import { DeleteWorktreeConfirmation } from './components/DeleteWorktreeConfirmation.tsx'
@@ -108,9 +110,29 @@ export function App() {
   const [lastOpenWorktreeTarget, setLastOpenWorktreeTarget] = useState<WorktreeOpenTarget | null>(null)
   const selectedProjectIdRef = useRef<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [vaultStatus, setVaultStatus] = useState<VaultStatus | 'unavailable'>('unavailable')
 
   useEffect(() => {
     run(listProjects).then(setProjects)
+  }, [])
+
+  useEffect(() => {
+    let stale = false
+    run(
+      Effect.gen(function* () {
+        const vault = yield* Vault
+        return yield* vault.status()
+      }),
+    )
+      .then((status) => {
+        if (!stale) setVaultStatus(status)
+      })
+      .catch(() => {
+        if (!stale) setVaultStatus('unavailable')
+      })
+    return () => {
+      stale = true
+    }
   }, [])
 
   useEffect(() => {
@@ -693,7 +715,12 @@ export function App() {
           backgroundColor: C.canvas,
         }}
       >
-        <TopBar selectedProject={selectedProject} onToggleSidebar={() => setCollapsed((current) => !current)} onAddProject={handleBrowse} />
+        <TopBar
+          selectedProject={selectedProject}
+          vaultStatus={vaultStatus}
+          onToggleSidebar={() => setCollapsed((current) => !current)}
+          onAddProject={handleBrowse}
+        />
 
         <div style={{ display: 'flex', flexDirection: 'row', flexGrow: 1, minHeight: 0 }}>
           <Sidebar

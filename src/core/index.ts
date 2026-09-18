@@ -31,3 +31,24 @@ export type { ParsedEnvVar, SetEnvVarOptions } from './envVarFile.ts'
 export { ProjectHasLinkedWorktreesError, removeProject } from './removeProject.ts'
 export type { ProjectRemovalMode } from './removeProject.ts'
 export { run } from './runtime.ts'
+export {
+  Vault,
+  VaultAlreadyInitializedError,
+  VaultCorruptedError,
+  VaultKeyMissingError,
+  VaultKeyProviderError,
+  VaultLockedError,
+  VaultNotInitializedError,
+  VaultStorageError,
+  makeVault,
+} from './vault.ts'
+export type {
+  VaultError,
+  VaultKeyProvider,
+  VaultLockState,
+  VaultRecord,
+  VaultService,
+  VaultStatus,
+  VaultStorage,
+} from './vault.ts'
+export { VaultLive } from './vaultLive.ts'

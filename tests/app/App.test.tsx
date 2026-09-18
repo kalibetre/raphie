@@ -117,6 +117,18 @@ describeNative('Raphie App', () => {
     expect(renderer.getPaintedText().join('\n')).toContain('Drag a project folder here')
   })
 
+  it('shows Vault availability in the top bar', async () => {
+    const { render, renderer } = createTestRoot()
+    render(<App />)
+    renderer.flush()
+
+    await waitForAppUpdate()
+    renderer.flush()
+
+    expect(renderer.findByTestId('vault-status')).toBeDefined()
+    expect(renderer.getPaintedText().join('\n')).toContain('Vault: uninitialized')
+  })
+
   it('registers a project dropped anywhere on the window', async () => {
     const { render, renderer } = createTestRoot()
     render(<App />)
