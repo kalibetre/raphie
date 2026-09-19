@@ -5,7 +5,7 @@ const algorithm = 'AES-GCM'
 const keyLength = 32
 const nonceLength = 12
 const saltLength = 16
-const passwordKeyDerivationIterations = 600_000
+const kdfIterations = 600_000
 
 const asArrayBuffer = (bytes: Uint8Array) =>
   bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
@@ -33,7 +33,7 @@ export const deriveVaultKey = async (password: string, salt: Uint8Array) => {
     {
       name: 'PBKDF2',
       hash: 'SHA-256',
-      iterations: passwordKeyDerivationIterations,
+      iterations: kdfIterations,
       salt: asArrayBuffer(salt),
     },
     material,
