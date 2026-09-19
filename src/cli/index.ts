@@ -1,10 +1,11 @@
 import { Effect } from 'effect'
-import { stdin, stderr } from 'node:process'
+import { cwd, stdin, stderr } from 'node:process'
 import { AppLive } from '../core/runtime.ts'
 import { Vault } from '../core/vault.ts'
+import { runProjectCli } from './projects.ts'
 import { runVaultCli, type CliIo } from './vault.ts'
 
-export const isCliInvocation = (args: readonly string[]) => args[0] === 'vault'
+export const isCliInvocation = (args: readonly string[]) => ['vault', 'project', 'profile', 'env'].includes(args[0] ?? '')
 
 let pipedSecrets: Promise<string[]> | null = null
 
@@ -60,7 +61,15 @@ const readSecretFromStdin = (prompt: string) => {
   })
 }
 
+const readAllStdin = async () => {
+  const chunks: string[] = []
+  for await (const chunk of stdin) chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'))
+  return chunks.join('')
+}
+
 const defaultIo: CliIo = {
+  cwd: cwd(),
+  readStdin: readAllStdin,
   write: (message) => console.log(message),
   error: (message) => console.error(message),
   readSecret: readSecretFromStdin,
@@ -69,6 +78,7 @@ const defaultIo: CliIo = {
 export const runCli = (args: readonly string[], io: CliIo = defaultIo) =>
   Effect.runPromise(
     Effect.gen(function* () {
+      if (args[0] !== 'vault') return yield* runProjectCli(args, io)
       const vault = yield* Vault
       return yield* runVaultCli(args, vault, io)
     }).pipe(Effect.provide(AppLive)),

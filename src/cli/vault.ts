@@ -10,14 +10,18 @@ import {
 } from '../core/vault.ts'
 
 export interface CliIo {
+  /** The caller's working directory, used to resolve the current Project. */
+  readonly cwd: string
   readonly write: (message: string) => void
   readonly error: (message: string) => void
   readonly readSecret: (prompt: string) => Promise<string>
+  /** Reads all of standard input, for values that must not appear in arguments. */
+  readonly readStdin: () => Promise<string>
 }
 
 const usage = 'Usage: raphie vault <init|status|lock|unlock>'
 
-const renderError = (error: unknown) => {
+export const renderVaultError = (error: unknown) => {
   if (error instanceof VaultAlreadyInitializedError) return 'Vault is already initialized.'
   if (error instanceof VaultNotInitializedError) return 'Vault is not initialized. Run `raphie vault init`.'
   if (error instanceof VaultLockedError) return 'Vault is locked. Run `raphie vault unlock`.'
@@ -72,7 +76,7 @@ export const runVaultCli = (
   return action.pipe(
     Effect.as(0),
     Effect.catchAll((error) => Effect.sync(() => {
-      io.error(renderError(error))
+      io.error(renderVaultError(error))
       return 1
     })),
   )

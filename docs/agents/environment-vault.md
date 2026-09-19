@@ -8,7 +8,7 @@ Read before changing Project registration, Profile editing, environment persiste
 
 The Environment Vault is the shared domain module behind Raphie's GUI and CLI. It owns Project and Profile resolution, encrypted value storage, profile editing, and secure injection of a selected Profile into a launched process. The Vault is the source of truth; repositories and Worktrees do not receive `.env` files from Raphie.
 
-This is an accepted design contract. The current migration introduces the password-backed local Vault and Vault-backed GUI Projects first; the remaining CLI execution and portable bundle surfaces are tracked separately.
+This is an accepted design contract. The current migration has introduced the password-backed local Vault, Vault-backed GUI Projects, and the CLI for registering Projects and managing Profiles and EnvVars; `raphie run` and the portable bundle surfaces are tracked separately.
 
 ## Canonical terms
 
@@ -48,6 +48,10 @@ The local Vault is either locked or unlocked.
 - The GUI re-checks status periodically so an expired or externally locked Vault returns to the unlock prompt instead of failing operations.
 - The lifetime is fixed from unlock; there is no idle auto-lock or sliding expiry yet.
 
+## Project and Profile commands
+
+`project`, `profile`, and `env` commands select a Project with `--project HANDLE`, or else by the registered location containing the current directory (the deepest match wins; none or an exact tie fails). `--profile NAME` selects a Profile and otherwise the Project's default Profile applies. Handles and Profile names are lowercase letters, digits, `-` and `_`, and a handle or registered location can belong to only one Project. Registration creates an empty `local` Profile and makes it the default; Projects stored before handles existed get a handle derived from their folder name when the Vault is read. Commands never print, log, or accept as an argument an EnvVar value; `env list` masks every value with a fixed-width mask.
+
 ## Project resolution
 
 `raphie run` accepts an optional Project handle and Profile name:
@@ -71,10 +75,13 @@ The command names below describe the contract; exact flag spelling can change wi
 | `raphie project add PATH --handle HANDLE` | Register a Project location and stable CLI handle. |
 | `raphie project list` | List Projects and handles without revealing values. |
 | `raphie profile create NAME` | Create an empty Profile for a Project. |
-| `raphie profile list` | List Profile names and metadata without revealing values. |
-| `raphie env set KEY` | Prompt securely for a value and update the selected Profile. A value flag is not the primary interface because shell history and process listings can expose it. |
-| `raphie env set KEY --from-stdin` | Read a value from standard input without echoing it. |
-| `raphie env delete KEY` | Remove an EnvVar from the selected Profile after explicit confirmation. |
+| `raphie profile list` | List Profile names, the default marker, and EnvVar counts without revealing values. |
+| `raphie profile default NAME` | Explicitly configure the Project's default Profile. |
+| `raphie env list` | List EnvVar keys with masked values. |
+| `raphie env add KEY` | Prompt securely for a value and add it to the selected Profile; fails if the key already exists. A value flag is not the primary interface because shell history and process listings can expose it. |
+| `raphie env set KEY` | Same prompt, but edits the key if it exists and adds it otherwise. |
+| `raphie env add\|set KEY --from-stdin` | Read the whole value from standard input (one trailing newline stripped) instead of prompting. |
+| `raphie env delete KEY --yes` | Remove an EnvVar from the selected Profile; `--yes` is the explicit confirmation. |
 | `raphie export ... --output FILE` | Write an encrypted portable bundle; never write plaintext values or print them to stdout. |
 | `raphie import --input FILE` | Decrypt and validate a bundle, then explicitly attach or merge it into the local Vault. |
 | `raphie vault lock\|unlock\|status` | Manage and inspect Vault availability without printing values. |
@@ -119,6 +126,8 @@ Failure output must identify the action and remediation without including any en
 | Domain language | [`CONTEXT.md`](../../CONTEXT.md) |
 | Architectural rationale | [`docs/adr/0004-encrypted-vault-profiles.md`](../adr/0004-encrypted-vault-profiles.md) |
 | Key cache and OS credential store adapter | `src/core/vaultKeyCache.ts` (`VaultKeyCache` seam in `src/core/vault.ts`) |
+| Project, Profile, and EnvVar operations | `src/core/vaultProjects.ts` (names in `src/core/vaultNames.ts`) |
+| CLI commands | `src/cli/vault.ts` (`vault`), `src/cli/projects.ts` (`project`, `profile`, `env`), routed from `src/cli/index.ts` |
 | Legacy Project persistence | `src/core/ProjectsFile.ts` — replace with Vault persistence |
 | Legacy env-file persistence | `src/core/envVarFile.ts`, `src/core/listEnvVars.ts`, `src/core/setEnvVar.ts` — replace with Profile operations |
 | Legacy Worktree linking | `src/core/worktreeEnvFile.ts`, `src/core/linkWorktree.ts`, `src/core/unlinkWorktree.ts` — remove from the new domain model |

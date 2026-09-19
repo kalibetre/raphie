@@ -2,6 +2,10 @@ export interface Project {
   readonly id: string
   readonly name: string
   readonly folderPath: string
+  /** Unique CLI selector; present on Vault-backed Projects. */
+  readonly handle?: string
+  /** Profile used when none is selected; present on Vault-backed Projects. */
+  readonly defaultProfile?: string
   readonly centralEnvFile: string
   /** True when this Project and its Profiles live in the encrypted Vault. */
   readonly vaultBacked?: boolean

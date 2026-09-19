@@ -55,19 +55,30 @@ export type {
 } from './vault.ts'
 export { VaultLive } from './vaultLive.ts'
 export {
+  createVaultProfile,
   deleteVaultEnvVar,
   importProjectEnvContent,
   importProjectEnvFile,
   listVaultEnvVars,
+  listVaultProfiles,
   listVaultProjects,
   registerVaultProject,
   removeVaultProject,
+  resolveVaultProject,
+  setVaultDefaultProfile,
   setVaultEnvVar,
   VaultEnvVarError,
+  VaultProfileNameError,
+  VaultProfileNotFoundError,
+  VaultProjectHandleError,
+  VaultProjectLocationError,
+  VaultProjectNotFoundError,
+  VaultProjectResolutionError,
 } from './vaultProjects.ts'
 export type {
   VaultEnvVarOptions,
   VaultImportOptions,
   VaultImportResult,
+  VaultProfileSummary,
   VaultProjectRegistration,
 } from './vaultProjects.ts'

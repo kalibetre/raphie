@@ -133,7 +133,7 @@ describe('Vault', () => {
         const first = makeVault(makeSqliteVaultStorage(home))
         yield* first.initialize(password)
         yield* first.writeState({
-          projects: [{ id: 'project-1', name: 'Agent Barn', folderPath: '/projects/agent-barn' }],
+          projects: [{ id: 'project-1', name: 'Agent Barn', handle: 'agent-barn', folderPath: '/projects/agent-barn', defaultProfile: 'staging' }],
           profiles: [
             {
               id: 'profile-1',
@@ -147,7 +147,7 @@ describe('Vault', () => {
         expect(yield* reopened.status()).toBe('locked')
         yield* reopened.unlock(password)
         expect(yield* reopened.readState()).toEqual({
-          projects: [{ id: 'project-1', name: 'Agent Barn', folderPath: '/projects/agent-barn' }],
+          projects: [{ id: 'project-1', name: 'Agent Barn', handle: 'agent-barn', folderPath: '/projects/agent-barn', defaultProfile: 'staging' }],
           profiles: [
             {
               id: 'profile-1',
