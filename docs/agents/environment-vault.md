@@ -32,7 +32,7 @@ Use the definitions in [`CONTEXT.md`](../../CONTEXT.md): **Project**, **Project 
 - A **Profile** owns a complete snapshot of its EnvVars.
 - A **Project** may have multiple local location bindings, including Git Worktrees. Location bindings are machine-local metadata and are not environment values.
 - The GUI and CLI are callers of the Vault module; they do not read SQLite tables or perform encryption directly.
-- SQLite persistence is an adapter behind the Vault's persistence seam. The local Vault derives its encryption key from the user's password with a stored random salt; the password itself is never persisted. Portable export/import uses a separate encrypted bundle passphrase rather than copying the local database.
+- SQLite persistence is an adapter behind the Vault's persistence seam. The local Vault derives its encryption key from the user's password with a stored random salt; the password itself is never persisted. The derived key is shared between processes through a key-cache seam backed by the OS credential store. Portable export/import uses a separate encrypted bundle passphrase rather than copying the local database.
 - The process launcher receives a resolved environment from the Vault and owns child-process lifecycle. It must not write a temporary environment file.
 
 ## State model
@@ -40,11 +40,13 @@ Use the definitions in [`CONTEXT.md`](../../CONTEXT.md): **Project**, **Project 
 The local Vault is either locked or unlocked.
 
 - On first launch, when no Vault record exists, the GUI asks the user to create a password and initializes one local `vault.sqlite` database.
-- On later launches, the persisted Vault is treated as locked until the user enters the password again, even if the previous process left the database lock marker unlocked.
+- On later launches, the Vault is unlocked only if the OS credential store still holds an unexpired derived key for this Vault; otherwise it is locked until the user enters the password. The database lock marker alone never authorizes access.
 - A locked Vault may report that it is unavailable, but operations requiring Profile values must fail without attempting plaintext recovery.
 - Unlocking authorizes value reads and writes for the current Vault session.
-- Locking removes the Vault's active decryption capability from the runtime as far as the platform permits.
-- The auto-lock policy and session lifetime are not yet settled.
+- Unlocking stores the derived key in the OS credential store, so separate CLI invocations and the GUI share one unlock. The key expires one hour after unlock (`VAULT_KEY_TTL_MS`); expiry is enforced on read, and an expired or malformed entry is deleted and reads as locked.
+- Locking deletes the stored key and zeroes any in-memory copy. Where no OS credential store is available (test workers), the key is held in process memory only.
+- The GUI re-checks status periodically so an expired or externally locked Vault returns to the unlock prompt instead of failing operations.
+- The lifetime is fixed from unlock; there is no idle auto-lock or sliding expiry yet.
 
 ## Project resolution
 
@@ -116,6 +118,7 @@ Failure output must identify the action and remediation without including any en
 | --- | --- |
 | Domain language | [`CONTEXT.md`](../../CONTEXT.md) |
 | Architectural rationale | [`docs/adr/0004-encrypted-vault-profiles.md`](../adr/0004-encrypted-vault-profiles.md) |
+| Key cache and OS credential store adapter | `src/core/vaultKeyCache.ts` (`VaultKeyCache` seam in `src/core/vault.ts`) |
 | Legacy Project persistence | `src/core/ProjectsFile.ts` — replace with Vault persistence |
 | Legacy env-file persistence | `src/core/envVarFile.ts`, `src/core/listEnvVars.ts`, `src/core/setEnvVar.ts` — replace with Profile operations |
 | Legacy Worktree linking | `src/core/worktreeEnvFile.ts`, `src/core/linkWorktree.ts`, `src/core/unlinkWorktree.ts` — remove from the new domain model |
@@ -143,4 +146,4 @@ When changing Vault or Profile behavior, also inspect:
 - Which exact keys are considered Project-managed, and whether absent keys in a Profile must be explicitly removed from the inherited process environment.
 - How Git identity and registered paths behave when a Project is cloned, moved, or attached to a new machine.
 - The portable bundle cryptographic format and key-rotation policy.
-- Vault auto-lock timing and whether background GUI sessions keep the Vault unlocked.
+- Whether the key lifetime should slide with use or become configurable, and whether an idle GUI should lock sooner than the CLI.
