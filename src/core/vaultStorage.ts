@@ -56,6 +56,10 @@ export const makeSqliteVaultStorage = (home: string): VaultStorage => ({
 
     const database = new DatabaseSync(file, { readOnly: true })
     try {
+      const table = database
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get(tableName)
+      if (table == null) return null
       const row = database
         .prepare(`SELECT format_version, lock_state, salt, nonce, ciphertext FROM ${tableName} WHERE id = 1`)
         .get() as unknown as VaultRow | undefined

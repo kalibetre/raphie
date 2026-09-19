@@ -1,4 +1,5 @@
 import { Effect } from 'effect'
+import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import {
   makeVault,
@@ -9,7 +10,7 @@ import {
   type VaultRecord,
   type VaultStorage,
 } from '../../src/core/vault.ts'
-import { makeSqliteVaultStorage } from '../../src/core/vaultStorage.ts'
+import { makeSqliteVaultStorage, vaultDatabasePath } from '../../src/core/vaultStorage.ts'
 import { withProjectFixtures } from './fixtures.ts'
 
 const password = 'correct horse battery staple'
@@ -123,6 +124,28 @@ describe('Vault', () => {
             },
           ],
         })
+      }),
+    ))
+
+  it('can initialize the password-backed format beside a legacy Vault table', () =>
+    withProjectFixtures(({ home }) =>
+      Effect.gen(function* () {
+        const database = new DatabaseSync(vaultDatabasePath(home))
+        database.exec(`
+          CREATE TABLE vault_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            format_version INTEGER NOT NULL,
+            lock_state TEXT NOT NULL,
+            nonce BLOB NOT NULL,
+            ciphertext BLOB NOT NULL
+          )
+        `)
+        database.close()
+
+        const vault = makeVault(makeSqliteVaultStorage(home))
+        expect(yield* vault.status()).toBe('uninitialized')
+        yield* vault.initialize(password)
+        expect(yield* vault.status()).toBe('unlocked')
       }),
     ))
 })

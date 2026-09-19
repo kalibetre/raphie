@@ -107,6 +107,8 @@ export function VaultGate({
     setFormError(null)
     if (creating) onCreate(password)
     else onUnlock(password)
+    setPassword('')
+    setConfirmation('')
   }
 
   return (
