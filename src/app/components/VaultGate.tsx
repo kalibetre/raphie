@@ -5,6 +5,10 @@ import { DialogButton } from './DialogButton.tsx'
 
 export type VaultGateStatus = 'loading' | 'uninitialized' | 'locked' | 'unavailable'
 
+// Monospace so the real (transparent) glyphs are as wide as the bullets drawn over them;
+// otherwise the native caret drifts right of the mask as you type.
+const MASK_FONT = 'Menlo'
+
 function SecretInput({
   testId,
   value,
@@ -43,6 +47,7 @@ function SecretInput({
           backgroundColor: C.canvas,
           color: 'transparent',
           fontSize: 13,
+          fontFamily: MASK_FONT,
         }}
         theme={{ caret: C.text }}
       />
@@ -55,6 +60,7 @@ function SecretInput({
           right: 10,
           color: value.length === 0 ? C.ghost : C.text,
           fontSize: 13,
+          fontFamily: value.length === 0 ? undefined : MASK_FONT,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           pointerEvents: 'none',
