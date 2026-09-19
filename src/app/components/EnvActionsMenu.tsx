@@ -4,6 +4,11 @@ import { C } from '../theme.ts'
 
 type EnvAction = 'toggle-reveal' | 'import' | 'export' | 'add'
 
+// This Select is a command menu rather than a persistent selection. Keeping
+// it on a sentinel value ensures selecting the same action twice still emits
+// onValueChange (for example, Reveal all followed by Hide all).
+const ACTION_MENU_VALUE = '__env_actions__'
+
 export function EnvActionsMenu({
   hasEnvVars,
   allEnvVarsRevealed,
@@ -33,6 +38,7 @@ export function EnvActionsMenu({
   return (
     <Select
       items={actions}
+      value={ACTION_MENU_VALUE}
       onValueChange={(value) => {
         switch (value as EnvAction) {
           case 'toggle-reveal':
