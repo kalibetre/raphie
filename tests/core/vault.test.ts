@@ -10,6 +10,7 @@ import {
   type VaultRecord,
   type VaultStorage,
 } from '../../src/core/vault.ts'
+import { makeKeychainKeyCache, type SecretStore } from '../../src/core/vaultKeyCache.ts'
 import { makeSqliteVaultStorage, vaultDatabasePath } from '../../src/core/vaultStorage.ts'
 import { withProjectFixtures } from './fixtures.ts'
 
@@ -62,6 +63,38 @@ describe('Vault', () => {
 
     await run(vault.unlock(password))
     await expect(run(vault.status())).resolves.toBe('unlocked')
+  })
+
+  it('shares one unlock across separate Vault instances until locked or expired', async () => {
+    const { storage } = makeMemoryVault()
+    const slot: { value: string | null } = { value: null }
+    const keychain: SecretStore = {
+      get: async () => slot.value,
+      set: async (value) => {
+        slot.value = value
+      },
+      delete: async () => {
+        slot.value = null
+      },
+    }
+    let now = 0
+    // Each Vault stands for a separate process: no shared memory, only storage and keychain.
+    const spawn = () => makeVault(storage, makeKeychainKeyCache(keychain, { ttlMs: 1_000, now: () => now }))
+
+    await run(spawn().initialize(password))
+    await expect(run(spawn().status())).resolves.toBe('unlocked')
+    await expect(run(spawn().readState())).resolves.toEqual({ projects: [], profiles: [] })
+
+    await run(spawn().lock())
+    await expect(run(spawn().status())).resolves.toBe('locked')
+    expect(await runFailure(spawn().readState())).toBeInstanceOf(VaultLockedError)
+
+    await run(spawn().unlock(password))
+    await expect(run(spawn().status())).resolves.toBe('unlocked')
+
+    now = 1_000
+    await expect(run(spawn().status())).resolves.toBe('locked')
+    expect(await runFailure(spawn().readState())).toBeInstanceOf(VaultLockedError)
   })
 
   it('rejects an incorrect password without revealing state', async () => {
