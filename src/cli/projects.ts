@@ -16,7 +16,9 @@ import {
   VaultProfileNotFoundError,
   VaultProjectHandleError,
   VaultProjectLocationError,
+  VaultProjectNotFoundError,
   VaultProjectResolutionError,
+  validateVaultEnvVarKey,
 } from '../core/vaultProjects.ts'
 import { renderVaultError, type CliIo } from './vault.ts'
 
@@ -54,6 +56,7 @@ const renderError = (error: unknown) => {
       ? 'A Profile name must start with a lowercase letter or digit and use only lowercase letters, digits, "-" and "_".'
       : 'A Profile with that name already exists. Run `raphie profile list`.'
   }
+  if (error instanceof VaultProjectNotFoundError) return 'That Project no longer exists. Run `raphie project list`.'
   if (error instanceof VaultProfileNotFoundError) return `Profile "${error.profileName}" was not found. Run \`raphie profile list\`.`
   return renderVaultError(error)
 }
@@ -146,7 +149,7 @@ export const runProjectCli = (args: readonly string[], io: CliIo) =>
       case 'env add':
       case 'env set': {
         const [rawKey] = yield* operand(1)
-        const key = rawKey!.trim()
+        const key = yield* validateVaultEnvVarKey(rawKey!)
         const resolved = yield* project
         const exists = (yield* listVaultEnvVars(resolved.id, values.profile)).some((envVar) => envVar.key === key)
         if (command === 'add' && exists) {

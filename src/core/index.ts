@@ -67,6 +67,7 @@ export {
   resolveVaultProject,
   setVaultDefaultProfile,
   setVaultEnvVar,
+  validateVaultEnvVarKey,
   VaultEnvVarError,
   VaultProfileNameError,
   VaultProfileNotFoundError,

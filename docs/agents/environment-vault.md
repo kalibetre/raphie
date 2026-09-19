@@ -50,7 +50,7 @@ The local Vault is either locked or unlocked.
 
 ## Project and Profile commands
 
-`project`, `profile`, and `env` commands select a Project with `--project HANDLE`, or else by the registered location containing the current directory (the deepest match wins; none or an exact tie fails). `--profile NAME` selects a Profile and otherwise the Project's default Profile applies. Handles and Profile names are lowercase letters, digits, `-` and `_`, and a handle or registered location can belong to only one Project. Registration creates an empty `local` Profile and makes it the default; Projects stored before handles existed get a handle derived from their folder name when the Vault is read. Commands never print, log, or accept as an argument an EnvVar value; `env list` masks every value with a fixed-width mask.
+`project`, `profile`, and `env` commands select a Project with `--project HANDLE`, or else by the registered location containing the current directory (the deepest match wins; none or an exact tie fails). `--profile NAME` selects a Profile and otherwise the Project's default Profile applies. Handles and Profile names are lowercase letters, digits, `-` and `_`, and a handle or registered location can belong to only one Project. Registration creates an empty `local` Profile and makes it the default; Projects stored before handles existed get a handle derived from their folder name when the Vault is read. An empty EnvVar value is rejected, as in the GUI. Commands never print, log, or accept as an argument an EnvVar value; `env list` masks every value with a fixed-width mask.
 
 ## Project resolution
 
@@ -72,7 +72,7 @@ The command names below describe the contract; exact flag spelling can change wi
 | Command | Contract |
 | --- | --- |
 | `raphie run ... -- COMMAND` | Resolve a Project and Profile, decrypt the snapshot, inject it into `COMMAND`, and return the command's result. |
-| `raphie project add PATH --handle HANDLE` | Register a Project location and stable CLI handle. |
+| `raphie project add PATH [--handle HANDLE]` | Register a Project location and stable CLI handle; without `--handle` one is derived from the folder name. |
 | `raphie project list` | List Projects and handles without revealing values. |
 | `raphie profile create NAME` | Create an empty Profile for a Project. |
 | `raphie profile list` | List Profile names, the default marker, and EnvVar counts without revealing values. |

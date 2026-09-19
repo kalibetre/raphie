@@ -175,9 +175,9 @@ describe('runProjectCli', () => {
         // A duplicate is rejected before the value is prompted for.
         expect(yield* cli.run('env', 'add', 'TAKEN')).toBe(1)
         expect(cli.errors).toEqual(['EnvVar key "TAKEN" already exists. Use `raphie env set` to change it.'])
-        cli.typeSecret(secret)
+        // An invalid key is rejected before the value is prompted for, too.
         expect(yield* cli.run('env', 'add', 'BAD=KEY')).toBe(1)
-        expect(cli.errors).toEqual(['EnvVar key is invalid.'])
+        expect(cli.errors[0]).toContain('EnvVar key is invalid')
         cli.typeSecret('')
         expect(yield* cli.run('env', 'add', 'EMPTY')).toBe(2)
         expect(cli.errors).toEqual(['EnvVar value cannot be empty.'])

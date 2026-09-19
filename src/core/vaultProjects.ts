@@ -145,7 +145,7 @@ export const registerVaultProject = (input: {
       defaultProfile: initialProfileName,
     }
     const profile: VaultProfileRecord = {
-      id: crypto.randomUUID().slice(0, 8),
+      id: generateProjectId(),
       projectId: id,
       name: initialProfileName,
       envVars: [],
@@ -211,7 +211,7 @@ export const createVaultProfile = (projectId: string, name: string) =>
     }
     yield* vault.writeState({
       ...state,
-      profiles: [...state.profiles, { id: crypto.randomUUID().slice(0, 8), projectId, name, envVars: [] }],
+      profiles: [...state.profiles, { id: generateProjectId(), projectId, name, envVars: [] }],
     })
   })
 
@@ -237,10 +237,12 @@ export const listVaultEnvVars = (
     return [...profile.envVars]
   })
 
-const normalizedKey = (key: string) => {
+/** Trims an EnvVar key and rejects one that cannot be written as `KEY=value`. */
+export const validateVaultEnvVarKey = (key: string) => {
   const value = key.trim()
-  if (!value || /[\r\n=]/.test(value)) throw new Error('invalid environment variable key')
-  return value
+  return !value || /[\r\n=]/.test(value)
+    ? Effect.fail(new VaultEnvVarError({ message: 'EnvVar key is invalid: it must not be empty or contain "=" or line breaks.' }))
+    : Effect.succeed(value)
 }
 
 const findOccurrenceIndex = (envVars: readonly EnvVar[], key: string, occurrence: number) => {
@@ -260,10 +262,7 @@ export const setVaultEnvVar = (
 ) =>
   Effect.gen(function* () {
     const vault = yield* Vault
-    const key = yield* Effect.try({
-      try: () => normalizedKey(envVar.key),
-      catch: () => new VaultEnvVarError({ message: 'EnvVar key is invalid.' }),
-    })
+    const key = yield* validateVaultEnvVarKey(envVar.key)
     const previousKey = options.previousKey?.trim()
     const occurrence = options.occurrence ?? 0
     let saved: EnvVar = { key, value: envVar.value }
