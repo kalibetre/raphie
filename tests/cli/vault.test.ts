@@ -67,6 +67,7 @@ describe('runVaultCli', () => {
       'Vault: unlocked',
     ])
     expect(cli.errors).toEqual([])
+    expect([...cli.output, ...cli.errors].join('\n')).not.toContain('correct horse battery staple')
   })
 
   it('returns a usage failure for an unknown command', async () => {

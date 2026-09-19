@@ -46,8 +46,14 @@ export interface VaultStorage {
   readonly updateEncryptedState: (encrypted: EncryptedVaultState) => Promise<void>
 }
 
-export interface VaultSession {
-  key: Uint8Array | null
+/**
+ * Where an unlocked Vault's derived key lives between operations. `get`
+ * returns null once the key is absent or expired, which means locked.
+ */
+export interface VaultKeyCache {
+  readonly get: () => Promise<Uint8Array | null>
+  readonly set: (key: Uint8Array) => Promise<void>
+  readonly clear: () => Promise<void>
 }
 
 export class VaultAlreadyInitializedError extends Data.TaggedError('VaultAlreadyInitializedError')<{}> {}
@@ -61,7 +67,7 @@ export class VaultPasswordError extends Data.TaggedError('VaultPasswordError')<{
 export class VaultCorruptedError extends Data.TaggedError('VaultCorruptedError')<{}> {}
 
 export class VaultStorageError extends Data.TaggedError('VaultStorageError')<{
-  readonly operation: 'read' | 'create' | 'remove' | 'update-lock-state' | 'update-encrypted-state'
+  readonly operation: 'read' | 'create' | 'remove' | 'update-lock-state' | 'update-encrypted-state' | 'key-cache'
 }> {}
 
 export interface VaultService {
@@ -84,21 +90,32 @@ export type VaultError =
 
 export class Vault extends Context.Tag('Vault')<Vault, VaultService>() {}
 
-const sessions = new Map<string, VaultSession>()
-
-export const createVaultSession = (): VaultSession => ({ key: null })
-
-export const vaultSessionFor = (identity: string) => {
-  const existing = sessions.get(identity)
-  if (existing) return existing
-  const session = createVaultSession()
-  sessions.set(identity, session)
-  return session
+export const makeMemoryKeyCache = (): VaultKeyCache => {
+  let key: Uint8Array | null = null
+  const clear = async () => {
+    key?.fill(0)
+    key = null
+  }
+  return {
+    get: async () => key,
+    set: async (next) => {
+      await clear()
+      key = next
+    },
+    clear,
+  }
 }
 
-const clearSession = (session: VaultSession) => {
-  session.key?.fill(0)
-  session.key = null
+// Process-scoped and keyed by Vault home, so every Vault built for one home in
+// this process shares one unlock. Used where no OS keychain is available.
+const memoryKeyCaches = new Map<string, VaultKeyCache>()
+
+export const memoryKeyCacheFor = (identity: string) => {
+  const existing = memoryKeyCaches.get(identity)
+  if (existing) return existing
+  const cache = makeMemoryKeyCache()
+  memoryKeyCaches.set(identity, cache)
+  return cache
 }
 
 const storageOperation = <A>(operation: VaultStorageError['operation'], action: () => Promise<A>) =>
@@ -162,7 +179,7 @@ const validateRecord = (record: VaultRecord) => {
   }
 }
 
-export const makeVault = (storage: VaultStorage, session: VaultSession = createVaultSession()): VaultService => {
+export const makeVault = (storage: VaultStorage, keys: VaultKeyCache = makeMemoryKeyCache()): VaultService => {
   const readRecord = () => storageOperation('read', () => storage.read())
 
   const requireRecord = () =>
@@ -170,8 +187,12 @@ export const makeVault = (storage: VaultStorage, session: VaultSession = createV
       Effect.flatMap((record) => (record === null ? Effect.fail(new VaultNotInitializedError()) : Effect.succeed(record))),
     )
 
+  const cachedKey = () => storageOperation('key-cache', () => keys.get())
+
   const requireKey = () =>
-    session.key === null ? Effect.fail(new VaultLockedError()) : Effect.succeed(session.key)
+    cachedKey().pipe(
+      Effect.flatMap((key) => (key === null ? Effect.fail(new VaultLockedError()) : Effect.succeed(key))),
+    )
 
   const decryptState = (record: VaultRecord, key: Uint8Array) =>
     Effect.tryPromise({
@@ -201,9 +222,11 @@ export const makeVault = (storage: VaultStorage, session: VaultSession = createV
     Effect.gen(function* () {
       const record = yield* readRecord()
       if (record === null) return 'uninitialized' as const
-      if (record.lockState === 'locked' || session.key === null) return 'locked' as const
+      if (record.lockState === 'locked') return 'locked' as const
+      const key = yield* cachedKey()
+      if (key === null) return 'locked' as const
       yield* checkedRecord(record)
-      yield* decryptState(record, session.key)
+      yield* decryptState(record, key)
       return 'unlocked' as const
     })
 
@@ -232,14 +255,15 @@ export const makeVault = (storage: VaultStorage, session: VaultSession = createV
         }),
       )
       yield* storageOperation('update-lock-state', () => storage.updateLockState('unlocked'))
-      session.key = key
+      yield* storageOperation('key-cache', () => keys.set(key))
     })
 
   const lock = (): Effect.Effect<void, VaultError> =>
     Effect.gen(function* () {
       const record = yield* requireRecord()
+      // Drop the key first so a failed marker write still leaves the Vault locked.
+      yield* storageOperation('key-cache', () => keys.clear())
       if (record.lockState === 'unlocked') yield* storageOperation('update-lock-state', () => storage.updateLockState('locked'))
-      clearSession(session)
     })
 
   const unlock = (password: string): Effect.Effect<void, VaultError> =>
@@ -253,7 +277,7 @@ export const makeVault = (storage: VaultStorage, session: VaultSession = createV
       })
       yield* decryptState(record, key).pipe(Effect.mapError(() => new VaultPasswordError()))
       yield* storageOperation('update-lock-state', () => storage.updateLockState('unlocked'))
-      session.key = key
+      yield* storageOperation('key-cache', () => keys.set(key))
     })
 
   const requireUnlocked = () => readUnlockedState().pipe(Effect.asVoid)
