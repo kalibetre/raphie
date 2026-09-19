@@ -1,8 +1,9 @@
 import { BunContext } from '@effect/platform-bun'
 import { Effect, Layer } from 'effect'
 import { AppHomeLive } from './AppHome.ts'
+import { VaultLive } from './vaultLive.ts'
 
-export const AppLive = Layer.merge(BunContext.layer, AppHomeLive)
+export const AppLive = Layer.mergeAll(BunContext.layer, AppHomeLive, Layer.provide(VaultLive, AppHomeLive))
 
 /**
  * The one place that turns an unexpected I/O failure into a crash instead of

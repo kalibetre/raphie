@@ -28,6 +28,46 @@ export { setEnvVar } from './setEnvVar.ts'
 export { deleteEnvVar } from './deleteEnvVar.ts'
 export type { DeleteEnvVarTarget } from './deleteEnvVar.ts'
 export type { ParsedEnvVar, SetEnvVarOptions } from './envVarFile.ts'
+export { serializeEnvVars } from './envVarFile.ts'
 export { ProjectHasLinkedWorktreesError, removeProject } from './removeProject.ts'
 export type { ProjectRemovalMode } from './removeProject.ts'
 export { run } from './runtime.ts'
+export {
+  Vault,
+  VaultAlreadyInitializedError,
+  VaultCorruptedError,
+  VaultLockedError,
+  VaultNotInitializedError,
+  VaultPasswordError,
+  VaultStorageError,
+  makeVault,
+} from './vault.ts'
+export type {
+  VaultError,
+  VaultLockState,
+  VaultProfileRecord,
+  VaultRecord,
+  VaultProjectRecord,
+  VaultService,
+  VaultState,
+  VaultStatus,
+  VaultStorage,
+} from './vault.ts'
+export { VaultLive } from './vaultLive.ts'
+export {
+  deleteVaultEnvVar,
+  importProjectEnvContent,
+  importProjectEnvFile,
+  listVaultEnvVars,
+  listVaultProjects,
+  registerVaultProject,
+  removeVaultProject,
+  setVaultEnvVar,
+  VaultEnvVarError,
+} from './vaultProjects.ts'
+export type {
+  VaultEnvVarOptions,
+  VaultImportOptions,
+  VaultImportResult,
+  VaultProjectRegistration,
+} from './vaultProjects.ts'

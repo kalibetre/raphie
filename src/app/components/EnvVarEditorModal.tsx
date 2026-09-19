@@ -63,7 +63,7 @@ export function EnvVarEditorModal({
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <text style={{ fontSize: 16, color: C.text }}>{mode === 'add' ? 'Add EnvVar' : 'Edit EnvVar'}</text>
-            <text style={{ fontSize: 11, color: C.ghost }}>Changes are saved to the Central env file immediately.</text>
+            <text style={{ fontSize: 11, color: C.ghost }}>Changes are encrypted in the Vault immediately.</text>
           </div>
           <IconButton testId="envvar-editor-close" label="Close EnvVar editor" icon="x" onClick={onClose} />
         </div>

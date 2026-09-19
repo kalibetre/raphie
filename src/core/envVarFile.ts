@@ -171,6 +171,9 @@ const serialize = (envVar: EnvVar) => {
   return `${envVar.key}="${escaped}"`
 }
 
+export const serializeEnvVars = (envVars: readonly EnvVar[]) =>
+  envVars.length === 0 ? '' : envVars.map(serialize).join('\n') + '\n'
+
 const findOccurrenceIndex = (entries: readonly ParsedEnvVar[], key: string, occurrence: number) => {
   let seen = 0
   for (let index = 0; index < entries.length; index += 1) {

@@ -18,7 +18,6 @@ import {
   type WorktreeWindow,
 } from '../worktreeWindow.ts'
 import { IconButton } from './IconButton.tsx'
-import { EnvFileBadge } from './EnvFileBadge.tsx'
 import { WorktreeOpenMenu } from './WorktreeOpenMenu.tsx'
 import { WorktreeSortButtons } from './WorktreeSortButtons.tsx'
 
@@ -130,8 +129,6 @@ function WorktreeRow({
   lastOpenWorktreeTarget,
   onOpenWorktree,
   onSelectOpenWorktreeTarget,
-  onLinkWorktree,
-  onUnlinkWorktree,
   onDeleteWorktree,
 }: {
   worktree: Worktree
@@ -141,8 +138,6 @@ function WorktreeRow({
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
-  onLinkWorktree: (path: string) => void
-  onUnlinkWorktree: (path: string) => void
   onDeleteWorktree: (path: string) => void
 }) {
   const metadata = worktree.metadata
@@ -211,37 +206,9 @@ function WorktreeRow({
             ) : (
               <Skeleton width={42} />
             )}
-            <div
-              testId={`worktree-status-${index}`}
-              aria-label={worktree.linked ? 'Linked' : 'Not Linked'}
-              style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5 }}
-            >
-              <Icon name={worktree.linked ? 'link' : 'unlink'} size={12} color={worktree.linked ? C.accent : C.secondary} />
-              <text style={{ fontSize: 11, color: worktree.linked ? C.accent : C.secondary }}>
-                {worktree.linked ? 'Linked' : 'Not Linked'}
-              </text>
-            </div>
-            {worktree.hasEnvFile && !worktree.linked ? <EnvFileBadge index={index} /> : null}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {worktree.linked ? (
-            <IconButton
-              testId={`unlink-worktree-${index}`}
-              label="Unlink Worktree from Central env file"
-              icon="unlink"
-              color={C.accent}
-              onClick={() => onUnlinkWorktree(worktree.path)}
-            />
-          ) : (
-            <IconButton
-              testId={`link-worktree-${index}`}
-              label="Link Worktree to Central env file"
-              icon="link"
-              color={C.accent}
-              onClick={() => onLinkWorktree(worktree.path)}
-            />
-          )}
           <WorktreeOpenMenu
             index={index}
             options={openWorktreeOptions}
@@ -329,8 +296,6 @@ export function WorktreeList({
   lastOpenWorktreeTarget,
   onOpenWorktree,
   onDeleteWorktree,
-  onLinkWorktree,
-  onUnlinkWorktree,
   onSelectOpenWorktreeTarget,
 }: {
   worktrees: Worktree[]
@@ -340,8 +305,6 @@ export function WorktreeList({
   projectFolderPath: string
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
-  onLinkWorktree: (path: string) => void
-  onUnlinkWorktree: (path: string) => void
   onDeleteWorktree: (path: string) => void
   onSelectOpenWorktreeTarget: (target: WorktreeOpenTarget) => void
 }) {
@@ -454,9 +417,7 @@ export function WorktreeList({
                       openWorktreeOptions={openWorktreeOptions}
                       lastOpenWorktreeTarget={lastOpenWorktreeTarget}
                       onOpenWorktree={onOpenWorktree}
-                      onLinkWorktree={onLinkWorktree}
                       onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}
-                      onUnlinkWorktree={onUnlinkWorktree}
                       onDeleteWorktree={onDeleteWorktree}
                     />
                   </div>

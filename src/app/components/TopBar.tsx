@@ -57,6 +57,24 @@ export function TopBar({
       ) : null}
       <div style={{ flexGrow: 1 }} />
       <div
+        testId="vault-status"
+        aria-label="Vault"
+        style={{
+          paddingLeft: 8,
+          paddingRight: 8,
+          height: 26,
+          borderRadius: 6,
+          borderWidth: 1,
+          borderColor: C.border,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <Icon name="lockOpen" size={13} color={C.accent} />
+        <text style={{ fontSize: 11, color: C.text }}>Vault</text>
+      </div>
+      <div
         testId="add-project-button"
         onClick={onAddProject}
         style={{

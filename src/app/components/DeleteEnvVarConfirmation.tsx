@@ -48,7 +48,7 @@ export function DeleteEnvVarConfirmation({
       >
         <text style={{ fontSize: 16, color: C.text }}>Delete EnvVar?</text>
         <text style={{ fontSize: 12, color: C.secondary }}>
-          {'Delete ' + envVar.key + ' from this Project’s Central env file?'}
+          {'Delete ' + envVar.key + ' from this Project’s active Profile?'}
         </text>
         <text style={{ fontSize: 11, color: C.ghost }}>This action cannot be undone.</text>
 

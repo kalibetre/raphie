@@ -4,6 +4,7 @@ import { C } from '../theme.ts'
 
 export function RemoveProjectConfirmation({
   removalMode,
+  vaultBacked,
   removalError,
   removalInFlight,
   onSelectMode,
@@ -11,12 +12,17 @@ export function RemoveProjectConfirmation({
   onConfirm,
 }: {
   removalMode: ProjectRemovalMode
+  vaultBacked: boolean
   removalError: string | null
   removalInFlight: boolean
   onSelectMode: (mode: ProjectRemovalMode) => void
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const description = vaultBacked
+    ? 'Its encrypted Profiles will be removed. Any .env file stays untouched.'
+    : 'Choose what to do with the project’s .env:'
+
   return (
     <div
       testId="remove-project-confirmation"
@@ -33,50 +39,56 @@ export function RemoveProjectConfirmation({
         flexShrink: 0,
       }}
     >
-      <text style={{ fontSize: 11, color: C.secondary }}>Remove this Project from Raphie?</text>
-      <text style={{ fontSize: 10, color: C.ghost }}>Choose what to do with the project’s .env:</text>
-      <div
-        testId="remove-env-copy-option"
-        onClick={() => {
-          if (!removalInFlight) onSelectMode('copy')
-        }}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          width: 300,
-          padding: 8,
-          borderRadius: 6,
-          borderWidth: 1,
-          borderColor: removalMode === 'copy' ? C.accent : C.border,
-          backgroundColor: removalMode === 'copy' ? C.overlay : undefined,
-          cursor: 'pointer',
-        }}
-      >
-        <text style={{ fontSize: 11, color: C.text }}>Copy .env into the project folder</text>
-        <text style={{ fontSize: 10, color: C.ghost }}>Recommended: keep the project’s current env values.</text>
-      </div>
-      <div
-        testId="remove-env-delete-option"
-        onClick={() => {
-          if (!removalInFlight) onSelectMode('remove')
-        }}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          width: 300,
-          padding: 8,
-          borderRadius: 6,
-          borderWidth: 1,
-          borderColor: removalMode === 'remove' ? C.accent : C.border,
-          backgroundColor: removalMode === 'remove' ? C.overlay : undefined,
-          cursor: 'pointer',
-        }}
-      >
-        <text style={{ fontSize: 11, color: C.text }}>Remove .env entirely</text>
-        <text style={{ fontSize: 10, color: C.ghost }}>Delete the project’s .env and Raphie’s Central copy.</text>
-      </div>
+      <text style={{ fontSize: 11, color: C.secondary }}>
+        {vaultBacked ? 'Remove this Project from the encrypted Vault?' : 'Remove this Project from Raphie?'}
+      </text>
+      <text style={{ fontSize: 10, color: C.ghost }}>{description}</text>
+      {!vaultBacked ? (
+        <>
+          <div
+            testId="remove-env-copy-option"
+            onClick={() => {
+              if (!removalInFlight) onSelectMode('copy')
+            }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              width: 300,
+              padding: 8,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: removalMode === 'copy' ? C.accent : C.border,
+              backgroundColor: removalMode === 'copy' ? C.overlay : undefined,
+              cursor: 'pointer',
+            }}
+          >
+            <text style={{ fontSize: 11, color: C.text }}>Copy .env into the project folder</text>
+            <text style={{ fontSize: 10, color: C.ghost }}>Recommended: keep the project’s current env values.</text>
+          </div>
+          <div
+            testId="remove-env-delete-option"
+            onClick={() => {
+              if (!removalInFlight) onSelectMode('remove')
+            }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              width: 300,
+              padding: 8,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: removalMode === 'remove' ? C.accent : C.border,
+              backgroundColor: removalMode === 'remove' ? C.overlay : undefined,
+              cursor: 'pointer',
+            }}
+          >
+            <text style={{ fontSize: 11, color: C.text }}>Remove .env entirely</text>
+            <text style={{ fontSize: 10, color: C.ghost }}>Delete the project’s .env and Raphie’s Central copy.</text>
+          </div>
+        </>
+      ) : null}
       {removalError ? (
         <div
           testId="remove-project-error"

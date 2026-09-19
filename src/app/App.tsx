@@ -8,36 +8,43 @@ import type {
   Worktree,
   WorktreeMetadata,
   WorktreeRemovalFailure,
-  WorktreeUnlinkMode,
+  VaultStatus,
 } from '../core/index.ts'
 import {
   deleteEnvVar,
   DuplicateEnvVarKeyError,
-  LinkWorktreeConflictError,
-  ProjectHasLinkedWorktreesError,
   listEnvVars,
-  listProjects,
   discoverWorktrees,
   loadWorktreeMetadata,
-  linkWorktree,
-  registerProject,
   forceRemoveWorktree,
   removeProject,
   removeWorktree,
-  unlinkWorktree,
   run,
   setEnvVar,
+  Vault,
+  deleteVaultEnvVar,
+  importProjectEnvContent,
+  importProjectEnvFile,
+  listVaultEnvVars,
+  listVaultProjects,
+  registerVaultProject,
+  removeVaultProject,
+  serializeEnvVars,
+  setVaultEnvVar,
+  VaultEnvVarError,
 } from '../core/index.ts'
 import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
 import { DeleteWorktreeConfirmation } from './components/DeleteWorktreeConfirmation.tsx'
+import { EnvContentImportModal } from './components/EnvContentImportModal.tsx'
+import { EnvExportModal } from './components/EnvExportModal.tsx'
 import { EnvVarEditorModal } from './components/EnvVarEditorModal.tsx'
 import type { EnvVarEditorValidationError } from './components/EnvVarEditorModal.tsx'
-import { LinkWorktreeConfirmation } from './components/LinkWorktreeConfirmation.tsx'
+import { EnvImportModal } from './components/EnvImportModal.tsx'
 import { MainPane } from './components/MainPane.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { Toast } from './components/Toast.tsx'
 import { TopBar } from './components/TopBar.tsx'
-import { UnlinkWorktreeConfirmation } from './components/UnlinkWorktreeConfirmation.tsx'
+import { VaultGate } from './components/VaultGate.tsx'
 import { C, DEFAULT_SIDEBAR_WIDTH } from './theme.ts'
 import { copyToClipboard } from './utils/clipboard.ts'
 import {
@@ -66,9 +73,21 @@ interface WorktreeDeleteState {
   readonly error: WorktreeRemovalFailure | null
 }
 
-interface WorktreeUnlinkState {
-  readonly path: string
-  readonly mode: WorktreeUnlinkMode | null
+interface EnvImportState {
+  readonly project: Project
+  readonly busy: boolean
+  readonly error: string | null
+}
+
+interface EnvContentImportState {
+  readonly content: string
+  readonly busy: boolean
+  readonly error: string | null
+}
+
+interface EnvExportState {
+  readonly content: string
+  readonly copied: boolean
 }
 
 export function App() {
@@ -101,17 +120,46 @@ export function App() {
   const [worktreeDelete, setWorktreeDelete] = useState<WorktreeDeleteState | null>(null)
   const [worktreeDeleteInFlight, setWorktreeDeleteInFlight] = useState(false)
   const [worktreeForceDeleteInFlight, setWorktreeForceDeleteInFlight] = useState(false)
-  const [worktreeLink, setWorktreeLink] = useState<LinkWorktreeConflictError | null>(null)
-  const [worktreeLinkInFlight, setWorktreeLinkInFlight] = useState(false)
-  const [worktreeUnlink, setWorktreeUnlink] = useState<WorktreeUnlinkState | null>(null)
-  const [worktreeUnlinkInFlight, setWorktreeUnlinkInFlight] = useState(false)
   const [lastOpenWorktreeTarget, setLastOpenWorktreeTarget] = useState<WorktreeOpenTarget | null>(null)
   const selectedProjectIdRef = useRef<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [vaultStatus, setVaultStatus] = useState<VaultStatus | 'unavailable' | 'loading'>('loading')
+  const [vaultBusy, setVaultBusy] = useState(false)
+  const [vaultError, setVaultError] = useState<string | null>(null)
+  const [vaultCheckVersion, setVaultCheckVersion] = useState(0)
+  const [envImport, setEnvImport] = useState<EnvImportState | null>(null)
+  const [envContentImport, setEnvContentImport] = useState<EnvContentImportState | null>(null)
+  const [envExport, setEnvExport] = useState<EnvExportState | null>(null)
 
   useEffect(() => {
-    run(listProjects).then(setProjects)
-  }, [])
+    if (vaultStatus !== 'unlocked') return
+    run(listVaultProjects).then(setProjects).catch(() => setVaultError('Could not load Projects from the Vault.'))
+  }, [vaultStatus])
+
+  useEffect(() => {
+    let stale = false
+    run(
+      Effect.gen(function* () {
+        const vault = yield* Vault
+        return yield* vault.status()
+      }),
+    )
+      .then((status) => {
+        if (!stale) {
+          setVaultError(null)
+          setVaultStatus(status)
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setVaultError('Could not access the local Vault.')
+          setVaultStatus('unavailable')
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [vaultCheckVersion])
 
   useEffect(() => {
     if (!toastMessage) return
@@ -123,16 +171,46 @@ export function App() {
   const selectedCentralEnvFile = selectedProject?.centralEnvFile ?? null
   selectedProjectIdRef.current = selectedProject?.id ?? null
 
+  const handleCreateVault = (password: string) => {
+    if (vaultBusy) return
+    setVaultBusy(true)
+    setVaultError(null)
+    run(
+      Effect.gen(function* () {
+        const vault = yield* Vault
+        yield* vault.initialize(password)
+      }),
+    )
+      .then(() => setVaultStatus('unlocked'))
+      .catch(() => setVaultError('Could not create the Vault.'))
+      .finally(() => setVaultBusy(false))
+  }
+
+  const handleUnlockVault = (password: string) => {
+    if (vaultBusy) return
+    setVaultBusy(true)
+    setVaultError(null)
+    run(
+      Effect.gen(function* () {
+        const vault = yield* Vault
+        yield* vault.unlock(password)
+      }),
+    )
+      .then(() => setVaultStatus('unlocked'))
+      .catch(() => setVaultError('The Vault password was rejected.'))
+      .finally(() => setVaultBusy(false))
+  }
+
   useEffect(() => {
     setRevealedKeys(new Set())
     setEnvVarSearchQuery('')
     setEnvVarEditor(null)
     setEnvVarDelete(null)
     setWorktreeDelete(null)
-    setWorktreeLink(null)
-    setWorktreeUnlink(null)
+    setEnvContentImport(null)
+    setEnvExport(null)
     setRemovalError(null)
-    if (!selectedProject || !selectedCentralEnvFile) {
+    if (vaultStatus !== 'unlocked' || !selectedProject || (!selectedProject.vaultBacked && !selectedCentralEnvFile)) {
       setEnvVars([])
       setWorktrees([])
       setWorktreesLoading(false)
@@ -149,7 +227,10 @@ export function App() {
     // Guard against a stale response landing after the user has already
     // switched to (or back to) a different Project.
     let stale = false
-    run(listEnvVars(selectedCentralEnvFile)).then((vars) => {
+    const envVarsRequest = project.vaultBacked
+      ? run(listVaultEnvVars(project.id))
+      : run(listEnvVars(selectedCentralEnvFile!))
+    envVarsRequest.then((vars) => {
       if (!stale) setEnvVars(vars)
     })
     const applyMetadata = (worktree: Worktree, metadata: WorktreeMetadata) => {
@@ -230,18 +311,22 @@ export function App() {
     return () => {
       stale = true
     }
-  }, [selectedCentralEnvFile, selectedProject, worktreeRefreshVersion])
+  }, [selectedCentralEnvFile, selectedProject, vaultStatus, worktreeRefreshVersion])
 
   useEffect(() => {
-    if (registrationInFlight || registrationQueue.length === 0) return
+    if (vaultStatus !== 'unlocked' || registrationInFlight || registrationQueue.length === 0) return
     const folderPath = registrationQueue[0]!
     setRegistrationQueue((current) => current.slice(1))
     setRegistrationInFlight(true)
-    run(registerProject({ folderPath }))
-      .then((project) => setProjects((current) => [...current, project]))
+    run(registerVaultProject({ folderPath }))
+      .then(({ project, envFileFound }) => {
+        setProjects((current) => [...current, project])
+        setSelectedId(project.id)
+        if (envFileFound) setEnvImport({ project, busy: false, error: null })
+      })
       .catch(() => undefined)
       .finally(() => setRegistrationInFlight(false))
-  }, [registrationInFlight, registrationQueue])
+  }, [registrationInFlight, registrationQueue, vaultStatus])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -273,10 +358,85 @@ export function App() {
       return next
     })
 
+  const handleToggleRevealAll = () => {
+    const allRevealed = envVars.length > 0 && envVars.every((envVar) => revealedKeys.has(envVar.key))
+    setRevealedKeys(allRevealed ? new Set() : new Set(envVars.map((envVar) => envVar.key)))
+  }
+
   const handleStartAddEnvVar = () => {
     if (!selectedProject || registrationInFlight) return
+    setEnvContentImport(null)
+    setEnvExport(null)
     setEnvVarDelete(null)
     setEnvVarEditor({ mode: 'add', index: null, originalKey: null, key: '', value: '', validationError: null })
+  }
+
+  const handleStartImportEnv = () => {
+    if (!selectedProject?.vaultBacked || registrationInFlight) return
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
+    setEnvExport(null)
+    setEnvContentImport({ content: '', busy: false, error: null })
+  }
+
+  const handleStartExport = () => {
+    if (!selectedProject?.vaultBacked || registrationInFlight) return
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
+    setEnvContentImport(null)
+    setEnvExport({ content: serializeEnvVars(envVars), copied: false })
+  }
+
+  const handleCopyExport = () => {
+    if (!envExport || envExport.content.length === 0) return
+    void copyToClipboard(envExport.content)
+    setEnvExport((current) => (current ? { ...current, copied: true } : current))
+    setToastMessage('Copied all EnvVars to clipboard')
+  }
+
+  const handleImportEnvContent = () => {
+    if (!envContentImport || envContentImport.busy || !selectedProject?.vaultBacked) return
+    if (!envContentImport.content.trim()) {
+      setEnvContentImport((current) => (current ? { ...current, error: 'Paste Env Var contents to import.' } : current))
+      return
+    }
+
+    const project = selectedProject
+    setEnvContentImport((current) => (current ? { ...current, busy: true, error: null } : current))
+    run(importProjectEnvContent(project, envContentImport.content))
+      .then((result) => {
+        if (selectedProjectIdRef.current === project.id) {
+          setRevealedKeys(new Set())
+          run(listVaultEnvVars(project.id)).then(setEnvVars).catch(() => undefined)
+        }
+        setEnvContentImport(null)
+        setToastMessage(`Imported ${result.importedCount} EnvVars`)
+      })
+      .catch(() =>
+        setEnvContentImport((current) =>
+          current ? { ...current, busy: false, error: 'Could not import Env Vars.' } : current,
+        ),
+      )
+  }
+
+  const handleImportProjectEnv = (deleteSourceFile: boolean) => {
+    if (!envImport || envImport.busy) return
+    const project = envImport.project
+    setEnvImport({ ...envImport, busy: true, error: null })
+    run(importProjectEnvFile(project, { deleteSourceFile }))
+      .then((result) => {
+        if (selectedProjectIdRef.current === project.id) {
+          setRevealedKeys(new Set())
+          run(listVaultEnvVars(project.id)).then(setEnvVars).catch(() => undefined)
+        }
+        setEnvImport(null)
+        setToastMessage(
+          deleteSourceFile
+            ? `Imported ${result.importedCount} EnvVars and deleted .env`
+            : `Imported ${result.importedCount} EnvVars`,
+        )
+      })
+      .catch(() => setEnvImport((current) => (current ? { ...current, busy: false, error: 'Could not import .env.' } : current)))
   }
 
   const handleStartEditEnvVar = (index: number) => {
@@ -308,17 +468,6 @@ export function App() {
     setWorktreeDelete({ path, error: null })
   }
 
-  const handleStartUnlinkWorktree = (path: string) => {
-    if (!selectedProject || registrationInFlight || worktreeUnlinkInFlight) return
-    const worktree = worktrees.find((candidate) => candidate.path === path)
-    if (!worktree?.linked) return
-    setEnvVarEditor(null)
-    setEnvVarDelete(null)
-    setWorktreeDelete(null)
-    setWorktreeLink(null)
-    setWorktreeUnlink({ path, mode: null })
-  }
-
   const handleRefreshWorktrees = () => {
     if (!selectedProject || registrationInFlight || worktreesRefreshing) return
     worktreeRefreshProjectRef.current = selectedProject.id
@@ -331,7 +480,7 @@ export function App() {
   }
 
   const handleSaveEnvVar = () => {
-    if (!envVarEditor || !selectedCentralEnvFile || envVarSaveInFlight) return
+    if (!envVarEditor || !selectedProject || (!selectedProject.vaultBacked && !selectedCentralEnvFile) || envVarSaveInFlight) return
 
     const key = envVarEditor.key.trim()
     const duplicate = envVars.some((envVar, index) => index !== envVarEditor.index && envVar.key === key)
@@ -356,23 +505,39 @@ export function App() {
         : envVars.slice(0, envVarEditor.index).filter((envVar) => envVar.key === envVarEditor.originalKey).length
 
     setEnvVarSaveInFlight(true)
-    run(
-      Effect.either(
-        setEnvVar(
-          selectedCentralEnvFile,
-          { key, value: envVarEditor.value },
-          envVarEditor.mode === 'edit' && envVarEditor.originalKey !== null
-            ? { previousKey: envVarEditor.originalKey, occurrence }
-            : undefined,
-        ),
-      ),
-    )
+    const saveResult = selectedProject.vaultBacked
+      ? run(
+          Effect.either(
+            setVaultEnvVar(
+              selectedProject.id,
+              { key, value: envVarEditor.value },
+              envVarEditor.mode === 'edit' && envVarEditor.originalKey !== null
+                ? { previousKey: envVarEditor.originalKey, occurrence }
+                : undefined,
+            ),
+          ),
+        )
+      : run(
+          Effect.either(
+            setEnvVar(
+              selectedCentralEnvFile!,
+              { key, value: envVarEditor.value },
+              envVarEditor.mode === 'edit' && envVarEditor.originalKey !== null
+                ? { previousKey: envVarEditor.originalKey, occurrence }
+                : undefined,
+            ),
+          ),
+        )
+    saveResult
       .then((result) => {
         if (result._tag === 'Left') {
           if (result.left instanceof DuplicateEnvVarKeyError) {
             const message = 'Duplicate EnvVar key "' + key + '" already exists'
             setEnvVarEditorValidationError({ field: 'key', message })
             setToastMessage(message)
+          } else if (result.left instanceof VaultEnvVarError) {
+            setEnvVarEditorValidationError({ field: 'key', message: result.left.message })
+            setToastMessage(result.left.message)
           } else {
             setToastMessage('Could not save EnvVar')
           }
@@ -397,14 +562,17 @@ export function App() {
   }
 
   const handleConfirmDeleteEnvVar = () => {
-    if (!envVarDelete || !selectedCentralEnvFile || envVarDeleteInFlight) return
+    if (!envVarDelete || !selectedProject || (!selectedProject.vaultBacked && !selectedCentralEnvFile) || envVarDeleteInFlight) return
 
     const occurrence = envVars
       .slice(0, envVarDelete.index)
       .filter((envVar) => envVar.key === envVarDelete.envVar.key).length
     const deletedKey = envVarDelete.envVar.key
     setEnvVarDeleteInFlight(true)
-    run(deleteEnvVar(selectedCentralEnvFile, { key: deletedKey, occurrence }))
+    const deleteResult = selectedProject.vaultBacked
+      ? run(deleteVaultEnvVar(selectedProject.id, { key: deletedKey, occurrence }))
+      : run(deleteEnvVar(selectedCentralEnvFile!, { key: deletedKey, occurrence }))
+    deleteResult
       .then((deleted) => {
         if (!deleted) {
           setToastMessage('Could not delete ' + deletedKey)
@@ -420,92 +588,6 @@ export function App() {
 
   const handleCancelDeleteWorktree = () => {
     if (!worktreeDeleteInFlight) setWorktreeDelete(null)
-  }
-
-  const finishWorktreeLink = (project: Project, worktreePath: string, backupPath: string | null) => {
-    const updateLinked = (current: Worktree[]) =>
-      current.map((worktree) =>
-        worktree.path === worktreePath
-          ? { ...worktree, linked: true, hasEnvFile: true }
-          : worktree,
-      )
-    const cacheEntry = worktreeCache.current.get(project.id)
-    if (cacheEntry) writeWorktreeCache(worktreeCache.current, project.id, updateLinked(cacheEntry.worktrees), cacheEntry.loadedAt)
-    if (selectedProjectIdRef.current !== project.id) return
-    setWorktrees(updateLinked)
-    setWorktreeLink(null)
-    setToastMessage(backupPath ? 'Linked Worktree and backed up its existing .env' : 'Linked Worktree')
-  }
-
-  const performWorktreeLink = (project: Project, worktreePath: string, force: boolean) => {
-    setWorktreeLinkInFlight(true)
-    run(Effect.either(linkWorktree(project, worktreePath, force ? { force: true } : {})))
-      .then((result) => {
-        if (result._tag === 'Left') {
-          if (result.left instanceof LinkWorktreeConflictError) {
-            if (selectedProjectIdRef.current === project.id) setWorktreeLink(result.left)
-          } else {
-            if (selectedProjectIdRef.current === project.id) setToastMessage('Could not link Worktree')
-          }
-          return
-        }
-        finishWorktreeLink(project, worktreePath, result.right.backupPath)
-      })
-      .catch(() => {
-        if (selectedProjectIdRef.current === project.id) setToastMessage('Could not link Worktree')
-      })
-      .finally(() => setWorktreeLinkInFlight(false))
-  }
-
-  const handleLinkWorktree = (worktreePath: string) => {
-    if (!selectedProject || registrationInFlight || worktreeLinkInFlight) return
-    if (!worktrees.some((worktree) => worktree.path === worktreePath)) return
-    performWorktreeLink(selectedProject, worktreePath, false)
-  }
-
-  const handleLinkWorktreeAnyway = () => {
-    if (!worktreeLink || !selectedProject || worktreeLinkInFlight) return
-    const worktreePath = worktreeLink.worktreePath
-    if (!worktrees.some((worktree) => worktree.path === worktreePath)) {
-      setWorktreeLink(null)
-      return
-    }
-    performWorktreeLink(selectedProject, worktreePath, true)
-  }
-
-  const finishWorktreeUnlink = (project: Project, worktreePath: string, mode: WorktreeUnlinkMode) => {
-    const updateUnlinked = (current: Worktree[]) =>
-      current.map((worktree) =>
-        worktree.path === worktreePath
-          ? { ...worktree, linked: false, hasEnvFile: mode === 'copy' }
-          : worktree,
-      )
-    const cacheEntry = worktreeCache.current.get(project.id)
-    if (cacheEntry) {
-      writeWorktreeCache(worktreeCache.current, project.id, updateUnlinked(cacheEntry.worktrees), cacheEntry.loadedAt)
-    }
-    if (selectedProjectIdRef.current !== project.id) return
-    setWorktrees(updateUnlinked)
-    setWorktreeUnlink(null)
-    setToastMessage(mode === 'copy' ? 'Unlinked Worktree and kept a copy of .env' : 'Unlinked Worktree and removed .env')
-  }
-
-  const handleConfirmUnlinkWorktree = () => {
-    if (!worktreeUnlink || worktreeUnlink.mode === null || !selectedProject || worktreeUnlinkInFlight) return
-    const project = selectedProject
-    const worktreePath = worktreeUnlink.path
-    const mode = worktreeUnlink.mode
-    if (!worktrees.some((worktree) => worktree.path === worktreePath && worktree.linked)) {
-      setWorktreeUnlink(null)
-      return
-    }
-    setWorktreeUnlinkInFlight(true)
-    run(unlinkWorktree(project, worktreePath, mode))
-      .then(() => finishWorktreeUnlink(project, worktreePath, mode))
-      .catch(() => {
-        if (selectedProjectIdRef.current === project.id) setToastMessage('Could not unlink Worktree')
-      })
-      .finally(() => setWorktreeUnlinkInFlight(false))
   }
 
   const finishWorktreeDeletion = (project: Project, worktreePath: string, message: string) => {
@@ -629,8 +711,6 @@ export function App() {
     setRemovalError(null)
     setEnvVarEditor(null)
     setEnvVarDelete(null)
-    setWorktreeLink(null)
-    setWorktreeUnlink(null)
   }
 
   const handleStartRemove = () => {
@@ -650,22 +730,17 @@ export function App() {
   const handleRemoveProject = () => {
     if (!removeCandidateId || registrationInFlight || removalInFlight) return
     const projectId = removeCandidateId
+    const project = projects.find((candidate) => candidate.id === projectId)
+    if (!project) return
     setRemovalError(null)
     setRemovalInFlight(true)
-    run(Effect.either(removeProject(projectId, removalMode)))
+    const removeResult = project.vaultBacked
+      ? run(Effect.either(removeVaultProject(projectId)))
+      : run(Effect.either(removeProject(projectId, removalMode)))
+    removeResult
       .then((result) => {
         if (result._tag === 'Left') {
-          if (result.left instanceof ProjectHasLinkedWorktreesError) {
-            const count = result.left.linkedWorktreeCount
-            const worktreeLabel = count === 1 ? 'Worktree' : 'Worktrees'
-            const pronoun = count === 1 ? 'it' : 'them'
-            const verb = count === 1 ? 'remains' : 'remain'
-            setRemovalError(
-              `Cannot delete the Project’s Central env file while ${count} linked ${worktreeLabel} ${verb}. Unlink ${pronoun} first.`,
-            )
-          } else {
-            setRemovalError('Could not remove the Project.')
-          }
+          setRemovalError('Could not remove the Project.')
           return
         }
         if (!result.right) {
@@ -678,6 +753,23 @@ export function App() {
       })
       .catch(() => setRemovalError('Could not remove the Project.'))
       .finally(() => setRemovalInFlight(false))
+  }
+
+  if (vaultStatus !== 'unlocked') {
+    return (
+      <VaultGate
+        status={vaultStatus}
+        busy={vaultBusy}
+        error={vaultError}
+        onCreate={handleCreateVault}
+        onUnlock={handleUnlockVault}
+        onRetry={() => {
+          setVaultError(null)
+          setVaultStatus('loading')
+          setVaultCheckVersion((current) => current + 1)
+        }}
+      />
+    )
   }
 
   return (
@@ -693,7 +785,11 @@ export function App() {
           backgroundColor: C.canvas,
         }}
       >
-        <TopBar selectedProject={selectedProject} onToggleSidebar={() => setCollapsed((current) => !current)} onAddProject={handleBrowse} />
+        <TopBar
+          selectedProject={selectedProject}
+          onToggleSidebar={() => setCollapsed((current) => !current)}
+          onAddProject={handleBrowse}
+        />
 
         <div style={{ display: 'flex', flexDirection: 'row', flexGrow: 1, minHeight: 0 }}>
           <Sidebar
@@ -725,9 +821,12 @@ export function App() {
             removalInFlight={removalInFlight}
             onFileDrop={handleFileDrop}
             onToggleReveal={handleToggleReveal}
+            onToggleRevealAll={handleToggleRevealAll}
             onCopy={handleCopyEnvVar}
             onSearchQueryChange={setEnvVarSearchQuery}
             onStartAdd={handleStartAddEnvVar}
+            onStartImport={handleStartImportEnv}
+            onStartExport={handleStartExport}
             onEdit={handleStartEditEnvVar}
             onDelete={handleStartDeleteEnvVar}
             onStartRemove={handleStartRemove}
@@ -738,8 +837,6 @@ export function App() {
             lastOpenWorktreeTarget={lastOpenWorktreeTarget}
             onSelectOpenWorktreeTarget={handleSelectOpenWorktreeTarget}
             onDeleteWorktree={handleStartDeleteWorktree}
-            onLinkWorktree={handleLinkWorktree}
-            onUnlinkWorktree={handleStartUnlinkWorktree}
             onRefreshWorktrees={handleRefreshWorktrees}
           />
         </div>
@@ -763,6 +860,42 @@ export function App() {
           />
         ) : null}
 
+        {envImport ? (
+          <EnvImportModal
+            projectName={envImport.project.name}
+            busy={envImport.busy}
+            error={envImport.error}
+            onSkip={() => {
+              if (!envImport.busy) setEnvImport(null)
+            }}
+            onImport={handleImportProjectEnv}
+          />
+        ) : null}
+
+        {envContentImport ? (
+          <EnvContentImportModal
+            content={envContentImport.content}
+            busy={envContentImport.busy}
+            error={envContentImport.error}
+            onChange={(content) =>
+              setEnvContentImport((current) => (current ? { ...current, content, error: null } : current))
+            }
+            onCancel={() => {
+              if (!envContentImport.busy) setEnvContentImport(null)
+            }}
+            onImport={handleImportEnvContent}
+          />
+        ) : null}
+
+        {envExport ? (
+          <EnvExportModal
+            content={envExport.content}
+            copied={envExport.copied}
+            onCopy={handleCopyExport}
+            onClose={() => setEnvExport(null)}
+          />
+        ) : null}
+
         {envVarDelete ? (
           <DeleteEnvVarConfirmation
             envVar={envVarDelete.envVar}
@@ -781,30 +914,6 @@ export function App() {
             onCancel={handleCancelDeleteWorktree}
             onConfirm={handleConfirmDeleteWorktree}
             onForceDelete={handleForceDeleteWorktree}
-          />
-        ) : null}
-
-        {worktreeLink ? (
-          <LinkWorktreeConfirmation
-            conflict={worktreeLink}
-            linking={worktreeLinkInFlight}
-            onCancel={() => {
-              if (!worktreeLinkInFlight) setWorktreeLink(null)
-            }}
-            onLinkAnyway={handleLinkWorktreeAnyway}
-          />
-        ) : null}
-
-        {worktreeUnlink ? (
-          <UnlinkWorktreeConfirmation
-            worktreePath={worktreeUnlink.path}
-            mode={worktreeUnlink.mode}
-            unlinking={worktreeUnlinkInFlight}
-            onSelectMode={(mode) => setWorktreeUnlink((current) => (current ? { ...current, mode } : current))}
-            onCancel={() => {
-              if (!worktreeUnlinkInFlight) setWorktreeUnlink(null)
-            }}
-            onConfirm={handleConfirmUnlinkWorktree}
           />
         ) : null}
 

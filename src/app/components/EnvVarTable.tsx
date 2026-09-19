@@ -25,7 +25,7 @@ export function EnvVarTable({
   if (envVars.length === 0) {
     return (
       <text testId="envvar-empty-hint" style={{ fontSize: 12, color: C.ghost }}>
-        No EnvVars in this Project's Central env file
+        No EnvVars in this Project's active Profile
       </text>
     )
   }

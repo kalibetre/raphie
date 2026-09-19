@@ -11,3 +11,7 @@ Default canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `read
 ### Domain docs
 
 Single-context layout — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Environment Vault
+
+Before changing Project registration, Profile editing, environment persistence, CLI execution, import/export, or `.env`/Worktree behavior, read `docs/agents/environment-vault.md`.
