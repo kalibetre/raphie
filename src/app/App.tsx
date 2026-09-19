@@ -209,6 +209,18 @@ export function App() {
       .finally(() => setVaultBusy(false))
   }
 
+  // Locking hands back to the gate below, which is where the Vault is unlocked again.
+  const handleLockVault = () => {
+    run(
+      Effect.gen(function* () {
+        const vault = yield* Vault
+        yield* vault.lock()
+      }),
+    )
+      .then(() => setVaultStatus('locked'))
+      .catch(() => setToastMessage('Could not lock the Vault'))
+  }
+
   useEffect(() => {
     setRevealedKeys(new Set())
     setEnvVarSearchQuery('')
@@ -797,6 +809,7 @@ export function App() {
           selectedProject={selectedProject}
           onToggleSidebar={() => setCollapsed((current) => !current)}
           onAddProject={handleBrowse}
+          onLockVault={handleLockVault}
         />
 
         <div style={{ display: 'flex', flexDirection: 'row', flexGrow: 1, minHeight: 0 }}>

@@ -6,10 +6,12 @@ export function TopBar({
   selectedProject,
   onToggleSidebar,
   onAddProject,
+  onLockVault,
 }: {
   selectedProject: Project | null
   onToggleSidebar: () => void
   onAddProject: () => void
+  onLockVault: () => void
 }) {
   return (
     <div
@@ -58,7 +60,9 @@ export function TopBar({
       <div style={{ flexGrow: 1 }} />
       <div
         testId="vault-status"
-        aria-label="Vault"
+        role="button"
+        aria-label="Lock Vault"
+        onClick={onLockVault}
         style={{
           paddingLeft: 8,
           paddingRight: 8,
@@ -69,6 +73,8 @@ export function TopBar({
           display: 'flex',
           alignItems: 'center',
           gap: 6,
+          cursor: 'pointer',
+          hover: { backgroundColor: C.overlay },
         }}
       >
         <Icon name="lockOpen" size={13} color={C.accent} />
