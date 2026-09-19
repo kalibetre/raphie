@@ -2,7 +2,8 @@ import { FileSystem } from '@effect/platform'
 import { BunContext } from '@effect/platform-bun'
 import { Effect, type Scope } from 'effect'
 import { describe, expect, it } from 'vitest'
-import { deleteEnvVar, DuplicateEnvVarKeyError, setEnvVar } from '../../src/core/index.ts'
+import { deleteEnvVar, DuplicateEnvVarKeyError, serializeEnvVars, setEnvVar } from '../../src/core/index.ts'
+import { parseEnvVars } from '../../src/core/envVarFile.ts'
 import { listEnvVars } from '../../src/core/listEnvVars.ts'
 
 /** Runs `test` against a real temp Central env file, on the real Bun filesystem. */
@@ -21,6 +22,20 @@ const withEnvFile = <A, E>(
   ).pipe(Effect.provide(BunContext.layer), Effect.runPromise)
 
 describe('EnvVar file operations', () => {
+  it('serializes EnvVars into content that can be imported again', () => {
+    const content = serializeEnvVars([
+      { key: 'PLAIN', value: 'value' },
+      { key: 'MULTILINE', value: 'first line\nsecond line' },
+      { key: 'TRIMMED', value: ' value ' },
+    ])
+
+    expect(parseEnvVars(content)).toEqual([
+      { key: 'PLAIN', value: 'value' },
+      { key: 'MULTILINE', value: 'first line\nsecond line' },
+      { key: 'TRIMMED', value: ' value ' },
+    ])
+  })
+
   it('adds a new EnvVar to the Central env file', () =>
     withEnvFile('EXISTING=one\n', (file) =>
       Effect.gen(function* () {

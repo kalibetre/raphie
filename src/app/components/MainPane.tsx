@@ -19,10 +19,12 @@ export function MainPane({
   removalInFlight,
   onFileDrop,
   onToggleReveal,
+  onToggleRevealAll,
   onCopy,
   onSearchQueryChange,
   onStartAdd,
   onStartImport,
+  onStartExport,
   onEdit,
   onDelete,
   onStartRemove,
@@ -50,10 +52,12 @@ export function MainPane({
   removalInFlight: boolean
   onFileDrop: (event: { paths?: string[] }) => void
   onToggleReveal: (key: string) => void
+  onToggleRevealAll: () => void
   onCopy: (envVar: EnvVar) => void
   onSearchQueryChange: (query: string) => void
   onStartAdd: () => void
   onStartImport: () => void
+  onStartExport: () => void
   onEdit: (index: number) => void
   onDelete: (index: number) => void
   onStartRemove: () => void
@@ -106,10 +110,12 @@ export function MainPane({
           removalInFlight={removalInFlight}
           registrationInFlight={registrationInFlight}
           onToggleReveal={onToggleReveal}
+          onToggleRevealAll={onToggleRevealAll}
           onCopy={onCopy}
           onSearchQueryChange={onSearchQueryChange}
           onStartAdd={onStartAdd}
           onStartImport={onStartImport}
+          onStartExport={onStartExport}
           onEdit={onEdit}
           onDelete={onDelete}
           onStartRemove={onStartRemove}

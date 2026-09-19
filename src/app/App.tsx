@@ -29,12 +29,14 @@ import {
   listVaultProjects,
   registerVaultProject,
   removeVaultProject,
+  serializeEnvVars,
   setVaultEnvVar,
   VaultEnvVarError,
 } from '../core/index.ts'
 import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
 import { DeleteWorktreeConfirmation } from './components/DeleteWorktreeConfirmation.tsx'
 import { EnvContentImportModal } from './components/EnvContentImportModal.tsx'
+import { EnvExportModal } from './components/EnvExportModal.tsx'
 import { EnvVarEditorModal } from './components/EnvVarEditorModal.tsx'
 import type { EnvVarEditorValidationError } from './components/EnvVarEditorModal.tsx'
 import { EnvImportModal } from './components/EnvImportModal.tsx'
@@ -83,6 +85,11 @@ interface EnvContentImportState {
   readonly error: string | null
 }
 
+interface EnvExportState {
+  readonly content: string
+  readonly copied: boolean
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState('')
@@ -122,6 +129,7 @@ export function App() {
   const [vaultCheckVersion, setVaultCheckVersion] = useState(0)
   const [envImport, setEnvImport] = useState<EnvImportState | null>(null)
   const [envContentImport, setEnvContentImport] = useState<EnvContentImportState | null>(null)
+  const [envExport, setEnvExport] = useState<EnvExportState | null>(null)
 
   useEffect(() => {
     if (vaultStatus !== 'unlocked') return
@@ -200,6 +208,7 @@ export function App() {
     setEnvVarDelete(null)
     setWorktreeDelete(null)
     setEnvContentImport(null)
+    setEnvExport(null)
     setRemovalError(null)
     if (vaultStatus !== 'unlocked' || !selectedProject || (!selectedProject.vaultBacked && !selectedCentralEnvFile)) {
       setEnvVars([])
@@ -349,9 +358,15 @@ export function App() {
       return next
     })
 
+  const handleToggleRevealAll = () => {
+    const allRevealed = envVars.length > 0 && envVars.every((envVar) => revealedKeys.has(envVar.key))
+    setRevealedKeys(allRevealed ? new Set() : new Set(envVars.map((envVar) => envVar.key)))
+  }
+
   const handleStartAddEnvVar = () => {
     if (!selectedProject || registrationInFlight) return
     setEnvContentImport(null)
+    setEnvExport(null)
     setEnvVarDelete(null)
     setEnvVarEditor({ mode: 'add', index: null, originalKey: null, key: '', value: '', validationError: null })
   }
@@ -360,7 +375,23 @@ export function App() {
     if (!selectedProject?.vaultBacked || registrationInFlight) return
     setEnvVarEditor(null)
     setEnvVarDelete(null)
+    setEnvExport(null)
     setEnvContentImport({ content: '', busy: false, error: null })
+  }
+
+  const handleStartExport = () => {
+    if (!selectedProject?.vaultBacked || registrationInFlight) return
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
+    setEnvContentImport(null)
+    setEnvExport({ content: serializeEnvVars(envVars), copied: false })
+  }
+
+  const handleCopyExport = () => {
+    if (!envExport || envExport.content.length === 0) return
+    void copyToClipboard(envExport.content)
+    setEnvExport((current) => (current ? { ...current, copied: true } : current))
+    setToastMessage('Copied all EnvVars to clipboard')
   }
 
   const handleImportEnvContent = () => {
@@ -375,6 +406,7 @@ export function App() {
     run(importProjectEnvContent(project, envContentImport.content))
       .then((result) => {
         if (selectedProjectIdRef.current === project.id) {
+          setRevealedKeys(new Set())
           run(listVaultEnvVars(project.id)).then(setEnvVars).catch(() => undefined)
         }
         setEnvContentImport(null)
@@ -394,6 +426,7 @@ export function App() {
     run(importProjectEnvFile(project, { deleteSourceFile }))
       .then((result) => {
         if (selectedProjectIdRef.current === project.id) {
+          setRevealedKeys(new Set())
           run(listVaultEnvVars(project.id)).then(setEnvVars).catch(() => undefined)
         }
         setEnvImport(null)
@@ -788,10 +821,12 @@ export function App() {
             removalInFlight={removalInFlight}
             onFileDrop={handleFileDrop}
             onToggleReveal={handleToggleReveal}
+            onToggleRevealAll={handleToggleRevealAll}
             onCopy={handleCopyEnvVar}
             onSearchQueryChange={setEnvVarSearchQuery}
             onStartAdd={handleStartAddEnvVar}
             onStartImport={handleStartImportEnv}
+            onStartExport={handleStartExport}
             onEdit={handleStartEditEnvVar}
             onDelete={handleStartDeleteEnvVar}
             onStartRemove={handleStartRemove}
@@ -849,6 +884,15 @@ export function App() {
               if (!envContentImport.busy) setEnvContentImport(null)
             }}
             onImport={handleImportEnvContent}
+          />
+        ) : null}
+
+        {envExport ? (
+          <EnvExportModal
+            content={envExport.content}
+            copied={envExport.copied}
+            onCopy={handleCopyExport}
+            onClose={() => setEnvExport(null)}
           />
         ) : null}
 

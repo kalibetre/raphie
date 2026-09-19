@@ -3,6 +3,7 @@ import iconChevronDown from '../../assets/icons/chevron-down.svg' with { type: '
 import iconCalendar from '../../assets/icons/calendar.svg' with { type: 'text' }
 import iconFileMinus from '../../assets/icons/file-minus.svg' with { type: 'text' }
 import iconFilePlus from '../../assets/icons/file-plus.svg' with { type: 'text' }
+import iconDownload from '../../assets/icons/download.svg' with { type: 'text' }
 import iconGitBranch from '../../assets/icons/git-branch.svg' with { type: 'text' }
 import iconGitCommit from '../../assets/icons/git-commit.svg' with { type: 'text' }
 import iconHardDrive from '../../assets/icons/hard-drive.svg' with { type: 'text' }
@@ -25,6 +26,7 @@ const ICONS = {
   copy: iconCopy,
   chevronDown: iconChevronDown,
   calendar: iconCalendar,
+  download: iconDownload,
   fileMinus: iconFileMinus,
   filePlus: iconFilePlus,
   gitBranch: iconGitBranch,

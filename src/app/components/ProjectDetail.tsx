@@ -26,9 +26,11 @@ export function ProjectDetail({
   removalInFlight,
   registrationInFlight,
   onToggleReveal,
+  onToggleRevealAll,
   onCopy,
   onStartAdd,
   onStartImport,
+  onStartExport,
   onEdit,
   onDelete,
   onStartRemove,
@@ -55,10 +57,12 @@ export function ProjectDetail({
   removalInFlight: boolean
   registrationInFlight: boolean
   onToggleReveal: (key: string) => void
+  onToggleRevealAll: () => void
   onCopy: (envVar: EnvVar) => void
   onSearchQueryChange: (query: string) => void
   onStartAdd: () => void
   onStartImport: () => void
+  onStartExport: () => void
   onEdit: (index: number) => void
   onDelete: (index: number) => void
   onStartRemove: () => void
@@ -73,6 +77,7 @@ export function ProjectDetail({
 }) {
   const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
   const showingWorktrees = activeTab === 'worktrees'
+  const allEnvVarsRevealed = envVars.length > 0 && envVars.every((envVar) => revealedKeys.has(envVar.key))
 
   return (
     <div
@@ -189,6 +194,31 @@ export function ProjectDetail({
                     color: C.text,
                   }}
                 />
+                {envVars.length > 0 ? (
+                  <div
+                    testId="toggle-all-envvars"
+                    role="button"
+                    aria-label={allEnvVarsRevealed ? 'Hide all Env Vars' : 'Reveal all Env Vars'}
+                    onClick={onToggleRevealAll}
+                    style={{
+                      height: 28,
+                      paddingLeft: 10,
+                      paddingRight: 10,
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      hover: { backgroundColor: C.overlay },
+                    }}
+                  >
+                    <text style={{ fontSize: 12, color: C.secondary }}>
+                      {allEnvVarsRevealed ? 'Hide all' : 'Reveal all'}
+                    </text>
+                  </div>
+                ) : null}
                 {project.vaultBacked ? (
                   <div
                     testId="import-env-button"
@@ -213,6 +243,32 @@ export function ProjectDetail({
                   >
                     <Icon name="import" size={13} color={C.secondary} />
                     <text style={{ fontSize: 12, color: C.secondary }}>Import</text>
+                  </div>
+                ) : null}
+                {project.vaultBacked ? (
+                  <div
+                    testId="export-env-button"
+                    role="button"
+                    aria-label="Export Env Vars"
+                    onClick={onStartExport}
+                    style={{
+                      height: 28,
+                      paddingLeft: 10,
+                      paddingRight: 10,
+                      borderRadius: 6,
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      hover: { backgroundColor: C.overlay },
+                    }}
+                  >
+                    <Icon name="download" size={13} color={C.secondary} />
+                    <text style={{ fontSize: 12, color: C.secondary }}>Export</text>
                   </div>
                 ) : null}
                 <div
