@@ -19,7 +19,7 @@ export interface CliIo {
   readonly readStdin: () => Promise<string>
 }
 
-const usage = 'Usage: raphie vault <init|status|lock|unlock>'
+export const vaultUsage = 'Usage: raphie vault <init|status|lock|unlock>'
 
 export const renderVaultError = (error: unknown) => {
   if (error instanceof VaultAlreadyInitializedError) return 'Vault is already initialized.'
@@ -55,7 +55,7 @@ export const runVaultCli = (
 ): Effect.Effect<number> => {
   const [resource, command] = args
   if (resource !== 'vault' || command === undefined || args.length !== 2 || !['init', 'status', 'lock', 'unlock'].includes(command)) {
-    io.error(usage)
+    io.error(vaultUsage)
     return Effect.succeed(2)
   }
 

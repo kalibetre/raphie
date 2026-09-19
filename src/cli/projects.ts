@@ -24,7 +24,7 @@ import { renderVaultError, type CliIo } from './vault.ts'
 
 class CliUsageError extends Data.TaggedError('CliUsageError')<{ readonly message: string }> {}
 
-const usage = [
+export const projectUsage = [
   'Usage: raphie project add PATH [--handle HANDLE]',
   '       raphie project list',
   '       raphie profile <create NAME|list|default NAME> [--project HANDLE]',
@@ -66,7 +66,7 @@ const plural = (count: number) => `${count} EnvVar${count === 1 ? '' : 's'}`
 export const runProjectCli = (args: readonly string[], io: CliIo) =>
   Effect.gen(function* () {
     const path = yield* Path.Path
-    const usageError = () => new CliUsageError({ message: usage })
+    const usageError = () => new CliUsageError({ message: projectUsage })
     const { values, positionals } = yield* Effect.try({
       try: () =>
         parseArgs({

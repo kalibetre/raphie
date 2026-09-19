@@ -2,10 +2,13 @@ import { Effect } from 'effect'
 import { cwd, stdin, stderr } from 'node:process'
 import { AppLive } from '../core/runtime.ts'
 import { Vault } from '../core/vault.ts'
-import { runProjectCli } from './projects.ts'
-import { runVaultCli, type CliIo } from './vault.ts'
+import { projectUsage, runProjectCli } from './projects.ts'
+import { runVaultCli, vaultUsage, type CliIo } from './vault.ts'
 
-export const isCliInvocation = (args: readonly string[]) => ['vault', 'project', 'profile', 'env'].includes(args[0] ?? '')
+// Any argument means the CLI, so `help` or a typo prints usage instead of opening the window.
+export const isCliInvocation = (args: readonly string[]) => args.length > 0
+
+const help = `${projectUsage}\n${vaultUsage.replace('Usage: ', '       ')}\n\nRun raphie with no command to open the app.`
 
 let pipedSecrets: Promise<string[]> | null = null
 
@@ -78,8 +81,14 @@ const defaultIo: CliIo = {
 export const runCli = (args: readonly string[], io: CliIo = defaultIo) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      if (args[0] !== 'vault') return yield* runProjectCli(args, io)
-      const vault = yield* Vault
-      return yield* runVaultCli(args, vault, io)
+      const [command] = args
+      if (command === 'help' || command === '--help' || command === '-h') {
+        io.write(help)
+        return 0
+      }
+      if (command === 'project' || command === 'profile' || command === 'env') return yield* runProjectCli(args, io)
+      if (command === 'vault') return yield* runVaultCli(args, yield* Vault, io)
+      io.error(help)
+      return 2
     }).pipe(Effect.provide(AppLive)),
   )
