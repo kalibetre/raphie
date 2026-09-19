@@ -34,6 +34,7 @@ import {
   VaultEnvVarError,
 } from '../core/index.ts'
 import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
+import { LockVaultConfirmation } from './components/LockVaultConfirmation.tsx'
 import { DeleteWorktreeConfirmation } from './components/DeleteWorktreeConfirmation.tsx'
 import { EnvContentImportModal } from './components/EnvContentImportModal.tsx'
 import { EnvExportModal } from './components/EnvExportModal.tsx'
@@ -128,6 +129,8 @@ export function App() {
   const [vaultStatus, setVaultStatus] = useState<VaultStatus | 'unavailable' | 'loading'>('loading')
   const [vaultBusy, setVaultBusy] = useState(false)
   const [vaultError, setVaultError] = useState<string | null>(null)
+  const [lockConfirmOpen, setLockConfirmOpen] = useState(false)
+  const [lockInFlight, setLockInFlight] = useState(false)
   const [vaultCheckVersion, setVaultCheckVersion] = useState(0)
   const [envImport, setEnvImport] = useState<EnvImportState | null>(null)
   const [envContentImport, setEnvContentImport] = useState<EnvContentImportState | null>(null)
@@ -209,8 +212,15 @@ export function App() {
       .finally(() => setVaultBusy(false))
   }
 
+  // The Vault can be locked elsewhere (CLI, expiry) while the dialog is open.
+  useEffect(() => {
+    if (vaultStatus !== 'unlocked') setLockConfirmOpen(false)
+  }, [vaultStatus])
+
   // Locking hands back to the gate below, which is where the Vault is unlocked again.
-  const handleLockVault = () => {
+  const handleConfirmLockVault = () => {
+    if (lockInFlight) return
+    setLockInFlight(true)
     run(
       Effect.gen(function* () {
         const vault = yield* Vault
@@ -219,6 +229,10 @@ export function App() {
     )
       .then(() => setVaultStatus('locked'))
       .catch(() => setToastMessage('Could not lock the Vault'))
+      .finally(() => {
+        setLockInFlight(false)
+        setLockConfirmOpen(false)
+      })
   }
 
   useEffect(() => {
@@ -809,7 +823,7 @@ export function App() {
           selectedProject={selectedProject}
           onToggleSidebar={() => setCollapsed((current) => !current)}
           onAddProject={handleBrowse}
-          onLockVault={handleLockVault}
+          onLockVault={() => setLockConfirmOpen(true)}
         />
 
         <div style={{ display: 'flex', flexDirection: 'row', flexGrow: 1, minHeight: 0 }}>
@@ -914,6 +928,14 @@ export function App() {
             copied={envExport.copied}
             onCopy={handleCopyExport}
             onClose={() => setEnvExport(null)}
+          />
+        ) : null}
+
+        {lockConfirmOpen ? (
+          <LockVaultConfirmation
+            locking={lockInFlight}
+            onCancel={() => setLockConfirmOpen(false)}
+            onConfirm={handleConfirmLockVault}
           />
         ) : null}
 
