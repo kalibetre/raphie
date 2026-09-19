@@ -1,21 +1,16 @@
-import type { Project, VaultStatus } from '../../core/index.ts'
+import type { Project } from '../../core/index.ts'
 import { Icon } from '../icons.tsx'
 import { C, TITLEBAR_CLEARANCE, TOP_BAR_HEIGHT } from '../theme.ts'
 
 export function TopBar({
   selectedProject,
-  vaultStatus,
   onToggleSidebar,
   onAddProject,
 }: {
   selectedProject: Project | null
-  vaultStatus: VaultStatus | 'unavailable'
   onToggleSidebar: () => void
   onAddProject: () => void
 }) {
-  const vaultLabel = vaultStatus === 'unavailable' ? 'Vault unavailable' : `Vault: ${vaultStatus}`
-  const vaultColor = vaultStatus === 'unlocked' ? C.accent : vaultStatus === 'unavailable' ? C.warning : C.secondary
-
   return (
     <div
       testId="top-bar"
@@ -63,6 +58,7 @@ export function TopBar({
       <div style={{ flexGrow: 1 }} />
       <div
         testId="vault-status"
+        aria-label="Vault"
         style={{
           paddingLeft: 8,
           paddingRight: 8,
@@ -72,9 +68,11 @@ export function TopBar({
           borderColor: C.border,
           display: 'flex',
           alignItems: 'center',
+          gap: 6,
         }}
       >
-        <text style={{ fontSize: 11, color: vaultColor }}>{vaultLabel}</text>
+        <Icon name="vault" size={13} color={C.accent} />
+        <text style={{ fontSize: 11, color: C.text }}>Vault</text>
       </div>
       <div
         testId="add-project-button"
