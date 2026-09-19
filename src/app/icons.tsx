@@ -8,7 +8,7 @@ import iconGitCommit from '../../assets/icons/git-commit.svg' with { type: 'text
 import iconHardDrive from '../../assets/icons/hard-drive.svg' with { type: 'text' }
 import iconHouse from '../../assets/icons/house.svg' with { type: 'text' }
 import iconImport from '../../assets/icons/import.svg' with { type: 'text' }
-import iconLock from '../../assets/icons/lock.svg' with { type: 'text' }
+import iconLockOpen from '../../assets/icons/lock-open.svg' with { type: 'text' }
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
 import iconPencil from '../../assets/icons/pencil.svg' with { type: 'text' }
 import iconRefreshCw from '../../assets/icons/refresh-cw.svg' with { type: 'text' }
@@ -32,7 +32,7 @@ const ICONS = {
   hardDrive: iconHardDrive,
   house: iconHouse,
   import: iconImport,
-  lock: iconLock,
+  lockOpen: iconLockOpen,
   pencil: iconPencil,
   refreshCw: iconRefreshCw,
   trash2: iconTrash2,
