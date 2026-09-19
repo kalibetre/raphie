@@ -10,6 +10,7 @@ import {
   VAULT_SALT_LENGTH,
   type EncryptedVaultState,
 } from './vaultCrypto.ts'
+import { deriveProjectHandle } from './vaultNames.ts'
 
 export type VaultLockState = 'locked' | 'unlocked'
 export type VaultStatus = 'uninitialized' | VaultLockState
@@ -17,7 +18,11 @@ export type VaultStatus = 'uninitialized' | VaultLockState
 export interface VaultProjectRecord {
   readonly id: string
   readonly name: string
+  /** Unique, user-facing CLI selector; stable independently of the folder. */
+  readonly handle: string
   readonly folderPath: string
+  /** Name of the Profile used when a command does not select one. */
+  readonly defaultProfile: string
 }
 
 export interface VaultProfileRecord {
@@ -165,7 +170,19 @@ const parseState = (value: unknown): VaultState => {
     }
   }
 
-  return candidate as VaultState
+  // Projects stored before handles and default Profiles existed get them here;
+  // the backfill is deterministic and is persisted by the next write.
+  const projects = candidate.projects as (Omit<VaultProjectRecord, 'handle' | 'defaultProfile'> &
+    Partial<Pick<VaultProjectRecord, 'handle' | 'defaultProfile'>>)[]
+  const taken = new Set(projects.flatMap((project) => (hasString(project.handle) ? [project.handle] : [])))
+  return {
+    projects: projects.map((project) => {
+      const handle = hasString(project.handle) ? project.handle : deriveProjectHandle(project.name, taken)
+      taken.add(handle)
+      return { ...project, handle, defaultProfile: hasString(project.defaultProfile) ? project.defaultProfile : 'local' }
+    }),
+    profiles: candidate.profiles as VaultState['profiles'],
+  }
 }
 
 const validateRecord = (record: VaultRecord) => {

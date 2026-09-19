@@ -31,6 +31,8 @@ const makeCli = (passwordQueue = ['correct horse battery staple', 'correct horse
   const output: string[] = []
   const errors: string[] = []
   const io: CliIo = {
+    cwd: '/',
+    readStdin: async () => '',
     write: (message) => output.push(message),
     error: (message) => errors.push(message),
     readSecret: async () => passwords.shift() ?? 'correct horse battery staple',
