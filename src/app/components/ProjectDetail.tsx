@@ -1,14 +1,18 @@
 import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../../core/index.ts'
+import { useWindowSize } from '@gpuix/react'
 import { useState } from 'react'
 import { Icon } from '../icons.tsx'
 import { C } from '../theme.ts'
 import type { WorktreeOpenTarget } from '../utils/openWorktree.ts'
 import { DuplicateKeysWarning } from './DuplicateKeysWarning.tsx'
+import { EnvActionsMenu } from './EnvActionsMenu.tsx'
 import { EnvVarTable } from './EnvVarTable.tsx'
 import { ProjectHeader } from './ProjectHeader.tsx'
 import { WorktreeList } from './WorktreeList.tsx'
 
 type ProjectTab = 'env-vars' | 'worktrees'
+
+const COMPACT_ACTIONS_BREAKPOINT = 1100
 
 export function ProjectDetail({
   project,
@@ -76,8 +80,10 @@ export function ProjectDetail({
   onRefreshWorktrees: () => void
 }) {
   const [activeTab, setActiveTab] = useState<ProjectTab>('env-vars')
+  const { width: windowWidth } = useWindowSize()
   const showingWorktrees = activeTab === 'worktrees'
   const allEnvVarsRevealed = envVars.length > 0 && envVars.every((envVar) => revealedKeys.has(envVar.key))
+  const compactActions = windowWidth < COMPACT_ACTIONS_BREAKPOINT
 
   return (
     <div
@@ -173,16 +179,37 @@ export function ProjectDetail({
           <>
             <DuplicateKeysWarning duplicateKeys={duplicateKeys} />
 
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <text style={{ fontSize: 13, color: C.secondary }}>Environment variables</text>
-              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                minWidth: 0,
+              }}
+            >
+              <text style={{ fontSize: 13, color: C.secondary, flexShrink: 0 }}>Environment variables</text>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 8,
+                  flexGrow: 1,
+                  minWidth: 0,
+                }}
+              >
                 <input
                   testId="envvar-search"
                   value={searchQuery}
                   placeholder="Search EnvVars"
                   onChange={(event) => onSearchQueryChange(event.value ?? '')}
                   style={{
-                    width: 220,
+                    width: compactActions ? 160 : 220,
+                    flexGrow: compactActions ? 1 : 0,
+                    minWidth: 0,
                     height: 28,
                     paddingLeft: 8,
                     paddingRight: 8,
@@ -194,104 +221,118 @@ export function ProjectDetail({
                     color: C.text,
                   }}
                 />
-                {envVars.length > 0 ? (
-                  <div
-                    testId="toggle-all-envvars"
-                    role="button"
-                    aria-label={allEnvVarsRevealed ? 'Hide all Env Vars' : 'Reveal all Env Vars'}
-                    onClick={onToggleRevealAll}
-                    style={{
-                      height: 28,
-                      paddingLeft: 10,
-                      paddingRight: 10,
-                      borderRadius: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      borderWidth: 1,
-                      borderColor: C.border,
-                      hover: { backgroundColor: C.overlay },
-                    }}
-                  >
-                    <text style={{ fontSize: 12, color: C.secondary }}>
-                      {allEnvVarsRevealed ? 'Hide all' : 'Reveal all'}
-                    </text>
-                  </div>
-                ) : null}
-                {project.vaultBacked ? (
-                  <div
-                    testId="import-env-button"
-                    role="button"
-                    aria-label="Import Env Vars"
-                    onClick={onStartImport}
-                    style={{
-                      height: 28,
-                      paddingLeft: 10,
-                      paddingRight: 10,
-                      borderRadius: 6,
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      cursor: 'pointer',
-                      borderWidth: 1,
-                      borderColor: C.border,
-                      hover: { backgroundColor: C.overlay },
-                    }}
-                  >
-                    <Icon name="import" size={13} color={C.secondary} />
-                    <text style={{ fontSize: 12, color: C.secondary }}>Import</text>
-                  </div>
-                ) : null}
-                {project.vaultBacked ? (
-                  <div
-                    testId="export-env-button"
-                    role="button"
-                    aria-label="Export Env Vars"
-                    onClick={onStartExport}
-                    style={{
-                      height: 28,
-                      paddingLeft: 10,
-                      paddingRight: 10,
-                      borderRadius: 6,
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      cursor: 'pointer',
-                      borderWidth: 1,
-                      borderColor: C.border,
-                      hover: { backgroundColor: C.overlay },
-                    }}
-                  >
-                    <Icon name="download" size={13} color={C.secondary} />
-                    <text style={{ fontSize: 12, color: C.secondary }}>Export</text>
-                  </div>
-                ) : null}
-                <div
-                  testId="add-envvar-button"
-                  role="button"
-                  aria-label="Add EnvVar"
-                  onClick={onStartAdd}
-                  style={{
-                    height: 28,
-                    paddingLeft: 10,
-                    paddingRight: 10,
-                    borderRadius: 6,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    borderWidth: 1,
-                    borderColor: C.border,
-                    hover: { backgroundColor: C.overlay },
-                  }}
-                >
-                  <text style={{ fontSize: 12, color: C.secondary }}>Add EnvVar</text>
-                </div>
+                {compactActions ? (
+                  <EnvActionsMenu
+                    hasEnvVars={envVars.length > 0}
+                    allEnvVarsRevealed={allEnvVarsRevealed}
+                    vaultBacked={project.vaultBacked === true}
+                    onToggleRevealAll={onToggleRevealAll}
+                    onStartImport={onStartImport}
+                    onStartExport={onStartExport}
+                    onStartAdd={onStartAdd}
+                  />
+                ) : (
+                  <>
+                    {envVars.length > 0 ? (
+                      <div
+                        testId="toggle-all-envvars"
+                        role="button"
+                        aria-label={allEnvVarsRevealed ? 'Hide all Env Vars' : 'Reveal all Env Vars'}
+                        onClick={onToggleRevealAll}
+                        style={{
+                          height: 28,
+                          paddingLeft: 10,
+                          paddingRight: 10,
+                          borderRadius: 6,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          borderWidth: 1,
+                          borderColor: C.border,
+                          hover: { backgroundColor: C.overlay },
+                        }}
+                      >
+                        <text style={{ fontSize: 12, color: C.secondary }}>
+                          {allEnvVarsRevealed ? 'Hide all' : 'Reveal all'}
+                        </text>
+                      </div>
+                    ) : null}
+                    {project.vaultBacked ? (
+                      <div
+                        testId="import-env-button"
+                        role="button"
+                        aria-label="Import Env Vars"
+                        onClick={onStartImport}
+                        style={{
+                          height: 28,
+                          paddingLeft: 10,
+                          paddingRight: 10,
+                          borderRadius: 6,
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          cursor: 'pointer',
+                          borderWidth: 1,
+                          borderColor: C.border,
+                          hover: { backgroundColor: C.overlay },
+                        }}
+                      >
+                        <Icon name="import" size={13} color={C.secondary} />
+                        <text style={{ fontSize: 12, color: C.secondary }}>Import</text>
+                      </div>
+                    ) : null}
+                    {project.vaultBacked ? (
+                      <div
+                        testId="export-env-button"
+                        role="button"
+                        aria-label="Export Env Vars"
+                        onClick={onStartExport}
+                        style={{
+                          height: 28,
+                          paddingLeft: 10,
+                          paddingRight: 10,
+                          borderRadius: 6,
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          cursor: 'pointer',
+                          borderWidth: 1,
+                          borderColor: C.border,
+                          hover: { backgroundColor: C.overlay },
+                        }}
+                      >
+                        <Icon name="download" size={13} color={C.secondary} />
+                        <text style={{ fontSize: 12, color: C.secondary }}>Export</text>
+                      </div>
+                    ) : null}
+                    <div
+                      testId="add-envvar-button"
+                      role="button"
+                      aria-label="Add EnvVar"
+                      onClick={onStartAdd}
+                      style={{
+                        height: 28,
+                        paddingLeft: 10,
+                        paddingRight: 10,
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        borderWidth: 1,
+                        borderColor: C.border,
+                        hover: { backgroundColor: C.overlay },
+                      }}
+                    >
+                      <text style={{ fontSize: 12, color: C.secondary }}>Add EnvVar</text>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
