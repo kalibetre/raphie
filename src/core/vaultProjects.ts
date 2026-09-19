@@ -203,6 +203,15 @@ export const importProjectEnvFile = (
     return { importedCount: envVars.length, deletedSourceFile: deleteSourceFile }
   })
 
+/** Imports pasted .env content directly into the encrypted local Profile. */
+export const importProjectEnvContent = (project: Project, content: string) =>
+  Effect.gen(function* () {
+    const envVars = parseEnvVars(content)
+    const vault = yield* Vault
+    yield* updateProfile(vault, project.id, defaultProfileName, (profile) => ({ ...profile, envVars }))
+    return { importedCount: envVars.length }
+  })
+
 export const removeVaultProject = (
   projectId: string,
 ) =>

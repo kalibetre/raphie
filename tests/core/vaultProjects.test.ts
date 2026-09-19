@@ -3,6 +3,7 @@ import { Effect, Layer } from 'effect'
 import { describe, expect, it } from 'vitest'
 import {
   deleteVaultEnvVar,
+  importProjectEnvContent,
   importProjectEnvFile,
   listVaultEnvVars,
   listVaultProjects,
@@ -96,6 +97,30 @@ describe('Vault-backed Projects', () => {
 
         expect(imported.deletedSourceFile).toBe(false)
         expect(yield* fs.exists(envFile)).toBe(true)
+      }),
+    ))
+
+  it('imports pasted env content into the encrypted Profile without creating a file', () =>
+    withProjectFixtures(({ projectFolder }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem
+        const path = yield* Path.Path
+        const envFile = path.join(projectFolder, '.env')
+        const vault = makeVault(makeStorage())
+        yield* vault.initialize(password)
+        const { project } = yield* runWithVault(registerVaultProject({ folderPath: projectFolder }), vault)
+
+        const imported = yield* runWithVault(
+          importProjectEnvContent(project, 'API_URL=https://pasted.example\nAPI_TOKEN=pasted-value\n'),
+          vault,
+        )
+
+        expect(imported.importedCount).toBe(2)
+        expect(yield* fs.exists(envFile)).toBe(false)
+        expect(yield* runWithVault(listVaultEnvVars(project.id), vault)).toEqual([
+          { key: 'API_URL', value: 'https://pasted.example' },
+          { key: 'API_TOKEN', value: 'pasted-value' },
+        ])
       }),
     ))
 

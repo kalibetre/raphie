@@ -7,12 +7,13 @@ import iconGitBranch from '../../assets/icons/git-branch.svg' with { type: 'text
 import iconGitCommit from '../../assets/icons/git-commit.svg' with { type: 'text' }
 import iconHardDrive from '../../assets/icons/hard-drive.svg' with { type: 'text' }
 import iconHouse from '../../assets/icons/house.svg' with { type: 'text' }
+import iconImport from '../../assets/icons/import.svg' with { type: 'text' }
+import iconLock from '../../assets/icons/lock.svg' with { type: 'text' }
 import iconPanelLeft from '../../assets/icons/panel-left.svg' with { type: 'text' }
 import iconPencil from '../../assets/icons/pencil.svg' with { type: 'text' }
 import iconRefreshCw from '../../assets/icons/refresh-cw.svg' with { type: 'text' }
 import iconTriangleAlert from '../../assets/icons/triangle-alert.svg' with { type: 'text' }
 import iconTrash2 from '../../assets/icons/trash-2.svg' with { type: 'text' }
-import iconVault from '../../assets/icons/vault.svg' with { type: 'text' }
 import iconX from '../../assets/icons/x.svg' with { type: 'text' }
 
 // Icon source: Lucide (via `lucide-static`, vendored per-icon into assets/icons/),
@@ -30,10 +31,11 @@ const ICONS = {
   gitCommit: iconGitCommit,
   hardDrive: iconHardDrive,
   house: iconHouse,
+  import: iconImport,
+  lock: iconLock,
   pencil: iconPencil,
   refreshCw: iconRefreshCw,
   trash2: iconTrash2,
-  vault: iconVault,
   x: iconX,
   triangleAlert: iconTriangleAlert,
 } as const

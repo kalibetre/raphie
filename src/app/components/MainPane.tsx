@@ -22,6 +22,7 @@ export function MainPane({
   onCopy,
   onSearchQueryChange,
   onStartAdd,
+  onStartImport,
   onEdit,
   onDelete,
   onStartRemove,
@@ -52,6 +53,7 @@ export function MainPane({
   onCopy: (envVar: EnvVar) => void
   onSearchQueryChange: (query: string) => void
   onStartAdd: () => void
+  onStartImport: () => void
   onEdit: (index: number) => void
   onDelete: (index: number) => void
   onStartRemove: () => void
@@ -107,6 +109,7 @@ export function MainPane({
           onCopy={onCopy}
           onSearchQueryChange={onSearchQueryChange}
           onStartAdd={onStartAdd}
+          onStartImport={onStartImport}
           onEdit={onEdit}
           onDelete={onDelete}
           onStartRemove={onStartRemove}

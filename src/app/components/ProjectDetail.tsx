@@ -1,5 +1,6 @@
 import type { EnvVar, Project, ProjectRemovalMode, Worktree } from '../../core/index.ts'
 import { useState } from 'react'
+import { Icon } from '../icons.tsx'
 import { C } from '../theme.ts'
 import type { WorktreeOpenTarget } from '../utils/openWorktree.ts'
 import { DuplicateKeysWarning } from './DuplicateKeysWarning.tsx'
@@ -27,6 +28,7 @@ export function ProjectDetail({
   onToggleReveal,
   onCopy,
   onStartAdd,
+  onStartImport,
   onEdit,
   onDelete,
   onStartRemove,
@@ -56,6 +58,7 @@ export function ProjectDetail({
   onCopy: (envVar: EnvVar) => void
   onSearchQueryChange: (query: string) => void
   onStartAdd: () => void
+  onStartImport: () => void
   onEdit: (index: number) => void
   onDelete: (index: number) => void
   onStartRemove: () => void
@@ -186,6 +189,32 @@ export function ProjectDetail({
                     color: C.text,
                   }}
                 />
+                {project.vaultBacked ? (
+                  <div
+                    testId="import-env-button"
+                    role="button"
+                    aria-label="Import Env Vars"
+                    onClick={onStartImport}
+                    style={{
+                      height: 28,
+                      paddingLeft: 10,
+                      paddingRight: 10,
+                      borderRadius: 6,
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      hover: { backgroundColor: C.overlay },
+                    }}
+                  >
+                    <Icon name="import" size={13} color={C.secondary} />
+                    <text style={{ fontSize: 12, color: C.secondary }}>Import</text>
+                  </div>
+                ) : null}
                 <div
                   testId="add-envvar-button"
                   role="button"

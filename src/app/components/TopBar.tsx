@@ -71,7 +71,7 @@ export function TopBar({
           gap: 6,
         }}
       >
-        <Icon name="vault" size={13} color={C.accent} />
+        <Icon name="lock" size={13} color={C.accent} />
         <text style={{ fontSize: 11, color: C.text }}>Vault</text>
       </div>
       <div

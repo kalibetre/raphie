@@ -23,6 +23,7 @@ import {
   setEnvVar,
   Vault,
   deleteVaultEnvVar,
+  importProjectEnvContent,
   importProjectEnvFile,
   listVaultEnvVars,
   listVaultProjects,
@@ -33,6 +34,7 @@ import {
 } from '../core/index.ts'
 import { DeleteEnvVarConfirmation } from './components/DeleteEnvVarConfirmation.tsx'
 import { DeleteWorktreeConfirmation } from './components/DeleteWorktreeConfirmation.tsx'
+import { EnvContentImportModal } from './components/EnvContentImportModal.tsx'
 import { EnvVarEditorModal } from './components/EnvVarEditorModal.tsx'
 import type { EnvVarEditorValidationError } from './components/EnvVarEditorModal.tsx'
 import { EnvImportModal } from './components/EnvImportModal.tsx'
@@ -75,6 +77,12 @@ interface EnvImportState {
   readonly error: string | null
 }
 
+interface EnvContentImportState {
+  readonly content: string
+  readonly busy: boolean
+  readonly error: string | null
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState('')
@@ -113,6 +121,7 @@ export function App() {
   const [vaultError, setVaultError] = useState<string | null>(null)
   const [vaultCheckVersion, setVaultCheckVersion] = useState(0)
   const [envImport, setEnvImport] = useState<EnvImportState | null>(null)
+  const [envContentImport, setEnvContentImport] = useState<EnvContentImportState | null>(null)
 
   useEffect(() => {
     if (vaultStatus !== 'unlocked') return
@@ -190,6 +199,7 @@ export function App() {
     setEnvVarEditor(null)
     setEnvVarDelete(null)
     setWorktreeDelete(null)
+    setEnvContentImport(null)
     setRemovalError(null)
     if (vaultStatus !== 'unlocked' || !selectedProject || (!selectedProject.vaultBacked && !selectedCentralEnvFile)) {
       setEnvVars([])
@@ -341,8 +351,40 @@ export function App() {
 
   const handleStartAddEnvVar = () => {
     if (!selectedProject || registrationInFlight) return
+    setEnvContentImport(null)
     setEnvVarDelete(null)
     setEnvVarEditor({ mode: 'add', index: null, originalKey: null, key: '', value: '', validationError: null })
+  }
+
+  const handleStartImportEnv = () => {
+    if (!selectedProject?.vaultBacked || registrationInFlight) return
+    setEnvVarEditor(null)
+    setEnvVarDelete(null)
+    setEnvContentImport({ content: '', busy: false, error: null })
+  }
+
+  const handleImportEnvContent = () => {
+    if (!envContentImport || envContentImport.busy || !selectedProject?.vaultBacked) return
+    if (!envContentImport.content.trim()) {
+      setEnvContentImport((current) => (current ? { ...current, error: 'Paste Env Var contents to import.' } : current))
+      return
+    }
+
+    const project = selectedProject
+    setEnvContentImport((current) => (current ? { ...current, busy: true, error: null } : current))
+    run(importProjectEnvContent(project, envContentImport.content))
+      .then((result) => {
+        if (selectedProjectIdRef.current === project.id) {
+          run(listVaultEnvVars(project.id)).then(setEnvVars).catch(() => undefined)
+        }
+        setEnvContentImport(null)
+        setToastMessage(`Imported ${result.importedCount} EnvVars`)
+      })
+      .catch(() =>
+        setEnvContentImport((current) =>
+          current ? { ...current, busy: false, error: 'Could not import Env Vars.' } : current,
+        ),
+      )
   }
 
   const handleImportProjectEnv = (deleteSourceFile: boolean) => {
@@ -749,6 +791,7 @@ export function App() {
             onCopy={handleCopyEnvVar}
             onSearchQueryChange={setEnvVarSearchQuery}
             onStartAdd={handleStartAddEnvVar}
+            onStartImport={handleStartImportEnv}
             onEdit={handleStartEditEnvVar}
             onDelete={handleStartDeleteEnvVar}
             onStartRemove={handleStartRemove}
@@ -791,6 +834,21 @@ export function App() {
               if (!envImport.busy) setEnvImport(null)
             }}
             onImport={handleImportProjectEnv}
+          />
+        ) : null}
+
+        {envContentImport ? (
+          <EnvContentImportModal
+            content={envContentImport.content}
+            busy={envContentImport.busy}
+            error={envContentImport.error}
+            onChange={(content) =>
+              setEnvContentImport((current) => (current ? { ...current, content, error: null } : current))
+            }
+            onCancel={() => {
+              if (!envContentImport.busy) setEnvContentImport(null)
+            }}
+            onImport={handleImportEnvContent}
           />
         ) : null}
 

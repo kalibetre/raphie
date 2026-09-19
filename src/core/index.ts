@@ -55,6 +55,7 @@ export type {
 export { VaultLive } from './vaultLive.ts'
 export {
   deleteVaultEnvVar,
+  importProjectEnvContent,
   importProjectEnvFile,
   listVaultEnvVars,
   listVaultProjects,
