@@ -159,6 +159,31 @@ describeNative('Raphie App', () => {
     expect(renderer.findByTestId('vault-status')).toBeDefined()
   })
 
+  it('locks the Vault from the top bar only after confirmation', async () => {
+    const { renderer } = await renderApp()
+    const vaultStatus = () => run(Effect.flatMap(Vault, (vault) => vault.status()))
+
+    const app = await connectTest(renderer)
+    await app.getByTestId('vault-status').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    expect(renderer.findByTestId('lock-vault-confirmation')).toBeDefined()
+    expect(await vaultStatus()).toBe('unlocked')
+
+    await app.getByTestId('lock-vault-cancel').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    expect(renderer.findByTestId('lock-vault-confirmation')).toBeUndefined()
+    expect(await vaultStatus()).toBe('unlocked')
+
+    await app.getByTestId('vault-status').click()
+    await app.getByTestId('lock-vault-confirm').click()
+    await waitForAppUpdate()
+    renderer.flush()
+    expect(renderer.getPaintedText().join('\n')).toContain('Unlock your Vault')
+    expect(await vaultStatus()).toBe('locked')
+  })
+
   it('registers a project dropped anywhere on the window', async () => {
     const { renderer } = await renderApp()
     renderer.flush()
