@@ -90,6 +90,8 @@ interface EnvExportState {
   readonly copied: boolean
 }
 
+const VAULT_RECHECK_MS = 30_000
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState('')
@@ -160,6 +162,12 @@ export function App() {
       stale = true
     }
   }, [vaultCheckVersion])
+
+  // The key can expire or be locked from the CLI while the window stays open.
+  useEffect(() => {
+    const id = setInterval(() => setVaultCheckVersion((version) => version + 1), VAULT_RECHECK_MS)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (!toastMessage) return
