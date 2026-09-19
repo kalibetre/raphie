@@ -2,13 +2,13 @@ import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { runVaultCli, type CliIo } from '../../src/cli/vault.ts'
 import { makeVault } from '../../src/core/vault.ts'
-import type { VaultKeyProvider, VaultRecord, VaultStorage } from '../../src/core/vault.ts'
+import type { VaultRecord, VaultStorage } from '../../src/core/vault.ts'
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
-const makeCli = () => {
+const makeCli = (passwordQueue = ['correct horse battery staple', 'correct horse battery staple']) => {
   let record: VaultRecord | null = null
-  let key: Uint8Array | null = null
+  const passwords = [...passwordQueue]
 
   const storage: VaultStorage = {
     read: async () => record,
@@ -22,11 +22,9 @@ const makeCli = () => {
       if (record === null) throw new Error('record does not exist')
       record = { ...record, lockState }
     },
-  }
-  const keyProvider: VaultKeyProvider = {
-    read: async () => key,
-    write: async (next) => {
-      key = next
+    updateEncryptedState: async (encrypted) => {
+      if (record === null) throw new Error('record does not exist')
+      record = { ...record, ...encrypted }
     },
   }
 
@@ -35,9 +33,10 @@ const makeCli = () => {
   const io: CliIo = {
     write: (message) => output.push(message),
     error: (message) => errors.push(message),
+    readSecret: async () => passwords.shift() ?? 'correct horse battery staple',
   }
 
-  return { vault: makeVault(storage, keyProvider), io, output, errors }
+  return { vault: makeVault(storage), io, output, errors }
 }
 
 describe('runVaultCli', () => {
@@ -76,6 +75,15 @@ describe('runVaultCli', () => {
     await expect(run(runVaultCli(['vault', 'reveal'], cli.vault, cli.io))).resolves.toBe(2)
     expect(cli.output).toEqual([])
     expect(cli.errors).toEqual(['Usage: raphie vault <init|status|lock|unlock>'])
+  })
+
+  it('requires confirmation when initializing a Vault', async () => {
+    const cli = makeCli(['correct horse battery staple', 'different password'])
+
+    await expect(run(runVaultCli(['vault', 'init'], cli.vault, cli.io))).resolves.toBe(1)
+    expect(cli.output).toEqual([])
+    expect(cli.errors).toEqual(['The Vault password was rejected.'])
+    await expect(run(cli.vault.status())).resolves.toBe('uninitialized')
   })
 
   it('renders lifecycle failures without exposing storage details', async () => {

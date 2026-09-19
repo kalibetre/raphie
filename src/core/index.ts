@@ -35,20 +35,37 @@ export {
   Vault,
   VaultAlreadyInitializedError,
   VaultCorruptedError,
-  VaultKeyMissingError,
-  VaultKeyProviderError,
   VaultLockedError,
   VaultNotInitializedError,
+  VaultPasswordError,
   VaultStorageError,
   makeVault,
 } from './vault.ts'
 export type {
   VaultError,
-  VaultKeyProvider,
   VaultLockState,
+  VaultProfileRecord,
   VaultRecord,
+  VaultProjectRecord,
   VaultService,
+  VaultState,
   VaultStatus,
   VaultStorage,
 } from './vault.ts'
 export { VaultLive } from './vaultLive.ts'
+export {
+  deleteVaultEnvVar,
+  importProjectEnvFile,
+  listVaultEnvVars,
+  listVaultProjects,
+  registerVaultProject,
+  removeVaultProject,
+  setVaultEnvVar,
+  VaultEnvVarError,
+} from './vaultProjects.ts'
+export type {
+  VaultEnvVarOptions,
+  VaultImportOptions,
+  VaultImportResult,
+  VaultProjectRegistration,
+} from './vaultProjects.ts'

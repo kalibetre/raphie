@@ -3,18 +3,16 @@ import { describe, expect, it } from 'vitest'
 import {
   makeVault,
   VaultAlreadyInitializedError,
-  VaultCorruptedError,
-  VaultKeyMissingError,
-  VaultKeyProviderError,
   VaultLockedError,
   VaultNotInitializedError,
-  type VaultKeyProvider,
+  VaultPasswordError,
   type VaultRecord,
   type VaultStorage,
 } from '../../src/core/vault.ts'
 import { makeSqliteVaultStorage } from '../../src/core/vaultStorage.ts'
 import { withProjectFixtures } from './fixtures.ts'
 
+const password = 'correct horse battery staple'
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
 const runFailure = async <A, E>(effect: Effect.Effect<A, E>) => {
@@ -25,8 +23,6 @@ const runFailure = async <A, E>(effect: Effect.Effect<A, E>) => {
 
 const makeMemoryVault = () => {
   let record: VaultRecord | null = null
-  let key: Uint8Array | null = null
-
   const storage: VaultStorage = {
     read: async () => record,
     create: async (next) => {
@@ -40,130 +36,93 @@ const makeMemoryVault = () => {
       if (record === null) throw new Error('record does not exist')
       record = { ...record, lockState }
     },
-  }
-
-  const keyProvider: VaultKeyProvider = {
-    read: async () => key,
-    write: async (next) => {
-      key = next
+    updateEncryptedState: async (encrypted) => {
+      if (record === null) throw new Error('record does not exist')
+      record = { ...record, ...encrypted }
     },
   }
 
-  return {
-    vault: makeVault(storage, keyProvider),
-    removeKey: () => {
-      key = null
-    },
-  }
+  return { vault: makeVault(storage), storage }
 }
 
 describe('Vault', () => {
-  it('initializes, reports, locks, and unlocks a Vault through its lifecycle interface', async () => {
+  it('initializes, reports, locks, unlocks, and reads encrypted state', async () => {
     const { vault } = makeMemoryVault()
 
     await expect(run(vault.status())).resolves.toBe('uninitialized')
 
-    await run(vault.initialize())
+    await run(vault.initialize(password))
     await expect(run(vault.status())).resolves.toBe('unlocked')
+    await expect(run(vault.readState())).resolves.toEqual({ projects: [], profiles: [] })
 
     await run(vault.lock())
     await expect(run(vault.status())).resolves.toBe('locked')
-    expect(await runFailure(vault.requireUnlocked())).toBeInstanceOf(VaultLockedError)
+    expect(await runFailure(vault.readState())).toBeInstanceOf(VaultLockedError)
 
-    await run(vault.unlock())
+    await run(vault.unlock(password))
     await expect(run(vault.status())).resolves.toBe('unlocked')
+  })
+
+  it('rejects an incorrect password without revealing state', async () => {
+    const { vault } = makeMemoryVault()
+    await run(vault.initialize(password))
+    await run(vault.lock())
+
+    expect(await runFailure(vault.unlock('not the password'))).toBeInstanceOf(VaultPasswordError)
   })
 
   it('rejects lifecycle operations that require an initialized Vault', async () => {
     const { vault } = makeMemoryVault()
 
     expect(await runFailure(vault.lock())).toBeInstanceOf(VaultNotInitializedError)
-    expect(await runFailure(vault.unlock())).toBeInstanceOf(VaultNotInitializedError)
-    expect(await runFailure(vault.requireUnlocked())).toBeInstanceOf(VaultNotInitializedError)
+    expect(await runFailure(vault.unlock(password))).toBeInstanceOf(VaultNotInitializedError)
+    expect(await runFailure(vault.readState())).toBeInstanceOf(VaultNotInitializedError)
+  })
+
+  it('rejects a password that is too short', async () => {
+    const { vault } = makeMemoryVault()
+
+    expect(await runFailure(vault.initialize('short'))).toBeInstanceOf(VaultPasswordError)
   })
 
   it('does not initialize the same Vault twice', async () => {
     const { vault } = makeMemoryVault()
 
-    await run(vault.initialize())
+    await run(vault.initialize(password))
 
-    expect(await runFailure(vault.initialize())).toBeInstanceOf(VaultAlreadyInitializedError)
+    expect(await runFailure(vault.initialize(password))).toBeInstanceOf(VaultAlreadyInitializedError)
   })
 
-  it('rolls back the storage record when key storage fails during initialization', async () => {
-    let record: VaultRecord | null = null
-    const storage: VaultStorage = {
-      read: async () => record,
-      create: async (next) => {
-        record = next
-      },
-      remove: async () => {
-        record = null
-      },
-      updateLockState: async () => undefined,
-    }
-    const keyProvider: VaultKeyProvider = {
-      read: async () => null,
-      write: async () => {
-        throw new Error('keychain unavailable')
-      },
-    }
-    const vault = makeVault(storage, keyProvider)
-
-    expect(await runFailure(vault.initialize())).toBeInstanceOf(VaultKeyProviderError)
-    expect(await run(vault.status())).toBe('uninitialized')
-  })
-
-  it('does not overwrite an orphaned key during initialization', async () => {
-    const storage: VaultStorage = {
-      read: async () => null,
-      create: async () => undefined,
-      remove: async () => undefined,
-      updateLockState: async () => undefined,
-    }
-    let key: Uint8Array | null = new Uint8Array(32).fill(7)
-    const keyProvider: VaultKeyProvider = {
-      read: async () => key,
-      write: async (next) => {
-        key = next
-      },
-    }
-    const orphanedVault = makeVault(storage, keyProvider)
-
-    expect(await runFailure(orphanedVault.initialize())).toBeInstanceOf(VaultCorruptedError)
-    expect(key).toEqual(new Uint8Array(32).fill(7))
-  })
-
-  it('fails safely when an unlocked Vault no longer has its key', async () => {
-    const { vault, removeKey } = makeMemoryVault()
-
-    await run(vault.initialize())
-    removeKey()
-
-    expect(await runFailure(vault.status())).toBeInstanceOf(VaultKeyMissingError)
-    expect(await runFailure(vault.requireUnlocked())).toBeInstanceOf(VaultKeyMissingError)
-  })
-
-  it('persists its lifecycle state through the SQLite storage adapter', () =>
+  it('persists encrypted Project and Profile state through the SQLite adapter', () =>
     withProjectFixtures(({ home }) =>
       Effect.gen(function* () {
-        let key: Uint8Array | null = null
-        const keyProvider: VaultKeyProvider = {
-          read: async () => key,
-          write: async (next) => {
-            key = next
-          },
-        }
-
-        const first = makeVault(makeSqliteVaultStorage(home), keyProvider)
-        yield* first.initialize()
-        yield* first.lock()
-
-        const reopened = makeVault(makeSqliteVaultStorage(home), keyProvider)
+        const first = makeVault(makeSqliteVaultStorage(home))
+        yield* first.initialize(password)
+        yield* first.writeState({
+          projects: [{ id: 'project-1', name: 'Agent Barn', folderPath: '/projects/agent-barn' }],
+          profiles: [
+            {
+              id: 'profile-1',
+              projectId: 'project-1',
+              name: 'staging',
+              envVars: [{ key: 'API_TOKEN', value: 'not-for-output' }],
+            },
+          ],
+        })
+        const reopened = makeVault(makeSqliteVaultStorage(home))
         expect(yield* reopened.status()).toBe('locked')
-
-        yield* reopened.unlock()
-        expect(yield* reopened.status()).toBe('unlocked')
+        yield* reopened.unlock(password)
+        expect(yield* reopened.readState()).toEqual({
+          projects: [{ id: 'project-1', name: 'Agent Barn', folderPath: '/projects/agent-barn' }],
+          profiles: [
+            {
+              id: 'profile-1',
+              projectId: 'project-1',
+              name: 'staging',
+              envVars: [{ key: 'API_TOKEN', value: 'not-for-output' }],
+            },
+          ],
+        })
       }),
     ))
 })

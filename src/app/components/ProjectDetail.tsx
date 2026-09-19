@@ -159,6 +159,7 @@ export function ProjectDetail({
             loading={worktreesLoading}
             refreshing={worktreesRefreshing}
             projectFolderPath={project.folderPath}
+            vaultBacked={project.vaultBacked === true}
             lastOpenWorktreeTarget={lastOpenWorktreeTarget}
             onOpenWorktree={onOpenWorktree}
             onSelectOpenWorktreeTarget={onSelectOpenWorktreeTarget}

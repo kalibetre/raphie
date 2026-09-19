@@ -111,7 +111,7 @@ export const discoverWorktrees = (project: Project) =>
       return yield* Command.lines(command)
     })
     const worktreePaths = parseWorktreePaths(lines)
-    const centralEnvPath = yield* canonicalPath(fs, project.centralEnvFile)
+    const centralEnvPath = project.centralEnvFile ? yield* canonicalPath(fs, project.centralEnvFile) : null
 
     return yield* Effect.forEach(worktreePaths, (worktreePath) =>
       inspectEnvFile(fs, path, worktreePath, centralEnvPath).pipe(

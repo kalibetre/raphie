@@ -36,6 +36,7 @@ export function ProjectHeader({
       {isRemoving ? (
         <RemoveProjectConfirmation
           removalMode={removalMode}
+          vaultBacked={project.vaultBacked === true}
           removalError={removalError}
           removalInFlight={removalInFlight}
           onSelectMode={onSelectRemovalMode}

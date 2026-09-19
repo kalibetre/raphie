@@ -126,6 +126,7 @@ function WorktreeRow({
   worktree,
   index,
   projectFolderPath,
+  vaultBacked,
   openWorktreeOptions,
   lastOpenWorktreeTarget,
   onOpenWorktree,
@@ -137,6 +138,7 @@ function WorktreeRow({
   worktree: Worktree
   index: number
   projectFolderPath: string
+  vaultBacked: boolean
   openWorktreeOptions: readonly WorktreeOpenOption[]
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
@@ -211,21 +213,31 @@ function WorktreeRow({
             ) : (
               <Skeleton width={42} />
             )}
-            <div
-              testId={`worktree-status-${index}`}
-              aria-label={worktree.linked ? 'Linked' : 'Not Linked'}
-              style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5 }}
-            >
-              <Icon name={worktree.linked ? 'link' : 'unlink'} size={12} color={worktree.linked ? C.accent : C.secondary} />
-              <text style={{ fontSize: 11, color: worktree.linked ? C.accent : C.secondary }}>
-                {worktree.linked ? 'Linked' : 'Not Linked'}
-              </text>
-            </div>
+            {vaultBacked ? (
+              <div
+                testId={`worktree-status-${index}`}
+                aria-label="Vault-managed"
+                style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5 }}
+              >
+                <text style={{ fontSize: 11, color: C.accent }}>Vault-managed</text>
+              </div>
+            ) : (
+              <div
+                testId={`worktree-status-${index}`}
+                aria-label={worktree.linked ? 'Linked' : 'Not Linked'}
+                style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5 }}
+              >
+                <Icon name={worktree.linked ? 'link' : 'unlink'} size={12} color={worktree.linked ? C.accent : C.secondary} />
+                <text style={{ fontSize: 11, color: worktree.linked ? C.accent : C.secondary }}>
+                  {worktree.linked ? 'Linked' : 'Not Linked'}
+                </text>
+              </div>
+            )}
             {worktree.hasEnvFile && !worktree.linked ? <EnvFileBadge index={index} /> : null}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {worktree.linked ? (
+          {vaultBacked ? null : worktree.linked ? (
             <IconButton
               testId={`unlink-worktree-${index}`}
               label="Unlink Worktree from Central env file"
@@ -326,6 +338,7 @@ export function WorktreeList({
   refreshing,
   onRefresh,
   projectFolderPath,
+  vaultBacked,
   lastOpenWorktreeTarget,
   onOpenWorktree,
   onDeleteWorktree,
@@ -338,6 +351,7 @@ export function WorktreeList({
   refreshing: boolean
   onRefresh: () => void
   projectFolderPath: string
+  vaultBacked: boolean
   lastOpenWorktreeTarget: WorktreeOpenTarget | null
   onOpenWorktree: (path: string, target: WorktreeOpenTarget) => void | Promise<void>
   onLinkWorktree: (path: string) => void
@@ -451,6 +465,7 @@ export function WorktreeList({
                       worktree={worktree}
                       index={index}
                       projectFolderPath={projectFolderPath}
+                      vaultBacked={vaultBacked}
                       openWorktreeOptions={openWorktreeOptions}
                       lastOpenWorktreeTarget={lastOpenWorktreeTarget}
                       onOpenWorktree={onOpenWorktree}

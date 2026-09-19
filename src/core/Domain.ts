@@ -3,6 +3,8 @@ export interface Project {
   readonly name: string
   readonly folderPath: string
   readonly centralEnvFile: string
+  /** True when this Project and its Profiles live in the encrypted Vault. */
+  readonly vaultBacked?: boolean
 }
 
 export interface WorktreeCommit {
