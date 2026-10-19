@@ -1,0 +1,260 @@
+{
+  "events": [
+    {
+      "data": {
+        "sequence": 1,
+        "turnId": "turn_1"
+      },
+      "type": "turn.started",
+      "meta": {
+        "at": "2026-10-17T11:14:02.992Z",
+        "id": "evt_01M54S383GWE01YQ0W4GW6SDF1",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "message": "RAPHIE_COMMAND {\"command\":\"cat /workspace/raphie-marker\"}",
+        "parts": [
+          {
+            "text": "RAPHIE_COMMAND {\"command\":\"cat /workspace/raphie-marker\"}",
+            "type": "text"
+          }
+        ],
+        "sequence": 1,
+        "turnId": "turn_1"
+      },
+      "type": "message.received",
+      "meta": {
+        "at": "2026-10-17T11:14:02.993Z",
+        "id": "evt_01M54S383HBVN29PRKRW7F5N2P",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "modelId": "openrouter/anthropic/claude-haiku-5.5",
+        "sequence": 1,
+        "stepIndex": 0,
+        "turnId": "turn_1"
+      },
+      "type": "step.started",
+      "meta": {
+        "at": "2026-10-17T11:14:02.994Z",
+        "id": "evt_01M54S383JA4KAC87G10W8TZF3",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "callId": "call_3984ef9f-a1ed-4e2c-9fbf-67d4324855d3",
+        "inputTextDelta": "{\"command\":\"cat /workspace/raphie-marker\"}",
+        "sequence": 1,
+        "stepIndex": 0,
+        "toolName": "bash",
+        "turnId": "turn_1"
+      },
+      "type": "action.input.appended",
+      "meta": {
+        "at": "2026-10-17T11:14:03.017Z",
+        "id": "evt_01M54S38497M7K24T54RAV9NK9",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "actions": [
+          {
+            "callId": "call_3984ef9f-a1ed-4e2c-9fbf-67d4324855d3",
+            "input": {
+              "command": "cat /workspace/raphie-marker"
+            },
+            "kind": "tool-call",
+            "toolName": "bash"
+          }
+        ],
+        "presentation": {
+          "call_3984ef9f-a1ed-4e2c-9fbf-67d4324855d3": {
+            "label": "Run cat /workspace/raphie-marker"
+          }
+        },
+        "sequence": 1,
+        "stepIndex": 0,
+        "turnId": "turn_1"
+      },
+      "type": "actions.requested",
+      "meta": {
+        "at": "2026-10-17T11:14:03.022Z",
+        "id": "evt_01M54S384EBKGJXMT1JDD7ZX8F",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "result": {
+          "callId": "call_3984ef9f-a1ed-4e2c-9fbf-67d4324855d3",
+          "kind": "tool-result",
+          "output": {
+            "stderr": "",
+            "stdout": "raphie-persisted",
+            "truncated": false,
+            "exitCode": 0,
+            "status": "completed"
+          },
+          "toolName": "bash"
+        },
+        "sequence": 1,
+        "status": "completed",
+        "stepIndex": 0,
+        "turnId": "turn_1"
+      },
+      "type": "action.result",
+      "meta": {
+        "at": "2026-10-17T11:14:03.297Z",
+        "id": "evt_01M54S38D1TEM0P5F00241BSFP",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "tool-calls",
+        "sequence": 1,
+        "stepIndex": 0,
+        "turnId": "turn_1",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cacheReadTokens": 0
+        }
+      },
+      "type": "step.completed",
+      "meta": {
+        "at": "2026-10-17T11:14:03.300Z",
+        "id": "evt_01M54S38D4SRBJEDXQW7RVD4X0",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "modelId": "openrouter/anthropic/claude-haiku-5.5",
+        "sequence": 1,
+        "stepIndex": 1,
+        "turnId": "turn_1"
+      },
+      "type": "step.started",
+      "meta": {
+        "at": "2026-10-17T11:14:03.311Z",
+        "id": "evt_01M54S38DFFPBQ8QPN0SBFP6S8",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "messageDelta": "{\"stderr\":\"\",\"stdout\":\"raphie-persisted\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+        "sequence": 1,
+        "stepIndex": 1,
+        "turnId": "turn_1"
+      },
+      "type": "message.appended",
+      "meta": {
+        "at": "2026-10-17T11:14:03.317Z",
+        "id": "evt_01M54S38DNY3K9YRKBQ26M3MJD",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "message": "{\"stderr\":\"\",\"stdout\":\"raphie-persisted\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+        "sequence": 1,
+        "stepIndex": 1,
+        "turnId": "turn_1"
+      },
+      "type": "message.completed",
+      "meta": {
+        "at": "2026-10-17T11:14:03.318Z",
+        "id": "evt_01M54S38DP3VES1D73PCZT1JV5",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "sequence": 1,
+        "stepIndex": 1,
+        "turnId": "turn_1",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cacheReadTokens": 0
+        }
+      },
+      "type": "step.completed",
+      "meta": {
+        "at": "2026-10-17T11:14:03.319Z",
+        "id": "evt_01M54S38DQB0W6B9DY01ANPWRB",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "sequence": 1,
+        "turnId": "turn_1"
+      },
+      "type": "turn.completed",
+      "meta": {
+        "at": "2026-10-17T11:14:03.321Z",
+        "id": "evt_01M54S38DSGNQ07EBAMVSR7EY9",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    },
+    {
+      "data": {
+        "continuationToken": "wrun_01M54S2Y9ZNPNE2169Z5FYQX9Y",
+        "usage": {
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "inputTokens": 400,
+          "outputTokens": 80
+        },
+        "wait": "next-user-message"
+      },
+      "type": "session.waiting",
+      "meta": {
+        "at": "2026-10-17T11:14:03.321Z",
+        "id": "evt_01M54S38DSGNQ07EBAMVSR7EYA",
+        "deliveryIds": [
+          "e2a031ac-d9e6-4282-895b-abbb9b2aa867"
+        ]
+      }
+    }
+  ],
+  "inputRequests": [],
+  "message": "{\"stderr\":\"\",\"stdout\":\"raphie-persisted\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+  "sessionId": "wrun_01M54S2Y9ZNPNE2169Z5FYQX9Y",
+  "status": "waiting"
+}

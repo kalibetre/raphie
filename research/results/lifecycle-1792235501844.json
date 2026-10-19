@@ -1,0 +1,8 @@
+{
+  "kind": "eve-real-vm-lifecycle-with-mock-model",
+  "startedAt": "2026-10-17T11:08:39.949Z",
+  "checks": [],
+  "passed": false,
+  "error": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /raphie-persisted/. Input:\n\n'MicrosandboxDiagnosticError: Failed to create microsandbox VM from snapshot \"eve-sbx-tpl-c9aea19e40582ad19dd65d17c8708120\" while image ready; booting microsandbox VM [runtime]: runtime error: timed out waiting for agent relay: deadline has elapsed.'\n",
+  "finishedAt": "2026-10-17T11:11:41.844Z"
+}

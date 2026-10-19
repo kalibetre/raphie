@@ -1,0 +1,32 @@
+[dockerd start] exit=0 521ms
+driver=overlay2 cgroup=2 mem=2125578240
+
+
+[docker run (pull + run)] exit=0 4791ms
+inner-container-ok
+
+STDERR: Unable to find image 'alpine:3.22' locally
+3.22: Pulling from library/alpine
+53f8f5e03afd: Pulling fs layer
+53f8f5e03afd: Verifying Checksum
+53f8f5e03afd: Download complete
+53f8f5e03afd: Pull complete
+Digest: sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+Status: Downloaded newer image for alpine:3.22
+
+
+  +10s mem: Mem: 2027 59 1746 32 222 1874 | docker_disk=33MiB layers_done=5 | lete d8d21be4bf02: Verifying Checksum d8d21be4bf02: Download complete 6117bd39f23f: Verifying Checksum 6117bd39f23f: Download complete 509688edf37b: Verifying Checksum 509688edf37b: Download complete  | [    5.477438] vetha57f749 (unregistering): left promiscuous mode | [    5.477438] docker0: port 1(vetha57f749) entered disabled state | 
+  +20s mem: Mem: 2027 59 1723 55 245 1851 | docker_disk=56MiB layers_done=5 | lete d8d21be4bf02: Verifying Checksum d8d21be4bf02: Download complete 6117bd39f23f: Verifying Checksum 6117bd39f23f: Download complete 509688edf37b: Verifying Checksum 509688edf37b: Download complete  | [    5.477438] vetha57f749 (unregistering): left promiscuous mode | [    5.477438] docker0: port 1(vetha57f749) entered disabled state | 
+  +55s probe failed: ExecTimeoutError: exec timed out after 20s
+  +90s probe failed: ExecTimeoutError: exec timed out after 20s
+  +125s probe failed: ExecTimeoutError: exec timed out after 20s
+  +160s probe failed: ExecTimeoutError: exec timed out after 20s
+  +195s probe failed: ExecTimeoutError: exec timed out after 20s
+  +230s probe failed: ExecTimeoutError: exec timed out after 20s
+  +265s probe failed: ExecTimeoutError: exec timed out after 20s
+  +300s probe failed: ExecTimeoutError: exec timed out after 20s
+  +335s probe failed: ExecTimeoutError: exec timed out after 20s
+  +370s probe failed: ExecTimeoutError: exec timed out after 20s
+  +405s probe failed: ExecTimeoutError: exec timed out after 20s
+  +440s probe failed: ExecTimeoutError: exec timed out after 20s
+  +475s probe failed: ExecTimeoutError: exec timed out after 20s

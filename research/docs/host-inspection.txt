@@ -1,0 +1,39 @@
+2026-10-17T10:46:47Z
+<dev-host>
+Linux 6.8.0-147-generic x86_64 GNU/Linux
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+Architecture:                            x86_64
+CPU(s):                                  8
+Model name:                              13th Gen Intel(R) Core(TM) i9-13900H
+Virtualization:                          VT-x
+Hypervisor vendor:                       KVM
+NUMA node0 CPU(s):                       0-7
+               total        used        free      shared  buff/cache   available
+Mem:            19Gi        10Gi       3.0Gi       154Mi       6.7Gi       9.2Gi
+Swap:             0B          0B          0B
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1       387G  136G  251G  36% /
+/dev/sda1       387G  136G  251G  36% /
+ 10:46:47 up  1:21,  1 user,  load average: 3.19, 3.62, 2.88
+uid=1000(<user>) gid=1000(<user>) groups=1000(<user>),27(sudo),988(docker)
+crw-rw---- 1 root kvm 10, 232 Oct 17 09:24 /dev/kvm
+KVM_ACCESS=unavailable-to-current-user
+SUDO_NONINTERACTIVE=yes
+v26.10.0
+11.19.1
+/usr/bin/git
+/usr/bin/python3
+Docker server: 29.8.2
+[redacted before commit: running containers, container stats, top processes and listening ports of the dev host]

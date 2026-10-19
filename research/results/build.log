@@ -1,0 +1,9 @@
+
+> raphie-prototype@0.0.0 build
+> eve build
+
+eve: initializing 1 sandbox template...
+eve: sandbox template "root" (microsandbox): loading microsandbox npm package
+eve: failed to initialize sandbox template "root" on provider "microsandbox": Failed to prepare microsandbox: The microsandbox VM runtime is not installed. Run `npx microsandbox install`, set MSB_PATH for a custom install, or let `eve dev` install it automatically with microsandbox({ setup: { autoInstall: true } }).
+Failed to prepare microsandbox: The microsandbox VM runtime is not installed. Run `npx microsandbox install`, set MSB_PATH for a custom install, or let `eve dev` install it automatically with microsandbox({ setup: { autoInstall: true } }).
+  Caused by: The microsandbox VM runtime is not installed. Run `npx microsandbox install`, set MSB_PATH for a custom install, or let `eve dev` install it automatically with microsandbox({ setup: { autoInstall: true } }).

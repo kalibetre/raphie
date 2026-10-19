@@ -1,0 +1,28 @@
+{
+  "kind": "docker-in-microvm",
+  "allowlist": false,
+  "name": "raphie-docker-1792246736678",
+  "startedAt": "2026-10-17T14:18:56.678Z",
+  "steps": [
+    {
+      "label": "dockerd start",
+      "ms": 829,
+      "code": 0,
+      "stdout": "driver=overlay2 cgroup=2 mem=2125578240\n",
+      "stderr": ""
+    },
+    {
+      "label": "docker run (pull + run)",
+      "ms": 4798,
+      "code": 0,
+      "stdout": "inner-container-ok\n",
+      "stderr": "Unable to find image 'alpine:3.22' locally\n3.22: Pulling from library/alpine\n53f8f5e03afd: Pulling fs layer\n53f8f5e03afd: Verifying Checksum\n53f8f5e03afd: Download complete\n53f8f5e03afd: Pull complete\nDigest: sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8\nStatus: Downloaded newer image for alpine:3.22\n"
+    }
+  ],
+  "createMs": 411,
+  "passed": false,
+  "error": "ExecTimeoutError: exec timed out after 300s",
+  "aborted": null,
+  "cleanedUp": true,
+  "finishedAt": "2026-10-17T14:24:15.758Z"
+}

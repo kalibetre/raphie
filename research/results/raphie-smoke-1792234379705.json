@@ -1,0 +1,9 @@
+{
+  "kind": "real-microvm-smoke",
+  "name": "raphie-smoke-1792234379705",
+  "startedAt": "2026-10-17T10:52:59.705Z",
+  "createMs": 4403,
+  "output": "Linux 6.12.68\nraphie-ok",
+  "passed": true,
+  "cleanedUp": true
+}

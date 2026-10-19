@@ -1,0 +1,19 @@
+{
+  "kind": "docker-in-microvm",
+  "allowlist": false,
+  "name": "raphie-docker-1792240376984",
+  "startedAt": "2026-10-17T12:32:56.984Z",
+  "steps": [
+    {
+      "label": "dockerd start",
+      "ms": 41425,
+      "code": 1,
+      "stdout": "805689379Z\" level=info msg=\"loaded extension\" extension=org.mobyproject.storage.bbolt.v0 origin=builtin providers=\"[org.mobyproject.extension.storage.kv.v0]\"\ntime=\"2026-10-17T12:33:53.805693547Z\" level=info msg=\"loaded extension\" extension=org.mobyproject.daemon.config.v0 origin=builtin providers=\"[org.mobyproject.extension.daemon.config.v0]\"\ntime=\"2026-10-17T12:33:53.806469718Z\" level=info msg=\"Creating a containerd client\" address=/var/run/docker/containerd/containerd.sock timeout=1m0s\ntime=\"2026-10-17T12:33:53.807649750Z\" level=warning msg=\"failed check for fsverity support\" error=\"enable fsverity failed: inappropriate ioctl for device\" path=/var/lib/docker/plugins/storage\ntime=\"2026-10-17T12:33:53.856955497Z\" level=info msg=\"Loading containers: start.\"\ntime=\"2026-10-17T12:33:53.857012428Z\" level=info msg=\"NRI is disabled\"\ntime=\"2026-10-17T12:33:53.857028932Z\" level=info msg=\"[graphdriver] trying configured driver: overlay2\"\ntime=\"2026-10-17T12:33:53.857692476Z\" level=error msg=\"failed to mount overlay: invalid argument\" storage-driver=overlay2\ntime=\"2026-10-17T12:33:53.858314853Z\" level=info msg=\"stopping event stream following graceful shutdown\" error=\"context canceled\" module=libcontainerd namespace=plugins.moby\ntime=\"2026-10-17T12:33:53.858544055Z\" level=info msg=\"Daemon shutdown complete\" error=\"failed to start daemon: error initializing graphdriver: driver not supported: overlay2\"\nfailed to start daemon: error initializing graphdriver: driver not supported: overlay2\n",
+      "stderr": "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\n"
+    }
+  ],
+  "createMs": 56472,
+  "passed": false,
+  "cleanedUp": true,
+  "finishedAt": "2026-10-17T12:34:42.915Z"
+}

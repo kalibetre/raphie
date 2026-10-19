@@ -1,0 +1,167 @@
+{
+  "kind": "eve-real-vm-lifecycle-with-mock-model",
+  "startedAt": "2026-10-17T11:13:51.869Z",
+  "checks": [
+    "real sandbox command execution",
+    "same session and guest file survive Eve process restart",
+    "second session has an independent writable filesystem",
+    "100 durable session registrations did not allocate extra running VMs",
+    "1 and 2 concurrent real sandbox turns passed"
+  ],
+  "idleRegistration": {
+    "sessions": 100,
+    "elapsedMs": 1733,
+    "additionalRunningVMs": 0
+  },
+  "concurrentRuns": [
+    {
+      "concurrency": 1,
+      "elapsedMs": 2278,
+      "turnMs": [
+        2278
+      ],
+      "peakRunningVMs": 2
+    },
+    {
+      "concurrency": 2,
+      "elapsedMs": 2231,
+      "turnMs": [
+        2133,
+        2231
+      ],
+      "peakRunningVMs": 2
+    }
+  ],
+  "resourceSamples": [
+    {
+      "at": 1792235643678,
+      "availableMiB": 10965,
+      "scopeMiB": 536,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235643746,
+      "availableMiB": 10960,
+      "scopeMiB": 543,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235643961,
+      "availableMiB": 10950,
+      "scopeMiB": 554,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235644138,
+      "availableMiB": 10939,
+      "scopeMiB": 568,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235644371,
+      "availableMiB": 10921,
+      "scopeMiB": 589,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235644543,
+      "availableMiB": 10922,
+      "scopeMiB": 598,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235644697,
+      "availableMiB": 10921,
+      "scopeMiB": 602,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235644893,
+      "availableMiB": 10916,
+      "scopeMiB": 609,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235645046,
+      "availableMiB": 10917,
+      "scopeMiB": 612,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235645193,
+      "availableMiB": 10913,
+      "scopeMiB": 617,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235645411,
+      "availableMiB": 10910,
+      "scopeMiB": 626,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235645411,
+      "availableMiB": 10910,
+      "scopeMiB": 626,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235645913,
+      "availableMiB": 10836,
+      "scopeMiB": 683,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235646413,
+      "availableMiB": 10850,
+      "scopeMiB": 683,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235646914,
+      "availableMiB": 10849,
+      "scopeMiB": 683,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235647414,
+      "availableMiB": 10850,
+      "scopeMiB": 682,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235647690,
+      "availableMiB": 10839,
+      "scopeMiB": 697,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235648190,
+      "availableMiB": 10797,
+      "scopeMiB": 748,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235648690,
+      "availableMiB": 10796,
+      "scopeMiB": 747,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235649190,
+      "availableMiB": 10800,
+      "scopeMiB": 747,
+      "runningVMs": 2
+    },
+    {
+      "at": 1792235649691,
+      "availableMiB": 10800,
+      "scopeMiB": 747,
+      "runningVMs": 2
+    }
+  ],
+  "scopePeakMiB": 761,
+  "limit": "Shared development VM: maximum active test concurrency is 2; no maximum-capacity claim.",
+  "passed": true,
+  "finishedAt": "2026-10-17T11:14:18.030Z"
+}

@@ -1,0 +1,47 @@
+{
+  "kind": "eve-live-openrouter",
+  "model": "anthropic/claude-haiku-5.5",
+  "startedAt": "2026-10-17T11:08:08.142Z",
+  "elapsedMs": 3553,
+  "status": "waiting",
+  "message": "0,1,1,2,3,5,8,13,21,34",
+  "eventTypes": [
+    "session.started",
+    "turn.started",
+    "message.received",
+    "step.started",
+    "action.input.appended",
+    "actions.requested",
+    "action.result",
+    "step.completed",
+    "message.appended",
+    "message.completed",
+    "turn.completed",
+    "session.waiting"
+  ],
+  "bashCalls": 19,
+  "usageEvents": [
+    {
+      "data": {
+        "continuationToken": "wrun_01M54RREMGCTPCT2RV2XJ30DMK",
+        "usage": {
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "inputTokens": 4194,
+          "outputTokens": 169
+        },
+        "wait": "next-user-message"
+      },
+      "type": "session.waiting",
+      "meta": {
+        "at": "2026-10-17T11:08:12.750Z",
+        "id": "evt_01M54RRJ2ECMEY9T7NCEMAC912",
+        "deliveryIds": [
+          "1840d716-ea16-49e7-8344-7c3bc679c3d3"
+        ]
+      }
+    }
+  ],
+  "passed": true,
+  "finishedAt": "2026-10-17T11:08:20.878Z"
+}

@@ -1,0 +1,37 @@
+{
+  "kind": "net-bulk",
+  "url": "http://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64/alpine-standard-3.22.0-x86_64.iso",
+  "name": "raphie-net-1792248264748",
+  "polls": [
+    {
+      "sec": 5,
+      "text": "10MiB rx | Mem: 1021 22 995 0 4 964 | "
+    },
+    {
+      "sec": 10,
+      "text": "18MiB rx | Mem: 1021 22 995 0 4 964 | "
+    },
+    {
+      "sec": 15,
+      "text": "28MiB rx | Mem: 1021 22 995 0 4 964 | "
+    },
+    {
+      "sec": 20,
+      "text": "42MiB rx | Mem: 1021 22 995 0 4 964 | "
+    },
+    {
+      "sec": 25,
+      "error": "ExecTimeoutError: exec timed out after 15s"
+    },
+    {
+      "sec": 50,
+      "error": "ExecTimeoutError: exec timed out after 15s"
+    },
+    {
+      "sec": 75,
+      "error": "ExecTimeoutError: exec timed out after 15s"
+    }
+  ],
+  "result": "guest unresponsive during bulk download",
+  "aborted": null
+}

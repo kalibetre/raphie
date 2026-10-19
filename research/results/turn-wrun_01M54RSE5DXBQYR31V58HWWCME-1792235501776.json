@@ -1,0 +1,278 @@
+{
+  "events": [
+    {
+      "data": {
+        "runtime": {
+          "agentId": "raphie-prototype",
+          "agentName": "raphie-prototype",
+          "eveVersion": "0.80.1"
+        }
+      },
+      "type": "session.started",
+      "meta": {
+        "at": "2026-10-17T11:08:41.589Z",
+        "id": "evt_01M54RSE7NQ1VS1B74NFXTRVS5",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "turn.started",
+      "meta": {
+        "at": "2026-10-17T11:08:41.591Z",
+        "id": "evt_01M54RSE7QC787WNFVCEMADT9K",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "message": "RAPHIE_COMMAND {\"command\":\"printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker\"}",
+        "parts": [
+          {
+            "text": "RAPHIE_COMMAND {\"command\":\"printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker\"}",
+            "type": "text"
+          }
+        ],
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "message.received",
+      "meta": {
+        "at": "2026-10-17T11:08:41.592Z",
+        "id": "evt_01M54RSE7RBWTM41FV7M8Z8AVX",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "modelId": "openrouter/anthropic/claude-haiku-5.5",
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "step.started",
+      "meta": {
+        "at": "2026-10-17T11:08:41.593Z",
+        "id": "evt_01M54RSE7S7125GAXXYWPWR1SJ",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "callId": "call_71caaa48-69d1-4849-a58c-a00717b3bcc3",
+        "inputTextDelta": "{\"command\":\"printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker\"}",
+        "sequence": 0,
+        "stepIndex": 0,
+        "toolName": "bash",
+        "turnId": "turn_0"
+      },
+      "type": "action.input.appended",
+      "meta": {
+        "at": "2026-10-17T11:08:41.626Z",
+        "id": "evt_01M54RSE8TH8RT2D6JBF67GRR7",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "actions": [
+          {
+            "callId": "call_71caaa48-69d1-4849-a58c-a00717b3bcc3",
+            "input": {
+              "command": "printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker"
+            },
+            "kind": "tool-call",
+            "toolName": "bash"
+          }
+        ],
+        "presentation": {
+          "call_71caaa48-69d1-4849-a58c-a00717b3bcc3": {
+            "label": "Run printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker"
+          }
+        },
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "actions.requested",
+      "meta": {
+        "at": "2026-10-17T11:08:41.633Z",
+        "id": "evt_01M54RSE91VWTV9TCBYA3C7GTF",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "error": {
+          "code": "ACTION_RESULT_FAILED",
+          "message": "Failed to create microsandbox VM from snapshot \"eve-sbx-tpl-c9aea19e40582ad19dd65d17c8708120\" while image ready; booting microsandbox VM [runtime]: runtime error: timed out waiting for agent relay: deadline has elapsed.",
+          "name": "MicrosandboxDiagnosticError"
+        },
+        "result": {
+          "callId": "call_71caaa48-69d1-4849-a58c-a00717b3bcc3",
+          "kind": "tool-result",
+          "output": "Failed to create microsandbox VM from snapshot \"eve-sbx-tpl-c9aea19e40582ad19dd65d17c8708120\" while image ready; booting microsandbox VM [runtime]: runtime error: timed out waiting for agent relay: deadline has elapsed.",
+          "toolName": "bash",
+          "errorName": "MicrosandboxDiagnosticError",
+          "isError": true
+        },
+        "sequence": 0,
+        "status": "failed",
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "action.result",
+      "meta": {
+        "at": "2026-10-17T11:11:41.741Z",
+        "id": "evt_01M54RYY5DB8TBZ246N0WAM6KR",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "tool-calls",
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cacheReadTokens": 0
+        }
+      },
+      "type": "step.completed",
+      "meta": {
+        "at": "2026-10-17T11:11:41.744Z",
+        "id": "evt_01M54RYY5GAJN6XT3ACG6Z95PS",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "modelId": "openrouter/anthropic/claude-haiku-5.5",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "step.started",
+      "meta": {
+        "at": "2026-10-17T11:11:41.761Z",
+        "id": "evt_01M54RYY61WEMCQZCKJ4187HWX",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "messageDelta": "MicrosandboxDiagnosticError: Failed to create microsandbox VM from snapshot \"eve-sbx-tpl-c9aea19e40582ad19dd65d17c8708120\" while image ready; booting microsandbox VM [runtime]: runtime error: timed out waiting for agent relay: deadline has elapsed.",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "message.appended",
+      "meta": {
+        "at": "2026-10-17T11:11:41.769Z",
+        "id": "evt_01M54RYY698WP4CDGHK1KYGZNV",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "message": "MicrosandboxDiagnosticError: Failed to create microsandbox VM from snapshot \"eve-sbx-tpl-c9aea19e40582ad19dd65d17c8708120\" while image ready; booting microsandbox VM [runtime]: runtime error: timed out waiting for agent relay: deadline has elapsed.",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "message.completed",
+      "meta": {
+        "at": "2026-10-17T11:11:41.770Z",
+        "id": "evt_01M54RYY6AGTEJWSYW3CFX10P8",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cacheReadTokens": 0
+        }
+      },
+      "type": "step.completed",
+      "meta": {
+        "at": "2026-10-17T11:11:41.770Z",
+        "id": "evt_01M54RYY6AGTEJWSYW3CFX10P9",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "turn.completed",
+      "meta": {
+        "at": "2026-10-17T11:11:41.773Z",
+        "id": "evt_01M54RYY6DTA6AMMM8454STTK9",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    },
+    {
+      "data": {
+        "continuationToken": "wrun_01M54RSE5DXBQYR31V58HWWCME",
+        "usage": {
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "inputTokens": 200,
+          "outputTokens": 40
+        },
+        "wait": "next-user-message"
+      },
+      "type": "session.waiting",
+      "meta": {
+        "at": "2026-10-17T11:11:41.773Z",
+        "id": "evt_01M54RYY6DTA6AMMM8454STTKA",
+        "deliveryIds": [
+          "a56455b6-3ad8-47ce-9e5c-5cbb8734d82d"
+        ]
+      }
+    }
+  ],
+  "inputRequests": [],
+  "message": "MicrosandboxDiagnosticError: Failed to create microsandbox VM from snapshot \"eve-sbx-tpl-c9aea19e40582ad19dd65d17c8708120\" while image ready; booting microsandbox VM [runtime]: runtime error: timed out waiting for agent relay: deadline has elapsed.",
+  "sessionId": "wrun_01M54RSE5DXBQYR31V58HWWCME",
+  "status": "waiting"
+}

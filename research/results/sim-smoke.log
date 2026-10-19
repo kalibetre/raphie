@@ -1,0 +1,2 @@
+{"agents":5,"createWallMs":471,"createP50Ms":471,"offeredTicksPerSec":0.63,"completedTicks":15,"errors":0,"overruns":0,"tickMix":{"light":14,"medium":1,"needs-vm":1},"latencyMs":{"p50":287,"p95":904,"p99":904,"max":904},"peakEveRssMiB":189,"peakScopeMiB":464,"minAvailableMiB":11076,"peakLoad1":4.53,"stateDirMiB":75,"mock":{"modelRequests":78,"promptTokens":839724,"completionTokens":3120,"integrationCalls":18},"meanPromptTokensPerTick":55982}
+report: results/sim-1792237184918.json

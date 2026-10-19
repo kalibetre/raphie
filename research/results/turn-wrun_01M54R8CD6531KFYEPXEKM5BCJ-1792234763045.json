@@ -1,0 +1,277 @@
+{
+  "events": [
+    {
+      "data": {
+        "runtime": {
+          "agentId": "raphie-prototype",
+          "agentName": "raphie-prototype",
+          "eveVersion": "0.80.1"
+        }
+      },
+      "type": "session.started",
+      "meta": {
+        "at": "2026-10-17T10:59:22.692Z",
+        "id": "evt_01M54R8CE4V0RB8PC9Z3BCHW2Q",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "turn.started",
+      "meta": {
+        "at": "2026-10-17T10:59:22.692Z",
+        "id": "evt_01M54R8CE4V0RB8PC9Z3BCHW2R",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "message": "RAPHIE_COMMAND {\"command\":\"test ! -e /workspace/raphie-marker && printf isolated\"}",
+        "parts": [
+          {
+            "text": "RAPHIE_COMMAND {\"command\":\"test ! -e /workspace/raphie-marker && printf isolated\"}",
+            "type": "text"
+          }
+        ],
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "message.received",
+      "meta": {
+        "at": "2026-10-17T10:59:22.692Z",
+        "id": "evt_01M54R8CE4V0RB8PC9Z3BCHW2S",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "modelId": "raphie-mock/raphie-deterministic",
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "step.started",
+      "meta": {
+        "at": "2026-10-17T10:59:22.692Z",
+        "id": "evt_01M54R8CE4V0RB8PC9Z3BCHW2T",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "callId": "call_19c04d0e-3809-4d4c-9070-fb57ef654951",
+        "inputTextDelta": "{\"command\":\"test ! -e /workspace/raphie-marker && printf isolated\"}",
+        "sequence": 0,
+        "stepIndex": 0,
+        "toolName": "bash",
+        "turnId": "turn_0"
+      },
+      "type": "action.input.appended",
+      "meta": {
+        "at": "2026-10-17T10:59:22.696Z",
+        "id": "evt_01M54R8CE8MBXZYP4N8SPGPEAF",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "actions": [
+          {
+            "callId": "call_19c04d0e-3809-4d4c-9070-fb57ef654951",
+            "input": {
+              "command": "test ! -e /workspace/raphie-marker && printf isolated"
+            },
+            "kind": "tool-call",
+            "toolName": "bash"
+          }
+        ],
+        "presentation": {
+          "call_19c04d0e-3809-4d4c-9070-fb57ef654951": {
+            "label": "Run test ! -e /workspace/raphie-marker && printf isolated"
+          }
+        },
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "actions.requested",
+      "meta": {
+        "at": "2026-10-17T10:59:22.697Z",
+        "id": "evt_01M54R8CE9G4GEWKW40Q28N5W1",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "result": {
+          "callId": "call_19c04d0e-3809-4d4c-9070-fb57ef654951",
+          "kind": "tool-result",
+          "output": {
+            "stderr": "",
+            "stdout": "isolated",
+            "truncated": false,
+            "exitCode": 0,
+            "status": "completed"
+          },
+          "toolName": "bash"
+        },
+        "sequence": 0,
+        "status": "completed",
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "action.result",
+      "meta": {
+        "at": "2026-10-17T10:59:23.015Z",
+        "id": "evt_01M54R8CR79MJ16RNJWTJM18JH",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "tool-calls",
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cacheReadTokens": 0
+        }
+      },
+      "type": "step.completed",
+      "meta": {
+        "at": "2026-10-17T10:59:23.016Z",
+        "id": "evt_01M54R8CR881F27PVW7JSMYZ0X",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "modelId": "raphie-mock/raphie-deterministic",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "step.started",
+      "meta": {
+        "at": "2026-10-17T10:59:23.024Z",
+        "id": "evt_01M54R8CRG78NA5CN26Y4WRJ71",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "messageDelta": "{\"stderr\":\"\",\"stdout\":\"isolated\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "message.appended",
+      "meta": {
+        "at": "2026-10-17T10:59:23.028Z",
+        "id": "evt_01M54R8CRMGN9W20J7K1BNZJEH",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "message": "{\"stderr\":\"\",\"stdout\":\"isolated\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "message.completed",
+      "meta": {
+        "at": "2026-10-17T10:59:23.029Z",
+        "id": "evt_01M54R8CRNQFVNJZ1J5Z4PRRKZ",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cacheReadTokens": 0
+        }
+      },
+      "type": "step.completed",
+      "meta": {
+        "at": "2026-10-17T10:59:23.029Z",
+        "id": "evt_01M54R8CRNQFVNJZ1J5Z4PRRM0",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "turn.completed",
+      "meta": {
+        "at": "2026-10-17T10:59:23.043Z",
+        "id": "evt_01M54R8CS3X710DEYS67CMWK0Z",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    },
+    {
+      "data": {
+        "continuationToken": "wrun_01M54R8CD6531KFYEPXEKM5BCJ",
+        "usage": {
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "inputTokens": 200,
+          "outputTokens": 40
+        },
+        "wait": "next-user-message"
+      },
+      "type": "session.waiting",
+      "meta": {
+        "at": "2026-10-17T10:59:23.043Z",
+        "id": "evt_01M54R8CS3X710DEYS67CMWK10",
+        "deliveryIds": [
+          "9f5ecc4e-a92c-44b9-827a-dd273ad66a8a"
+        ]
+      }
+    }
+  ],
+  "inputRequests": [],
+  "message": "{\"stderr\":\"\",\"stdout\":\"isolated\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+  "sessionId": "wrun_01M54R8CD6531KFYEPXEKM5BCJ",
+  "status": "waiting"
+}

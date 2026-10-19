@@ -1,0 +1,86 @@
+
+> raphie-prototype@0.0.0 build
+> eve build
+
+eve: initializing 1 sandbox template...
+eve: sandbox template "root" (microsandbox): loading microsandbox npm package
+eve: sandbox template "root" (microsandbox): creating template VM from image "docker.io/library/node:24-bookworm-slim"
+eve: sandbox template "root" (microsandbox): resolving the image
+eve: sandbox template "root" (microsandbox): downloading and materializing image layers
+eve: sandbox template "root" (microsandbox): downloading and materializing image layers (10s elapsed)
+eve: sandbox template "root" (microsandbox): downloading and materializing image layers (20s elapsed)
+eve: sandbox template "root" (microsandbox): downloading and materializing image layers (30s elapsed)
+eve: sandbox template "root" (microsandbox): assembling the image filesystem
+eve: sandbox template "root" (microsandbox): image ready; booting microsandbox VM
+eve: sandbox template "root" (microsandbox): preparing base runtime inside VM
+eve: sandbox template "root" (microsandbox): create sandbox user: vercel-sandbox
+eve: sandbox template "root" (microsandbox): prepare workspace directory: /workspace
+eve: sandbox template "root" (microsandbox): snapshotting template VM
+eve: initialized 1 sandbox template.
+[nitro] ✔ Generated public .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/public
+[nitro] ℹ Building server (builder: rolldown, preset: node-server, compatibility date: 2026-10-17)
+ℹ Tracing dependencies:
+- microsandbox (0.5.10)
+- @superradcompany/microsandbox-linux-x64-gnu (0.5.10)
+✔ Traced 2 dependencies (40 files) in 211ms.
+ℹ Ensure your production environment matches the builder OS and architecture (linux-x64) to avoid native module issues.
+ℹ Generated .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/nitro.json
+[nitro] ✔ Server built in 1566ms
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_chunks/compiled-artifacts-instrumentation.mjs (748 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_chunks/node-server.mjs (1.29 MB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_chunks/storage.mjs (1.56 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_.mjs (839 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_10.mjs (497 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_11.mjs (236 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_12.mjs (235 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_13.mjs (275 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_14.mjs (345 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_15.mjs (262 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_16.mjs (267 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_17.mjs (256 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_18.mjs (266 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_19.mjs (243 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_2.mjs (313 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_20.mjs (243 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_21.mjs (241 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_22.mjs (241 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_23.mjs (241 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_24.mjs (243 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_25.mjs (253 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_26.mjs (244 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_27.mjs (263 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_28.mjs (260 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_29.mjs (255 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_3.mjs (273 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_30.mjs (268 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_31.mjs (267 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_32.mjs (251 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_33.mjs (308 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_34.mjs (252 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_35.mjs (289 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_36.mjs (307 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_37.mjs (307 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_38.mjs (311 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_39.mjs (290 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_4.mjs (312 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_5.mjs (270 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_6.mjs (294 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_7.mjs (244 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_8.mjs (241 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/_9.mjs (241 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/@ai-sdk/gateway+[...].mjs (452 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/ai.mjs (372 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/eve.mjs (6.55 MB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/h3+rou3+srvx.mjs (56.5 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/hookable.mjs (1.37 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/ufo.mjs (2.4 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/undici.mjs (1 MB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/unstorage.mjs (22.8 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_libs/vercel__oidc.mjs (2.85 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_runtime.mjs (1.77 kB)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/_virtual/skills.json.mjs (477 B)
+  ├─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/index.mjs (468 B)
+  └─ .eve/builds/mvca7eoo-8dbca94d-e270-46c5-a7f3-a1aa6add2678/output/server/package.json (211 B)
+Σ Total size: 55.6 MB
+[nitro] ✔ You can preview this build using npx nitro preview
+[BUILD] built output at /home/<user>/raphie-prototype/.output

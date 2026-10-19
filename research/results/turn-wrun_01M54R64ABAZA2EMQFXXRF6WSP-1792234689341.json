@@ -1,0 +1,277 @@
+{
+  "events": [
+    {
+      "data": {
+        "runtime": {
+          "agentId": "raphie-prototype",
+          "agentName": "raphie-prototype",
+          "eveVersion": "0.80.1"
+        }
+      },
+      "type": "session.started",
+      "meta": {
+        "at": "2026-10-17T10:58:08.921Z",
+        "id": "evt_01M54R64CSTSVWZEMHG609HY5Y",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "turn.started",
+      "meta": {
+        "at": "2026-10-17T10:58:08.922Z",
+        "id": "evt_01M54R64CTWZ5XK7SXJGJ5160N",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "message": "RAPHIE_COMMAND {\"command\":\"printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker\"}",
+        "parts": [
+          {
+            "text": "RAPHIE_COMMAND {\"command\":\"printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker\"}",
+            "type": "text"
+          }
+        ],
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "message.received",
+      "meta": {
+        "at": "2026-10-17T10:58:08.923Z",
+        "id": "evt_01M54R64CVP6EGQBD23AB2EK58",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "modelId": "raphie-mock/raphie-deterministic",
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "step.started",
+      "meta": {
+        "at": "2026-10-17T10:58:08.924Z",
+        "id": "evt_01M54R64CW8AXBDYA8345GDQ9P",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "callId": "call_28f926b2-1c42-45fe-8482-f4a5753e4e18",
+        "inputTextDelta": "{\"command\":\"printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker\"}",
+        "sequence": 0,
+        "stepIndex": 0,
+        "toolName": "bash",
+        "turnId": "turn_0"
+      },
+      "type": "action.input.appended",
+      "meta": {
+        "at": "2026-10-17T10:58:08.952Z",
+        "id": "evt_01M54R64DRDTX3DTNW4N5KR5ZN",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "actions": [
+          {
+            "callId": "call_28f926b2-1c42-45fe-8482-f4a5753e4e18",
+            "input": {
+              "command": "printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker"
+            },
+            "kind": "tool-call",
+            "toolName": "bash"
+          }
+        ],
+        "presentation": {
+          "call_28f926b2-1c42-45fe-8482-f4a5753e4e18": {
+            "label": "Run printf 'raphie-persisted' > /workspace/raphie-marker; cat /workspace/raphie-marker"
+          }
+        },
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "actions.requested",
+      "meta": {
+        "at": "2026-10-17T10:58:08.957Z",
+        "id": "evt_01M54R64DXJYHWNWTFVJR45QQT",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "result": {
+          "callId": "call_28f926b2-1c42-45fe-8482-f4a5753e4e18",
+          "kind": "tool-result",
+          "output": {
+            "stderr": "",
+            "stdout": "raphie-persisted",
+            "truncated": false,
+            "exitCode": 0,
+            "status": "completed"
+          },
+          "toolName": "bash"
+        },
+        "sequence": 0,
+        "status": "completed",
+        "stepIndex": 0,
+        "turnId": "turn_0"
+      },
+      "type": "action.result",
+      "meta": {
+        "at": "2026-10-17T10:58:09.310Z",
+        "id": "evt_01M54R64RY0J1B0A4236D2BR3P",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "tool-calls",
+        "sequence": 0,
+        "stepIndex": 0,
+        "turnId": "turn_0",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cacheReadTokens": 0
+        }
+      },
+      "type": "step.completed",
+      "meta": {
+        "at": "2026-10-17T10:58:09.313Z",
+        "id": "evt_01M54R64S1Y99F3DC50RF23XS3",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "modelId": "raphie-mock/raphie-deterministic",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "step.started",
+      "meta": {
+        "at": "2026-10-17T10:58:09.325Z",
+        "id": "evt_01M54R64SDJRHS0N4R34T2Q86Z",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "messageDelta": "{\"stderr\":\"\",\"stdout\":\"raphie-persisted\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "message.appended",
+      "meta": {
+        "at": "2026-10-17T10:58:09.332Z",
+        "id": "evt_01M54R64SMAWNE9JD0NXXCTKD4",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "message": "{\"stderr\":\"\",\"stdout\":\"raphie-persisted\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0"
+      },
+      "type": "message.completed",
+      "meta": {
+        "at": "2026-10-17T10:58:09.333Z",
+        "id": "evt_01M54R64SNGKEGB3NZNCXXJXZQ",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "sequence": 0,
+        "stepIndex": 1,
+        "turnId": "turn_0",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cacheReadTokens": 0
+        }
+      },
+      "type": "step.completed",
+      "meta": {
+        "at": "2026-10-17T10:58:09.334Z",
+        "id": "evt_01M54R64SPXA0C7Y7WYNDJV9SV",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "sequence": 0,
+        "turnId": "turn_0"
+      },
+      "type": "turn.completed",
+      "meta": {
+        "at": "2026-10-17T10:58:09.336Z",
+        "id": "evt_01M54R64SR6AEH22P37AE503B2",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    },
+    {
+      "data": {
+        "continuationToken": "wrun_01M54R64ABAZA2EMQFXXRF6WSP",
+        "usage": {
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "inputTokens": 200,
+          "outputTokens": 40
+        },
+        "wait": "next-user-message"
+      },
+      "type": "session.waiting",
+      "meta": {
+        "at": "2026-10-17T10:58:09.336Z",
+        "id": "evt_01M54R64SR6AEH22P37AE503B3",
+        "deliveryIds": [
+          "ad57a7c5-7a8b-4af6-bc37-0142e6b70330"
+        ]
+      }
+    }
+  ],
+  "inputRequests": [],
+  "message": "{\"stderr\":\"\",\"stdout\":\"raphie-persisted\",\"truncated\":false,\"exitCode\":0,\"status\":\"completed\"}",
+  "sessionId": "wrun_01M54R64ABAZA2EMQFXXRF6WSP",
+  "status": "waiting"
+}

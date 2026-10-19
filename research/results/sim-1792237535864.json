@@ -1,0 +1,144 @@
+{
+  "kind": "cron-agent-fleet-sim",
+  "startedAt": "2026-10-17T11:40:32.273Z",
+  "config": {
+    "stages": [
+      50,
+      150,
+      300
+    ],
+    "stageMs": 90000,
+    "periodMs": 60000,
+    "realPeriodMin": 15
+  },
+  "stages": [
+    {
+      "agents": 50,
+      "createWallMs": 2895,
+      "createP50Ms": 435,
+      "offeredTicksPerSec": 0.83,
+      "completedTicks": 74,
+      "errors": 0,
+      "overruns": 0,
+      "tickMix": {
+        "light": 64,
+        "medium": 10,
+        "needs-vm": 2
+      },
+      "latencyMs": {
+        "p50": 287,
+        "p95": 776,
+        "p99": 957,
+        "max": 957
+      },
+      "peakEveRssMiB": 193,
+      "peakScopeMiB": 499,
+      "minAvailableMiB": 10466,
+      "peakLoad1": 1.65,
+      "workflowStateMiB": 113,
+      "workflowStateFiles": 27526,
+      "mock": {
+        "modelRequests": 400,
+        "promptTokens": 3456802,
+        "completionTokens": 16000,
+        "avgSystemTokensPerRequest": 780,
+        "avgToolSchemaTokensPerRequest": 1229,
+        "avgConversationTokensPerRequest": 4520,
+        "integrationCalls": 96
+      },
+      "meanPromptTokensPerTick": 46714
+    },
+    {
+      "agents": 150,
+      "createWallMs": 5405,
+      "createP50Ms": 440,
+      "offeredTicksPerSec": 2.5,
+      "completedTicks": 220,
+      "errors": 0,
+      "overruns": 0,
+      "tickMix": {
+        "light": 191,
+        "medium": 29,
+        "needs-vm": 9
+      },
+      "latencyMs": {
+        "p50": 309,
+        "p95": 776,
+        "p99": 950,
+        "max": 1235
+      },
+      "peakEveRssMiB": 193,
+      "peakScopeMiB": 673,
+      "minAvailableMiB": 7402,
+      "peakLoad1": 5.26,
+      "workflowStateMiB": 225,
+      "workflowStateFiles": 52090,
+      "mock": {
+        "modelRequests": 1187,
+        "promptTokens": 12191707,
+        "completionTokens": 47480,
+        "avgSystemTokensPerRequest": 780,
+        "avgToolSchemaTokensPerRequest": 1229,
+        "avgConversationTokensPerRequest": 5960,
+        "integrationCalls": 284
+      },
+      "meanPromptTokensPerTick": 55417
+    },
+    {
+      "agents": 300,
+      "createWallMs": 8601,
+      "createP50Ms": 446,
+      "offeredTicksPerSec": 5,
+      "completedTicks": 444,
+      "errors": 0,
+      "overruns": 0,
+      "tickMix": {
+        "light": 399,
+        "medium": 45,
+        "needs-vm": 16
+      },
+      "latencyMs": {
+        "p50": 298,
+        "p95": 747,
+        "p99": 951,
+        "max": 1014
+      },
+      "peakEveRssMiB": 130,
+      "peakScopeMiB": 1028,
+      "minAvailableMiB": 10774,
+      "peakLoad1": 2.92,
+      "workflowStateMiB": 434,
+      "workflowStateFiles": 97654,
+      "mock": {
+        "modelRequests": 2355,
+        "promptTokens": 27612226,
+        "completionTokens": 94200,
+        "avgSystemTokensPerRequest": 780,
+        "avgToolSchemaTokensPerRequest": 1229,
+        "avgConversationTokensPerRequest": 7245,
+        "integrationCalls": 546
+      },
+      "meanPromptTokensPerTick": 62190
+    }
+  ],
+  "haikuPricingPerToken": {
+    "prompt": "0.0000001",
+    "completion": "0.0000005",
+    "web_search": "0.01",
+    "input_cache_read": "0.00000001",
+    "input_cache_write": "0.000000125",
+    "input_cache_write_1h": "0.0000002",
+    "overrides": [
+      {
+        "min_prompt_tokens": 100000,
+        "prompt": "0.0000005",
+        "completion": "0.0000025",
+        "input_cache_read": "0.00000005",
+        "input_cache_write": "0.000000625",
+        "input_cache_write_1h": "0.000001"
+      }
+    ]
+  },
+  "stopReason": null,
+  "finishedAt": "2026-10-17T11:45:35.864Z"
+}
