@@ -1,0 +1,109 @@
+import { Chat, ConsoleLogger } from 'chat';
+import type { CardElement, Message, Thread } from 'chat';
+import { createDiscordAdapter } from '@chat-adapter/discord';
+import type { DiscordAdapterConfig } from '@chat-adapter/discord';
+import { createMemoryState } from '@chat-adapter/state-memory';
+import { setTimeout as delay } from 'node:timers/promises';
+import { MAX_FILE_BYTES } from './files.ts';
+import { InputError } from './state.ts';
+import type { Approval } from './state.ts';
+import type { Gateway } from './gateway.ts';
+
+export function approvalCard(approval: Approval): CardElement {
+  const pending = approval.status === 'pending' && Date.now() < approval.expiresAt;
+  return {
+    type: 'card', title: pending ? 'Approve file copy' : `Request ${approval.status}`,
+    children: [
+      { type: 'text', content: approval.text.slice(0, 1500) || 'Attached files' },
+      { type: 'text', content: `${approval.files.length ? approval.files.map(f => f.name).join(', ') : 'Create approved-note.txt'}\nExpires: ${new Date(approval.expiresAt).toISOString()}\nRequest: ${approval.id}` },
+      { type: 'actions', children: [
+        { type: 'button', id: 'raphie-approve', value: approval.id, label: 'Approve', style: 'primary', disabled: !pending },
+        { type: 'button', id: 'raphie-reject', value: approval.id, label: 'Decline', style: 'danger', disabled: !pending },
+      ] },
+    ],
+  };
+}
+
+export function createDiscordBridge(app: Gateway, config: DiscordAdapterConfig & {
+  ownerId: string; threadId: string; attachmentFetch?: typeof fetch;
+}) {
+  // SDK info logs include message content; keep it out of service logs.
+  const logger = new ConsoleLogger('silent');
+  const adapter = createDiscordAdapter({ ...config, logger });
+  const chat = new Chat({ userName: 'raphie', adapters: { discord: adapter },
+    state: createMemoryState(), logger, concurrency: 'concurrent' });
+  const authorized = (userId: string, threadId: string) => userId === config.ownerId && threadId === config.threadId;
+
+  async function receive(thread: Thread, message: Message) {
+    if (!authorized(message.author.userId, thread.id) || message.author.isBot) return;
+    try {
+      if (message.attachments.length > 4) throw new InputError('Attach at most four files.');
+      const files = [];
+      for (const attachment of message.attachments) {
+        if ((attachment.size ?? 0) > MAX_FILE_BYTES) throw new InputError('Files must be 8 MiB or smaller.');
+        const url = new URL(attachment.url ?? '');
+        if (url.protocol !== 'https:' || !['cdn.discordapp.com', 'media.discordapp.net'].includes(url.hostname) || url.port || url.username || url.password) {
+          throw new InputError('Unsupported attachment URL.');
+        }
+        const response = await (config.attachmentFetch ?? fetch)(url, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
+        if (!response.ok || !response.body) throw new InputError('Could not download the attachment.');
+        const chunks = []; let size = 0;
+        for await (const chunk of response.body) {
+          size += chunk.byteLength;
+          if (size > MAX_FILE_BYTES) throw new InputError('Files must be 8 MiB or smaller.');
+          chunks.push(Buffer.from(chunk));
+        }
+        files.push(await app.files.put(attachment.name ?? 'attachment', Buffer.concat(chunks)));
+      }
+      await app.accept({ source: 'discord', eventId: message.id, actor: 'owner', text: message.text, files });
+    } catch {
+      console.error('Discord message was not accepted. Check attachment limits and retry as a new message.');
+    }
+  }
+  chat.onNewMessage(receive);
+  chat.onNewMention(receive);
+  chat.onDirectMessage(receive);
+  chat.onSubscribedMessage(receive);
+  chat.onAction(['raphie-approve', 'raphie-reject'], async event => {
+    if (!authorized(event.user.userId, event.threadId) || !event.value) return;
+    await app.decide(event.value, event.actionId === 'raphie-approve' ? 'approved' : 'rejected', 'owner', 'discord');
+  });
+
+  let pumping = false;
+  async function flush() {
+    if (pumping) return;
+    pumping = true;
+    try {
+      for (let delivery; (delivery = await app.claimDelivery());) {
+        try {
+          const state = await app.state();
+          const approval = state.approvals.find(a => a.id === delivery.approvalId)!;
+          let message;
+          if (delivery.kind === 'result') {
+            message = await adapter.postMessage(delivery.threadId, {
+              raw: `Completed request ${approval.id}.`,
+              files: await Promise.all(approval.results.map(async f => ({ filename: f.name, data: await app.files.read(f.id) }))),
+            });
+          } else if (delivery.kind === 'resolved') {
+            const original = state.deliveries.find(d => d.approvalId === approval.id && d.kind === 'approval');
+            message = original?.messageId
+              ? await adapter.editMessage(delivery.threadId, original.messageId, approvalCard(approval))
+              : await adapter.postMessage(delivery.threadId, approvalCard(approval));
+          } else message = await adapter.postMessage(delivery.threadId, approvalCard(approval));
+          await app.settleDelivery(delivery.id, message.id);
+        } catch {
+          await app.settleDelivery(delivery.id, null, 'Delivery failed or its outcome is unknown; inspect Discord before retrying.');
+        }
+      }
+    } finally { pumping = false; }
+  }
+  async function listen(signal: AbortSignal) {
+    while (!signal.aborted) {
+      let listener: Promise<unknown> = Promise.resolve();
+      await adapter.startGatewayListener({ waitUntil: task => { listener = task; } }, 60 * 60 * 1000, signal);
+      await listener;
+      if (!signal.aborted) await delay(5000, undefined, { signal }).catch(() => {});
+    }
+  }
+  return { adapter, chat, flush, listen };
+}

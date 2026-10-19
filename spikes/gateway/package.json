@@ -5,8 +5,8 @@
   "type": "module",
   "engines": { "node": ">=24.0.0" },
   "scripts": {
-    "start": "varlock run -- node src/server.ts",
-    "test": "node --test test/*.test.ts",
+    "start": "varlock run -- node src/main.ts",
+    "test": "node --test --test-timeout=15000 test/*.test.ts",
     "check": "tsc --noEmit",
     "config:check": "varlock load --agent"
   },
