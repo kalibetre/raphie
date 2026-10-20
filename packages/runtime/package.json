@@ -1,9 +1,21 @@
 {
-  "name": "@raphie/runtime", "private": true, "type": "module", "version": "0.1.0",
-  "scripts": { "check": "tsc --noEmit", "test": "node --test --test-timeout=15000 test/*.test.ts" },
+  "name": "@raphie/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test ./test --timeout 15000"
+  },
   "dependencies": {
-    "@earendil-works/pi-durable": "1.3.0", "effect": "4.0.5",
-    "chat": "4.43.0", "@chat-adapter/discord": "4.43.0", "@chat-adapter/state-memory": "4.43.0",
-    "@modelcontextprotocol/client": "2.3.1"
+    "@chat-adapter/discord": "4.43.0",
+    "@chat-adapter/state-memory": "4.43.0",
+    "@earendil-works/pi-durable": "1.3.0",
+    "@modelcontextprotocol/client": "2.3.1",
+    "@raphie/contracts": "0.1.0",
+    "chat": "4.43.0",
+    "effect": "4.0.5",
+    "hono": "4.13.13",
+    "zod": "4.6.7"
   }
 }

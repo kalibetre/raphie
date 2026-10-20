@@ -1,0 +1,9 @@
+# Varlock owns private configuration; do not preload it into build/test processes.
+env = false
+telemetry = false
+
+[run]
+bun = true
+
+[test]
+timeout = 15000

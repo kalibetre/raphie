@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "tabWidth": 2,
+  "semi": true,
+  "singleQuote": false,
+  "sortImports": {},
+  "ignorePatterns": [
+    "research/**",
+    ".data/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.tanstack/**",
+    "**/*routeTree.gen.ts",
+    ".env*",
+    "bun.lock"
+  ]
+}
