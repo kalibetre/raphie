@@ -47,7 +47,15 @@ export function createDiscordBridge(app: Gateway, config: DiscordAdapterConfig &
   const adapter = createDiscordAdapter({ ...config, logger });
   const chat = new Chat({ userName: 'raphie', adapters: { discord: adapter },
     state: createMemoryState(), logger, concurrency: 'concurrent' });
-  const authorized = (userId: string, threadId: string) => userId === config.ownerId && threadId === config.threadId;
+  const target = adapter.decodeThreadId(config.threadId);
+  const authorized = (userId: string, threadId: string) => {
+    if (userId !== config.ownerId) return false;
+    const incoming = adapter.decodeThreadId(threadId);
+    // Gateway mentions create child threads; their encoded route retains the
+    // parent channel. Authorize that parent, never an arbitrary thread prefix.
+    return incoming.guildId === target.guildId && incoming.channelId === target.channelId &&
+      (!target.threadId || incoming.threadId === target.threadId);
+  };
 
   async function receive(thread: Thread, message: Message) {
     if (!authorized(message.author.userId, thread.id) || message.author.isBot) return;

@@ -39,7 +39,7 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
     return originalFetch(input, init);
   };
   const directory = await mkdtemp(join(tmpdir(), 'raphie-discord-'));
-  const threadId = 'discord:@me:channel';
+  const threadId = 'discord:guild:channel';
   let app = await Gateway.open({ directory, discordThreadId: threadId });
   const bytes = new Uint8Array([0, 128, 255, 10]);
   const config = {
@@ -52,18 +52,30 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
   try {
     await bridge.chat.initialize();
     const incoming = (author = 'owner-id', id = 'incoming-1') => bridge.adapter.parseMessage({
-      id, channel_id: 'channel', content: 'Remember my manager notes',
+      id, guild_id: 'guild', channel_id: 'channel', content: 'Remember my manager notes',
       author: { id: author, username: author, bot: false }, timestamp: new Date().toISOString(),
       attachments: [{ filename: 'notes.bin', size: bytes.length, url: 'https://cdn.discordapp.com/attachments/test/notes.bin' }],
     });
     await bridge.chat.processMessage(bridge.adapter, threadId, incoming('stranger', 'unauthorized'));
+    const wrongChannel = incoming('owner-id', 'wrong-channel');
+    await bridge.chat.processMessage(bridge.adapter, 'discord:guild:other:child', wrongChannel);
+    await bridge.chat.processMessage(bridge.adapter, 'discord:other-guild:channel:child', incoming('owner-id', 'wrong-guild'));
     assert.equal((await app.state()).approvals.length, 0);
-    await bridge.chat.processMessage(bridge.adapter, threadId, incoming());
+    // Exercise the real Gateway path: mentions create a child Discord thread.
+    // This protected SDK method receives a discord.js Message-shaped fixture.
+    const gateway = bridge.adapter as unknown as { handleGatewayMessage(message: unknown, mentioned: boolean): Promise<void> };
+    await gateway.handleGatewayMessage({
+      id: 'incoming-1', guildId: 'guild', channelId: 'channel',
+      channel: { isThread: () => false }, content: 'Remember my manager notes',
+      author: { id: 'owner-id', username: 'owner', displayName: 'Owner', bot: false },
+      createdAt: new Date(), editedAt: null,
+      attachments: new Map([['file', { name: 'notes.bin', size: bytes.length, url: 'https://cdn.discordapp.com/attachments/test/notes.bin' }]]),
+    }, true);
     const approval = (await app.state()).approvals[0];
     assert.ok(approval);
     assert.deepEqual(new Uint8Array(await app.files.read(approval.files[0].id)), bytes);
     await bridge.flush();
-    const payload = JSON.parse(requests[0].body.toString());
+    const payload = JSON.parse(requests.find(r => r.path === '/channels/channel/messages' && r.method === 'POST')!.body.toString());
     assert.equal(payload.components[0].components[0].label, 'Approve');
     assert.ok(payload.components[0].components[0].custom_id.includes(approval.id));
     await bridge.chat.shutdown(); await app.close();
