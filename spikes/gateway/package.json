@@ -8,13 +8,15 @@
     "start": "varlock run -- node src/main.ts",
     "test": "node --test --test-timeout=15000 test/*.test.ts",
     "check": "tsc --noEmit",
-    "config:check": "varlock load --agent"
+    "config:check": "varlock load --agent",
+    "mcp:check": "varlock run -- node src/mcp-check.ts"
   },
   "dependencies": {
     "@earendil-works/pi-durable": "1.3.0",
     "chat": "4.43.0",
     "@chat-adapter/discord": "4.43.0",
-    "@chat-adapter/state-memory": "4.43.0"
+    "@chat-adapter/state-memory": "4.43.0",
+    "@modelcontextprotocol/client": "2.3.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
