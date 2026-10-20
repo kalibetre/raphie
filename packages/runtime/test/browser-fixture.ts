@@ -1,0 +1,45 @@
+// Local browser acceptance fixture: real Pi/SQLite/HTTP; no external services.
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { createModels } from '@earendil-works/pi-ai/models';
+import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
+import { createAssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { Provider } from '@earendil-works/pi-ai/models';
+import { Gateway } from '../src/gateway.ts';
+import { startServer } from '../src/server.ts';
+const directory = await mkdtemp(join(tmpdir(), 'raphie-browser-'));
+const models = createModels();
+const model = { ...openrouterProvider().getModels()[0], id: 'acceptance', provider: 'fixture' };
+const reply: Provider['streamSimple'] = (_model, context, options) => {
+  const stream = createAssistantMessageEventStream();
+  const toolResult = context.messages.findLast(m => m.role === 'toolResult');
+  const user = context.messages.findLast(m => m.role === 'user');
+  const input = user && typeof user.content === 'string' ? user.content : '';
+  const useTool = /tool|approval/i.test(input) && !toolResult;
+  const text = toolResult?.role === 'toolResult' ? toolResult.content.flatMap(p => p.type === 'text' ? [p.text] : []).join('')
+    : `Let’s make some room for the day.\n\n1. **Choose one priority.** Start with the work that matters most.\n2. **Leave a little breathing room.** Keep a gap between meetings.\n3. **Close the loop.** Write down your next step before you finish.\n\nWhat would you like to focus on first?`;
+  const message: AssistantMessage = { role: 'assistant', content: useTool ? [{ type: 'toolCall', id: 'test-call', name: 'mcp_fixture_execute', arguments: { code: 'return calendar.events.list({ date: "2026-10-21" });' } }] : [{ type: 'text', text: '' }], api: model.api, provider: 'fixture', model: model.id, stopReason: useTool ? 'toolUse' : 'stop', timestamp: Date.now(), usage: { input: 24, output: 64, totalTokens: 88, cacheRead: 0, cacheWrite: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+  void (async () => {
+    stream.push({ type: 'start', partial: structuredClone(message) });
+    if (!useTool) {
+      for (const delta of text.match(/.{1,8}/gs) ?? []) {
+        await delay(90);
+        if (options?.signal?.aborted) break;
+        const content = message.content[0];
+        if (content.type === 'text') content.text += delta;
+        stream.push({ type: 'text_delta', contentIndex: 0, delta, partial: structuredClone(message) });
+      }
+    }
+    stream.push({ type: 'done', reason: useTool ? 'toolUse' : 'stop', message });
+  })();
+  return stream;
+};
+models.setProvider({ id: 'fixture', name: 'Fixture', getModels: () => [model], auth: { apiKey: { name: 'Fixture', resolve: async () => ({ auth: { apiKey: 'test' } }) } }, stream: (m,c,o) => reply(m,c,{ signal:o?.signal }), streamSimple: reply });
+const app = await Gateway.open({ directory, models, model: { provider: 'fixture', modelId: model.id }, mcp: { identity: 'acceptance', client: { server: { name: 'fixture', version: '1' }, tools: [{ name: 'execute', description: 'Fixture calendar lookup', inputSchema: { type: 'object', properties: { code: { type: 'string' } } } }], call: async () => ({ content: [{ type: 'text', text: 'Calendar checked. You have a planning session at 10:00 and the afternoon is clear.' }] }), close: async () => {} } } });
+const server = await startServer(app, { port: 4316, webOrigin: 'http://127.0.0.1:4320' });
+console.log(`Browser fixture: ${server.url}`);
+await new Promise<void>(done => { process.once('SIGINT', done); process.once('SIGTERM', done); });
+await server.close(); await app.close(); await rm(directory, { recursive: true, force: true });

@@ -6,3 +6,7 @@ node_modules/
 .output/
 .nitro/
 .DS_Store
+.data/
+dist/
+.tanstack/
+.env.schema.cache.json

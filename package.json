@@ -1,0 +1,27 @@
+{
+  "name": "raphie",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "npm run dev -w @raphie/web",
+    "dev:runtime": "varlock run -- node packages/runtime/src/main.ts",
+    "build": "npm run build -w @raphie/web",
+    "check": "npm run check --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "start": "node scripts/dev.mjs --production",
+    "start:web": "npm run start -w @raphie/web"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "@types/node": "^24.0.0",
+    "varlock": "1.23.0"
+  }
+}
