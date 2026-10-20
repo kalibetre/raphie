@@ -5,6 +5,9 @@ import { startServer } from './server.ts';
 import { createDiscordBridge, resolveDiscordThread } from './discord.ts';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
+import { createHash } from 'node:crypto';
+import { connectMcp, mcpConfig } from './mcp.ts';
+import type { McpClient } from './mcp.ts';
 
 const keys = ['DISCORD_BOT_TOKEN', 'DISCORD_APPLICATION_ID', 'DISCORD_PUBLIC_KEY', 'DISCORD_OWNER_ID', 'DISCORD_CHANNEL_ID'] as const;
 const configured = keys.filter(key => process.env[key]);
@@ -20,7 +23,16 @@ models.setProvider(openrouterProvider());
 const modelId = process.env.RAPHIE_MODEL ?? 'anthropic/claude-haiku-5.5';
 if (!models.getModel('openrouter', modelId)) throw new Error('RAPHIE_MODEL is not in the installed OpenRouter model catalog.');
 const model = process.env.OPENROUTER_API_KEY ? { provider: 'openrouter', modelId } : undefined;
-const app = await Gateway.open({ directory: resolve(process.env.DATA_DIRECTORY ?? '.data'), discordThreadId: threadId, models, model });
+const connectionConfig = mcpConfig(process.env);
+let mcp: McpClient | undefined;
+let mcpError = false;
+if (connectionConfig) {
+  try { mcp = await connectMcp(connectionConfig); }
+  catch { mcpError = true; console.error('MCP connection failed. Chat is available without external tools; check MCP configuration and restart.'); }
+}
+const app = await Gateway.open({ directory: resolve(process.env.DATA_DIRECTORY ?? '.data'), discordThreadId: threadId, models, model, mcpError,
+  mcp: mcp ? { client: mcp, identity: createHash('sha256').update(JSON.stringify(connectionConfig)).digest('hex'),
+    documentationTools: mcp.server?.name === 'executor' ? ['skills'] : [] } : undefined });
 const discord = threadId ? createDiscordBridge(app, {
   botToken: process.env.DISCORD_BOT_TOKEN!, applicationId: process.env.DISCORD_APPLICATION_ID!,
   publicKey: process.env.DISCORD_PUBLIC_KEY!,
@@ -49,4 +61,5 @@ try {
 } finally {
   stop.abort();
   await listener; await flushing; await http?.close(); await discord?.chat.shutdown(); await app.close();
+  await mcp?.close().catch(() => {});
 }

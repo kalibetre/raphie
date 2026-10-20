@@ -37,3 +37,16 @@ export async function connectMcp(config: McpConnection) {
 }
 
 export type McpClient = Awaited<ReturnType<typeof connectMcp>>;
+
+export function mcpConfig(env: NodeJS.ProcessEnv, urlOverride?: string): McpConnection | undefined {
+  const mode = env.MCP_TRANSPORT ?? 'http';
+  if (mode === 'stdio') {
+    if (!env.MCP_COMMAND) return undefined;
+    const args: unknown = JSON.parse(env.MCP_ARGS || '[]');
+    if (!Array.isArray(args) || !args.every(a => typeof a === 'string')) throw new Error('MCP_ARGS must be a JSON array of strings.');
+    return { transport: mode, command: env.MCP_COMMAND, args };
+  }
+  if (mode !== 'http' && mode !== 'sse') throw new Error('MCP_TRANSPORT must be http, sse, or stdio.');
+  const url = urlOverride ?? env.MCP_URL;
+  return url ? { transport: mode, url, token: env.MCP_BEARER_TOKEN } : undefined;
+}

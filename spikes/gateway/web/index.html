@@ -26,7 +26,9 @@
           <p id="conversation-hint">Talk it through with Raphie. Your conversation will be here when you return.</p>
         </div>
         <p id="setup" class="notice" hidden></p>
+        <p id="mcp-status" class="integration-status" role="status"></p>
         <section id="conversation" aria-label="Conversation" aria-live="polite" aria-relevant="additions text"></section>
+        <section id="tool-approvals" aria-label="Tool approvals" aria-live="polite"></section>
         <p id="deliveries" class="delivery-status" role="status"></p>
         <form id="composer">
           <label for="message">Message Raphie</label>
@@ -34,7 +36,7 @@
           <div class="composer-footer"><small>Text chat · Saved automatically</small><button id="send" class="primary" type="submit">Send message <span aria-hidden="true">↗</span></button></div>
           <p id="error" role="alert" hidden></p>
         </form>
-        <p class="footnote">Raphie remembers this conversation. Tasks, reminders, email, calendar, and file-reading tools are not connected yet.</p>
+        <p class="footnote">Raphie remembers this conversation. MCP executions require your approval. Built-in tasks and reminders are not connected yet.</p>
       </div>
     </main>
   </div>

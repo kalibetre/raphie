@@ -23,6 +23,7 @@ type Options = {
   beforeEffectCommit?: () => Promise<void>;
   models?: Models; model?: ModelRef;
   mcp?: McpTools;
+  mcpError?: boolean;
 };
 export class Gateway {
   files: Files;

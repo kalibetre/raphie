@@ -8,6 +8,7 @@ let eventId = crypto.randomUUID();
 let latest;
 let previous = '';
 let listVersion = '';
+let approvalsVersion = '';
 let refreshing = false;
 let sending = false;
 const drafts = new Map();
@@ -42,13 +43,15 @@ function render(state) {
   latest = state;
   const active = state.conversations.find(c => c.id === selected);
   const valid = selected === null || !!active;
-  const listKey = JSON.stringify([selected, state.conversations, sending]);
+  const approvals = state.toolApprovals ?? [];
+  const listKey = JSON.stringify([selected, state.conversations, sending, approvals.filter(a => a.status === 'pending').map(a => a.conversationId)]);
   if (listKey !== listVersion) {
     const list = document.querySelector('#conversations'); list.replaceChildren();
     if (!state.conversations.length) list.append(element('p', 'Your conversations will appear here.', 'empty'));
     for (const saved of [...state.conversations].reverse()) {
       const button = element('button', undefined, 'conversation-link'); button.type = 'button';
-      button.append(element('span', saved.title), element('small', saved.discordThreadId ? 'Discord' : 'Web'));
+      const awaiting = approvals.some(a => a.conversationId === saved.id && a.status === 'pending');
+      button.append(element('span', saved.title), element('small', `${saved.discordThreadId ? 'Discord' : 'Web'}${awaiting ? ' · Approval needed' : ''}`));
       if (saved.id === selected) button.setAttribute('aria-current', 'page');
       button.disabled = sending;
       button.onclick = () => select(saved.id); list.append(button);
@@ -67,7 +70,11 @@ function render(state) {
   messageInput.disabled = sending || !state.model || !valid;
   document.querySelector('#send').disabled = sending || !state.model || !valid;
   const turns = state.turns.filter(t => t.conversationId === selected);
-  const serialized = JSON.stringify([selected, turns]);
+  const proposals = approvals.filter(a => a.conversationId === selected);
+  document.querySelector('#mcp-status').textContent = state.mcp?.connected
+    ? `${state.mcp.server} connected · ${state.mcp.toolCount} tools · executions need approval`
+    : state.mcp?.error ? 'MCP connection failed · chat is available without external tools' : 'No MCP server connected';
+  const serialized = JSON.stringify([selected, turns, proposals.filter(a => a.status === 'pending').map(a => a.id)]);
   if (serialized !== previous) {
     transcript.replaceChildren();
     if (!turns.length && valid) transcript.append(element('p', 'A thought, a question, a detail to remember. Start anywhere.', 'empty'));
@@ -77,13 +84,53 @@ function render(state) {
       item.append(element('p', `YOU / ${turn.source.toUpperCase()} · ${date}`, 'message-meta'), element('p', turn.text, 'message-text'));
       const reply = element('div', undefined, 'assistant-reply');
       reply.append(element('p', 'RAPHIE', 'message-meta'), element('p', turn.answer ?? (turn.status === 'pending'
-        ? 'Thinking…' : 'I couldn’t complete that reply. Check the service and model configuration, then send a new message.'), 'message-text'));
+        ? (proposals.some(a => a.status === 'pending') ? 'Waiting for your tool approval below…' : 'Thinking…')
+        : 'I couldn’t complete that reply. Check the service and model configuration, then send a new message.'), 'message-text'));
       item.append(reply); transcript.append(item);
     }
     previous = serialized;
   }
+  const approvalsKey = JSON.stringify([selected, proposals]);
+  if (approvalsKey !== approvalsVersion) {
+    const container = document.querySelector('#tool-approvals'); container.replaceChildren();
+    for (const proposal of proposals) {
+      const card = element('article', undefined, `approval tool-approval ${proposal.status}`);
+      const status = proposal.status === 'pending' ? 'Needs your approval'
+        : proposal.execution === 'uncertain' ? 'Outcome unknown · check the external service'
+        : proposal.execution === 'done' ? 'Call finished'
+        : proposal.execution === 'running' ? 'Executing approved call…'
+        : { approved: 'Approved · waiting to execute', rejected: 'Declined', expired: 'Approval expired' }[proposal.status];
+      card.append(element('p', `${proposal.server} / ${proposal.tool}`, 'message-meta'), element('h2', status),
+        element('p', 'Approval permits one call with these exact arguments. Code may read or change external data.'));
+      const details = element('details');
+      details.open = proposal.status === 'pending';
+      details.append(element('summary', 'Review exact arguments'), element('pre', proposal.argumentsJson, 'tool-arguments'));
+      const download = element('a', 'Download full request JSON'); download.href = `/api/tool-approvals/${proposal.id}.json`;
+      download.setAttribute('download', ''); card.append(details, download);
+      if (proposal.status === 'pending') {
+        card.append(element('p', `Expires at ${new Date(proposal.expiresAt).toLocaleTimeString()}`));
+        const actions = element('div', undefined, 'actions');
+        for (const [decision, label] of [['approved', 'Approve once'], ['rejected', 'Decline']]) {
+          const button = element('button', label, decision === 'approved' ? 'primary' : 'secondary'); button.type = 'button';
+          button.setAttribute('aria-label', `${label}: ${proposal.tool} (${proposal.id.slice(0, 8)})`);
+          button.onclick = async () => {
+            for (const sibling of actions.children) sibling.disabled = true;
+            try {
+              await request(`/api/tool-approvals/${proposal.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ decision }) });
+              showError(''); await refresh(); messageInput.focus();
+            } catch (error) { showError(error.message); for (const sibling of actions.children) sibling.disabled = false; }
+          };
+          actions.append(button);
+        }
+        card.append(actions);
+      } else if (proposal.decidedVia) card.append(element('p', `Decision recorded via ${proposal.decidedVia}.`));
+      container.append(card);
+    }
+    approvalsVersion = approvalsKey;
+  }
   const uncertain = state.deliveries.filter(d => d.status === 'uncertain' && turns.some(t => t.id === d.turnId));
-  document.querySelector('#deliveries').textContent = uncertain.length ? 'A Discord delivery needs checking. The reply is saved here; automatic resend is paused to avoid duplicates.' : '';
+  const uncertainApproval = proposals.some(p => state.uncertainToolDeliveries?.includes(p.id));
+  document.querySelector('#deliveries').textContent = uncertain.length || uncertainApproval ? 'A Discord delivery needs checking. The request and reply are saved here; automatic resend is paused to avoid duplicates.' : '';
 }
 async function refresh() {
   if (refreshing) return;

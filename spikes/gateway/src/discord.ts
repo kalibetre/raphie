@@ -8,6 +8,18 @@ import { MAX_FILE_BYTES } from './files.ts';
 import { InputError } from './state.ts';
 import type { Approval } from './state.ts';
 import type { Gateway } from './gateway.ts';
+import type { ToolApproval } from './tool-approvals.ts';
+
+export function toolApprovalCard(item: ToolApproval): CardElement {
+  const pending = item.status === 'pending' && Date.now() < item.expiresAt;
+  return { type: 'card', title: pending ? `Approve ${item.server}: ${item.tool}` : `Tool request ${item.status}`, children: [
+    { type: 'text', content: `Review the attached JSON for the exact arguments. Approval permits one call, which may change external data.\nExpires: ${new Date(item.expiresAt).toISOString()}\nRequest: ${item.id}` },
+    { type: 'actions', children: [
+      { type: 'button', id: 'raphie-tool-approve', value: item.id, label: 'Approve once', style: 'primary', disabled: !pending },
+      { type: 'button', id: 'raphie-tool-reject', value: item.id, label: 'Decline', style: 'danger', disabled: !pending },
+    ] },
+  ] };
+}
 
 /** REST posting only needs a channel ID; incoming SDK routes also contain its guild. */
 export async function resolveDiscordThread(config: {
@@ -98,12 +110,31 @@ export function createDiscordBridge(app: Gateway, config: DiscordAdapterConfig &
     if (!authorized(event.user.userId, event.threadId) || !event.value) return;
     await app.decide(event.value, event.actionId === 'raphie-approve' ? 'approved' : 'rejected', 'owner', 'discord');
   });
+  chat.onAction(['raphie-tool-approve', 'raphie-tool-reject'], async event => {
+    if (!authorized(event.user.userId, event.threadId) || !event.value) return;
+    await app.toolApprovals.decide(event.value, event.actionId === 'raphie-tool-approve' ? 'approved' : 'rejected', 'owner', 'discord', event.threadId);
+  });
 
   let pumping = false;
   async function flush() {
     if (pumping) return;
     pumping = true;
     try {
+      for (let delivery; (delivery = await app.toolApprovals.claimDelivery());) {
+        try {
+          const state = await app.toolApprovals.state();
+          const item = state.approvals.find(a => a.id === delivery.approvalId)!;
+          const original = state.deliveries.find(d => d.approvalId === item.id && d.kind === 'approval');
+          const card = toolApprovalCard(item);
+          const message = delivery.kind === 'resolved' && original?.messageId
+            ? await adapter.editMessage(delivery.threadId, original.messageId, card)
+            : await adapter.postMessage(delivery.threadId, { card, files: [{
+              filename: `tool-request-${item.id}.json`,
+              data: Buffer.from(JSON.stringify({ server: item.server, tool: item.tool, arguments: JSON.parse(item.argumentsJson) }, null, 2)),
+            }] });
+          await app.toolApprovals.settleDelivery(delivery.id, message.id);
+        } catch { await app.toolApprovals.settleDelivery(delivery.id, null); }
+      }
       for (let delivery; (delivery = await app.claimDelivery());) {
         try {
           const state = await app.state();

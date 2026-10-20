@@ -61,7 +61,21 @@ export async function startServer(app: Gateway, options: {
       } else if (req.method === 'GET' && path === '/api/state') {
         json(res, { ...await app.state(), discordConfigured: options.discordConfigured ?? false });
       } else if (req.method === 'GET' && path === '/api/chats') {
-        json(res, { ...await app.chats.state(), model: app.chats.model ?? null });
+        const tools = await app.toolApprovals.state();
+        json(res, { ...await app.chats.state(), model: app.chats.model ?? null,
+          mcp: { connected: !!app.options.mcp, error: app.options.mcpError ?? false,
+            server: app.options.mcp?.client.server?.name ?? null, toolCount: app.options.mcp?.client.tools.length ?? 0 },
+          toolApprovals: tools.approvals.map(({ taskId, fingerprint, result, ...proposal }) => proposal),
+          uncertainToolDeliveries: tools.deliveries.filter(d => d.status === 'uncertain').map(d => d.approvalId) });
+      } else if (req.method === 'POST' && /^\/api\/tool-approvals\/[a-f0-9-]{36}$/.test(path)) {
+        const data = JSON.parse((await body(req, 1024)).toString());
+        json(res, { status: await app.toolApprovals.decide(path.split('/').at(-1)!, data.decision, 'owner', 'web') });
+      } else if (req.method === 'GET' && /^\/api\/tool-approvals\/[a-f0-9-]{36}\.json$/.test(path)) {
+        const id = path.split('/').at(-1)!.slice(0, -5);
+        const item = (await app.toolApprovals.state()).approvals.find(a => a.id === id);
+        if (!item) throw new InputError('Tool approval not found.', 404);
+        res.setHeader('Content-Disposition', `attachment; filename="tool-request-${id}.json"`);
+        json(res, { server: item.server, tool: item.tool, arguments: JSON.parse(item.argumentsJson) });
       } else if (req.method === 'POST' && path === '/api/chat') {
         const data = JSON.parse((await body(req, 20_000)).toString());
         const result = await app.chats.send({ source: 'web', actor: 'owner', eventId: data.eventId,
