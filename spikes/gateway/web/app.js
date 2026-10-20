@@ -1,27 +1,22 @@
-const conversation = document.querySelector('#conversation');
+const transcript = document.querySelector('#conversation');
 const form = document.querySelector('#composer');
 const errorBox = document.querySelector('#error');
-let previous = '';
+const messageInput = document.querySelector('#message');
+let selected = new URL(location.href).searchParams.get('conversation');
+selected = selected ? Number(selected) : null;
 let eventId = crypto.randomUUID();
+let latest;
+let previous = '';
+let listVersion = '';
 let refreshing = false;
+let sending = false;
+const drafts = new Map();
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
   if (className) node.className = className;
   return node;
-}
-function filesList(files) {
-  const list = element('ul', undefined, 'files');
-  for (const file of files) {
-    const item = element('li');
-    const link = element('a', file.name);
-    link.href = `/api/files/${file.id}`;
-    link.setAttribute('download', '');
-    item.append(link, element('small', `${Math.ceil(file.size / 1024)} KB`));
-    list.append(item);
-  }
-  return list;
 }
 function showError(message) { errorBox.textContent = message; errorBox.hidden = !message; }
 async function request(url, options = {}) {
@@ -30,74 +25,87 @@ async function request(url, options = {}) {
   if (!response.ok) throw new Error(data.error || 'Request failed.');
   return data;
 }
+function select(id) {
+  if (sending) return;
+  drafts.set(selected, { text: messageInput.value, eventId });
+  selected = id;
+  messageInput.value = drafts.get(id)?.text ?? '';
+  eventId = drafts.get(id)?.eventId ?? crypto.randomUUID();
+  const url = new URL(location.href);
+  if (id === null) url.searchParams.delete('conversation'); else url.searchParams.set('conversation', String(id));
+  history.replaceState(null, '', url);
+  showError(''); previous = ''; listVersion = '';
+  if (latest) render(latest);
+  messageInput.focus();
+}
 function render(state) {
-  conversation.replaceChildren();
-  if (!state.approvals.length) conversation.append(element('p', 'Your first message starts the experiment.', 'empty'));
-  for (const approval of state.approvals) {
-    const item = element('article', undefined, 'exchange');
-    const date = new Date(approval.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    item.append(element('p', `YOU / ${approval.source.toUpperCase()} · ${date}`, 'message-meta'));
-    if (approval.text) item.append(element('p', approval.text, 'message-text'));
-    if (approval.files.length) item.append(filesList(approval.files));
-    const card = element('div', undefined, `approval ${approval.status}`);
-    const status = approval.completedAt ? 'Completed' : { pending: 'Needs your approval', approved: 'Creating your copy…', rejected: 'Declined', expired: 'Approval expired' }[approval.status];
-    card.append(element('p', 'RAPHIE', 'message-meta'), element('h2', status));
-    card.append(element('p', approval.files.length ? 'Create a copy of the attached files and deliver it to your connected interfaces.' : 'Create a text file containing this exact note and deliver it to your connected interfaces.'));
-    if (approval.status === 'pending') {
-      card.append(element('small', `Expires at ${new Date(approval.expiresAt).toLocaleTimeString()}`));
-      const actions = element('div', undefined, 'actions');
-      for (const [decision, label] of [['approved', 'Approve'], ['rejected', 'Decline']]) {
-        const button = element('button', label, decision === 'approved' ? 'primary' : 'secondary');
-        button.type = 'button';
-        button.setAttribute('aria-label', `${label} request from ${date}`);
-        button.onclick = async () => {
-          for (const sibling of actions.children) sibling.disabled = true;
-          try {
-            await request(`/api/approvals/${approval.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ decision }) });
-            showError(''); await refresh(); document.querySelector('#message').focus();
-          } catch (error) { showError(error.message); for (const sibling of actions.children) sibling.disabled = false; }
-        };
-        actions.append(button);
-      }
-      card.append(actions);
-    } else if (approval.decidedVia) card.append(element('small', `Decision recorded via ${approval.decidedVia}.`));
-    if (approval.results.length) card.append(filesList(approval.results));
-    item.append(card); conversation.append(item);
+  latest = state;
+  const active = state.conversations.find(c => c.id === selected);
+  const valid = selected === null || !!active;
+  const listKey = JSON.stringify([selected, state.conversations, sending]);
+  if (listKey !== listVersion) {
+    const list = document.querySelector('#conversations'); list.replaceChildren();
+    if (!state.conversations.length) list.append(element('p', 'Your conversations will appear here.', 'empty'));
+    for (const saved of [...state.conversations].reverse()) {
+      const button = element('button', undefined, 'conversation-link'); button.type = 'button';
+      button.append(element('span', saved.title), element('small', saved.discordThreadId ? 'Discord' : 'Web'));
+      if (saved.id === selected) button.setAttribute('aria-current', 'page');
+      button.disabled = sending;
+      button.onclick = () => select(saved.id); list.append(button);
+    }
+    listVersion = listKey;
   }
-  const uncertain = state.deliveries.filter(d => d.status === 'uncertain');
-  document.querySelector('#deliveries').textContent = uncertain.length
-    ? `${uncertain.length} Discord delivery attempt(s) need checking. Delivery may have succeeded; automatic retry is paused to avoid duplicates.` : '';
+  document.querySelector('#new-conversation').disabled = sending;
+  document.querySelector('#model').textContent = state.model ? state.model.modelId : 'MODEL NOT CONFIGURED';
+  document.querySelector('#conversation-title').textContent = active?.title ?? (valid ? 'What’s on your mind?' : 'Conversation not found');
+  document.querySelector('#conversation-source').textContent = active ? (active.discordThreadId ? 'STARTED IN DISCORD' : 'STARTED ON THE WEB') : 'A FRESH START';
+  document.querySelector('#conversation-hint').textContent = active?.discordThreadId
+    ? 'Continue here or in the same Discord thread. Replies appear in both places.'
+    : 'Talk it through with Raphie. Your conversation will be here when you return.';
+  const setup = document.querySelector('#setup'); setup.hidden = !!state.model;
+  setup.textContent = 'Chat needs OpenRouter configuration on the server. Set OPENROUTER_API_KEY and restart Raphie.';
+  messageInput.disabled = sending || !state.model || !valid;
+  document.querySelector('#send').disabled = sending || !state.model || !valid;
+  const turns = state.turns.filter(t => t.conversationId === selected);
+  const serialized = JSON.stringify([selected, turns]);
+  if (serialized !== previous) {
+    transcript.replaceChildren();
+    if (!turns.length && valid) transcript.append(element('p', 'A thought, a question, a detail to remember. Start anywhere.', 'empty'));
+    for (const turn of turns) {
+      const item = element('article', undefined, 'exchange');
+      const date = new Date(turn.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      item.append(element('p', `YOU / ${turn.source.toUpperCase()} · ${date}`, 'message-meta'), element('p', turn.text, 'message-text'));
+      const reply = element('div', undefined, 'assistant-reply');
+      reply.append(element('p', 'RAPHIE', 'message-meta'), element('p', turn.answer ?? (turn.status === 'pending'
+        ? 'Thinking…' : 'I couldn’t complete that reply. Check the service and model configuration, then send a new message.'), 'message-text'));
+      item.append(reply); transcript.append(item);
+    }
+    previous = serialized;
+  }
+  const uncertain = state.deliveries.filter(d => d.status === 'uncertain' && turns.some(t => t.id === d.turnId));
+  document.querySelector('#deliveries').textContent = uncertain.length ? 'A Discord delivery needs checking. The reply is saved here; automatic resend is paused to avoid duplicates.' : '';
 }
 async function refresh() {
   if (refreshing) return;
   refreshing = true;
-  try {
-    const state = await request('/api/state');
-    document.querySelector('#connection').textContent = '● Service connected';
-    document.querySelector('#discord-status').textContent = state.discordConfigured ? 'Discord configured' : 'Discord not configured · web works locally';
-    const serialized = JSON.stringify(state);
-    if (serialized !== previous) { render(state); previous = serialized; }
-  } catch {
-    document.querySelector('#connection').textContent = 'Service offline · reconnecting';
-  } finally { refreshing = false; }
+  try { render(await request('/api/chats')); document.querySelector('#connection').textContent = '● Service connected'; }
+  catch { document.querySelector('#connection').textContent = 'Service offline · reconnecting'; }
+  finally { refreshing = false; }
 }
-form.addEventListener('input', () => { eventId = crypto.randomUUID(); });
+document.querySelector('#new-conversation').onclick = () => select(null);
+messageInput.addEventListener('input', () => { eventId = crypto.randomUUID(); });
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  const data = new FormData(form);
-  const selected = [...document.querySelector('#files').files];
-  if (selected.length > 4 || selected.some(file => file.size > 8 * 1024 * 1024)) return showError('Choose up to four files, each no larger than 8 MiB.');
-  if (!String(data.get('text')).trim() && !selected.length) return showError('Write a note or attach a file first.');
-  data.delete('files');
-  for (const file of selected) data.append('files', file);
-  data.set('eventId', eventId);
-  const controls = [...form.querySelectorAll('button, input, textarea')];
-  for (const control of controls) control.disabled = true;
+  const text = messageInput.value;
+  if (!text.trim() || sending) return;
+  sending = true; if (latest) render(latest);
   try {
-    await request('/api/messages', { method: 'POST', body: data });
-    form.reset(); eventId = crypto.randomUUID(); showError(''); await refresh();
-  } catch (error) { showError(`${error.message} You can retry this same message.`); }
-  finally { for (const control of controls) control.disabled = false; document.querySelector('#message').focus(); }
+    const result = await request('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text, eventId, ...(selected === null ? {} : { conversationId: selected }) }) });
+    drafts.delete(selected); messageInput.value = ''; sending = false;
+    select(result.conversationId); await refresh(); showError('');
+  } catch (error) { showError(`${error.message} Your message is still here; you can retry.`); }
+  finally { sending = false; if (latest) render(latest); messageInput.focus(); }
 });
 await refresh();
 setInterval(refresh, 1000);

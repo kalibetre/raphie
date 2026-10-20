@@ -7,6 +7,8 @@ import type { Gateway } from './gateway.ts';
 
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
+  ['/experiment', ['experiment.html', 'text/html; charset=utf-8']],
+  ['/experiment.js', ['experiment.js', 'text/javascript; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
 ]);
@@ -58,6 +60,13 @@ export async function startServer(app: Gateway, options: {
         res.end(await readFile(new URL(`../web/${name}`, import.meta.url)));
       } else if (req.method === 'GET' && path === '/api/state') {
         json(res, { ...await app.state(), discordConfigured: options.discordConfigured ?? false });
+      } else if (req.method === 'GET' && path === '/api/chats') {
+        json(res, { ...await app.chats.state(), model: app.chats.model ?? null });
+      } else if (req.method === 'POST' && path === '/api/chat') {
+        const data = JSON.parse((await body(req, 20_000)).toString());
+        const result = await app.chats.send({ source: 'web', actor: 'owner', eventId: data.eventId,
+          text: data.text, conversationId: data.conversationId });
+        json(res, result, 201);
       } else if (req.method === 'GET' && path.startsWith('/api/files/')) {
         const id = path.slice('/api/files/'.length);
         const state = await app.state();

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Gateway } from '../src/gateway.ts';
 import { createDiscordBridge, resolveDiscordThread } from '../src/discord.ts';
+import { chatModel } from './chat-model.ts';
 
 test('server channel without a configured guild resolves to the incoming event route', async () => {
   const lookup = (async () => Response.json({ id: 'channel', type: 0, guild_id: 'guild' })) as typeof fetch;
@@ -43,7 +44,7 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
   };
   const directory = await mkdtemp(join(tmpdir(), 'raphie-discord-'));
   const threadId = 'discord:guild:channel';
-  let app = await Gateway.open({ directory, discordThreadId: threadId });
+  let app = await Gateway.open({ directory, discordThreadId: threadId, ...chatModel() });
   const bytes = new Uint8Array([0, 128, 255, 10]);
   const config = {
     botToken: 'fixture-token', applicationId: 'fixture-app', ownerId: 'owner-id', threadId,
@@ -55,7 +56,7 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
   try {
     await bridge.chat.initialize();
     const incoming = (author = 'owner-id', id = 'incoming-1') => bridge.adapter.parseMessage({
-      id, guild_id: 'guild', channel_id: 'channel', content: 'Remember my manager notes',
+      id, guild_id: 'guild', channel_id: 'channel', content: '/copy Remember my manager notes',
       author: { id: author, username: author, bot: false }, timestamp: new Date().toISOString(),
       attachments: [{ filename: 'notes.bin', size: bytes.length, url: 'https://cdn.discordapp.com/attachments/test/notes.bin' }],
     });
@@ -69,7 +70,7 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
     const gateway = bridge.adapter as unknown as { handleGatewayMessage(message: unknown, mentioned: boolean): Promise<void> };
     await gateway.handleGatewayMessage({
       id: 'incoming-1', guildId: 'guild', channelId: 'channel',
-      channel: { isThread: () => false }, content: 'Remember my manager notes',
+      channel: { isThread: () => false }, content: '/copy Remember my manager notes',
       author: { id: 'owner-id', username: 'owner', displayName: 'Owner', bot: false },
       createdAt: new Date(), editedAt: null,
       attachments: new Map([['file', { name: 'notes.bin', size: bytes.length, url: 'https://cdn.discordapp.com/attachments/test/notes.bin' }]]),
@@ -83,7 +84,7 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
     assert.equal(payload.components[0].components[0].label, 'Approve');
     assert.ok(payload.components[0].components[0].custom_id.includes(approval.id));
     await bridge.chat.shutdown(); await app.close();
-    app = await Gateway.open({ directory, discordThreadId: threadId });
+    app = await Gateway.open({ directory, discordThreadId: threadId, ...chatModel() });
     bridge = createDiscordBridge(app, config); await bridge.chat.initialize();
     // Event redelivery after the SDK's in-memory dedupe is lost still reuses durable state.
     await bridge.chat.processMessage(bridge.adapter, threadId, incoming());
@@ -108,6 +109,26 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
     assert.equal(upload.path, '/channels/outgoing-1/messages');
     assert.equal((await app.state()).deliveries.every(d => d.threadId === `${threadId}:outgoing-1`), true);
     assert.equal((await app.state()).deliveries.every(d => d.status === 'sent'), true);
+    const repliesBeforeChat = requests.length;
+    const followUp = async (id: string, text: string) => {
+      const gateway = bridge.adapter as unknown as { handleGatewayMessage(message: unknown, mentioned: boolean): Promise<void> };
+      await gateway.handleGatewayMessage({
+        id, guildId: 'guild', channelId: 'outgoing-1', channel: { isThread: () => true, parentId: 'channel' }, content: text,
+        author: { id: 'owner-id', username: 'owner', bot: false }, createdAt: new Date(), editedAt: null, attachments: new Map(),
+      }, false);
+      for (let n = 0; n < 150 && (await app.chats.state()).turns.some(t => t.status === 'pending'); n++) await delay(20);
+      await bridge.flush();
+    };
+    await followUp('chat-1', 'The proposal is due Thursday');
+    await followUp('chat-2', 'What day is it due?');
+    const chats = await app.chats.state();
+    assert.equal(chats.conversations.length, 1);
+    assert.match(chats.turns[1].answer!, /Thursday.*What day/);
+    assert.equal(chats.deliveries.every(d => d.status === 'sent'), true);
+    const chatRequests = requests.slice(repliesBeforeChat).filter(r => r.method === 'POST');
+    assert.equal(chatRequests.length, 2);
+    assert.equal(chatRequests.every(r => r.path === '/channels/outgoing-1/messages'), true);
+    assert.equal((await app.state()).approvals.length, 1, 'Normal chat must not create file-copy approvals');
     // A failed/unknown network operation becomes visible instead of being retried.
     const id = await app.accept({ source: 'web', eventId: 'failure', actor: 'owner', text: 'Test uncertain delivery', files: [] });
     bridge.adapter.postMessage = async () => { throw new Error('Connection lost after send'); };

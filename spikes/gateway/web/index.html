@@ -2,39 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Raphie · Gateway experiment</title>
+  <title>Raphie · Conversations</title>
   <link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
 </head>
 <body>
-  <div class="shell">
+  <div class="shell chat-shell">
     <aside class="sidebar">
       <a class="brand" href="/">r<span>aphie</span><span class="brand-dot">.</span></a>
-      <p class="eyebrow">PERSONAL AGENT / EXPERIMENT 01</p>
-      <div class="nav-current">Conversation <span>01</span></div>
+      <p class="eyebrow">YOUR PERSONAL ASSISTANT</p>
+      <button id="new-conversation" class="primary" type="button">+ New conversation</button>
+      <nav id="conversations" aria-label="Saved conversations"><p class="empty">Loading conversations…</p></nav>
       <div class="sidebar-bottom">
-        <p class="sidebar-heading">A small test of trust.</p>
-        <p>One conversation. Two interfaces. Decisions that survive a restart.</p>
+        <p>Pick up any conversation, here or in Discord.</p>
         <div id="connection" role="status">Connecting…</div>
-        <div id="discord-status">Checking Discord…</div>
+        <a href="/experiment">File approval experiment ↗</a>
       </div>
     </aside>
     <main>
-      <header class="topbar"><span>Gateway experiment</span><span class="mode">DETERMINISTIC · NO MODEL CALLS</span></header>
+      <header class="topbar"><span>Conversations</span><span id="model" class="mode">CHECKING MODEL…</span></header>
       <div class="content">
-        <div class="intro"><p class="eyebrow">THE CONVERSATION</p><h1>Pick up where you left off.</h1>
-          <p>Send a note or file. Raphie asks before creating a downloadable copy. Approve here or in Discord—even after restarting the service.</p>
+        <div class="intro"><p id="conversation-source" class="eyebrow">A FRESH START</p>
+          <h1 id="conversation-title">What’s on your mind?</h1>
+          <p id="conversation-hint">Talk it through with Raphie. Your conversation will be here when you return.</p>
         </div>
-        <section id="conversation" aria-label="Conversation" aria-live="polite" aria-relevant="additions text">
-          <p class="empty">Your first message starts the experiment.</p>
-        </section>
-        <div id="deliveries" class="delivery-status" aria-live="polite"></div>
+        <p id="setup" class="notice" hidden></p>
+        <section id="conversation" aria-label="Conversation" aria-live="polite" aria-relevant="additions text"></section>
+        <p id="deliveries" class="delivery-status" role="status"></p>
         <form id="composer">
           <label for="message">Message Raphie</label>
-          <textarea id="message" name="text" rows="3" maxlength="4000" placeholder="Keep these notes from my manager…"></textarea>
-          <div class="composer-footer"><div class="file-control"><label for="files">Attach files</label><input id="files" name="files" type="file" multiple aria-describedby="file-hint"><small id="file-hint">Up to 4 files · 8 MiB each</small></div><button class="primary" type="submit">Send for approval <span aria-hidden="true">↗</span></button></div>
+          <textarea id="message" name="text" rows="3" maxlength="4000" placeholder="My manager asked me to send the proposal by Thursday…" required></textarea>
+          <div class="composer-footer"><small>Text chat · Saved automatically</small><button id="send" class="primary" type="submit">Send message <span aria-hidden="true">↗</span></button></div>
           <p id="error" role="alert" hidden></p>
         </form>
-        <p class="footnote">Local experiment · Files stay on this server. Approved results are also sent to Discord when connected.</p>
+        <p class="footnote">Raphie remembers this conversation. Tasks, reminders, email, calendar, and file-reading tools are not connected yet.</p>
       </div>
     </main>
   </div>

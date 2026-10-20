@@ -7,15 +7,20 @@ import { get } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Gateway } from '../src/gateway.ts';
 import { startServer } from '../src/server.ts';
+import { chatModel } from './chat-model.ts';
 
 test('HTTP upload, restart, duplicate decisions and binary download', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'raphie-http-'));
-  let app = await Gateway.open({ directory });
+  let app = await Gateway.open({ directory, ...chatModel() });
   let http = await startServer(app, { port: 0 });
   const bytes = new Uint8Array([0, 255, 128, 10]);
   const headers = { 'x-raphie-client': 'web' };
   try {
     assert.equal((await fetch(http.url)).status, 200);
+    const message = { text: 'Remember Thursday', eventId: 'chat-event' };
+    const chatResponse = await fetch(`${http.url}/api/chat`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(message) });
+    assert.equal(chatResponse.status, 201);
+    const sent = await chatResponse.json();
     const upload = () => {
       const form = new FormData();
       form.set('text', 'Keep these notes'); form.set('eventId', 'stable-event');
@@ -34,7 +39,12 @@ test('HTTP upload, restart, duplicate decisions and binary download', async () =
     });
     assert.equal(badHost, 403);
     await http.close(); await app.close();
-    app = await Gateway.open({ directory }); http = await startServer(app, { port: 0 });
+    app = await Gateway.open({ directory, ...chatModel() }); http = await startServer(app, { port: 0 });
+    const replay = await fetch(`${http.url}/api/chat`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(message) });
+    assert.deepEqual(await replay.json(), sent);
+    const chats = await (await fetch(`${http.url}/api/chats`)).json();
+    assert.equal(chats.conversations[0].id, sent.conversationId);
+    assert.equal(chats.turns.length, 1);
     const decide = () => fetch(`${http.url}/api/approvals/${id}`, {
       method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ decision: 'approved' }),
     });

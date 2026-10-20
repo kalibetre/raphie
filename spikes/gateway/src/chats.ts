@@ -60,9 +60,10 @@ export class ChatService {
   async send(input: { source: Source; eventId: string; actor: string; text: string; conversationId?: ConversationId; discordThreadId?: string }) {
     this.app.authorize(input.actor);
     if (!this.model) throw new InputError('Chat needs OPENROUTER_API_KEY and RAPHIE_MODEL configured on the server.', 503);
-    if (!input.eventId || input.eventId.length > 200 || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 4000) {
+    if (typeof input.eventId !== 'string' || !input.eventId || input.eventId.length > 200 || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 4000) {
       throw new InputError('Send a message of 1–4,000 characters with a stable event ID.');
     }
+    if (input.conversationId !== undefined && (!Number.isSafeInteger(input.conversationId) || input.conversationId <= 0)) throw new InputError('Invalid conversation ID.');
     const model = this.model;
     const requestKey = `${input.source}:${input.eventId}`;
     const fingerprint = createHash('sha256').update(JSON.stringify([input.text, input.conversationId ?? null, input.discordThreadId ?? null])).digest('hex');

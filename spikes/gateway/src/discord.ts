@@ -60,6 +60,12 @@ export function createDiscordBridge(app: Gateway, config: DiscordAdapterConfig &
   async function receive(thread: Thread, message: Message) {
     if (!authorized(message.author.userId, thread.id) || message.author.isBot) return;
     try {
+      const text = message.text.replace(/^<@!?\d+>\s*/, '').trim();
+      if (!/^\/copy(?:\s|$)/.test(text)) {
+        if (message.attachments.length) throw new InputError('Chat currently accepts text only. Use /copy with attachments to run the file approval experiment.');
+        await app.chats.send({ source: 'discord', eventId: message.id, actor: 'owner', text, discordThreadId: thread.id });
+        return;
+      }
       if (message.attachments.length > 4) throw new InputError('Attach at most four files.');
       const files = [];
       for (const attachment of message.attachments) {
@@ -78,9 +84,10 @@ export function createDiscordBridge(app: Gateway, config: DiscordAdapterConfig &
         }
         files.push(await app.files.put(attachment.name ?? 'attachment', Buffer.concat(chunks)));
       }
-      await app.accept({ source: 'discord', eventId: message.id, actor: 'owner', text: message.text, files, discordThreadId: thread.id });
-    } catch {
-      console.error('Discord message was not accepted. Check attachment limits and retry as a new message.');
+      await app.accept({ source: 'discord', eventId: message.id, actor: 'owner', text: text.replace(/^\/copy\s*/, ''), files, discordThreadId: thread.id });
+    } catch (error) {
+      const text = error instanceof InputError ? error.message : 'I could not accept that message. Please try again.';
+      await adapter.postMessage(thread.id, { raw: text }).catch(() => { console.error('Discord message error notification failed.'); });
     }
   }
   chat.onNewMessage(receive);
@@ -117,6 +124,12 @@ export function createDiscordBridge(app: Gateway, config: DiscordAdapterConfig &
         } catch {
           await app.settleDelivery(delivery.id, null, 'Delivery failed or its outcome is unknown; inspect Discord before retrying.');
         }
+      }
+      for (let delivery; (delivery = await app.chats.claimDelivery());) {
+        try {
+          await adapter.postMessage(delivery.threadId, { raw: delivery.text });
+          await app.chats.settleDelivery(delivery.id, 'sent');
+        } catch { await app.chats.settleDelivery(delivery.id, 'uncertain'); }
       }
     } finally { pumping = false; }
   }

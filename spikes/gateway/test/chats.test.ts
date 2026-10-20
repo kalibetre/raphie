@@ -33,10 +33,31 @@ test('conversation history and reply routing survive reopen, without leaking acr
     assert.equal((await answered(app, isolated.id)).answer, 'Hello');
     assert.equal((await app.chats.state()).conversations.length, 2);
     assert.equal((await app.chats.state()).deliveries.filter(d => d.threadId === input.discordThreadId).length, 2);
+    const concurrent = await Promise.all(['First follow-up', 'Second follow-up'].map((text, index) => app.chats.send({
+      source: 'web', actor: 'owner', eventId: `concurrent-${index}`, text, conversationId: first.conversationId,
+    })));
+    const replies = await Promise.all(concurrent.map(turn => answered(app, turn.id)));
+    assert.equal(replies.every(turn => turn.status === 'done'), true);
+    assert.match(replies[1].answer!, /First follow-up.*Second follow-up/);
     const claimed = await app.chats.claimDelivery(); assert.ok(claimed);
     await app.close(); app = await Gateway.open({ directory, ...config });
     assert.equal((await app.chats.state()).deliveries.find(d => d.id === claimed.id)!.status, 'uncertain');
     await assert.rejects(app.chats.send({ ...input, actor: 'stranger' }), /authorized/);
+  } finally { await app.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('provider failures settle visibly; missing model or invalid input never queues a turn', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'raphie-chat-errors-'));
+  let app = await Gateway.open({ directory, ...chatModel({ fail: true }) });
+  const input = { source: 'web' as const, actor: 'owner', eventId: 'failure', text: 'Hello' };
+  try {
+    await assert.rejects(app.chats.send({ ...input, text: '' }), /message/);
+    const sent = await app.chats.send(input);
+    const failed = await answered(app, sent.id);
+    assert.equal(failed.status, 'error'); assert.equal(failed.answer, null);
+    await app.close(); app = await Gateway.open({ directory });
+    await assert.rejects(app.chats.send({ ...input, eventId: 'unconfigured' }), /OPENROUTER_API_KEY/);
+    assert.equal((await app.chats.state()).turns.length, 1);
   } finally { await app.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
