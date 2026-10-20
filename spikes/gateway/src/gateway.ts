@@ -11,10 +11,14 @@ import type { FileRef } from './files.ts';
 import { State, InputError } from './state.ts';
 import type { Approval, Source } from './state.ts';
 import { deliveryWorkflow, enqueue } from './workflow.ts';
+import { Chats, ChatService, chatWorkflow } from './chats.ts';
+import type { ModelRef } from '@earendil-works/pi-durable';
+import type { Models } from '@earendil-works/pi-ai/models';
 
 type Options = {
   directory: string; discordThreadId?: string; approvalTtlMs?: number;
   beforeEffectCommit?: () => Promise<void>;
+  models?: Models; model?: ModelRef;
 };
 export class Gateway {
   files: Files;
@@ -22,20 +26,24 @@ export class Gateway {
   root!: Conversation;
   options: Options;
   workflow: ReturnType<typeof deliveryWorkflow>;
+  chats: ChatService;
 
   private constructor(options: Options) {
     this.options = options;
     this.files = new Files(join(options.directory, 'files'));
     this.workflow = deliveryWorkflow(this.files, options.discordThreadId ?? null, options.beforeEffectCommit);
+    this.chats = new ChatService(this, options.model);
   }
 
   static async open(options: Options) {
     const app = new Gateway(options);
     await mkdir(options.directory, { recursive: true, mode: 0o700 });
     const registry = createRegistry();
-    registry.install(defineExtension({ name: 'raphie.gateway', tasks: [app.workflow] }));
+    registry.install(defineExtension({ name: 'raphie.gateway', tasks: [app.workflow, chatWorkflow] }));
     app.harness = await Harness.open(await openNodeSqliteStorage(join(options.directory, 'gateway.sqlite')),
-      { registry, models: createModels() }, context);
+      { registry, models: options.models ?? createModels(), settings: {
+        followUpMode: 'one-at-a-time', stream: { timeoutMs: 120_000 }, retry: { enabled: true, maxRetries: 1 },
+      } }, context);
     app.root = await app.harness.root(context);
     await app.root.commit(async tx => {
       const state = await tx.doc(State);
@@ -43,6 +51,8 @@ export class Gateway {
       for (const delivery of state.deliveries) if (delivery.status === 'sending') {
         delivery.status = 'uncertain'; delivery.error = 'Interrupted during delivery; check Discord before retrying.';
       }
+      const chats = await tx.doc(Chats);
+      for (const delivery of chats.deliveries) if (delivery.status === 'sending') delivery.status = 'uncertain';
     }, context);
     app.harness.resume();
     return app;
