@@ -51,7 +51,7 @@ export class Gateway {
   async state() { return (await this.harness.snapshot(State, context))!; }
   async close() { await this.harness.close(context); }
 
-  async accept(input: { source: Source; eventId: string; actor: string; text: string; files: FileRef[] }) {
+  async accept(input: { source: Source; eventId: string; actor: string; text: string; files: FileRef[]; discordThreadId?: string }) {
     this.authorize(input.actor);
     if (!input.eventId || input.eventId.length > 200) throw new InputError('A stable event ID is required.');
     if (typeof input.text !== 'string' || input.text.length > 4000 || (!input.text.trim() && !input.files.length)) {
@@ -76,7 +76,9 @@ export class Gateway {
       await tx.createTask(this.workflow, { approvalId: approval.id },
         { ownership: { kind: 'conversation' } });
       state.approvals.push(approval);
-      enqueue(state, approval, 'approval', this.options.discordThreadId ?? null);
+      enqueue(state, approval, 'approval', input.source === 'discord'
+        ? input.discordThreadId ?? this.options.discordThreadId ?? null
+        : this.options.discordThreadId ?? null);
       return approval.id;
     }, context);
     this.harness.resume();

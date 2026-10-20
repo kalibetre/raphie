@@ -9,6 +9,9 @@ type Input = { approvalId: string };
 type Checkpoint = { phase: 'wait' } | { phase: 'effect' };
 
 export function enqueue(state: GatewayState, approval: Approval, kind: Delivery['kind'], threadId: string | null) {
+  // Pin follow-ups to the persisted original destination, including after a
+  // restart, a web decision, or a change to the configured notification channel.
+  threadId = state.deliveries.find(d => d.approvalId === approval.id && d.kind === 'approval')?.threadId ?? threadId;
   if (threadId) state.deliveries.push({
     id: `${approval.id}:${kind}`, approvalId: approval.id, kind, threadId,
     status: 'pending', messageId: null, error: null,

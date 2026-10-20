@@ -20,7 +20,7 @@ test('pending workflow survives reopen; competing clients produce one file effec
   try {
     const bytes = Buffer.from([0, 255, 128, 10]);
     const file = await app.files.put('manager-notes.bin', bytes);
-    const input = { source: 'discord' as const, eventId: 'message-1', actor: 'owner', text: 'Keep this', files: [file] };
+    const input = { source: 'discord' as const, eventId: 'message-1', actor: 'owner', text: 'Keep this', files: [file], discordThreadId: 'discord:guild:channel:thread' };
     const id = await app.accept(input);
     assert.equal(await app.accept(input), id);
     await assert.rejects(app.accept({ ...input, text: 'Different action' }), /different content/);
@@ -39,6 +39,7 @@ test('pending workflow survives reopen; competing clients produce one file effec
     assert.equal(state.approvals.length, 1);
     assert.deepEqual(await app.files.read(state.approvals[0].results[0].id), bytes);
     assert.equal(state.deliveries.filter(d => d.kind === 'result').length, 1);
+    assert.equal(state.deliveries.every(d => d.threadId === input.discordThreadId), true);
     const delivery = await app.claimDelivery();
     assert.ok(delivery);
     await app.close();

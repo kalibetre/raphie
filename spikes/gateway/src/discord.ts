@@ -78,7 +78,7 @@ export function createDiscordBridge(app: Gateway, config: DiscordAdapterConfig &
         }
         files.push(await app.files.put(attachment.name ?? 'attachment', Buffer.concat(chunks)));
       }
-      await app.accept({ source: 'discord', eventId: message.id, actor: 'owner', text: message.text, files });
+      await app.accept({ source: 'discord', eventId: message.id, actor: 'owner', text: message.text, files, discordThreadId: thread.id });
     } catch {
       console.error('Discord message was not accepted. Check attachment limits and retry as a new message.');
     }

@@ -24,6 +24,9 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     requests.push({ method: req.method!, path: req.url!, body: Buffer.concat(chunks) });
     res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'GET' && req.url === '/channels/outgoing-1') {
+      res.end(JSON.stringify({ id: 'outgoing-1', parent_id: 'channel', type: 11 })); return;
+    }
     res.end(JSON.stringify({ id: 'outgoing-1', channel_id: 'channel', content: '', author: { id: 'bot', username: 'raphie', bot: true }, timestamp: new Date().toISOString(), attachments: [] }));
   });
   await new Promise<void>(resolve => api.listen(0, '127.0.0.1', resolve));
@@ -73,9 +76,10 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
     }, true);
     const approval = (await app.state()).approvals[0];
     assert.ok(approval);
+    assert.equal((await app.state()).deliveries[0].threadId, `${threadId}:outgoing-1`);
     assert.deepEqual(new Uint8Array(await app.files.read(approval.files[0].id)), bytes);
     await bridge.flush();
-    const payload = JSON.parse(requests.find(r => r.path === '/channels/channel/messages' && r.method === 'POST')!.body.toString());
+    const payload = JSON.parse(requests.find(r => r.path === '/channels/outgoing-1/messages' && r.method === 'POST')!.body.toString());
     assert.equal(payload.components[0].components[0].label, 'Approve');
     assert.ok(payload.components[0].components[0].custom_id.includes(approval.id));
     await bridge.chat.shutdown(); await app.close();
@@ -86,7 +90,7 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
     assert.equal((await app.state()).approvals.length, 1);
     const action = (userId: string) => bridge.chat.processAction({
       adapter: bridge.adapter, actionId: 'raphie-approve', value: approval.id,
-      messageId: 'outgoing-1', threadId, raw: {},
+      messageId: 'outgoing-1', threadId: `${threadId}:outgoing-1`, raw: {},
       user: { userId, userName: userId, fullName: userId, isBot: false, isMe: false },
     }, undefined);
     await action('stranger');
@@ -100,6 +104,9 @@ test('real Chat SDK parses incoming files, renders buttons, handles actions and 
     const upload = requests.find(r => r.body.includes(Buffer.from('approved-notes.bin')))!;
     assert.ok(upload, 'SDK must upload the approved file as multipart data');
     assert.ok(upload.body.includes(Buffer.from(bytes)));
+    assert.equal(edit.path, '/channels/outgoing-1/messages/outgoing-1');
+    assert.equal(upload.path, '/channels/outgoing-1/messages');
+    assert.equal((await app.state()).deliveries.every(d => d.threadId === `${threadId}:outgoing-1`), true);
     assert.equal((await app.state()).deliveries.every(d => d.status === 'sent'), true);
     // A failed/unknown network operation becomes visible instead of being retried.
     const id = await app.accept({ source: 'web', eventId: 'failure', actor: 'owner', text: 'Test uncertain delivery', files: [] });
