@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./base.css";
+@import "./sessions.css";
+@import "./chat.css";
+@import "./activity.css";
+@import "./settings.css";
+@import "./responsive.css";
+@import "./panels.css";
+
+/* App styles stay layered so component utilities can override them. */

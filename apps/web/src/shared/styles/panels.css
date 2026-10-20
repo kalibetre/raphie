@@ -1,0 +1,51 @@
+@layer components {
+  .panel-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    z-index: 15;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+  }
+  .resize-left {
+    left: calc(var(--sidebar-width) - 4px);
+  }
+  .resize-right {
+    left: -4px;
+  }
+  .panel-resize-handle::after {
+    content: "";
+    display: block;
+    width: 2px;
+    height: 100%;
+    margin: 0 auto;
+  }
+  .panel-resize-handle:hover::after,
+  .panel-resize-handle:focus-visible::after,
+  .panel-resize-handle:active::after {
+    background: var(--accent);
+  }
+  .run-elapsed {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .active-run {
+    min-width: 0;
+    padding: 4px 0;
+  }
+  .active-run .steps-header {
+    flex-wrap: wrap;
+    text-align: left;
+  }
+  .conversation-card-footer .conversation-meta {
+    margin-left: auto;
+  }
+  @media (max-width: 767px) {
+    .panel-resize-handle {
+      display: none;
+    }
+  }
+}

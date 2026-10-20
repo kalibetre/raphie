@@ -1,0 +1,108 @@
+/* Match the app's explicit theme choice, with the OS as the fallback. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(
+      :root:not([data-theme="light"]),
+      :root:not([data-theme="light"]) *
+    ) {
+      @slot;
+    }
+  }
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--muted);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--hover);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--error);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+/* Warm paper surfaces, one green accent for "alive" things, amber only when
+   the owner is needed. Dark mode follows the system. */
+:root {
+  --background: #f7f5ef;
+  --sidebar: #ebe8de;
+  --card: #fdfcf8;
+  --foreground: #24231f;
+  --muted: #efece4;
+  --hover: #e2ded2;
+  --muted-foreground: #6f6b61;
+  --faint: #656156;
+  --border: #dcd8cc;
+  --primary: #24231f;
+  --primary-foreground: #f7f5ef;
+  --accent: #4a7a57;
+  --accent-soft: #dfe8dc;
+  --attention: #a2670f;
+  --attention-soft: #f6e8cc;
+  --error: #b13e32;
+  --shadow: 0 1px 2px #2a24140a, 0 8px 24px #2a24140d;
+  color-scheme: light;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #1c1b18;
+    --sidebar: #161512;
+    --card: #24231f;
+    --foreground: #ebe8df;
+    --muted: #2a2924;
+    --hover: #33312b;
+    --muted-foreground: #a29d91;
+    --faint: #a29d91;
+    --border: #36342e;
+    --primary: #ebe8df;
+    --primary-foreground: #1c1b18;
+    --accent: #7fb08b;
+    --accent-soft: #263228;
+    --attention: #e0a54a;
+    --attention-soft: #3a2f1b;
+    --error: #e07a6e;
+    --shadow: 0 1px 2px #0006, 0 8px 24px #0005;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --background: #1c1b18;
+  --sidebar: #161512;
+  --card: #24231f;
+  --foreground: #ebe8df;
+  --muted: #2a2924;
+  --hover: #33312b;
+  --muted-foreground: #a29d91;
+  --faint: #a29d91;
+  --border: #36342e;
+  --primary: #ebe8df;
+  --primary-foreground: #1c1b18;
+  --accent: #7fb08b;
+  --accent-soft: #263228;
+  --attention: #e0a54a;
+  --attention-soft: #3a2f1b;
+  --error: #e07a6e;
+  --shadow: 0 1px 2px #0006, 0 8px 24px #0005;
+  color-scheme: dark;
+}

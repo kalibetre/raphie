@@ -1,6 +1,7 @@
-import { test } from "node:test";
+import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { proxyRuntime } from "../src/lib/runtime-proxy.server.ts";
+
+import { proxyRuntime } from "../src/infrastructure/http/runtime-proxy.server.ts";
 
 test("production API proxy refuses foreign hosts and origins before reaching the runtime", async () => {
   assert.equal(

@@ -1,9 +1,14 @@
-import { test } from "node:test";
+import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { ChatClient } from "@tanstack/ai-client";
+
 import { EventType } from "@tanstack/ai";
-import { transcript, chatAdapter } from "../src/lib/chat-adapter.ts";
-import type { Snapshot } from "../src/lib/api.ts";
+import { ChatClient } from "@tanstack/ai-client";
+
+import {
+  chatAdapter,
+  transcript,
+} from "../src/domains/conversations/infrastructure/chat-adapter.ts";
+import type { Snapshot } from "../src/infrastructure/http/api-client.ts";
 
 const state = {
   turns: [
