@@ -3,9 +3,10 @@ import type { Provider } from '@earendil-works/pi-ai/models';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import type { JsonObject } from '@earendil-works/pi-durable';
 
 /** Deterministic provider behind the real Pi generation loop, with no network. */
-export function chatModel(options: { fail?: boolean; started?: () => void; pause?: Promise<void> } = {}) {
+export function chatModel(options: { fail?: boolean; started?: () => void; pause?: Promise<void>; tool?: { name: string; args: JsonObject } } = {}) {
   const models = createModels();
   const model = { ...openrouterProvider().getModels()[0], id: 'history', provider: 'fixture' };
   const reply: Provider['streamSimple'] = (_model, context, streamOptions) => {
@@ -15,12 +16,19 @@ export function chatModel(options: { fail?: boolean; started?: () => void; pause
     const message: AssistantMessage = { role: 'assistant', content: [{ type: 'text', text: answer }],
       api: model.api, provider: 'fixture', model: 'history', stopReason: options.fail ? 'error' : 'stop', timestamp: Date.now(),
       usage: { input: 1, output: 1, totalTokens: 2, cacheRead: 0, cacheWrite: 0, cost: { input: 0, output: 0, total: 0, cacheRead: 0, cacheWrite: 0 } } };
+    const result = context.messages.findLast(m => m.role === 'toolResult');
+    if (options.tool && !result) {
+      message.content = [{ type: 'toolCall', id: 'fixture-call', name: options.tool.name, arguments: options.tool.args }];
+      message.stopReason = 'toolUse';
+    } else if (options.tool && result?.role === 'toolResult') {
+      message.content = [{ type: 'text', text: result.content.flatMap(p => p.type === 'text' ? [p.text] : []).join('\n') }];
+    }
     options.started?.();
     void (async () => {
       if (options.pause) await Promise.race([options.pause, new Promise<void>(done => streamOptions?.signal?.addEventListener('abort', () => done(), { once: true }))]);
       if (streamOptions?.signal?.aborted) { message.stopReason = 'aborted'; stream.push({ type: 'error', reason: 'aborted', error: message }); }
       else if (options.fail) stream.push({ type: 'error', reason: 'error', error: { ...message, errorMessage: 'Fixture failure' } });
-      else stream.push({ type: 'done', reason: 'stop', message });
+      else stream.push({ type: 'done', reason: message.stopReason === 'toolUse' ? 'toolUse' : 'stop', message });
     })();
     return stream;
   };

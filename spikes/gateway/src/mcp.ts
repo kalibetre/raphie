@@ -24,9 +24,9 @@ export async function connectMcp(config: McpConnection) {
     const inventory = await client.listTools({}, { timeout: 15_000 });
     return {
       server: client.getServerVersion(), tools: inventory.tools,
-      async call(name: string, args: Record<string, unknown>) {
+      async call(name: string, args: Record<string, unknown>, signal?: AbortSignal) {
         if (!inventory.tools.some(t => t.name === name)) throw new Error('Tool was not advertised by the connected server.');
-        return client.callTool({ name, arguments: args }, { timeout: 30_000 });
+        return client.callTool({ name, arguments: args }, { timeout: 30_000, signal });
       },
       async close() {
         try { if (transport instanceof StreamableHTTPClientTransport) await transport.terminateSession(); }
@@ -35,3 +35,5 @@ export async function connectMcp(config: McpConnection) {
     };
   } catch (error) { await client.close().catch(() => {}); throw error; }
 }
+
+export type McpClient = Awaited<ReturnType<typeof connectMcp>>;

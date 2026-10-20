@@ -14,11 +14,15 @@ import { deliveryWorkflow, enqueue } from './workflow.ts';
 import { Chats, ChatService, chatWorkflow } from './chats.ts';
 import type { ModelRef } from '@earendil-works/pi-durable';
 import type { Models } from '@earendil-works/pi-ai/models';
+import { ToolApprovals, ToolApprovalService } from './tool-approvals.ts';
+import { createMcpTools } from './mcp-tools.ts';
+import type { McpTools } from './mcp-tools.ts';
 
 type Options = {
   directory: string; discordThreadId?: string; approvalTtlMs?: number;
   beforeEffectCommit?: () => Promise<void>;
   models?: Models; model?: ModelRef;
+  mcp?: McpTools;
 };
 export class Gateway {
   files: Files;
@@ -27,12 +31,14 @@ export class Gateway {
   options: Options;
   workflow: ReturnType<typeof deliveryWorkflow>;
   chats: ChatService;
+  toolApprovals: ToolApprovalService;
 
   private constructor(options: Options) {
     this.options = options;
     this.files = new Files(join(options.directory, 'files'));
     this.workflow = deliveryWorkflow(this.files, options.discordThreadId ?? null, options.beforeEffectCommit);
     this.chats = new ChatService(this, options.model);
+    this.toolApprovals = new ToolApprovalService(this);
   }
 
   static async open(options: Options) {
@@ -40,6 +46,7 @@ export class Gateway {
     await mkdir(options.directory, { recursive: true, mode: 0o700 });
     const registry = createRegistry();
     registry.install(defineExtension({ name: 'raphie.gateway', tasks: [app.workflow, chatWorkflow] }));
+    if (options.mcp) registry.install(createMcpTools(app, options.mcp));
     app.harness = await Harness.open(await openNodeSqliteStorage(join(options.directory, 'gateway.sqlite')),
       { registry, models: options.models ?? createModels(), settings: {
         followUpMode: 'one-at-a-time', stream: { timeoutMs: 120_000 }, retry: { enabled: true, maxRetries: 1 },
@@ -53,6 +60,9 @@ export class Gateway {
       }
       const chats = await tx.doc(Chats);
       for (const delivery of chats.deliveries) if (delivery.status === 'sending') delivery.status = 'uncertain';
+      const toolApprovals = await tx.doc(ToolApprovals);
+      for (const item of toolApprovals.approvals) if (item.execution === 'running') item.execution = 'uncertain';
+      for (const delivery of toolApprovals.deliveries) if (delivery.status === 'sending') delivery.status = 'uncertain';
     }, context);
     app.harness.resume();
     return app;

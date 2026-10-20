@@ -83,8 +83,8 @@ export class ChatService {
           discordThreadId: input.source === 'discord' ? input.discordThreadId ?? null : null, createdAt: Date.now() };
         state.conversations.push(conversation);
       }
-      await configure(tx, conversation.id, { model, tools: [], instructions:
-        'You are Raphie, a concise and thoughtful personal assistant. Use the conversation history to continue prior discussions. You currently have no tools, calendar, email, reminders, or cross-conversation memory. Never claim to have saved a task, scheduled a reminder, accessed a file, or performed an external action. Be clear about these limits when relevant.' });
+      await configure(tx, conversation.id, { model, tools: this.app.options.mcp ? null : [], instructions:
+        'You are Raphie, a concise and thoughtful personal assistant. Use conversation history. You have no built-in tasks, reminders, or cross-conversation memory. Use available MCP tools for connected integrations, and never claim an external action succeeded without a confirming tool result. For Executor, read mcp_executor_skills(name="execute") before using execute. Follow its discovery workflow. The application pauses execution for owner approval; ordinary chat text is not an approval. Never automatically repeat an uncertain, rejected, or expired call. If Executor pauses for an interaction, explain it and use resume only when the owner has supplied the required response.' });
       const turn: ChatTurn = { id: randomUUID(), requestKey, fingerprint, conversationId: conversation.id,
         source: input.source, text: input.text, createdAt: Date.now(), status: 'pending', answer: null };
       state.turns.push(turn);
