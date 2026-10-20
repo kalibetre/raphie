@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Gateway } from './gateway.ts';
 import { startServer } from './server.ts';
-import { createDiscordBridge } from './discord.ts';
+import { createDiscordBridge, resolveDiscordThread } from './discord.ts';
 
 const keys = ['DISCORD_BOT_TOKEN', 'DISCORD_APPLICATION_ID', 'DISCORD_PUBLIC_KEY', 'DISCORD_OWNER_ID', 'DISCORD_CHANNEL_ID'] as const;
 const configured = keys.filter(key => process.env[key]);
@@ -10,7 +10,9 @@ if (configured.length && configured.length !== keys.length) throw new Error('Set
 const port = Number(process.env.PORT ?? 4315);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT.');
 const channelId = process.env.DISCORD_CHANNEL_ID;
-const threadId = channelId ? `discord:${process.env.DISCORD_GUILD_ID || '@me'}:${channelId}` : undefined;
+const threadId = channelId ? await resolveDiscordThread({
+  botToken: process.env.DISCORD_BOT_TOKEN!, channelId, guildId: process.env.DISCORD_GUILD_ID,
+}) : undefined;
 const app = await Gateway.open({ directory: resolve(process.env.DATA_DIRECTORY ?? '.data'), discordThreadId: threadId });
 const discord = threadId ? createDiscordBridge(app, {
   botToken: process.env.DISCORD_BOT_TOKEN!, applicationId: process.env.DISCORD_APPLICATION_ID!,

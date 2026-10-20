@@ -9,6 +9,21 @@ import { InputError } from './state.ts';
 import type { Approval } from './state.ts';
 import type { Gateway } from './gateway.ts';
 
+/** REST posting only needs a channel ID; incoming SDK routes also contain its guild. */
+export async function resolveDiscordThread(config: {
+  botToken: string; channelId: string; guildId?: string;
+}, lookup: typeof fetch = fetch) {
+  const response = await lookup(`https://discord.com/api/v10/channels/${encodeURIComponent(config.channelId)}`, {
+    headers: { Authorization: `Bot ${config.botToken}` }, signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`Discord channel lookup failed (${response.status}). Check the channel ID and bot permissions.`);
+  const channel = await response.json() as { id: string; guild_id?: string };
+  if (channel.id !== config.channelId) throw new Error('Discord returned a different channel.');
+  const guild = channel.guild_id || '@me';
+  if (config.guildId && config.guildId !== guild) throw new Error('DISCORD_GUILD_ID does not match the configured channel.');
+  return `discord:${guild}:${channel.id}`;
+}
+
 export function approvalCard(approval: Approval): CardElement {
   const pending = approval.status === 'pending' && Date.now() < approval.expiresAt;
   return {

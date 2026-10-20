@@ -6,7 +6,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Gateway } from '../src/gateway.ts';
-import { createDiscordBridge } from '../src/discord.ts';
+import { createDiscordBridge, resolveDiscordThread } from '../src/discord.ts';
+
+test('server channel without a configured guild resolves to the incoming event route', async () => {
+  const lookup = (async () => Response.json({ id: 'channel', type: 0, guild_id: 'guild' })) as typeof fetch;
+  assert.equal(await resolveDiscordThread({ botToken: 'fixture', channelId: 'channel' }, lookup), 'discord:guild:channel');
+  await assert.rejects(resolveDiscordThread({ botToken: 'fixture', channelId: 'channel', guildId: 'wrong' }, lookup), /does not match/);
+  const dm = (async () => Response.json({ id: 'channel', type: 1 })) as typeof fetch;
+  assert.equal(await resolveDiscordThread({ botToken: 'fixture', channelId: 'channel' }, dm), 'discord:@me:channel');
+  const denied = (async () => new Response('', { status: 403 })) as typeof fetch;
+  await assert.rejects(resolveDiscordThread({ botToken: 'fixture', channelId: 'channel' }, denied), /403/);
+});
 
 test('real Chat SDK parses incoming files, renders buttons, handles actions and uploads results', async () => {
   const requests: { method: string; path: string; body: Buffer }[] = [];

@@ -28,7 +28,7 @@ Set all five values together:
 - `DISCORD_OWNER_ID`: your Discord user ID, the only authorized sender and approver.
 - `DISCORD_CHANNEL_ID`: one channel ID used for both incoming messages and outbound results.
 
-For a server channel, also set `DISCORD_GUILD_ID`. For a DM channel, leave it unset. For this spike, use a plain channel or DM rather than a Discord thread; the encoded route is `discord:<guild or @me>:<channel>`.
+Startup looks up the channel in Discord and detects its server ID (or `@me` for a DM). `DISCORD_GUILD_ID` is an optional assertion; startup rejects it if it does not match. For this spike, use a plain channel or DM rather than a Discord thread; the encoded route is `discord:<guild or @me>:<channel>`. This lookup matters because outgoing REST posts only need a channel ID, while incoming event routes also include the server ID. Assuming `@me` for a server channel previously allowed outbound delivery but silently rejected incoming messages.
 
 Enable **Message Content Intent** in the Discord Developer Portal. Install the bot in the target server with View Channel, Send Messages, Embed Links, Attach Files, and Read Message History permissions. For a DM, open the conversation with the bot first and use its channel ID.
 
