@@ -24,11 +24,14 @@ export interface FileApprovalCommands {
     text: string;
     files: Attachment[];
     discordThreadId?: string;
+    connectionId?: string;
   }): Promise<string>;
   decide(
     id: string,
     decision: "approved" | "rejected",
     actor: string,
     via: Channel,
+    threadId?: string,
+    connectionId?: string,
   ): Promise<string>;
 }

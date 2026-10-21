@@ -13,7 +13,11 @@ import {
 } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import { api, type Snapshot } from "../../infrastructure/http/api-client";
+import {
+  api,
+  ApiError,
+  type Snapshot,
+} from "../../infrastructure/http/api-client";
 
 /** Each observation replaces authoritative state; reconnect never replays a command. */
 export function useLiveState(
@@ -23,6 +27,7 @@ export function useLiveState(
 ) {
   const client = useQueryClient();
   const [connected, setConnected] = useState(false);
+  const [sessionConnected, setSessionConnected] = useState(false);
   const [older, setOlder] = useState<Record<string, Page<SessionTurn>>>({});
   const [loadingOlder, setLoadingOlder] = useState(false);
   const info = useQuery({
@@ -82,8 +87,11 @@ export function useLiveState(
     return () => events.close();
   }, [client]);
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || selected.error) return;
+    setSessionConnected(false);
     const events = new EventSource(`/api/sessions/${selectedId}/events`);
+    events.onopen = () => setSessionConnected(true);
+    events.onerror = () => setSessionConnected(false);
     events.onmessage = (event) => {
       try {
         const next = JSON.parse(event.data) as SessionObservation;
@@ -110,7 +118,7 @@ export function useLiveState(
       }
     };
     return () => events.close();
-  }, [selectedId, client]);
+  }, [selectedId, selected.error, client]);
   const data = useMemo<Snapshot | undefined>(() => {
     if (!info.data || !sessions.data) return undefined;
     const observation = selected.data;
@@ -185,13 +193,21 @@ export function useLiveState(
 
   return {
     data,
-    connected,
+    connected: connected && (!selectedId || sessionConnected),
+    sessionMissing:
+      (selected.error instanceof ApiError && selected.error.status === 404) ||
+      (legacy.error instanceof ApiError && legacy.error.status === 404),
     isPending:
       info.isPending ||
       sessions.isPending ||
       (!!selectedId && selected.isPending) ||
       (!!legacyId && legacy.isPending),
-    error: info.error ?? sessions.error,
+    error:
+      info.error ??
+      sessions.error ??
+      (selected.error instanceof ApiError && selected.error.status === 404
+        ? null
+        : selected.error),
     refetch: async () => {
       await Promise.all([
         info.refetch(),

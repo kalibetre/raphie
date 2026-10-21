@@ -25,6 +25,7 @@ export type ToolDelivery = {
   id: string;
   approvalId: string;
   threadId: string;
+  connectionId?: string;
   kind: "approval" | "resolved";
   status: "pending" | "sending" | "sent" | "uncertain";
   messageId: string | null;

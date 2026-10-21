@@ -26,6 +26,7 @@ export type ChatDelivery = {
   id: string;
   turnId: string;
   threadId: string;
+  connectionId?: string;
   text: string;
   status: "pending" | "sending" | "sent" | "uncertain";
 };

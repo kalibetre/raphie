@@ -41,6 +41,7 @@ export function Workspace({
     error,
     refetch,
     legacySessionId,
+    sessionMissing,
     nextBefore,
     loadOlder,
     loadingOlder,
@@ -69,7 +70,8 @@ export function Workspace({
   const [enabled, setEnabled] = useEnabledPlugins();
   const conversationId = conversation?.id;
   const missing =
-    !!(sessionId || legacyConversationId) && !!data && !conversation;
+    sessionMissing ||
+    (!!(sessionId || legacyConversationId) && !!data && !conversation);
   useEffect(() => {
     if (legacyConversationId && conversation?.sessionId) {
       void navigate({
@@ -200,7 +202,7 @@ export function Workspace({
             onToggleNavigation={toggleCollapsed}
             onToggleInspector={() => setInspector(!inspector)}
           />
-          {error && !connected ? (
+          {error ? (
             <WorkspaceAlert
               title="Couldn’t connect to your workspace"
               description="Your saved sessions and drafts are still on this device. Check that the runtime is running, then try again."

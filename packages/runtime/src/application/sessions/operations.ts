@@ -1,6 +1,9 @@
 import type { ApprovalStatus } from "@raphie/contracts";
 
-import type { ToolApprovalCommands } from "../../domains/approvals/application/ports.ts";
+import type {
+  FileApprovalCommands,
+  ToolApprovalCommands,
+} from "../../domains/approvals/application/ports.ts";
 import type {
   ConversationCommands,
   SendMessage,
@@ -10,7 +13,20 @@ import type { ActorAuthority } from "../access/actors.ts";
 
 export type MessageReceipt = { id: string; sessionId: string };
 
+type FileCommands = Pick<FileApprovalCommands, "accept" | "decide">;
+
+type CopyInput = Pick<
+  Parameters<FileApprovalCommands["accept"]>[0],
+  "text" | "eventId" | "files"
+>;
+
 export interface SessionOperations {
+  copy(actor: ActorContext, input: CopyInput): Promise<string>;
+  decideFile(
+    actor: ActorContext,
+    id: string,
+    decision: "approved" | "rejected",
+  ): Promise<string>;
   submit(
     actor: ActorContext,
     input: { eventId: string; text: string; sessionId?: string },
@@ -26,15 +42,18 @@ export class Sessions implements SessionOperations {
   private readonly authority: ActorAuthority;
   private readonly conversations: ConversationCommands;
   private readonly approvals: ToolApprovalCommands;
+  private readonly files: FileCommands;
 
   constructor(
     authority: ActorAuthority,
     conversations: ConversationCommands,
     approvals: ToolApprovalCommands,
+    files: FileCommands,
   ) {
     this.authority = authority;
     this.conversations = conversations;
     this.approvals = approvals;
+    this.files = files;
   }
 
   async submit(
@@ -69,7 +88,39 @@ export class Sessions implements SessionOperations {
     });
   }
 
-  decide(actor: ActorContext, id: string, decision: "approved" | "rejected") {
+  async copy(actor: ActorContext, input: CopyInput) {
+    const verified = this.authority.require(actor);
+    return this.files.accept({
+      ...input,
+      source: verified.source,
+      actor: verified.subject,
+      discordThreadId: verified.threadId,
+      connectionId:
+        verified.source === "discord" ? verified.connectionId : undefined,
+    });
+  }
+
+  async decideFile(
+    actor: ActorContext,
+    id: string,
+    decision: "approved" | "rejected",
+  ) {
+    const verified = this.authority.require(actor);
+    return this.files.decide(
+      id,
+      decision,
+      verified.subject,
+      verified.source,
+      verified.threadId,
+      verified.connectionId,
+    );
+  }
+
+  async decide(
+    actor: ActorContext,
+    id: string,
+    decision: "approved" | "rejected",
+  ) {
     const verified = this.authority.require(actor);
     return this.approvals.decide(
       id,

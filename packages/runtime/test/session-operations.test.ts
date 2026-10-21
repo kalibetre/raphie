@@ -79,3 +79,49 @@ test("shared operations require issued actors and preserve UUID admission and re
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("file experiment uses verified actors and restricts decisions to its originating connection and thread", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-copy-access-"));
+  const app = await Gateway.open({ directory });
+  try {
+    const owner = app.actors.establish(
+      "discord",
+      "discord:guild:channel:one",
+      "bot-one",
+    );
+    const input = { eventId: "file", text: "Copy once", files: [] };
+    const id = await app.sessions.copy(owner, input);
+    for (const denied of [
+      app.actors.establish("discord", "discord:guild:channel:two", "bot-one"),
+      app.actors.establish("discord", "discord:guild:channel:one", "bot-two"),
+    ]) {
+      await assert.rejects(
+        app.sessions.copy(denied, input),
+        /another Discord connection or thread/,
+      );
+      await assert.rejects(
+        app.sessions.decideFile(denied, id, "approved"),
+        /another Discord connection or thread/,
+      );
+    }
+    await assert.rejects(
+      app.sessions.copy({ subject: "owner", source: "web" }, input),
+      /authorized/,
+    );
+    assert.equal(
+      await app.sessions.decideFile(
+        app.actors.establish("web"),
+        id,
+        "rejected",
+      ),
+      "rejected",
+    );
+    assert.equal(
+      await app.sessions.decideFile(owner, id, "approved"),
+      "rejected",
+    );
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

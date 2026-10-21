@@ -6,6 +6,17 @@ export type Approval = Snapshot["toolApprovals"][number];
 
 export type ActivityEvent = Snapshot["activity"][number];
 
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export async function api<T>(path: string, data?: unknown): Promise<T> {
   const response = await fetch(
     path,
@@ -22,8 +33,10 @@ export async function api<T>(path: string, data?: unknown): Promise<T> {
   );
   const result = await response.json();
   if (!response.ok)
-    throw new Error(
+    throw new ApiError(
       result.error ?? "The runtime is unavailable. Please retry.",
+      response.status,
+      result.code ?? "request_failed",
     );
   return result as T;
 }

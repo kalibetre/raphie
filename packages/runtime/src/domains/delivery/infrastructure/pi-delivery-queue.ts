@@ -17,24 +17,40 @@ export const DeliveryPlans = defineDoc<{ plans: DeliveryPlan[] }>({
 
 export class PiDeliveryQueue implements DeliveryQueue {
   private readonly app: DurableContext;
+  private readonly connectionId: string | undefined;
 
-  constructor(app: DurableContext) {
+  constructor(app: DurableContext, connectionId?: string) {
     this.app = app;
+    this.connectionId = connectionId;
+  }
+
+  forConnection(connectionId: string) {
+    return new PiDeliveryQueue(this.app, connectionId);
   }
 
   claim(render: RenderDelivery) {
     return this.app.root.commit(async (tx) => {
       const plans = (await tx.doc(DeliveryPlans)).plans;
+      const inScope = (item: { connectionId?: string }) =>
+        !this.connectionId ||
+        (item.connectionId ?? "legacy-discord") === this.connectionId;
       let next = plans
+        .filter(inScope)
         .flatMap((p) => p.operations)
         .find((op) => op.status === "pending");
       if (!next) {
         const tools = await tx.doc(ToolApprovals);
         const files = await tx.doc(State);
         const chats = await tx.doc(Chats);
-        const tool = tools.deliveries.find((d) => d.status === "pending");
-        const file = files.deliveries.find((d) => d.status === "pending");
-        const chat = chats.deliveries.find((d) => d.status === "pending");
+        const tool = tools.deliveries.find(
+          (d) => d.status === "pending" && inScope(d),
+        );
+        const file = files.deliveries.find(
+          (d) => d.status === "pending" && inScope(d),
+        );
+        const chat = chats.deliveries.find(
+          (d) => d.status === "pending" && inScope(d),
+        );
         let intent: DeliveryIntent;
         const original = tool ?? file ?? chat;
         if (tool)
@@ -68,6 +84,7 @@ export class PiDeliveryQueue implements DeliveryQueue {
         const plan: DeliveryPlan = {
           id: original!.id,
           source: intent.source,
+          connectionId: original!.connectionId ?? "legacy-discord",
           operations: payloads.map((payload, index) => ({
             id: `${intent.source}:${intent.id}:${index}`,
             payload,

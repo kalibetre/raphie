@@ -28,6 +28,7 @@ export function enqueue(
       approvalId: approval.id,
       kind,
       threadId,
+      connectionId: approval.connectionId,
       status: "pending",
       messageId: null,
       error: null,

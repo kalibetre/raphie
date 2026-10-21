@@ -71,11 +71,10 @@ export function approvalRoutes(
       if (!idPattern.test(c.req.param("id")))
         throw new InputError("Not found.", 404);
       return c.json({
-        status: await files.decide(
+        status: await sessions.decideFile(
+          actor,
           c.req.param("id"),
           c.req.valid("json").decision,
-          "owner",
-          "web",
         ),
       });
     },
@@ -107,9 +106,7 @@ export function approvalRoutes(
         throw new InputError("Invalid message fields.");
       return c.json(
         {
-          id: await files.accept({
-            source: "web",
-            actor: "owner",
+          id: await sessions.copy(actor, {
             eventId,
             text,
             files: saved,

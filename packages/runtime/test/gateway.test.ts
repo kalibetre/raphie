@@ -44,7 +44,7 @@ test("pending workflow survives reopen; competing clients produce one file effec
     );
     const decisions = await Promise.all([
       app.decide(id, "approved", "owner", "web"),
-      app.decide(id, "rejected", "owner", "discord"),
+      app.decide(id, "rejected", "owner", "discord", input.discordThreadId),
       app.decide(id, "approved", "owner", "web"),
     ]);
     assert.deepEqual(decisions, ["approved", "approved", "approved"]);
@@ -93,7 +93,7 @@ test("rejection and expiry never execute the effect", async () => {
         "expired",
     );
     assert.equal(
-      await app.decide(expired, "approved", "owner", "discord"),
+      await app.decide(expired, "approved", "owner", "web"),
       "expired",
     );
     assert.equal(

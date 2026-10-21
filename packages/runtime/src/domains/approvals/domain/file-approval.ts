@@ -8,6 +8,7 @@ export type Approval = {
   fingerprint: string;
   text: string;
   source: Source;
+  connectionId?: string;
   files: FileRef[];
   createdAt: number;
   expiresAt: number;
@@ -23,6 +24,7 @@ export type Delivery = {
   approvalId: string;
   kind: "approval" | "resolved" | "result";
   threadId: string;
+  connectionId?: string;
   status: "pending" | "sending" | "sent" | "uncertain";
   messageId: string | null;
   error: string | null;

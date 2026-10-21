@@ -27,5 +27,6 @@ export type DeliveryOperation = {
 export type DeliveryPlan = {
   id: string;
   source: DeliveryIntent["source"];
+  connectionId?: string;
   operations: DeliveryOperation[];
 };

@@ -84,3 +84,45 @@ for (const acknowledged of [true, false])
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+test("a Discord worker cannot claim another connection's persisted intents or remaining chunks", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-delivery-scope-"));
+  const app = await Gateway.open({ directory });
+  try {
+    await app.root.commit(async (tx) => {
+      (await tx.doc(Chats)).deliveries.push({
+        id: "scoped",
+        turnId: "turn",
+        threadId: "discord:guild:channel",
+        connectionId: "bot-one",
+        text: "x".repeat(2500),
+        status: "pending",
+      });
+    }, context);
+    assert.equal(
+      await app.deliveries
+        .forConnection("bot-two")
+        .claim(discordRenderer(app.files)),
+      null,
+    );
+    const first = await app.deliveries
+      .forConnection("bot-one")
+      .claim(discordRenderer(app.files));
+    assert.ok(first);
+    await app.deliveries.settle(first.id, "first");
+    assert.equal(
+      await app.deliveries
+        .forConnection("bot-two")
+        .claim(discordRenderer(app.files)),
+      null,
+    );
+    assert.ok(
+      await app.deliveries
+        .forConnection("bot-one")
+        .claim(discordRenderer(app.files)),
+    );
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

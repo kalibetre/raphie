@@ -135,14 +135,14 @@ export function createDiscordBridge(
           ),
         );
       }
-      await app.accept({
-        source: "discord",
-        eventId: message.id,
-        actor: "owner",
-        text: text.replace(/^\/copy\s*/, ""),
-        files,
-        discordThreadId: thread.id,
-      });
+      await app.sessions.copy(
+        app.actors.establish("discord", thread.id, config.applicationId),
+        {
+          eventId: message.id,
+          text: text.replace(/^\/copy\s*/, ""),
+          files,
+        },
+      );
     } catch (error) {
       const text =
         error instanceof InputError
@@ -160,11 +160,10 @@ export function createDiscordBridge(
   chat.onSubscribedMessage(receive);
   chat.onAction(["raphie-approve", "raphie-reject"], async (event) => {
     if (!authorized(event.user.userId, event.threadId) || !event.value) return;
-    await app.decide(
+    await app.sessions.decideFile(
+      app.actors.establish("discord", event.threadId, config.applicationId),
       event.value,
       event.actionId === "raphie-approve" ? "approved" : "rejected",
-      "owner",
-      "discord",
     );
   });
   chat.onAction(
@@ -181,7 +180,7 @@ export function createDiscordBridge(
   );
 
   const flush = createDeliveryWorker(
-    app.deliveries,
+    app.deliveries.forConnection(config.applicationId),
     discordRenderer(app.files),
     async (payload) => {
       const operation = decodeDiscordOperation(payload);

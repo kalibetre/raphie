@@ -39,6 +39,7 @@ function notify(
       id: `${item.id}:${kind}`,
       approvalId: item.id,
       threadId,
+      connectionId: item.replyTo?.connectionId,
       kind,
       status: "pending",
       messageId: null,

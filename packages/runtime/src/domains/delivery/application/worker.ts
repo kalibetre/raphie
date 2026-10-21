@@ -1,5 +1,9 @@
 import type { DeliveryIntent, DeliveryOperation } from "../domain/model.ts";
 
+export interface ChannelDeliveryQueues {
+  forConnection(connectionId: string): DeliveryQueue;
+}
+
 export type RenderDelivery = (intent: DeliveryIntent) => Promise<string[]>;
 
 export interface DeliveryQueue {

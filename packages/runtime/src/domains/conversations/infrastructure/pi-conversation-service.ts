@@ -95,6 +95,7 @@ export const chatWorkflow = defineTask<
             id: `${turn.id}:reply`,
             turnId: turn.id,
             threadId: destination,
+            connectionId: turn.replyTo?.connectionId,
             text,
             status: "pending",
           });

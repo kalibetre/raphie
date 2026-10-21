@@ -48,6 +48,7 @@ export async function startServer(
   app.onError((error, c) =>
     c.json(
       {
+        code: error instanceof InputError ? error.code : "invalid_request",
         error:
           error instanceof InputError
             ? error.message

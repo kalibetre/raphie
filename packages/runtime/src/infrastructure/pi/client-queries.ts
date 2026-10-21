@@ -240,7 +240,21 @@ export class PiClientQueries implements ClientQueries {
           .length,
         waiting,
       },
-      turns: history.items,
+      turns:
+        pending[0] && !history.items.some((t) => t.id === pending[0]!.id)
+          ? [
+              {
+                id: pending[0].id,
+                conversationId: id,
+                source: pending[0].source,
+                text: pending[0].text,
+                createdAt: pending[0].createdAt,
+                status: pending[0].status,
+                answer: pending[0].answer,
+              },
+              ...history.items,
+            ]
+          : history.items,
       nextBefore: history.next,
       toolApprovals,
       live,

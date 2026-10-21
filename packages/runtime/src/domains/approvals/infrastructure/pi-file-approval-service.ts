@@ -11,7 +11,10 @@ import { enqueue } from "./pi-delivery-workflow.ts";
 import { InputError, State } from "./pi-file-approvals.ts";
 
 type ApprovalContext = DurableContext & {
-  options: DurableContext["options"] & { discordThreadId?: string };
+  options: DurableContext["options"] & {
+    discordThreadId?: string;
+    discordConnectionId?: string;
+  };
   workflow: ReturnType<typeof deliveryWorkflow>;
 };
 
@@ -29,6 +32,7 @@ export class FileApprovalService {
     text: string;
     files: FileRef[];
     discordThreadId?: string;
+    connectionId?: string;
   }) {
     this.context.authorize(input.actor);
     if (!input.eventId || input.eventId.length > 200)
@@ -52,6 +56,19 @@ export class FileApprovalService {
       const state = await tx.doc(State);
       const existing = state.approvals.find((a) => a.requestKey === requestKey);
       if (existing) {
+        const destination = state.deliveries.find(
+          (d) => d.approvalId === existing.id,
+        );
+        if (
+          input.source === "discord" &&
+          (destination?.threadId !== input.discordThreadId ||
+            (existing.connectionId ?? "legacy-discord") !==
+              (input.connectionId ?? "legacy-discord"))
+        )
+          throw new InputError(
+            "Request belongs to another Discord connection or thread.",
+            403,
+          );
         if (existing.fingerprint !== fingerprint)
           throw new InputError(
             "Event ID already used for different content.",
@@ -67,6 +84,10 @@ export class FileApprovalService {
         text: input.text,
         files: input.files,
         source: input.source,
+        connectionId:
+          input.connectionId ??
+          this.context.options.discordConnectionId ??
+          "legacy-discord",
         createdAt: now,
         expiresAt: now + (this.context.options.approvalTtlMs ?? 600_000),
         status: "pending",
@@ -102,6 +123,8 @@ export class FileApprovalService {
     decision: "approved" | "rejected",
     actor: string,
     via: Source,
+    threadId?: string,
+    connectionId = "legacy-discord",
   ) {
     this.context.authorize(actor);
     if (!isDecision(decision)) throw new InputError("Invalid decision.");
@@ -109,6 +132,17 @@ export class FileApprovalService {
       const state = await tx.doc(State);
       const approval = state.approvals.find((a) => a.id === id);
       if (!approval) throw new InputError("Approval not found.", 404);
+      if (via === "discord") {
+        const destination = state.deliveries.find((d) => d.approvalId === id);
+        if (
+          destination?.threadId !== threadId ||
+          (approval.connectionId ?? "legacy-discord") !== connectionId
+        )
+          throw new InputError(
+            "Approval belongs to another Discord connection or thread.",
+            403,
+          );
+      }
       if (approval.status !== "pending") return approval.status;
       approval.status = decideApproval(
         approval.status,

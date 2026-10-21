@@ -87,7 +87,12 @@ export class Gateway {
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
     this.queries = new PiClientQueries(this);
-    this.sessions = new Sessions(this.actors, this.chats, this.toolApprovals);
+    this.sessions = new Sessions(
+      this.actors,
+      this.chats,
+      this.toolApprovals,
+      this.fileApprovals,
+    );
   }
 
   static async open(options: Options) {
@@ -166,9 +171,34 @@ export class Gateway {
       for (const delivery of chats.deliveries)
         if (delivery.status === "sending") delivery.status = "uncertain";
       const toolApprovals = await tx.doc(ToolApprovals);
-      for (const plan of (await tx.doc(DeliveryPlans)).plans)
+      const legacyConnection = options.discordConnectionId ?? "legacy-discord";
+      for (const delivery of [
+        ...state.deliveries,
+        ...chats.deliveries,
+        ...toolApprovals.deliveries,
+      ])
+        delivery.connectionId ??= legacyConnection;
+      for (const approval of state.approvals)
+        approval.connectionId ??= legacyConnection;
+      for (const approval of toolApprovals.approvals)
+        if (approval.replyTo === undefined) {
+          const delivery = toolApprovals.deliveries.find(
+            (d) => d.approvalId === approval.id,
+          );
+          approval.replyTo = delivery
+            ? {
+                provider: "discord",
+                owner: "owner",
+                connectionId: delivery.connectionId!,
+                conversation: delivery.threadId,
+              }
+            : null;
+        }
+      for (const plan of (await tx.doc(DeliveryPlans)).plans) {
+        plan.connectionId ??= legacyConnection;
         for (const operation of plan.operations)
           if (operation.status === "sending") operation.status = "uncertain";
+      }
       const journal = await tx.doc(Activity);
       record(
         journal,

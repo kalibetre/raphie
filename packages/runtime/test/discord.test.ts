@@ -117,6 +117,7 @@ test("real Chat SDK parses incoming files, renders buttons, handles actions and 
   let app = await Gateway.open({
     directory,
     discordThreadId: threadId,
+    discordConnectionId: "fixture-app",
     ...chatModel(),
   });
   const bytes = new Uint8Array([0, 128, 255, 10]);
@@ -226,6 +227,7 @@ test("real Chat SDK parses incoming files, renders buttons, handles actions and 
     app = await Gateway.open({
       directory,
       discordThreadId: threadId,
+      discordConnectionId: "fixture-app",
       ...chatModel(),
     });
     bridge = createDiscordBridge(app, config);
