@@ -125,10 +125,14 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
           )
             return;
           event.preventDefault();
-          choices[
-            (index + (event.key === "ArrowDown" ? 1 : -1) + choices.length) %
-              choices.length
-          ]?.focus();
+          const direction = event.key === "ArrowDown" ? 1 : -1;
+          if (index < 0) {
+            choices[direction === 1 ? 0 : choices.length - 1]?.focus();
+            return;
+          }
+          const nextIndex =
+            (index + direction + choices.length) % choices.length;
+          choices[nextIndex]?.focus();
         }}
       >
         <nav className="model-picker-rail" aria-label="Model filters">
