@@ -67,3 +67,31 @@ The test fixture and Vite server were stopped normally. The normal production ap
   was unavailable, so this is DOM/interaction acceptance, not screenshot review.
 - The full validation gate passes 61 tests plus formatting, lint, architecture,
   TypeScript and production build. Existing large-chunk build warning remains.
+
+## Composer models and consistent controls — 2026-10-21
+
+- Original model-picker implementation using shared shadcn-style Button, Input,
+  Select and Popover primitives; T3 screenshots served only as visual references.
+  No T3 code was reused. Settings inputs, selects and switches now use shared
+  primitives; native browser dropdown styling is replaced by the Radix menu.
+- New-session selections persist with admission. Existing-session changes save
+  immediately while idle. Defaults remain in Settings and affect new sessions.
+  Backend regression tests cover actual dispatch, migration, reopen, retry
+  fingerprints, unavailable models and busy rejection.
+- Browser acceptance used temporary fixture data and deterministic inference at
+  4317/4321. Checked choosing before first send, saved selection, busy disabling,
+  keyboard search/ArrowDown/Enter selection, Escape/focus restoration, favorites,
+  no-match results, Settings navigation and a 102-model scrollable catalog.
+- Computed picker bounds stayed within 320/768/1024/1440px viewports for the short
+  catalog. The long catalog stayed capped at 440px with its own Radix scroll
+  viewport and responded to scrolling. Family filtering and text search combined
+  to find a specific model in that catalog.
+- After the focus-state correction, the auto-focused search input reports no
+  outline or visible ring; the provider trigger reports no outline and renders a
+  Radix listbox. The resizer reports no outer outline and retains its thin line
+  indicator for keyboard focus. Screenshot capture still timed out, and no
+  alternative browser tool was available. These are interaction/layout checks.
+- `bun run validate` passes 64 tests, formatting, lint, architecture, TypeScript
+  and production build. The existing large client-chunk warning remains.
+- Work is published through separate PRs targeting main; no PR was merged or
+  production session modified during acceptance.

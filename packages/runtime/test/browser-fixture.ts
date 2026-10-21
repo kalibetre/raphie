@@ -100,6 +100,13 @@ models.setProvider({
   getModels: () => [
     model,
     { ...model, id: "acceptance-alternate", name: "Acceptance alternate" },
+    ...(process.env.RAPHIE_FIXTURE_MODEL_CATALOG === "long"
+      ? Array.from({ length: 100 }, (_, index) => ({
+          ...model,
+          id: `${index % 2 ? "fixture-a" : "fixture-b"}/model-${index}`,
+          name: `Fixture model ${index}`,
+        }))
+      : []),
   ],
   auth: {
     apiKey: {

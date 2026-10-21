@@ -137,3 +137,16 @@ This is a short local query baseline, not a soak test or proof of 100 active
 agents/VMs. Pi document reads still scan retained state and observations still
 poll at 150 ms; indexed reads, production-scale viewers and real sandbox/model
 capacity need separate measurements. No new infrastructure dependency was added.
+
+## Session model selection
+
+`POST /api/sessions/messages` accepts an optional `model: { provider, modelId }`.
+For a new session, omission uses the Settings default; an explicit choice is
+saved with the first turn. The selected model participates in the admission
+fingerprint, so retrying an event ID with a different explicit model is a conflict.
+
+`POST /api/sessions/:id/model` changes an idle session's model without admitting
+a message. It validates the connected provider and catalog and rejects active
+sessions with 409. A session observation exposes the saved choice as
+`session.model`. Sessions preserve their model through default changes and
+restarts; legacy records are backfilled from their existing Pi agent model.

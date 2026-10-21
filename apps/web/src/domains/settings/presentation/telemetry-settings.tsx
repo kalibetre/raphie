@@ -1,4 +1,5 @@
 import { Button } from "../../../shared/ui/button";
+import { Switch } from "../../../shared/ui/switch";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { Group, Row } from "./settings-group";
 
@@ -13,19 +14,14 @@ export function TelemetrySettings() {
         title="Collect diagnostic traces"
         description="Record run and model timings, token counts, errors, and tool activity. Prompts and tool payloads are excluded."
       >
-        <label className="switch">
-          <input
-            type="checkbox"
-            role="switch"
-            aria-label="Collect diagnostic traces"
-            checked={settings.data?.telemetryEnabled ?? false}
-            disabled={!settings.data || settings.update.isPending}
-            onChange={(event) =>
-              settings.update.mutate({ telemetryEnabled: event.target.checked })
-            }
-          />
-          <span aria-hidden="true" />
-        </label>
+        <Switch
+          aria-label="Collect diagnostic traces"
+          checked={settings.data?.telemetryEnabled ?? false}
+          disabled={!settings.data || settings.update.isPending}
+          onCheckedChange={(checked) =>
+            settings.update.mutate({ telemetryEnabled: checked })
+          }
+        />
       </Row>
       <div className="settings-form">
         <p>
