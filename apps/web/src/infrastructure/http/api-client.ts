@@ -1,6 +1,6 @@
-import type { WorkspaceSnapshot } from "@raphie/contracts";
+import type { ClientWorkspace } from "@raphie/contracts";
 
-export type Snapshot = WorkspaceSnapshot;
+export type Snapshot = ClientWorkspace;
 
 export type Approval = Snapshot["toolApprovals"][number];
 

@@ -29,7 +29,8 @@ export function dependencyViolation(source, target) {
     if (
       !to.startsWith(".") &&
       !to.includes("/src/") &&
-      to !== "@raphie/contracts"
+      to !== "@raphie/contracts" &&
+      !to.startsWith("@raphie/contracts/")
     )
       return "Core layers must be independent of platform and framework packages.";
   }

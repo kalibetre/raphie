@@ -81,3 +81,15 @@ export type WorkspaceSnapshot = {
   live: Record<number, LiveConversation>;
   activity: ActivityEvent[];
 };
+
+export type {
+  SessionSummary,
+  SessionTurn,
+  SessionApproval,
+  SessionActivity,
+  Page,
+  RunPhase,
+  SessionObservation,
+  RuntimeInfo,
+  ClientWorkspace,
+} from "./sessions/views.ts";

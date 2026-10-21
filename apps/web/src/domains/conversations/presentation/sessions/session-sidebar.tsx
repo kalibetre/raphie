@@ -30,14 +30,18 @@ export function SessionSidebar({
   setSidebar,
   connected,
   select,
+  hasMore,
+  loadMore,
 }: {
   data?: Snapshot;
-  conversationId?: number;
+  hasMore?: boolean;
+  loadMore: () => void;
+  conversationId?: string;
   view?: View;
   sidebar: boolean;
   setSidebar: (open: boolean) => void;
   connected: boolean;
-  select: (id?: number, view?: View) => void;
+  select: (id?: string, view?: View) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [dark, setDark] = useState(false);
@@ -112,6 +116,7 @@ export function SessionSidebar({
             onSelect={() => select(session.id)}
           />
         ))}
+        {hasMore && <button onClick={loadMore}>Load more sessions</button>}
         {data && !conversations.length && (
           <p className="sidebar-empty">
             {filter ? "No matches." : "Your conversations will live here."}

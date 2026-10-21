@@ -19,7 +19,7 @@ export function Composer({
   enabledPlugins,
   onSend,
 }: {
-  conversationId?: number;
+  conversationId?: string;
   suggestion?: { text: string; at: number };
   model: string | null;
   usage?: { tokens: number; cost: number };

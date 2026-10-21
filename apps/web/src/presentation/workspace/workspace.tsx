@@ -34,9 +34,23 @@ export function Workspace({
   section?: Section;
 }) {
   const navigate = useNavigate();
-  const { data, connected, isPending, error, refetch } = useLiveState();
-  const conversation = data?.conversations.find((c) =>
-    sessionId ? c.sessionId === sessionId : c.id === legacyConversationId,
+  const {
+    data,
+    connected,
+    isPending,
+    error,
+    refetch,
+    legacySessionId,
+    nextBefore,
+    loadOlder,
+    loadingOlder,
+    loadMoreSessions,
+    hasMoreSessions,
+    loadMoreActivity,
+    hasMoreActivity,
+  } = useLiveState(sessionId, legacyConversationId, view === "diagnostics");
+  const conversation = data?.conversations.find(
+    (c) => c.sessionId === (sessionId ?? legacySessionId),
   );
   const {
     inspector,
@@ -87,12 +101,11 @@ export function Workspace({
   async function send(text: string, eventId: string) {
     const sent = await api<{
       id: string;
-      conversationId: number;
       sessionId: string;
-    }>("/api/chat", { text, eventId, conversationId });
+    }>("/api/sessions/messages", { text, eventId, sessionId: conversationId });
     setSuggestion(undefined);
     await refetch();
-    if (conversationId !== sent.conversationId)
+    if (conversationId !== sent.sessionId)
       await navigate({
         to: "/sessions/$sessionId",
         params: { sessionId: sent.sessionId },
@@ -100,7 +113,7 @@ export function Workspace({
       });
   }
 
-  function select(id?: number, nextView?: "diagnostics" | "settings") {
+  function select(id?: string, nextView?: "diagnostics" | "settings") {
     setSuggestion(undefined);
     const selected = data?.conversations.find((c) => c.id === id);
     if (selected)
@@ -172,6 +185,8 @@ export function Workspace({
             setSidebar={setSidebar}
             connected={connected}
             select={select}
+            hasMore={hasMoreSessions}
+            loadMore={() => void loadMoreSessions()}
           />
         )}
         <main id="main" className="main-panel" inert={sidebar}>
@@ -209,7 +224,14 @@ export function Workspace({
               action="New session"
             />
           ) : view === "diagnostics" ? (
-            <Activity events={events} full />
+            <>
+              <Activity events={events} full />
+              {hasMoreActivity && (
+                <button onClick={() => void loadMoreActivity()}>
+                  Load earlier activity
+                </button>
+              )}
+            </>
           ) : view === "settings" ? (
             <Settings
               section={section}
@@ -220,6 +242,14 @@ export function Workspace({
             />
           ) : (
             <>
+              {nextBefore && (
+                <button
+                  disabled={loadingOlder}
+                  onClick={() => void loadOlder()}
+                >
+                  {loadingOlder ? "Loading…" : "Load earlier messages"}
+                </button>
+              )}
               {conversation && data ? (
                 <Chat
                   key={conversation.id}

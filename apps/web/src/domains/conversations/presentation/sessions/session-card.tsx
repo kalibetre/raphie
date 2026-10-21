@@ -40,8 +40,8 @@ export function SessionCard({
       <span className="conversation-card-footer">
         <SessionBadge session={session} />
         <span className="conversation-meta">
-          {session.discordThreadId && (
-            <MessageCircle size={12} aria-label="Also in Discord" />
+          {session.origin === "discord" && (
+            <MessageCircle size={12} aria-label="Discord session" />
           )}
           {session.turnCount} {session.turnCount === 1 ? "message" : "messages"}
         </span>

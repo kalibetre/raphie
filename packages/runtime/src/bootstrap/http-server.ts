@@ -7,6 +7,7 @@ import { streamSnapshots } from "../domains/activity/presentation/http/events.ts
 import { approvalRoutes } from "../domains/approvals/presentation/http/routes.ts";
 import { attachmentRoutes } from "../domains/attachments/presentation/http/routes.ts";
 import { conversationRoutes } from "../domains/conversations/presentation/http/routes.ts";
+import { clientRoutes } from "../infrastructure/http/client-routes.ts";
 import {
   browserCors,
   localAccess,
@@ -79,6 +80,7 @@ export async function startServer(
   app.get("/api/chats", async (c) => c.json(await snapshot(runtime)));
   app.get("/api/events", (c) => streamSnapshots(c, () => snapshot(runtime)));
   const owner = runtime.actors.establish("web");
+  app.route("/api", clientRoutes(runtime.queries, owner));
   app.route("/api", conversationRoutes(runtime.sessions, owner));
   app.route(
     "/api",

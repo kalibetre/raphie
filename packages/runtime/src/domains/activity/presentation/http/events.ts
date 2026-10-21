@@ -1,9 +1,10 @@
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 
-import type { ReadWorkspace } from "../../../../application/workspace/ports.ts";
-
-export function streamSnapshots(c: Context, readWorkspace: ReadWorkspace) {
+export function streamSnapshots(
+  c: Context,
+  readWorkspace: () => Promise<unknown>,
+) {
   c.header("X-Accel-Buffering", "no");
   return streamSSE(c, async (stream) => {
     let previous = "";

@@ -44,6 +44,7 @@ import {
   DeliveryPlans,
   PiDeliveryQueue,
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
+import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
 
 type Options = {
   directory: string;
@@ -60,6 +61,7 @@ type Options = {
 export class Gateway {
   readonly actors = new ActorAuthority();
   readonly sessions: Sessions;
+  readonly queries: PiClientQueries;
   readonly deliveries: PiDeliveryQueue;
   files: Files;
   harness!: Harness;
@@ -84,6 +86,7 @@ export class Gateway {
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
+    this.queries = new PiClientQueries(this);
     this.sessions = new Sessions(this.actors, this.chats, this.toolApprovals);
   }
 

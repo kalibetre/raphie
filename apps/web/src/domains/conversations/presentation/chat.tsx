@@ -29,7 +29,7 @@ export function Chat({
   conversationId,
 }: {
   state: Snapshot;
-  conversationId: number;
+  conversationId: string;
 }) {
   const query = useQueryClient();
   const connection = useMemo(

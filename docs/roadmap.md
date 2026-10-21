@@ -29,7 +29,20 @@ and the existing self-hosted deployment.
   new chat intents contain whole replies, with chunking confined to Discord.
   SIGKILL tests cover both confirmed and unknown first-chunk outcomes: recovery
   sends only the remaining chunks. Unknown chunks remain uncertain (44 tests).
-- Focused reads and web observation migration remain in the following slice.
+- Focused client queries now provide summary pages, UUID session observations,
+  50-turn history pages, approvals, runtime metadata and optional activity pages.
+  Web reads these interfaces and offers older-history/list pagination; whole-state
+  endpoints remain compatibility reads. Pure run/tool/usage projections live in
+  the framework-free contracts package. Headless client/read-authorization tests
+  and browser approval acceptance pass (46 tests total).
+- Local baseline on 2026-10-21 (Bun 1.4.3, macOS arm64): 100 deterministic-model
+  sessions, 25 SSE viewers and 100 queries measured p50 1 ms / p95 4 ms, average
+  response 2,499 bytes, RSS 83 MiB; a follow-up completed in 12 ms while those
+  viewers stopped reading. Run `bun scripts/benchmark-client-queries.ts` to repeat.
+  This uses zero sandboxes and is not a model/sandbox capacity test. Pi document
+  reads still scan retained state; bounded responses do not imply indexed storage.
+- Final work: review migration edge cases, synchronize the visual guide and
+  document the delivered interface and remaining deployment limitations.
 
 ## 1. Application operations and trusted actor context
 

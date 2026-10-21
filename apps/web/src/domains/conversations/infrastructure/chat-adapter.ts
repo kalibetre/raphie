@@ -6,7 +6,7 @@ import { api } from "../../../infrastructure/http/api-client.ts";
 
 export function transcript(
   state: Snapshot,
-  conversationId: number,
+  conversationId: string,
 ): StreamChunk {
   const turns = state.turns.filter((t) => t.conversationId === conversationId);
   const active = turns.find((t) => t.status === "pending");
@@ -39,7 +39,7 @@ export function transcript(
 // Pi owns durable execution; TanStack AI only projects our transcript for React.
 // Unsubscribing never submits a cancellation or approval command.
 export function chatAdapter(
-  conversationId: number,
+  conversationId: string,
   subscribe: (listener: (state: Snapshot) => void) => () => void,
 ): SubscribeConnectionAdapter {
   return {
@@ -82,10 +82,10 @@ export function chatAdapter(
           : typeof message.content === "string"
             ? message.content
             : "";
-      await api("/api/chat", {
+      await api("/api/sessions/messages", {
         eventId: message.id ?? crypto.randomUUID(),
         text,
-        conversationId,
+        sessionId: conversationId,
       });
     },
   };

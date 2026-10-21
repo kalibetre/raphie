@@ -14,19 +14,19 @@ const state = {
   turns: [
     {
       id: "turn",
-      conversationId: 1,
+      conversationId: "session-1",
       text: "Hello",
       status: "pending",
       answer: null,
     },
   ],
-  live: { 1: { text: "Hel", generating: true } },
+  live: { "session-1": { text: "Hel", generating: true } },
 } as unknown as Snapshot;
 
 test("TanStack AI consumes authoritative partial and completed transcripts without duplicate replies", async () => {
   let publish!: (state: Snapshot) => void;
   let detached = 0;
-  const adapter = chatAdapter(1, (listener) => {
+  const adapter = chatAdapter("session-1", (listener) => {
     publish = listener;
     return () => {
       detached++;
@@ -67,11 +67,12 @@ test("reconnect reconstructs only the selected conversation and omits stale live
       {
         ...state.turns[0],
         id: "other",
-        conversationId: 2 as Snapshot["turns"][number]["conversationId"],
+        conversationId:
+          "session-2" as Snapshot["turns"][number]["conversationId"],
       },
     ],
   };
-  const chunk = transcript(completed, 1);
+  const chunk = transcript(completed, "session-1");
   assert.equal(chunk.type, EventType.MESSAGES_SNAPSHOT);
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
     assert.equal(chunk.messages.length, 2);
