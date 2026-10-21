@@ -1,35 +1,35 @@
-// Composed from the shadcn AI Elements chat pattern. The scrolling primitive
-// preserves the reader's position while new text arrives.
 import { ArrowDown } from "lucide-react";
 import type { ReactNode } from "react";
-import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { useStickToBottom } from "use-stick-to-bottom";
 
 import { Button } from "../../../shared/ui/button";
+import { ScrollArea } from "../../../shared/ui/scroll-area";
 
 export function Conversation({ children }: { children: ReactNode }) {
+  const { scrollRef, contentRef, isAtBottom, scrollToBottom } =
+    useStickToBottom({ resize: "smooth", initial: "instant" });
   return (
-    <StickToBottom className="conversation" resize="smooth" initial="instant">
-      <StickToBottom.Content className="conversation-content">
-        {children}
-      </StickToBottom.Content>
-      <ScrollButton />
-    </StickToBottom>
-  );
-}
-
-function ScrollButton() {
-  const { isAtBottom, scrollToBottom } = useStickToBottomContext();
-  return (
-    !isAtBottom && (
-      <Button
-        className="scroll-bottom rounded-full"
-        size="icon"
-        variant="outline"
-        aria-label="Scroll to latest message"
-        onClick={() => void scrollToBottom()}
+    <div className="conversation">
+      <ScrollArea
+        className="conversation-scroll"
+        viewportRef={scrollRef}
+        viewportLabel="Conversation messages"
       >
-        <ArrowDown />
-      </Button>
-    )
+        <div ref={contentRef} className="conversation-content">
+          {children}
+        </div>
+      </ScrollArea>
+      {!isAtBottom && (
+        <Button
+          className="scroll-bottom rounded-full"
+          size="icon"
+          variant="outline"
+          aria-label="Scroll to latest message"
+          onClick={() => void scrollToBottom()}
+        >
+          <ArrowDown />
+        </Button>
+      )}
+    </div>
   );
 }

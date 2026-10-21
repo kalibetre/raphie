@@ -12,6 +12,7 @@ import {
 import { useState } from "react";
 
 import { type Approval } from "../../../infrastructure/http/api-client";
+import { CodeBlock } from "../../../shared/ui/code-block";
 import {
   formatDuration,
   type ToolStep,
@@ -132,13 +133,13 @@ function Step({ step }: { step: ToolStep }) {
         {args && (
           <>
             <span className="step-label">Arguments</span>
-            <pre>{pretty(args)}</pre>
+            <CodeBlock>{pretty(args)}</CodeBlock>
           </>
         )}
         {step.result && (
           <>
             <span className="step-label">Result</span>
-            <pre>{step.result}</pre>
+            <CodeBlock>{step.result}</CodeBlock>
           </>
         )}
         {state === "uncertain" && (

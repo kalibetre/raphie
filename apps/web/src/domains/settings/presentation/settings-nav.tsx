@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 
+import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { type Section, sections } from "./settings";
 
 export function SettingsNav({
@@ -21,18 +22,23 @@ export function SettingsNav({
       <div className="sidebar-top">
         <div className="brand">Settings</div>
       </div>
-      <nav className="settings-nav">
-        {sections.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            className={section === id ? "selected" : ""}
-            aria-current={section === id ? "page" : undefined}
-            onClick={() => onSelect(id)}
-          >
-            <Icon size={15} /> {label}
-          </button>
-        ))}
-      </nav>
+      <ScrollArea
+        className="settings-nav-scroll"
+        viewportLabel="Settings sections"
+      >
+        <nav className="settings-nav">
+          {sections.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              className={section === id ? "selected" : ""}
+              aria-current={section === id ? "page" : undefined}
+              onClick={() => onSelect(id)}
+            >
+              <Icon size={15} /> {label}
+            </button>
+          ))}
+        </nav>
+      </ScrollArea>
       <div className="sidebar-bottom">
         <button className="settings-back" onClick={onBack}>
           <ArrowLeft size={15} /> Back

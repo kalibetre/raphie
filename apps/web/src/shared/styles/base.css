@@ -48,7 +48,15 @@
         --inspector-width
       );
   }
+  .scroll-area-viewport {
+    max-height: inherit;
+  }
+  /* Radix's table sizing must not let long messages or titles widen a panel. */
+  .scroll-area-viewport > div {
+    display: block !important;
+  }
   .main-panel {
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     min-height: 0;

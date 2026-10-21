@@ -99,7 +99,7 @@
       display: none;
     }
     .conversation-content {
-      padding: 20px 16px;
+      padding: 20px 16px calc(var(--composer-height, 150px) + 20px);
     }
     .composer-wrap {
       padding: 4px 12px 12px;

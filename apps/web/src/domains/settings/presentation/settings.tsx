@@ -6,6 +6,7 @@ import {
   readLocal,
   writeLocal,
 } from "../../../infrastructure/preferences/storage";
+import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
 
@@ -30,49 +31,51 @@ export function Settings({
   setEnabled: (ids: string[]) => void;
 }) {
   return (
-    <section className="settings-page">
-      {section === "general" ? (
-        <General data={data} connected={connected} />
-      ) : (
-        <Group
-          title="Installed"
-          note="Trusted local plugins add small pieces to your workspace through explicit UI slots. Preferences are saved in this browser."
-        >
-          {plugins.map((plugin) => (
-            <Row
-              key={plugin.id}
-              title={plugin.name}
-              description={
-                <>
-                  {plugin.description}
-                  <code>
-                    {plugin.id} · v{plugin.version} ·{" "}
-                    {Object.keys(plugin.slots).join(", ")}
-                  </code>
-                </>
-              }
-            >
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  role="switch"
-                  aria-label={`Enable ${plugin.name}`}
-                  checked={enabled.includes(plugin.id)}
-                  onChange={(event) => {
-                    const next = event.target.checked
-                      ? [...enabled, plugin.id]
-                      : enabled.filter((id) => id !== plugin.id);
-                    setEnabled(next);
-                    writeLocal("raphie:plugins", JSON.stringify(next));
-                  }}
-                />
-                <span aria-hidden="true" />
-              </label>
-            </Row>
-          ))}
-        </Group>
-      )}
-    </section>
+    <ScrollArea className="settings-scroll" viewportLabel="Settings">
+      <section className="settings-page">
+        {section === "general" ? (
+          <General data={data} connected={connected} />
+        ) : (
+          <Group
+            title="Installed"
+            note="Trusted local plugins add small pieces to your workspace through explicit UI slots. Preferences are saved in this browser."
+          >
+            {plugins.map((plugin) => (
+              <Row
+                key={plugin.id}
+                title={plugin.name}
+                description={
+                  <>
+                    {plugin.description}
+                    <code>
+                      {plugin.id} · v{plugin.version} ·{" "}
+                      {Object.keys(plugin.slots).join(", ")}
+                    </code>
+                  </>
+                }
+              >
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-label={`Enable ${plugin.name}`}
+                    checked={enabled.includes(plugin.id)}
+                    onChange={(event) => {
+                      const next = event.target.checked
+                        ? [...enabled, plugin.id]
+                        : enabled.filter((id) => id !== plugin.id);
+                      setEnabled(next);
+                      writeLocal("raphie:plugins", JSON.stringify(next));
+                    }}
+                  />
+                  <span aria-hidden="true" />
+                </label>
+              </Row>
+            ))}
+          </Group>
+        )}
+      </section>
+    </ScrollArea>
   );
 }
 

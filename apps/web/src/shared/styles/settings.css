@@ -1,5 +1,9 @@
 @layer components {
   /* Settings */
+  .settings-scroll,
+  .settings-nav-scroll {
+    flex: 1;
+  }
   .settings-nav {
     display: grid;
     gap: 2px;
@@ -39,7 +43,6 @@
     max-width: 760px;
     margin: 0 auto;
     padding: 28px 28px 48px;
-    overflow-y: auto;
     display: grid;
     align-content: start;
     gap: 28px;

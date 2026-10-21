@@ -11,6 +11,7 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import type { Snapshot } from "../../../../infrastructure/http/api-client";
 import { Button } from "../../../../shared/ui/button";
+import { ScrollArea } from "../../../../shared/ui/scroll-area";
 import {
   Tooltip,
   TooltipContent,
@@ -106,23 +107,25 @@ export function SessionSidebar({
           onChange={(e) => setFilter(e.target.value)}
         />
       </label>
-      <nav className="conversation-list" aria-label="Conversations">
-        {conversations.map((session) => (
-          <SessionCard
-            key={session.id}
-            session={session}
-            selected={session.id === conversationId && !view}
-            now={now}
-            onSelect={() => select(session.id)}
-          />
-        ))}
-        {hasMore && <button onClick={loadMore}>Load more sessions</button>}
-        {data && !conversations.length && (
-          <p className="sidebar-empty">
-            {filter ? "No matches." : "Your conversations will live here."}
-          </p>
-        )}
-      </nav>
+      <ScrollArea className="session-scroll" viewportLabel="Saved sessions">
+        <nav className="conversation-list" aria-label="Conversations">
+          {conversations.map((session) => (
+            <SessionCard
+              key={session.id}
+              session={session}
+              selected={session.id === conversationId && !view}
+              now={now}
+              onSelect={() => select(session.id)}
+            />
+          ))}
+          {hasMore && <button onClick={loadMore}>Load more sessions</button>}
+          {data && !conversations.length && (
+            <p className="sidebar-empty">
+              {filter ? "No matches." : "Your conversations will live here."}
+            </p>
+          )}
+        </nav>
+      </ScrollArea>
       <div className="sidebar-bottom">
         <span
           className="runtime-status"

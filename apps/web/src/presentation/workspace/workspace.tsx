@@ -243,7 +243,7 @@ export function Workspace({
               setEnabled={setEnabled}
             />
           ) : (
-            <>
+            <div className="chat-stage">
               {nextBefore && (
                 <button
                   disabled={loadingOlder}
@@ -284,7 +284,7 @@ export function Workspace({
                 enabledPlugins={enabled}
                 onSend={send}
               />
-            </>
+            </div>
           )}
         </main>
         {inspector && !view && conversation && (

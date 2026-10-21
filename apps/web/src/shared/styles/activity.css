@@ -57,10 +57,10 @@
     font-size: 11px;
     color: var(--faint);
   }
-  .activity-list {
+  .activity-scroll {
     flex: 1;
-    min-height: 0;
-    overflow-y: auto;
+  }
+  .activity-list {
     padding-bottom: 16px;
   }
   .activity-empty {
@@ -134,13 +134,15 @@
     margin: 0;
     overflow-wrap: anywhere;
   }
-  .event-detail pre {
+  .event-detail .code-scroll {
     margin: 0;
     max-height: 280px;
-    overflow: auto;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 8px;
+  }
+  .event-detail pre {
+    margin: 0;
     padding: 8px 10px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;

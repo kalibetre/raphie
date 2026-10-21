@@ -43,16 +43,28 @@
   }
 
   /* Conversation */
+  .chat-stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
   .conversation {
     position: relative;
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
+  }
+  .conversation-scroll {
+    height: 100%;
   }
   .conversation-content {
     max-width: 780px;
     margin: 0 auto;
-    padding: 28px 28px 24px;
+    padding: 28px 28px calc(var(--composer-height, 150px) + 24px);
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -140,7 +152,6 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 12px 14px;
-    overflow-x: auto;
     font-size: 12.5px;
   }
   .markdown pre code {
@@ -168,8 +179,9 @@
     gap: 6px;
   }
   .scroll-bottom {
-    position: sticky;
-    bottom: 12px;
+    position: absolute;
+    z-index: 3;
+    bottom: calc(var(--composer-height, 150px) + 12px);
     left: 50%;
     transform: translateX(-50%);
     border-radius: 999px;
@@ -308,13 +320,14 @@
     letter-spacing: 0.6px;
     color: var(--faint);
   }
-  .step-body pre {
-    margin: 0;
+  .step-body .code-scroll {
     max-height: 260px;
-    overflow: auto;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 8px;
+  }
+  .step-body pre {
+    margin: 0;
     padding: 10px 12px;
     font-size: 12px;
     line-height: 1.5;
@@ -346,10 +359,25 @@
 
   /* Composer */
   .composer-wrap {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    pointer-events: none;
     width: 100%;
     max-width: 780px;
     margin: 0 auto;
     padding: 4px 28px 14px;
+  }
+  .composer-wrap > * {
+    pointer-events: auto;
+  }
+  .composer-input-scroll {
+    max-height: min(240px, 35dvh);
+  }
+  .composer textarea {
+    overflow: hidden;
   }
   .composer {
     background: var(--card);
@@ -397,7 +425,7 @@
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 32px;
+    padding: 32px 32px calc(var(--composer-height, 150px) + 32px);
   }
   .welcome-mark {
     font-size: 56px;

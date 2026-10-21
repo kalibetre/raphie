@@ -17,6 +17,7 @@ import {
 import { chatAdapter } from "../infrastructure/chat-adapter";
 import { ActiveRun } from "./active-run";
 import { Conversation } from "./conversation";
+import { markdownComponents } from "./markdown-components";
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, {
@@ -85,7 +86,10 @@ export function Chat({
             <div key={message.id} className="turn-user">
               <article className="message message-user">
                 <div className="markdown">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown
+                    components={markdownComponents}
+                    remarkPlugins={[remarkGfm]}
+                  >
                     {text}
                   </ReactMarkdown>
                 </div>
@@ -105,7 +109,12 @@ export function Chat({
         return (
           <article key={message.id} className="message message-assistant">
             <div className="markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+              <ReactMarkdown
+                components={markdownComponents}
+                remarkPlugins={[remarkGfm]}
+              >
+                {text}
+              </ReactMarkdown>
             </div>
             {turn?.status === "done" && (
               <footer className="message-meta">

@@ -6,8 +6,10 @@ import {
   writeLocal,
 } from "../../../infrastructure/preferences/storage";
 import { Button } from "../../../shared/ui/button";
+import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Textarea } from "../../../shared/ui/textarea";
 import { ComposerPlugins } from "../../settings/infrastructure/plugins/index";
+import { useComposerLayout } from "./use-composer-layout";
 
 export function Composer({
   conversationId,
@@ -45,6 +47,8 @@ export function Composer({
     }
   }, [suggestion, key]);
 
+  const { wrapper, input, revealCaret } = useComposerLayout(draft);
+
   function update(text: string) {
     setDraft(text);
     writeLocal(key, text);
@@ -72,7 +76,7 @@ export function Composer({
   }
 
   return (
-    <div className="composer-wrap">
+    <div className="composer-wrap" ref={wrapper}>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -85,24 +89,33 @@ export function Composer({
           void send();
         }}
       >
-        <Textarea
-          className="max-h-60 min-h-12 resize-none rounded-none border-0 bg-transparent px-0 pt-1 pb-2 text-[14.5px] leading-normal shadow-none focus-visible:ring-0 md:text-[14.5px] dark:bg-transparent"
-          aria-label="Message Raphie"
-          placeholder="Message Raphie…"
-          value={draft}
-          maxLength={4000}
-          onChange={(event) => update(event.target.value)}
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault();
-              void send();
-            }
-          }}
-        />
+        <ScrollArea
+          className="composer-input-scroll"
+          viewportLabel="Message draft"
+        >
+          <Textarea
+            ref={input}
+            className="min-h-12 resize-none rounded-none border-0 bg-transparent px-0 pt-1 pb-2 text-[14.5px] leading-normal shadow-none focus-visible:ring-0 md:text-[14.5px] dark:bg-transparent"
+            aria-label="Message Raphie"
+            placeholder="Message Raphie…"
+            value={draft}
+            maxLength={4000}
+            onSelect={revealCaret}
+            onKeyUp={revealCaret}
+            onPointerUp={revealCaret}
+            onChange={(event) => update(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                void send();
+              }
+            }}
+          />
+        </ScrollArea>
         <div className="composer-toolbar">
           <span className="composer-chip" title={model ?? undefined}>
             <Sparkles size={13} />
