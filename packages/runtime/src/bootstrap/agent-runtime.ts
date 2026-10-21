@@ -50,6 +50,7 @@ import {
   noTelemetry,
   type Telemetry,
 } from "../shared/application/telemetry.ts";
+import type { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
   directory: string;
@@ -59,6 +60,7 @@ type Options = {
   beforeEffectCommit?: () => Promise<void>;
   models?: Models;
   model?: ModelRef;
+  modelConnectionGate?: ModelConnectionGate;
   mcp?: McpTools;
   mcpError?: boolean;
   telemetry?: Telemetry;
@@ -90,7 +92,11 @@ export class Gateway {
       options.beforeEffectCommit,
     );
     this.fileApprovals = new FileApprovalService(this);
-    this.chats = new ChatService(this, options.model);
+    this.chats = new ChatService(
+      this,
+      options.model,
+      options.modelConnectionGate,
+    );
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);

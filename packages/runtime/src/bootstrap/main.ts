@@ -136,6 +136,7 @@ const program = Effect.gen(function* () {
           telemetry,
           models,
           model: settings.model,
+          modelConnectionGate: settings.connectionGate,
           mcpError,
           mcp: mcp
             ? {

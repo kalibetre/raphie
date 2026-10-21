@@ -5,6 +5,7 @@ import type { Channel as Source } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
+import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import {
   Activity,
   record,
@@ -116,10 +117,16 @@ export const chatWorkflow = defineTask<
 export class ChatService implements ConversationCommands {
   app: DurableContext;
   model: ModelRef | undefined;
+  private readonly connectionGate: ModelConnectionGate;
 
-  constructor(app: DurableContext, model?: ModelRef) {
+  constructor(
+    app: DurableContext,
+    model?: ModelRef,
+    connectionGate = new ModelConnectionGate(),
+  ) {
     this.app = app;
     this.model = model;
+    this.connectionGate = connectionGate;
   }
 
   async state() {
@@ -137,137 +144,142 @@ export class ChatService implements ConversationCommands {
     connectionId?: string;
   }) {
     this.app.authorize(input.actor);
-    if (!this.model)
-      throw new InputError(
-        "Connect a model provider in Settings before sending a message.",
-        503,
-      );
-    const violation = messageViolation(input);
-    if (violation) throw new InputError(violation);
-    const model = this.model;
-    const requestKey = `${input.source}:${input.eventId}`;
-    const result = await this.app.root.commit(async (tx) => {
-      const state = await tx.doc(Chats);
-      const bindings = (await tx.doc(ChannelBindings)).bindings;
-      const replyTo =
-        input.source === "discord" && input.discordThreadId
-          ? {
-              provider: "discord" as const,
-              owner: "owner" as const,
-              connectionId: input.connectionId ?? "legacy-discord",
-              conversation: input.discordThreadId,
-            }
-          : null;
-      const binding = replyTo
-        ? bindings.find((b) => sameDestination(b, replyTo))
-        : undefined;
-      const addressed = input.sessionId
-        ? state.conversations.find((c) => c.sessionId === input.sessionId)
-        : undefined;
-      if (input.sessionId && !addressed)
-        throw new InputError("Session not found.", 404);
-      if (
-        addressed &&
-        input.source === "discord" &&
-        binding?.sessionId !== addressed.sessionId
-      )
-        throw new InputError("Session belongs to another Discord thread.", 403);
-      const conversationId = addressed?.id ?? input.conversationId;
-      // Preserve the fingerprint of pre-migration commands when addressed by UUID.
-      const fingerprint = new Bun.CryptoHasher("sha256")
-        .update(
-          JSON.stringify([
-            input.text,
-            conversationId ?? null,
-            input.discordThreadId ?? null,
-          ]),
-        )
-        .digest("hex");
-      const existing = state.turns.find((t) => t.requestKey === requestKey);
-      if (existing) {
+    const result = await this.connectionGate.run(async () => {
+      if (!this.model)
+        throw new InputError(
+          "Connect a model provider in Settings before sending a message.",
+          503,
+        );
+      const violation = messageViolation(input);
+      if (violation) throw new InputError(violation);
+      const model = this.model;
+      const requestKey = `${input.source}:${input.eventId}`;
+      return this.app.root.commit(async (tx) => {
+        const state = await tx.doc(Chats);
+        const bindings = (await tx.doc(ChannelBindings)).bindings;
+        const replyTo =
+          input.source === "discord" && input.discordThreadId
+            ? {
+                provider: "discord" as const,
+                owner: "owner" as const,
+                connectionId: input.connectionId ?? "legacy-discord",
+                conversation: input.discordThreadId,
+              }
+            : null;
+        const binding = replyTo
+          ? bindings.find((b) => sameDestination(b, replyTo))
+          : undefined;
+        const addressed = input.sessionId
+          ? state.conversations.find((c) => c.sessionId === input.sessionId)
+          : undefined;
+        if (input.sessionId && !addressed)
+          throw new InputError("Session not found.", 404);
         if (
+          addressed &&
           input.source === "discord" &&
-          (!replyTo ||
-            !existing.replyTo ||
-            !sameDestination(replyTo, existing.replyTo))
+          binding?.sessionId !== addressed.sessionId
         )
           throw new InputError(
-            "Event belongs to another Discord connection or thread.",
+            "Session belongs to another Discord thread.",
             403,
           );
-        if (existing.fingerprint !== fingerprint)
-          throw new InputError(
-            "Event ID already used for different content.",
-            409,
-          );
-        return {
-          id: existing.id,
-          conversationId: existing.conversationId,
-          sessionId: state.conversations.find(
-            (c) => c.id === existing.conversationId,
-          )!.sessionId,
-        };
-      }
-      let conversation = conversationId
-        ? state.conversations.find((c) => c.id === conversationId)
-        : binding
-          ? state.conversations.find((c) => c.sessionId === binding.sessionId)
-          : undefined;
-      if (conversationId && !conversation)
-        throw new InputError("Conversation not found.", 404);
-      if (!conversation) {
-        const created = await tx.createConversation({
-          ownership: { kind: "ownerless" },
+        const conversationId = addressed?.id ?? input.conversationId;
+        // Preserve the fingerprint of pre-migration commands when addressed by UUID.
+        const fingerprint = new Bun.CryptoHasher("sha256")
+          .update(
+            JSON.stringify([
+              input.text,
+              conversationId ?? null,
+              input.discordThreadId ?? null,
+            ]),
+          )
+          .digest("hex");
+        const existing = state.turns.find((t) => t.requestKey === requestKey);
+        if (existing) {
+          if (
+            input.source === "discord" &&
+            (!replyTo ||
+              !existing.replyTo ||
+              !sameDestination(replyTo, existing.replyTo))
+          )
+            throw new InputError(
+              "Event belongs to another Discord connection or thread.",
+              403,
+            );
+          if (existing.fingerprint !== fingerprint)
+            throw new InputError(
+              "Event ID already used for different content.",
+              409,
+            );
+          return {
+            id: existing.id,
+            conversationId: existing.conversationId,
+            sessionId: state.conversations.find(
+              (c) => c.id === existing.conversationId,
+            )!.sessionId,
+          };
+        }
+        let conversation = conversationId
+          ? state.conversations.find((c) => c.id === conversationId)
+          : binding
+            ? state.conversations.find((c) => c.sessionId === binding.sessionId)
+            : undefined;
+        if (conversationId && !conversation)
+          throw new InputError("Conversation not found.", 404);
+        if (!conversation) {
+          const created = await tx.createConversation({
+            ownership: { kind: "ownerless" },
+          });
+          conversation = {
+            id: created.id,
+            sessionId: newSessionId(),
+            title: input.text.trim().slice(0, 70),
+            createdAt: Date.now(),
+          };
+          state.conversations.push(conversation);
+        }
+        if (replyTo && !binding)
+          bindings.push({ ...replyTo, sessionId: conversation.sessionId });
+        await configure(tx, conversation.id as ConversationId, {
+          model,
+          tools: this.app.options.mcp ? null : [],
+          instructions:
+            'You are Raphie, a concise and thoughtful personal assistant. Use conversation history. You have no built-in tasks, reminders, or cross-conversation memory. Use available MCP tools for connected integrations, and never claim an external action succeeded without a confirming tool result. For Executor, read mcp_executor_skills(name="execute") before using execute. Follow its discovery workflow. The application pauses execution for owner approval; ordinary chat text is not an approval. Never automatically repeat an uncertain, rejected, or expired call. If Executor pauses for an interaction, explain it and use resume only when the owner has supplied the required response.',
         });
-        conversation = {
-          id: created.id,
-          sessionId: newSessionId(),
-          title: input.text.trim().slice(0, 70),
+        const turn: ChatTurn = {
+          id: crypto.randomUUID(),
+          requestKey,
+          fingerprint,
+          conversationId: conversation.id,
+          source: input.source,
+          text: input.text,
           createdAt: Date.now(),
+          status: "pending",
+          answer: null,
+          replyTo,
         };
-        state.conversations.push(conversation);
-      }
-      if (replyTo && !binding)
-        bindings.push({ ...replyTo, sessionId: conversation.sessionId });
-      await configure(tx, conversation.id as ConversationId, {
-        model,
-        tools: this.app.options.mcp ? null : [],
-        instructions:
-          'You are Raphie, a concise and thoughtful personal assistant. Use conversation history. You have no built-in tasks, reminders, or cross-conversation memory. Use available MCP tools for connected integrations, and never claim an external action succeeded without a confirming tool result. For Executor, read mcp_executor_skills(name="execute") before using execute. Follow its discovery workflow. The application pauses execution for owner approval; ordinary chat text is not an approval. Never automatically repeat an uncertain, rejected, or expired call. If Executor pauses for an interaction, explain it and use resume only when the owner has supplied the required response.',
-      });
-      const turn: ChatTurn = {
-        id: crypto.randomUUID(),
-        requestKey,
-        fingerprint,
-        conversationId: conversation.id,
-        source: input.source,
-        text: input.text,
-        createdAt: Date.now(),
-        status: "pending",
-        answer: null,
-        replyTo,
-      };
-      state.turns.push(turn);
-      record(await tx.doc(Activity), "run.accepted", "Message accepted", {
-        conversationId: conversation.id,
-        runId: turn.id,
-        details: { source: input.source, text: turn.text, model },
-      });
-      await tx.createTask(
-        chatWorkflow,
-        {
-          turnId: turn.id,
-          conversationId: conversation.id as ConversationId,
-          text: turn.text,
-        },
-        { ownership: { kind: "conversation" } },
-      );
-      return {
-        id: turn.id,
-        conversationId: conversation.id,
-        sessionId: conversation.sessionId,
-      };
-    }, context);
+        state.turns.push(turn);
+        record(await tx.doc(Activity), "run.accepted", "Message accepted", {
+          conversationId: conversation.id,
+          runId: turn.id,
+          details: { source: input.source, text: turn.text, model },
+        });
+        await tx.createTask(
+          chatWorkflow,
+          {
+            turnId: turn.id,
+            conversationId: conversation.id as ConversationId,
+            text: turn.text,
+          },
+          { ownership: { kind: "conversation" } },
+        );
+        return {
+          id: turn.id,
+          conversationId: conversation.id,
+          sessionId: conversation.sessionId,
+        };
+      }, context);
+    });
     await this.app.observations.attach(result.conversationId);
     this.app.harness.resume();
     return result;
