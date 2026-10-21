@@ -43,7 +43,7 @@ test("backend settings persist model, credentials and telemetry without exposing
       body: JSON.stringify(data),
     });
   try {
-    assert.equal(settings.read().credentialSource, "environment");
+    assert.equal((await settings.read()).credentialSource, "environment");
     const response = await post("", {
       provider: "openrouter",
       modelId: ids[1],
@@ -79,10 +79,10 @@ test("backend settings persist model, credentials and telemetry without exposing
     settings = await BackendSettings.open(path, options);
     assert.equal(settings.key, "PRIVATE_SAVED_KEY");
     assert.equal(settings.model, undefined);
-    assert.equal(settings.read().modelId, ids[1]);
+    assert.equal((await settings.read()).modelId, ids[1]);
     await settings.update({ apiKey: null, providerEnabled: true });
     assert.equal(settings.key, "PRIVATE_ENV_KEY");
-    assert.equal(settings.read().credentialSource, "environment");
+    assert.equal((await settings.read()).credentialSource, "environment");
   } finally {
     await http.close();
     await app.close();

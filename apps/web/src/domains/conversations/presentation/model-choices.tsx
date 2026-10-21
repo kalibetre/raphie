@@ -48,6 +48,15 @@ export function ModelChoices({
                 <span>{model.name}</span>
                 <small>
                   {model.id}
+                  {model.pricing && (
+                    <span
+                      title={`Typical OpenRouter price across providers, USD per million tokens: $${model.pricing.input} input, $${model.pricing.output} output`}
+                    >
+                      {" "}
+                      · {price(model.pricing.input)} /{" "}
+                      {price(model.pricing.output)} per M
+                    </span>
+                  )}
                   {model.id === defaultModel && (
                     <span className="model-default-label">
                       {" "}
@@ -74,3 +83,5 @@ export function ModelChoices({
     </ul>
   );
 }
+
+const price = (usd: number) => `$${Number(usd.toPrecision(2))}`;

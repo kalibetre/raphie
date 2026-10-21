@@ -5,7 +5,13 @@ export type RuntimeSettings = {
   credentialSource: "saved" | "environment" | null;
   modelId: string;
   providers: { id: string; name: string }[];
-  models: { id: string; name: string; contextWindow: number }[];
+  models: {
+    id: string;
+    name: string;
+    contextWindow: number;
+    /** USD per million tokens, from OpenRouter when known. */
+    pricing?: { input: number; output: number };
+  }[];
 };
 
 export type UpdateRuntimeSettings = {

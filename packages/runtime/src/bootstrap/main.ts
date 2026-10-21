@@ -10,6 +10,7 @@ import {
   redact,
 } from "../domains/activity/infrastructure/pi-activity-journal.ts";
 import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
+import { OpenRouterCatalog } from "../domains/settings/infrastructure/openrouter-catalog.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
 import {
   createDiscordBridge,
@@ -56,10 +57,17 @@ const program = Effect.gen(function* () {
   const models = createModels();
   const provider = openrouterProvider();
   models.setProvider(provider);
+  const catalog = yield* Effect.promise(() =>
+    new OpenRouterCatalog({
+      path: resolve(directory, "openrouter-models.json"),
+      models,
+    }).load(),
+  );
   const settings = yield* resource(
     () =>
       BackendSettings.open(resolve(directory, "settings.sqlite"), {
         models,
+        catalog,
         environmentKey: process.env.OPENROUTER_API_KEY,
         defaultModel: process.env.RAPHIE_MODEL ?? "anthropic/claude-haiku-5.5",
       }),
@@ -155,6 +163,10 @@ const program = Effect.gen(function* () {
   settings.onChange = () => {
     app.chats.model = settings.model;
   };
+  settings.sessionModels = async () =>
+    (await app.chats.state()).conversations.flatMap((c) =>
+      c.model?.provider === "openrouter" ? [c.model.modelId] : [],
+    );
   settings.isBusy = async () =>
     (await app.chats.state()).turns.some((turn) => turn.status === "pending");
   const stop = yield* Effect.acquireRelease(

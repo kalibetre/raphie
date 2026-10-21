@@ -11,7 +11,7 @@ const key = z.string().min(1).max(4096).regex(/^\S+$/);
 
 export function settingsRoutes(settings: SettingsService) {
   return new Hono()
-    .get("/", (c) => c.json(settings.read()))
+    .get("/", async (c) => c.json(await settings.read()))
     .post(
       "/",
       limitBody(8192),

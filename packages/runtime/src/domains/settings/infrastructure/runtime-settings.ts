@@ -22,6 +22,8 @@ type Options = {
   environmentKey?: string;
   defaultModel: string;
   verifyKey?: (key: string) => Promise<void>;
+  /** Curated catalog; without one, every model Pi knows is listed. */
+  catalog?: { list(extra: string[]): RuntimeSettings["models"] };
 };
 
 /** Private credentials never enter Pi documents, session APIs or browser storage. */
@@ -32,6 +34,8 @@ export class BackendSettings implements SettingsService {
   readonly connectionGate = new ModelConnectionGate();
   onChange: () => void = () => {};
   isBusy: () => Promise<boolean> = async () => false;
+  /** Model ids sessions use, kept selectable even when not curated. */
+  sessionModels: () => Promise<string[]> = async () => [];
 
   private constructor(db: Database, state: Stored, options: Options) {
     this.db = db;
@@ -80,7 +84,17 @@ export class BackendSettings implements SettingsService {
     return this.state.telemetryEnabled;
   }
 
-  read(): RuntimeSettings {
+  async read(): Promise<RuntimeSettings> {
+    const models = this.options.catalog
+      ? this.options.catalog.list([
+          this.state.modelId,
+          ...(await this.sessionModels()),
+        ])
+      : this.options.models.getModels("openrouter").map((m) => ({
+          id: m.id,
+          name: m.name,
+          contextWindow: m.contextWindow,
+        }));
     return {
       telemetryEnabled: this.state.telemetryEnabled,
       provider: "openrouter",
@@ -92,11 +106,7 @@ export class BackendSettings implements SettingsService {
           ? "environment"
           : null,
       providers: [{ id: "openrouter", name: "OpenRouter" }],
-      models: this.options.models.getModels("openrouter").map((m) => ({
-        id: m.id,
-        name: m.name,
-        contextWindow: m.contextWindow,
-      })),
+      models,
     };
   }
 

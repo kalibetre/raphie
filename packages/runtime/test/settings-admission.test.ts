@@ -119,7 +119,7 @@ for (const change of [
       admission.resume();
       const sent = await sending;
       assert.equal(await updating, 409);
-      assert.equal(settings.read().providerEnabled, true);
+      assert.equal((await settings.read()).providerEnabled, true);
       assert.equal(settings.key === "original-fixture-key", true);
       assert.equal(
         (await app.chats.state()).turns.find((turn) => turn.id === sent.id)
