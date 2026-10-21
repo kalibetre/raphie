@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+import { BACKGROUND_CONTEXT as durableContext } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { Provider } from "@earendil-works/pi-ai/models";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -12,6 +13,12 @@ import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/utils/e
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
+import {
+  Activity,
+  record,
+} from "../src/domains/activity/infrastructure/pi-activity-journal.ts";
+import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
+import { newSessionId } from "../src/domains/conversations/infrastructure/session-id.ts";
 const directory = await mkdtemp(join(tmpdir(), "raphie-browser-"));
 const models = createModels();
 const model = {
@@ -126,6 +133,51 @@ const app = await Gateway.open({
     },
   },
 });
+// Opt-in dense UI fixture: synthetic history stays inside the disposable database.
+if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
+  await app.root.commit(async (tx) => {
+    const created = await tx.createConversation({
+      ownership: { kind: "ownerless" },
+    });
+    const state = await tx.doc(Chats);
+    const now = Date.now();
+    state.conversations.push({
+      id: created.id,
+      sessionId: newSessionId(),
+      title: "Scroll layout acceptance",
+      createdAt: now,
+    });
+    for (let n = 0; n < 60; n++) {
+      const id = crypto.randomUUID();
+      state.turns.push({
+        id,
+        requestKey: `fixture:${n}`,
+        fingerprint: "fixture",
+        conversationId: created.id,
+        source: "web",
+        text: `Question ${n + 1}: review the plan`,
+        createdAt: now + n,
+        status: "done",
+        answer: `Reply ${n + 1}. Here is a longer response to exercise transcript scrolling.\n\n${"A useful paragraph with enough detail to wrap across the available width. ".repeat(6)}\n\n\`\`\`ts\n${"const value = 'a deliberately wide code sample for horizontal scrolling'; ".repeat(8)}\n\`\`\`\n\n| Step | Result |\n| --- | --- |\n| Check | Passed |`,
+      });
+      record(
+        await tx.doc(Activity),
+        "run.completed",
+        `Fixture reply ${n + 1}`,
+        {
+          conversationId: created.id,
+          runId: id,
+          details: {
+            rows: Array.from({ length: 40 }, (_, index) => ({
+              index,
+              value: "Detailed fixture data",
+            })),
+          },
+        },
+      );
+    }
+  }, durableContext);
+}
 // Override the ports to run beside a real runtime.
 const server = await startServer(app, {
   port: Number(process.env.RAPHIE_FIXTURE_PORT ?? 4317),

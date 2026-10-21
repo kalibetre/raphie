@@ -99,3 +99,15 @@ in sync with `docs/architecture.md`, `docs/headless-runtime.md`, and
 Use inline styles, scripts, and SVG so the guide works offline without a CDN or
 a build step. Check both themes, narrow layouts, keyboard controls, and browser
 console output when changing it.
+
+## Scrolling and the composer
+
+Use `shared/ui/scroll-area` for scrolling panels, code/details and wide tables.
+Each panel has one Radix viewport; its flex/grid ancestors need `min-height: 0`
+and must not add a competing `overflow: auto`. Connect `useStickToBottom` directly
+to the transcript viewport and content refs instead of adding another scroller.
+
+The composer floats inside `chat-stage`. Its measured height supplies transcript
+bottom padding and the jump-button offset, including multiline drafts and errors.
+Preserve last-message clearance while letting older messages scroll underneath.
+See [UI scrolling](docs/ui-scrolling.md) for the long-history fixture and browser probe.
