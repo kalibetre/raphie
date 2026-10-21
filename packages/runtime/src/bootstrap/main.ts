@@ -5,12 +5,16 @@ import { createModels } from "@earendil-works/pi-ai/models";
 import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
 import { Effect } from "effect";
 
-import { redact } from "../domains/activity/infrastructure/pi-activity-journal.ts";
+import {
+  attemptId,
+  redact,
+} from "../domains/activity/infrastructure/pi-activity-journal.ts";
 import {
   createDiscordBridge,
   resolveDiscordThread,
 } from "../infrastructure/discord/bridge.ts";
 import { connectMcp, mcpConfig } from "../infrastructure/mcp/client.ts";
+import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
 import { Gateway } from "./agent-runtime.ts";
 import { startServer } from "./http-server.ts";
 
@@ -25,6 +29,15 @@ const resource = <A>(
 let lifecycle: "starting" | "running" | "stopping" = "starting";
 
 const program = Effect.gen(function* () {
+  const telemetry = yield* resource(
+    () =>
+      createTelemetry({
+        endpoint: process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+        serviceName: process.env.OTEL_SERVICE_NAME,
+        attemptId,
+      }),
+    (telemetry) => telemetry.close(),
+  );
   const discordEnabled = process.env.RAPHIE_DISCORD_ENABLED === "true";
   const keys = [
     "DISCORD_BOT_TOKEN",
@@ -82,27 +95,30 @@ const program = Effect.gen(function* () {
     : undefined;
   const app = yield* resource(
     () =>
-      Gateway.open({
-        directory: resolve(
-          fileURLToPath(new URL("../../../../", import.meta.url)),
-          process.env.DATA_DIRECTORY ?? ".data",
-        ),
-        discordThreadId: threadId,
-        discordConnectionId: process.env.DISCORD_APPLICATION_ID,
-        models,
-        model,
-        mcpError,
-        mcp: mcp
-          ? {
-              client: mcp,
-              identity: new Bun.CryptoHasher("sha256")
-                .update(JSON.stringify(config))
-                .digest("hex"),
-              documentationTools:
-                mcp.server?.name === "executor" ? ["skills"] : [],
-            }
-          : undefined,
-      }),
+      telemetry.run("runtime.start", {}, () =>
+        Gateway.open({
+          directory: resolve(
+            fileURLToPath(new URL("../../../../", import.meta.url)),
+            process.env.DATA_DIRECTORY ?? ".data",
+          ),
+          discordThreadId: threadId,
+          discordConnectionId: process.env.DISCORD_APPLICATION_ID,
+          telemetry,
+          models,
+          model,
+          mcpError,
+          mcp: mcp
+            ? {
+                client: mcp,
+                identity: new Bun.CryptoHasher("sha256")
+                  .update(JSON.stringify(config))
+                  .digest("hex"),
+                documentationTools:
+                  mcp.server?.name === "executor" ? ["skills"] : [],
+              }
+            : undefined,
+        }),
+      ),
     (app) => app.close(),
   );
   const stop = yield* Effect.acquireRelease(

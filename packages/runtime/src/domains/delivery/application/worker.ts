@@ -1,3 +1,5 @@
+import type { Telemetry } from "../../../shared/application/telemetry.ts";
+import { noTelemetry } from "../../../shared/application/telemetry.ts";
 import type { DeliveryIntent, DeliveryOperation } from "../domain/model.ts";
 
 export interface ChannelDeliveryQueues {
@@ -16,6 +18,7 @@ export function createDeliveryWorker(
   queue: DeliveryQueue,
   render: RenderDelivery,
   send: (payload: string) => Promise<string>,
+  telemetry: Telemetry = noTelemetry,
 ) {
   let running = false;
   return async () => {
@@ -25,7 +28,11 @@ export function createDeliveryWorker(
       for (let operation; (operation = await queue.claim(render));) {
         let messageId: string | null = null;
         try {
-          messageId = await send(operation.payload);
+          messageId = await telemetry.run(
+            "delivery.send",
+            { "delivery.id": operation.id },
+            () => send(operation.payload),
+          );
         } catch {
           /* Persist uncertainty below. */
         }

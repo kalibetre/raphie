@@ -70,6 +70,14 @@ The activity inspector and Diagnostics page record precise UTC timestamps, local
 
 This first journal keeps the latest **5,000 events**, truncates individual diagnostic payloads at **24,000 characters**, and does not persist individual text deltas. Timestamps describe when the host observed an event; “Model response started” is the first observed response, not the start of the provider's network request. Executor's nested calls and private model reasoning are not available here. Operation waterfalls and a backend plugin lifecycle are later work.
 
+## Operational telemetry
+
+Effect's built-in OTLP tracing can export safe operational spans to your own
+self-hosted collector. Set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to enable it;
+empty leaves export disabled. Prompts, arguments/results and raw errors are not
+exported. See [observability](docs/observability.md). The durable activity journal
+continues to own product inspection and recovery history.
+
 ## UI plugins
 
 `apps/web/src/domains/settings/infrastructure/plugins/index.tsx` defines host API version 1 and the `composer.footer` slot. Plugins receive `{ draft, model }` and render with shared UI components. The included token counter is an intentionally rough character-based estimate; actual provider usage is separate in Diagnostics.

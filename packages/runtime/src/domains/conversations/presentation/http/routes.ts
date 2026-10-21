@@ -15,7 +15,7 @@ const message = z.object({
 });
 
 export function conversationRoutes(
-  conversations: Sessions,
+  conversations: Pick<Sessions, "submit" | "submitLegacy">,
   actor: ActorContext,
 ) {
   return new Hono()

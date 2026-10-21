@@ -87,9 +87,10 @@ hosts use `Bun.serve`; the Node Hono adapter and srvx dependency are removed.
 Hono’s Bun adapter provides static asset responses for the built Start app.
 
 Tests import `bun:test`, including native spies; filesystem and assertions can
-still use Bun’s Node-compatible built-ins. Pi Durable’s maintained `node:sqlite`
-adapter runs on Bun’s SQLite compatibility implementation. This avoids a custom
-storage adapter and preserves transactional/recovery semantics and file format.
+still use Bun’s Node-compatible built-ins. A native `bun:sqlite` driver implements
+Pi's public `SqliteDatabase` interface; Pi retains the storage engine, schema,
+migrations and recovery. The driver serializes awaited transactions and unrelated
+operations on one connection, with WAL and rollback/close guarantees.
 
 `bunfig.toml` disables automatic dotenv loading so Varlock remains the sole
 private configuration loader. The web build uses Vite on Bun because TanStack
@@ -118,3 +119,12 @@ The browser composes summary pages and a selected session observation; it no
 longer fetches or subscribes to the whole workspace. See the delivered
 [HTTP interface and migration record](headless-interface.md) for routes, limits,
 recovery verification and the local query baseline.
+
+## Operational tracing
+
+Effect 4's built-in OTLP exporter observes HTTP handlers, shared commands, remote
+MCP calls and delivery attempts through a framework-free telemetry port. Export
+is optional and targets a configured self-hosted receiver. The activity journal
+remains durable product history; trace spans are best-effort operational data.
+Payloads and raw errors are excluded. See [observability](observability.md) for
+configuration, span meanings, lifetime/recovery limits and tests.

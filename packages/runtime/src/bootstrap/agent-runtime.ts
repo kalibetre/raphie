@@ -43,8 +43,13 @@ import {
   DeliveryPlans,
   PiDeliveryQueue,
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
+import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
 import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
 import { openBunSqliteStorage } from "../infrastructure/storage/bun-sqlite.ts";
+import {
+  noTelemetry,
+  type Telemetry,
+} from "../shared/application/telemetry.ts";
 
 type Options = {
   directory: string;
@@ -56,11 +61,13 @@ type Options = {
   model?: ModelRef;
   mcp?: McpTools;
   mcpError?: boolean;
+  telemetry?: Telemetry;
 };
 
 export class Gateway {
   readonly actors = new ActorAuthority();
-  readonly sessions: Sessions;
+  readonly sessions: ReturnType<typeof traceSessions>;
+  readonly telemetry: Telemetry;
   readonly queries: PiClientQueries;
   readonly deliveries: PiDeliveryQueue;
   files: Files;
@@ -75,6 +82,7 @@ export class Gateway {
 
   private constructor(options: Options) {
     this.options = options;
+    this.telemetry = options.telemetry ?? noTelemetry;
     this.files = new Files(join(options.directory, "files"));
     this.workflow = deliveryWorkflow(
       this.files,
@@ -87,11 +95,14 @@ export class Gateway {
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
     this.queries = new PiClientQueries(this);
-    this.sessions = new Sessions(
-      this.actors,
-      this.chats,
-      this.toolApprovals,
-      this.fileApprovals,
+    this.sessions = traceSessions(
+      new Sessions(
+        this.actors,
+        this.chats,
+        this.toolApprovals,
+        this.fileApprovals,
+      ),
+      this.telemetry,
     );
   }
 

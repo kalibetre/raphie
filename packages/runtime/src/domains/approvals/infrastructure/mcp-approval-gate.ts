@@ -2,10 +2,12 @@ import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 
 import type { McpClient } from "../../../infrastructure/mcp/client.ts";
+import type { Telemetry } from "../../../shared/application/telemetry.ts";
 import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import type { ChatService } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import type { ToolApprovalService } from "./pi-tool-approvals.ts";
 import type { ToolResult } from "./pi-tool-approvals.ts";
 import { ToolApprovals } from "./pi-tool-approvals.ts";
@@ -44,7 +46,11 @@ function output(result: ToolResult) {
 }
 
 export function createMcpTools(
-  app: { toolApprovals: ToolApprovalService },
+  app: {
+    toolApprovals: ToolApprovalService;
+    telemetry: Telemetry;
+    chats: Pick<ChatService, "state">;
+  },
   options: McpTools,
 ) {
   const server = options.client.server?.name ?? "mcp";
@@ -57,13 +63,24 @@ export function createMcpTools(
       replay: "safe", // Only this durable gate is replay-safe, not the remote action.
       outputLimits: { maxBytes: 32_000, maxLines: 1000 },
       execute: async (args, api, ctx) => {
+        const call = (approvalId?: string) =>
+          app.telemetry.run(
+            "tool.call",
+            { "tool.name": tool.name },
+            async (annotate) => {
+              const session = (await app.chats.state()).conversations.find(
+                (c) => c.id === api.conversationId,
+              );
+              annotate({
+                ...(session ? { "session.id": session.sessionId } : {}),
+                ...(approvalId ? { "approval.id": approvalId } : {}),
+              });
+              return options.client.call(tool.name, args, ctx.abortSignal);
+            },
+          );
         if (options.documentationTools?.includes(tool.name)) {
           try {
-            return output(
-              normalize(
-                await options.client.call(tool.name, args, ctx.abortSignal),
-              ),
-            );
+            return output(normalize(await call()));
           } catch {
             return output({
               text: "MCP documentation lookup failed. Check the connection.",
@@ -121,9 +138,7 @@ export function createMcpTools(
           });
         let result;
         try {
-          result = normalize(
-            await options.client.call(tool.name, args, ctx.abortSignal),
-          );
+          result = normalize(await call(approved.id));
         } catch {
           if (ctx.abortSignal?.aborted)
             throw new Error("MCP invocation interrupted.");

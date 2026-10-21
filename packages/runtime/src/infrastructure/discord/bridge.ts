@@ -193,6 +193,7 @@ export function createDiscordBridge(
         : await adapter.postMessage(operation.threadId, operation.message);
       return message.id;
     },
+    app.telemetry,
   );
 
   async function listen(signal: AbortSignal) {

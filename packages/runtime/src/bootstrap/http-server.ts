@@ -28,6 +28,19 @@ export async function startServer(
 ) {
   const app = new Hono();
   let port = options.port ?? 4315;
+  app.use("*", async (c, next) =>
+    runtime.telemetry.run(
+      "http.request",
+      { "http.method": c.req.method },
+      async (annotate) => {
+        await next();
+        annotate({
+          "http.route": c.req.routePath,
+          "http.status_code": c.res.status,
+        });
+      },
+    ),
+  );
   app.use(
     "*",
     secureHeaders({
