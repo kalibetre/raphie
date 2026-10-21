@@ -109,9 +109,7 @@ export class BackendSettings implements SettingsService {
     )
       throw new InputError("Choose a model from the available catalog.");
     const changesModel =
-      input.modelId !== undefined ||
-      input.apiKey !== undefined ||
-      input.providerEnabled !== undefined;
+      input.apiKey !== undefined || input.providerEnabled !== undefined;
     if (changesModel && (await this.isBusy()))
       throw new InputError(
         "Wait for active turns to finish before changing the model connection.",

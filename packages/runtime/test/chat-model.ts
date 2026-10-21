@@ -10,6 +10,7 @@ export function chatModel(
   options: {
     fail?: boolean;
     started?: () => void;
+    requestedModel?: (id: string) => void;
     pause?: Promise<void>;
     streamChunkPause?: Promise<void>;
     tool?: { name: string; args: JsonObject };
@@ -22,6 +23,7 @@ export function chatModel(
     provider: "fixture",
   };
   const reply: Provider["streamSimple"] = (_model, context, streamOptions) => {
+    options.requestedModel?.(_model.id);
     const stream = createAssistantMessageEventStream();
     const answer = context.messages
       .filter((m) => m.role === "user")
@@ -39,7 +41,7 @@ export function chatModel(
       content: [{ type: "text", text: answer }],
       api: model.api,
       provider: "fixture",
-      model: "history",
+      model: _model.id,
       stopReason: options.fail ? "error" : "stop",
       timestamp: Date.now(),
       usage: {

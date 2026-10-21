@@ -222,6 +222,7 @@ export class PiClientQueries implements ClientQueries {
     );
     return {
       session: {
+        model: session.model,
         id,
         origin:
           chats.turns.find((t) => t.conversationId === session.id)?.source ??

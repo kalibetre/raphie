@@ -1,7 +1,8 @@
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+import type { Models } from "@earendil-works/pi-ai/models";
 import type { ConversationId, ModelRef } from "@earendil-works/pi-durable";
 import { configure, defineDoc, defineTask } from "@earendil-works/pi-durable";
-import type { Channel as Source } from "@raphie/contracts";
+import type { Channel as Source, ModelSelection } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
@@ -117,14 +118,17 @@ export const chatWorkflow = defineTask<
 export class ChatService implements ConversationCommands {
   app: DurableContext;
   model: ModelRef | undefined;
+  private models: Models;
   private readonly connectionGate: ModelConnectionGate;
 
   constructor(
     app: DurableContext,
+    models: Models,
     model?: ModelRef,
     connectionGate = new ModelConnectionGate(),
   ) {
     this.app = app;
+    this.models = models;
     this.model = model;
     this.connectionGate = connectionGate;
   }
@@ -140,6 +144,7 @@ export class ChatService implements ConversationCommands {
     text: string;
     conversationId?: number;
     sessionId?: string;
+    model?: ModelSelection;
     discordThreadId?: string;
     connectionId?: string;
   }) {
@@ -152,7 +157,6 @@ export class ChatService implements ConversationCommands {
         );
       const violation = messageViolation(input);
       if (violation) throw new InputError(violation);
-      const model = this.model;
       const requestKey = `${input.source}:${input.eventId}`;
       return this.app.root.commit(async (tx) => {
         const state = await tx.doc(Chats);
@@ -191,6 +195,9 @@ export class ChatService implements ConversationCommands {
               input.text,
               conversationId ?? null,
               input.discordThreadId ?? null,
+              ...(input.model
+                ? [input.model.provider, input.model.modelId]
+                : []),
             ]),
           )
           .digest("hex");
@@ -235,9 +242,24 @@ export class ChatService implements ConversationCommands {
             sessionId: newSessionId(),
             title: input.text.trim().slice(0, 70),
             createdAt: Date.now(),
+            model: { ...(input.model ?? this.model!) },
           };
           state.conversations.push(conversation);
         }
+        if (
+          input.model &&
+          state.turns.some(
+            (t) =>
+              t.conversationId === conversation.id && t.status === "pending",
+          )
+        )
+          throw new InputError(
+            "Wait for this session’s current turn to finish before changing its model.",
+            409,
+          );
+        const model = input.model ?? conversation.model ?? this.model!;
+        this.validateModel(model);
+        conversation.model = { ...model };
         if (replyTo && !binding)
           bindings.push({ ...replyTo, sessionId: conversation.sessionId });
         await configure(tx, conversation.id as ConversationId, {
@@ -283,6 +305,40 @@ export class ChatService implements ConversationCommands {
     await this.app.observations.attach(result.conversationId);
     this.app.harness.resume();
     return result;
+  }
+
+  private validateModel(model: ModelSelection) {
+    if (
+      !this.model ||
+      model.provider !== this.model.provider ||
+      !this.models.getModel(model.provider, model.modelId)
+    )
+      throw new InputError(
+        "This model is unavailable. Choose a model from the connected provider.",
+        400,
+      );
+  }
+
+  async chooseModel(sessionId: string, model: ModelSelection) {
+    await this.app.root.commit(async (tx) => {
+      const state = await tx.doc(Chats);
+      const session = state.conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!session) throw new InputError("Session not found.", 404);
+      this.validateModel(model);
+      if (
+        state.turns.some(
+          (t) => t.conversationId === session.id && t.status === "pending",
+        )
+      )
+        throw new InputError(
+          "Wait for this session’s current turn to finish before changing its model.",
+          409,
+        );
+      session.model = { ...model };
+      await configure(tx, session.id as ConversationId, { model });
+    }, context);
   }
 
   async claimDelivery() {
