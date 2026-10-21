@@ -285,10 +285,17 @@ export function Workspace({
                   await refetch();
                 }}
                 onModelSettings={() => {
-                  void navigate({
-                    to: "/",
-                    search: { view: "settings", section: "models" },
-                  });
+                  if (conversation)
+                    void navigate({
+                      to: "/sessions/$sessionId",
+                      params: { sessionId: conversation.sessionId },
+                      search: { view: "settings", section: "models" },
+                    });
+                  else
+                    void navigate({
+                      to: "/",
+                      search: { view: "settings", section: "models" },
+                    });
                 }}
               />
             </div>
