@@ -4,8 +4,7 @@
 of this design. Open the file directly; no server or external assets are needed.
 
 Design dated 2026-10-21. The principles in [ADR 0001](adr/0001-headless-runtime-and-capability-specific-adapters.md)
-are accepted; the interfaces and migration slices below are proposed implementation
-work. The existing prototype still uses its current commands and persistence shapes.
+are accepted. All four migration slices now have working implementations and acceptance coverage. This document records the design; [headless-interface.md](headless-interface.md) describes the delivered names, routes, limits and migration behavior. Desktop, CLI, Telegram and session linking remain future work.
 
 ## Product scope
 
@@ -179,19 +178,21 @@ Inspection data and subscriptions are authorized to the same owner/session scope
 The adapter's presentation capabilities do not grant additional access. Redact
 before persistence and transport, as in the current implementation.
 
-## Current gaps addressed by the design
+## Delivered implementation and remaining limits
 
-- The legacy wire type `Channel` mixes the web client with Discord as one source
-  enum; migration must distinguish client origin from messaging-channel identity.
-- `SendMessage` and persisted conversations contain Discord-specific routing.
-- Conversation workflows construct Discord-sized text chunks themselves.
-- Three separate delivery pumps expose claim/settle mechanics through a broad
-  `ChannelServices` interface.
-- Public sends still accept numeric conversation IDs; UUIDs are resolved in clients.
-- `/api/chats` plus SSE sends whole-workspace snapshots, including inspection data.
-- Browser modules calculate some activity/usage projections needed by future clients.
-- Current authorization is single-owner and browser-local rather than a shared
-  authenticated client interface.
+Shared commands accept runtime-issued actor context. New client sends and focused
+reads use UUIDs; the numeric admission endpoint is retained only for compatibility.
+Bindings and per-turn origins replace session-owned Discord routes. Discord
+chunking lives in its renderer, with one connection-scoped worker and persisted
+plans replacing the three adapter pumps. Pure run/tool/usage projections are
+shared without React dependencies. Web uses focused queries and observations.
+
+The legacy source enum still names web and Discord for stored-event compatibility;
+channel identity is a separate structured reply destination. Local HTTP access
+remains single-owner and loopback-only. No remote authentication, full CLI/desktop
+application, Telegram integration or session-link command has been added. Retained
+Pi documents are still scanned internally; response pagination is not an indexed
+storage optimization. See the implementation record for measured limits.
 
 ## Migration invariants
 

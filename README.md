@@ -47,8 +47,9 @@ Open the [interactive HTML architecture guide](docs/architecture.html) directly
 in your browser. It works offline and includes a current/target runtime map,
 capability comparison, request and delivery flows, and migration explorer.
 
-Raphie is moving toward a headless runtime shared by clients and messaging
-channels. See the [target design](docs/headless-runtime.md) and
+Raphie has a headless runtime shared by clients and messaging channels. Run
+`bun run dev:runtime` on its own to use configured Discord without a web process.
+See the [delivered HTTP interface](docs/headless-interface.md). See the [target design](docs/headless-runtime.md) and
 [migration roadmap](docs/roadmap.md). Inspection interfaces are optional for
 messaging channels; cross-channel session continuation is deferred.
 
@@ -57,7 +58,7 @@ messaging channels; cross-channel session continuation is deferred.
 - `apps/web/src/shared/styles`: theme tokens and separate stylesheets with explicit cascade order. Shared UI primitives live under `shared/ui`.
 - `packages/runtime`: an independent Bun host; Effect scopes own MCP, Pi, HTTP, and Discord lifetimes. Pi Durable and SQLite own persistent execution and approval state.
 - Hono and Bun’s native server own HTTP dispatch, validation, security middleware, and streaming. Domain presentation handlers receive application ports; Pi Durable adapters own transactional execution. `@raphie/contracts` shares wire types without runtime dependencies.
-- The browser gets an initial state snapshot and subscribes to SSE updates. Reconnect replaces the snapshot. Closing a tab only detaches its viewer; it never cancels work or repeats an action.
+- The browser reads summary pages and the selected session through focused UUID queries and SSE observations. Older history and diagnostic pages load separately. Reconnect replaces authoritative observed state. Closing a tab only detaches its viewer; it never cancels work or repeats an action.
 - TanStack AI's client renders a projection of the durable transcript. It does not own a second model loop, conversation database, or approval store. Our admission endpoint retains stable event IDs for retrying an ambiguous message submission.
 - Vite proxies `/api` during development. Start server routes proxy the same API in the production build. API origin and host checks restrict access to the local workspace.
 

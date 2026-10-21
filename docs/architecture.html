@@ -749,7 +749,7 @@
             <span aria-hidden="true">r</span> raphie
             <span class="stamp">/ engineering</span>
           </div>
-          <span class="stamp">Design reference · 21 Oct 2026</span>
+          <span class="stamp">Implemented foundation · 21 Oct 2026</span>
         </div>
         <h1>Architecture field guide</h1>
         <p class="subtitle">
@@ -786,14 +786,15 @@
           </div>
         </div>
         <p class="section-intro">
-          Select an entrance to see its interface with the runtime. The target
-          is a design to implement, not a claim of completed migration.
+          Select an entrance to explore the runtime. All four foundation slices
+          are implemented. Desktop, CLI, Telegram and session linking remain
+          future work.
         </p>
         <div class="diagram" aria-label="Layered architecture diagram">
           <div class="toolbar">
             <span class="eyebrow">Clients &amp; messaging channels</span
             ><span id="map-status" class="status proposed"
-              >Proposed interfaces</span
+              >Implemented foundation</span
             >
           </div>
           <div class="adapters" role="group" aria-label="Explore an adapter">
@@ -895,7 +896,7 @@
             <div>
               <h3 id="adapter-title">Discord / target</h3>
               <span class="status" id="adapter-state"
-                >Shared interface planned</span
+                >Shared interface implemented</span
               >
             </div>
             <p id="adapter-detail">
@@ -935,7 +936,7 @@
             <span class="number">02</span>
             <h2>Capability fit, not identical screens</h2>
           </div>
-          <span class="status proposed">Target capability map</span>
+          <span class="status proposed">Capabilities and future clients</span>
         </div>
         <p class="section-intro">
           Clients can expose more detail without making every messaging channel
@@ -1007,7 +1008,7 @@
             <span class="number">03</span>
             <h2>Follow a Discord turn</h2>
           </div>
-          <span class="status proposed">Target flow</span>
+          <span class="status proposed">Implemented request flow</span>
         </div>
         <p class="section-intro">
           Select a stage. This is a conceptual trace, not live agent telemetry.
@@ -1096,7 +1097,7 @@
             <span class="number">04</span>
             <h2>Migrate in working slices</h2>
           </div>
-          <span class="status proposed">All four slices planned</span>
+          <span class="status proposed">All four slices implemented</span>
         </div>
         <p class="section-intro">
           The existing prototype remains usable between slices. No database
@@ -1136,7 +1137,7 @@
           </div>
           <div aria-live="polite" aria-atomic="true">
             <article class="phase-panel" data-panel="0">
-              <span class="eyebrow">Next implementation slice</span>
+              <span class="eyebrow">Implemented / slice 01</span>
               <h3>A small, shared application interface</h3>
               <p>
                 Use public session UUIDs and trusted actor context for
@@ -1144,7 +1145,7 @@
                 Keep existing endpoints as compatibility adapters.
               </p>
               <div class="acceptance">
-                <strong>Proof of completion</strong>
+                <strong>Verified acceptance</strong>
                 <p>
                   Without a web process: a Discord fixture sends a message,
                   requests approval, executes the exact approved tool call, and
@@ -1154,7 +1155,7 @@
               </div>
             </article>
             <article class="phase-panel" data-panel="1" hidden>
-              <span class="eyebrow">Planned / slice 02</span>
+              <span class="eyebrow">Implemented / slice 02</span>
               <h3>Separate identity from destination</h3>
               <p>
                 Move Discord associations into channel bindings. Backfill
@@ -1163,7 +1164,7 @@
                 identities.
               </p>
               <div class="acceptance">
-                <strong>Proof of completion</strong>
+                <strong>Verified acceptance</strong>
                 <p>
                   Restarts and duplicate events preserve the same binding, turn,
                   and destination. Another thread cannot read its history or
@@ -1173,7 +1174,7 @@
               </div>
             </article>
             <article class="phase-panel" data-panel="2" hidden>
-              <span class="eyebrow">Planned / slice 03</span>
+              <span class="eyebrow">Implemented / slice 03</span>
               <h3>Make delivery its own responsibility</h3>
               <p>
                 Conversation and approval operations record intent. A scoped
@@ -1182,7 +1183,7 @@
                 edits.
               </p>
               <div class="acceptance">
-                <strong>Proof of completion</strong>
+                <strong>Verified acceptance</strong>
                 <p>
                   Kill a worker after one chunk: recovery does not silently
                   duplicate it or lose the remaining plan. An uncertain
@@ -1192,7 +1193,7 @@
               </div>
             </article>
             <article class="phase-panel" data-panel="3" hidden>
-              <span class="eyebrow">Planned / slice 04</span>
+              <span class="eyebrow">Implemented / slice 04</span>
               <h3>Read only what a client needs</h3>
               <p>
                 Replace whole-workspace snapshots incrementally with summaries,
@@ -1200,7 +1201,7 @@
                 observations, and optional inspection queries.
               </p>
               <div class="acceptance">
-                <strong>Proof of completion</strong>
+                <strong>Verified acceptance</strong>
                 <p>
                   An HTTP client fixture lists a session, sends a message,
                   observes output, and decides an approval with the web app
@@ -1211,6 +1212,12 @@
             </article>
           </div>
         </div>
+        <p class="scope-note">
+          Verified: 48 tests, production build, TypeScript 7, Oxfmt and Oxlint.
+          Local query baseline: 100 stored sessions, 25 SSE viewers, p95 4 ms;
+          deterministic model, zero sandboxes. This is not an active-agent
+          capacity result. Startup preserved all existing session and turn IDs.
+        </p>
         <div style="margin-top: 24px">
           <details>
             <summary>Later: desktop, CLI, and Telegram</summary>
@@ -1319,7 +1326,7 @@
             name: "Web",
             state: "Available",
             current:
-              "The web workspace uses HTTP commands and whole-workspace snapshot/SSE reads. It already runs separately from the durable agent runtime.",
+              "The web workspace uses shared UUID commands, summary pages, paged history and session-scoped SSE observations. Inspection has a separate query. No whole-workspace reads are needed.",
             target:
               "A client uses shared commands, focused reads, and session observations through HTTP. Rendering, drafts, layout, and UI plugins remain local to the client.",
           },
@@ -1327,7 +1334,7 @@
             name: "Discord",
             state: "Built; disabled by configuration",
             current:
-              "The bridge directly invokes conversation and approval operations and pumps three delivery queues. Thread routing and message chunk sizes still leak into persisted conversation/workflow code.",
+              "The SDK adapter verifies the owner and conversation, then uses shared operations and scoped durable bindings. One connection-scoped worker sends persisted plans; Discord rendering owns chunk, card, file and edit payloads.",
             target:
               "The adapter verifies identity and uses channel ingress to resolve a binding and admit a turn. It renders messages and explicit approval controls. Inspection commands are not required.",
           },
@@ -1387,7 +1394,7 @@
           uncertain:
             "A send may have reached the platform before the worker died. Preserve its uncertain disposition. Use provider idempotency or explicit reconciliation; never repair a notification by rerunning a completed tool action.",
         };
-        let view = "target";
+        let view = "current";
         let selected = "discord";
         const byId = (id) => document.getElementById(id);
         const pressed = (selector, attribute, value) =>
@@ -1405,33 +1412,33 @@
           pressed("[data-view]", "data-view", view);
           pressed("[data-adapter]", "data-adapter", selected);
           byId("map-status").textContent = target
-            ? "Proposed interfaces"
+            ? "Implemented foundation"
             : "Current implementation";
           byId("map-status").classList.toggle("proposed", target);
           byId("interface-title").textContent = target
             ? "Shared application operations"
-            : "HTTP handlers + direct channel services";
+            : "Shared application operations";
           byId("interface-subtitle").textContent = target
             ? "Admit messages · decide approvals · read authorized state"
-            : "Partial shared ports · snapshots · adapter-specific delivery pumps";
+            : "UUID admission · scoped bindings · focused queries · durable delivery";
           byId("transport-label").textContent = [
             "discord",
             "telegram",
           ].includes(selected)
             ? target
               ? "Trusted channel ingress"
-              : "Channel bridge; future adapters are not connected"
+              : "Verified Discord ingress; Telegram remains future work"
             : target
               ? "HTTP client interface"
-              : "Local HTTP commands + snapshot / SSE";
+              : "Local UUID commands + focused queries / SSE";
           byId("routing-module").innerHTML = target
             ? "Channels<span>Bindings &amp; delivery</span>"
-            : "Routing<span>Currently Discord-coupled</span>";
+            : "Channels<span>Scoped bindings &amp; delivery</span>";
           byId("adapter-title").textContent =
             `${adapter.name} / ${view === "target" ? "target design" : "current"}`;
           byId("adapter-state").textContent =
             target && ["web", "discord"].includes(selected)
-              ? "Shared interface planned"
+              ? "Shared interface implemented"
               : adapter.state;
           byId("adapter-detail").textContent = adapter[view];
         }

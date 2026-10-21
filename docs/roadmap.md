@@ -41,8 +41,12 @@ and the existing self-hosted deployment.
   viewers stopped reading. Run `bun scripts/benchmark-client-queries.ts` to repeat.
   This uses zero sandboxes and is not a model/sandbox capacity test. Pi document
   reads still scan retained state; bounded responses do not imply indexed storage.
-- Final work: review migration edge cases, synchronize the visual guide and
-  document the delivered interface and remaining deployment limitations.
+- Final review added connection-scoped worker claims and verified-context file
+  experiment operations, with thread/connection checks before retries and decisions.
+  All 48 tests and the complete quality gate pass. The live local prototype was
+  backed up and restarted: all 1 session / 7 turn IDs survived, SQLite integrity
+  passed, and the new web query returned HTTP 200. No VM changes or model calls
+  were needed. See [the implementation record](headless-interface.md).
 
 ## 1. Application operations and trusted actor context
 

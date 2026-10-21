@@ -6,7 +6,7 @@ For interactive maps, request flows, and migration phases, open the
 This file describes the current implementation. The accepted headless direction
 and proposed application interfaces are documented in
 [headless-runtime.md](headless-runtime.md), with migration slices in
-[roadmap.md](roadmap.md). Those proposed interfaces are not implemented yet.
+[roadmap.md](roadmap.md). The four migration slices are implemented; the roadmap records verification and later client work.
 
 Decision: use TypeScript 7.0.2 throughout the active monorepo, Hono for the
 runtime HTTP transport hosted by Bun, and domain-oriented modules for runtime and browser.
@@ -46,8 +46,7 @@ belong to presentation/infrastructure.
 
 Composition roots wire adapters. Neither channel adapters nor domain handlers
 import the process host. Discord receives an explicit channel-services port.
-Cross-context reads are assembled into a workspace snapshot by an infrastructure
-adapter, then exposed via the framework-free `@raphie/contracts` package. No
+Focused queries assemble public UUID summaries, transcript pages, approvals, phases and inspection data through a Pi adapter. Framework-free DTOs and reusable run/tool/usage projections live in `@raphie/contracts`; the old workspace snapshot remains a compatibility read. No
 browser module imports the runtime package.
 
 The architecture check rejects reverse-layer imports, framework dependencies
@@ -62,16 +61,14 @@ Hono routes replace the handwritten request dispatcher. Bun’s native `Bun.serv
 bounded input; CORS and secure headers use standard middleware. Local Host,
 Origin, and client-marker checks remain application-specific middleware.
 
-Route factories receive conversation, approval, and attachment ports. The
-composition root injects concrete services and the workspace snapshot reader.
+Route factories receive shared session/approval operations, client query ports and attachment reads. Trusted HTTP and Discord adapters issue runtime-local actor contexts after access checks; application operations reject fabricated contexts. The composition root injects concrete adapters.
 Hono's SSE helper owns write backpressure and cancellation. A disconnected
 viewer ends its stream without cancelling durable work. Discord webhook input
 is bounded separately and passes through the SDK's existing signature checks.
 
 ## Persistence and verification
 
-No durable document kind/version, public API payload, SQLite path, or attachment
-location changes. Existing public UUID session identifiers are preserved. The
+Existing durable document kinds/versions, SQLite paths and attachment locations are retained. Additive channel-binding and delivery-plan documents accompany transactional backfills of legacy routing fields. New focused contracts use UUIDs; legacy HTTP reads and numeric admission remain compatibility adapters. Existing public UUID session identifiers are preserved. The
 runtime still writes to root `.data/gateway.sqlite`; browser storage only holds
 UI preferences and drafts. No archived database is merged or removed.
 
@@ -98,3 +95,26 @@ storage adapter and preserves transactional/recovery semantics and file format.
 private configuration loader. The web build uses Vite on Bun because TanStack
 Start and Tailwind depend on its compiler plugins. See `bun-migration.md` for
 verified tooling limits and the acceptance commands.
+
+## Headless modules
+
+`application/sessions` owns shared admission and approval entrypoints, including
+compatibility operations for the retained file-copy experiment. `application/access`
+issues and verifies process-local actor contexts. The HTTP middleware and Discord
+SDK adapter establish identity; a caller's JSON never grants owner access.
+
+`domains/channels` owns scoped bindings. `domains/conversations` persists a frozen
+reply destination per channel-origin turn; web-origin turns have none. Tool
+approval notifications follow that origin. There is no session-linking operation.
+
+`domains/delivery` owns persisted operation plans and pending/sending/sent/uncertain
+transitions. Discord renders whole reply intents into chunks and serializes card,
+file and edit payloads before network I/O. Its worker claims only the configured
+Discord connection's intents and operations. Original IDs remain intact during
+migration. A lost send is uncertain, never automatically repeated.
+
+`application/queries` exposes client reads implemented by `infrastructure/pi`.
+The browser composes summary pages and a selected session observation; it no
+longer fetches or subscribes to the whole workspace. See the delivered
+[HTTP interface and migration record](headless-interface.md) for routes, limits,
+recovery verification and the local query baseline.
