@@ -87,3 +87,20 @@ test("Pi storage opens the same schema with official Node and native Bun drivers
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a rollback failure is distinguishable from a guaranteed rollback", async () => {
+  const db = new BunSqliteDatabase(":memory:");
+  const failure = new Error("Original operation failed");
+  try {
+    await assert.rejects(
+      db.transaction(async (tx) => {
+        await tx.exec("ROLLBACK");
+        throw failure;
+      }),
+      (error) => error instanceof AggregateError && error.errors[0] === failure,
+    );
+    assert.deepEqual(await db.get("SELECT 1 AS value"), { value: 1 });
+  } finally {
+    await db.close();
+  }
+});

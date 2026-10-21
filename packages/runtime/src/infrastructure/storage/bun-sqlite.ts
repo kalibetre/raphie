@@ -17,9 +17,14 @@ export class BunSqliteDatabase implements SqliteDatabase {
 
   constructor(path: string) {
     this.database = new Database(path, { strict: true });
-    this.database.exec(
-      "PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA wal_autocheckpoint = 1000;",
-    );
+    try {
+      this.database.exec(
+        "PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA wal_autocheckpoint = 1000;",
+      );
+    } catch (error) {
+      this.database.close(true);
+      throw error;
+    }
   }
 
   private queued<A>(operation: () => A | Promise<A>): Promise<A> {

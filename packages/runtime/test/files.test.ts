@@ -1,5 +1,6 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +17,15 @@ test("untrusted names stay metadata, bytes round-trip, and repeated uploads shar
     const bytes = Buffer.from([0, 255, 1, 128]);
     const ref = await files.put("../../private\\report.txt", bytes);
     assert.equal(ref.name, "report.txt");
+    assert.equal(
+      ref.id,
+      createHash("sha256")
+        .update("report.txt")
+        .update("\0")
+        .update(bytes)
+        .digest("hex"),
+      "Bun must preserve references created by the previous crypto implementation",
+    );
     assert.deepEqual(await files.read(ref.id), bytes);
     assert.deepEqual(await files.put("report.txt", bytes), ref);
     await assert.rejects(files.read("../private"));
