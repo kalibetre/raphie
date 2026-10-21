@@ -97,7 +97,7 @@ async function renderWorkspace({
 
 function assertComposerModel(html: string, modelId: string) {
   assert.ok(
-    html.includes(`class="composer-chip" title="${modelId}"`),
+    html.includes(`aria-label="Choose model: ${modelId.split("/").at(-1)}"`),
     `Expected composer model ${modelId}`,
   );
 }
@@ -149,5 +149,5 @@ test("an unavailable runtime retains its warning and disabled composer", async (
   );
   assert.match(html, /aria-label="Send message" disabled/);
   const empty = await renderWorkspace({ defaultModel: null });
-  assert.ok(empty.includes("No model"));
+  assert.ok(empty.includes('aria-label="Choose model: Choose model"'));
 });

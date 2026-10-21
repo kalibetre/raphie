@@ -1,3 +1,4 @@
+import type { ModelSelection } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { type CSSProperties, useEffect, useState } from "react";
 
@@ -97,11 +98,16 @@ export function Workspace({
   const events =
     data?.activity.filter((e) => e.conversationId === conversationId) ?? [];
 
-  async function send(text: string, eventId: string) {
+  async function send(text: string, eventId: string, model?: ModelSelection) {
     const sent = await api<{
       id: string;
       sessionId: string;
-    }>("/api/sessions/messages", { text, eventId, sessionId: conversationId });
+    }>("/api/sessions/messages", {
+      text,
+      eventId,
+      sessionId: conversationId,
+      model,
+    });
     setSuggestion(undefined);
     await refetch();
     if (conversationId !== sent.sessionId)
@@ -263,9 +269,7 @@ export function Workspace({
                 key={`composer-${conversationId ?? "new"}`}
                 conversationId={conversationId}
                 suggestion={suggestion}
-                model={
-                  conversation?.model?.modelId ?? data?.model?.modelId ?? null
-                }
+                model={conversation?.model ?? data?.model ?? null}
                 usage={usage?.tokens ? usage : undefined}
                 disabled={
                   !connected ||
@@ -275,6 +279,24 @@ export function Workspace({
                 busy={busy}
                 enabledPlugins={enabled}
                 onSend={send}
+                onChooseModel={async (model) => {
+                  if (!conversationId) return;
+                  await api(`/api/sessions/${conversationId}/model`, model);
+                  await refetch();
+                }}
+                onModelSettings={() => {
+                  if (conversation)
+                    void navigate({
+                      to: "/sessions/$sessionId",
+                      params: { sessionId: conversation.sessionId },
+                      search: { view: "settings", section: "models" },
+                    });
+                  else
+                    void navigate({
+                      to: "/",
+                      search: { view: "settings", section: "models" },
+                    });
+                }}
               />
             </div>
           )}
