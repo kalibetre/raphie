@@ -95,3 +95,8 @@ export type {
   RuntimeInfo,
   ClientWorkspace,
 } from "./sessions/views.ts";
+
+export type {
+  RuntimeSettings,
+  UpdateRuntimeSettings,
+} from "./settings/views.ts";

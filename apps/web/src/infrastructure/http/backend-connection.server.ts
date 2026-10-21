@@ -1,4 +1,5 @@
-const cookieName = "raphie_backend";
+const backendCookie = (request: Request) =>
+  `raphie_backend_${new URL(request.url).port || "80"}`;
 
 export function localBackend(value: string, webPort?: string) {
   const url = new URL(value);
@@ -19,6 +20,7 @@ export function localBackend(value: string, webPort?: string) {
 }
 
 export function backendAddress(request: Request) {
+  const cookieName = backendCookie(request);
   const cookie = request.headers
     .get("cookie")
     ?.split(";")
@@ -78,7 +80,7 @@ export async function connectionRequest(request: Request) {
       input.action === "connect"
         ? {
             headers: {
-              "set-cookie": `${cookieName}=${encodeURIComponent(url)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000`,
+              "set-cookie": `${backendCookie(request)}=${encodeURIComponent(url)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000`,
             },
           }
         : undefined,

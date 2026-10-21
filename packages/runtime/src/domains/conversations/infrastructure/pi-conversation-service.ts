@@ -139,7 +139,7 @@ export class ChatService implements ConversationCommands {
     this.app.authorize(input.actor);
     if (!this.model)
       throw new InputError(
-        "Chat needs OPENROUTER_API_KEY and RAPHIE_MODEL configured on the server.",
+        "Connect a model provider in Settings before sending a message.",
         503,
       );
     const violation = messageViolation(input);

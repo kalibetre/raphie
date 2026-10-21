@@ -34,7 +34,10 @@ disable the normal hooks checks.
 Conversations own sessions, turns, admission, and transcript projection.
 Approvals own decisions, expiry, and execution/delivery state. Attachments own
 file limits and display-name policy. Activity owns observable execution history.
-Settings owns browser preferences and trusted UI contributions.
+Settings owns browser preferences, the selected local backend connection, and
+backend model/provider and telemetry preferences. Private backend settings live
+in a dedicated SQLite store behind a Settings application port; credentials never
+enter conversation documents or read responses.
 
 Domain policies depend on value types, not React, Hono, Node, or Pi Durable.
 Application ports describe commands/read models. Outer adapters implement ports

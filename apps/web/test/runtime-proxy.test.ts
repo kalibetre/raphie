@@ -55,6 +55,7 @@ test("local backend selection is probed, browser-scoped and used by normal reque
     const saved = await proxyRuntime(request(address));
     assert.equal(saved.status, 200);
     const cookie = saved.headers.get("set-cookie")!;
+    assert.match(cookie, /raphie_backend_4320=/);
     assert.match(cookie, /HttpOnly/);
     assert.match(cookie, /SameSite=Strict/);
     const headers = { cookie: cookie.split(";")[0]! };

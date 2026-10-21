@@ -199,7 +199,15 @@ export function Workspace({
             onToggleNavigation={toggleCollapsed}
             onToggleInspector={() => setInspector(!inspector)}
           />
-          {error ? (
+          {view === "settings" ? (
+            <Settings
+              section={section}
+              data={data}
+              connected={connected}
+              enabled={enabled}
+              setEnabled={setEnabled}
+            />
+          ) : error ? (
             <WorkspaceAlert
               title="Couldn’t connect to your workspace"
               description="Your saved sessions and drafts are still on this device. Check that the runtime is running, then try again."
@@ -224,14 +232,6 @@ export function Workspace({
             />
           ) : view === "diagnostics" ? (
             <Diagnostics />
-          ) : view === "settings" ? (
-            <Settings
-              section={section}
-              data={data}
-              connected={connected}
-              enabled={enabled}
-              setEnabled={setEnabled}
-            />
           ) : (
             <div className="chat-stage">
               {nextBefore && (

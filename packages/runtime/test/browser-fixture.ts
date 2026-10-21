@@ -19,12 +19,16 @@ import {
 } from "../src/domains/activity/infrastructure/pi-activity-journal.ts";
 import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
 import { newSessionId } from "../src/domains/conversations/infrastructure/session-id.ts";
+import { openLocalOtlp } from "../src/domains/diagnostics/infrastructure/local-otlp.ts";
+import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
+import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
+import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
 const directory = await mkdtemp(join(tmpdir(), "raphie-browser-"));
 const models = createModels();
 const model = {
   ...openrouterProvider().getModels()[0],
   id: "acceptance",
-  provider: "fixture",
+  provider: "openrouter",
 };
 const reply: Provider["streamSimple"] = (_model, context, options) => {
   const stream = createAssistantMessageEventStream();
@@ -53,8 +57,8 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
         ]
       : [{ type: "text", text: "" }],
     api: model.api,
-    provider: "fixture",
-    model: model.id,
+    provider: "openrouter",
+    model: _model.id,
     stopReason: useTool ? "toolUse" : "stop",
     timestamp: Date.now(),
     usage: {
@@ -91,9 +95,12 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
   return stream;
 };
 models.setProvider({
-  id: "fixture",
+  id: "openrouter",
   name: "Fixture",
-  getModels: () => [model],
+  getModels: () => [
+    model,
+    { ...model, id: "acceptance-alternate", name: "Acceptance alternate" },
+  ],
   auth: {
     apiKey: {
       name: "Fixture",
@@ -103,10 +110,29 @@ models.setProvider({
   stream: (m, c, o) => reply(m, c, { signal: o?.signal }),
   streamSimple: reply,
 });
+const settings = await BackendSettings.open(
+  join(directory, "settings.sqlite"),
+  {
+    models,
+    defaultModel: model.id,
+    environmentKey: "fixture",
+    verifyKey: async (key) => {
+      if (key !== "fixture" && key !== "fixture-browser-key")
+        throw new Error("Invalid fixture key");
+    },
+  },
+);
+const collector = await openLocalOtlp(join(directory, "traces.sqlite"));
+const exporter = await createTelemetry({ endpoint: collector.endpoint });
+const telemetry = switchableTelemetry(
+  exporter,
+  () => settings.telemetryEnabled,
+);
 const app = await Gateway.open({
   directory,
   models,
-  model: { provider: "fixture", modelId: model.id },
+  model: settings.model,
+  telemetry,
   mcp: {
     identity: "acceptance",
     client: {
@@ -178,8 +204,15 @@ if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
     }
   }, durableContext);
 }
+settings.onChange = () => {
+  app.chats.model = settings.model;
+};
+settings.isBusy = async () =>
+  (await app.chats.state()).turns.some((turn) => turn.status === "pending");
 // Override the ports to run beside a real runtime.
 const server = await startServer(app, {
+  settings,
+  diagnostics: collector.traces,
   port: Number(process.env.RAPHIE_FIXTURE_PORT ?? 4317),
   webOrigin: process.env.RAPHIE_FIXTURE_WEB_ORIGIN ?? "http://127.0.0.1:4321",
 });
@@ -190,4 +223,7 @@ await new Promise<void>((done) => {
 });
 await server.close();
 await app.close();
+await exporter.close();
+await collector.close();
+settings.close();
 await rm(directory, { recursive: true, force: true });

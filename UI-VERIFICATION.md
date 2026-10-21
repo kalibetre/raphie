@@ -44,3 +44,26 @@ The test fixture and Vite server were stopped normally. The normal production ap
 - Added pointer and keyboard resize handles for navigation and activity, saved independently in browser preferences. Double-click resets widths. Effective widths adapt to keep at least 320px for chat when panels are docked. Verified pointer dragging, keyboard increments, reload persistence, and a 1200px window with 480px navigation, 400px activity, and 320px chat.
 - Fixed the plugin switch's collapsing pseudo-element margin by positioning the 16px thumb absolutely, 2px from the top/edge of its 36 × 20px track. Verified matching label/track geometry and thumb position in both checked and unchecked states.
 - Verification: 6 web and 24 runtime tests passed; type checks, production build, and whitespace check passed. Isolated fixture stopped normally. Updated the production UI. The existing launcher also stopped the runtime when the old web process exited, so restarted the runtime immediately and verified recovery with no pending turns or uncertain actions. Real session data remains in place.
+
+## Settings — 2026-10-21
+
+- Backend address selection tests the target before saving a browser cookie scoped
+  to the web port. Development and production use the same API/SSE proxy.
+- Models offers an OpenRouter provider connection with password input, key testing,
+  saving/replacing/removing a key, disconnecting, catalog search and default model.
+  Backend credentials remain out of read responses; the input clears after saving.
+- Telemetry persists per backend and suppresses new traces immediately. Against the
+  isolated fixture, repeated requests left the span count unchanged while disabled;
+  re-enabling resumed collection. Retained traces and Activity are preserved.
+- Browser acceptance used ports 4317/4321 and temporary SQLite with a deterministic
+  provider, no real keys or paid inference. The selected alternate fixture model
+  became the runtime default and completed a new turn. Connection testing/saving,
+  mobile navigation, and switch interactions passed. Settings remained accessible
+  after stopping the fixture backend.
+- Computed layout checks at 320/768/1024/1440px found no horizontal overflow; inputs,
+  selectors and buttons stayed within the 320px viewport. Both theme text colors
+  and switch visibility were checked. Screenshot capture failed twice with
+  `Preview automation snapshot timed out after 15000ms`; the alternate CUA browser
+  was unavailable, so this is DOM/interaction acceptance, not screenshot review.
+- The full validation gate passes 61 tests plus formatting, lint, architecture,
+  TypeScript and production build. Existing large-chunk build warning remains.

@@ -17,7 +17,7 @@ There is no Jaeger, Docker requirement, cloud backend or extra process.
 
 `OTEL_SERVICE_NAME` identifies the runtime's spans. No collector address, secret
 or private configuration edit is needed. Normal startup now always enables local
-tracing; the previous optional `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` setting is no
+tracing unless disabled in backend Settings; the previous optional `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` setting is no
 longer used by bootstrap. Direct `createTelemetry()` users such as tests can still
 supply their own endpoint or omit it to disable export.
 
@@ -162,3 +162,11 @@ persisted through Effect/OTLP/SQLite, redaction, and retry/shutdown lifecycle ch
 No paid model calls were used. After a graceful local restart, the running web
 proxy served ready Diagnostics and the existing session, seven turn IDs/statuses
 and seven approval IDs/statuses/deadlines matched the pre-restart metadata.
+
+### Runtime Settings
+
+The Telemetry switch persists per backend in `settings.sqlite` and takes effect
+without restarting. It suppresses new spans, including HTTP traffic, model loops
+and deliveries; application commands still execute exactly once as before. Already
+active spans can finish exporting, and disabling does not delete retained traces.
+Session Activity and durable recovery are independent of the switch.

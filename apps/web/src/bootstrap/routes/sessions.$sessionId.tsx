@@ -12,6 +12,8 @@ export const Route = createFileRoute("/sessions/$sessionId")({
         ? search.view
         : undefined,
     section:
+      search.section === "models" ||
+      search.section === "telemetry" ||
       search.section === "connection" ||
       search.section === "general" ||
       search.section === "plugins"

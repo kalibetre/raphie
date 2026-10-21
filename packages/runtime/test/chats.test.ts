@@ -162,7 +162,7 @@ test("provider failures settle visibly; missing model or invalid input never que
     app = await Gateway.open({ directory });
     await assert.rejects(
       app.chats.send({ ...input, eventId: "unconfigured" }),
-      /OPENROUTER_API_KEY/,
+      /model provider in Settings/,
     );
     assert.equal((await app.chats.state()).turns.length, 1);
   } finally {

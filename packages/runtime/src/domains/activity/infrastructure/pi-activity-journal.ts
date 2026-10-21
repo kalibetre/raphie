@@ -15,6 +15,12 @@ export const Activity = defineDoc<Journal>({
 
 export const attemptId = crypto.randomUUID();
 
+const registeredSecrets = new Set<string>();
+
+export function registerRedactionSecret(secret: string) {
+  if (secret) registeredSecrets.add(secret);
+}
+
 // Redact before persistence, including values accidentally embedded in error text.
 export function redact(value: unknown): string {
   const secrets = [
@@ -31,7 +37,8 @@ export function redact(value: unknown): string {
         ? "[redacted]"
         : val,
     ) ?? "null";
-  for (const secret of secrets) text = text.replaceAll(secret, "[redacted]");
+  for (const secret of [...secrets, ...registeredSecrets])
+    text = text.replaceAll(secret, "[redacted]");
   return text.length > 24_000
     ? JSON.stringify({ preview: text.slice(0, 24_000), truncated: true })
     : text;
