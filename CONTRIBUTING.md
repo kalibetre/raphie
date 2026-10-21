@@ -32,8 +32,8 @@ fields and properties can stay grouped. Oxfmt preserves these blank lines.
 Use `bun run lint:fix` to insert missing spacing, followed by `bun run format`.
 Missing spacing fails `bun run lint` and CI; it is not just a visual convention.
 
-Generated routes, build output, local databases, private configuration, and
-archived `research/` are excluded. Vite generates
+Generated routes, build output, local databases, dependencies, and private
+configuration are excluded. Vite generates
 `apps/web/src/bootstrap/routeTree.gen.ts`; do not edit it by hand.
 
 ## Organizing code
@@ -82,11 +82,10 @@ uses 4317/4321 and removes its temporary database on shutdown. Never replace the
 normal runtime with the fixture or use production conversations as test data.
 
 Tests use `bun:test` and temporary databases. The root test script explicitly
-selects active project test directories, leaving archived experiments out. Keep test
+selects the project test directories explicitly. Keep test
 assertions unchanged during pure code moves and formatting; add regression
 tests when observable behavior changes.
 
 Keep credentials in private configuration, load them through Varlock, and
 never print their values. Use `bun --bun run varlock load --agent` for masked
-validation. Preserve `.data/` and the archived prototype databases during
-cleanup.
+validation. Preserve `.data/`, including its private legacy archive, during cleanup.

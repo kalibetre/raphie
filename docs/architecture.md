@@ -2,7 +2,9 @@
 
 Decision: use TypeScript 7.0.2 throughout the active monorepo, Hono for the
 runtime HTTP transport hosted by Bun, and domain-oriented modules for runtime and browser.
-The archived research tree remains historical material outside validation.
+The original research experiments are retired; Git history and an ignored local
+archive preserve their sources and legacy data. The active configuration schema
+is self-contained at the repository root.
 
 ## Compiler and tooling
 

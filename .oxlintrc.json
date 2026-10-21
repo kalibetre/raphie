@@ -9,7 +9,6 @@
     "browser": true
   },
   "ignorePatterns": [
-    "research/**",
     ".data/**",
     "**/dist/**",
     "**/.tanstack/**",

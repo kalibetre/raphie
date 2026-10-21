@@ -15,9 +15,14 @@ Open **http://127.0.0.1:4320**. The runtime listens on **127.0.0.1:4316**. Both 
 
 For a production bundle, run `bun run build`, then `bun run start`. This starts the built TanStack Start server and the independent agent runtime. Bun’s built-in parallel runner starts both; Ctrl+C stops both. Use an external process supervisor for automatic restart; this slice does not install one.
 
-Configuration is loaded through Varlock. The root `.env.schema` imports the existing private configuration under `research/spikes/gateway/`, without copying its values. Use `bun --bun run varlock load --agent` to inspect masked configuration. New installations can provide the keys named in that schema through their environment or a private `.env.local` file. A model API key enables chat; MCP is optional.
+Configuration is loaded through Varlock from the root `.env.schema` and private
+root `.env` / `.env.local` values. Use `bun --bun run varlock load --agent` to
+inspect masked configuration. New installations can provide the keys named in
+the schema through their environment or a private `.env.local` file. A model API
+key enables chat; MCP is optional. Bun's automatic dotenv loading is disabled.
 
-The product writes to root `.data/`; the archived experiment and its data are unchanged. Discord is disabled by default while the experiment's listener may still be running. Stop that listener before setting `RAPHIE_DISCORD_ENABLED=true` in your private configuration and restarting the product. The configured Discord owner and thread restrictions still apply.
+The product writes to root `.data/`. Discord is disabled by default; enable it
+with `RAPHIE_DISCORD_ENABLED=true` when the owner/channel settings are configured.
 
 ## Sessions and storage
 
@@ -25,7 +30,14 @@ Session links use `/sessions/<uuidv7>`. These public IDs are persisted in SQLite
 
 The normal app stores conversations, messages, execution state, and approvals in **`.data/gateway.sqlite`** at the repository root. Attachments live under `.data/files/`. `DATA_DIRECTORY` can select another location; relative paths resolve against the repository root, so changing the shell's working directory cannot silently open a different database. Browser storage holds drafts and UI preferences, not session history.
 
-The earlier gateway prototype has a separate database at `research/spikes/gateway/.data/gateway.sqlite`. Its sessions are not automatically merged into the product database. Both stores remain on disk. Back up SQLite with its backup API, or stop the runtime before copying the database and its WAL files; copying only an active `.sqlite` file can miss recent writes.
+The old research tree and its legacy server have been retired. Source history
+remains in Git. A private local archive, including the older prototype database,
+is stored at `.data/backups/research-20261021.tar.gz` and is ignored by Git. Its
+sessions were not merged into the active database. See the
+[cleanup record](docs/repository-cleanup.md).
+
+Back up SQLite with its backup API, or stop the runtime before copying the
+database and WAL files; copying only an active `.sqlite` file can miss recent writes.
 
 The browser fixture uses a temporary database that is removed on normal shutdown. Its `acceptance` model and fake calendar sessions are disposable. It now runs on **4317**, with its UI on **4321**, to keep it separate from the normal app on **4316/4320**.
 
