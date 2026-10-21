@@ -1,5 +1,12 @@
-import { Monitor, Moon, Puzzle, SlidersHorizontal, Sun } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import {
+  Monitor,
+  Moon,
+  Puzzle,
+  SlidersHorizontal,
+  Sun,
+  Server,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 import type { Snapshot } from "../../../infrastructure/http/api-client";
 import {
@@ -9,8 +16,11 @@ import {
 import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
+import { ConnectionSettings } from "./connection-settings";
+import { Group, Row } from "./settings-group";
 
 export const sections = [
+  { id: "connection", label: "Backend", icon: Server },
   { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "plugins", label: "Plugins", icon: Puzzle },
 ] as const;
@@ -33,7 +43,9 @@ export function Settings({
   return (
     <ScrollArea className="settings-scroll" viewportLabel="Settings">
       <section className="settings-page">
-        {section === "general" ? (
+        {section === "connection" ? (
+          <ConnectionSettings />
+        ) : section === "general" ? (
           <General data={data} connected={connected} />
         ) : (
           <Group
@@ -144,43 +156,5 @@ function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
         </Row>
       </Group>
     </>
-  );
-}
-
-function Group({
-  title,
-  note,
-  children,
-}: {
-  title: string;
-  note?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="settings-group">
-      <h2>{title}</h2>
-      {note && <p>{note}</p>}
-      <div className="settings-card">{children}</div>
-    </div>
-  );
-}
-
-function Row({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="settings-row">
-      <div className="settings-row-text">
-        <h3>{title}</h3>
-        <p>{description}</p>
-      </div>
-      {children}
-    </div>
   );
 }
