@@ -6,13 +6,7 @@ import { Button } from "../../../shared/ui/button";
 import { CodeBlock } from "../../../shared/ui/code-block";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
 
-export function Activity({
-  events,
-  full = false,
-}: {
-  events: ActivityEvent[];
-  full?: boolean;
-}) {
+export function Activity({ events }: { events: ActivityEvent[] }) {
   const [filter, setFilter] = useState("");
   const visible = events
     .filter((e) =>
@@ -37,29 +31,22 @@ export function Activity({
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = `raphie-diagnostics-${Date.now()}.json`;
+    a.download = `raphie-activity-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   return (
-    <section
-      className={full ? "diagnostics" : "activity-panel"}
-      aria-label="Activity journal"
-    >
+    <section className="activity-panel" aria-label="Activity journal">
       <div className="panel-heading">
         <div>
-          <h2>{full ? "Diagnostics" : "Activity"}</h2>
-          <p>
-            {full
-              ? "A durable record of what happened, and when."
-              : "Every step, as it happens."}
-          </p>
+          <h2>Activity</h2>
+          <p>Every step, as it happens.</p>
         </div>
         <Button
           variant="ghost"
           size="icon"
-          aria-label="Export diagnostics"
+          aria-label="Export activity"
           onClick={download}
         >
           <Download size={16} />

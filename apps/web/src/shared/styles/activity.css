@@ -60,6 +60,24 @@
   .activity-scroll {
     flex: 1;
   }
+  .trace-actions,
+  .trace-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .trace-controls {
+    margin-top: 16px;
+  }
+  .trace-timing {
+    flex: none;
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .trace-notice {
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
   .activity-list {
     padding-bottom: 16px;
   }

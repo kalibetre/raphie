@@ -123,8 +123,9 @@ recovery verification and the local query baseline.
 ## Operational tracing
 
 Effect 4's built-in OTLP exporter observes HTTP handlers, shared commands, remote
-MCP calls and delivery attempts through a framework-free telemetry port. Export
-is optional and targets a configured self-hosted receiver. The activity journal
-remains durable product history; trace spans are best-effort operational data.
+MCP calls and delivery attempts through a framework-free telemetry port. Normal
+bootstrap owns a loopback OTLP JSON receiver and separate Bun SQLite trace store.
+Diagnostics queries only that store; session Activity and recovery still use
+the durable journal. Trace spans are best-effort operational data.
 Payloads and raw errors are excluded. See [observability](observability.md) for
 configuration, span meanings, lifetime/recovery limits and tests.

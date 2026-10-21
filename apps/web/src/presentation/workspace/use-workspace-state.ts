@@ -1,7 +1,6 @@
 import type {
   Page,
   RuntimeInfo,
-  SessionActivity,
   SessionObservation,
   SessionSummary,
   SessionTurn,
@@ -20,11 +19,7 @@ import {
 } from "../../infrastructure/http/api-client";
 
 /** Each observation replaces authoritative state; reconnect never replays a command. */
-export function useLiveState(
-  sessionId?: string,
-  legacyId?: number,
-  diagnostics = false,
-) {
+export function useLiveState(sessionId?: string, legacyId?: number) {
   const client = useQueryClient();
   const [connected, setConnected] = useState(false);
   const [sessionConnected, setSessionConnected] = useState(false);
@@ -57,17 +52,6 @@ export function useLiveState(
     enabled: !!selectedId,
     queryFn: () => api<SessionObservation>(`/api/sessions/${selectedId}`),
     retry: false,
-  });
-  const inspection = useInfiniteQuery({
-    queryKey: ["inspection"],
-    enabled: diagnostics,
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) =>
-      api<Page<SessionActivity>>(
-        `/api/inspection/activity?limit=100${pageParam ? `&before=${pageParam}` : ""}`,
-      ),
-    getNextPageParam: (page) => page.next,
-    refetchInterval: diagnostics ? 5000 : false,
   });
   useEffect(() => {
     const events = new EventSource("/api/sessions/events");
@@ -133,15 +117,6 @@ export function useLiveState(
         ...(observation?.turns ?? []),
       ].map((t) => [t.id, t]),
     );
-    const activity = diagnostics
-      ? [
-          ...new Map(
-            inspection.data?.pages
-              .flatMap((page) => page.items)
-              .map((e) => [e.id, e]) ?? [],
-          ).values(),
-        ].sort((a, b) => a.id - b.id)
-      : (observation?.activity ?? []);
     return {
       ...info.data,
       conversations: [...byId.values()],
@@ -151,17 +126,9 @@ export function useLiveState(
         selectedId && observation?.live
           ? { [selectedId]: observation.live }
           : {},
-      activity,
+      activity: observation?.activity ?? [],
     };
-  }, [
-    info.data,
-    sessions.data,
-    selected.data,
-    selectedId,
-    older,
-    diagnostics,
-    inspection.data,
-  ]);
+  }, [info.data, sessions.data, selected.data, selectedId, older]);
   useEffect(() => {
     if (data) client.setQueryData(["runtime"], data);
   }, [client, data]);
@@ -219,7 +186,5 @@ export function useLiveState(
     loadingOlder,
     loadMoreSessions: () => sessions.fetchNextPage(),
     hasMoreSessions: sessions.hasNextPage,
-    loadMoreActivity: () => inspection.fetchNextPage(),
-    hasMoreActivity: inspection.hasNextPage,
   };
 }

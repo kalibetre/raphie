@@ -7,6 +7,7 @@ import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
 import { SessionSidebar } from "../../domains/conversations/presentation/sessions/session-sidebar";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
+import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
 import type { Section } from "../../domains/settings/presentation/settings";
 import {
@@ -47,9 +48,7 @@ export function Workspace({
     loadingOlder,
     loadMoreSessions,
     hasMoreSessions,
-    loadMoreActivity,
-    hasMoreActivity,
-  } = useLiveState(sessionId, legacyConversationId, view === "diagnostics");
+  } = useLiveState(sessionId, legacyConversationId);
   const conversation = data?.conversations.find(
     (c) => c.sessionId === (sessionId ?? legacySessionId),
   );
@@ -96,9 +95,7 @@ export function Workspace({
       { tokens: 0, cost: 0 },
     );
   const events =
-    data?.activity.filter(
-      (e) => view === "diagnostics" || e.conversationId === conversationId,
-    ) ?? [];
+    data?.activity.filter((e) => e.conversationId === conversationId) ?? [];
 
   async function send(text: string, eventId: string) {
     const sent = await api<{
@@ -226,14 +223,7 @@ export function Workspace({
               action="New session"
             />
           ) : view === "diagnostics" ? (
-            <>
-              <Activity events={events} full />
-              {hasMoreActivity && (
-                <button onClick={() => void loadMoreActivity()}>
-                  Load earlier activity
-                </button>
-              )}
-            </>
+            <Diagnostics />
           ) : view === "settings" ? (
             <Settings
               section={section}
