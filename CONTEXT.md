@@ -5,7 +5,8 @@ apply consistently to the web workspace and the agent runtime.
 
 ## Language
 
-**Session**: A durable conversation with its own identity and ordered history.
+**Session**: A durable conversation with its own identity and ordered history,
+independent of the interface through which the owner participates.
 _Avoid_: Chat as a synonym for a single message or a temporary browser connection.
 
 **Turn**: One admitted owner message and the agent work that answers it. A turn may
@@ -23,5 +24,19 @@ Its display name is metadata, not its storage identity.
 **Activity**: An observed event in an agent run, including model, tool, approval,
 and recovery progress. Activity is not private model reasoning.
 
-**Channel**: A way the owner participates in a session, such as web or Discord.
-Changing channels does not create a second execution of the same message.
+**Channel**: An external messaging platform through which the owner communicates
+with Raphie, such as Discord or Telegram.
+
+**Client**: An application through which the owner interacts with Raphie, such as
+the web workspace, a desktop application, or a CLI.
+
+**Channel binding**: The association between an external messaging conversation
+and a Raphie session. A binding identifies where messages belong; it does not
+imply that the session is shared with other conversations.
+
+**Actor**: The person making a request or approval decision. Using a different
+client or channel does not change that person's authority.
+
+**Delivery**: A tracked attempt to present a reply or approval request at its
+intended destination. An uncertain delivery may have reached that destination
+and must not be repeated blindly.

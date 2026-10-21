@@ -1,4 +1,9 @@
-# Domain boundaries and native TypeScript tooling
+# Current architecture and target design
+
+This file describes the current implementation. The accepted headless direction
+and proposed application interfaces are documented in
+[headless-runtime.md](headless-runtime.md), with migration slices in
+[roadmap.md](roadmap.md). Those proposed interfaces are not implemented yet.
 
 Decision: use TypeScript 7.0.2 throughout the active monorepo, Hono for the
 runtime HTTP transport hosted by Bun, and domain-oriented modules for runtime and browser.

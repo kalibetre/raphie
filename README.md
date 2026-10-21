@@ -43,6 +43,11 @@ The browser fixture uses a temporary database that is removed on normal shutdown
 
 ## Architecture
 
+Raphie is moving toward a headless runtime shared by clients and messaging
+channels. See the [target design](docs/headless-runtime.md) and
+[migration roadmap](docs/roadmap.md). Inspection interfaces are optional for
+messaging channels; cross-channel session continuation is deferred.
+
 - `apps/web`: TanStack Start and Router, React, TanStack Query, shadcn components, and AI Elements composition patterns.
 - Both applications organize code under `domains/<context>/{domain,application,infrastructure,presentation}`. Conversations, approvals, activity, attachments, and settings have explicit owners. Source roots contain entrypoints; `bootstrap/` owns wiring. See [architecture](docs/architecture.md).
 - `apps/web/src/shared/styles`: theme tokens and separate stylesheets with explicit cascade order. Shared UI primitives live under `shared/ui`.
