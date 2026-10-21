@@ -7,6 +7,9 @@ import { streamSnapshots } from "../domains/activity/presentation/http/events.ts
 import { approvalRoutes } from "../domains/approvals/presentation/http/routes.ts";
 import { attachmentRoutes } from "../domains/attachments/presentation/http/routes.ts";
 import { conversationRoutes } from "../domains/conversations/presentation/http/routes.ts";
+import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
+import { noTraces } from "../domains/diagnostics/application/trace-reader.ts";
+import { diagnosticsRoutes } from "../domains/diagnostics/presentation/http/routes.ts";
 import { clientRoutes } from "../infrastructure/http/client-routes.ts";
 import {
   browserCors,
@@ -24,12 +27,15 @@ export async function startServer(
     discordConfigured?: boolean;
     webOrigin?: string;
     webhook?: (request: Request) => Promise<Response>;
+    diagnostics?: TraceReader;
   } = {},
 ) {
   const app = new Hono();
   let port = options.port ?? 4315;
-  app.use("*", async (c, next) =>
-    runtime.telemetry.run(
+  app.use("*", async (c, next) => {
+    // Polling telemetry must not create a feedback stream of diagnostic spans.
+    if (c.req.path.startsWith("/api/diagnostics/")) return next();
+    return runtime.telemetry.run(
       "http.request",
       { "http.method": c.req.method },
       async (annotate) => {
@@ -39,8 +45,8 @@ export async function startServer(
           "http.status_code": c.res.status,
         });
       },
-    ),
-  );
+    );
+  });
   app.use(
     "*",
     secureHeaders({
@@ -95,6 +101,10 @@ export async function startServer(
   app.get("/api/events", (c) => streamSnapshots(c, () => snapshot(runtime)));
   const owner = runtime.actors.establish("web");
   app.route("/api", clientRoutes(runtime.queries, owner));
+  app.route(
+    "/api/diagnostics",
+    diagnosticsRoutes(options.diagnostics ?? noTraces),
+  );
   app.route("/api", conversationRoutes(runtime.sessions, owner));
   app.route(
     "/api",

@@ -9,6 +9,7 @@ import {
   attemptId,
   redact,
 } from "../domains/activity/infrastructure/pi-activity-journal.ts";
+import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
 import {
   createDiscordBridge,
   resolveDiscordThread,
@@ -29,10 +30,22 @@ const resource = <A>(
 let lifecycle: "starting" | "running" | "stopping" = "starting";
 
 const program = Effect.gen(function* () {
+  const directory = resolve(
+    fileURLToPath(new URL("../../../../", import.meta.url)),
+    process.env.DATA_DIRECTORY ?? ".data",
+  );
+  const collector = yield* resource(
+    () =>
+      openLocalOtlp(
+        resolve(directory, "traces.sqlite"),
+        process.env.OTEL_SERVICE_NAME,
+      ),
+    (collector) => collector.close(),
+  );
   const telemetry = yield* resource(
     () =>
       createTelemetry({
-        endpoint: process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+        endpoint: collector.endpoint,
         serviceName: process.env.OTEL_SERVICE_NAME,
         attemptId,
       }),
@@ -97,10 +110,7 @@ const program = Effect.gen(function* () {
     () =>
       telemetry.run("runtime.start", {}, () =>
         Gateway.open({
-          directory: resolve(
-            fileURLToPath(new URL("../../../../", import.meta.url)),
-            process.env.DATA_DIRECTORY ?? ".data",
-          ),
+          directory,
           discordThreadId: threadId,
           discordConnectionId: process.env.DISCORD_APPLICATION_ID,
           telemetry,
@@ -162,7 +172,13 @@ const program = Effect.gen(function* () {
     );
   }
   const http = yield* resource(
-    () => startServer(app, { port, webOrigin, discordConfigured: !!discord }),
+    () =>
+      startServer(app, {
+        port,
+        webOrigin,
+        discordConfigured: !!discord,
+        diagnostics: collector.traces,
+      }),
     (http) => http.close(),
   );
   lifecycle = "running";

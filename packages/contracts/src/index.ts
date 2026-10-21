@@ -1,4 +1,6 @@
 /** Public read models. No runtime, framework, or persistence dependencies. */
+export type { DiagnosticSpan, TraceDiagnostics } from "./diagnostics/views.ts";
+
 export type Channel = "web" | "discord";
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";
