@@ -1,6 +1,7 @@
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
+  AgentEvent,
   AgentEventStream,
   ConversationId,
 } from "@earendil-works/pi-durable";
@@ -11,6 +12,8 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import { Chats } from "./pi-conversation-service.ts";
+import { ExecutionTraces } from "./pi-execution-traces.ts";
 
 export type LiveConversation = {
   text: string;
@@ -22,6 +25,7 @@ export class Observations {
   app: DurableContext;
   streams = new Map<number, AgentEventStream>();
   live = new Map<number, LiveConversation>();
+  traces = new Map<number, ExecutionTraces>();
 
   constructor(app: DurableContext) {
     this.app = app;
@@ -36,6 +40,31 @@ export class Observations {
     );
     this.streams.set(id, stream);
     const snapshot = stream.snapshot;
+    const state = await this.app.harness.snapshot(Chats, context);
+    const session = state?.conversations.find((c) => c.id === id);
+    const traces = new ExecutionTraces(
+      this.app.telemetry,
+      session ? { "session.id": session.sessionId } : {},
+    );
+    this.traces.set(id, traces);
+    const observe = async (event: AgentEvent) => {
+      let turnId: string | undefined;
+      const inputs =
+        event.type === "run_start"
+          ? event.inputs
+          : event.type === "snapshot"
+            ? event.run?.inputs
+            : undefined;
+      if (inputs?.[0]) {
+        const submission = await this.app.harness.submission(
+          inputs[0],
+          context,
+        );
+        turnId = (await submission?.status(context))?.requestId;
+      }
+      traces.accept(event, turnId);
+    };
+    await observe(snapshot);
     let content: AssistantMessage["content"] = structuredClone(
       snapshot.generation?.message?.content ?? [],
     );
@@ -57,6 +86,7 @@ export class Observations {
         operationId?: string;
       }[] = [];
       for (const event of events) {
+        await observe(event);
         if (event.type === "snapshot") {
           content = structuredClone(event.generation?.message?.content ?? []);
           live.text =
@@ -146,7 +176,6 @@ export class Observations {
       if (rows.length)
         await this.app.root.commit(async (tx) => {
           const journal = await tx.doc(Activity);
-          const { Chats } = await import("./pi-conversation-service.ts");
           const chats = await tx.doc(Chats);
           const runId =
             chats.turns.find(
@@ -166,5 +195,8 @@ export class Observations {
     await Promise.all(
       [...this.streams.values()].map((stream) => stream.stop()),
     );
+    for (const traces of this.traces.values()) traces.close();
+    this.traces.clear();
+    this.streams.clear();
   }
 }

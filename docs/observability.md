@@ -57,6 +57,9 @@ exported spans, and survives restarts only within the trace store's retention.
 | ---------------------------- | ------------------------------------------------------------------ |
 | `runtime.start`              | Open/migrate/recover the durable runtime                           |
 | `http.request`               | HTTP handler through response headers, not the SSE viewer lifetime |
+| `agent.run`                  | One Pi run, including model turns and tool/approval waits          |
+| `model.generate`             | One observed generation attempt, from turn start through response  |
+| `model.retry`                | Backoff between model attempts                                     |
 | `session.submit`             | Durable message admission, not model completion                    |
 | `approval.decide`            | Owner decision about an exact tool proposal                        |
 | `file.submit`, `file.decide` | Retained file-copy experiment commands                             |
@@ -65,16 +68,23 @@ exported spans, and survives restarts only within the trace store's retention.
 
 Exported attributes are explicitly selected operational metadata: public session,
 turn, approval and delivery identifiers, tool name, source, HTTP method, matched
-route template and status. The resource includes service/runtime versions and
+route template and status. Model spans also carry provider/model IDs, attempt number,
+stop reason and input/output/cache token counts. The resource includes service/runtime versions and
 the same runtime-attempt ID used by the activity journal when bootstrapped normally.
 Raw URLs, headers, prompt text, tool arguments/results, message bodies, attachment
 names and raw exception text are excluded. A failed operation exports only a
 fixed failure tag and rethrows the original error to its caller.
 
-These are separately scoped operational spans, correlated by durable identifiers
-and runtime attempt; they are not a persisted parent/child trace spanning a process
-restart. There is no distributed `traceparent` propagation yet. Model-provider
-request spans, token/queue metrics and log export are not enabled by this slice.
+Agent runs parent their model-attempt and retry spans. Other operational spans
+are separately scoped and correlated by durable identifiers and runtime attempt.
+Timings come from Pi live events, including time waiting for the first response;
+they are not separate network-level provider request measurements. Spans are
+exported when they finish, so active work appears after completion. Shutdown or
+a replaced observation snapshot ends unfinished spans as interrupted; observations
+attached to existing work are marked `execution.partial`. Historical timing is
+never reconstructed. A process kill can lose unfinished spans; a recovered run
+starts a new partial trace. There is no distributed `traceparent` propagation,
+token/queue metrics or log export yet.
 Effect supports further telemetry, but exporting arbitrary existing logs or raw
 model payloads would bypass the deliberate field selection above.
 
@@ -99,7 +109,7 @@ model reasoning. Tracing does not replace Pi's scheduler, journal or effect clai
 
 ## Verification
 
-The complete gate passes **56 tests**, formatting, type-aware lint, architecture
+The complete gate checks tests, formatting, type-aware lint, architecture
 checks, TypeScript 7 and production build. OTLP tests use a local Bun HTTP collector
 and exercise real HTTP admission, an approved model-proposed MCP call, decision
 spans, uncertain delivery, error redaction and scope flushing. Another test stops
@@ -142,3 +152,13 @@ no `/api/inspection/activity` requests. Screenshot capture timed out twice, so
 these are DOM/interaction checks rather than a completed screenshot review.
 The exploratory Jaeger container and its temporary volume were removed; the
 implementation requires neither. No VM or private configuration was changed.
+
+### Agent execution tracing follow-up
+
+The generation loop now exports `agent.run`, child `model.generate` attempts and
+retry backoff spans. The full validation gate passes 58 tests, including a real
+Pi tool cycle with two model spans under the same run, failed model metadata
+persisted through Effect/OTLP/SQLite, redaction, and retry/shutdown lifecycle checks.
+No paid model calls were used. After a graceful local restart, the running web
+proxy served ready Diagnostics and the existing session, seven turn IDs/statuses
+and seven approval IDs/statuses/deadlines matched the pre-restart metadata.

@@ -1,4 +1,7 @@
 export type TraceName =
+  | "agent.run"
+  | "model.generate"
+  | "model.retry"
   | "runtime.start"
   | "http.request"
   | "session.submit"
@@ -10,6 +13,16 @@ export type TraceName =
 
 export type TraceAttributes = Partial<
   Record<
+    | "model.provider"
+    | "model.id"
+    | "model.stop_reason"
+    | "model.attempt"
+    | "model.input_tokens"
+    | "model.output_tokens"
+    | "model.cache_read_tokens"
+    | "model.cache_write_tokens"
+    | "execution.outcome"
+    | "execution.partial"
     | "session.id"
     | "turn.id"
     | "approval.id"
@@ -23,7 +36,17 @@ export type TraceAttributes = Partial<
   >
 >;
 
+export interface TraceSpan {
+  annotate(attributes: TraceAttributes): void;
+  end(outcome?: "ok" | "error" | "interrupted"): void;
+}
+
 export interface Telemetry {
+  start(
+    name: TraceName,
+    attributes: TraceAttributes,
+    parent?: TraceSpan,
+  ): TraceSpan;
   run<A>(
     name: TraceName,
     attributes: TraceAttributes,
@@ -32,5 +55,6 @@ export interface Telemetry {
 }
 
 export const noTelemetry: Telemetry = {
+  start: () => ({ annotate: () => {}, end: () => {} }),
   run: (_name, _attributes, operation) => operation(() => {}),
 };

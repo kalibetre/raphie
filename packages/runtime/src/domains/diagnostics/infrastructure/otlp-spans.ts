@@ -65,6 +65,16 @@ const payload = z.object({
 });
 
 const allowed = new Set([
+  "model.provider",
+  "model.id",
+  "model.stop_reason",
+  "model.attempt",
+  "model.input_tokens",
+  "model.output_tokens",
+  "model.cache_read_tokens",
+  "model.cache_write_tokens",
+  "execution.outcome",
+  "execution.partial",
   "session.id",
   "turn.id",
   "approval.id",

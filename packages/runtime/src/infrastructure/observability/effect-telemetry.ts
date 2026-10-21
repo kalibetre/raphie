@@ -1,11 +1,13 @@
-import { Effect, Exit, Layer, ManagedRuntime } from "effect";
+import { Clock, Effect, Exit, Layer, ManagedRuntime } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { OtlpSerialization, OtlpTracer } from "effect/observability";
+import type { Span } from "effect/Tracer";
 
 import type {
   Telemetry,
   TraceAttributes,
   TraceName,
+  TraceSpan,
 } from "../../shared/application/telemetry.ts";
 import { noTelemetry } from "../../shared/application/telemetry.ts";
 
@@ -50,7 +52,37 @@ export async function createTelemetry(
   );
   const runtime = ManagedRuntime.make(layer);
   await runtime.runPromise(Effect.void);
+  const parents = new WeakMap<TraceSpan, Span>();
   return {
+    start(name, attributes, parent) {
+      const span = runtime.runSync(
+        Effect.makeSpan(name, {
+          attributes,
+          parent: parent ? parents.get(parent) : undefined,
+        }),
+      );
+      let ended = false;
+      const handle: TraceSpan = {
+        annotate(values) {
+          if (ended) return;
+          for (const [key, value] of Object.entries(values))
+            span.attribute(key, value);
+        },
+        end(outcome = "ok") {
+          if (ended) return;
+          ended = true;
+          span.attribute("execution.outcome", outcome);
+          span.end(
+            runtime.runSync(Clock.currentTimeNanos),
+            outcome === "ok"
+              ? Exit.succeed(undefined)
+              : Exit.fail({ _tag: "OperationFailed" }),
+          );
+        },
+      };
+      parents.set(handle, span);
+      return handle;
+    },
     async run<A>(
       name: TraceName,
       attributes: TraceAttributes,

@@ -5,9 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { createDeliveryWorker } from "../src/domains/delivery/application/worker.ts";
+import { openLocalOtlp } from "../src/domains/diagnostics/infrastructure/local-otlp.ts";
 import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
 import { chatModel } from "./chat-model.ts";
 
@@ -145,6 +148,11 @@ test("Effect OTLP exports safe HTTP/command spans and flushes on close without e
           scopeSpans: {
             spans: {
               name: string;
+              traceId: string;
+              spanId: string;
+              parentSpanId?: string;
+              startTimeUnixNano: string;
+              endTimeUnixNano: string;
               attributes: {
                 key: string;
                 value: { stringValue?: string; intValue?: string };
@@ -157,6 +165,42 @@ test("Effect OTLP exports safe HTTP/command spans and flushes on close without e
         r.scopeSpans.flatMap((s) => s.spans),
       );
     });
+    const run = spans.find((span) => span.name === "agent.run")!;
+    assert.ok(
+      run,
+      "Agent execution must be traced independently of HTTP admission",
+    );
+    const models = spans.filter((span) => span.name === "model.generate");
+    assert.equal(
+      models.length,
+      2,
+      "Trace each model turn around the approved tool call",
+    );
+    for (const model of models) {
+      assert.equal(model.traceId, run.traceId);
+      assert.equal(model.parentSpanId, run.spanId);
+      assert.ok(
+        BigInt(model.endTimeUnixNano) >= BigInt(model.startTimeUnixNano),
+      );
+      for (const key of [
+        "session.id",
+        "turn.id",
+        "model.provider",
+        "model.id",
+        "model.input_tokens",
+        "model.output_tokens",
+        "model.stop_reason",
+      ])
+        assert.ok(
+          model.attributes.some((attribute) => attribute.key === key),
+          key,
+        );
+    }
+    assert.ok(
+      run.attributes.some(
+        (a) => a.key === "turn.id" && a.value.stringValue === receipt.id,
+      ),
+    );
     const requestSpan = spans.find((span) => span.name === "http.request")!;
     assert.ok(
       requestSpan.attributes.some(
@@ -214,4 +258,48 @@ test("an unavailable collector cannot repeat or fail application work and shutdo
     );
   }
   assert.equal(calls, 1);
+});
+
+test("failed model work reaches Diagnostics as an error with safe metadata", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-model-traces-"));
+  const collector = await openLocalOtlp(join(directory, "traces.sqlite"));
+  const telemetry = await createTelemetry({
+    endpoint: collector.endpoint,
+    exportIntervalMs: 60_000,
+  });
+  const app = await Gateway.open({
+    directory,
+    telemetry,
+    ...chatModel({ fail: true }),
+  });
+  try {
+    const receipt = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "failure",
+      text: "PRIVATE_FAILED_PROMPT",
+    });
+    await app.harness.waitForIdle(context);
+    await app.close();
+    await telemetry.close();
+    const result = await collector.traces.read(1);
+    const run = result.spans.find((s) => s.name === "agent.run");
+    const model = result.spans.find((s) => s.name === "model.generate");
+    assert.equal(run?.status, "error");
+    assert.equal(model?.status, "error");
+    assert.equal(model?.attributes["model.stop_reason"], "error");
+    assert.equal(model?.attributes["turn.id"], receipt.id);
+    assert.equal(model?.attributes["session.id"], receipt.sessionId);
+    assert.equal(model?.attributes["model.input_tokens"], 1);
+    assert.equal(
+      JSON.stringify(result).includes("PRIVATE_FAILED_PROMPT"),
+      false,
+    );
+    assert.equal(JSON.stringify(result).includes("Fixture failure"), false);
+  } finally {
+    await app.close();
+    await telemetry.close();
+    await collector.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
