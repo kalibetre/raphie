@@ -1,5 +1,8 @@
 # Current architecture and target design
 
+For interactive maps, request flows, and migration phases, open the
+[HTML architecture field guide](architecture.html) directly in a browser.
+
 This file describes the current implementation. The accepted headless direction
 and proposed application interfaces are documented in
 [headless-runtime.md](headless-runtime.md), with migration slices in

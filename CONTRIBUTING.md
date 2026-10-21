@@ -89,3 +89,13 @@ tests when observable behavior changes.
 Keep credentials in private configuration, load them through Varlock, and
 never print their values. Use `bun --bun run varlock load --agent` for masked
 validation. Preserve `.data/`, including its private legacy archive, during cleanup.
+
+## Visual architecture documentation
+
+`docs/architecture.html` is the standalone visual field guide. Keep its current
+implementation labels, proposed interfaces, capability map, and migration phases
+in sync with `docs/architecture.md`, `docs/headless-runtime.md`, and
+`docs/roadmap.md`. Future capabilities must stay visibly marked as planned.
+Use inline styles, scripts, and SVG so the guide works offline without a CDN or
+a build step. Check both themes, narrow layouts, keyboard controls, and browser
+console output when changing it.

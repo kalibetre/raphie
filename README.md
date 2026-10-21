@@ -43,6 +43,10 @@ The browser fixture uses a temporary database that is removed on normal shutdown
 
 ## Architecture
 
+Open the [interactive HTML architecture guide](docs/architecture.html) directly
+in your browser. It works offline and includes a current/target runtime map,
+capability comparison, request and delivery flows, and migration explorer.
+
 Raphie is moving toward a headless runtime shared by clients and messaging
 channels. See the [target design](docs/headless-runtime.md) and
 [migration roadmap](docs/roadmap.md). Inspection interfaces are optional for
