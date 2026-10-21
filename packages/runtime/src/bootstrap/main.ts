@@ -10,12 +10,14 @@ import {
   redact,
 } from "../domains/activity/infrastructure/pi-activity-journal.ts";
 import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
+import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
 import {
   createDiscordBridge,
   resolveDiscordThread,
 } from "../infrastructure/discord/bridge.ts";
 import { connectMcp, mcpConfig } from "../infrastructure/mcp/client.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
+import { switchableTelemetry } from "../infrastructure/observability/telemetry-switch.ts";
 import { Gateway } from "./agent-runtime.ts";
 import { startServer } from "./http-server.ts";
 
@@ -42,7 +44,7 @@ const program = Effect.gen(function* () {
       ),
     (collector) => collector.close(),
   );
-  const telemetry = yield* resource(
+  const exporter = yield* resource(
     () =>
       createTelemetry({
         endpoint: collector.endpoint,
@@ -50,6 +52,32 @@ const program = Effect.gen(function* () {
         attemptId,
       }),
     (telemetry) => telemetry.close(),
+  );
+  const models = createModels();
+  const provider = openrouterProvider();
+  models.setProvider(provider);
+  const settings = yield* resource(
+    () =>
+      BackendSettings.open(resolve(directory, "settings.sqlite"), {
+        models,
+        environmentKey: process.env.OPENROUTER_API_KEY,
+        defaultModel: process.env.RAPHIE_MODEL ?? "anthropic/claude-haiku-5.5",
+      }),
+    async (settings) => settings.close(),
+  );
+  models.setProvider({
+    ...provider,
+    auth: {
+      apiKey: {
+        name: "OpenRouter API key",
+        resolve: async () =>
+          settings.key ? { auth: { apiKey: settings.key } } : undefined,
+      },
+    },
+  });
+  const telemetry = switchableTelemetry(
+    exporter,
+    () => settings.telemetryEnabled,
   );
   const discordEnabled = process.env.RAPHIE_DISCORD_ENABLED === "true";
   const keys = [
@@ -77,14 +105,6 @@ const program = Effect.gen(function* () {
           guildId: process.env.DISCORD_GUILD_ID,
         }),
       )
-    : undefined;
-  const models = createModels();
-  models.setProvider(openrouterProvider());
-  const modelId = process.env.RAPHIE_MODEL ?? "anthropic/claude-haiku-5.5";
-  if (!models.getModel("openrouter", modelId))
-    throw new Error("RAPHIE_MODEL is not in the installed OpenRouter catalog.");
-  const model = process.env.OPENROUTER_API_KEY
-    ? { provider: "openrouter", modelId }
     : undefined;
   const config = mcpConfig(process.env);
   let mcpError = false;
@@ -115,7 +135,7 @@ const program = Effect.gen(function* () {
           discordConnectionId: process.env.DISCORD_APPLICATION_ID,
           telemetry,
           models,
-          model,
+          model: settings.model,
           mcpError,
           mcp: mcp
             ? {
@@ -131,6 +151,11 @@ const program = Effect.gen(function* () {
       ),
     (app) => app.close(),
   );
+  settings.onChange = () => {
+    app.chats.model = settings.model;
+  };
+  settings.isBusy = async () =>
+    (await app.chats.state()).turns.some((turn) => turn.status === "pending");
   const stop = yield* Effect.acquireRelease(
     Effect.sync(() => new AbortController()),
     (stop) => Effect.sync(() => stop.abort()),
@@ -178,6 +203,7 @@ const program = Effect.gen(function* () {
         webOrigin,
         discordConfigured: !!discord,
         diagnostics: collector.traces,
+        settings,
       }),
     (http) => http.close(),
   );

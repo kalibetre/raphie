@@ -135,7 +135,11 @@ There is no Discord/Telegram inspection-command requirement.
   destination selection, with history-disclosure policy. No implicit broadcasting,
   automatic identity matching, or copying transcripts into a new session.
 
-General chat attachments, cancellation, model/tool configuration commands,
+Default model selection, OpenRouter key connections, local backend selection and
+trace collection controls are delivered in Settings. Authenticated remote backend
+connections and additional model providers remain future work.
+
+General chat attachments, cancellation, conversational model/tool configuration commands,
 automations, and other capabilities that the runtime does not currently expose
 need their own contracts and acceptance criteria. This architecture does not
 make them available merely by adding another client. Private runtime configuration

@@ -55,13 +55,13 @@ export function ConnectionSettings() {
         <div className="settings-actions">
           <Button
             variant="outline"
-            disabled={busy || !current.data}
+            disabled={busy || !(draft ?? current.data?.url)}
             onClick={() => void connect("test")}
           >
             Test connection
           </Button>
           <Button
-            disabled={busy || !current.data}
+            disabled={busy || !(draft ?? current.data?.url)}
             onClick={() => void connect("connect")}
           >
             {busy ? "Connecting…" : "Connect"}

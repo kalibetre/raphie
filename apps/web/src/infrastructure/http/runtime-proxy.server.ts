@@ -12,8 +12,11 @@ export async function proxyRuntime(request: Request) {
     !hosts.map((host) => `${web.protocol}//${host}`).includes(origin)
   )
     return new Response("Unrecognized origin.", { status: 403 });
-  if (incoming.pathname === "/api/web/connection")
-    return connectionRequest(request);
+  if (incoming.pathname === "/api/web/connection") {
+    const response = await connectionRequest(request);
+    response.headers.set("cache-control", "no-store");
+    return response;
+  }
   let base: string;
   try {
     base = backendAddress(request);

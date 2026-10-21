@@ -5,6 +5,8 @@ import {
   SlidersHorizontal,
   Sun,
   Server,
+  Radio,
+  Brain,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -17,10 +19,14 @@ import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
 import { ConnectionSettings } from "./connection-settings";
+import { ModelSettings } from "./model-settings";
 import { Group, Row } from "./settings-group";
+import { TelemetrySettings } from "./telemetry-settings";
 
 export const sections = [
   { id: "connection", label: "Backend", icon: Server },
+  { id: "models", label: "Models", icon: Brain },
+  { id: "telemetry", label: "Telemetry", icon: Radio },
   { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "plugins", label: "Plugins", icon: Puzzle },
 ] as const;
@@ -43,7 +49,11 @@ export function Settings({
   return (
     <ScrollArea className="settings-scroll" viewportLabel="Settings">
       <section className="settings-page">
-        {section === "connection" ? (
+        {section === "models" ? (
+          <ModelSettings />
+        ) : section === "telemetry" ? (
+          <TelemetrySettings />
+        ) : section === "connection" ? (
           <ConnectionSettings />
         ) : section === "general" ? (
           <General data={data} connected={connected} />
@@ -127,9 +137,9 @@ function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
       </Group>
       <Group
         title="Runtime"
-        note="Configured on the runtime through Varlock. Read-only here."
+        note="Connection and model preferences are available in Backend and Models."
       >
-        <Row title="Runtime" description="The local agent host on 127.0.0.1.">
+        <Row title="Runtime" description="The selected local agent backend.">
           <span className="settings-value">
             <span className={`status-dot ${connected ? "" : "offline"}`} />
             {connected ? "Connected" : "Reconnecting…"}

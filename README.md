@@ -70,12 +70,33 @@ The session Activity inspector records precise UTC timestamps, local display tim
 
 This first journal keeps the latest **5,000 events**, truncates individual diagnostic payloads at **24,000 characters**, and does not persist individual text deltas. Timestamps describe when the host observed an event; “Model response started” is the first observed response, not the start of the provider's network request. Executor's nested calls and private model reasoning are not available here. Operation waterfalls and a backend plugin lifecycle are later work.
 
+## Settings
+
+Open Settings to select and test a local backend, connect OpenRouter, search the
+model catalog and choose the default for new turns, or toggle Diagnostics trace
+collection. Changes are applied without a restart. Backend addresses are saved
+in a browser cookie scoped to the web port; reconnecting reloads the workspace
+and clears the old backend's client cache. Only local HTTP backends are supported.
+
+Provider/model and telemetry preferences belong to the selected backend and
+persist in `.data/settings.sqlite`. The existing Varlock OpenRouter key and
+`RAPHIE_MODEL` supply initial defaults. A key saved through Settings takes
+precedence; removing it restores the environment key if present. Disconnecting
+disables new model turns even when an environment key exists. Active turns must
+finish before model connections can change. Saved keys are never returned to the
+browser or written to session history; the private settings database is mode 0600
+and stores them in plaintext, so protect its backups like private configuration.
+Provider testing uses [OpenRouter's key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key)
+without generating a model response. Additional providers and authenticated remote
+backend connections are not available yet.
+
 ## Operational telemetry
 
 Effect's built-in exporter sends OTLP JSON to a loopback receiver owned by the
 runtime. Diagnostics reads only those traces from `.data/traces.sqlite`, using
 native Bun SQLite; no additional process or cloud service is required. Tracing
-starts automatically with the runtime. Retention is 48 hours / 100,000 spans,
+starts automatically with the runtime and can be disabled in Settings. In-flight
+spans may finish exporting after disabling; existing traces expire normally. Retention is 48 hours / 100,000 spans,
 and queries return the latest 500 spans in a 1, 6 or 24 hour window. Prompts,
 tool arguments/results and raw SDK errors are excluded. The durable activity
 journal remains the recovery record and the source for session Activity.
