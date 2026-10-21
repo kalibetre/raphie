@@ -1,4 +1,5 @@
-import { ArrowUp, Sparkles } from "lucide-react";
+import type { ModelSelection } from "@raphie/contracts";
+import { ArrowUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -9,6 +10,7 @@ import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Textarea } from "../../../shared/ui/textarea";
 import { ComposerPlugins } from "../../settings/infrastructure/plugins/index";
+import { ModelPicker } from "./model-picker";
 import { useComposerLayout } from "./use-composer-layout";
 
 export function Composer({
@@ -20,20 +22,33 @@ export function Composer({
   busy,
   enabledPlugins,
   onSend,
+  onChooseModel,
+  onModelSettings,
 }: {
   conversationId?: string;
   suggestion?: { text: string; at: number };
-  model: string | null;
+  model: ModelSelection | null;
   usage?: { tokens: number; cost: number };
   disabled: boolean;
   busy: boolean;
   enabledPlugins: string[];
-  onSend: (text: string, eventId: string) => Promise<void>;
+  onSend: (
+    text: string,
+    eventId: string,
+    model?: ModelSelection,
+  ) => Promise<void>;
+  onChooseModel: (model: ModelSelection) => Promise<void>;
+  onModelSettings: () => void;
 }) {
+  const [newModel, setNewModel] = useState<ModelSelection>();
+  const selectedForNewSession = conversationId ? undefined : newModel;
+  const activeModel = selectedForNewSession ?? model;
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
-  const request = useRef<{ text: string; id: string } | undefined>(undefined);
+  const request = useRef<
+    { text: string; id: string; modelKey: string } | undefined
+  >(undefined);
   const key = `raphie:draft:${conversationId ?? "new"}`;
   useEffect(() => {
     setDraft(readLocal(key) ?? "");
@@ -58,10 +73,14 @@ export function Composer({
     if (!draft.trim() || sending || disabled || busy) return;
     setSending(true);
     setError(undefined);
-    if (request.current?.text !== draft)
-      request.current = { text: draft, id: crypto.randomUUID() };
+    const modelKey = JSON.stringify(selectedForNewSession ?? null);
+    if (
+      request.current?.text !== draft ||
+      request.current.modelKey !== modelKey
+    )
+      request.current = { text: draft, id: crypto.randomUUID(), modelKey };
     try {
-      await onSend(draft, request.current.id);
+      await onSend(draft, request.current.id, selectedForNewSession);
       update("");
       request.current = undefined;
     } catch (error) {
@@ -117,13 +136,18 @@ export function Composer({
           />
         </ScrollArea>
         <div className="composer-toolbar">
-          <span className="composer-chip" title={model ?? undefined}>
-            <Sparkles size={13} />
-            {model?.split("/").at(-1) ?? "No model"}
-          </span>
+          <ModelPicker
+            model={activeModel}
+            disabled={busy || sending}
+            onChoose={async (selected) => {
+              if (conversationId) await onChooseModel(selected);
+              else setNewModel(selected);
+            }}
+            onSettings={onModelSettings}
+          />
           <ComposerPlugins
             enabled={enabledPlugins}
-            context={{ draft, model, usage }}
+            context={{ draft, model: activeModel?.modelId ?? null, usage }}
           />
           <Button
             className="ml-auto size-[32px] rounded-full"

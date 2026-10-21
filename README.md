@@ -85,7 +85,10 @@ precedence; removing it restores the environment key if present. Disconnecting
 disables new model turns even when an environment key exists. Active turns must
 finish before provider connections can change. Each session keeps its model across
 default changes and restarts; a session model can change only while that session
-is idle. Legacy sessions inherit their previously saved Pi model. Saved keys are never returned to the
+is idle. The composer picker supports search, model-family filters and local
+favorites. Choosing before the first message sets the new session’s model;
+choosing later updates only that session. Legacy sessions inherit their previously
+saved Pi model. Saved keys are never returned to the
 browser or written to session history; the private settings database is mode 0600
 and stores them in plaintext, so protect its backups like private configuration.
 Provider testing uses [OpenRouter's key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key)
