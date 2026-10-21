@@ -1,5 +1,3 @@
-import { createHash, randomUUID } from "node:crypto";
-
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
@@ -49,7 +47,7 @@ export class FileApprovalService {
     if (input.files.length > 4)
       throw new InputError("Attach at most four files.");
     const requestKey = `${input.source}:${input.eventId}`;
-    const fingerprint = createHash("sha256")
+    const fingerprint = new Bun.CryptoHasher("sha256")
       .update(JSON.stringify([input.text, input.files]))
       .digest("hex");
     const id = await this.context.root.commit(async (tx) => {
@@ -78,7 +76,7 @@ export class FileApprovalService {
       }
       const now = Date.now();
       const approval: Approval = {
-        id: randomUUID(),
+        id: crypto.randomUUID(),
         requestKey,
         fingerprint,
         text: input.text,

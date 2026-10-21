@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -96,7 +95,7 @@ const program = Effect.gen(function* () {
         mcp: mcp
           ? {
               client: mcp,
-              identity: createHash("sha256")
+              identity: new Bun.CryptoHasher("sha256")
                 .update(JSON.stringify(config))
                 .digest("hex"),
               documentationTools:

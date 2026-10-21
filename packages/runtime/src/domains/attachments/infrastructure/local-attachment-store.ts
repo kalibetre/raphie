@@ -1,5 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { attachmentName, MAX_ATTACHMENT_BYTES } from "../domain/policy.ts";
@@ -20,13 +19,13 @@ export class Files {
     if (bytes.byteLength > MAX_FILE_BYTES)
       throw new Error("Files must be 8 MiB or smaller.");
     name = attachmentName(name);
-    const id = createHash("sha256")
+    const id = new Bun.CryptoHasher("sha256")
       .update(name)
       .update("\0")
       .update(bytes)
       .digest("hex");
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
-    const temporary = join(this.directory, `.upload-${randomUUID()}`);
+    const temporary = join(this.directory, `.upload-${crypto.randomUUID()}`);
     await writeFile(temporary, bytes, { mode: 0o600, flush: true });
     await rename(temporary, join(this.directory, id));
     return { id, name, size: bytes.byteLength };
@@ -34,6 +33,6 @@ export class Files {
 
   async read(id: string): Promise<Buffer> {
     if (!/^[a-f0-9]{64}$/.test(id)) throw new Error("Invalid file reference.");
-    return readFile(join(this.directory, id));
+    return Buffer.from(await Bun.file(join(this.directory, id)).arrayBuffer());
   }
 }

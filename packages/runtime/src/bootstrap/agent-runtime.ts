@@ -11,7 +11,6 @@ import {
   defineExtension,
   Harness,
 } from "@earendil-works/pi-durable";
-import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 
 import { ActorAuthority } from "../application/access/actors.ts";
 import { Sessions } from "../application/sessions/operations.ts";
@@ -45,6 +44,7 @@ import {
   PiDeliveryQueue,
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
+import { openBunSqliteStorage } from "../infrastructure/storage/bun-sqlite.ts";
 
 type Options = {
   directory: string;
@@ -107,7 +107,7 @@ export class Gateway {
     );
     if (options.mcp) registry.install(createMcpTools(app, options.mcp));
     app.harness = await Harness.open(
-      await openNodeSqliteStorage(join(options.directory, "gateway.sqlite")),
+      await openBunSqliteStorage(join(options.directory, "gateway.sqlite")),
       {
         registry,
         models: options.models ?? createModels(),

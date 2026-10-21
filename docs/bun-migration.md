@@ -26,11 +26,22 @@ Vite is still required for TanStack Start's route/SSR compilation and Tailwind
 plugins. Varlock still validates and injects sensitive configuration. Automatic
 Bun dotenv loading is disabled in `bunfig.toml`; no private values were edited.
 
-Pi Durable's official SQLite adapter uses Bun's `node:sqlite` compatibility.
-This is Bun execution, with no Node subprocess for storage. Building our own
-`bun:sqlite` adapter would duplicate the SDK's transaction queue and recovery
-contract. Durable document schemas, SQLite location, and attachment paths remain
-unchanged.
+The initial migration used Pi's `node:sqlite` adapter on Bun compatibility.
+The 2026-10-21 audit replaces that driver with `bun:sqlite` through Pi's public
+`SqliteDatabase` interface. Pi still owns `SqliteStorage`, schema migrations and
+recovery; our small driver serializes awaited transactions and unrelated reads,
+invalidates completed transaction handles, and rolls back before releasing the
+queue. WAL, checkpointing, busy timeout and synchronization settings are retained.
+The same database reopens through the official Node driver and native Bun driver;
+all 50 tests, including restart and SIGKILL recovery, pass. No storage schema or
+attachment path changes.
+
+Bun's SHA-256 hasher replaces crypto hashing while preserving admission and
+content-addressed identities. Bun's UUIDv7 generator replaces the handwritten
+implementation, retaining timestamped legacy backfills. Attachment reads use
+`Bun.file`; writes retain flushed temporary files and atomic rename. Node-compatible
+filesystem/path/signal/abortable-timer APIs remain where they express the required
+semantics; changing their names alone would not improve the design.
 
 ## Commands
 

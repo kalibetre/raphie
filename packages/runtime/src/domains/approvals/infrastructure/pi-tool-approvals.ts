@@ -3,8 +3,6 @@ import type { ToolApproval, ToolDelivery } from "../domain/tool-approval.ts";
 
 export type { ToolApproval, ToolResult } from "../domain/tool-approval.ts";
 
-import { randomUUID } from "node:crypto";
-
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
@@ -80,7 +78,7 @@ export class ToolApprovalService {
       }
       const item: ToolApproval = {
         ...proposal,
-        id: randomUUID(),
+        id: crypto.randomUUID(),
         taskId: api.taskId,
         conversationId: api.conversationId,
         replyTo:

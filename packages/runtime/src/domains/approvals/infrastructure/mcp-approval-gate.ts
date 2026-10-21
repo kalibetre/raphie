@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 
@@ -79,7 +77,7 @@ export function createMcpTools(
             text: "Tool arguments are too large to review. Use a smaller request.",
             isError: true,
           });
-        const fingerprint = createHash("sha256")
+        const fingerprint = new Bun.CryptoHasher("sha256")
           .update(JSON.stringify([options.identity, tool.name, argumentsJson]))
           .digest("hex");
         const created = await app.toolApprovals.ensure(api, ctx, {

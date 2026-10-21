@@ -2,8 +2,6 @@ import type { ActivityEvent } from "../domain/model.ts";
 
 export type { ActivityEvent } from "../domain/model.ts";
 
-import { randomUUID } from "node:crypto";
-
 import { defineDoc } from "@earendil-works/pi-durable";
 
 type Journal = { next: number; events: ActivityEvent[] };
@@ -15,7 +13,7 @@ export const Activity = defineDoc<Journal>({
   initial: () => ({ next: 1, events: [] }),
 });
 
-export const attemptId = randomUUID();
+export const attemptId = crypto.randomUUID();
 
 // Redact before persistence, including values accidentally embedded in error text.
 export function redact(value: unknown): string {

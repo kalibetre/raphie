@@ -1,5 +1,3 @@
-import { createHash, randomUUID } from "node:crypto";
-
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { ConversationId, ModelRef } from "@earendil-works/pi-durable";
 import { configure, defineDoc, defineTask } from "@earendil-works/pi-durable";
@@ -176,7 +174,7 @@ export class ChatService implements ConversationCommands {
         throw new InputError("Session belongs to another Discord thread.", 403);
       const conversationId = addressed?.id ?? input.conversationId;
       // Preserve the fingerprint of pre-migration commands when addressed by UUID.
-      const fingerprint = createHash("sha256")
+      const fingerprint = new Bun.CryptoHasher("sha256")
         .update(
           JSON.stringify([
             input.text,
@@ -238,7 +236,7 @@ export class ChatService implements ConversationCommands {
           'You are Raphie, a concise and thoughtful personal assistant. Use conversation history. You have no built-in tasks, reminders, or cross-conversation memory. Use available MCP tools for connected integrations, and never claim an external action succeeded without a confirming tool result. For Executor, read mcp_executor_skills(name="execute") before using execute. Follow its discovery workflow. The application pauses execution for owner approval; ordinary chat text is not an approval. Never automatically repeat an uncertain, rejected, or expired call. If Executor pauses for an interaction, explain it and use resume only when the owner has supplied the required response.',
       });
       const turn: ChatTurn = {
-        id: randomUUID(),
+        id: crypto.randomUUID(),
         requestKey,
         fingerprint,
         conversationId: conversation.id,
