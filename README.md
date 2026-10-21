@@ -73,7 +73,7 @@ This first journal keeps the latest **5,000 events**, truncates individual diagn
 ## Settings
 
 Open Settings to select and test a local backend, connect OpenRouter, search the
-model catalog and choose the default for new turns, or toggle Diagnostics trace
+model catalog and choose the default for new sessions, or toggle Diagnostics trace
 collection. Changes are applied without a restart. Backend addresses are saved
 in a browser cookie scoped to the web port; reconnecting reloads the workspace
 and clears the old backend's client cache. Only local HTTP backends are supported.
@@ -83,7 +83,9 @@ persist in `.data/settings.sqlite`. The existing Varlock OpenRouter key and
 `RAPHIE_MODEL` supply initial defaults. A key saved through Settings takes
 precedence; removing it restores the environment key if present. Disconnecting
 disables new model turns even when an environment key exists. Active turns must
-finish before model connections can change. Saved keys are never returned to the
+finish before provider connections can change. Each session keeps its model across
+default changes and restarts; a session model can change only while that session
+is idle. Legacy sessions inherit their previously saved Pi model. Saved keys are never returned to the
 browser or written to session history; the private settings database is mode 0600
 and stores them in plaintext, so protect its backups like private configuration.
 Provider testing uses [OpenRouter's key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key)

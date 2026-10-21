@@ -7,7 +7,10 @@ export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";
 
 export type Attachment = { id: string; name: string; size: number };
 
+export type ModelSelection = { provider: string; modelId: string };
+
 export type Session = {
+  model?: ModelSelection;
   id: number;
   sessionId: string;
   title: string;

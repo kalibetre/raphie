@@ -36,8 +36,8 @@ export function ModelSettings() {
     <>
       <ProviderConnection settings={data} />
       <Group
-        title="Default model"
-        note="Used for new turns in all sessions, including channels. Active turns keep their current model."
+        title="Default for new sessions"
+        note="New sessions start with this model. Existing sessions keep their model; choose a different one in the composer."
       >
         <form
           className="settings-form"

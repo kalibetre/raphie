@@ -5,7 +5,7 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai/models";
 import { createModels } from "@earendil-works/pi-ai/models";
 import type { Conversation } from "@earendil-works/pi-durable";
-import type { ModelRef } from "@earendil-works/pi-durable";
+import type { ModelRef, ConversationId } from "@earendil-works/pi-durable";
 import {
   createRegistry,
   defineExtension,
@@ -50,6 +50,7 @@ import {
   noTelemetry,
   type Telemetry,
 } from "../shared/application/telemetry.ts";
+import type { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
   directory: string;
@@ -59,6 +60,7 @@ type Options = {
   beforeEffectCommit?: () => Promise<void>;
   models?: Models;
   model?: ModelRef;
+  modelConnectionGate?: ModelConnectionGate;
   mcp?: McpTools;
   mcpError?: boolean;
   telemetry?: Telemetry;
@@ -68,6 +70,7 @@ export class Gateway {
   readonly actors = new ActorAuthority();
   readonly sessions: ReturnType<typeof traceSessions>;
   readonly telemetry: Telemetry;
+  readonly models: Models;
   readonly queries: PiClientQueries;
   readonly deliveries: PiDeliveryQueue;
   files: Files;
@@ -90,7 +93,13 @@ export class Gateway {
       options.beforeEffectCommit,
     );
     this.fileApprovals = new FileApprovalService(this);
-    this.chats = new ChatService(this, options.model);
+    this.models = options.models ?? createModels();
+    this.chats = new ChatService(
+      this,
+      this.models,
+      options.model,
+      options.modelConnectionGate,
+    );
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
@@ -121,7 +130,7 @@ export class Gateway {
       await openBunSqliteStorage(join(options.directory, "gateway.sqlite")),
       {
         registry,
-        models: options.models ?? createModels(),
+        models: app.models,
         settings: {
           followUpMode: "one-at-a-time",
           stream: { timeoutMs: 120_000 },
@@ -131,6 +140,18 @@ export class Gateway {
       context,
     );
     app.root = await app.harness.root(context);
+    const previousChats = await app.harness.snapshot(Chats, context);
+    const previousModels = new Map<number, ModelRef>();
+    for (const session of previousChats?.conversations ?? []) {
+      if (session.model) continue;
+      const conversation = await app.harness.conversation(
+        session.id as ConversationId,
+        context,
+      );
+      const model =
+        (await conversation?.agent(context))?.model ?? options.model;
+      if (model) previousModels.set(session.id, model);
+    }
     await app.root.commit(async (tx) => {
       const state = await tx.doc(State);
       // Sending may have succeeded before the process died. Never blindly resend it.
@@ -143,6 +164,8 @@ export class Gateway {
       const chats = await tx.doc(Chats);
       // Add public identifiers once, in the same transaction as recovery.
       for (const conversation of chats.conversations) {
+        if (!conversation.model && previousModels.has(conversation.id))
+          conversation.model = previousModels.get(conversation.id)!;
         if (!conversation.sessionId)
           conversation.sessionId = newSessionId(conversation.createdAt);
       }

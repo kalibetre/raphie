@@ -69,7 +69,7 @@ test("backend settings persist model, credentials and telemetry without exposing
     assert.equal((await post("", { apiKey: "rejected" })).status, 503);
     assert.equal(settings.key, "PRIVATE_SAVED_KEY");
     settings.isBusy = async () => true;
-    assert.equal((await post("", { modelId: ids[0] })).status, 409);
+    assert.equal((await post("", { providerEnabled: false })).status, 409);
     assert.equal((await post("", { telemetryEnabled: true })).status, 200);
     settings.isBusy = async () => false;
     assert.equal((await post("/provider/test", {})).status, 200);

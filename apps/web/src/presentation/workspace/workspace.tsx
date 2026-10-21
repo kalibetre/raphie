@@ -263,7 +263,9 @@ export function Workspace({
                 key={`composer-${conversationId ?? "new"}`}
                 conversationId={conversationId}
                 suggestion={suggestion}
-                model={data?.model?.modelId ?? null}
+                model={
+                  conversation?.model?.modelId ?? data?.model?.modelId ?? null
+                }
                 usage={usage?.tokens ? usage : undefined}
                 disabled={
                   !connected ||

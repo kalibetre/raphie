@@ -1,8 +1,9 @@
-import type { Channel as Source } from "@raphie/contracts";
+import type { Channel as Source, ModelSelection } from "@raphie/contracts";
 
 import type { ReplyDestination } from "../../channels/domain/binding.ts";
 
 export type ChatConversation = {
+  model?: ModelSelection;
   id: number;
   sessionId: string;
   title: string;

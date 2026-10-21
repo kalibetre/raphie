@@ -6,6 +6,7 @@ import type { Models } from "@earendil-works/pi-ai/models";
 import type { RuntimeSettings, UpdateRuntimeSettings } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
+import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { SettingsService } from "../application/ports.ts";
 
@@ -28,6 +29,7 @@ export class BackendSettings implements SettingsService {
   private db: Database;
   private state: Stored;
   private options: Options;
+  readonly connectionGate = new ModelConnectionGate();
   onChange: () => void = () => {};
   isBusy: () => Promise<boolean> = async () => false;
 
@@ -107,41 +109,43 @@ export class BackendSettings implements SettingsService {
     )
       throw new InputError("Choose a model from the available catalog.");
     const changesModel =
-      input.modelId !== undefined ||
-      input.apiKey !== undefined ||
-      input.providerEnabled !== undefined;
+      input.apiKey !== undefined || input.providerEnabled !== undefined;
     if (changesModel && (await this.isBusy()))
       throw new InputError(
         "Wait for active turns to finish before changing the model connection.",
         409,
       );
     if (typeof input.apiKey === "string") await this.testProvider(input.apiKey);
-    // Re-check after a network verification; a new turn may have started meanwhile.
-    if (changesModel && (await this.isBusy()))
-      throw new InputError(
-        "Wait for active turns to finish before changing the model connection.",
-        409,
-      );
-    const next = {
-      ...this.state,
-      ...(input.telemetryEnabled !== undefined
-        ? { telemetryEnabled: input.telemetryEnabled }
-        : {}),
-      ...(input.providerEnabled !== undefined
-        ? { providerEnabled: input.providerEnabled }
-        : {}),
-      ...(input.modelId !== undefined ? { modelId: input.modelId } : {}),
-      ...(input.apiKey !== undefined ? { apiKey: input.apiKey } : {}),
+    const apply = async () => {
+      // Admission cannot capture a model until this check and settings publication finish.
+      if (changesModel && (await this.isBusy()))
+        throw new InputError(
+          "Wait for active turns to finish before changing the model connection.",
+          409,
+        );
+      const next = {
+        ...this.state,
+        ...(input.telemetryEnabled !== undefined
+          ? { telemetryEnabled: input.telemetryEnabled }
+          : {}),
+        ...(input.providerEnabled !== undefined
+          ? { providerEnabled: input.providerEnabled }
+          : {}),
+        ...(input.modelId !== undefined ? { modelId: input.modelId } : {}),
+        ...(input.apiKey !== undefined ? { apiKey: input.apiKey } : {}),
+      };
+      this.db
+        .query(
+          "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+        )
+        .run(JSON.stringify(next));
+      this.state = next;
+      if (next.apiKey) registerRedactionSecret(next.apiKey);
+      this.onChange();
+      return this.read();
     };
-    this.db
-      .query(
-        "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
-      )
-      .run(JSON.stringify(next));
-    this.state = next;
-    if (next.apiKey) registerRedactionSecret(next.apiKey);
-    this.onChange();
-    return this.read();
+    // Telemetry-only updates retain their existing availability during active turns.
+    return changesModel ? this.connectionGate.run(apply) : apply();
   }
 
   async testProvider(apiKey = this.key) {

@@ -8,6 +8,13 @@ import {
   limitBody,
 } from "../../../../infrastructure/http/validation.ts";
 
+const model = z
+  .object({
+    provider: z.string().min(1).max(80),
+    modelId: z.string().min(1).max(256),
+  })
+  .strict();
+
 const message = z.object({
   text: z.string().min(1).max(4000),
   eventId: z.string().min(1).max(200),
@@ -15,17 +22,30 @@ const message = z.object({
 });
 
 export function conversationRoutes(
-  conversations: Pick<Sessions, "submit" | "submitLegacy">,
+  conversations: Pick<Sessions, "submit" | "submitLegacy" | "chooseModel">,
   actor: ActorContext,
 ) {
   return new Hono()
+    .post(
+      "/sessions/:id/model",
+      limitBody(1024),
+      jsonInput(model),
+      async (c) => {
+        await conversations.chooseModel(
+          actor,
+          c.req.param("id"),
+          c.req.valid("json"),
+        );
+        return c.json({ model: c.req.valid("json") });
+      },
+    )
     .post(
       "/sessions/messages",
       limitBody(20_000),
       jsonInput(
         message
           .omit({ conversationId: true })
-          .extend({ sessionId: z.uuid().optional() }),
+          .extend({ sessionId: z.uuid().optional(), model: model.optional() }),
       ),
       async (c) =>
         c.json(await conversations.submit(actor, c.req.valid("json")), 201),

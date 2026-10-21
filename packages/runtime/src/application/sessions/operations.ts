@@ -1,4 +1,4 @@
-import type { ApprovalStatus } from "@raphie/contracts";
+import type { ApprovalStatus, ModelSelection } from "@raphie/contracts";
 
 import type {
   FileApprovalCommands,
@@ -8,6 +8,7 @@ import type {
   ConversationCommands,
   SendMessage,
 } from "../../domains/conversations/application/ports.ts";
+import { InputError } from "../../shared/application/input-error.ts";
 import type { ActorContext } from "../access/actors.ts";
 import type { ActorAuthority } from "../access/actors.ts";
 
@@ -29,7 +30,12 @@ export interface SessionOperations {
   ): Promise<string>;
   submit(
     actor: ActorContext,
-    input: { eventId: string; text: string; sessionId?: string },
+    input: {
+      eventId: string;
+      text: string;
+      sessionId?: string;
+      model?: ModelSelection;
+    },
   ): Promise<MessageReceipt>;
   decide(
     actor: ActorContext,
@@ -58,19 +64,36 @@ export class Sessions implements SessionOperations {
 
   async submit(
     actor: ActorContext,
-    input: { eventId: string; text: string; sessionId?: string },
+    input: {
+      eventId: string;
+      text: string;
+      sessionId?: string;
+      model?: ModelSelection;
+    },
   ) {
     const verified = this.authority.require(actor);
     const receipt = await this.conversations.send({
       eventId: input.eventId,
       text: input.text,
       sessionId: input.sessionId,
+      model: input.model,
       source: verified.source,
       actor: verified.subject,
       discordThreadId: verified.threadId,
       connectionId: verified.connectionId,
     });
     return { id: receipt.id, sessionId: receipt.sessionId };
+  }
+
+  async chooseModel(
+    actor: ActorContext,
+    sessionId: string,
+    model: ModelSelection,
+  ) {
+    const verified = this.authority.require(actor);
+    if (verified.source !== "web")
+      throw new InputError("Model selection requires a client interface.", 403);
+    await this.conversations.chooseModel(sessionId, model);
   }
 
   /** Compatibility admission retains numeric request fingerprints during client migration. */

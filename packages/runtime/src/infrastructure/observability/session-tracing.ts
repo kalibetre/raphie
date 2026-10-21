@@ -4,6 +4,8 @@ import type { Telemetry } from "../../shared/application/telemetry.ts";
 /** Commands get operational spans; request text, arguments and attachment names never do. */
 export function traceSessions(sessions: Sessions, telemetry: Telemetry) {
   return {
+    chooseModel: (...args: Parameters<Sessions["chooseModel"]>) =>
+      sessions.chooseModel(...args),
     submit: (...args: Parameters<Sessions["submit"]>) =>
       telemetry.run(
         "session.submit",
