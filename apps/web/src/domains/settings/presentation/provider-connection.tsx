@@ -3,6 +3,14 @@ import { useState } from "react";
 
 import { api } from "../../../infrastructure/http/api-client";
 import { Button } from "../../../shared/ui/button";
+import { Input } from "../../../shared/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "../../../shared/ui/select";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { Group } from "./settings-group";
 
@@ -66,25 +74,25 @@ export function ProviderConnection({
         }}
       >
         <label htmlFor="model-provider">Provider</label>
-        <select
-          id="model-provider"
-          value={settings.provider}
-          onChange={() => {}}
-          disabled={busy}
-        >
-          {settings.providers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <Select value={settings.provider} disabled={busy}>
+          <SelectTrigger id="model-provider" aria-label="Provider">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {settings.providers.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <p>
           {settings.providerEnabled && configured
             ? `Configured with ${source}.`
             : "Disconnected."}
         </p>
         <label htmlFor="provider-api-key">OpenRouter API key</label>
-        <input
+        <Input
           id="provider-api-key"
           name="openrouter-key"
           type="password"

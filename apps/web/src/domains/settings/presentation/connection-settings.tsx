@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { api } from "../../../infrastructure/http/api-client";
 import { Button } from "../../../shared/ui/button";
+import { Input } from "../../../shared/ui/input";
 import { Group } from "./settings-group";
 
 export function ConnectionSettings() {
@@ -40,7 +41,7 @@ export function ConnectionSettings() {
     >
       <div className="settings-form">
         <label htmlFor="backend-url">Backend address</label>
-        <input
+        <Input
           id="backend-url"
           type="url"
           value={draft ?? current.data?.url ?? ""}
