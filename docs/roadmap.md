@@ -5,6 +5,20 @@ Each slice must leave the existing prototype usable. The
 not mark planned capabilities as implemented. Keep Bun, Hono, Pi Durable, SQLite,
 and the existing self-hosted deployment.
 
+## Implementation progress
+
+- Shared UUID message submission and tool approval decisions now run through
+  `application/sessions`. HTTP and Discord establish runtime-issued actor contexts;
+  fabricated/deserialized contexts are rejected. The compatibility numeric endpoint
+  retains old admission fingerprints.
+- The real Discord SDK fixture now admits a model turn, receives its proposal,
+  accepts an owner decision through the shared client operation, ignores a stale
+  Discord click, and delivers the completed reply without starting a web process.
+- Verification: 40 tests pass; domain checks, TypeScript 7, Oxlint, Oxfmt and
+  production build pass. No live database or service was restarted for this slice.
+- Focused reads, binding migration, delivery extraction and web observation
+  migration remain in the following slices.
+
 ## 1. Application operations and trusted actor context
 
 Introduce conversation submission, approval decisions, and session reads behind

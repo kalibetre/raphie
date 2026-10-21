@@ -135,6 +135,7 @@ export class ChatService implements ConversationCommands {
     actor: string;
     text: string;
     conversationId?: number;
+    sessionId?: string;
     discordThreadId?: string;
   }) {
     this.app.authorize(input.actor);
@@ -147,17 +148,30 @@ export class ChatService implements ConversationCommands {
     if (violation) throw new InputError(violation);
     const model = this.model;
     const requestKey = `${input.source}:${input.eventId}`;
-    const fingerprint = createHash("sha256")
-      .update(
-        JSON.stringify([
-          input.text,
-          input.conversationId ?? null,
-          input.discordThreadId ?? null,
-        ]),
-      )
-      .digest("hex");
     const result = await this.app.root.commit(async (tx) => {
       const state = await tx.doc(Chats);
+      const addressed = input.sessionId
+        ? state.conversations.find((c) => c.sessionId === input.sessionId)
+        : undefined;
+      if (input.sessionId && !addressed)
+        throw new InputError("Session not found.", 404);
+      if (
+        addressed &&
+        input.source === "discord" &&
+        addressed.discordThreadId !== input.discordThreadId
+      )
+        throw new InputError("Session belongs to another Discord thread.", 403);
+      const conversationId = addressed?.id ?? input.conversationId;
+      // Preserve the fingerprint of pre-migration commands when addressed by UUID.
+      const fingerprint = createHash("sha256")
+        .update(
+          JSON.stringify([
+            input.text,
+            conversationId ?? null,
+            input.discordThreadId ?? null,
+          ]),
+        )
+        .digest("hex");
       const existing = state.turns.find((t) => t.requestKey === requestKey);
       if (existing) {
         if (existing.fingerprint !== fingerprint)
@@ -173,14 +187,14 @@ export class ChatService implements ConversationCommands {
           )!.sessionId,
         };
       }
-      let conversation = input.conversationId
-        ? state.conversations.find((c) => c.id === input.conversationId)
+      let conversation = conversationId
+        ? state.conversations.find((c) => c.id === conversationId)
         : input.discordThreadId
           ? state.conversations.find(
               (c) => c.discordThreadId === input.discordThreadId,
             )
           : undefined;
-      if (input.conversationId && !conversation)
+      if (conversationId && !conversation)
         throw new InputError("Conversation not found.", 404);
       if (!conversation) {
         const created = await tx.createConversation({

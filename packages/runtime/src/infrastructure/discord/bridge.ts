@@ -163,12 +163,9 @@ export function createDiscordBridge(
           throw new InputError(
             "Chat currently accepts text only. Use /copy with attachments to run the file approval experiment.",
           );
-        await app.chats.send({
-          source: "discord",
+        await app.sessions.submit(app.actors.establish("discord", thread.id), {
           eventId: message.id,
-          actor: "owner",
           text,
-          discordThreadId: thread.id,
         });
         return;
       }
@@ -248,12 +245,10 @@ export function createDiscordBridge(
     async (event) => {
       if (!authorized(event.user.userId, event.threadId) || !event.value)
         return;
-      await app.toolApprovals.decide(
+      await app.sessions.decide(
+        app.actors.establish("discord", event.threadId),
         event.value,
         event.actionId === "raphie-tool-approve" ? "approved" : "rejected",
-        "owner",
-        "discord",
-        event.threadId,
       );
     },
   );

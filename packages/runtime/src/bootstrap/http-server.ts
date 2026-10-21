@@ -78,7 +78,8 @@ export async function startServer(
   );
   app.get("/api/chats", async (c) => c.json(await snapshot(runtime)));
   app.get("/api/events", (c) => streamSnapshots(c, () => snapshot(runtime)));
-  app.route("/api", conversationRoutes(runtime.chats));
+  const owner = runtime.actors.establish("web");
+  app.route("/api", conversationRoutes(runtime.sessions, owner));
   app.route(
     "/api",
     approvalRoutes(
@@ -86,6 +87,8 @@ export async function startServer(
       runtime,
       runtime.files,
       options.discordConfigured ?? false,
+      runtime.sessions,
+      owner,
     ),
   );
   app.route("/api", attachmentRoutes(runtime.files, runtime));

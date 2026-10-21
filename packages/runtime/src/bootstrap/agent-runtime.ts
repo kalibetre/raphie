@@ -13,6 +13,8 @@ import {
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 
+import { ActorAuthority } from "../application/access/actors.ts";
+import { Sessions } from "../application/sessions/operations.ts";
 import {
   Activity,
   record,
@@ -50,6 +52,8 @@ type Options = {
 };
 
 export class Gateway {
+  readonly actors = new ActorAuthority();
+  readonly sessions: Sessions;
   files: Files;
   harness!: Harness;
   root!: Conversation;
@@ -72,6 +76,7 @@ export class Gateway {
     this.chats = new ChatService(this, options.model);
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);
+    this.sessions = new Sessions(this.actors, this.chats, this.toolApprovals);
   }
 
   static async open(options: Options) {

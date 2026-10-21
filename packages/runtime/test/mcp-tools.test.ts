@@ -200,7 +200,21 @@ test("Discord tool approvals attach full arguments, enforce owner/thread, and di
   };
   try {
     await bridge.chat.initialize();
-    const turn = await app.chats.send(input);
+    await bridge.chat.processMessage(
+      bridge.adapter,
+      input.discordThreadId,
+      bridge.adapter.parseMessage({
+        id: input.eventId,
+        guild_id: "guild",
+        channel_id: "thread",
+        content: input.text,
+        author: { id: "owner-id", username: "owner", bot: false },
+        timestamp: new Date().toISOString(),
+        attachments: [],
+      }),
+    );
+    const turn = (await app.chats.state()).turns[0];
+    assert.ok(turn, "Discord ingress must admit a turn without a web process");
     await until(
       async () => (await app.toolApprovals.state()).approvals.length === 1,
     );
@@ -240,6 +254,12 @@ test("Discord tool approvals attach full arguments, enforce owner/thread, and di
       "pending",
     );
     assert.equal(calls, 0);
+    await app.sessions.decide(
+      app.actors.establish("web"),
+      approval.id,
+      "approved",
+    );
+    // A stale Discord button cannot repeat an action settled by another client.
     await action("owner-id");
     await until(
       async () =>

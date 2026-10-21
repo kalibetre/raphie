@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
+import type { ActorContext } from "../../../../application/access/actors.ts";
+import type { SessionOperations } from "../../../../application/sessions/operations.ts";
 import {
   jsonInput,
   limitBody,
@@ -21,6 +23,8 @@ export function approvalRoutes(
   files: FileApprovalCommands,
   attachments: AttachmentStore,
   discordConfigured: boolean,
+  sessions: SessionOperations,
+  actor: ActorContext,
 ) {
   const routes = new Hono();
   routes.get("/state", async (c) =>
@@ -34,11 +38,10 @@ export function approvalRoutes(
       if (!idPattern.test(c.req.param("id")))
         throw new InputError("Not found.", 404);
       return c.json({
-        status: await tools.decide(
+        status: await sessions.decide(
+          actor,
           c.req.param("id"),
           c.req.valid("json").decision,
-          "owner",
-          "web",
         ),
       });
     },

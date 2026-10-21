@@ -7,8 +7,12 @@ import type { ToolDelivery } from "../../domains/approvals/domain/tool-approval.
 import type { AttachmentStore } from "../../domains/attachments/application/ports.ts";
 import type { ConversationCommands } from "../../domains/conversations/application/ports.ts";
 import type { ChatDelivery } from "../../domains/conversations/domain/model.ts";
+import type { ActorAuthority } from "../access/actors.ts";
+import type { SessionOperations } from "../sessions/operations.ts";
 
 export interface ChannelServices extends FileApprovalCommands {
+  actors: ActorAuthority;
+  sessions: SessionOperations;
   files: AttachmentStore;
   chats: ConversationCommands & {
     claimDelivery(): Promise<ChatDelivery | null>;

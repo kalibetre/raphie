@@ -6,6 +6,7 @@ export type SendMessage = {
   eventId: string;
   text: string;
   conversationId?: number;
+  sessionId?: string;
   discordThreadId?: string;
 };
 
