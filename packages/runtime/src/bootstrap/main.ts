@@ -2,7 +2,6 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createModels } from "@earendil-works/pi-ai/models";
-import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
 import { Effect } from "effect";
 
 import {
@@ -10,7 +9,11 @@ import {
   redact,
 } from "../domains/activity/infrastructure/pi-activity-journal.ts";
 import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
-import { OpenRouterCatalog } from "../domains/settings/infrastructure/openrouter-catalog.ts";
+import {
+  dynamicOpenRouterProvider,
+  ModelCatalog,
+  SqliteModelsStore,
+} from "../domains/settings/infrastructure/openrouter-models.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
 import {
   createDiscordBridge,
@@ -54,15 +57,14 @@ const program = Effect.gen(function* () {
       }),
     (telemetry) => telemetry.close(),
   );
-  const models = createModels();
-  const provider = openrouterProvider();
-  models.setProvider(provider);
-  const catalog = yield* Effect.promise(() =>
-    new OpenRouterCatalog({
-      path: resolve(directory, "openrouter-models.json"),
-      models,
-    }).load(),
+  const modelsStore = yield* resource(
+    () => SqliteModelsStore.open(resolve(directory, "models.sqlite")),
+    async (store) => store.close(),
   );
+  const models = createModels({ modelsStore });
+  const provider = dynamicOpenRouterProvider();
+  models.setProvider(provider);
+  const catalog = new ModelCatalog(models, modelsStore);
   const settings = yield* resource(
     () =>
       BackendSettings.open(resolve(directory, "settings.sqlite"), {
@@ -83,6 +85,8 @@ const program = Effect.gen(function* () {
       },
     },
   });
+  // Pi restores the cached list offline; settings fetch it when missing or stale.
+  yield* Effect.promise(() => catalog.restore());
   const telemetry = switchableTelemetry(
     exporter,
     () => settings.telemetryEnabled,
@@ -163,10 +167,6 @@ const program = Effect.gen(function* () {
   settings.onChange = () => {
     app.chats.model = settings.model;
   };
-  settings.sessionModels = async () =>
-    (await app.chats.state()).conversations.flatMap((c) =>
-      c.model?.provider === "openrouter" ? [c.model.modelId] : [],
-    );
   settings.isBusy = async () =>
     (await app.chats.state()).turns.some((turn) => turn.status === "pending");
   const stop = yield* Effect.acquireRelease(

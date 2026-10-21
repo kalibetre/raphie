@@ -22,8 +22,12 @@ type Options = {
   environmentKey?: string;
   defaultModel: string;
   verifyKey?: (key: string) => Promise<void>;
-  /** Curated catalog; without one, every model Pi knows is listed. */
-  catalog?: { list(extra: string[]): RuntimeSettings["models"] };
+  /** OpenRouter's cached list; without one, Pi's bundled models are listed. */
+  catalog?: {
+    ensure(): Promise<void>;
+    refresh(): Promise<void>;
+    fetchedAt(): Promise<number | null>;
+  };
 };
 
 /** Private credentials never enter Pi documents, session APIs or browser storage. */
@@ -34,8 +38,6 @@ export class BackendSettings implements SettingsService {
   readonly connectionGate = new ModelConnectionGate();
   onChange: () => void = () => {};
   isBusy: () => Promise<boolean> = async () => false;
-  /** Model ids sessions use, kept selectable even when not curated. */
-  sessionModels: () => Promise<string[]> = async () => [];
 
   private constructor(db: Database, state: Stored, options: Options) {
     this.db = db;
@@ -85,16 +87,19 @@ export class BackendSettings implements SettingsService {
   }
 
   async read(): Promise<RuntimeSettings> {
-    const models = this.options.catalog
-      ? this.options.catalog.list([
-          this.state.modelId,
-          ...(await this.sessionModels()),
-        ])
-      : this.options.models.getModels("openrouter").map((m) => ({
-          id: m.id,
-          name: m.name,
-          contextWindow: m.contextWindow,
-        }));
+    const catalog = this.options.catalog;
+    await catalog?.ensure();
+    const fetchedAt = (await catalog?.fetchedAt()) ?? null;
+    const models = [...this.options.models.getModels("openrouter")]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        contextWindow: m.contextWindow,
+        ...(m.cost.input || m.cost.output
+          ? { pricing: { input: m.cost.input, output: m.cost.output } }
+          : {}),
+      }));
     return {
       telemetryEnabled: this.state.telemetryEnabled,
       provider: "openrouter",
@@ -107,6 +112,10 @@ export class BackendSettings implements SettingsService {
           : null,
       providers: [{ id: "openrouter", name: "OpenRouter" }],
       models,
+      modelCatalog: {
+        source: fetchedAt ? "openrouter" : "bundled",
+        fetchedAt,
+      },
     };
   }
 
@@ -156,6 +165,18 @@ export class BackendSettings implements SettingsService {
     };
     // Telemetry-only updates retain their existing availability during active turns.
     return changesModel ? this.connectionGate.run(apply) : apply();
+  }
+
+  async refreshModels() {
+    try {
+      await this.options.catalog?.refresh();
+    } catch {
+      throw new InputError(
+        "Could not reach OpenRouter to fetch models. Try again later.",
+        503,
+      );
+    }
+    return this.read();
   }
 
   async testProvider(apiKey = this.key) {

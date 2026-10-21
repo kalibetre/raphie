@@ -1,5 +1,8 @@
+import type { RuntimeSettings } from "@raphie/contracts";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { api } from "../../../infrastructure/http/api-client";
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
 import {
@@ -11,7 +14,7 @@ import {
 } from "../../../shared/ui/select";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { ProviderConnection } from "./provider-connection";
-import { Group } from "./settings-group";
+import { Group, Row } from "./settings-group";
 
 export function ModelSettings() {
   const settings = useRuntimeSettings();
@@ -43,6 +46,7 @@ export function ModelSettings() {
   return (
     <>
       <ProviderConnection settings={data} />
+      <ModelList settings={data} />
       <Group
         title="Default for new sessions"
         note="New sessions start with this model. Existing sessions keep their model; choose a different one in the composer."
@@ -117,5 +121,46 @@ export function ModelSettings() {
         </form>
       </Group>
     </>
+  );
+}
+
+function ModelList({ settings }: { settings: RuntimeSettings }) {
+  const client = useQueryClient();
+  const refresh = useMutation({
+    mutationFn: () => api<RuntimeSettings>("/api/settings/models/refresh", {}),
+    onSuccess: (next) => client.setQueryData(["runtime-settings"], next),
+  });
+  const { source, fetchedAt } = settings.modelCatalog;
+  return (
+    <Group
+      title="Model list"
+      note="Fetched from OpenRouter in one request and cached for a week. Search and the picker use the cache."
+    >
+      <Row
+        title={`${settings.models.length} models`}
+        description={
+          source === "openrouter" && fetchedAt
+            ? `From OpenRouter, updated ${new Date(fetchedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.`
+            : "Pi's built-in list. OpenRouter has not been reached yet."
+        }
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={refresh.isPending}
+          onClick={() => refresh.mutate()}
+        >
+          {refresh.isPending ? "Fetching…" : "Clear model cache"}
+        </Button>
+      </Row>
+      {refresh.error && (
+        <p
+          role="alert"
+          className="px-[18px] pb-3.5 text-[12.5px] text-destructive"
+        >
+          {refresh.error.message}
+        </p>
+      )}
+    </Group>
   );
 }
