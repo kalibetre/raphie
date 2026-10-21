@@ -122,11 +122,9 @@ export function useLiveState(
   const data = useMemo<Snapshot | undefined>(() => {
     if (!info.data || !sessions.data) return undefined;
     const observation = selected.data;
-    const byId = new Map(
-      sessions.data.pages
-        .flatMap((page) => page.items)
-        .map((s) => [s.sessionId, s]),
-    );
+    const byId = new Map<string, SessionSummary>();
+    for (const session of sessions.data.pages.flatMap((page) => page.items))
+      if (!byId.has(session.sessionId)) byId.set(session.sessionId, session);
     if (observation)
       byId.set(observation.session.sessionId, observation.session);
     const turns = new Map(
