@@ -9,6 +9,9 @@
     touch-action: none;
     user-select: none;
   }
+  .panel-resize-handle:focus-visible {
+    outline: none;
+  }
   .resize-left {
     left: calc(var(--sidebar-width) - 4px);
   }

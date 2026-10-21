@@ -1,6 +1,14 @@
 import { useState } from "react";
 
 import { Button } from "../../../shared/ui/button";
+import { Input } from "../../../shared/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "../../../shared/ui/select";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { ProviderConnection } from "./provider-connection";
 import { Group } from "./settings-group";
@@ -56,7 +64,7 @@ export function ModelSettings() {
           }}
         >
           <label htmlFor="model-search">Find a model</label>
-          <input
+          <Input
             id="model-search"
             type="search"
             value={search}
@@ -64,24 +72,30 @@ export function ModelSettings() {
             placeholder="Search by name or model ID"
           />
           <label htmlFor="default-model">Default model</label>
-          <select
-            id="default-model"
+          <Select
             value={selected}
-            onChange={(event) => {
-              setModel(event.target.value);
+            onValueChange={(value) => {
+              setModel(value);
               setMessage("");
               settings.update.reset();
             }}
           >
-            {!data.models.some((m) => m.id === selected) && (
-              <option value={selected}>{selected} · unavailable</option>
-            )}
-            {catalog.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} · {m.id}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="default-model" aria-label="Default model">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {!data.models.some((m) => m.id === selected) && (
+                <SelectItem value={selected}>
+                  {selected} · unavailable
+                </SelectItem>
+              )}
+              {catalog.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.name} · {m.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p>
             {catalog.length} models shown
             {data.models.find((m) => m.id === selected)?.contextWindow

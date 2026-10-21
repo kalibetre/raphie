@@ -16,6 +16,7 @@ import {
   writeLocal,
 } from "../../../infrastructure/preferences/storage";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
+import { Switch } from "../../../shared/ui/switch";
 import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
 import { ConnectionSettings } from "./connection-settings";
@@ -76,22 +77,17 @@ export function Settings({
                   </>
                 }
               >
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    aria-label={`Enable ${plugin.name}`}
-                    checked={enabled.includes(plugin.id)}
-                    onChange={(event) => {
-                      const next = event.target.checked
-                        ? [...enabled, plugin.id]
-                        : enabled.filter((id) => id !== plugin.id);
-                      setEnabled(next);
-                      writeLocal("raphie:plugins", JSON.stringify(next));
-                    }}
-                  />
-                  <span aria-hidden="true" />
-                </label>
+                <Switch
+                  aria-label={`Enable ${plugin.name}`}
+                  checked={enabled.includes(plugin.id)}
+                  onCheckedChange={(checked) => {
+                    const next = checked
+                      ? [...enabled, plugin.id]
+                      : enabled.filter((id) => id !== plugin.id);
+                    setEnabled(next);
+                    writeLocal("raphie:plugins", JSON.stringify(next));
+                  }}
+                />
               </Row>
             ))}
           </Group>
