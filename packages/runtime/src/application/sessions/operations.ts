@@ -49,6 +49,7 @@ export class Sessions implements SessionOperations {
       source: verified.source,
       actor: verified.subject,
       discordThreadId: verified.threadId,
+      connectionId: verified.connectionId,
     });
     return { id: receipt.id, sessionId: receipt.sessionId };
   }
@@ -64,6 +65,7 @@ export class Sessions implements SessionOperations {
       source: verified.source,
       actor: verified.subject,
       discordThreadId: verified.threadId,
+      connectionId: verified.connectionId,
     });
   }
 
@@ -75,6 +77,7 @@ export class Sessions implements SessionOperations {
       verified.subject,
       verified.source,
       verified.threadId,
+      verified.connectionId,
     );
   }
 }

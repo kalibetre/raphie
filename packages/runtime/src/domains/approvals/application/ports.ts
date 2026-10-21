@@ -11,6 +11,7 @@ export interface ToolApprovalCommands {
     actor: string,
     via: Channel,
     threadId?: string,
+    connectionId?: string,
   ): Promise<"approved" | "rejected" | "expired" | "pending">;
 }
 

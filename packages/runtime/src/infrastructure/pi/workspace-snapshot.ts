@@ -23,6 +23,11 @@ export async function snapshot(
   const tools = await app.toolApprovals.state();
   return {
     ...chats,
+    // Compatibility DTO only; channel associations live in ChannelBindings.
+    conversations: chats.conversations.map((c) => ({
+      ...c,
+      discordThreadId: null,
+    })),
     model: app.chats.model ?? null,
     mcp: {
       connected: !!app.options.mcp,

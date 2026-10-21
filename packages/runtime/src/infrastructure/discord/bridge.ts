@@ -125,6 +125,7 @@ export function approvalCard(approval: Approval): CardElement {
 export function createDiscordBridge(
   app: ChannelServices,
   config: DiscordAdapterConfig & {
+    applicationId: string;
     ownerId: string;
     threadId: string;
     attachmentFetch?: FetchRequest;
@@ -163,10 +164,13 @@ export function createDiscordBridge(
           throw new InputError(
             "Chat currently accepts text only. Use /copy with attachments to run the file approval experiment.",
           );
-        await app.sessions.submit(app.actors.establish("discord", thread.id), {
-          eventId: message.id,
-          text,
-        });
+        await app.sessions.submit(
+          app.actors.establish("discord", thread.id, config.applicationId),
+          {
+            eventId: message.id,
+            text,
+          },
+        );
         return;
       }
       if (message.attachments.length > 4)
@@ -246,7 +250,7 @@ export function createDiscordBridge(
       if (!authorized(event.user.userId, event.threadId) || !event.value)
         return;
       await app.sessions.decide(
-        app.actors.establish("discord", event.threadId),
+        app.actors.establish("discord", event.threadId, config.applicationId),
         event.value,
         event.actionId === "raphie-tool-approve" ? "approved" : "rejected",
       );

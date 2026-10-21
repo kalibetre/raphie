@@ -11,6 +11,8 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import { sameDestination } from "../../channels/domain/binding.ts";
+import { ChannelBindings } from "../../channels/infrastructure/pi-bindings.ts";
 import type { ConversationCommands } from "../application/ports.ts";
 import { messageViolation } from "../domain/admission.ts";
 import type {
@@ -84,9 +86,7 @@ export const chatWorkflow = defineTask<
           answer ? "Reply completed" : "Reply failed",
           { conversationId: turn.conversationId, runId: turn.id },
         );
-        const destination = state.conversations.find(
-          (c) => c.id === turn.conversationId,
-        )!.discordThreadId;
+        const destination = turn.replyTo?.conversation;
         if (destination) {
           const text =
             answer ??
@@ -137,6 +137,7 @@ export class ChatService implements ConversationCommands {
     conversationId?: number;
     sessionId?: string;
     discordThreadId?: string;
+    connectionId?: string;
   }) {
     this.app.authorize(input.actor);
     if (!this.model)
@@ -150,6 +151,19 @@ export class ChatService implements ConversationCommands {
     const requestKey = `${input.source}:${input.eventId}`;
     const result = await this.app.root.commit(async (tx) => {
       const state = await tx.doc(Chats);
+      const bindings = (await tx.doc(ChannelBindings)).bindings;
+      const replyTo =
+        input.source === "discord" && input.discordThreadId
+          ? {
+              provider: "discord" as const,
+              owner: "owner" as const,
+              connectionId: input.connectionId ?? "legacy-discord",
+              conversation: input.discordThreadId,
+            }
+          : null;
+      const binding = replyTo
+        ? bindings.find((b) => sameDestination(b, replyTo))
+        : undefined;
       const addressed = input.sessionId
         ? state.conversations.find((c) => c.sessionId === input.sessionId)
         : undefined;
@@ -158,7 +172,7 @@ export class ChatService implements ConversationCommands {
       if (
         addressed &&
         input.source === "discord" &&
-        addressed.discordThreadId !== input.discordThreadId
+        binding?.sessionId !== addressed.sessionId
       )
         throw new InputError("Session belongs to another Discord thread.", 403);
       const conversationId = addressed?.id ?? input.conversationId;
@@ -174,6 +188,16 @@ export class ChatService implements ConversationCommands {
         .digest("hex");
       const existing = state.turns.find((t) => t.requestKey === requestKey);
       if (existing) {
+        if (
+          input.source === "discord" &&
+          (!replyTo ||
+            !existing.replyTo ||
+            !sameDestination(replyTo, existing.replyTo))
+        )
+          throw new InputError(
+            "Event belongs to another Discord connection or thread.",
+            403,
+          );
         if (existing.fingerprint !== fingerprint)
           throw new InputError(
             "Event ID already used for different content.",
@@ -189,10 +213,8 @@ export class ChatService implements ConversationCommands {
       }
       let conversation = conversationId
         ? state.conversations.find((c) => c.id === conversationId)
-        : input.discordThreadId
-          ? state.conversations.find(
-              (c) => c.discordThreadId === input.discordThreadId,
-            )
+        : binding
+          ? state.conversations.find((c) => c.sessionId === binding.sessionId)
           : undefined;
       if (conversationId && !conversation)
         throw new InputError("Conversation not found.", 404);
@@ -204,12 +226,12 @@ export class ChatService implements ConversationCommands {
           id: created.id,
           sessionId: newSessionId(),
           title: input.text.trim().slice(0, 70),
-          discordThreadId:
-            input.source === "discord" ? (input.discordThreadId ?? null) : null,
           createdAt: Date.now(),
         };
         state.conversations.push(conversation);
       }
+      if (replyTo && !binding)
+        bindings.push({ ...replyTo, sessionId: conversation.sessionId });
       await configure(tx, conversation.id as ConversationId, {
         model,
         tools: this.app.options.mcp ? null : [],
@@ -226,6 +248,7 @@ export class ChatService implements ConversationCommands {
         createdAt: Date.now(),
         status: "pending",
         answer: null,
+        replyTo,
       };
       state.turns.push(turn);
       record(await tx.doc(Activity), "run.accepted", "Message accepted", {

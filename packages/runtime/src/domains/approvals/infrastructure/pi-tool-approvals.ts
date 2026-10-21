@@ -82,6 +82,11 @@ export class ToolApprovalService {
         id: randomUUID(),
         taskId: api.taskId,
         conversationId: api.conversationId,
+        replyTo:
+          chats.turns.find(
+            (t) =>
+              t.conversationId === api.conversationId && t.status === "pending",
+          )?.replyTo ?? null,
         createdAt: Date.now(),
         expiresAt: Date.now() + (this.app.options.approvalTtlMs ?? 600_000),
         status: "pending",
@@ -114,8 +119,10 @@ export class ToolApprovalService {
         state,
         item,
         "approval",
-        chats.conversations.find((c) => c.id === item.conversationId)
-          ?.discordThreadId ?? null,
+        chats.turns.find(
+          (t) =>
+            t.conversationId === item.conversationId && t.status === "pending",
+        )?.replyTo?.conversation ?? null,
       );
       return { ...item };
     }, ctx);
@@ -181,6 +188,7 @@ export class ToolApprovalService {
     actor: string,
     via: Source,
     threadId?: string,
+    connectionId = "legacy-discord",
   ) {
     this.app.authorize(actor);
     if (!isDecision(decision)) throw new InputError("Invalid decision.");
@@ -190,6 +198,15 @@ export class ToolApprovalService {
       if (!item) throw new InputError("Tool approval not found.", 404);
       const destination =
         state.deliveries.find((d) => d.approvalId === id)?.threadId ?? null;
+      if (
+        via === "discord" &&
+        item.replyTo &&
+        item.replyTo.connectionId !== connectionId
+      )
+        throw new InputError(
+          "Approval belongs to another Discord connection.",
+          403,
+        );
       if (via === "discord" && destination !== threadId)
         throw new InputError(
           "Approval belongs to another Discord thread.",

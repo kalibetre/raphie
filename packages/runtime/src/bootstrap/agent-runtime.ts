@@ -32,6 +32,7 @@ import {
   ToolApprovalService,
 } from "../domains/approvals/infrastructure/pi-tool-approvals.ts";
 import { Files } from "../domains/attachments/infrastructure/local-attachment-store.ts";
+import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.ts";
 import {
   Chats,
   ChatService,
@@ -43,6 +44,7 @@ import { newSessionId } from "../domains/conversations/infrastructure/session-id
 type Options = {
   directory: string;
   discordThreadId?: string;
+  discordConnectionId?: string;
   approvalTtlMs?: number;
   beforeEffectCommit?: () => Promise<void>;
   models?: Models;
@@ -118,6 +120,39 @@ export class Gateway {
       for (const conversation of chats.conversations) {
         if (!conversation.sessionId)
           conversation.sessionId = newSessionId(conversation.createdAt);
+      }
+      const bindings = (await tx.doc(ChannelBindings)).bindings;
+      // Backfill only persisted associations, never the current default channel.
+      for (const conversation of chats.conversations) {
+        const legacy = conversation as typeof conversation & {
+          discordThreadId?: string | null;
+        };
+        if (legacy.discordThreadId) {
+          const destination = {
+            provider: "discord" as const,
+            owner: "owner" as const,
+            connectionId: options.discordConnectionId ?? "legacy-discord",
+            conversation: legacy.discordThreadId,
+          };
+          if (
+            !bindings.some(
+              (b) =>
+                b.sessionId === conversation.sessionId &&
+                b.connectionId === destination.connectionId &&
+                b.conversation === destination.conversation,
+            )
+          )
+            bindings.push({
+              ...destination,
+              sessionId: conversation.sessionId,
+            });
+          for (const turn of chats.turns.filter(
+            (t) => t.conversationId === conversation.id,
+          ))
+            if (turn.replyTo === undefined)
+              turn.replyTo = turn.source === "discord" ? destination : null;
+        }
+        Reflect.deleteProperty(conversation, "discordThreadId");
       }
       for (const delivery of chats.deliveries)
         if (delivery.status === "sending") delivery.status = "uncertain";

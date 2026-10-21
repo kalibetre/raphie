@@ -1,11 +1,14 @@
 import type { Channel as Source } from "@raphie/contracts";
 
+import type { ReplyDestination } from "../../channels/domain/binding.ts";
+
 export type ToolResult = { text: string; isError: boolean };
 
 export type ToolApproval = {
   id: string;
   taskId: number;
   conversationId: number;
+  replyTo?: ReplyDestination | null;
   fingerprint: string;
   server: string;
   tool: string;

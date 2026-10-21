@@ -6,13 +6,18 @@ export type ActorContext = Readonly<{
   subject: "owner";
   source: Channel;
   threadId?: string;
+  connectionId?: string;
 }>;
 
 /** Only trusted adapters receive the issuer. Contexts are never deserialized from requests. */
 export class ActorAuthority {
   private readonly issued = new WeakSet<ActorContext>();
 
-  establish(source: Channel, threadId?: string): ActorContext {
+  establish(
+    source: Channel,
+    threadId?: string,
+    connectionId = "legacy-discord",
+  ): ActorContext {
     if (source === "discord" && !threadId)
       throw new InputError(
         "Discord context requires a verified conversation.",
@@ -22,6 +27,7 @@ export class ActorAuthority {
       subject: "owner",
       source,
       threadId,
+      connectionId,
     });
     this.issued.add(actor);
     return actor;

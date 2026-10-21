@@ -8,6 +8,7 @@ export type SendMessage = {
   conversationId?: number;
   sessionId?: string;
   discordThreadId?: string;
+  connectionId?: string;
 };
 
 export interface ConversationCommands {

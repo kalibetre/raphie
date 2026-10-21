@@ -1,10 +1,11 @@
 import type { Channel as Source } from "@raphie/contracts";
 
+import type { ReplyDestination } from "../../channels/domain/binding.ts";
+
 export type ChatConversation = {
   id: number;
   sessionId: string;
   title: string;
-  discordThreadId: string | null;
   createdAt: number;
 };
 
@@ -18,6 +19,7 @@ export type ChatTurn = {
   createdAt: number;
   status: "pending" | "done" | "error";
   answer: string | null;
+  replyTo?: ReplyDestination | null;
 };
 
 export type ChatDelivery = {

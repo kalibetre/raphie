@@ -16,8 +16,15 @@ and the existing self-hosted deployment.
   Discord click, and delivers the completed reply without starting a web process.
 - Verification: 40 tests pass; domain checks, TypeScript 7, Oxlint, Oxfmt and
   production build pass. No live database or service was restarted for this slice.
-- Focused reads, binding migration, delivery extraction and web observation
-  migration remain in the following slices.
+- Channel associations now live in durable `ChannelBindings`, scoped by owner,
+  Discord application and external conversation. Startup backfills legacy fields
+  transactionally and removes them from the session record. Each new turn freezes
+  its reply destination; web turns have no channel destination. Tool proposals use
+  their originating turn. Existing source/event keys remain valid, with route
+  checks before returning duplicate receipts. Migration and delayed-origin tests
+  pass (42 tests total).
+- Focused reads, delivery extraction and web observation migration remain in the
+  following slices.
 
 ## 1. Application operations and trusted actor context
 

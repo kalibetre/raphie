@@ -68,7 +68,7 @@ test("conversation history and reply routing survive reopen, without leaking acr
       (await app.chats.state()).deliveries.filter(
         (d) => d.threadId === input.discordThreadId,
       ).length,
-      2,
+      1,
     );
     const concurrent = await Promise.all(
       ["First follow-up", "Second follow-up"].map((text, index) =>

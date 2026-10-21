@@ -89,6 +89,7 @@ const program = Effect.gen(function* () {
           process.env.DATA_DIRECTORY ?? ".data",
         ),
         discordThreadId: threadId,
+        discordConnectionId: process.env.DISCORD_APPLICATION_ID,
         models,
         model,
         mcpError,
