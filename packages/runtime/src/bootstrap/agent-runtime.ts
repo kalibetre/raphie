@@ -40,6 +40,10 @@ import {
 } from "../domains/conversations/infrastructure/pi-conversation-service.ts";
 import { Observations } from "../domains/conversations/infrastructure/pi-observations.ts";
 import { newSessionId } from "../domains/conversations/infrastructure/session-id.ts";
+import {
+  DeliveryPlans,
+  PiDeliveryQueue,
+} from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 
 type Options = {
   directory: string;
@@ -56,6 +60,7 @@ type Options = {
 export class Gateway {
   readonly actors = new ActorAuthority();
   readonly sessions: Sessions;
+  readonly deliveries: PiDeliveryQueue;
   files: Files;
   harness!: Harness;
   root!: Conversation;
@@ -78,6 +83,7 @@ export class Gateway {
     this.chats = new ChatService(this, options.model);
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);
+    this.deliveries = new PiDeliveryQueue(this);
     this.sessions = new Sessions(this.actors, this.chats, this.toolApprovals);
   }
 
@@ -157,6 +163,9 @@ export class Gateway {
       for (const delivery of chats.deliveries)
         if (delivery.status === "sending") delivery.status = "uncertain";
       const toolApprovals = await tx.doc(ToolApprovals);
+      for (const plan of (await tx.doc(DeliveryPlans)).plans)
+        for (const operation of plan.operations)
+          if (operation.status === "sending") operation.status = "uncertain";
       const journal = await tx.doc(Activity);
       record(
         journal,

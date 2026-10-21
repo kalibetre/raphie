@@ -91,15 +91,13 @@ export const chatWorkflow = defineTask<
           const text =
             answer ??
             "I could not complete that reply. Check the model configuration and send a new message to retry.";
-          // Discord has a 2,000-character content limit. Each chunk has its own durable claim.
-          for (let start = 0; start < text.length; start += 1900)
-            state.deliveries.push({
-              id: `${turn.id}:${start}`,
-              turnId: turn.id,
-              threadId: destination,
-              text: text.slice(start, start + 1900),
-              status: "pending",
-            });
+          state.deliveries.push({
+            id: `${turn.id}:reply`,
+            turnId: turn.id,
+            threadId: destination,
+            text,
+            status: "pending",
+          });
         }
         return {
           status: "terminal",

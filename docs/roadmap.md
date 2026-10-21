@@ -23,8 +23,13 @@ and the existing self-hosted deployment.
   their originating turn. Existing source/event keys remain valid, with route
   checks before returning duplicate receipts. Migration and delayed-origin tests
   pass (42 tests total).
-- Focused reads, delivery extraction and web observation migration remain in the
-  following slices.
+- Discord now uses one scoped delivery worker. The renderer persists complete
+  chunk/card/file/edit payloads before sending, and every operation stores its
+  disposition and platform message ID. Existing intents retain their original IDs;
+  new chat intents contain whole replies, with chunking confined to Discord.
+  SIGKILL tests cover both confirmed and unknown first-chunk outcomes: recovery
+  sends only the remaining chunks. Unknown chunks remain uncertain (44 tests).
+- Focused reads and web observation migration remain in the following slice.
 
 ## 1. Application operations and trusted actor context
 
