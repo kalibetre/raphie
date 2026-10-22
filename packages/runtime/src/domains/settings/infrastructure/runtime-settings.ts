@@ -22,12 +22,6 @@ type Options = {
   environmentKey?: string;
   defaultModel: string;
   verifyKey?: (key: string) => Promise<void>;
-  /** OpenRouter's cached list; without one, Pi's bundled models are listed. */
-  catalog?: {
-    ensure(): Promise<void>;
-    refresh(): Promise<void>;
-    fetchedAt(): Promise<number | null>;
-  };
 };
 
 /** Private credentials never enter Pi documents, session APIs or browser storage. */
@@ -87,9 +81,6 @@ export class BackendSettings implements SettingsService {
   }
 
   async read(): Promise<RuntimeSettings> {
-    const catalog = this.options.catalog;
-    await catalog?.ensure();
-    const fetchedAt = (await catalog?.fetchedAt()) ?? null;
     const models = [...this.options.models.getModels("openrouter")]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((m) => ({
@@ -112,10 +103,6 @@ export class BackendSettings implements SettingsService {
           : null,
       providers: [{ id: "openrouter", name: "OpenRouter" }],
       models,
-      modelCatalog: {
-        source: fetchedAt ? "openrouter" : "bundled",
-        fetchedAt,
-      },
     };
   }
 
@@ -165,18 +152,6 @@ export class BackendSettings implements SettingsService {
     };
     // Telemetry-only updates retain their existing availability during active turns.
     return changesModel ? this.connectionGate.run(apply) : apply();
-  }
-
-  async refreshModels() {
-    try {
-      await this.options.catalog?.refresh();
-    } catch {
-      throw new InputError(
-        "Could not reach OpenRouter to fetch models. Try again later.",
-        503,
-      );
-    }
-    return this.read();
   }
 
   async testProvider(apiKey = this.key) {

@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createModels } from "@earendil-works/pi-ai/models";
+import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
 import { Effect } from "effect";
 
 import {
@@ -9,11 +10,6 @@ import {
   redact,
 } from "../domains/activity/infrastructure/pi-activity-journal.ts";
 import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
-import {
-  dynamicOpenRouterProvider,
-  ModelCatalog,
-  SqliteModelsStore,
-} from "../domains/settings/infrastructure/openrouter-models.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
 import {
   createDiscordBridge,
@@ -57,19 +53,13 @@ const program = Effect.gen(function* () {
       }),
     (telemetry) => telemetry.close(),
   );
-  const modelsStore = yield* resource(
-    () => SqliteModelsStore.open(resolve(directory, "models.sqlite")),
-    async (store) => store.close(),
-  );
-  const models = createModels({ modelsStore });
-  const provider = dynamicOpenRouterProvider();
+  const models = createModels();
+  const provider = openrouterProvider();
   models.setProvider(provider);
-  const catalog = new ModelCatalog(models, modelsStore);
   const settings = yield* resource(
     () =>
       BackendSettings.open(resolve(directory, "settings.sqlite"), {
         models,
-        catalog,
         environmentKey: process.env.OPENROUTER_API_KEY,
         defaultModel: process.env.RAPHIE_MODEL ?? "anthropic/claude-haiku-5.5",
       }),
@@ -78,6 +68,7 @@ const program = Effect.gen(function* () {
   models.setProvider({
     ...provider,
     auth: {
+      ...provider.auth,
       apiKey: {
         name: "OpenRouter API key",
         resolve: async () =>
@@ -85,8 +76,6 @@ const program = Effect.gen(function* () {
       },
     },
   });
-  // Pi restores the cached list offline; settings fetch it when missing or stale.
-  yield* Effect.promise(() => catalog.restore());
   const telemetry = switchableTelemetry(
     exporter,
     () => settings.telemetryEnabled,

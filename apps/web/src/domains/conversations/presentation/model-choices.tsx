@@ -50,7 +50,7 @@ export function ModelChoices({
                   {model.id}
                   {model.pricing && (
                     <span
-                      title={`OpenRouter price, USD per million tokens: $${model.pricing.input} input, $${model.pricing.output} output`}
+                      title={`Pi catalog price, USD per million tokens: $${model.pricing.input} input, $${model.pricing.output} output`}
                     >
                       {" "}
                       · {price(model.pricing.input)} /{" "}

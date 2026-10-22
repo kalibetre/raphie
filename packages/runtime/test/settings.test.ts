@@ -44,6 +44,24 @@ test("backend settings persist model, credentials and telemetry without exposing
     });
   try {
     assert.equal((await settings.read()).credentialSource, "environment");
+    const listed = await fetch(`${http.url}/api/settings`).then((response) =>
+      response.json(),
+    );
+    const bundled = openrouterProvider().getModels();
+    assert.equal(listed.models.length, bundled.length);
+    assert.deepEqual(
+      new Set(listed.models.map((model: { id: string }) => model.id)),
+      new Set(bundled.map((model) => model.id)),
+    );
+    const haiku = listed.models.find(
+      (model: { id: string }) => model.id === "anthropic/claude-haiku-5.5",
+    );
+    const piHaiku = models.getModel("openrouter", haiku.id)!;
+    assert.equal(haiku.contextWindow, piHaiku.contextWindow);
+    assert.equal(haiku.pricing.input, piHaiku.cost.input);
+    assert.equal(haiku.pricing.output, piHaiku.cost.output);
+    assert.equal("modelCatalog" in listed, false);
+    assert.equal((await post("/models/refresh", {})).status, 404);
     const response = await post("", {
       provider: "openrouter",
       modelId: ids[1],

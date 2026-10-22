@@ -28,9 +28,6 @@ export function settingsRoutes(settings: SettingsService) {
       ),
       async (c) => c.json(await settings.update(c.req.valid("json"))),
     )
-    .post("/models/refresh", async (c) =>
-      c.json(await settings.refreshModels()),
-    )
     .post(
       "/provider/test",
       limitBody(8192),

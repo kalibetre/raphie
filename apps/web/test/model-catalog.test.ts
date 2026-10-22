@@ -16,7 +16,6 @@ const settings: RuntimeSettings = {
     { id: "anthropic/haiku", name: "Claude Haiku", contextWindow: 100 },
     { id: "openai/gpt", name: "GPT", contextWindow: 200 },
   ],
-  modelCatalog: { source: "openrouter", fetchedAt: 1 },
 };
 
 test("model discovery combines search and filters without treating another provider’s favorites as connected", () => {

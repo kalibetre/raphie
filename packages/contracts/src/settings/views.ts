@@ -9,11 +9,9 @@ export type RuntimeSettings = {
     id: string;
     name: string;
     contextWindow: number;
-    /** USD per million tokens, from OpenRouter when known. */
+    /** USD per million tokens, from Pi's model catalog when known. */
     pricing?: { input: number; output: number };
   }[];
-  /** Where `models` came from: OpenRouter's cached list, or Pi's bundled one. */
-  modelCatalog: { source: "openrouter" | "bundled"; fetchedAt: number | null };
 };
 
 export type UpdateRuntimeSettings = {
