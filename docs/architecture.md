@@ -40,7 +40,8 @@ in a dedicated SQLite store behind a Settings application port; credentials neve
 enter conversation documents or read responses. Provider keys are encrypted at rest
 with an OS credential-store master; see [credential storage](provider-credential-storage.md).
 
-Memory owns opt-in cross-session evidence through a Memory application port.
+Memory owns cross-session evidence through a Memory application port. Built-in
+memory starts enabled; an explicitly saved disabled setting is preserved.
 `memory.sqlite` contains configuration metadata and built-in evidence with FTS5
 lexical retrieval; connection keys use the existing OS-backed Settings cipher.
 Settings → Memory chooses one backend and owner/assistant scope. Pi memory tools

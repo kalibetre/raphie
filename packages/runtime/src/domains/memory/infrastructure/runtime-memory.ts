@@ -77,7 +77,7 @@ export class RuntimeMemory implements MemoryService {
     this.saved = row
       ? (JSON.parse(row.value) as Saved)
       : {
-          enabled: false,
+          enabled: true,
           provider: "builtin",
           scope: "owner",
           endpoint: "",

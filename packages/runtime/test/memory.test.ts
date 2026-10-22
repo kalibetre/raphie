@@ -55,10 +55,31 @@ async function fixture() {
   };
 }
 
+test("built-in memory starts enabled and preserves an explicit disabled setting after restart", async () => {
+  const f = await fixture();
+  try {
+    expect(f.memory.read().configuration).toMatchObject({
+      enabled: true,
+      provider: "builtin",
+      scope: "owner",
+    });
+    await f.memory.retain(evidence);
+    await f.memory.configure({ ...builtin, enabled: false });
+    f.reopen();
+    expect(f.memory.read().configuration.enabled).toBe(false);
+    expect(f.memory.recall("tea")).rejects.toThrow("disabled");
+    await f.memory.configure(builtin);
+    expect((await f.memory.recall("tea")).evidence[0]?.content).toBe(
+      evidence.content,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test("built-in evidence persists, isolates scope and never resurrects corrected or forgotten sources", async () => {
   const f = await fixture();
   try {
-    expect(f.memory.recall("tea")).rejects.toThrow("disabled");
     await f.memory.configure(builtin);
     await f.memory.retain(evidence);
     await f.memory.retain(evidence);
