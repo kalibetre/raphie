@@ -11,11 +11,15 @@ export function useWorkspaceLayout(
   view?: "diagnostics" | "settings",
 ) {
   const [inspector, setInspector] = useState(false);
+  const [sidebar, setSidebar] = useState(false);
   const [navigationWidth, setNavigationWidth] = useState(264);
   const [activityWidth, setActivityWidth] = useState(340);
   const [viewportWidth, setViewportWidth] = useState(1440);
   useEffect(() => {
-    const update = () => setViewportWidth(window.innerWidth);
+    const update = () => {
+      setViewportWidth(window.innerWidth);
+      if (window.innerWidth >= 768) setSidebar(false);
+    };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -43,7 +47,6 @@ export function useWorkspaceLayout(
     setInspector(window.innerWidth > 1400);
     applyTheme();
   }, []);
-  const [sidebar, setSidebar] = useState(false);
   // Desktop collapse; on small screens the sidebar is an overlay instead.
   const [collapsed, setCollapsed] = useState(false);
 
@@ -59,7 +62,8 @@ export function useWorkspaceLayout(
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
         event.preventDefault();
-        toggleCollapsed();
+        if (window.innerWidth < 768) setSidebar((value) => !value);
+        else toggleCollapsed();
       }
     };
     window.addEventListener("keydown", onKey);

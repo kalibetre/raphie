@@ -11,6 +11,7 @@
     "start": "bun server.mjs"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
     "@hono/bun": "1.0.1",
     "@raphie/contracts": "0.1.0",
     "@tanstack/ai": "0.70.0",

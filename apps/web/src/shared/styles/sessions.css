@@ -9,6 +9,95 @@
     min-height: 0;
     padding: 12px 10px 0;
   }
+  .sidebar-content {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .sidebar-viewport {
+    height: 100%;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+  .sidebar-viewport::-webkit-scrollbar {
+    display: none;
+  }
+  .sidebar-scrollbar {
+    display: flex;
+    width: 8px;
+    padding: 2px;
+    opacity: 0;
+  }
+  .sidebar-content:hover .sidebar-scrollbar,
+  .sidebar-content:focus-within .sidebar-scrollbar {
+    opacity: 1;
+  }
+  .sidebar-thumb {
+    width: 100%;
+    border-radius: 8px;
+    background: var(--border);
+  }
+  .sidebar-primary {
+    display: grid;
+    gap: 2px;
+    margin-bottom: 12px;
+  }
+  .sidebar-group {
+    display: grid;
+    gap: 2px;
+    padding: 8px 0 16px;
+  }
+  .sidebar-group-label {
+    padding: 4px 10px 6px;
+    color: var(--faint);
+    font-size: 11px;
+    font-weight: 550;
+  }
+  .sidebar-menu-button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted-foreground);
+    text-align: left;
+    font-size: 13px;
+  }
+  .sidebar-menu-button:hover {
+    background: var(--hover);
+    color: var(--foreground);
+  }
+  .sidebar-menu-button[data-active="true"] {
+    background: var(--card);
+    color: var(--foreground);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  .sidebar-menu-button svg {
+    flex-shrink: 0;
+  }
+  .sidebar-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted-foreground);
+  }
+  .sidebar-close:hover {
+    background: var(--hover);
+  }
   .sidebar-top {
     display: flex;
     align-items: center;
@@ -96,10 +185,6 @@
     background: var(--attention-soft);
     color: var(--attention);
     font-size: 12px;
-  }
-  .session-scroll {
-    flex: 1;
-    margin: 6px -4px 0;
   }
   .conversation-list {
     min-width: 0;
