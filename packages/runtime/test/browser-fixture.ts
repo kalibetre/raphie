@@ -150,6 +150,22 @@ const memory = new RuntimeMemory(
   settings,
   settings.connectionGate,
 );
+// Opt-in inventory for browsing/pagination acceptance; always disposable data.
+if (process.env.RAPHIE_FIXTURE_MEMORY_HISTORY === "true") {
+  for (let index = 1; index <= 60; index++) {
+    const suffix = String(index).padStart(3, "0");
+    await memory.retain({
+      id: `fixture-memory-${suffix}`,
+      content:
+        index === 7
+          ? "Fixture preference: jasmine tea"
+          : `Fixture memory ${suffix}: a synthetic preference for browsing acceptance.`,
+      kind: index % 2 ? "fact" : "experience",
+      source: `fixture:memory-${suffix}`,
+      eventTime: Date.now() - index * 1000,
+    });
+  }
+}
 const app = await Gateway.open({
   memory,
   modelConnectionGate: settings.connectionGate,

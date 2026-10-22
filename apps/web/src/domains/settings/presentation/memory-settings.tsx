@@ -85,6 +85,15 @@ function MemoryConfiguration({
         </div>
         <BookOpen size={22} aria-hidden="true" />
       </header>
+      {status.configuration.enabled && (
+        <MemoryEvidenceBrowser
+          key={JSON.stringify(status.configuration)}
+          canManage={status.capabilities.revise && status.capabilities.forget}
+          canBrowse={status.capabilities.browse}
+          liveSearch={status.configuration.provider === "builtin"}
+          scope={status.configuration.scope}
+        />
+      )}
       <Group
         title="Memory backend"
         note="One active backend. Switching preserves existing data; it does not copy or merge memories."
@@ -251,7 +260,10 @@ function MemoryConfiguration({
               </Button>
             </div>
             {dirty && (
-              <p>Save changes before testing or browsing this backend.</p>
+              <p>
+                Save changes before testing this connection. The memory view
+                uses your saved configuration.
+              </p>
             )}
             {(message || memory.update.error) && (
               <p role="status">{memory.update.error?.message ?? message}</p>
@@ -293,13 +305,6 @@ function MemoryConfiguration({
           </span>
         </Row>
       </Group>
-      {status.configuration.enabled && !dirty && (
-        <MemoryEvidenceBrowser
-          key={JSON.stringify(status.configuration)}
-          canManage={status.capabilities.revise && status.capabilities.forget}
-          liveSearch={status.configuration.provider === "builtin"}
-        />
-      )}
     </>
   );
 }

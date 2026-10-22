@@ -117,8 +117,8 @@ backend connections are not available yet.
 Built-in memory is enabled by default and stores selected facts and experiences
 in `.data/memory.sqlite`. The agent uses explicit tools to retain and search
 source-linked evidence across sessions, then reasons over the results. Settings →
-Memory controls the backend and scope and lets you inspect, correct or forget
-built-in evidence. Saved disabled settings are preserved. Hindsight is supported
+Memory opens a paginated list of saved evidence with sources and a total count.
+You can filter, correct or forget records, and configure the backend and scope. Saved disabled settings are preserved. Hindsight is supported
 through a connector; Honcho and Obsidian/Markdown are planned.
 
 See [how memory works](docs/memory.md) for retrieval behavior, model-dependent

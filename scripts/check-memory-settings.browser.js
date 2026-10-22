@@ -57,6 +57,10 @@ export async function checkMemorySettings() {
     );
     if (!document.querySelector("#memory-scope").checkValidity())
       throw new Error("A valid scope was rejected by native form validation.");
+    await waitFor(
+      () => document.body.textContent.includes("No memories saved yet"),
+      "automatic empty-scope inventory",
+    );
     fill("probe", "#memory-query");
     await waitFor(
       () => document.body.textContent.includes("0 matching memories"),
@@ -70,6 +74,7 @@ export async function checkMemorySettings() {
     return {
       save: "passed",
       savedBaseline: "passed",
+      browse: "passed",
       liveSearch: "passed",
       connection: "passed",
     };

@@ -10,12 +10,25 @@ Built-in memory is enabled by default when the runtime has no saved memory
 configuration. It needs no separate memory service. A saved disabled setting or
 external backend choice is preserved across restarts.
 
-Open **Settings → Memory** to enable or disable memory, select the backend and
-owner/assistant scope, test the saved connection, or search evidence. Built-in search
-results update as you type after a short delay; Search and Enter also submit
-the query. External providers use Search or Enter explicitly. Built-in evidence
-can be corrected or forgotten there. Wait for active turns to finish
-before changing configuration.
+Open **Settings → Memory** to see **Saved memories** immediately, without
+knowing a search term. Built-in evidence appears newest first, 25 records at a
+time, with the total for the saved owner/assistant scope. Use **Load more** to
+continue through the inventory or **Refresh** to reload it. Each record shows its
+content, kind, source-turn time and revision. Expand **Source and record ID** to
+inspect provenance; runtime-created session references link to the original
+conversation.
+
+Type to filter the list after a short delay; Search and Enter also submit the
+query. **Clear search** returns to the full paginated inventory. Search returns
+up to eight matching records, while browsing can page through every current
+record. External providers use Search or Enter explicitly; Hindsight does not yet
+support browsing all records through Raphie.
+
+Correct or forget built-in evidence from its card. Forgetting updates the visible
+count. An empty scope has an explicit empty state. The browser always shows the
+saved configuration; changing an unsaved connection draft does not redirect it.
+Backend and scope controls are below the inventory. Wait for active turns to
+finish before saving configuration changes.
 
 For example, ask Raphie:
 
@@ -89,6 +102,12 @@ part of the model context. Selecting Hindsight also sends memory operations to
 that configured service.
 
 ## Search and reflection
+
+Browsing lists current evidence by source-turn time descending, breaking ties by
+evidence ID. Pagination uses a cursor rather than an offset so newly retained
+records do not cause repeated rows in subsequent pages. Refresh starts again at
+the newest record. The total reflects the current scope and can change while
+browsing. Browsing reads SQLite directly and makes no model call.
 
 Built-in recall extracts up to 24 distinct letter/number terms from the query,
 combines them with OR, filters to the configured scope, and returns at most eight
@@ -173,7 +192,8 @@ Live-deployment compatibility and quality/cost evaluation are still outstanding.
 - [Hindsight adapter](../packages/runtime/src/domains/memory/infrastructure/hindsight-memory.ts)
 - [Settings UI](../apps/web/src/domains/settings/presentation/memory-settings.tsx)
 - [Memory regression tests](../packages/runtime/test/memory.test.ts)
-- [Reusable browser check](../scripts/check-memory-settings.browser.js)
+- [Settings browser check](../scripts/check-memory-settings.browser.js)
+- [Inventory browser check](../scripts/check-memory-browse.browser.js)
 
 Run `bun test packages/runtime/test/memory.test.ts` for focused runtime checks, or
 `bun run validate` for repository validation. Tests use temporary databases and
@@ -181,7 +201,16 @@ synthetic credentials. Browser acceptance uses `bun run dev:fixture` and
 `bun run dev:web:fixture`; see [contributing](../CONTRIBUTING.md#verification-and-data).
 
 The HTTP surface is under `/api/memory`: configuration read/write, saved-connection
-testing, recall, correction and forgetting. Retention and reflection are agent
+testing, paginated inventory, recall, correction and forgetting. Retention and reflection are agent
 operations in this slice; there are no HTTP retain/reflect routes. The
 [route adapter](../packages/runtime/src/domains/memory/presentation/http/routes.ts)
-is the reference for exact request schemas and paths.
+is the reference for exact request schemas and paths. Browsing uses
+`GET /api/memory/evidence`, returning `{ evidence, total, next }`. Pass a non-null
+`next` value as the `after` query parameter to load another page of at most 25
+records. An invalid cursor is rejected; external adapters without browsing
+capability return an explicit unsupported-operation error.
+
+For pagination browser acceptance, start a disposable fixture with
+`RAPHIE_FIXTURE_MEMORY_HISTORY=true`; this seeds 60 synthetic evidence records.
+The normal fixture leaves the inventory empty unless the fixture agent saves
+something. Never seed the normal application database for this check.
