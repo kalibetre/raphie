@@ -133,6 +133,12 @@ function MemoryConfiguration({
           <div className="settings-form">
             <label htmlFor="memory-backend">Backend</label>
             <Select
+              items={{
+                builtin: "Raphie · built-in",
+                hindsight: "Hindsight",
+                honcho: "Honcho · planned",
+                markdown: "Obsidian / Markdown · planned",
+              }}
               value={draft.provider}
               disabled={busy}
               onValueChange={(value) => {
