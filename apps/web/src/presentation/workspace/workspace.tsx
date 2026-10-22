@@ -16,7 +16,7 @@ import {
   Settings,
 } from "../../domains/settings/presentation/settings";
 import { SettingsNav } from "../../domains/settings/presentation/settings-nav";
-import { api } from "../../infrastructure/http/api-client";
+import { useBackend } from "../../infrastructure/http/backend-context";
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { PanelResizeHandle } from "./panel-resize-handle";
 import { useWorkspaceLayout } from "./use-workspace-layout";
@@ -35,6 +35,8 @@ export function Workspace({
   view?: "diagnostics" | "settings";
   section?: Section;
 }) {
+  const { workspace } = useBackend();
+  const api = workspace.api;
   const navigate = useNavigate();
   const {
     data,
@@ -110,6 +112,7 @@ export function Workspace({
     });
     setSuggestion(undefined);
     await refetch();
+    workspace.assertActive();
     if (conversationId !== sent.sessionId)
       await navigate({
         to: "/sessions/$sessionId",

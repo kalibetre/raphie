@@ -17,14 +17,24 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, data?: unknown): Promise<T> {
+export async function api<T>(
+  path: string,
+  data?: unknown,
+  signal?: AbortSignal,
+  backend?: string,
+): Promise<T> {
+  const headers: Record<string, string> = backend
+    ? { "x-raphie-backend": backend }
+    : {};
   const response = await fetch(
     path,
     data === undefined
-      ? undefined
+      ? { signal, headers }
       : {
+          signal,
           method: "POST",
           headers: {
+            ...headers,
             "content-type": "application/json",
             "x-raphie-client": "web",
           },

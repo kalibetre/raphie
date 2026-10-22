@@ -1,9 +1,11 @@
 import type { RuntimeSettings, UpdateRuntimeSettings } from "@raphie/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "../../../infrastructure/http/api-client";
+import { useBackend } from "../../../infrastructure/http/backend-context";
 
 export function useRuntimeSettings() {
+  const { workspace } = useBackend();
+  const api = workspace.api;
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ["runtime-settings"],

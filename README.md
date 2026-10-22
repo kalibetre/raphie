@@ -82,8 +82,10 @@ This first journal keeps the latest **5,000 events**, truncates individual diagn
 Open Settings to select and test a local backend, connect OpenRouter, search the
 model catalog and choose the default for new sessions, or toggle Diagnostics trace
 collection. Changes are applied without a restart. Backend addresses are saved
-in a browser cookie scoped to the web port; reconnecting reloads the workspace
-and clears the old backend's client cache. Only local HTTP backends are supported.
+in a browser cookie scoped to the web port; reconnecting switches the workspace in place, closes old streams and requests,
+and reloads sessions and settings from the selected backend. Drafts are scoped
+to each backend. Older drafts without a backend identity remain in browser storage
+but are not automatically loaded into a backend. Only local HTTP backends are supported.
 
 Provider/model and telemetry preferences belong to the selected backend and
 persist in `.data/settings.sqlite`. Provider keys come exclusively from connections

@@ -5,7 +5,7 @@ import type {
 import { KeyRound, X } from "lucide-react";
 import { useState } from "react";
 
-import { api } from "../../../infrastructure/http/api-client";
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
 import {
@@ -28,6 +28,8 @@ export function ProviderConnection({
   suggestedName: string;
   onClose: () => void;
 }) {
+  const { workspace } = useBackend();
+  const api = workspace.api;
   const mutation = useProviderConnections();
   const [provider, setProvider] = useState(
     connection?.provider ?? providers[0]?.id ?? "",

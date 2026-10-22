@@ -1,11 +1,11 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createRootRoute,
   HeadContent,
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
-import { useState } from "react";
+
+import { BackendBoundary } from "../../presentation/workspace/backend-boundary";
 
 import styles from "../../shared/styles/index.css?url";
 
@@ -29,12 +29,6 @@ export const Route = createRootRoute({
 });
 
 function Root() {
-  const [client] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: { queries: { retry: 1, staleTime: 1000 } },
-      }),
-  );
   return (
     <html lang="en">
       <head>
@@ -49,9 +43,9 @@ function Root() {
             Test workspace · fake models, not your data
           </div>
         )}
-        <QueryClientProvider client={client}>
+        <BackendBoundary>
           <Outlet />
-        </QueryClientProvider>
+        </BackendBoundary>
         <Scripts />
       </body>
     </html>

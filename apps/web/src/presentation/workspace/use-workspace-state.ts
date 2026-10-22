@@ -12,14 +12,13 @@ import {
 } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  api,
-  ApiError,
-  type Snapshot,
-} from "../../infrastructure/http/api-client";
+import { ApiError, type Snapshot } from "../../infrastructure/http/api-client";
+import { useBackend } from "../../infrastructure/http/backend-context";
 
 /** Each observation replaces authoritative state; reconnect never replays a command. */
 export function useLiveState(sessionId?: string, legacyId?: number) {
+  const { workspace } = useBackend();
+  const api = workspace.api;
   const client = useQueryClient();
   const [connected, setConnected] = useState(false);
   const [sessionConnected, setSessionConnected] = useState(false);
@@ -54,55 +53,58 @@ export function useLiveState(sessionId?: string, legacyId?: number) {
     retry: false,
   });
   useEffect(() => {
-    const events = new EventSource("/api/sessions/events");
-    events.onopen = () => setConnected(true);
-    events.onerror = () => setConnected(false);
-    events.onmessage = (event) => {
-      try {
-        const page = JSON.parse(event.data) as Page<SessionSummary>;
-        client.setQueryData<typeof sessions.data>(["sessions"], (current) => ({
-          pages: [page, ...(current?.pages.slice(1) ?? [])],
-          pageParams: [null, ...(current?.pageParams.slice(1) ?? [])],
-        }));
-      } catch {
-        setConnected(false);
-      }
-    };
-    return () => events.close();
-  }, [client]);
+    return workspace.observe("/api/sessions/events", {
+      open: () => setConnected(true),
+      error: () => setConnected(false),
+      message: (event) => {
+        try {
+          const page = JSON.parse(event.data) as Page<SessionSummary>;
+          client.setQueryData<typeof sessions.data>(
+            ["sessions"],
+            (current) => ({
+              pages: [page, ...(current?.pages.slice(1) ?? [])],
+              pageParams: [null, ...(current?.pageParams.slice(1) ?? [])],
+            }),
+          );
+        } catch {
+          setConnected(false);
+        }
+      },
+    });
+  }, [client, workspace]);
   useEffect(() => {
     if (!selectedId || selected.error) return;
     setSessionConnected(false);
-    const events = new EventSource(`/api/sessions/${selectedId}/events`);
-    events.onopen = () => setSessionConnected(true);
-    events.onerror = () => setSessionConnected(false);
-    events.onmessage = (event) => {
-      try {
-        const next = JSON.parse(event.data) as SessionObservation;
-        const previous = client.getQueryData<SessionObservation>([
-          "session",
-          selectedId,
-        ]);
-        const visible = new Set(next.turns.map((turn) => turn.id));
-        const shifted =
-          previous?.turns.filter((turn) => !visible.has(turn.id)) ?? [];
-        if (shifted.length)
-          setOlder((current) => ({
-            ...current,
-            [selectedId]: {
-              items: [...(current[selectedId]?.items ?? []), ...shifted],
-              next: current[selectedId]
-                ? current[selectedId].next
-                : (previous?.nextBefore ?? null),
-            },
-          }));
-        client.setQueryData(["session", selectedId], next);
-      } catch {
-        setConnected(false);
-      }
-    };
-    return () => events.close();
-  }, [selectedId, selected.error, client]);
+    return workspace.observe(`/api/sessions/${selectedId}/events`, {
+      open: () => setSessionConnected(true),
+      error: () => setSessionConnected(false),
+      message: (event) => {
+        try {
+          const next = JSON.parse(event.data) as SessionObservation;
+          const previous = client.getQueryData<SessionObservation>([
+            "session",
+            selectedId,
+          ]);
+          const visible = new Set(next.turns.map((turn) => turn.id));
+          const shifted =
+            previous?.turns.filter((turn) => !visible.has(turn.id)) ?? [];
+          if (shifted.length)
+            setOlder((current) => ({
+              ...current,
+              [selectedId]: {
+                items: [...(current[selectedId]?.items ?? []), ...shifted],
+                next: current[selectedId]
+                  ? current[selectedId].next
+                  : (previous?.nextBefore ?? null),
+              },
+            }));
+          client.setQueryData(["session", selectedId], next);
+        } catch {
+          setConnected(false);
+        }
+      },
+    });
+  }, [selectedId, selected.error, client, workspace]);
   const data = useMemo<Snapshot | undefined>(() => {
     if (!info.data || !sessions.data) return undefined;
     const observation = selected.data;

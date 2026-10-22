@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { Snapshot } from "../../../infrastructure/http/api-client";
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import { ToolSteps } from "../../approvals/presentation/tool-steps";
 import {
   formatCost,
@@ -33,17 +34,22 @@ export function Chat({
   conversationId: string;
 }) {
   const query = useQueryClient();
+  const { workspace } = useBackend();
   const connection = useMemo(
     () =>
-      chatAdapter(conversationId, (listener) => {
-        const publish = () => {
-          const current = query.getQueryData<Snapshot>(["runtime"]);
-          if (current) listener(current);
-        };
-        publish();
-        return query.getQueryCache().subscribe(publish);
-      }),
-    [conversationId, query],
+      chatAdapter(
+        conversationId,
+        (listener) => {
+          const publish = () => {
+            const current = query.getQueryData<Snapshot>(["runtime"]);
+            if (current) listener(current);
+          };
+          publish();
+          return query.getQueryCache().subscribe(publish);
+        },
+        workspace.api,
+      ),
+    [conversationId, query, workspace],
   );
   const { messages } = useChat({ connection, live: true });
   const turns = state.turns.filter((t) => t.conversationId === conversationId);

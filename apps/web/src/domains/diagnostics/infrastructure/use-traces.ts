@@ -1,9 +1,11 @@
 import type { TraceDiagnostics } from "@raphie/contracts";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "../../../infrastructure/http/api-client";
+import { useBackend } from "../../../infrastructure/http/backend-context";
 
 export function useTraces(hours: 1 | 6 | 24) {
+  const { workspace } = useBackend();
+  const api = workspace.api;
   return useQuery({
     queryKey: ["diagnostics", "traces", hours],
     queryFn: () =>

@@ -64,11 +64,33 @@ test("local backend selection is probed, browser-scoped and used by normal reque
     );
     assert.equal((await selected.json()).url, address);
     for (const path of ["/api/sessions", "/api/sessions/events"]) {
+      const mismatch = await proxyRuntime(
+        new Request(`http://127.0.0.1:4320${path}`, {
+          headers: { ...headers, "x-raphie-backend": "http://127.0.0.1:1" },
+        }),
+      );
+      assert.equal(mismatch.status, 409);
+      const staleStream = await proxyRuntime(
+        new Request(
+          `http://127.0.0.1:4320${path}?_raphie_backend=http://127.0.0.1:1`,
+          { headers },
+        ),
+      );
+      assert.equal(staleStream.status, 409);
+
       const response = await proxyRuntime(
         new Request(`http://127.0.0.1:4320${path}`, { headers }),
       );
       assert.deepEqual(await response.json(), { path, cookie: null });
     }
+    const staleAction = await proxyRuntime(
+      new Request("http://127.0.0.1:4320/api/tool-approvals/old", {
+        method: "POST",
+        headers: { ...headers, "x-raphie-backend": "http://127.0.0.1:1" },
+        body: "{}",
+      }),
+    );
+    assert.equal(staleAction.status, 409);
     await backend.stop(true);
     assert.equal((await proxyRuntime(request(address))).status, 503);
   } finally {

@@ -41,6 +41,7 @@ export function transcript(
 export function chatAdapter(
   conversationId: string,
   subscribe: (listener: (state: Snapshot) => void) => () => void,
+  sendRequest = api,
 ): SubscribeConnectionAdapter {
   return {
     async *subscribe(signal) {
@@ -82,7 +83,7 @@ export function chatAdapter(
           : typeof message.content === "string"
             ? message.content
             : "";
-      await api("/api/sessions/messages", {
+      await sendRequest("/api/sessions/messages", {
         eventId: message.id ?? crypto.randomUUID(),
         text,
         sessionId: conversationId,
