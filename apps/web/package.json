@@ -11,6 +11,7 @@
     "start": "bun server.mjs"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
     "@hono/bun": "1.0.1",
     "@raphie/contracts": "0.1.0",
     "@tanstack/ai": "0.70.0",
@@ -23,7 +24,6 @@
     "clsx": "2.1.1",
     "hono": "4.13.13",
     "lucide-react": "1.60.0",
-    "radix-ui": "1.8.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-markdown": "10.1.0",

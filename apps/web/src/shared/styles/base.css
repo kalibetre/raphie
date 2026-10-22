@@ -51,7 +51,7 @@
   .scroll-area-viewport {
     max-height: inherit;
   }
-  /* Radix's table sizing must not let long messages or titles widen a panel. */
+  /* Long messages and titles must stay within their panel width. */
   .scroll-area-viewport > div {
     display: block !important;
   }

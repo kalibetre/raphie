@@ -1,49 +1,73 @@
 import { ArrowLeft } from "lucide-react";
 
-import { ScrollArea } from "../../../shared/ui/scroll-area";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarMenuButton,
+} from "../../../shared/ui/sidebar";
 import { type Section, sections } from "./settings";
+
+const groups = [
+  { label: "Runtime", ids: ["connection", "providers", "models", "telemetry"] },
+  { label: "Preferences", ids: ["general", "plugins"] },
+] as const;
 
 export function SettingsNav({
   section,
   open,
+  onOpenChange,
   onSelect,
   onBack,
 }: {
   section: Section;
   open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSelect: (section: Section) => void;
   onBack: () => void;
 }) {
   return (
-    <aside
-      className={`sidebar ${open ? "sidebar-open" : ""}`}
-      aria-label="Settings navigation"
+    <Sidebar
+      label="Settings navigation"
+      open={open}
+      onOpenChange={onOpenChange}
     >
-      <div className="sidebar-top">
-        <div className="brand">Settings</div>
-      </div>
-      <ScrollArea
-        className="settings-nav-scroll"
-        viewportLabel="Settings sections"
-      >
-        <nav className="settings-nav">
-          {sections.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              className={section === id ? "selected" : ""}
-              aria-current={section === id ? "page" : undefined}
-              onClick={() => onSelect(id)}
-            >
-              <Icon size={15} /> {label}
-            </button>
+      <SidebarHeader>
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            r
+          </span>
+          Settings
+        </div>
+      </SidebarHeader>
+      <SidebarContent label="Settings sections">
+        <nav aria-label="Settings">
+          {groups.map(({ label, ids }) => (
+            <SidebarGroup key={label} label={label}>
+              {ids.map((id) => {
+                const item = sections.find((entry) => entry.id === id)!;
+                const Icon = item.icon;
+                return (
+                  <SidebarMenuButton
+                    key={id}
+                    active={section === id}
+                    onClick={() => onSelect(id)}
+                  >
+                    <Icon size={15} aria-hidden="true" /> {item.label}
+                  </SidebarMenuButton>
+                );
+              })}
+            </SidebarGroup>
           ))}
         </nav>
-      </ScrollArea>
-      <div className="sidebar-bottom">
-        <button className="settings-back" onClick={onBack}>
-          <ArrowLeft size={15} /> Back
-        </button>
-      </div>
-    </aside>
+      </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenuButton onClick={onBack}>
+          <ArrowLeft size={15} aria-hidden="true" /> Back to conversations
+        </SidebarMenuButton>
+      </SidebarFooter>
+    </Sidebar>
   );
 }

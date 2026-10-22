@@ -44,3 +44,13 @@ test("the runtime package alias cannot bypass the browser boundary", () => {
     ),
   );
 });
+
+test("web components use Base UI instead of Radix primitives", () => {
+  const component = "apps/web/src/shared/ui/select.tsx";
+  assert.ok(dependencyViolation(component, "radix-ui"));
+  assert.ok(dependencyViolation(component, "@radix-ui/react-select"));
+  assert.equal(
+    dependencyViolation(component, "@base-ui/react/select"),
+    undefined,
+  );
+});

@@ -1,5 +1,5 @@
+import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
-import { Select as SelectPrimitive } from "radix-ui";
 import type { ComponentProps } from "react";
 
 import { cn } from "./utils";
@@ -12,7 +12,9 @@ export function SelectTrigger({
   className,
   children,
   ...props
-}: ComponentProps<typeof SelectPrimitive.Trigger>) {
+}: Omit<ComponentProps<typeof SelectPrimitive.Trigger>, "className"> & {
+  className?: string;
+}) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
@@ -23,7 +25,7 @@ export function SelectTrigger({
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon asChild>
+      <SelectPrimitive.Icon>
         <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
@@ -34,30 +36,36 @@ export function SelectContent({
   className,
   children,
   ...props
-}: ComponentProps<typeof SelectPrimitive.Content>) {
+}: Omit<ComponentProps<typeof SelectPrimitive.Popup>, "className"> & {
+  className?: string;
+}) {
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Content
-        data-slot="select-content"
-        position="popper"
+      <SelectPrimitive.Positioner
+        className="z-70"
         sideOffset={5}
         collisionPadding={12}
-        className={cn(
-          "relative z-70 max-h-[min(320px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md outline-none",
-          className,
-        )}
-        {...props}
+        alignItemWithTrigger={false}
       >
-        <SelectPrimitive.ScrollUpButton className="flex justify-center py-1">
-          ⌃
-        </SelectPrimitive.ScrollUpButton>
-        <SelectPrimitive.Viewport className="p-1">
-          {children}
-        </SelectPrimitive.Viewport>
-        <SelectPrimitive.ScrollDownButton className="flex justify-center py-1">
-          ⌄
-        </SelectPrimitive.ScrollDownButton>
-      </SelectPrimitive.Content>
+        <SelectPrimitive.Popup
+          data-slot="select-content"
+          className={cn(
+            "relative max-h-[min(320px,var(--available-height))] min-w-(--anchor-width) max-w-[calc(100vw-24px)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md outline-none",
+            className,
+          )}
+          {...props}
+        >
+          <SelectPrimitive.ScrollUpArrow className="flex justify-center py-1">
+            ⌃
+          </SelectPrimitive.ScrollUpArrow>
+          <SelectPrimitive.List className="max-h-[min(280px,var(--available-height))] overflow-y-auto p-1">
+            {children}
+          </SelectPrimitive.List>
+          <SelectPrimitive.ScrollDownArrow className="flex justify-center py-1">
+            ⌄
+          </SelectPrimitive.ScrollDownArrow>
+        </SelectPrimitive.Popup>
+      </SelectPrimitive.Positioner>
     </SelectPrimitive.Portal>
   );
 }
@@ -66,22 +74,22 @@ export function SelectItem({
   className,
   children,
   ...props
-}: ComponentProps<typeof SelectPrimitive.Item>) {
+}: Omit<ComponentProps<typeof SelectPrimitive.Item>, "className"> & {
+  className?: string;
+}) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default items-center rounded-sm py-2 pr-8 pl-2 text-sm outline-none select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex w-full cursor-default items-center rounded-sm py-2 pr-8 pl-2 text-sm outline-none select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
         className,
       )}
       {...props}
     >
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
-      <span className="absolute right-2 flex items-center">
-        <SelectPrimitive.ItemIndicator>
-          <Check className="size-3.5" />
-        </SelectPrimitive.ItemIndicator>
-      </span>
+      <SelectPrimitive.ItemIndicator className="absolute right-2 flex items-center">
+        <Check className="size-3.5" />
+      </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>
   );
 }

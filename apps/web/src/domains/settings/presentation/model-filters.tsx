@@ -56,9 +56,13 @@ export function ModelFilters({
       <div className="model-filter">
         <label htmlFor="model-provider-filter">Provider</label>
         <Select
+          items={[
+            { value: "all", label: "All providers" },
+            ...providers.map((p) => ({ value: p.id, label: p.name })),
+          ]}
           value={provider}
           onValueChange={(value) => {
-            onProvider(value);
+            if (value !== null) onProvider(value);
           }}
         >
           <SelectTrigger id="model-provider-filter">
@@ -77,9 +81,13 @@ export function ModelFilters({
       <div className="model-filter">
         <label htmlFor="model-source-filter">Model source</label>
         <Select
+          items={[
+            { value: "all", label: "All sources" },
+            ...sources.map((s) => ({ value: s.id, label: s.label })),
+          ]}
           value={source}
           onValueChange={(value) => {
-            onSource(value);
+            if (value !== null) onSource(value);
           }}
         >
           <SelectTrigger id="model-source-filter">
@@ -98,7 +106,16 @@ export function ModelFilters({
       {connections.length > 1 && (
         <div className="model-filter model-connection-filter">
           <label htmlFor="model-connection-filter">Connection</label>
-          <Select value={connection} onValueChange={onConnection}>
+          <Select
+            items={[
+              { value: "all", label: "All connections" },
+              ...connections.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            value={connection}
+            onValueChange={(value) => {
+              if (value !== null) onConnection(value);
+            }}
+          >
             <SelectTrigger id="model-connection-filter">
               <SelectValue />
             </SelectTrigger>

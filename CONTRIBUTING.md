@@ -103,7 +103,8 @@ console output when changing it.
 ## Scrolling and the composer
 
 Use `shared/ui/scroll-area` for scrolling panels, code/details and wide tables.
-Each panel has one Radix viewport; its flex/grid ancestors need `min-height: 0`
+Use Base UI for shadcn components; do not add Radix primitives or dependencies.
+Each panel has one Base UI viewport; its flex/grid ancestors need `min-height: 0`
 and must not add a competing `overflow: auto`. Connect `useStickToBottom` directly
 to the transcript viewport and content refs instead of adding another scroller.
 

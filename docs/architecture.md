@@ -84,7 +84,7 @@ CI uses a self-hosted Linux x64 runner and never requires paid model calls.
 
 ## Bun execution and package management
 
-Bun 1.4.2 is the pinned, tested runtime and package manager. `bun.lock` replaces
+Bun 1.4.4 is the pinned, tested runtime and package manager. `bun.lock` replaces
 `package-lock.json`; CI uses `bun install --frozen-lockfile`. Built-in parallel
 script execution replaces the custom Node child-process launcher. Both HTTP
 hosts use `Bun.serve`; the Node Hono adapter and srvx dependency are removed.

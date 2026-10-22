@@ -1,42 +1,7 @@
 @layer components {
   /* Settings */
-  .settings-scroll,
-  .settings-nav-scroll {
+  .settings-scroll {
     flex: 1;
-  }
-  .settings-nav {
-    display: grid;
-    gap: 2px;
-    align-content: start;
-    flex: 1;
-  }
-  .settings-nav button,
-  .settings-back {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border: 0;
-    background: transparent;
-    text-align: left;
-    padding: 8px 10px;
-    border-radius: 8px;
-    color: var(--muted-foreground);
-    font-size: 13px;
-  }
-  .settings-nav button:hover,
-  .settings-back:hover {
-    background: var(--hover);
-    color: var(--foreground);
-  }
-  .settings-nav button.selected {
-    background: var(--card);
-    color: var(--foreground);
-    box-shadow:
-      0 1px 2px #2a241410,
-      0 0 0 1px var(--border);
-  }
-  .settings-back {
-    margin-right: auto;
   }
   .settings-page {
     width: 100%;

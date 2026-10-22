@@ -2,7 +2,7 @@
 // Throws on the reported double-scroll / non-floating-composer regressions.
 export function checkScrollLayout() {
   const viewport = document.querySelector(
-    ".conversation-scroll [data-radix-scroll-area-viewport]",
+    ".conversation-scroll [data-slot='scroll-area-viewport']",
   );
   const conversation = document.querySelector(".conversation");
   const composer = document.querySelector(".composer");
@@ -15,7 +15,7 @@ export function checkScrollLayout() {
         element.scrollHeight > element.clientHeight + 1) ||
         (/auto|scroll/.test(style.overflowX) &&
           element.scrollWidth > element.clientWidth + 1)) &&
-      !element.hasAttribute("data-radix-scroll-area-viewport")
+      !element.matches("[data-slot=scroll-area-viewport], .sidebar-viewport")
     );
   });
   if (native.length)

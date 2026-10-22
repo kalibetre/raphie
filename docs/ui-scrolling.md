@@ -6,8 +6,8 @@ stable gutters. The composer occupied a separate flex row, so messages could not
 scroll underneath it. The activity, settings and session lists used unrelated
 native scroll containers too.
 
-The shared shadcn-style ScrollArea uses the existing `radix-ui` dependency; no
-package was added. Panel ancestors constrain size without scrolling. Radix owns
+The shared shadcn ScrollArea uses `@base-ui/react/scroll-area`, like the other
+Base UI controls. Panel ancestors constrain size without scrolling. Base UI owns
 the viewport and custom thumb. The transcript's `useStickToBottom` refs point
 directly at this viewport and its content, preserving streaming follow behavior,
 reading-position escape and the jump-to-latest control. Code blocks, tables,
