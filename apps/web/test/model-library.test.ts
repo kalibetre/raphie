@@ -44,3 +44,10 @@ test("source filters group Pi latest aliases with the same vendor", () => {
     label: "OpenRouter",
   });
 });
+
+test("different catalog namespaces from the same source share one filter", () => {
+  const llama = { ...claude, id: "meta-llama/llama", name: "Meta: Llama" };
+  const meta = { ...claude, id: "meta/other", name: "Meta: Other" };
+  expect(modelSource(llama)).toEqual(modelSource(meta));
+  expect(filterModels([llama, meta], "", "all", "meta")).toEqual([llama, meta]);
+});

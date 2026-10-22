@@ -27,6 +27,13 @@ export function ProviderSettings() {
       </Group>
     );
   const connected = data.providerEnabled && !!data.credentialSource;
+
+  function openSetup() {
+    setMessage("");
+    settings.update.reset();
+    setSetup(true);
+  }
+
   return (
     <>
       <header className="catalog-heading">
@@ -34,13 +41,7 @@ export function ProviderSettings() {
           <h2>Your providers</h2>
           <p>Connect the services your models run through.</p>
         </div>
-        <Button
-          onClick={() => {
-            setSetup(true);
-            setMessage("");
-          }}
-          disabled={setup}
-        >
+        <Button onClick={openSetup} disabled={setup}>
           <Plus />
           {connected ? "Manage connection" : "Add provider"}
         </Button>
@@ -69,33 +70,35 @@ export function ProviderSettings() {
             </span>
             <span>{data.models.length} models</span>
           </div>
-          <footer>
-            <Button variant="outline" size="sm" onClick={() => setSetup(true)}>
-              Edit connection
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={settings.update.isPending}
-              onClick={() => {
-                setMessage("");
-                settings.update.mutate(
-                  { apiKey: null, providerEnabled: false },
-                  {
-                    onSuccess: () => {
-                      setSetup(false);
-                      setMessage(
-                        "Provider removed. New turns are disabled until you connect a provider.",
-                      );
+          {!setup && (
+            <footer>
+              <Button variant="outline" size="sm" onClick={openSetup}>
+                Edit connection
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={settings.update.isPending}
+                onClick={() => {
+                  setMessage("");
+                  settings.update.mutate(
+                    { apiKey: null, providerEnabled: false },
+                    {
+                      onSuccess: () => {
+                        setSetup(false);
+                        setMessage(
+                          "Provider removed. New turns are disabled until you connect a provider.",
+                        );
+                      },
                     },
-                  },
-                );
-              }}
-            >
-              <Trash2 />
-              {settings.update.isPending ? "Removing…" : "Remove provider"}
-            </Button>
-          </footer>
+                  );
+                }}
+              >
+                <Trash2 />
+                {settings.update.isPending ? "Removing…" : "Remove provider"}
+              </Button>
+            </footer>
+          )}
           {data.credentialSource === "environment" && (
             <p className="provider-environment-note">
               Removing disconnects this provider. The environment key remains on
@@ -112,7 +115,7 @@ export function ProviderSettings() {
               Add a provider to start using models. Your conversations stay here
               when a provider is removed.
             </p>
-            <Button variant="outline" onClick={() => setSetup(true)}>
+            <Button variant="outline" onClick={openSetup}>
               <Plus />
               Add your first provider
             </Button>
@@ -120,7 +123,13 @@ export function ProviderSettings() {
         )
       )}
       {setup && (
-        <ProviderConnection settings={data} onClose={() => setSetup(false)} />
+        <ProviderConnection
+          settings={data}
+          onClose={() => {
+            setSetup(false);
+            setMessage("");
+          }}
+        />
       )}
       {(message || settings.update.error) && (
         <p role="status" className="catalog-feedback">

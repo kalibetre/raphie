@@ -11,7 +11,7 @@ export function modelSource(model: LibraryModel) {
     : ({ openai: "OpenAI", anthropic: "Anthropic", openrouter: "OpenRouter" }[
         namespace
       ] ?? namespace);
-  return { id: namespace, label };
+  return { id: label.toLowerCase().replace(/[^a-z0-9]/g, ""), label };
 }
 
 export function filterModels(
