@@ -557,3 +557,54 @@
     overflow-wrap: anywhere;
   }
 }
+
+@layer components {
+  .memory-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .memory-search {
+    display: grid;
+    gap: 10px;
+  }
+  .memory-search .settings-actions input {
+    flex: 1 1 180px;
+  }
+  .memory-evidence {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 0;
+  }
+  .memory-evidence .memory-evidence-content {
+    color: var(--foreground);
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  .memory-evidence code,
+  .memory-source {
+    overflow-wrap: anywhere;
+    font-size: 11px;
+  }
+  .memory-evidence form {
+    display: grid;
+    gap: 10px;
+  }
+  .memory-evidence textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--background);
+    color: var(--foreground);
+    resize: vertical;
+  }
+  .memory-evidence textarea:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}

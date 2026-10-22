@@ -24,6 +24,7 @@ export const Route = createFileRoute("/")({
           ? "settings"
           : undefined,
     section:
+      search.section === "memory" ||
       search.section === "models" ||
       search.section === "providers" ||
       search.section === "telemetry" ||

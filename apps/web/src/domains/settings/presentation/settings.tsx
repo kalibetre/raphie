@@ -22,6 +22,7 @@ import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { ConnectionSettings } from "./connection-settings";
+import { MemorySettings } from "./memory-settings";
 import { ModelSettings } from "./model-settings";
 import { ProviderSettings } from "./provider-settings";
 import { Group, Row } from "./settings-group";
@@ -31,6 +32,7 @@ export const sections = [
   { id: "connection", label: "Backend", icon: Server },
   { id: "providers", label: "Providers", icon: KeyRound },
   { id: "models", label: "Models", icon: Brain },
+  { id: "memory", label: "Memory", icon: Brain },
   { id: "telemetry", label: "Telemetry", icon: Radio },
   { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "plugins", label: "Plugins", icon: Puzzle },
@@ -58,6 +60,8 @@ export function Settings({
           <ProviderSettings />
         ) : section === "models" ? (
           <ModelSettings />
+        ) : section === "memory" ? (
+          <MemorySettings />
         ) : section === "telemetry" ? (
           <TelemetrySettings />
         ) : section === "connection" ? (
