@@ -2,6 +2,8 @@
 
 A personal assistant with durable conversations, explicit tool approvals, and an inspectable activity history.
 
+Browse the [documentation](docs/README.md) for feature guides, operations and architecture.
+
 ## Run locally
 
 Requires Bun 1.4.2 (pinned in `.bun-version` and `packageManager`).
@@ -109,6 +111,18 @@ credential store or running runtime.
 Provider testing uses [OpenRouter's key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key)
 without generating a model response. Additional providers and authenticated remote
 backend connections are not available yet.
+
+## Memory
+
+Built-in memory is enabled by default and stores selected facts and experiences
+in `.data/memory.sqlite`. The agent uses explicit tools to retain and search
+source-linked evidence across sessions, then reasons over the results. Settings →
+Memory controls the backend and scope and lets you inspect, correct or forget
+built-in evidence. Saved disabled settings are preserved. Hindsight is supported
+through a connector; Honcho and Obsidian/Markdown are planned.
+
+See [how memory works](docs/memory.md) for retrieval behavior, model-dependent
+retention, storage/privacy, recovery and current limitations.
 
 ## Operational telemetry
 

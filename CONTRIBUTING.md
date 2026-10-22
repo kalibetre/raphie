@@ -90,6 +90,17 @@ Keep credentials in private configuration, load them through Varlock, and
 never print their values. Use `bun --bun run varlock load --agent` for masked
 validation. Preserve `.data/`, including its private legacy archive, during cleanup.
 
+## Feature documentation
+
+Keep [the documentation index](docs/README.md) and feature guides current in the
+same change that changes product behavior. Update defaults, Settings controls,
+storage, API/tool contracts, recovery behavior, provider differences and relevant
+verification instructions. Describe model-dependent behavior accurately and keep
+planned capabilities visibly separate from delivered ones. For memory changes,
+update [the memory guide](docs/memory.md); update the architecture guide and roadmap
+when the architectural boundary or delivery status changes. Link new feature
+guides from the docs index and the relevant root README section.
+
 ## Visual architecture documentation
 
 `docs/architecture.html` is the standalone visual field guide. Keep its current
