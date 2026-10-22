@@ -10,6 +10,7 @@ import {
   redact,
 } from "../domains/activity/infrastructure/pi-activity-journal.ts";
 import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
+import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
 import {
   createDiscordBridge,
@@ -63,6 +64,15 @@ const program = Effect.gen(function* () {
         defaultModel: process.env.RAPHIE_MODEL ?? "anthropic/claude-haiku-5.5",
       }),
     async (settings) => settings.close(),
+  );
+  const memory = yield* resource(
+    async () =>
+      new RuntimeMemory(
+        resolve(directory, "memory.sqlite"),
+        settings,
+        settings.connectionGate,
+      ),
+    async (memory) => memory.close(),
   );
   const telemetry = switchableTelemetry(
     exporter,
@@ -126,6 +136,7 @@ const program = Effect.gen(function* () {
           models,
           model: settings.model,
           modelConnectionGate: settings.connectionGate,
+          memory,
           mcpError,
           mcp: mcp
             ? {
@@ -144,7 +155,7 @@ const program = Effect.gen(function* () {
   settings.onChange = () => {
     app.chats.model = settings.model;
   };
-  settings.isBusy = async () =>
+  memory.isBusy = settings.isBusy = async () =>
     (await app.chats.state()).turns.some((turn) => turn.status === "pending");
   const stop = yield* Effect.acquireRelease(
     Effect.sync(() => new AbortController()),
@@ -194,6 +205,7 @@ const program = Effect.gen(function* () {
         discordConfigured: !!discord,
         diagnostics: collector.traces,
         settings,
+        memory,
       }),
     (http) => http.close(),
   );

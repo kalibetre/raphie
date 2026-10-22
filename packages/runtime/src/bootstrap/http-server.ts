@@ -10,6 +10,8 @@ import { conversationRoutes } from "../domains/conversations/presentation/http/r
 import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
 import { noTraces } from "../domains/diagnostics/application/trace-reader.ts";
 import { diagnosticsRoutes } from "../domains/diagnostics/presentation/http/routes.ts";
+import type { MemoryService } from "../domains/memory/application/ports.ts";
+import { memoryRoutes } from "../domains/memory/presentation/http/routes.ts";
 import type { SettingsService } from "../domains/settings/application/ports.ts";
 import { settingsRoutes } from "../domains/settings/presentation/http/routes.ts";
 import { clientRoutes } from "../infrastructure/http/client-routes.ts";
@@ -31,6 +33,7 @@ export async function startServer(
     webhook?: (request: Request) => Promise<Response>;
     diagnostics?: TraceReader;
     settings?: SettingsService;
+    memory?: MemoryService;
   } = {},
 ) {
   const app = new Hono();
@@ -100,6 +103,7 @@ export async function startServer(
       web: options.webOrigin ?? "http://127.0.0.1:4320",
     }),
   );
+  if (options.memory) app.route("/api/memory", memoryRoutes(options.memory));
   if (options.settings)
     app.route("/api/settings", settingsRoutes(options.settings));
   app.get("/api/chats", async (c) => c.json(await snapshot(runtime)));

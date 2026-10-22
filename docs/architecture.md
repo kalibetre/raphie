@@ -40,6 +40,21 @@ in a dedicated SQLite store behind a Settings application port; credentials neve
 enter conversation documents or read responses. Provider keys are encrypted at rest
 with an OS credential-store master; see [credential storage](provider-credential-storage.md).
 
+Memory owns opt-in cross-session evidence through a Memory application port.
+`memory.sqlite` contains configuration metadata and built-in evidence with FTS5
+lexical retrieval; connection keys use the existing OS-backed Settings cipher.
+Settings → Memory chooses one backend and owner/assistant scope. Pi memory tools
+supply stable source IDs from the current session and turn. Corrections and
+logical forgetting update current local evidence; replay receipts prevent an old
+retain from restoring it. The agent synthesizes local reflections from evidence;
+background local consolidation is not implemented. The Hindsight connector maps
+synchronous retain, scoped recall and native reflection, with source correction
+and deletion still managed externally. Honcho and Markdown remain planned.
+Configuration changes share the admission gate and wait until pending turns
+finish. Interrupted tools are not automatically repeated, and backend switching
+never migrates data or silently falls back. See the [memory roadmap](roadmap.md#next-phase-lightweight-execution-memory-and-vm-escalation)
+for remaining capabilities and limits.
+
 Domain policies depend on value types, not React, Hono, Node, or Pi Durable.
 Application ports describe commands/read models. Outer adapters implement ports
 and apply policies inside durable transactions. Pi Durable definitions and task
