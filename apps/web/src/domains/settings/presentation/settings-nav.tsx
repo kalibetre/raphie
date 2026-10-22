@@ -21,8 +21,10 @@ type Entry =
       children: readonly { id: Section; label: string }[];
     };
 
+// Ordered by setup flow: connect a backend, add a provider, pick a model,
+// then shape the workspace; preferences last.
 const groups: readonly { label: string; entries: readonly Entry[] }[] = [
-  { label: "Preferences", entries: ["general", "plugins"] },
+  { label: "Setup", entries: ["connection", "providers", "models"] },
   {
     label: "Workspace",
     entries: [
@@ -34,12 +36,10 @@ const groups: readonly { label: string; entries: readonly Entry[] }[] = [
           { id: "memory-browse", label: "Browse" },
         ],
       },
+      "plugins",
     ],
   },
-  {
-    label: "Runtime",
-    entries: ["connection", "providers", "models", "telemetry"],
-  },
+  { label: "Preferences", entries: ["general", "telemetry"] },
 ];
 
 export function SettingsNav({

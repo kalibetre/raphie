@@ -31,13 +31,13 @@ import { Group, Row } from "./settings-group";
 import { TelemetrySettings } from "./telemetry-settings";
 
 export const sections = [
-  { id: "general", label: "General", icon: SlidersHorizontal },
-  { id: "plugins", label: "Plugins", icon: Puzzle },
-  { id: "memory", label: "Memory", icon: BookOpen },
-  { id: "memory-browse", label: "Browse memory", icon: Library },
   { id: "connection", label: "Backend", icon: Server },
   { id: "providers", label: "Providers", icon: KeyRound },
   { id: "models", label: "Models", icon: Brain },
+  { id: "memory", label: "Memory", icon: BookOpen },
+  { id: "memory-browse", label: "Browse memory", icon: Library },
+  { id: "plugins", label: "Plugins", icon: Puzzle },
+  { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "telemetry", label: "Telemetry", icon: Radio },
 ] as const;
 
