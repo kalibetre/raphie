@@ -29,6 +29,9 @@ export type MemoryEvidence = {
 
 export type MemoryRecall = { evidence: MemoryEvidence[] };
 
+/** Newest retained evidence first; next is an opaque pagination cursor. */
+export type MemoryPage = MemoryRecall & { next: string | null; total: number };
+
 export type MemoryReflection = MemoryRecall & {
   answer: string;
   mode: "model-assisted" | "provider";
@@ -37,6 +40,7 @@ export type MemoryReflection = MemoryRecall & {
 export type MemoryStatus = {
   configuration: MemoryConfiguration;
   capabilities: {
+    browse: boolean;
     retain: boolean;
     recall: boolean;
     reflect: "model-assisted" | "provider";

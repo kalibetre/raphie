@@ -114,6 +114,7 @@ export type {
   SaveMemoryConfiguration,
   MemoryEvidence,
   MemoryRecall,
+  MemoryPage,
   MemoryReflection,
   MemoryStatus,
 } from "./memory/views.ts";

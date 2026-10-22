@@ -95,6 +95,7 @@ export class RuntimeMemory implements MemoryService {
     return {
       configuration: { ...configuration, hasCredential: credential !== null },
       capabilities: {
+        browse: !external,
         retain: true,
         recall: true,
         reflect: external ? "provider" : "model-assisted",
@@ -209,6 +210,16 @@ export class RuntimeMemory implements MemoryService {
       .safeParse(input);
     if (!parsed.success) throw new InputError("Invalid memory evidence.");
     return this.run((backend, scope) => backend.retain(scope, parsed.data));
+  }
+
+  async browse(after?: string) {
+    return this.run((backend, scope) => {
+      if (!backend.browse)
+        throw new InputError(
+          "Browsing all memories is not supported by this backend. Use search or the provider’s interface.",
+        );
+      return backend.browse(scope, after);
+    });
   }
 
   async recall(query: string) {

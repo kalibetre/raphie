@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 
-import type { MemoryEvidence } from "@raphie/contracts";
+import type { MemoryEvidence, MemoryPage } from "@raphie/contracts";
+import { z } from "zod";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import type { MemoryBackend, RetainMemory } from "../application/ports.ts";
@@ -17,6 +18,7 @@ export class BuiltinMemory implements MemoryBackend {
       kind TEXT NOT NULL, source TEXT NOT NULL, eventTime INTEGER NOT NULL,
       revision INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(scope,id)
     );
+    CREATE INDEX IF NOT EXISTS memory_evidence_browse ON memory_evidence(scope,eventTime DESC,id DESC);
     CREATE VIRTUAL TABLE IF NOT EXISTS memory_search USING fts5(
       scope UNINDEXED, id UNINDEXED, content, tokenize='unicode61'
     );`);
@@ -49,6 +51,49 @@ export class BuiltinMemory implements MemoryBackend {
       this.db
         .query("INSERT INTO memory_search(scope,id,content) VALUES (?,?,?)")
         .run(scope, input.id, input.content);
+    })();
+  }
+
+  async browse(scope: string, after?: string): Promise<MemoryPage> {
+    let cursor: [number, string] | undefined;
+    if (after !== undefined) {
+      try {
+        if (after.length > 1024) throw new Error();
+        cursor = z
+          .tuple([
+            z.number().int().min(0).max(8.64e15),
+            z.string().min(1).max(256),
+          ])
+          .parse(JSON.parse(Buffer.from(after, "base64url").toString()));
+      } catch {
+        throw new InputError("Invalid memory page cursor.");
+      }
+    }
+    return this.db.transaction(() => {
+      const total = this.db
+        .query<{ total: number }, [string]>(
+          "SELECT COUNT(*) AS total FROM memory_evidence WHERE scope=?",
+        )
+        .get(scope)!.total;
+      const rows = this.db
+        .query<MemoryEvidence, [string, ...(number | string)[]]>(`
+        SELECT id,content,kind,source,eventTime,revision FROM memory_evidence
+        WHERE scope=? ${cursor ? "AND (eventTime,id)<(?,?)" : ""}
+        ORDER BY eventTime DESC,id DESC LIMIT 26
+      `)
+        .all(scope, ...(cursor ?? []));
+      const evidence = rows.slice(0, 25);
+      const last = evidence.at(-1);
+      return {
+        evidence,
+        total,
+        next:
+          rows.length > 25 && last
+            ? Buffer.from(JSON.stringify([last.eventTime, last.id])).toString(
+                "base64url",
+              )
+            : null,
+      };
     })();
   }
 

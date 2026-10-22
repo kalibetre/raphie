@@ -109,6 +109,63 @@ test("built-in evidence persists, isolates scope and never resurrects corrected 
   }
 });
 
+test("browsing pages through every scoped memory in stable order, including after insertions", async () => {
+  const f = await fixture();
+  try {
+    expect(await f.memory.browse()).toEqual({
+      evidence: [],
+      total: 0,
+      next: null,
+    });
+    const records = Array.from({ length: 57 }, (_, index) => ({
+      ...evidence,
+      id: `record-${String(index).padStart(3, "0")}`,
+      eventTime: 1000 + Math.floor(index / 3),
+    }));
+    for (const record of records) await f.memory.retain(record);
+    const first = await f.memory.browse();
+    expect(first.total).toBe(57);
+    expect(first.evidence).toHaveLength(25);
+    expect(first.next).not.toBeNull();
+    await f.memory.retain({ ...evidence, id: "newest", eventTime: 99999 });
+    const second = await f.memory.browse(first.next!);
+    const third = await f.memory.browse(second.next!);
+    expect(second.total).toBe(58);
+    expect(second.evidence).toHaveLength(25);
+    expect(third.evidence).toHaveLength(7);
+    expect(third.next).toBeNull();
+    const ids = [...first.evidence, ...second.evidence, ...third.evidence].map(
+      (item) => item.id,
+    );
+    expect(ids).toEqual(records.toReversed().map((item) => item.id));
+    await f.memory.revise("newest", "Corrected evidence");
+    expect((await f.memory.browse()).evidence[0]?.content).toBe(
+      "Corrected evidence",
+    );
+    await f.memory.forget("newest");
+    expect((await f.memory.browse()).total).toBe(57);
+    await f.memory.configure({ ...builtin, scope: "another" });
+    expect((await f.memory.browse()).total).toBe(0);
+    await f.memory.retain({ ...evidence, id: "other-scope" });
+    expect((await f.memory.browse()).evidence.map((item) => item.id)).toEqual([
+      "other-scope",
+    ]);
+    await f.memory.configure(builtin);
+    expect((await f.memory.browse()).total).toBe(57);
+    for (const cursor of [
+      "not-json",
+      Buffer.from("[12]").toString("base64url"),
+      Buffer.from('[-1,"id"]').toString("base64url"),
+      "a".repeat(1025),
+    ])
+      expect(f.memory.browse(cursor)).rejects.toThrow(
+        "Invalid memory page cursor",
+      );
+  } finally {
+    await f.close();
+  }
+});
+
 test("memory configuration protects credentials, destination changes, and busy turns", async () => {
   const f = await fixture();
   try {
@@ -200,6 +257,8 @@ test("Hindsight uses synchronous, scoped API calls and never follows credential 
       bankId: "private-bank",
       apiKey: "synthetic-memory-key",
     });
+    expect(f.memory.read().capabilities.browse).toBe(false);
+    expect(f.memory.browse()).rejects.toThrow("not supported");
     await f.memory.test();
     await f.memory.retain(evidence);
     expect(calls.at(-1)?.body).toMatchObject({
@@ -324,6 +383,13 @@ test("memory HTTP endpoints share local access protection and expose no key", as
     expect(denied.status).toBe(403);
     await f.memory.configure(builtin);
     await f.memory.retain(evidence);
+    const page = await fetch(`${url}/evidence`);
+    expect(await page.json()).toEqual({
+      evidence: [{ ...evidence, revision: 1 }],
+      total: 1,
+      next: null,
+    });
+    expect((await fetch(`${url}/evidence?after=invalid`)).status).toBe(400);
     const read = await fetch(url);
     expect(read.status).toBe(200);
     expect(await read.json()).toMatchObject({

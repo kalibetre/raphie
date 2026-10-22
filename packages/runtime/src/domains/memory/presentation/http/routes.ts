@@ -13,6 +13,9 @@ export function memoryRoutes(memory: MemoryService) {
     .strict();
   return new Hono()
     .get("/", (c) => c.json(memory.read()))
+    .get("/evidence", async (c) =>
+      c.json(await memory.browse(c.req.query("after"))),
+    )
     .post(
       "/",
       limitBody(8192),

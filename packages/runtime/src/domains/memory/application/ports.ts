@@ -1,5 +1,6 @@
 import type {
   MemoryEvidence,
+  MemoryPage,
   MemoryRecall,
   MemoryReflection,
   MemoryStatus,
@@ -10,6 +11,7 @@ export type RetainMemory = Omit<MemoryEvidence, "revision">;
 
 /** Scope is supplied by the runtime configuration, never by a model/tool caller. */
 export interface MemoryBackend {
+  browse?(scope: string, after?: string): Promise<MemoryPage>;
   retain(scope: string, input: RetainMemory): Promise<void>;
   recall(scope: string, query: string): Promise<MemoryRecall>;
   revise(scope: string, id: string, content: string): Promise<void>;
@@ -19,6 +21,7 @@ export interface MemoryBackend {
 }
 
 export interface MemoryService {
+  browse(after?: string): Promise<MemoryPage>;
   read(): MemoryStatus;
   configure(input: SaveMemoryConfiguration): Promise<MemoryStatus>;
   test(): Promise<void>;
