@@ -58,6 +58,10 @@ test("backend settings persist model, credentials and telemetry without exposing
     );
     const piHaiku = models.getModel("openrouter", haiku.id)!;
     assert.equal(haiku.contextWindow, piHaiku.contextWindow);
+    assert.equal(haiku.provider, "openrouter");
+    assert.equal(haiku.maxOutputTokens, piHaiku.maxTokens);
+    assert.equal(haiku.reasoning, piHaiku.reasoning);
+    assert.deepEqual(haiku.inputModalities, piHaiku.input);
     assert.equal(haiku.pricing.input, piHaiku.cost.input);
     assert.equal(haiku.pricing.output, piHaiku.cost.output);
     assert.equal("modelCatalog" in listed, false);

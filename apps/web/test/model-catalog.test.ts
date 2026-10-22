@@ -13,8 +13,24 @@ const settings: RuntimeSettings = {
   modelId: "anthropic/haiku",
   providers: [{ id: "openrouter", name: "OpenRouter" }],
   models: [
-    { id: "anthropic/haiku", name: "Claude Haiku", contextWindow: 100 },
-    { id: "openai/gpt", name: "GPT", contextWindow: 200 },
+    {
+      id: "anthropic/haiku",
+      name: "Claude Haiku",
+      provider: "openrouter",
+      contextWindow: 100,
+      maxOutputTokens: 50,
+      reasoning: false,
+      inputModalities: ["text"],
+    },
+    {
+      id: "openai/gpt",
+      name: "GPT",
+      provider: "openrouter",
+      contextWindow: 200,
+      maxOutputTokens: 50,
+      reasoning: true,
+      inputModalities: ["text"],
+    },
   ],
 };
 

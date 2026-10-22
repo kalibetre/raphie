@@ -86,10 +86,12 @@ export class BackendSettings implements SettingsService {
       .map((m) => ({
         id: m.id,
         name: m.name,
+        provider: m.provider,
         contextWindow: m.contextWindow,
-        ...(m.cost.input || m.cost.output
-          ? { pricing: { input: m.cost.input, output: m.cost.output } }
-          : {}),
+        maxOutputTokens: m.maxTokens,
+        reasoning: m.reasoning,
+        inputModalities: m.input,
+        pricing: { input: m.cost.input, output: m.cost.output },
       }));
     return {
       telemetryEnabled: this.state.telemetryEnabled,

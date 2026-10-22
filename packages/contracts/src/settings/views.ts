@@ -8,7 +8,11 @@ export type RuntimeSettings = {
   models: {
     id: string;
     name: string;
+    provider: string;
     contextWindow: number;
+    maxOutputTokens: number;
+    reasoning: boolean;
+    inputModalities: string[];
     /** USD per million tokens, from Pi's model catalog when known. */
     pricing?: { input: number; output: number };
   }[];
