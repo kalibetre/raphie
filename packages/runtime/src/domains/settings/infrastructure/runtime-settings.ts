@@ -50,6 +50,8 @@ type LegacyStored = {
   apiKey: string | null;
 };
 
+type SavedSettings = Stored | PreviousStored | EncryptedStored | LegacyStored;
+
 type Options = {
   models: MutableModels;
   defaultModel: string;
@@ -102,13 +104,7 @@ export class BackendSettings implements SettingsService {
       const row = db
         .query<{ value: string }, []>("SELECT value FROM settings WHERE id = 1")
         .get();
-      const saved = row
-        ? (JSON.parse(row.value) as
-            | Stored
-            | PreviousStored
-            | EncryptedStored
-            | LegacyStored)
-        : undefined;
+      const saved = row ? (JSON.parse(row.value) as SavedSettings) : undefined;
       if (saved && "version" in saved && ![2, 3, 4].includes(saved.version))
         throw new Error();
       if (
@@ -125,48 +121,20 @@ export class BackendSettings implements SettingsService {
           ? saved.keyId
           : undefined,
       );
-      const connections =
-        saved && "version" in saved
-          ? saved.version === 4
-            ? saved.connections.map(({ credential, ...connection }) => ({
-                ...connection,
-                apiKey: cipher!.decrypt(
-                  credential,
-                  connection.id,
-                  connection.provider,
-                ),
-              }))
-            : saved.connections
-          : saved?.apiKey
-            ? [
-                {
-                  id: "openrouter",
-                  provider: "openrouter" as const,
-                  name: "OpenRouter",
-                  apiKey: saved.apiKey,
-                  enabled: saved.providerEnabled,
-                },
-              ]
-            : [];
+      const connections = BackendSettings.decodeConnections(saved, cipher);
       const state: Stored = {
         version: 3,
         telemetryEnabled: saved?.telemetryEnabled ?? true,
         modelId: saved?.modelId ?? options.defaultModel,
         connectionId:
           saved && "version" in saved ? saved.connectionId : "openrouter",
-        // Keep saved credentials and identities; discard old environment-only entries.
-        connections: connections
-          .filter(
-            (c) =>
-              !(saved && "version" in saved && saved.version === 2) || c.apiKey,
-          )
-          .map((c) => ({
-            id: c.id,
-            provider: c.provider,
-            name: c.name,
-            apiKey: c.apiKey,
-            enabled: c.enabled,
-          })),
+        connections: connections.map((c) => ({
+          id: c.id,
+          provider: c.provider,
+          name: c.name,
+          apiKey: c.apiKey,
+          enabled: c.enabled,
+        })),
       };
       db.query(
         "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
@@ -183,6 +151,42 @@ export class BackendSettings implements SettingsService {
         "Settings storage could not be opened or migrated safely. Stop other runtimes using this data directory, check disk access and free space, then restart. Saved connections were not discarded.",
         503,
       );
+    }
+  }
+
+  private static decodeConnections(
+    saved: SavedSettings | undefined,
+    cipher: CredentialCipher,
+  ): StoredConnection[] {
+    if (!saved) return [];
+    if (!("version" in saved)) {
+      if (!saved.apiKey) return [];
+      return [
+        {
+          id: "openrouter",
+          provider: "openrouter",
+          name: "OpenRouter",
+          apiKey: saved.apiKey,
+          enabled: saved.providerEnabled,
+        },
+      ];
+    }
+
+    switch (saved.version) {
+      case 2:
+        // Discard old environment-only entries, preserving saved identities.
+        return saved.connections.filter((connection) => connection.apiKey);
+      case 3:
+        return saved.connections;
+      case 4:
+        return saved.connections.map(({ credential, ...connection }) => ({
+          ...connection,
+          apiKey: cipher.decrypt(
+            credential,
+            connection.id,
+            connection.provider,
+          ),
+        }));
     }
   }
 
