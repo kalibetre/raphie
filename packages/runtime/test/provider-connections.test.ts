@@ -179,7 +179,7 @@ test("two connections to OpenRouter isolate credentials, session choices, edits 
   }
 });
 
-test("legacy connections keep session identity and removed environment connections stay removed after restart", async () => {
+test("legacy saved connections keep session identity and removed connections stay removed after restart", async () => {
   const directory = await mkdtemp("/private/tmp/raphie-legacy-connections-");
   const path = `${directory}/settings.sqlite`;
   const db = new Database(path);
@@ -191,13 +191,12 @@ test("legacy connections keep session identity and removed environment connectio
       telemetryEnabled: false,
       providerEnabled: true,
       modelId: "history",
-      apiKey: null,
+      apiKey: "PRIVATE_LEGACY_SAVED",
     }),
   );
   db.close();
   const options = {
     defaultModel: "history",
-    environmentKey: "PRIVATE_ENVIRONMENT",
   };
   let settings = await BackendSettings.open(path, {
     ...options,
@@ -207,7 +206,7 @@ test("legacy connections keep session identity and removed environment connectio
     assert.equal(settings.model!.provider, "openrouter");
     assert.equal(
       (await settings.read()).connections[0]!.credentialSource,
-      "environment",
+      "saved",
     );
     await settings.removeConnection("openrouter");
     assert.equal(settings.model, undefined);
@@ -221,6 +220,95 @@ test("legacy connections keep session identity and removed environment connectio
     assert.equal(settings.telemetryEnabled, false);
   } finally {
     settings.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("old environment-only entries disappear while saved connections survive migration", async () => {
+  const directory = await mkdtemp("/private/tmp/raphie-env-migration-");
+  const path = `${directory}/settings.sqlite`;
+  const db = new Database(path);
+  db.exec(
+    "CREATE TABLE settings (id INTEGER PRIMARY KEY, value TEXT NOT NULL)",
+  );
+  db.query("INSERT INTO settings VALUES (1, ?)").run(
+    JSON.stringify({
+      version: 2,
+      telemetryEnabled: true,
+      modelId: "history",
+      connectionId: "openrouter",
+      connections: [
+        {
+          id: "openrouter",
+          provider: "openrouter",
+          name: "Environment",
+          apiKey: null,
+          environment: true,
+          enabled: true,
+        },
+        {
+          id: "openrouter_saved",
+          provider: "openrouter",
+          name: "Saved",
+          apiKey: "PRIVATE_SAVED",
+          environment: true,
+          enabled: true,
+        },
+      ],
+    }),
+  );
+  db.close();
+  let settings = await BackendSettings.open(path, {
+    models: fixtureModels([]),
+    defaultModel: "history",
+  });
+  try {
+    const data = await settings.read();
+    assert.deepEqual(
+      data.connections.map((c) => c.id),
+      ["openrouter_saved"],
+    );
+    assert.equal(data.connections[0]!.credentialSource, "saved");
+    assert.equal(settings.model, undefined);
+    await settings.update({ connectionId: "openrouter_saved" });
+    assert.equal(settings.key, "PRIVATE_SAVED");
+    settings.close();
+    settings = await BackendSettings.open(path, {
+      models: fixtureModels([]),
+      defaultModel: "history",
+    });
+    assert.equal((await settings.read()).connections.length, 1);
+    assert.equal(settings.model!.provider, "openrouter_saved");
+  } finally {
+    settings.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("an ambient OpenRouter key cannot configure a provider on a fresh installation", async () => {
+  const directory = await mkdtemp("/private/tmp/raphie-ignore-env-");
+  const modulePath = new URL(
+    "../src/domains/settings/infrastructure/runtime-settings.ts",
+    import.meta.url,
+  ).pathname;
+  const script = `
+    import { createModels } from '@earendil-works/pi-ai/models';
+    import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
+    import { BackendSettings } from ${JSON.stringify(modulePath)};
+    const models = createModels(); models.setProvider(openrouterProvider());
+    const settings = await BackendSettings.open(${JSON.stringify(`${directory}/settings.sqlite`)}, { models, defaultModel: 'anthropic/claude-haiku-5.5' });
+    if (settings.model || (await settings.read()).connections.length || await models.getAuth('openrouter')) throw new Error('Environment key configured a provider');
+    settings.close();
+  `;
+  try {
+    const child = Bun.spawnSync([process.execPath, "--eval", script], {
+      cwd: new URL("../../../", import.meta.url).pathname,
+      env: { ...process.env, OPENROUTER_API_KEY: "unused-fixture-key" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    assert.equal(child.exitCode, 0, child.stderr.toString());
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });

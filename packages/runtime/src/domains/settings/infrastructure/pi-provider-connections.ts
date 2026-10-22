@@ -8,7 +8,6 @@ export type StoredConnection = {
   provider: "openrouter";
   name: string;
   apiKey: string | null;
-  environment: boolean;
   enabled: boolean;
 };
 
@@ -17,11 +16,9 @@ export class PiProviderConnections {
   readonly provider: Provider;
   private registered = new Set<string>();
   private models: MutableModels;
-  private environmentKey?: string;
 
-  constructor(models: MutableModels, environmentKey?: string) {
+  constructor(models: MutableModels) {
     this.models = models;
-    this.environmentKey = environmentKey;
     const provider = models.getProvider("openrouter") ?? openrouterProvider();
     this.provider = provider;
     this.registered.add(provider.id);
@@ -32,10 +29,7 @@ export class PiProviderConnections {
   }
 
   key(connection: StoredConnection) {
-    return (
-      connection.apiKey ??
-      (connection.environment ? this.environmentKey : undefined)
-    );
+    return connection.apiKey ?? undefined;
   }
 
   publish(connections: StoredConnection[]) {

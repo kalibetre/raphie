@@ -18,8 +18,9 @@ For a production bundle, run `bun run build`, then `bun run start`. This starts 
 Configuration is loaded through Varlock from the root `.env.schema` and private
 root `.env` / `.env.local` values. Use `bun --bun run varlock load --agent` to
 inspect masked configuration. New installations can provide the keys named in
-the schema through their environment or a private `.env.local` file. A model API
-key enables chat; MCP is optional. Bun's automatic dotenv loading is disabled.
+the schema through their environment or a private `.env.local` file. Configure
+model provider connections in **Settings → Providers**; model keys are not loaded
+from environment variables. MCP is optional. Bun's automatic dotenv loading is disabled.
 
 The product writes to root `.data/`. Discord is disabled by default; enable it
 with `RAPHIE_DISCORD_ENABLED=true` when the owner/channel settings are configured.
@@ -35,6 +36,12 @@ remains in Git. A private local archive, including the older prototype database,
 is stored at `.data/backups/research-20261021.tar.gz` and is ignored by Git. Its
 sessions were not merged into the active database. See the
 [cleanup record](docs/repository-cleanup.md).
+
+Provider connection names, API keys, model defaults, and telemetry preferences are
+stored in **`.data/settings.sqlite`** (or `DATA_DIRECTORY/settings.sqlite`). This
+backend file is restricted to the owner (`0600`); API keys are stored in plaintext
+on disk and are never returned to the browser. Removing a connection deletes its
+stored key.
 
 Back up SQLite with its backup API, or stop the runtime before copying the
 database and WAL files; copying only an active `.sqlite` file can miss recent writes.
@@ -79,11 +86,12 @@ in a browser cookie scoped to the web port; reconnecting reloads the workspace
 and clears the old backend's client cache. Only local HTTP backends are supported.
 
 Provider/model and telemetry preferences belong to the selected backend and
-persist in `.data/settings.sqlite`. The existing Varlock OpenRouter key and
-`RAPHIE_MODEL` supply initial defaults. A key saved through Settings takes
-precedence; removing it restores the environment key if present. Disconnecting
-disables new model turns even when an environment key exists. Active turns must
-finish before provider connections can change. Each session keeps its model across
+persist in `.data/settings.sqlite`. Provider keys come exclusively from connections
+saved in Settings → Providers. `OPENROUTER_API_KEY` is ignored for provider setup;
+removing a saved key never restores an environment key. Old environment-only
+connections are removed on startup; saved connections retain their identities.
+`RAPHIE_MODEL` supplies the initial model choice. Active turns must finish before
+provider connections can change. Each session keeps its model across
 default changes and restarts; a session model can change only while that session
 is idle. The composer picker supports search, model-family filters and local
 favorites. Choosing before the first message sets the new session’s model;

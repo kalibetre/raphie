@@ -248,13 +248,9 @@
     border-top: 1px solid var(--border);
     padding-top: 16px;
   }
-  .provider-environment-note,
   .catalog-feedback {
     font-size: 12px;
     color: var(--muted-foreground);
-  }
-  .provider-environment-note {
-    margin: 16px 0 0;
   }
   .provider-setup-heading {
     display: flex;

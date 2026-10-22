@@ -2,7 +2,7 @@ export type ProviderConnection = {
   id: string;
   provider: string;
   name: string;
-  credentialSource: "saved" | "environment";
+  credentialSource: "saved";
 };
 
 export type SaveProviderConnection = {
@@ -21,7 +21,7 @@ export type RuntimeSettings = {
   /** Pi connection identity used for the default model. */
   provider: string;
   providerEnabled: boolean;
-  credentialSource: "saved" | "environment" | null;
+  credentialSource: "saved" | null;
   modelId: string;
   providers: { id: string; name: string }[];
   connections: ProviderConnection[];

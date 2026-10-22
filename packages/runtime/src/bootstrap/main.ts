@@ -60,7 +60,6 @@ const program = Effect.gen(function* () {
     () =>
       BackendSettings.open(resolve(directory, "settings.sqlite"), {
         models,
-        environmentKey: process.env.OPENROUTER_API_KEY,
         defaultModel: process.env.RAPHIE_MODEL ?? "anthropic/claude-haiku-5.5",
       }),
     async (settings) => settings.close(),

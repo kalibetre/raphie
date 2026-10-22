@@ -20,7 +20,7 @@ import {
 } from "./pi-provider-connections.ts";
 
 type Stored = {
-  version: 2;
+  version: 3;
   telemetryEnabled: boolean;
   modelId: string;
   connectionId: string;
@@ -36,7 +36,6 @@ type LegacyStored = {
 
 type Options = {
   models: MutableModels;
-  environmentKey?: string;
   defaultModel: string;
   verifyKey?: (key: string) => Promise<void>;
 };
@@ -55,10 +54,7 @@ export class BackendSettings implements SettingsService {
     this.db = db;
     this.state = state;
     this.options = options;
-    this.providers = new PiProviderConnections(
-      options.models,
-      options.environmentKey,
-    );
+    this.providers = new PiProviderConnections(options.models);
     this.providers.publish(state.connections);
   }
 
@@ -76,26 +72,37 @@ export class BackendSettings implements SettingsService {
       const saved = row
         ? (JSON.parse(row.value) as Stored | LegacyStored)
         : undefined;
-      const state: Stored =
+      const connections =
         saved && "version" in saved
-          ? saved
-          : {
-              version: 2,
-              telemetryEnabled: saved?.telemetryEnabled ?? true,
-              modelId: saved?.modelId ?? options.defaultModel,
-              connectionId: "openrouter",
-              connections: [
+          ? saved.connections
+          : saved?.apiKey
+            ? [
                 {
                   id: "openrouter",
-                  provider: "openrouter",
+                  provider: "openrouter" as const,
                   name: "OpenRouter",
-                  apiKey: saved?.apiKey ?? null,
-                  environment: true,
-                  enabled: saved?.providerEnabled ?? true,
+                  apiKey: saved.apiKey,
+                  enabled: saved.providerEnabled,
                 },
-              ],
-            };
-      // Persist migration once, so removing an environment connection survives restarts.
+              ]
+            : [];
+      const state: Stored = {
+        version: 3,
+        telemetryEnabled: saved?.telemetryEnabled ?? true,
+        modelId: saved?.modelId ?? options.defaultModel,
+        connectionId:
+          saved && "version" in saved ? saved.connectionId : "openrouter",
+        // Keep saved credentials and identities; discard old environment-only entries.
+        connections: connections
+          .filter((c) => c.apiKey)
+          .map((c) => ({
+            id: c.id,
+            provider: c.provider,
+            name: c.name,
+            apiKey: c.apiKey,
+            enabled: c.enabled,
+          })),
+      };
       db.query(
         "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
       ).run(JSON.stringify(state));
@@ -156,18 +163,14 @@ export class BackendSettings implements SettingsService {
       telemetryEnabled: this.state.telemetryEnabled,
       provider: this.state.connectionId,
       providerEnabled: this.selectedConnection?.enabled ?? false,
-      credentialSource: this.key
-        ? this.selectedConnection?.apiKey
-          ? "saved"
-          : "environment"
-        : null,
+      credentialSource: this.key ? "saved" : null,
       modelId: this.state.modelId,
       providers: [{ id: "openrouter", name: "OpenRouter" }],
       connections: active.map((c) => ({
         id: c.id,
         provider: c.provider,
         name: c.name,
-        credentialSource: c.apiKey ? "saved" : "environment",
+        credentialSource: "saved" as const,
       })),
       models,
     };
@@ -215,6 +218,20 @@ export class BackendSettings implements SettingsService {
         )
       )
         throw new InputError("Choose a connected provider connection.");
+      const connections =
+        this.state.connections.some((c) => c.id === connectionId) ||
+        typeof input.apiKey !== "string"
+          ? this.state.connections
+          : [
+              ...this.state.connections,
+              {
+                id: connectionId,
+                provider: "openrouter" as const,
+                name: "OpenRouter",
+                apiKey: null,
+                enabled: true,
+              },
+            ];
       return this.persist(
         {
           ...this.state,
@@ -222,7 +239,7 @@ export class BackendSettings implements SettingsService {
           telemetryEnabled:
             input.telemetryEnabled ?? this.state.telemetryEnabled,
           modelId: input.modelId ?? this.state.modelId,
-          connections: this.state.connections.map((c) =>
+          connections: connections.map((c) =>
             c.id !== connectionId
               ? c
               : {
@@ -254,7 +271,6 @@ export class BackendSettings implements SettingsService {
         provider: "openrouter",
         name: input.name,
         apiKey: input.apiKey,
-        environment: false,
         enabled: true,
       };
       return this.persist({
@@ -282,9 +298,7 @@ export class BackendSettings implements SettingsService {
             : {
                 ...c,
                 name: input.name,
-                ...(input.apiKey
-                  ? { apiKey: input.apiKey, environment: false }
-                  : {}),
+                ...(input.apiKey ? { apiKey: input.apiKey } : {}),
               },
         ),
       });

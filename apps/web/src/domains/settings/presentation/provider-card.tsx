@@ -39,9 +39,7 @@ export function ProviderCard({
       <div className="provider-card-details">
         <span>
           <KeyRound size={14} />
-          {connection.credentialSource === "environment"
-            ? "Backend environment key"
-            : "Saved API key"}
+          Saved API key
         </span>
         <span>{modelCount} models</span>
       </div>
@@ -55,12 +53,6 @@ export function ProviderCard({
           Remove connection
         </Button>
       </footer>
-      {connection.credentialSource === "environment" && (
-        <p className="provider-environment-note">
-          Removing disconnects this connection. The environment key remains on
-          your backend.
-        </p>
-      )}
     </article>
   );
 }
