@@ -37,11 +37,14 @@ is stored at `.data/backups/research-20261021.tar.gz` and is ignored by Git. Its
 sessions were not merged into the active database. See the
 [cleanup record](docs/repository-cleanup.md).
 
-Provider connection names, API keys, model defaults, and telemetry preferences are
-stored in **`.data/settings.sqlite`** (or `DATA_DIRECTORY/settings.sqlite`). This
-backend file is restricted to the owner (`0600`); API keys are stored in plaintext
-on disk and are never returned to the browser. Removing a connection deletes its
-stored key.
+Provider connection names, model defaults, telemetry preferences and encrypted
+provider keys are stored in **`.data/settings.sqlite`** (or
+`DATA_DIRECTORY/settings.sqlite`), restricted to the owner (`0600`). Keys use
+AES-256-GCM with a random master held in the OS credential store, never alongside
+the ciphertext. Startup migrates existing plaintext keys while preserving connection
+IDs and fails closed if the OS store is unavailable. Keys are never returned to
+the browser. See [credential storage and recovery](docs/provider-credential-storage.md)
+for platform prerequisites, migration, backup handling and threat-model limits.
 
 Back up SQLite with its backup API, or stop the runtime before copying the
 database and WAL files; copying only an active `.sqlite` file can miss recent writes.
@@ -97,8 +100,10 @@ is idle. The composer picker supports search, model-family filters and local
 favorites. Choosing before the first message sets the new session’s model;
 choosing later updates only that session. Legacy sessions inherit their previously
 saved Pi model. Saved keys are never returned to the
-browser or written to session history; the private settings database is mode 0600
-and stores them in plaintext, so protect its backups like private configuration.
+browser or written to session history. The settings database contains encrypted
+keys; its OS-stored master is required for recovery. Old plaintext backups remain
+sensitive. Encryption does not isolate arbitrary same-user processes from the
+credential store or running runtime.
 Provider testing uses [OpenRouter's key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key)
 without generating a model response. Additional providers and authenticated remote
 backend connections are not available yet.

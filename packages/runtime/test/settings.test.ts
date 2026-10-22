@@ -13,6 +13,7 @@ import { redact } from "../src/domains/activity/infrastructure/pi-activity-journ
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
 import { noTelemetry } from "../src/shared/application/telemetry.ts";
+import { memoryCredentialKeyStore } from "./credential-store.ts";
 
 test("backend settings persist model, credentials and telemetry without exposing secrets and reject busy or invalid changes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-settings-"));
@@ -25,6 +26,7 @@ test("backend settings persist model, credentials and telemetry without exposing
     .map((m) => m.id);
   let verified = 0;
   const options = {
+    credentialKeyStore: memoryCredentialKeyStore(),
     models,
     defaultModel: ids[0]!,
     verifyKey: async (key: string) => {

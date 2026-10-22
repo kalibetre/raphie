@@ -10,6 +10,7 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { chatModel } from "./chat-model.ts";
+import { memoryCredentialKeyStore } from "./credential-store.ts";
 
 function fixtureModels(requests: string[]) {
   const { models } = chatModel();
@@ -33,6 +34,7 @@ test("two connections to OpenRouter isolate credentials, session choices, edits 
   const models = fixtureModels(requests);
   const path = `${directory}/settings.sqlite`;
   const options = {
+    credentialKeyStore: memoryCredentialKeyStore(),
     models,
     defaultModel: "history",
     verifyKey: async () => {},
@@ -196,6 +198,7 @@ test("legacy saved connections keep session identity and removed connections sta
   );
   db.close();
   const options = {
+    credentialKeyStore: memoryCredentialKeyStore(),
     defaultModel: "history",
   };
   let settings = await BackendSettings.open(path, {
@@ -258,7 +261,9 @@ test("old environment-only entries disappear while saved connections survive mig
     }),
   );
   db.close();
+  const credentialKeyStore = memoryCredentialKeyStore();
   let settings = await BackendSettings.open(path, {
+    credentialKeyStore,
     models: fixtureModels([]),
     defaultModel: "history",
   });
@@ -274,6 +279,7 @@ test("old environment-only entries disappear while saved connections survive mig
     assert.equal(settings.key, "PRIVATE_SAVED");
     settings.close();
     settings = await BackendSettings.open(path, {
+      credentialKeyStore,
       models: fixtureModels([]),
       defaultModel: "history",
     });
@@ -295,8 +301,9 @@ test("an ambient OpenRouter key cannot configure a provider on a fresh installat
     import { createModels } from '@earendil-works/pi-ai/models';
     import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
     import { BackendSettings } from ${JSON.stringify(modulePath)};
+    import { memoryCredentialKeyStore } from ${JSON.stringify(new URL("./credential-store.ts", import.meta.url).pathname)};
     const models = createModels(); models.setProvider(openrouterProvider());
-    const settings = await BackendSettings.open(${JSON.stringify(`${directory}/settings.sqlite`)}, { models, defaultModel: 'anthropic/claude-haiku-5.5' });
+    const settings = await BackendSettings.open(${JSON.stringify(`${directory}/settings.sqlite`)}, { models, credentialKeyStore: memoryCredentialKeyStore(), defaultModel: 'anthropic/claude-haiku-5.5' });
     if (settings.model || (await settings.read()).connections.length || await models.getAuth('openrouter')) throw new Error('Environment key configured a provider');
     settings.close();
   `;

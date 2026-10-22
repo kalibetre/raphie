@@ -15,6 +15,12 @@ import { ModelConnectionGate } from "../../../shared/infrastructure/model-connec
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { SettingsService } from "../application/ports.ts";
 import {
+  CredentialCipher,
+  osCredentialKeyStore,
+  type CredentialKeyStore,
+  type EncryptedCredential,
+} from "./credential-cipher.ts";
+import {
   PiProviderConnections,
   type StoredConnection,
 } from "./pi-provider-connections.ts";
@@ -27,6 +33,16 @@ type Stored = {
   connections: StoredConnection[];
 };
 
+type PreviousStored = Omit<Stored, "version"> & { version: 2 };
+
+type EncryptedStored = Omit<Stored, "version" | "connections"> & {
+  version: 4;
+  keyId: string;
+  connections: (Omit<StoredConnection, "apiKey"> & {
+    credential: EncryptedCredential | null;
+  })[];
+};
+
 type LegacyStored = {
   telemetryEnabled: boolean;
   providerEnabled: boolean;
@@ -34,10 +50,13 @@ type LegacyStored = {
   apiKey: string | null;
 };
 
+type SavedSettings = Stored | PreviousStored | EncryptedStored | LegacyStored;
+
 type Options = {
   models: MutableModels;
   defaultModel: string;
   verifyKey?: (key: string) => Promise<void>;
+  credentialKeyStore?: CredentialKeyStore;
 };
 
 /** Private credentials never enter Pi documents, session APIs or browser storage. */
@@ -46,12 +65,19 @@ export class BackendSettings implements SettingsService {
   private state: Stored;
   private options: Options;
   private providers: PiProviderConnections;
+  private cipher: CredentialCipher;
   readonly connectionGate = new ModelConnectionGate();
   onChange: () => void = () => {};
   isBusy: () => Promise<boolean> = async () => false;
 
-  private constructor(db: Database, state: Stored, options: Options) {
+  private constructor(
+    db: Database,
+    state: Stored,
+    options: Options,
+    cipher: CredentialCipher,
+  ) {
     this.db = db;
+    this.cipher = cipher;
     this.state = state;
     this.options = options;
     this.providers = new PiProviderConnections(options.models);
@@ -61,56 +87,120 @@ export class BackendSettings implements SettingsService {
   static async open(path: string, options: Options) {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const db = new Database(path, { strict: true });
+    let cipher: CredentialCipher | undefined;
     try {
       await chmod(path, 0o600);
       db.exec(
         "PRAGMA secure_delete = ON; CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id = 1), value TEXT NOT NULL)",
       );
+      // Drain/remove any historical WAL before rewriting. Fail if another reader prevents it.
+      const journal = db
+        .query<{ journal_mode: string }, []>("PRAGMA journal_mode = DELETE")
+        .get();
+      if (journal?.journal_mode !== "delete") throw new Error();
+      db.exec(
+        "PRAGMA temp_store = MEMORY; PRAGMA synchronous = FULL; BEGIN IMMEDIATE",
+      );
       const row = db
         .query<{ value: string }, []>("SELECT value FROM settings WHERE id = 1")
         .get();
-      const saved = row
-        ? (JSON.parse(row.value) as Stored | LegacyStored)
-        : undefined;
-      const connections =
-        saved && "version" in saved
-          ? saved.connections
-          : saved?.apiKey
-            ? [
-                {
-                  id: "openrouter",
-                  provider: "openrouter" as const,
-                  name: "OpenRouter",
-                  apiKey: saved.apiKey,
-                  enabled: saved.providerEnabled,
-                },
-              ]
-            : [];
+      const saved = row ? (JSON.parse(row.value) as SavedSettings) : undefined;
+      if (saved && "version" in saved && ![2, 3, 4].includes(saved.version))
+        throw new Error();
+      if (
+        saved &&
+        "version" in saved &&
+        saved.version === 4 &&
+        (typeof saved.keyId !== "string" ||
+          !/^[0-9a-f-]{36}$/.test(saved.keyId))
+      )
+        throw new Error();
+      cipher = await CredentialCipher.open(
+        options.credentialKeyStore ?? osCredentialKeyStore,
+        saved && "version" in saved && saved.version === 4
+          ? saved.keyId
+          : undefined,
+      );
+      const connections = BackendSettings.decodeConnections(saved, cipher);
       const state: Stored = {
         version: 3,
         telemetryEnabled: saved?.telemetryEnabled ?? true,
         modelId: saved?.modelId ?? options.defaultModel,
         connectionId:
           saved && "version" in saved ? saved.connectionId : "openrouter",
-        // Keep saved credentials and identities; discard old environment-only entries.
-        connections: connections
-          .filter((c) => c.apiKey)
-          .map((c) => ({
-            id: c.id,
-            provider: c.provider,
-            name: c.name,
-            apiKey: c.apiKey,
-            enabled: c.enabled,
-          })),
+        connections: connections.map((c) => ({
+          id: c.id,
+          provider: c.provider,
+          name: c.name,
+          apiKey: c.apiKey,
+          enabled: c.enabled,
+        })),
       };
       db.query(
         "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
-      ).run(JSON.stringify(state));
-      return new BackendSettings(db, state, options);
+      ).run(BackendSettings.encode(state, cipher));
+      db.exec("COMMIT");
+      // Repeated on every startup so a crash after COMMIT cannot skip remnant cleanup.
+      db.exec("VACUUM");
+      return new BackendSettings(db, state, options, cipher);
     } catch (error) {
+      cipher?.close();
       db.close();
-      throw error;
+      if (error instanceof InputError) throw error;
+      throw new InputError(
+        "Settings storage could not be opened or migrated safely. Stop other runtimes using this data directory, check disk access and free space, then restart. Saved connections were not discarded.",
+        503,
+      );
     }
+  }
+
+  private static decodeConnections(
+    saved: SavedSettings | undefined,
+    cipher: CredentialCipher,
+  ): StoredConnection[] {
+    if (!saved) return [];
+    if (!("version" in saved)) {
+      if (!saved.apiKey) return [];
+      return [
+        {
+          id: "openrouter",
+          provider: "openrouter",
+          name: "OpenRouter",
+          apiKey: saved.apiKey,
+          enabled: saved.providerEnabled,
+        },
+      ];
+    }
+
+    switch (saved.version) {
+      case 2:
+        // Discard old environment-only entries, preserving saved identities.
+        return saved.connections.filter((connection) => connection.apiKey);
+      case 3:
+        return saved.connections;
+      case 4:
+        return saved.connections.map(({ credential, ...connection }) => ({
+          ...connection,
+          apiKey: cipher.decrypt(
+            credential,
+            connection.id,
+            connection.provider,
+          ),
+        }));
+    }
+  }
+
+  private static encode(state: Stored, cipher: CredentialCipher) {
+    const saved: EncryptedStored = {
+      ...state,
+      version: 4,
+      keyId: cipher.keyId,
+      connections: state.connections.map(({ apiKey, ...connection }) => ({
+        ...connection,
+        credential: cipher.encrypt(apiKey, connection.id, connection.provider),
+      })),
+    };
+    return JSON.stringify(saved);
   }
 
   private get selectedConnection() {
@@ -177,11 +267,18 @@ export class BackendSettings implements SettingsService {
   }
 
   private persist(next: Stored, publishConnections = true) {
-    this.db
-      .query(
-        "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
-      )
-      .run(JSON.stringify(next));
+    try {
+      this.db
+        .query(
+          "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+        )
+        .run(BackendSettings.encode(next, this.cipher));
+    } catch {
+      throw new InputError(
+        "Settings could not be saved securely. Check disk access and free space; the previous settings remain active.",
+        503,
+      );
+    }
     this.state = next;
     if (publishConnections) this.providers.publish(next.connections);
     this.onChange();
@@ -355,5 +452,6 @@ export class BackendSettings implements SettingsService {
 
   close() {
     this.db.close();
+    this.cipher.close();
   }
 }
