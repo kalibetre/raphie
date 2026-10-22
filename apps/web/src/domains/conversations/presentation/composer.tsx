@@ -2,6 +2,7 @@ import type { ModelSelection } from "@raphie/contracts";
 import { ArrowUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import {
   readLocal,
   writeLocal,
@@ -49,7 +50,8 @@ export function Composer({
   const request = useRef<
     { text: string; id: string; modelKey: string } | undefined
   >(undefined);
-  const key = `raphie:draft:${conversationId ?? "new"}`;
+  const { workspace } = useBackend();
+  const key = workspace.draftKey(conversationId);
   useEffect(() => {
     setDraft(readLocal(key) ?? "");
     setError(undefined);

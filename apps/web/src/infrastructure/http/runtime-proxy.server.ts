@@ -26,6 +26,20 @@ export async function proxyRuntime(request: Request) {
       { status: 400 },
     );
   }
+  // Pin a workspace's requests to its selection, including reconnecting SSE.
+  // Another tab can change the shared cookie while this tab still has old state.
+  const expected =
+    request.headers.get("x-raphie-backend") ??
+    incoming.searchParams.get("_raphie_backend");
+  if (expected && expected !== base)
+    return Response.json(
+      {
+        error: "The backend selection changed. Reconnect to continue.",
+        code: "backend_changed",
+      },
+      { status: 409 },
+    );
+  incoming.searchParams.delete("_raphie_backend");
   const target = new URL(incoming.pathname + incoming.search, base);
   const headers = new Headers();
   for (const key of ["content-type", "x-raphie-client", "origin"]) {

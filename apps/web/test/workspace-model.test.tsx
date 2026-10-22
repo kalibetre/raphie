@@ -7,7 +7,7 @@ import type {
   SessionObservation,
   SessionSummary,
 } from "@raphie/contracts";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -16,6 +16,8 @@ import {
 } from "@tanstack/react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { BackendContext } from "../src/infrastructure/http/backend-context";
+import { BackendWorkspace } from "../src/infrastructure/http/backend-workspace";
 import { Workspace } from "../src/presentation/workspace/workspace";
 
 const modelA = { provider: "fixture", modelId: "fixture/model-a" };
@@ -46,9 +48,8 @@ async function renderWorkspace({
   defaultModel: ModelSelection | null;
   legacy?: boolean;
 }) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+  const workspace = new BackendWorkspace("http://127.0.0.1:4317");
+  const client = workspace.queries;
   client.setQueryData<RuntimeInfo>(["runtime-info"], {
     model: defaultModel,
     mcp: { connected: false, error: false, server: null, toolCount: 0 },
@@ -86,12 +87,14 @@ async function renderWorkspace({
   await router.load();
   try {
     return renderToStaticMarkup(
-      <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
+      <BackendContext.Provider value={{ workspace, connect: async () => {} }}>
+        <QueryClientProvider client={client}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </BackendContext.Provider>,
     );
   } finally {
-    client.clear();
+    workspace.dispose();
   }
 }
 

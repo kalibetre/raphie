@@ -5,7 +5,7 @@ import type {
 } from "@raphie/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "../../../infrastructure/http/api-client";
+import { useBackend } from "../../../infrastructure/http/backend-context";
 
 type Change =
   | { action: "add"; input: SaveProviderConnection }
@@ -13,6 +13,8 @@ type Change =
   | { action: "remove"; id: string };
 
 export function useProviderConnections() {
+  const { workspace } = useBackend();
+  const api = workspace.api;
   const client = useQueryClient();
   return useMutation({
     mutationKey: ["provider-connections"],

@@ -1,10 +1,13 @@
 import { useMutation } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 
-import { api, type Approval } from "../../../infrastructure/http/api-client";
+import { type Approval } from "../../../infrastructure/http/api-client";
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 
 export function ToolDecision({ approval }: { approval: Approval }) {
+  const { workspace } = useBackend();
+  const api = workspace.api;
   const decision = useMutation({
     mutationFn: (value: "approved" | "rejected") =>
       api<{ status: string }>(`/api/tool-approvals/${approval.id}`, {
