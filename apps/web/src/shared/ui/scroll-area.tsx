@@ -1,9 +1,13 @@
-import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
+import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area";
 import type { ComponentProps, Ref } from "react";
 
 import { cn } from "./utils";
 
-type ScrollAreaProps = ComponentProps<typeof ScrollAreaPrimitive.Root> & {
+type ScrollAreaProps = Omit<
+  ComponentProps<typeof ScrollAreaPrimitive.Root>,
+  "className"
+> & {
+  className?: string;
   viewportRef?: Ref<HTMLDivElement>;
   viewportLabel?: string;
   orientation?: "vertical" | "horizontal" | "both";
@@ -28,9 +32,9 @@ export function ScrollArea({
         ref={viewportRef}
         aria-label={viewportLabel}
         role={viewportLabel ? "group" : undefined}
-        className="scroll-area-viewport size-full rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="scroll-area-viewport size-full rounded-[inherit] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {children}
+        <ScrollAreaPrimitive.Content>{children}</ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
       {orientation !== "horizontal" && <ScrollBar />}
       {orientation !== "vertical" && <ScrollBar orientation="horizontal" />}
@@ -43,9 +47,11 @@ export function ScrollBar({
   className,
   orientation = "vertical",
   ...props
-}: ComponentProps<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>) {
+}: Omit<ComponentProps<typeof ScrollAreaPrimitive.Scrollbar>, "className"> & {
+  className?: string;
+}) {
   return (
-    <ScrollAreaPrimitive.ScrollAreaScrollbar
+    <ScrollAreaPrimitive.Scrollbar
       data-slot="scroll-area-scrollbar"
       orientation={orientation}
       className={cn(
@@ -57,10 +63,10 @@ export function ScrollBar({
       )}
       {...props}
     >
-      <ScrollAreaPrimitive.ScrollAreaThumb
+      <ScrollAreaPrimitive.Thumb
         data-slot="scroll-area-thumb"
         className="relative flex-1 rounded-full bg-border"
       />
-    </ScrollAreaPrimitive.ScrollAreaScrollbar>
+    </ScrollAreaPrimitive.Scrollbar>
   );
 }
