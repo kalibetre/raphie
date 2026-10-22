@@ -10,6 +10,11 @@ export function dependencyViolation(source, target) {
   const to = normalized(target);
   if (
     from.startsWith("apps/web/") &&
+    (to === "radix-ui" || to.startsWith("@radix-ui/"))
+  )
+    return "Web UI primitives must use Base UI, not Radix.";
+  if (
+    from.startsWith("apps/web/") &&
     (to.startsWith("packages/runtime/") ||
       to === "@raphie/runtime" ||
       to.startsWith("@raphie/runtime/"))

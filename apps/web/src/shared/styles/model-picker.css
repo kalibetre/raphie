@@ -30,7 +30,7 @@
     z-index: 60;
     display: flex;
     width: min(410px, calc(100vw - 24px));
-    max-height: min(440px, var(--radix-popover-content-available-height));
+    max-height: min(440px, var(--available-height));
     border: 1px solid var(--border);
     border-radius: 14px;
     background: var(--card);

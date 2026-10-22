@@ -83,19 +83,21 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
         }
       }}
     >
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          type="button"
-          className="composer-model-trigger focus-visible:ring-1"
-          disabled={disabled || saving}
-          aria-label={`Choose model: ${name}`}
-        >
-          <Sparkles size={13} />
-          <span>{name}</span>
-          <ChevronDown size={12} />
-        </Button>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            className="composer-model-trigger focus-visible:ring-1"
+            disabled={disabled || saving}
+            aria-label={`Choose model: ${name}`}
+          />
+        }
+      >
+        <Sparkles size={13} />
+        <span>{name}</span>
+        <ChevronDown size={12} />
       </PopoverTrigger>
       <PopoverContent
         className="model-picker-content p-0"
@@ -104,10 +106,7 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
         sideOffset={10}
         collisionPadding={12}
         aria-label="Model for this session"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          input.current?.focus();
-        }}
+        initialFocus={input}
         onKeyDown={(event) => {
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
           const choices = [
@@ -174,7 +173,13 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
               value={
                 filter === "favorites" || filter === "all" ? "all" : filter
               }
-              onValueChange={setFilter}
+              items={[
+                { value: "all", label: "All model families" },
+                ...families.map((family) => ({ value: family, label: family })),
+              ]}
+              onValueChange={(value) => {
+                if (value !== null) setFilter(value);
+              }}
             >
               <SelectTrigger
                 aria-label="Model family"

@@ -116,9 +116,12 @@ export function ProviderConnection({
           <>
             <label htmlFor={`${fieldId}-provider`}>Provider</label>
             <Select
+              items={providers.map((p) => ({ value: p.id, label: p.name }))}
               value={provider}
               disabled={busy}
-              onValueChange={setProvider}
+              onValueChange={(value) => {
+                if (value !== null) setProvider(value);
+              }}
             >
               <SelectTrigger id={`${fieldId}-provider`}>
                 <SelectValue />

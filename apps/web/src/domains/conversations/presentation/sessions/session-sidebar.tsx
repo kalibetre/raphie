@@ -160,18 +160,20 @@ function IconButton({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          className="icon-button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={badge ? `${label} (${badge} need attention)` : label}
-          aria-pressed={pressed}
-          onClick={onClick}
-        >
-          {children}
-          {badge && <span className="icon-badge">{badge}</span>}
-        </Button>
+      <TooltipTrigger
+        render={
+          <Button
+            className="icon-button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={badge ? `${label} (${badge} need attention)` : label}
+            aria-pressed={pressed}
+            onClick={onClick}
+          />
+        }
+      >
+        {children}
+        {badge && <span className="icon-badge">{badge}</span>}
       </TooltipTrigger>
       <TooltipContent side="top">{label}</TooltipContent>
     </Tooltip>

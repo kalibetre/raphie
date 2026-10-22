@@ -24,7 +24,7 @@ export function useComposerLayout(draft: string) {
   const revealCaret = useCallback(() => {
     const element = input.current;
     const viewport = element?.closest<HTMLElement>(
-      "[data-radix-scroll-area-viewport]",
+      '[data-slot="scroll-area-viewport"]',
     );
     if (!element || !viewport || document.activeElement !== element) return;
     // Measure wrapped text up to the selection, so edits in the middle stay visible too.

@@ -140,7 +140,7 @@ export function Workspace({
   if (view === "settings")
     title = sections.find((s) => s.id === section)?.label;
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delay={300}>
       <div
         style={
           {
