@@ -25,6 +25,7 @@ export const Route = createFileRoute("/")({
           : undefined,
     section:
       search.section === "models" ||
+      search.section === "providers" ||
       search.section === "telemetry" ||
       search.section === "connection" ||
       search.section === "general" ||

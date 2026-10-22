@@ -7,6 +7,7 @@ import {
   Server,
   Radio,
   Brain,
+  KeyRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -21,11 +22,13 @@ import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
 import { ConnectionSettings } from "./connection-settings";
 import { ModelSettings } from "./model-settings";
+import { ProviderSettings } from "./provider-settings";
 import { Group, Row } from "./settings-group";
 import { TelemetrySettings } from "./telemetry-settings";
 
 export const sections = [
   { id: "connection", label: "Backend", icon: Server },
+  { id: "providers", label: "Providers", icon: KeyRound },
   { id: "models", label: "Models", icon: Brain },
   { id: "telemetry", label: "Telemetry", icon: Radio },
   { id: "general", label: "General", icon: SlidersHorizontal },
@@ -49,8 +52,12 @@ export function Settings({
 }) {
   return (
     <ScrollArea className="settings-scroll" viewportLabel="Settings">
-      <section className="settings-page">
-        {section === "models" ? (
+      <section
+        className={`settings-page ${section === "models" ? "settings-page-wide" : ""}`}
+      >
+        {section === "providers" ? (
+          <ProviderSettings />
+        ) : section === "models" ? (
           <ModelSettings />
         ) : section === "telemetry" ? (
           <TelemetrySettings />
@@ -133,7 +140,7 @@ function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
       </Group>
       <Group
         title="Runtime"
-        note="Connection and model preferences are available in Backend and Models."
+        note="Connection and model preferences are available in Backend, Providers, and Models."
       >
         <Row title="Runtime" description="The selected local agent backend.">
           <span className="settings-value">

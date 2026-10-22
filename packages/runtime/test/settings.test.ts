@@ -101,6 +101,14 @@ test("backend settings persist model, credentials and telemetry without exposing
     await settings.update({ apiKey: null, providerEnabled: true });
     assert.equal(settings.key, "PRIVATE_ENV_KEY");
     assert.equal((await settings.read()).credentialSource, "environment");
+    // Removing a provider clears its saved key and keeps an environment fallback disabled.
+    await settings.update({ apiKey: "PRIVATE_REPLACEMENT_KEY" });
+    await settings.update({ apiKey: null, providerEnabled: false });
+    assert.equal(settings.model, undefined);
+    settings.close();
+    settings = await BackendSettings.open(path, options);
+    assert.equal(settings.key, "PRIVATE_ENV_KEY");
+    assert.equal((await settings.read()).providerEnabled, false);
   } finally {
     await http.close();
     await app.close();

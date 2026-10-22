@@ -10,7 +10,6 @@ import {
   SelectItem,
 } from "../../../shared/ui/select";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
-import { ProviderConnection } from "./provider-connection";
 import { Group } from "./settings-group";
 
 export function ModelSettings() {
@@ -42,7 +41,6 @@ export function ModelSettings() {
   );
   return (
     <>
-      <ProviderConnection settings={data} />
       <Group title="Model list">
         <div className="settings-form">
           <p>

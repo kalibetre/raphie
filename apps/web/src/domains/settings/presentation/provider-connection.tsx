@@ -1,4 +1,5 @@
 import type { RuntimeSettings } from "@raphie/contracts";
+import { X } from "lucide-react";
 import { useState } from "react";
 
 import { api } from "../../../infrastructure/http/api-client";
@@ -16,8 +17,10 @@ import { Group } from "./settings-group";
 
 export function ProviderConnection({
   settings,
+  onClose,
 }: {
   settings: RuntimeSettings;
+  onClose: () => void;
 }) {
   const { update } = useRuntimeSettings();
   const [key, setKey] = useState("");
@@ -25,10 +28,6 @@ export function ProviderConnection({
   const [testing, setTesting] = useState(false);
   const busy = testing || update.isPending;
   const configured = !!settings.credentialSource;
-  const source =
-    settings.credentialSource === "environment"
-      ? "environment key"
-      : "saved key";
 
   async function testConnection() {
     setTesting(true);
@@ -44,36 +43,44 @@ export function ProviderConnection({
     }
   }
 
-  function save(input: Parameters<typeof update.mutate>[0], success: string) {
-    setMessage("");
-    update.mutate(input, {
-      onSuccess: () => {
-        setKey("");
-        setMessage(success);
-      },
-    });
-  }
-
   return (
     <Group
-      title="Provider connection"
-      note="OpenRouter is the first supported model provider."
+      title="Connect a provider"
+      note="Choose a provider, then add its connection details."
     >
       <form
         className="settings-form"
         onSubmit={(event) => {
           event.preventDefault();
-          save(
+          setMessage("");
+          update.mutate(
             {
               provider: settings.provider,
               providerEnabled: true,
               ...(key ? { apiKey: key } : {}),
             },
-            "Provider connection saved.",
+            {
+              onSuccess: () => {
+                setKey("");
+                onClose();
+              },
+            },
           );
         }}
       >
-        <label htmlFor="model-provider">Provider</label>
+        <div className="provider-setup-heading">
+          <label htmlFor="model-provider">Provider</label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close provider setup"
+            disabled={busy}
+            onClick={onClose}
+          >
+            <X />
+          </Button>
+        </div>
         <Select value={settings.provider} disabled={busy}>
           <SelectTrigger id="model-provider" aria-label="Provider">
             <SelectValue />
@@ -86,11 +93,6 @@ export function ProviderConnection({
             ))}
           </SelectContent>
         </Select>
-        <p>
-          {settings.providerEnabled && configured
-            ? `Configured with ${source}.`
-            : "Disconnected."}
-        </p>
         <label htmlFor="provider-api-key">OpenRouter API key</label>
         <Input
           id="provider-api-key"
@@ -98,6 +100,7 @@ export function ProviderConnection({
           type="password"
           autoComplete="new-password"
           value={key}
+          disabled={busy}
           onChange={(event) => {
             setKey(event.target.value);
             setMessage("");
@@ -107,12 +110,18 @@ export function ProviderConnection({
             configured ? "Enter a replacement key" : "Enter an API key"
           }
           spellCheck={false}
+          aria-describedby="provider-key-help"
         />
-        <p>
-          Keys stay on the backend and are never returned here. Leave blank to
-          keep the configured key.
+        <p id="provider-key-help">
+          Your key stays on the backend.{" "}
+          {configured
+            ? "Leave blank to keep the configured key."
+            : "The connection is verified before it is saved."}
         </p>
         <div className="settings-actions">
+          <Button type="submit" disabled={busy || (!key && !configured)}>
+            {update.isPending ? "Connecting…" : "Connect provider"}
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -121,39 +130,14 @@ export function ProviderConnection({
           >
             {testing ? "Testing…" : "Test connection"}
           </Button>
-          <Button type="submit" disabled={busy || (!key && !configured)}>
-            {update.isPending ? "Saving…" : "Save connection"}
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancel
           </Button>
-          {settings.providerEnabled && configured && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() =>
-                save(
-                  { providerEnabled: false },
-                  "Provider disconnected. No new model turns will start.",
-                )
-              }
-            >
-              Disconnect
-            </Button>
-          )}
-          {settings.credentialSource === "saved" && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() =>
-                save(
-                  { apiKey: null },
-                  "Saved key removed. The backend’s environment key is used if configured.",
-                )
-              }
-            >
-              Remove saved key
-            </Button>
-          )}
         </div>
         {(message || update.error) && (
           <p role="status">{update.error?.message ?? message}</p>
