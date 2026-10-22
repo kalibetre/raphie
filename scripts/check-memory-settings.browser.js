@@ -1,5 +1,6 @@
 // Run in a page opened on Settings → Memory in dev:web:fixture.
-// Saves through the real UI and catches stale saved-state / dirty-form regressions.
+// Saves through the real UI and catches stale saved-state / dirty-form regressions,
+// then checks the saved scope from Settings → Memory → Browse memory.
 export async function checkMemorySettings() {
   if (!document.title.includes("fixture"))
     throw new Error("Use the disposable fixture workspace for this check.");
@@ -26,6 +27,10 @@ export async function checkMemorySettings() {
     [...document.querySelectorAll("button")].find(
       (item) => item.textContent.trim() === name,
     );
+  const open = async (section, ready) => {
+    button(section).click();
+    await waitFor(() => document.querySelector(ready), section);
+  };
   const fill = (value, selector = "#memory-scope") => {
     const input = document.querySelector(selector);
     Object.getOwnPropertyDescriptor(
@@ -51,12 +56,14 @@ export async function checkMemorySettings() {
     if (!enabled) toggle.click();
     fill(`browser_probe_${Date.now()}`);
     await save();
-    await waitFor(
-      () => document.querySelector("#memory-query"),
-      "evidence browser",
-    );
     if (!document.querySelector("#memory-scope").checkValidity())
       throw new Error("A valid scope was rejected by native form validation.");
+    button("Test saved connection").click();
+    await waitFor(
+      () => document.body.textContent.includes("Connection successful."),
+      "connection test",
+    );
+    await open("Browse memory", "#memory-query");
     await waitFor(
       () => document.body.textContent.includes("No memories saved yet"),
       "automatic empty-scope inventory",
@@ -66,11 +73,6 @@ export async function checkMemorySettings() {
       () => document.body.textContent.includes("0 matching memories"),
       "live search results without submitting",
     );
-    button("Test saved connection").click();
-    await waitFor(
-      () => document.body.textContent.includes("Connection successful."),
-      "connection test",
-    );
     return {
       save: "passed",
       savedBaseline: "passed",
@@ -79,6 +81,8 @@ export async function checkMemorySettings() {
       connection: "passed",
     };
   } finally {
+    if (!document.querySelector("#memory-scope"))
+      await open("Memory", "#memory-scope");
     fill(original);
     const current = document.querySelector(
       '[role="switch"][aria-label="Enable memory"]',

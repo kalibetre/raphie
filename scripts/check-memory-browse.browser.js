@@ -1,4 +1,4 @@
-// Run in Settings → Memory on a fresh dev:web:fixture backed by a runtime
+// Run in Settings → Memory → Browse memory on a fresh dev:web:fixture backed by a runtime
 // started with RAPHIE_FIXTURE_MEMORY_HISTORY=true. Uses only synthetic records.
 export async function checkMemoryBrowse() {
   if (!document.title.includes("fixture"))

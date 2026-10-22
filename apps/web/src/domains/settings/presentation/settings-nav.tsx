@@ -10,11 +10,13 @@ import {
 } from "../../../shared/ui/sidebar";
 import { type Section, sections } from "./settings";
 
+// Child items render indented under the item before them.
 const groups = [
-  { label: "Workspace", ids: ["memory"] },
-  { label: "Runtime", ids: ["connection", "providers", "models", "telemetry"] },
   { label: "Preferences", ids: ["general", "plugins"] },
+  { label: "Memory", ids: ["memory", "memory-browse"] },
+  { label: "Runtime", ids: ["connection", "providers", "models", "telemetry"] },
 ] as const;
+const children: readonly Section[] = ["memory-browse"];
 
 export function SettingsNav({
   section,
@@ -54,6 +56,7 @@ export function SettingsNav({
                   <SidebarMenuButton
                     key={id}
                     active={section === id}
+                    className={children.includes(id) ? "pl-8" : undefined}
                     onClick={() => onSelect(id)}
                   >
                     <Icon size={15} aria-hidden="true" /> {item.label}

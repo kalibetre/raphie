@@ -1,5 +1,5 @@
 import type { MemoryStatus } from "@raphie/contracts";
-import { BookOpen, Database, Network } from "lucide-react";
+import { BookOpen, Database, Library, Network } from "lucide-react";
 import { useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -40,6 +40,55 @@ export function MemorySettings() {
       status={memory.data}
       memory={memory}
     />
+  );
+}
+
+/** Settings → Memory → Browse memory: the saved evidence, apart from configuration. */
+export function MemoryBrowse() {
+  const memory = useMemory();
+  const status = memory.data;
+  if (!status)
+    return (
+      <Group title="Browse memory">
+        <div className="settings-form">
+          <p role="status">
+            {memory.error
+              ? "Memory is unavailable. This backend may need an update."
+              : "Loading memories…"}
+          </p>
+          <Button variant="outline" onClick={() => void memory.refetch()}>
+            Retry
+          </Button>
+        </div>
+      </Group>
+    );
+  return (
+    <>
+      <header className="catalog-heading">
+        <div>
+          <h2>Browse memory</h2>
+          <p>What Raphie remembers, with sources. Correct or forget entries.</p>
+        </div>
+        <Library size={22} aria-hidden="true" />
+      </header>
+      {status.configuration.enabled ? (
+        <MemoryEvidenceBrowser
+          key={JSON.stringify(status.configuration)}
+          canManage={status.capabilities.revise && status.capabilities.forget}
+          canBrowse={status.capabilities.browse}
+          liveSearch={status.configuration.provider === "builtin"}
+          scope={status.configuration.scope}
+        />
+      ) : (
+        <Group title="Memory is off">
+          <div className="settings-form">
+            <p>
+              Turn on memory in Settings → Memory to save and browse memories.
+            </p>
+          </div>
+        </Group>
+      )}
+    </>
   );
 }
 
@@ -85,15 +134,6 @@ function MemoryConfiguration({
         </div>
         <BookOpen size={22} aria-hidden="true" />
       </header>
-      {status.configuration.enabled && (
-        <MemoryEvidenceBrowser
-          key={JSON.stringify(status.configuration)}
-          canManage={status.capabilities.revise && status.capabilities.forget}
-          canBrowse={status.capabilities.browse}
-          liveSearch={status.configuration.provider === "builtin"}
-          scope={status.configuration.scope}
-        />
-      )}
       <Group
         title="Memory backend"
         note="One active backend. Switching preserves existing data; it does not copy or merge memories."
