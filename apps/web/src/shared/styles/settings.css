@@ -362,12 +362,10 @@
   .model-search svg {
     position: absolute;
     left: 12px;
-    top: 10px;
+    top: 50%;
+    transform: translateY(-50%);
     color: var(--muted-foreground);
     pointer-events: none;
-  }
-  .model-search input {
-    padding-left: 36px;
   }
   .model-results-summary {
     display: flex;

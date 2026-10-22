@@ -44,6 +44,7 @@ export function ModelFilters({
           <Input
             id="model-search"
             type="search"
+            className="pl-9"
             placeholder="Search by name or model ID…"
             value={search}
             onChange={(event) => {
