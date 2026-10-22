@@ -1,7 +1,8 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { Collapsible } from "@base-ui/react/collapsible";
 import { Dialog } from "@base-ui/react/dialog";
 import { ScrollArea } from "@base-ui/react/scroll-area";
-import { X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { type ComponentProps, useEffect, useState } from "react";
 
 import { cn } from "./utils";
@@ -125,6 +126,52 @@ export function SidebarMenuButton({
       data-active={active}
       aria-current={active ? "page" : undefined}
       className={cn("sidebar-menu-button", className)}
+      {...props}
+    />
+  );
+}
+
+/** A menu item that expands to show sub-items, like shadcn's collapsible nav. */
+export function SidebarMenuCollapsible({
+  label,
+  icon,
+  defaultOpen,
+  children,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Collapsible.Root defaultOpen={defaultOpen}>
+      <Collapsible.Trigger
+        data-slot="sidebar-menu-button"
+        className="sidebar-menu-button sidebar-menu-collapsible"
+      >
+        {icon} {label}
+        <ChevronRight
+          size={14}
+          aria-hidden="true"
+          className="sidebar-menu-chevron"
+        />
+      </Collapsible.Trigger>
+      <Collapsible.Panel>
+        <div data-slot="sidebar-menu-sub" className="sidebar-menu-sub">
+          {children}
+        </div>
+      </Collapsible.Panel>
+    </Collapsible.Root>
+  );
+}
+
+export function SidebarMenuSubButton({
+  className,
+  ...props
+}: ComponentProps<typeof SidebarMenuButton>) {
+  return (
+    <SidebarMenuButton
+      className={cn("sidebar-menu-sub-button", className)}
       {...props}
     />
   );

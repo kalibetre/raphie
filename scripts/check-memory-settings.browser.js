@@ -1,6 +1,6 @@
 // Run in a page opened on Settings → Memory in dev:web:fixture.
 // Saves through the real UI and catches stale saved-state / dirty-form regressions,
-// then checks the saved scope from Settings → Memory → Browse memory.
+// then checks the saved scope from Settings → Memory → Browse.
 export async function checkMemorySettings() {
   if (!document.title.includes("fixture"))
     throw new Error("Use the disposable fixture workspace for this check.");
@@ -63,7 +63,7 @@ export async function checkMemorySettings() {
       () => document.body.textContent.includes("Connection successful."),
       "connection test",
     );
-    await open("Browse memory", "#memory-query");
+    await open("Browse", "#memory-query");
     await waitFor(
       () => document.body.textContent.includes("No memories saved yet"),
       "automatic empty-scope inventory",
@@ -82,7 +82,7 @@ export async function checkMemorySettings() {
     };
   } finally {
     if (!document.querySelector("#memory-scope"))
-      await open("Memory", "#memory-scope");
+      await open("Configuration", "#memory-scope");
     fill(original);
     const current = document.querySelector(
       '[role="switch"][aria-label="Enable memory"]',

@@ -82,6 +82,25 @@
   .sidebar-menu-button svg {
     flex-shrink: 0;
   }
+  .sidebar-menu-chevron {
+    margin-left: auto;
+    transition: transform 0.15s;
+  }
+  .sidebar-menu-collapsible[data-panel-open] .sidebar-menu-chevron {
+    transform: rotate(90deg);
+  }
+  /* Sub-items hang off a guide line under the parent's icon. */
+  .sidebar-menu-sub {
+    display: grid;
+    gap: 2px;
+    margin: 2px 0 2px 17px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+  }
+  .sidebar-menu-sub-button {
+    min-height: 32px;
+    padding: 6px 10px;
+  }
   .sidebar-close {
     position: absolute;
     top: 8px;
