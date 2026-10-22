@@ -20,6 +20,7 @@ import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Switch } from "../../../shared/ui/switch";
 import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
+import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { ConnectionSettings } from "./connection-settings";
 import { ModelSettings } from "./model-settings";
 import { ProviderSettings } from "./provider-settings";
@@ -52,9 +53,7 @@ export function Settings({
 }) {
   return (
     <ScrollArea className="settings-scroll" viewportLabel="Settings">
-      <section
-        className={`settings-page ${section === "models" ? "settings-page-wide" : ""}`}
-      >
+      <section className="settings-page">
         {section === "providers" ? (
           <ProviderSettings />
         ) : section === "models" ? (
@@ -106,6 +105,10 @@ export function Settings({
 
 function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
   const [theme, setTheme] = useState<Theme>("system");
+  const settings = useRuntimeSettings();
+  const connection = settings.data?.connections.find(
+    (c) => c.id === data?.model?.provider,
+  );
   useEffect(
     () => setTheme((readLocal("raphie:theme") as Theme) ?? "system"),
     [],
@@ -151,7 +154,7 @@ function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
         <Row title="Model" description="Used for every conversation.">
           <span className="settings-value">
             {data?.model
-              ? `${data.model.provider} · ${data.model.modelId}`
+              ? `${connection?.name ?? data.model.provider} · ${data.model.modelId}`
               : "Not configured"}
           </span>
         </Row>

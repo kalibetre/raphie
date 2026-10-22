@@ -35,13 +35,13 @@ export function ModelCard({
   return (
     <article
       className={`model-library-card ${isDefault ? "is-default" : ""}`}
-      aria-label={`${model.name} via ${providerName}`}
+      aria-label={`${model.name} via ${model.connectionName}`}
     >
       <div className="model-card-top">
-        <span className="model-source-mark" aria-hidden="true">
-          {source.label.slice(0, 1).toUpperCase()}
-        </span>
-        <span className="model-source-label">{source.label}</span>
+        <div>
+          <span className="model-source-label">{source.label}</span>
+          <h3>{name}</h3>
+        </div>
         {isDefault && (
           <span className="catalog-badge connected">
             <Check size={12} />
@@ -49,62 +49,54 @@ export function ModelCard({
           </span>
         )}
       </div>
-      <h3>{name}</h3>
       <p className="model-card-id" title={model.id}>
         {model.id}
       </p>
-      <div className="model-capabilities">
+      <div className="model-compact-meta">
+        <span title={`${model.contextWindow.toLocaleString()} context tokens`}>
+          {tokens(model.contextWindow)} context
+        </span>
+        <span
+          title={`${model.maxOutputTokens.toLocaleString()} maximum output tokens`}
+        >
+          {tokens(model.maxOutputTokens)} output
+        </span>
         {model.reasoning && (
-          <span className="catalog-badge">
+          <span title="Supports reasoning">
             <Brain size={12} />
             Reasoning
           </span>
         )}
         {model.inputModalities.includes("image") && (
-          <span className="catalog-badge">
+          <span title="Supports image input">
             <Image size={12} />
             Vision
           </span>
         )}
-        {!model.reasoning && !model.inputModalities.includes("image") && (
-          <span className="catalog-badge">Text</span>
-        )}
       </div>
-      <dl className="model-card-stats">
-        <div>
-          <dt>Context</dt>
-          <dd title={`${model.contextWindow.toLocaleString()} tokens`}>
-            {tokens(model.contextWindow)} <small>tokens</small>
-          </dd>
-        </div>
-        <div>
-          <dt>Max output</dt>
-          <dd title={`${model.maxOutputTokens.toLocaleString()} tokens`}>
-            {tokens(model.maxOutputTokens)} <small>tokens</small>
-          </dd>
-        </div>
+      <dl className="model-card-pricing">
         <div>
           <dt>Input / 1M</dt>
-          <dd>{model.pricing ? price(model.pricing.input) : "Not listed"}</dd>
+          <dd>{model.pricing ? price(model.pricing.input) : "—"}</dd>
         </div>
         <div>
           <dt>Output / 1M</dt>
-          <dd>{model.pricing ? price(model.pricing.output) : "Not listed"}</dd>
+          <dd>{model.pricing ? price(model.pricing.output) : "—"}</dd>
         </div>
       </dl>
       <footer>
-        <span>
-          <ArrowUpRight size={13} />
-          {providerName}
+        <span title={providerName}>
+          <ArrowUpRight size={12} />
+          {model.connectionName}
         </span>
         <Button
           variant="outline"
-          size="sm"
+          size="xs"
           disabled={isDefault || saving}
           aria-label={
             isDefault
-              ? `${model.name} is the default`
-              : `Use ${model.name} as default`
+              ? `${model.name} via ${model.connectionName} is the default`
+              : `Use ${model.name} via ${model.connectionName} as default`
           }
           onClick={onSelect}
         >

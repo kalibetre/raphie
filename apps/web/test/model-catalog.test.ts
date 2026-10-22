@@ -12,11 +12,21 @@ const settings: RuntimeSettings = {
   credentialSource: "saved",
   modelId: "anthropic/haiku",
   providers: [{ id: "openrouter", name: "OpenRouter" }],
+  connections: [
+    {
+      id: "openrouter",
+      provider: "openrouter",
+      name: "OpenRouter",
+      credentialSource: "saved",
+    },
+  ],
   models: [
     {
       id: "anthropic/haiku",
       name: "Claude Haiku",
       provider: "openrouter",
+      connectionId: "openrouter",
+      connectionName: "OpenRouter",
       contextWindow: 100,
       maxOutputTokens: 50,
       reasoning: false,
@@ -26,6 +36,8 @@ const settings: RuntimeSettings = {
       id: "openai/gpt",
       name: "GPT",
       provider: "openrouter",
+      connectionId: "openrouter",
+      connectionName: "OpenRouter",
       contextWindow: 200,
       maxOutputTokens: 50,
       reasoning: true,
@@ -55,4 +67,21 @@ test("model discovery combines search and filters without treating another provi
     "openai",
   ]);
   assert.deepEqual(modelCatalog(undefined, "", "all", []).matching, []);
+});
+
+test("favorites and search retain the identity of two connections to the same provider", () => {
+  const personal = {
+    ...settings.models[0]!,
+    connectionId: "personal",
+    connectionName: "Personal",
+  };
+  const work = { ...personal, connectionId: "work", connectionName: "Work" };
+  const data = { ...settings, models: [personal, work] };
+  assert.deepEqual(
+    modelCatalog(data, "", "favorites", ["work:anthropic/haiku"]).matching,
+    [work],
+  );
+  assert.deepEqual(modelCatalog(data, "personal", "all", []).matching, [
+    personal,
+  ]);
 });

@@ -19,6 +19,9 @@ export function ModelFilters({
   onSearch,
   onProvider,
   onSource,
+  connections,
+  connection,
+  onConnection,
 }: {
   search: string;
   provider: string;
@@ -28,6 +31,9 @@ export function ModelFilters({
   onSearch: (value: string) => void;
   onProvider: (value: string) => void;
   onSource: (value: string) => void;
+  connections: RuntimeSettings["connections"];
+  connection: string;
+  onConnection: (value: string) => void;
 }) {
   return (
     <div className="model-library-controls">
@@ -88,6 +94,24 @@ export function ModelFilters({
           </SelectContent>
         </Select>
       </div>
+      {connections.length > 1 && (
+        <div className="model-filter model-connection-filter">
+          <label htmlFor="model-connection-filter">Connection</label>
+          <Select value={connection} onValueChange={onConnection}>
+            <SelectTrigger id="model-connection-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All connections</SelectItem>
+              {connections.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </div>
   );
 }

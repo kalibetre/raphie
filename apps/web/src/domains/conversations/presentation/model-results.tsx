@@ -16,7 +16,7 @@ type Props = {
   search: string;
   favorites: string[];
   disabled: boolean;
-  onChoose: (id: string) => void;
+  onChoose: (model: ModelSelection) => void;
   onFavorite: (key: string) => void;
 };
 
@@ -61,7 +61,7 @@ function Results({
         </Button>
       </div>
     );
-  if (!data?.providerEnabled || !data.credentialSource)
+  if (!data?.connections.length)
     return (
       <p className="model-picker-message">
         Connect a provider in Settings to choose a model.

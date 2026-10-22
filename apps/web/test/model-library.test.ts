@@ -10,6 +10,8 @@ const claude: LibraryModel = {
   id: "anthropic/claude",
   name: "Anthropic: Claude",
   provider: "openrouter",
+  connectionId: "openrouter",
+  connectionName: "OpenRouter",
   contextWindow: 200000,
   maxOutputTokens: 32000,
   reasoning: true,
@@ -20,6 +22,8 @@ const gpt: LibraryModel = {
   id: "openai/gpt",
   name: "OpenAI: GPT",
   provider: "openrouter",
+  connectionId: "openrouter",
+  connectionName: "OpenRouter",
 };
 const direct: LibraryModel = { ...gpt, id: "gpt", provider: "openai" };
 const models = [claude, gpt, direct];

@@ -7,6 +7,7 @@ export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";
 
 export type Attachment = { id: string; name: string; size: number };
 
+/** `provider` identifies the Pi provider instance for a specific connection. */
 export type ModelSelection = { provider: string; modelId: string };
 
 export type Session = {
@@ -102,4 +103,7 @@ export type {
 export type {
   RuntimeSettings,
   UpdateRuntimeSettings,
+  ProviderConnection,
+  SaveProviderConnection,
+  EditProviderConnection,
 } from "./settings/views.ts";

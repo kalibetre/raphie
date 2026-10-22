@@ -1,14 +1,20 @@
-import { Check, KeyRound, Plus, ArrowUpRight, Trash2 } from "lucide-react";
+import { useIsMutating } from "@tanstack/react-query";
+import { KeyRound, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "../../../shared/ui/button";
+import { useProviderConnections } from "../infrastructure/use-provider-connections";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
+import { ProviderCard } from "./provider-card";
 import { ProviderConnection } from "./provider-connection";
 import { Group } from "./settings-group";
 
 export function ProviderSettings() {
   const settings = useRuntimeSettings();
-  const [setup, setSetup] = useState(false);
+  const mutation = useProviderConnections();
+  const busy = useIsMutating({ mutationKey: ["provider-connections"] }) > 0;
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const data = settings.data;
   if (!data)
@@ -26,12 +32,11 @@ export function ProviderSettings() {
         </div>
       </Group>
     );
-  const connected = data.providerEnabled && !!data.credentialSource;
 
-  function openSetup() {
+  function add() {
+    setAdding(true);
     setMessage("");
-    settings.update.reset();
-    setSetup(true);
+    mutation.reset();
   }
 
   return (
@@ -39,101 +44,89 @@ export function ProviderSettings() {
       <header className="catalog-heading">
         <div>
           <h2>Your providers</h2>
-          <p>Connect the services your models run through.</p>
+          <p>
+            Give each connection a name. Connect the same provider more than
+            once.
+          </p>
         </div>
-        <Button onClick={openSetup} disabled={setup}>
+        <Button onClick={add} disabled={adding || busy}>
           <Plus />
-          {connected ? "Manage connection" : "Add provider"}
+          Add connection
         </Button>
       </header>
-      {connected ? (
-        <article className="provider-card">
-          <div className="provider-card-heading">
-            <span className="provider-mark">
-              <ArrowUpRight size={22} />
-            </span>
-            <div>
-              <h3>OpenRouter</h3>
-              <p>One connection, models from many sources.</p>
-            </div>
-            <span className="catalog-badge connected">
-              <Check size={12} />
-              Connected
-            </span>
-          </div>
-          <div className="provider-card-details">
-            <span>
-              <KeyRound size={14} />
-              {data.credentialSource === "environment"
-                ? "Backend environment key"
-                : "Saved API key"}
-            </span>
-            <span>{data.models.length} models</span>
-          </div>
-          {!setup && (
-            <footer>
-              <Button variant="outline" size="sm" onClick={openSetup}>
-                Edit connection
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={settings.update.isPending}
-                onClick={() => {
-                  setMessage("");
-                  settings.update.mutate(
-                    { apiKey: null, providerEnabled: false },
-                    {
-                      onSuccess: () => {
-                        setSetup(false);
-                        setMessage(
-                          "Provider removed. New turns are disabled until you connect a provider.",
-                        );
-                      },
-                    },
-                  );
-                }}
-              >
-                <Trash2 />
-                {settings.update.isPending ? "Removing…" : "Remove provider"}
-              </Button>
-            </footer>
-          )}
-          {data.credentialSource === "environment" && (
-            <p className="provider-environment-note">
-              Removing disconnects this provider. The environment key remains on
-              your backend.
-            </p>
-          )}
-        </article>
-      ) : (
-        !setup && (
-          <div className="catalog-empty">
-            <KeyRound size={24} />
-            <h3>No providers connected</h3>
-            <p>
-              Add a provider to start using models. Your conversations stay here
-              when a provider is removed.
-            </p>
-            <Button variant="outline" onClick={openSetup}>
-              <Plus />
-              Add your first provider
-            </Button>
-          </div>
-        )
-      )}
-      {setup && (
+      {adding && (
         <ProviderConnection
-          settings={data}
+          providers={data.providers}
+          suggestedName={`OpenRouter ${data.connections.filter((c) => c.provider === "openrouter").length + 1}`}
           onClose={() => {
-            setSetup(false);
+            setAdding(false);
             setMessage("");
           }}
         />
       )}
-      {(message || settings.update.error) && (
+      {data.connections.map((connection) =>
+        editing.includes(connection.id) ? (
+          <ProviderConnection
+            key={connection.id}
+            connection={connection}
+            providers={data.providers}
+            suggestedName={connection.name}
+            onClose={() => {
+              setEditing((current) =>
+                current.filter((id) => id !== connection.id),
+              );
+              setMessage("");
+            }}
+          />
+        ) : (
+          <ProviderCard
+            key={connection.id}
+            connection={connection}
+            providerName={
+              data.providers.find((p) => p.id === connection.provider)?.name ??
+              connection.provider
+            }
+            modelCount={
+              data.models.filter((m) => m.connectionId === connection.id).length
+            }
+            busy={busy}
+            onEdit={() => {
+              setEditing((current) => [...current, connection.id]);
+              setMessage("");
+              mutation.reset();
+            }}
+            onRemove={() => {
+              setMessage("");
+              mutation.mutate(
+                { action: "remove", id: connection.id },
+                {
+                  onSuccess: () =>
+                    setMessage(
+                      `${connection.name} removed. Other connections are unchanged.`,
+                    ),
+                },
+              );
+            }}
+          />
+        ),
+      )}
+      {!data.connections.length && !adding && (
+        <div className="catalog-empty">
+          <KeyRound size={24} />
+          <h3>No providers connected</h3>
+          <p>
+            Add a connection to start using models. Your conversations stay here
+            when a connection is removed.
+          </p>
+          <Button variant="outline" onClick={add}>
+            <Plus />
+            Add your first connection
+          </Button>
+        </div>
+      )}
+      {(message || mutation.error) && (
         <p role="status" className="catalog-feedback">
-          {settings.update.error?.message ?? message}
+          {mutation.error?.message ?? message}
         </p>
       )}
     </>

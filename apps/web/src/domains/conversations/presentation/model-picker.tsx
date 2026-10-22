@@ -45,10 +45,9 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
   const settings = useRuntimeSettings();
   const { favorites, toggle } = useModelFavorites();
   const data = settings.data;
-  const current =
-    data?.provider === model?.provider
-      ? data?.models.find((m) => m.id === model?.modelId)
-      : undefined;
+  const current = data?.models.find(
+    (m) => m.id === model?.modelId && m.connectionId === model?.provider,
+  );
   const name =
     current?.name ?? model?.modelId.split("/").at(-1) ?? "Choose model";
   const { families, matching } = modelCatalog(data, search, filter, favorites);
@@ -56,12 +55,12 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
     if (disabled) setOpen(false);
   }, [disabled]);
 
-  async function choose(modelId: string) {
+  async function choose(selection: ModelSelection) {
     if (!data || disabled || saving) return;
     setSaving(true);
     setError(undefined);
     try {
-      await onChoose({ provider: data.provider, modelId });
+      await onChoose(selection);
       setOpen(false);
     } catch (error) {
       setError(
@@ -209,7 +208,7 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
             search={search}
             favorites={favorites}
             disabled={saving || disabled}
-            onChoose={(id) => void choose(id)}
+            onChoose={(selection) => void choose(selection)}
             onFavorite={toggle}
           />
           {error && (
@@ -224,7 +223,7 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
                   <Check size={12} /> Saving…
                 </>
               ) : (
-                `Via ${data?.providers.find((p) => p.id === data.provider)?.name ?? "provider"}`
+                `Via ${current?.connectionName ?? "your connections"}`
               )}
             </span>
             <Button

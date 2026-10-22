@@ -65,17 +65,6 @@ const program = Effect.gen(function* () {
       }),
     async (settings) => settings.close(),
   );
-  models.setProvider({
-    ...provider,
-    auth: {
-      ...provider.auth,
-      apiKey: {
-        name: "OpenRouter API key",
-        resolve: async () =>
-          settings.key ? { auth: { apiKey: settings.key } } : undefined,
-      },
-    },
-  });
   const telemetry = switchableTelemetry(
     exporter,
     () => settings.telemetryEnabled,

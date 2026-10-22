@@ -15,6 +15,7 @@ export function ModelSettings() {
   const [search, setSearch] = useState("");
   const [provider, setProvider] = useState("all");
   const [source, setSource] = useState("all");
+  const [connection, setConnection] = useState("all");
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [message, setMessage] = useState("");
   const data = settings.data;
@@ -42,16 +43,24 @@ export function ModelSettings() {
       }),
     ).values(),
   ].sort((a, b) => a.label.localeCompare(b.label));
-  const matching = filterModels(data.models, search, provider, source);
-  const defaultModel = data.models.find(
-    (model) => model.id === data.modelId && model.provider === data.provider,
+  const matching = filterModels(data.models, search, provider, source).filter(
+    (model) => connection === "all" || model.connectionId === connection,
   );
-  const filtered = search !== "" || provider !== "all" || source !== "all";
+  const defaultModel = data.models.find(
+    (model) =>
+      model.id === data.modelId && model.connectionId === data.provider,
+  );
+  const filtered =
+    search !== "" ||
+    provider !== "all" ||
+    source !== "all" ||
+    connection !== "all";
 
   function clear() {
     setSearch("");
     setProvider("all");
     setSource("all");
+    setConnection("all");
     setLimit(PAGE_SIZE);
   }
 
@@ -76,10 +85,13 @@ export function ModelSettings() {
           <strong>
             {defaultModel?.name ?? `${data.modelId} · unavailable`}
           </strong>
-          <p>Existing sessions keep their model.</p>
+          <p>
+            {defaultModel?.connectionName ?? "No connection"} · Existing
+            sessions keep their model.
+          </p>
         </div>
       </div>
-      {(!data.providerEnabled || !data.credentialSource) && (
+      {!data.connections.length && (
         <p className="catalog-notice">
           <a href="?view=settings&section=providers">Connect a provider</a> to
           use these models. You can browse and choose a default now.
@@ -91,6 +103,12 @@ export function ModelSettings() {
         source={source}
         providers={data.providers}
         sources={sources}
+        connections={data.connections}
+        connection={connection}
+        onConnection={(value) => {
+          setConnection(value);
+          setLimit(PAGE_SIZE);
+        }}
         onSearch={(value) => {
           setSearch(value);
           setLimit(PAGE_SIZE);
@@ -126,20 +144,26 @@ export function ModelSettings() {
           <div className="model-library-grid">
             {matching.slice(0, limit).map((model) => (
               <ModelCard
-                key={`${model.provider}:${model.id}`}
+                key={`${model.connectionId}:${model.id}`}
                 model={model}
                 providerName={
                   data.providers.find((p) => p.id === model.provider)?.name ??
                   model.provider
                 }
                 isDefault={
-                  model.id === data.modelId && model.provider === data.provider
+                  model.id === data.modelId &&
+                  model.connectionId === data.provider
                 }
                 saving={settings.update.isPending}
                 onSelect={() => {
                   setMessage("");
                   settings.update.mutate(
-                    { modelId: model.id },
+                    {
+                      modelId: model.id,
+                      ...(data.connections.length
+                        ? { connectionId: model.connectionId }
+                        : {}),
+                    },
                     {
                       onSuccess: () =>
                         setMessage(
