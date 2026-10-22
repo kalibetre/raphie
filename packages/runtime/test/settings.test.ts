@@ -26,7 +26,6 @@ test("backend settings persist model, credentials and telemetry without exposing
   let verified = 0;
   const options = {
     models,
-    environmentKey: "PRIVATE_ENV_KEY",
     defaultModel: ids[0]!,
     verifyKey: async (key: string) => {
       verified++;
@@ -43,7 +42,29 @@ test("backend settings persist model, credentials and telemetry without exposing
       body: JSON.stringify(data),
     });
   try {
-    assert.equal(settings.read().credentialSource, "environment");
+    assert.equal((await settings.read()).credentialSource, null);
+    const listed = await fetch(`${http.url}/api/settings`).then((response) =>
+      response.json(),
+    );
+    const bundled = openrouterProvider().getModels();
+    assert.equal(listed.models.length, bundled.length);
+    assert.deepEqual(
+      new Set(listed.models.map((model: { id: string }) => model.id)),
+      new Set(bundled.map((model) => model.id)),
+    );
+    const haiku = listed.models.find(
+      (model: { id: string }) => model.id === "anthropic/claude-haiku-5.5",
+    );
+    const piHaiku = bundled.find((model) => model.id === haiku.id)!;
+    assert.equal(haiku.contextWindow, piHaiku.contextWindow);
+    assert.equal(haiku.provider, "openrouter");
+    assert.equal(haiku.maxOutputTokens, piHaiku.maxTokens);
+    assert.equal(haiku.reasoning, piHaiku.reasoning);
+    assert.deepEqual(haiku.inputModalities, piHaiku.input);
+    assert.equal(haiku.pricing.input, piHaiku.cost.input);
+    assert.equal(haiku.pricing.output, piHaiku.cost.output);
+    assert.equal("modelCatalog" in listed, false);
+    assert.equal((await post("/models/refresh", {})).status, 404);
     const response = await post("", {
       provider: "openrouter",
       modelId: ids[1],
@@ -79,10 +100,18 @@ test("backend settings persist model, credentials and telemetry without exposing
     settings = await BackendSettings.open(path, options);
     assert.equal(settings.key, "PRIVATE_SAVED_KEY");
     assert.equal(settings.model, undefined);
-    assert.equal(settings.read().modelId, ids[1]);
+    assert.equal((await settings.read()).modelId, ids[1]);
     await settings.update({ apiKey: null, providerEnabled: true });
-    assert.equal(settings.key, "PRIVATE_ENV_KEY");
-    assert.equal(settings.read().credentialSource, "environment");
+    assert.equal(settings.key, undefined);
+    assert.equal((await settings.read()).credentialSource, null);
+    // Clearing a saved key leaves the connection unconfigured, with no fallback.
+    await settings.update({ apiKey: "PRIVATE_REPLACEMENT_KEY" });
+    await settings.update({ apiKey: null, providerEnabled: false });
+    assert.equal(settings.model, undefined);
+    settings.close();
+    settings = await BackendSettings.open(path, options);
+    assert.equal(settings.key, undefined);
+    assert.equal((await settings.read()).providerEnabled, false);
   } finally {
     await http.close();
     await app.close();

@@ -7,6 +7,7 @@ import {
   Server,
   Radio,
   Brain,
+  KeyRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -19,13 +20,16 @@ import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Switch } from "../../../shared/ui/switch";
 import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
+import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { ConnectionSettings } from "./connection-settings";
 import { ModelSettings } from "./model-settings";
+import { ProviderSettings } from "./provider-settings";
 import { Group, Row } from "./settings-group";
 import { TelemetrySettings } from "./telemetry-settings";
 
 export const sections = [
   { id: "connection", label: "Backend", icon: Server },
+  { id: "providers", label: "Providers", icon: KeyRound },
   { id: "models", label: "Models", icon: Brain },
   { id: "telemetry", label: "Telemetry", icon: Radio },
   { id: "general", label: "General", icon: SlidersHorizontal },
@@ -50,7 +54,9 @@ export function Settings({
   return (
     <ScrollArea className="settings-scroll" viewportLabel="Settings">
       <section className="settings-page">
-        {section === "models" ? (
+        {section === "providers" ? (
+          <ProviderSettings />
+        ) : section === "models" ? (
           <ModelSettings />
         ) : section === "telemetry" ? (
           <TelemetrySettings />
@@ -99,6 +105,10 @@ export function Settings({
 
 function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
   const [theme, setTheme] = useState<Theme>("system");
+  const settings = useRuntimeSettings();
+  const connection = settings.data?.connections.find(
+    (c) => c.id === data?.model?.provider,
+  );
   useEffect(
     () => setTheme((readLocal("raphie:theme") as Theme) ?? "system"),
     [],
@@ -133,7 +143,7 @@ function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
       </Group>
       <Group
         title="Runtime"
-        note="Connection and model preferences are available in Backend and Models."
+        note="Connection and model preferences are available in Backend, Providers, and Models."
       >
         <Row title="Runtime" description="The selected local agent backend.">
           <span className="settings-value">
@@ -144,7 +154,7 @@ function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
         <Row title="Model" description="Used for every conversation.">
           <span className="settings-value">
             {data?.model
-              ? `${data.model.provider} · ${data.model.modelId}`
+              ? `${connection?.name ?? data.model.provider} · ${data.model.modelId}`
               : "Not configured"}
           </span>
         </Row>

@@ -19,18 +19,19 @@ export function ModelChoices({
   defaultModel: string;
   favorites: string[];
   disabled: boolean;
-  onChoose: (id: string) => void;
+  onChoose: (model: ModelSelection) => void;
   onFavorite: (key: string) => void;
 }) {
   return (
     <ul className="model-picker-list">
       {models.map((model) => {
         const current =
-          selected?.provider === provider && selected.modelId === model.id;
-        const key = `${provider}:${model.id}`;
+          selected?.provider === model.connectionId &&
+          selected.modelId === model.id;
+        const key = `${model.connectionId}:${model.id}`;
         const favorite = favorites.includes(key);
         return (
-          <li key={model.id} className={current ? "is-current" : undefined}>
+          <li key={key} className={current ? "is-current" : undefined}>
             <Button
               variant="ghost"
               size="sm"
@@ -39,7 +40,9 @@ export function ModelChoices({
               data-model-choice
               aria-pressed={current}
               disabled={disabled}
-              onClick={() => onChoose(model.id)}
+              onClick={() =>
+                onChoose({ provider: model.connectionId, modelId: model.id })
+              }
             >
               <span className="model-picker-check">
                 {current && <Check size={13} />}
@@ -47,13 +50,23 @@ export function ModelChoices({
               <span className="model-picker-name">
                 <span>{model.name}</span>
                 <small>
-                  {model.id}
-                  {model.id === defaultModel && (
-                    <span className="model-default-label">
+                  {model.connectionName} · {model.id}
+                  {model.pricing && (
+                    <span
+                      title={`Pi catalog price, USD per million tokens: $${model.pricing.input} input, $${model.pricing.output} output`}
+                    >
                       {" "}
-                      · New-session default
+                      · {price(model.pricing.input)} /{" "}
+                      {price(model.pricing.output)} per M
                     </span>
                   )}
+                  {model.id === defaultModel &&
+                    model.connectionId === provider && (
+                      <span className="model-default-label">
+                        {" "}
+                        · New-session default
+                      </span>
+                    )}
                 </small>
               </span>
             </Button>
@@ -74,3 +87,5 @@ export function ModelChoices({
     </ul>
   );
 }
+
+const price = (usd: number) => `$${Number(usd.toPrecision(2))}`;

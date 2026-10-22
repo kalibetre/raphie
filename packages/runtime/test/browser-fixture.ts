@@ -122,13 +122,17 @@ const settings = await BackendSettings.open(
   {
     models,
     defaultModel: model.id,
-    environmentKey: "fixture",
     verifyKey: async (key) => {
       if (key !== "fixture" && key !== "fixture-browser-key")
         throw new Error("Invalid fixture key");
     },
   },
 );
+await settings.addConnection({
+  provider: "openrouter",
+  name: "Fixture",
+  apiKey: "fixture",
+});
 const collector = await openLocalOtlp(join(directory, "traces.sqlite"));
 const exporter = await createTelemetry({ endpoint: collector.endpoint });
 const telemetry = switchableTelemetry(

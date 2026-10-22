@@ -2,15 +2,32 @@ import { Database } from "bun:sqlite";
 import { chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import type { Models } from "@earendil-works/pi-ai/models";
-import type { RuntimeSettings, UpdateRuntimeSettings } from "@raphie/contracts";
+import type { MutableModels } from "@earendil-works/pi-ai/models";
+import type {
+  RuntimeSettings,
+  UpdateRuntimeSettings,
+  SaveProviderConnection,
+  EditProviderConnection,
+} from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { SettingsService } from "../application/ports.ts";
+import {
+  PiProviderConnections,
+  type StoredConnection,
+} from "./pi-provider-connections.ts";
 
 type Stored = {
+  version: 3;
+  telemetryEnabled: boolean;
+  modelId: string;
+  connectionId: string;
+  connections: StoredConnection[];
+};
+
+type LegacyStored = {
   telemetryEnabled: boolean;
   providerEnabled: boolean;
   modelId: string;
@@ -18,8 +35,7 @@ type Stored = {
 };
 
 type Options = {
-  models: Models;
-  environmentKey?: string;
+  models: MutableModels;
   defaultModel: string;
   verifyKey?: (key: string) => Promise<void>;
 };
@@ -29,6 +45,7 @@ export class BackendSettings implements SettingsService {
   private db: Database;
   private state: Stored;
   private options: Options;
+  private providers: PiProviderConnections;
   readonly connectionGate = new ModelConnectionGate();
   onChange: () => void = () => {};
   isBusy: () => Promise<boolean> = async () => false;
@@ -37,7 +54,8 @@ export class BackendSettings implements SettingsService {
     this.db = db;
     this.state = state;
     this.options = options;
-    if (state.apiKey) registerRedactionSecret(state.apiKey);
+    this.providers = new PiProviderConnections(options.models);
+    this.providers.publish(state.connections);
   }
 
   static async open(path: string, options: Options) {
@@ -51,14 +69,43 @@ export class BackendSettings implements SettingsService {
       const row = db
         .query<{ value: string }, []>("SELECT value FROM settings WHERE id = 1")
         .get();
-      const state: Stored = row
-        ? JSON.parse(row.value)
-        : {
-            telemetryEnabled: true,
-            providerEnabled: true,
-            modelId: options.defaultModel,
-            apiKey: null,
-          };
+      const saved = row
+        ? (JSON.parse(row.value) as Stored | LegacyStored)
+        : undefined;
+      const connections =
+        saved && "version" in saved
+          ? saved.connections
+          : saved?.apiKey
+            ? [
+                {
+                  id: "openrouter",
+                  provider: "openrouter" as const,
+                  name: "OpenRouter",
+                  apiKey: saved.apiKey,
+                  enabled: saved.providerEnabled,
+                },
+              ]
+            : [];
+      const state: Stored = {
+        version: 3,
+        telemetryEnabled: saved?.telemetryEnabled ?? true,
+        modelId: saved?.modelId ?? options.defaultModel,
+        connectionId:
+          saved && "version" in saved ? saved.connectionId : "openrouter",
+        // Keep saved credentials and identities; discard old environment-only entries.
+        connections: connections
+          .filter((c) => c.apiKey)
+          .map((c) => ({
+            id: c.id,
+            provider: c.provider,
+            name: c.name,
+            apiKey: c.apiKey,
+            enabled: c.enabled,
+          })),
+      };
+      db.query(
+        "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+      ).run(JSON.stringify(state));
       return new BackendSettings(db, state, options);
     } catch (error) {
       db.close();
@@ -66,13 +113,18 @@ export class BackendSettings implements SettingsService {
     }
   }
 
+  private get selectedConnection() {
+    return this.state.connections.find((c) => c.id === this.state.connectionId);
+  }
+
   get key() {
-    return this.state.apiKey ?? this.options.environmentKey;
+    const connection = this.selectedConnection;
+    return connection ? this.providers.key(connection) : undefined;
   }
 
   get model() {
-    return this.state.providerEnabled && this.key
-      ? { provider: "openrouter", modelId: this.state.modelId }
+    return this.selectedConnection?.enabled && this.key
+      ? { provider: this.state.connectionId, modelId: this.state.modelId }
       : undefined;
   }
 
@@ -80,24 +132,68 @@ export class BackendSettings implements SettingsService {
     return this.state.telemetryEnabled;
   }
 
-  read(): RuntimeSettings {
+  async read(): Promise<RuntimeSettings> {
+    const active = this.state.connections.filter(
+      (c) => c.enabled && this.providers.key(c),
+    );
+    const catalogs = active.length
+      ? active
+      : [{ id: "openrouter", provider: "openrouter", name: "OpenRouter" }];
+    const models = catalogs
+      .flatMap((connection) =>
+        this.providers.provider.getModels().map((m) => ({
+          id: m.id,
+          name: m.name,
+          provider: connection.provider,
+          connectionId: connection.id,
+          connectionName: connection.name,
+          contextWindow: m.contextWindow,
+          maxOutputTokens: m.maxTokens,
+          reasoning: m.reasoning,
+          inputModalities: m.input,
+          pricing: { input: m.cost.input, output: m.cost.output },
+        })),
+      )
+      .sort(
+        (a, b) =>
+          a.name.localeCompare(b.name) ||
+          a.connectionName.localeCompare(b.connectionName),
+      );
     return {
       telemetryEnabled: this.state.telemetryEnabled,
-      provider: "openrouter",
-      providerEnabled: this.state.providerEnabled,
+      provider: this.state.connectionId,
+      providerEnabled: this.selectedConnection?.enabled ?? false,
+      credentialSource: this.key ? "saved" : null,
       modelId: this.state.modelId,
-      credentialSource: this.state.apiKey
-        ? "saved"
-        : this.options.environmentKey
-          ? "environment"
-          : null,
       providers: [{ id: "openrouter", name: "OpenRouter" }],
-      models: this.options.models.getModels("openrouter").map((m) => ({
-        id: m.id,
-        name: m.name,
-        contextWindow: m.contextWindow,
+      connections: active.map((c) => ({
+        id: c.id,
+        provider: c.provider,
+        name: c.name,
+        credentialSource: "saved" as const,
       })),
+      models,
     };
+  }
+
+  private persist(next: Stored, publishConnections = true) {
+    this.db
+      .query(
+        "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+      )
+      .run(JSON.stringify(next));
+    this.state = next;
+    if (publishConnections) this.providers.publish(next.connections);
+    this.onChange();
+    return this.read();
+  }
+
+  private async checkIdle() {
+    if (await this.isBusy())
+      throw new InputError(
+        "Wait for active turns to finish before changing the model connection.",
+        409,
+      );
   }
 
   async update(input: UpdateRuntimeSettings) {
@@ -105,47 +201,134 @@ export class BackendSettings implements SettingsService {
       throw new InputError("Choose an available provider.");
     if (
       input.modelId !== undefined &&
-      !this.options.models.getModel("openrouter", input.modelId)
+      !this.providers.provider.getModels().some((m) => m.id === input.modelId)
     )
       throw new InputError("Choose a model from the available catalog.");
-    const changesModel =
+    const changesConnection =
       input.apiKey !== undefined || input.providerEnabled !== undefined;
-    if (changesModel && (await this.isBusy()))
-      throw new InputError(
-        "Wait for active turns to finish before changing the model connection.",
-        409,
-      );
+    if (changesConnection) await this.checkIdle();
     if (typeof input.apiKey === "string") await this.testProvider(input.apiKey);
     const apply = async () => {
-      // Admission cannot capture a model until this check and settings publication finish.
-      if (changesModel && (await this.isBusy()))
-        throw new InputError(
-          "Wait for active turns to finish before changing the model connection.",
-          409,
-        );
-      const next = {
-        ...this.state,
-        ...(input.telemetryEnabled !== undefined
-          ? { telemetryEnabled: input.telemetryEnabled }
-          : {}),
-        ...(input.providerEnabled !== undefined
-          ? { providerEnabled: input.providerEnabled }
-          : {}),
-        ...(input.modelId !== undefined ? { modelId: input.modelId } : {}),
-        ...(input.apiKey !== undefined ? { apiKey: input.apiKey } : {}),
-      };
-      this.db
-        .query(
-          "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+      if (changesConnection) await this.checkIdle();
+      const connectionId = input.connectionId ?? this.state.connectionId;
+      if (
+        input.connectionId &&
+        !this.state.connections.some(
+          (c) => c.id === connectionId && c.enabled && this.providers.key(c),
         )
-        .run(JSON.stringify(next));
-      this.state = next;
-      if (next.apiKey) registerRedactionSecret(next.apiKey);
-      this.onChange();
-      return this.read();
+      )
+        throw new InputError("Choose a connected provider connection.");
+      const connections =
+        this.state.connections.some((c) => c.id === connectionId) ||
+        typeof input.apiKey !== "string"
+          ? this.state.connections
+          : [
+              ...this.state.connections,
+              {
+                id: connectionId,
+                provider: "openrouter" as const,
+                name: "OpenRouter",
+                apiKey: null,
+                enabled: true,
+              },
+            ];
+      return this.persist(
+        {
+          ...this.state,
+          connectionId,
+          telemetryEnabled:
+            input.telemetryEnabled ?? this.state.telemetryEnabled,
+          modelId: input.modelId ?? this.state.modelId,
+          connections: connections.map((c) =>
+            c.id !== connectionId
+              ? c
+              : {
+                  ...c,
+                  ...(input.apiKey !== undefined
+                    ? { apiKey: input.apiKey }
+                    : {}),
+                  ...(input.providerEnabled !== undefined
+                    ? { enabled: input.providerEnabled }
+                    : {}),
+                },
+          ),
+        },
+        changesConnection,
+      );
     };
-    // Telemetry-only updates retain their existing availability during active turns.
-    return changesModel ? this.connectionGate.run(apply) : apply();
+    return changesConnection ? this.connectionGate.run(apply) : apply();
+  }
+
+  async addConnection(input: SaveProviderConnection) {
+    if (input.provider !== "openrouter")
+      throw new InputError("Choose an available provider.");
+    await this.checkIdle();
+    await this.testProvider(input.apiKey);
+    return this.connectionGate.run(async () => {
+      await this.checkIdle();
+      const connection: StoredConnection = {
+        id: `openrouter_${crypto.randomUUID()}`,
+        provider: "openrouter",
+        name: input.name,
+        apiKey: input.apiKey,
+        enabled: true,
+      };
+      return this.persist({
+        ...this.state,
+        connectionId: this.model ? this.state.connectionId : connection.id,
+        connections: [...this.state.connections, connection],
+      });
+    });
+  }
+
+  async editConnection(id: string, input: EditProviderConnection) {
+    const connection = this.state.connections.find((c) => c.id === id);
+    if (!connection) throw new InputError("Connection not found.", 404);
+    await this.checkIdle();
+    if (input.apiKey) await this.testProvider(input.apiKey);
+    return this.connectionGate.run(async () => {
+      await this.checkIdle();
+      if (!this.state.connections.some((c) => c.id === id))
+        throw new InputError("Connection not found.", 404);
+      return this.persist({
+        ...this.state,
+        connections: this.state.connections.map((c) =>
+          c.id !== id
+            ? c
+            : {
+                ...c,
+                name: input.name,
+                ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+              },
+        ),
+      });
+    });
+  }
+
+  async removeConnection(id: string) {
+    return this.connectionGate.run(async () => {
+      await this.checkIdle();
+      if (!this.state.connections.some((c) => c.id === id))
+        throw new InputError("Connection not found.", 404);
+      const connections = this.state.connections.filter((c) => c.id !== id);
+      const replacement = connections.find(
+        (c) => c.enabled && this.providers.key(c),
+      );
+      return this.persist({
+        ...this.state,
+        connections,
+        connectionId:
+          this.state.connectionId === id
+            ? (replacement?.id ?? id)
+            : this.state.connectionId,
+      });
+    });
+  }
+
+  async testConnection(id: string, apiKey?: string) {
+    const connection = this.state.connections.find((c) => c.id === id);
+    if (!connection) throw new InputError("Connection not found.", 404);
+    await this.testProvider(apiKey ?? this.providers.key(connection));
   }
 
   async testProvider(apiKey = this.key) {

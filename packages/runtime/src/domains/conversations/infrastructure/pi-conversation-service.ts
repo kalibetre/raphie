@@ -308,11 +308,7 @@ export class ChatService implements ConversationCommands {
   }
 
   private validateModel(model: ModelSelection) {
-    if (
-      !this.model ||
-      model.provider !== this.model.provider ||
-      !this.models.getModel(model.provider, model.modelId)
-    )
+    if (!this.model || !this.models.getModel(model.provider, model.modelId))
       throw new InputError(
         "This model is unavailable. Choose a model from the connected provider.",
         400,
