@@ -161,17 +161,11 @@ export function Workspace({
             onChange={(value) => resizePanel("left", value)}
           />
         )}
-        {sidebar && (
-          <button
-            className="sidebar-backdrop"
-            aria-label="Close navigation"
-            onClick={() => setSidebar(false)}
-          />
-        )}
         {view === "settings" ? (
           <SettingsNav
             section={section}
             open={sidebar}
+            onOpenChange={setSidebar}
             onSelect={(next) => {
               if (conversation)
                 void navigate({
