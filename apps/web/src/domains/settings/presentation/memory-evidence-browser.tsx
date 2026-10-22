@@ -170,7 +170,6 @@ export function MemoryEvidenceBrowser({
               value={query}
               maxLength={2000}
               required={!canBrowse}
-              disabled={busy}
               placeholder="A preference, person or experience…"
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -225,16 +224,21 @@ export function MemoryEvidenceBrowser({
             </p>
           </div>
         )}
-        {evidence?.map((item, index) => (
-          <MemoryEvidenceCard
-            key={canBrowse ? item.id : `${item.id}:${index}`}
-            item={item}
-            canManage={canManage}
-            busy={busy}
-            onRevise={change}
-            onForget={(id) => change(id)}
-          />
-        ))}
+        {/* Keyed by ID, so forgetting one card never resets the others. */}
+        {evidence
+          ?.filter(
+            (item, i, all) => all.findIndex((x) => x.id === item.id) === i,
+          )
+          .map((item) => (
+            <MemoryEvidenceCard
+              key={item.id}
+              item={item}
+              canManage={canManage}
+              busy={busy}
+              onRevise={change}
+              onForget={(id) => change(id)}
+            />
+          ))}
         {browsing && page?.next && (
           <Button
             type="button"

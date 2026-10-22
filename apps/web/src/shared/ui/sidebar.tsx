@@ -131,22 +131,33 @@ export function SidebarMenuButton({
   );
 }
 
-/** A menu item that expands to show sub-items, like shadcn's collapsible nav. */
+/**
+ * A menu item that expands to show sub-items, like shadcn's collapsible nav.
+ * It opens whenever one of its items becomes active (including via browser
+ * history), so the current page is never hidden in a collapsed group.
+ */
 export function SidebarMenuCollapsible({
   label,
   icon,
-  defaultOpen,
+  active = false,
   children,
 }: {
   label: string;
   icon: React.ReactNode;
-  defaultOpen?: boolean;
+  /** One of the sub-items is the current page. */
+  active?: boolean;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(active);
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
   return (
-    <Collapsible.Root defaultOpen={defaultOpen}>
+    <Collapsible.Root open={open} onOpenChange={setOpen}>
       <Collapsible.Trigger
         data-slot="sidebar-menu-button"
+        // Collapsed over the current page: highlight the group instead.
+        data-active={active && !open}
         className="sidebar-menu-button sidebar-menu-collapsible"
       >
         {icon} {label}

@@ -93,7 +93,7 @@ export function SettingsNav({
                     key={entry.label}
                     label={entry.label}
                     icon={<Icon size={15} aria-hidden="true" />}
-                    defaultOpen={entry.children.some((c) => c.id === section)}
+                    active={entry.children.some((c) => c.id === section)}
                   >
                     {entry.children.map((child) => (
                       <SidebarMenuSubButton

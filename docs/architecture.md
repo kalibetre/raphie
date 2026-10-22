@@ -51,8 +51,8 @@ retain from restoring it. The agent synthesizes local reflections from evidence;
 background local consolidation is not implemented. The Hindsight connector maps
 synchronous retain, scoped recall and native reflection, with source correction
 and deletion still managed externally. Honcho and Markdown remain planned.
-Configuration changes share the admission gate and wait until pending turns
-finish. Interrupted tools are not automatically repeated, and backend switching
+Configuration changes take the admission gate and are rejected while turns are
+pending; memory I/O runs outside the gate, so a slow backend never blocks chat. Interrupted tools are not automatically repeated, and backend switching
 never migrates data or silently falls back. See the [memory roadmap](roadmap.md#next-phase-lightweight-execution-memory-and-vm-escalation)
 for remaining capabilities and limits.
 

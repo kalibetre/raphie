@@ -3945,9 +3945,9 @@
               browser never opens vault files or receives saved secrets.
             </p>
             <p>
-              Switching changes the selected backend for subsequent work after
-              active memory operations settle. Existing data stays at its
-              original backend. No automatic copying, dual writes,
+              Switching changes the selected backend for subsequent work; saving
+              is rejected while a turn is in progress. Existing data stays at
+              its original backend. No automatic copying, dual writes,
               synchronization or outage fallback: imports and migrations require
               a separate explicit operation. Memory failures and ingestion lag
               stay visible, and never cause a completed external action to run

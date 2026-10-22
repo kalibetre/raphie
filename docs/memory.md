@@ -10,8 +10,12 @@ Built-in memory is enabled by default when the runtime has no saved memory
 configuration. It needs no separate memory service. A saved disabled setting or
 external backend choice is preserved across restarts.
 
-Open **Settings → Memory** to see **Saved memories** immediately, without
-knowing a search term. Built-in evidence appears newest first, 25 records at a
+Settings has a collapsible **Memory** group with two pages. **Configuration**
+holds the backend, scope and connection controls. **Browse** shows **Saved
+memories** immediately, without knowing a search term. When memory is off, Browse
+says so and points to Configuration.
+
+In Browse, built-in evidence appears newest first, 25 records at a
 time, with the total for the saved owner/assistant scope. Use **Load more** to
 continue through the inventory or **Refresh** to reload it. Each record shows its
 content, kind, source-turn time and revision. Expand **Source and record ID** to
@@ -24,11 +28,14 @@ up to eight matching records, while browsing can page through every current
 record. External providers use Search or Enter explicitly; Hindsight does not yet
 support browsing all records through Raphie.
 
+Typing never leaves the search box while results load.
+
 Correct or forget built-in evidence from its card. Forgetting updates the visible
-count. An empty scope has an explicit empty state. The browser always shows the
-saved configuration; changing an unsaved connection draft does not redirect it.
-Backend and scope controls are below the inventory. Wait for active turns to
-finish before saving configuration changes.
+count; forgetting an ID that does not exist in the scope reports “not found”
+rather than success. An empty scope has an explicit empty state. Browse always
+uses the saved configuration; an unsaved Configuration draft does not redirect
+it. Saving configuration is rejected while a turn is in progress; wait for it to
+finish and save again.
 
 For example, ask Raphie:
 
@@ -140,9 +147,12 @@ dual write or fallback during an outage. Switching back to built-in memory and
 the original scope makes its existing evidence available again.
 
 Disabling memory rejects memory operations while keeping existing evidence. It
-does not erase data. Re-enabling restores access. Configuration changes and memory
-operations share the admission gate; pending turns block configuration changes so
-an unfinished turn cannot be silently redirected to another backend.
+does not erase data. Re-enabling restores access. Saving configuration takes the
+admission gate that also admits chat messages, and is rejected while any turn is
+pending, so an unfinished turn cannot be silently redirected to another backend.
+A memory operation holds that gate only to read the saved configuration and then
+runs outside it: a slow Hindsight request (up to its 60-second timeout) never
+blocks sending messages or saving settings.
 
 ## Correction, forgetting and recovery
 
@@ -174,8 +184,15 @@ requesting another write. Tests cover process termination at this boundary.
 
 Hindsight requires an existing deployment and bank. Configure its endpoint, bank
 ID and optional API key in Settings. Use HTTPS, or HTTP on loopback for local
-servers. Changing the destination with a saved key requires re-entering or
-clearing the key. Requests do not follow redirects or automatically retry writes.
+servers. A saved key is bound to the endpoint and bank it was saved for and is
+only ever sent there: changing the destination requires re-entering or clearing
+the key, and while built-in is selected the saved Hindsight destination cannot
+change. The key and its clear option only apply when Hindsight is selected.
+
+If the saved key cannot be decrypted (for example, the OS-backed Settings key
+changed), the runtime still starts. The key is never used; Settings → Memory
+shows the error and Hindsight operations fail until the key is re-entered.
+Built-in memory and chat keep working. Requests do not follow redirects or automatically retry writes.
 Connection testing reads the bank; it does not insert a sample memory.
 
 Use a dedicated bank. Scope tags filter retrieval; they are not tenant isolation.
@@ -209,6 +226,14 @@ is the reference for exact request schemas and paths. Browsing uses
 `next` value as the `after` query parameter to load another page of at most 25
 records. An invalid cursor is rejected; external adapters without browsing
 capability return an explicit unsupported-operation error.
+
+`GET /api/memory` returns `{ configuration, capabilities, error }`.
+`configuration` never contains the key, only `hasCredential`. `capabilities`
+reports what the active backend supports through Raphie: `browse`, `retain`,
+`recall`, `revise` and `forget` are booleans; `reflect` is `"provider"` (native)
+or `"model-assisted"` (Raphie supplies evidence to the conversation model);
+`consolidation` is `"provider"` or `"none"`. `error` explains a backend that is
+configured but unusable, such as an undecryptable key.
 
 For pagination browser acceptance, start a disposable fixture with
 `RAPHIE_FIXTURE_MEMORY_HISTORY=true`; this seeds 60 synthetic evidence records.

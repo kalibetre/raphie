@@ -34,13 +34,7 @@ export function MemorySettings() {
         </div>
       </Group>
     );
-  return (
-    <MemoryConfiguration
-      key={JSON.stringify(memory.data.configuration)}
-      status={memory.data}
-      memory={memory}
-    />
-  );
+  return <MemoryConfiguration status={memory.data} memory={memory} />;
 }
 
 /** Settings → Memory → Browse memory: the saved evidence, apart from configuration. */
@@ -107,10 +101,18 @@ function MemoryConfiguration({
   const [message, setMessage] = useState("");
   const busy = testing || memory.update.isPending;
   const external = draft.provider === "hindsight";
-  const dirty =
-    JSON.stringify(draft) !== JSON.stringify(status.configuration) ||
-    !!key ||
-    clearKey;
+  // Key fields only apply to Hindsight; hidden ones never count or get sent.
+  const keyChange = external ? clearKey || !!key : false;
+  const saved = JSON.stringify(status.configuration);
+  const dirty = JSON.stringify(draft) !== saved || keyChange;
+  // Follow configuration saved elsewhere unless the owner is editing. Staying
+  // mounted (not remounting on save) keeps keyboard focus on the form.
+  const [base, setBase] = useState(saved);
+  if (saved !== base) {
+    setBase(saved);
+    if (JSON.stringify(draft) === base && !keyChange)
+      setDraft(status.configuration);
+  }
 
   async function test() {
     setTesting(true);
@@ -146,10 +148,17 @@ function MemoryConfiguration({
             memory.update.mutate(
               {
                 ...configuration,
-                ...(clearKey ? { apiKey: null } : key ? { apiKey: key } : {}),
+                ...(!external
+                  ? {}
+                  : clearKey
+                    ? { apiKey: null }
+                    : key
+                      ? { apiKey: key }
+                      : {}),
               },
               {
-                onSuccess: () => {
+                onSuccess: (next) => {
+                  setDraft(next.configuration);
                   setKey("");
                   setClearKey(false);
                 },
