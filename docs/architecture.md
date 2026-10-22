@@ -37,7 +37,8 @@ file limits and display-name policy. Activity owns observable execution history.
 Settings owns browser preferences, the selected local backend connection, and
 backend model/provider and telemetry preferences. Private backend settings live
 in a dedicated SQLite store behind a Settings application port; credentials never
-enter conversation documents or read responses.
+enter conversation documents or read responses. Provider keys are encrypted at rest
+with an OS credential-store master; see [credential storage](provider-credential-storage.md).
 
 Domain policies depend on value types, not React, Hono, Node, or Pi Durable.
 Application ports describe commands/read models. Outer adapters implement ports
