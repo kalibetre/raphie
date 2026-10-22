@@ -150,7 +150,11 @@ test("an unavailable runtime retains its warning and disabled composer", async (
   assert.ok(
     html.includes("Configure a model on the runtime to start chatting."),
   );
-  assert.match(html, /aria-label="Send message" disabled/);
+  const sendButton = html.match(
+    /<button[^>]*aria-label="Send message"[^>]*>/,
+  )?.[0];
+  assert.ok(sendButton, "The composer renders a send button.");
+  assert.match(sendButton, /\sdisabled(?:="")?(?:\s|>)/);
   const empty = await renderWorkspace({ defaultModel: null });
   assert.ok(empty.includes('aria-label="Choose model: Choose model"'));
 });

@@ -95,3 +95,23 @@ The test fixture and Vite server were stopped normally. The normal production ap
   and production build. The existing large client-chunk warning remains.
 - Work is published through separate PRs targeting main; no PR was merged or
   production session modified during acceptance.
+
+## Base UI migration — 2026-10-22
+
+- All shared interactive primitives now use `@base-ui/react`: Button, Input,
+  Popover, Select, Separator, Switch, Tooltip, ScrollArea and the sidebar sheet.
+  Badge composition uses Base UI `useRender`; Textarea remains native HTML,
+  matching shadcn's implementation. Removed the Radix package and its transitive
+  dependencies from the lockfile. The Radix references above describe historical
+  verification, before this migration.
+- Browser checks used the disposable long-history and 102-model fixture on
+  ports 14317/14321. Checked nested family selection without dismissing the
+  model picker, selected labels, search and arrow-key wrapping with 102/2/1/0
+  results, Escape/focus restoration, Settings Back with draft preservation,
+  tooltips, and switch state/keyboard operation.
+- Transcript and multiline composer scrolling retain their single viewport;
+  the browser layout probe reports zero competing native scrollers and a
+  floating composer at desktop and mobile widths.
+- The full validation gate passes 96 tests, formatting, architecture, lint,
+  types and production build. A dependency boundary rule prevents new web
+  imports from Radix packages. Memory remains separate from this PR to main.

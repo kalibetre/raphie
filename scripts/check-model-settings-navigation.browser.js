@@ -38,7 +38,10 @@ export async function checkModelSettingsNavigation() {
   );
   manage.click();
   const back = await waitFor(
-    () => document.querySelector(".settings-back"),
+    () =>
+      [...document.querySelectorAll('[data-slot="sidebar"] button')].find(
+        (button) => button.textContent.trim() === "Back to conversations",
+      ),
     "Settings Back",
   );
   const settingsPath = location.pathname;

@@ -1,10 +1,17 @@
+import { Input as InputPrimitive } from "@base-ui/react/input";
 import type { ComponentProps } from "react";
 
 import { cn } from "./utils";
 
-export function Input({ className, type, ...props }: ComponentProps<"input">) {
+export function Input({
+  className,
+  type,
+  ...props
+}: Omit<ComponentProps<typeof InputPrimitive>, "className"> & {
+  className?: string;
+}) {
   return (
-    <input
+    <InputPrimitive
       data-slot="input"
       type={type}
       className={cn(
