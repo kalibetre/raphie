@@ -23,6 +23,7 @@ import { openLocalOtlp } from "../src/domains/diagnostics/infrastructure/local-o
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
+import { memoryCredentialKeyStore } from "./credential-store.ts";
 const directory = await mkdtemp(join(tmpdir(), "raphie-browser-"));
 const models = createModels();
 const model = {
@@ -121,6 +122,7 @@ const settings = await BackendSettings.open(
   join(directory, "settings.sqlite"),
   {
     models,
+    credentialKeyStore: memoryCredentialKeyStore(),
     defaultModel: model.id,
     verifyKey: async (key) => {
       if (key !== "fixture" && key !== "fixture-browser-key")

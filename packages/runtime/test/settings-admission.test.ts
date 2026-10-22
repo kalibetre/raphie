@@ -9,6 +9,7 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { InputError } from "../src/shared/application/input-error.ts";
 import { chatModel } from "./chat-model.ts";
+import { memoryCredentialKeyStore } from "./credential-store.ts";
 
 const input = {
   source: "web" as const,
@@ -39,6 +40,7 @@ async function fixture(
     join(directory, "settings.sqlite"),
     {
       models,
+      credentialKeyStore: memoryCredentialKeyStore(),
       defaultModel: "history",
       verifyKey,
     },
