@@ -1,7 +1,10 @@
 # Bun migration
 
-Bun 1.4.2 is pinned in `.bun-version` and `packageManager`. The existing global
-installation is unchanged. CI remains on a self-hosted Linux x64 runner.
+Bun 1.4.4 is pinned in `.bun-version` and `packageManager`; `engines.bun`
+requires at least 1.4.4. CI installs the same version from `.bun-version` on
+its self-hosted Linux x64 runner. Typings are pinned separately to
+`@types/bun` 1.4.3, the newest version published during the 1.4.4 upgrade;
+`@types/bun` 1.4.4 was not available.
 
 ## Replaced
 
@@ -16,11 +19,11 @@ installation is unchanged. CI remains on a self-hosted Linux x64 runner.
 ## Retained deliberately
 
 TypeScript 7.0.2 remains the actual type checker. Oxfmt and type-aware Oxlint
-retain formatting, import sorting, hooks, and promise checks. The installed Bun
-1.4.2 and an isolated official 1.4.3 binary both reject `bun fmt` and `bun lint`
-with `Script not found`, although current documentation describes them. Bun
-1.4.3 has a built-in checker reporting TypeScript 7.0.2; we retain the explicitly
-pinned compiler rather than change type-checker implementation in this migration.
+retain formatting, import sorting, hooks, and promise checks. During the initial
+migration, Bun 1.4.2 and an isolated official 1.4.3 binary both rejected
+`bun fmt` and `bun lint` with `Script not found`. The 1.4.3 binary reported a
+built-in checker using TypeScript 7.0.2. We retain the explicitly pinned compiler
+and format/lint tools rather than change their implementation with a runtime bump.
 
 Vite is still required for TanStack Start's route/SSR compilation and Tailwind
 plugins. Varlock still validates and injects sensitive configuration. Automatic

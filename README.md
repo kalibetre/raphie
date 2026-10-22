@@ -6,7 +6,7 @@ Browse the [documentation](docs/README.md) for feature guides, operations and ar
 
 ## Run locally
 
-Requires Bun 1.4.2 (pinned in `.bun-version` and `packageManager`).
+Requires Bun 1.4.4 (pinned in `.bun-version` and `packageManager`).
 
 ```sh
 bun install --frozen-lockfile
