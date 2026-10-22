@@ -144,3 +144,101 @@ automations, and other capabilities that the runtime does not currently expose
 need their own contracts and acceptance criteria. This architecture does not
 make them available merely by adding another client. Private runtime configuration
 continues to be managed through Varlock, not conversational credential prompts.
+
+## Next phase: lightweight execution, memory, and VM escalation
+
+Direction recorded 2026-10-22. Execution and the full learning-memory lifecycle
+remain planned. The first configurable-memory slice is implemented locally.
+Explore the execution, memory, and budget simulations in the
+[HTML architecture guide](architecture.html#execution-memory).
+
+Memory slice 1 adds **Settings → Memory**, built-in memory enabled by default and a Hindsight
+connection. Built-in evidence uses SQLite FTS5, scoped provenance, event time,
+corrections and logical forgetting; stable receipts prevent replay from restoring
+a corrected or forgotten source. Reflection supplies evidence to the conversation
+model rather than running a separate consolidation model. Hindsight supports
+synchronous retain, scoped recall and provider reflection; source corrections and
+deletion must currently be managed in Hindsight. API keys use the existing
+OS-backed Settings cipher. Active turns block configuration changes; switching
+never migrates data or falls back. Memory tools are not automatically replayed
+when interrupted. Honcho, Markdown, named connection libraries, background local
+consolidation and adapter relevance/cost evaluation remain subsequent slices.
+The adapter is tested against a local server matching the documented Hindsight
+API, not a live deployment. Forgetting current evidence does not erase chat
+history, old tool outputs, backups or forensic storage remnants.
+
+Start with **just-bash** for supported shell-like commands over a virtual
+filesystem. Do not reserve a VM per conversation. Keep agent/task state and
+workspace checkpoints outside compute; use an explicit execution port to request
+native capabilities and lease a self-hosted VM only when needed. Runtime policy,
+approval where required, and separate concurrency budgets govern escalation.
+Files and explicit artifacts cross tiers; live processes and RAM do not
+implicitly migrate. Credential-bearing integrations remain host-side tools.
+
+Proposed slices:
+
+1. **One durable lightweight workspace:** integrate just-bash, checkpoint files,
+   and prove restart recovery and isolation between workspaces. No host-home or
+   settings-database mount.
+2. **Configurable experience-based memory:** provide a runtime-owned Memory
+   interface with adapters for **Raphie built-in memory, Hindsight, Honcho and
+   Obsidian / Markdown vaults**, configured through **Settings → Memory**.
+   Built-in memory is included without requiring an external memory service;
+   the first slice uses SQLite evidence and FTS5 lexical retrieval, with
+   broader indexing and consolidation choices still open. External
+   providers are supported integration targets, not mandatory dependencies.
+   Settings manages named connections, endpoint and protected credentials or a
+   scoped vault path, provider namespace, capabilities and active backend.
+   Start with one active connection per runtime and explicit owner/assistant
+   scoping. Translate source IDs and scope to provider-specific identities in
+   adapters rather than leaking bank/peer/vault details into agent turns.
+
+   Retain facts and confirmed experiences with provenance and event time;
+   consolidate revisable observations; recall bounded relevant evidence; reflect
+   with support and uncertainty. These are desired application behaviors, not
+   an assertion that every provider has equivalent native methods. Report native,
+   Raphie-provided and unsupported capabilities explicitly. Do not hide weaker
+   semantics behind a success response. Tasks and reminders remain separate.
+
+   A Markdown vault contains user-editable source notes. Index external edits,
+   return file provenance, separate generated observations, constrain write paths
+   and detect conflicts. Reflection/consolidation can be supplied by Raphie where
+   configured, not claimed as a native Obsidian feature. Forgetting a derived
+   memory must not silently delete an authored note.
+
+   Switching backends preserves existing data and affects subsequent work after
+   in-flight memory operations settle. No implicit migration, synchronization,
+   dual writes or fallback on failure. Imports/exports and migration are explicit
+   operations. Surface ingestion/consolidation lag and outages. Keep secrets in
+   encrypted Settings storage, never browser read responses or sandbox files.
+
+   Acceptance: implement built-in plus one external adapter against the same
+   interface first, then Honcho and vault adapters in independent slices. Prove
+   sourced cross-session recall after restart, deduplicated ingestion, isolation,
+   evidence-linked reflection, temporal correction and forgetting of derivatives.
+   Also verify Settings connection testing/activation, unsupported capabilities,
+   safe switching, failure visibility and concurrent vault edits. Evaluate
+   relevance, unsupported inference, latency and cost per adapter.
+
+3. **On-demand VM execution:** capability request, policy check, exclusive lease,
+   fenced recovery, explicit input/output transfer, idle cleanup and a concurrency
+   budget. Prove a real repository test and bulk downloads before choosing the VM
+   backend. Unknown external effects remain uncertain rather than automatically
+   replaying after a lost VM. Kubernetes deployment is a target, not implemented.
+4. **Durable follow-through:** commitments have assignee, deadline/timezone,
+   source and open/completed state. A scheduler owns reminder timing, deduplicated
+   admission and delivery; saving a memory alone does not schedule a reminder.
+   Prove restart during the wait and no duplicate notification after recovery.
+5. **Mixed-workload measurement:** benchmark light tasks and concurrent heavy
+   jobs on the target host. Record startup/queue latency, task success, process-tree
+   memory, CPU, storage growth and model cost separately. Choose limits from the
+   evidence rather than from registered-agent counts.
+
+Historical evidence: the 2026-10-17 Eve / just-bash POC reached 300 simulated
+agents with mock models/integrations and no VMs, around 750 ms p95 tick latency
+and 1.03 GiB process memory. It did not measure mixed-tier execution or production
+memory retrieval. Separate microsandbox 0.5.10 tests proved boot, persisted files
+and isolated sessions, but bulk downloads hung and Testcontainers was blocked.
+These results do not establish capacity for the current Pi Durable runtime or
+select a production VM backend. The archived report is available in Git at
+`b74dbe3:research/EXPERIMENT-REPORT.md`; the research tree has been retired.
