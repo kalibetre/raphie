@@ -26,8 +26,8 @@ export async function checkMemorySettings() {
     [...document.querySelectorAll("button")].find(
       (item) => item.textContent.trim() === name,
     );
-  const fill = (value) => {
-    const input = document.querySelector("#memory-scope");
+  const fill = (value, selector = "#memory-scope") => {
+    const input = document.querySelector(selector);
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value",
@@ -57,12 +57,22 @@ export async function checkMemorySettings() {
     );
     if (!document.querySelector("#memory-scope").checkValidity())
       throw new Error("A valid scope was rejected by native form validation.");
+    fill("probe", "#memory-query");
+    await waitFor(
+      () => document.body.textContent.includes("0 matching memories"),
+      "live search results without submitting",
+    );
     button("Test saved connection").click();
     await waitFor(
       () => document.body.textContent.includes("Connection successful."),
       "connection test",
     );
-    return { save: "passed", savedBaseline: "passed", connection: "passed" };
+    return {
+      save: "passed",
+      savedBaseline: "passed",
+      liveSearch: "passed",
+      connection: "passed",
+    };
   } finally {
     fill(original);
     const current = document.querySelector(

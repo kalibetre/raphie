@@ -297,6 +297,7 @@ function MemoryConfiguration({
         <MemoryEvidenceBrowser
           key={JSON.stringify(status.configuration)}
           canManage={status.capabilities.revise && status.capabilities.forget}
+          liveSearch={status.configuration.provider === "builtin"}
         />
       )}
     </>

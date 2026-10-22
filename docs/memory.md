@@ -11,8 +11,10 @@ configuration. It needs no separate memory service. A saved disabled setting or
 external backend choice is preserved across restarts.
 
 Open **Settings → Memory** to enable or disable memory, select the backend and
-owner/assistant scope, test the saved connection, or search evidence. Built-in
-results can be corrected or forgotten there. Wait for active turns to finish
+owner/assistant scope, test the saved connection, or search evidence. Built-in search
+results update as you type after a short delay; Search and Enter also submit
+the query. External providers use Search or Enter explicitly. Built-in evidence
+can be corrected or forgotten there. Wait for active turns to finish
 before changing configuration.
 
 For example, ask Raphie:

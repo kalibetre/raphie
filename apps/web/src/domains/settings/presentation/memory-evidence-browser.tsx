@@ -1,13 +1,19 @@
 import type { MemoryEvidence, MemoryRecall } from "@raphie/contracts";
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
 import { Group } from "./settings-group";
 
-export function MemoryEvidenceBrowser({ canManage }: { canManage: boolean }) {
+export function MemoryEvidenceBrowser({
+  canManage,
+  liveSearch,
+}: {
+  canManage: boolean;
+  liveSearch: boolean;
+}) {
   const { workspace } = useBackend();
   const [query, setQuery] = useState("");
   const [evidence, setEvidence] = useState<MemoryEvidence[] | null>(null);
@@ -17,23 +23,47 @@ export function MemoryEvidenceBrowser({ canManage }: { canManage: boolean }) {
   const [content, setContent] = useState("");
   const [forgetting, setForgetting] = useState<string | null>(null);
 
-  async function search() {
+  const request = useRef<symbol | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = useCallback(async () => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    if (!query.trim()) return;
+    const current = Symbol();
+    request.current = current;
     setBusy(true);
     setError("");
     setEditing(null);
     setForgetting(null);
     try {
       const result = await workspace.api<MemoryRecall>("/api/memory/recall", {
-        query,
+        query: query.trim(),
       });
-      setEvidence(result.evidence);
+      if (current === request.current) setEvidence(result.evidence);
     } catch (error) {
-      setEvidence(null);
-      setError(error instanceof Error ? error.message : "Search failed.");
+      if (current === request.current) {
+        setEvidence(null);
+        setError(error instanceof Error ? error.message : "Search failed.");
+      }
     } finally {
-      setBusy(false);
+      if (current === request.current) setBusy(false);
     }
-  }
+  }, [query, workspace]);
+
+  useEffect(() => {
+    // Never let a previous query (or an unmounted scope) publish stale evidence.
+    request.current = null;
+    setEvidence(null);
+    setError("");
+    setBusy(false);
+    const pending =
+      liveSearch && query.trim() ? setTimeout(() => void search(), 300) : null;
+    timer.current = pending;
+    return () => {
+      if (pending !== null) clearTimeout(pending);
+      request.current = null;
+    };
+  }, [liveSearch, query, search]);
 
   async function change(id: string, forget: boolean) {
     setBusy(true);
@@ -81,6 +111,7 @@ export function MemoryEvidenceBrowser({ canManage }: { canManage: boolean }) {
           <div className="settings-actions">
             <Input
               id="memory-query"
+              aria-describedby="memory-search-help"
               value={query}
               maxLength={2000}
               required
@@ -98,11 +129,18 @@ export function MemoryEvidenceBrowser({ canManage }: { canManage: boolean }) {
             </Button>
           </div>
         </form>
+        <p id="memory-search-help">
+          {liveSearch
+            ? "Results update as you type. You can also press Search or Enter."
+            : "Press Search or Enter to query the provider."}
+        </p>
         <div role="status">
           {error ||
             (evidence
               ? `${evidence.length} matching ${evidence.length === 1 ? "memory" : "memories"}`
-              : "")}
+              : busy
+                ? "Working…"
+                : "Enter keywords to search retained evidence.")}
         </div>
         {evidence?.map((item, index) => (
           <article className="memory-evidence" key={`${item.id}:${index}`}>
