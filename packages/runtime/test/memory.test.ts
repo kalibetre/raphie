@@ -10,6 +10,7 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memory.ts";
 import { CredentialCipher } from "../src/domains/settings/infrastructure/credential-cipher.ts";
+import { ModelConnectionGate } from "../src/shared/infrastructure/model-connection-gate.ts";
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 
@@ -208,6 +209,124 @@ test("memory configuration protects credentials, destination changes, and busy t
   }
 });
 
+const failure = (promise: Promise<unknown>) =>
+  promise.then(
+    () => "resolved",
+    (error: Error & { status?: number }) =>
+      `${error.status ?? ""} ${error.message}`.trim(),
+  );
+
+const hindsight = {
+  ...builtin,
+  provider: "hindsight" as const,
+  endpoint: "https://memory.example",
+  bankId: "owner",
+};
+
+test("a saved Hindsight key never follows a destination changed while built-in is selected", async () => {
+  const f = await fixture();
+  try {
+    await f.memory.configure({ ...hindsight, apiKey: "synthetic-memory-key" });
+    // Built-in has no destination; the saved Hindsight one is kept.
+    await f.memory.configure({ ...builtin, endpoint: "https://evil.example" });
+    expect(f.memory.read().configuration.endpoint).toBe(hindsight.endpoint);
+    expect(
+      await failure(
+        f.memory.configure({ ...hindsight, endpoint: "https://evil.example" }),
+      ),
+    ).toContain("Re-enter or clear");
+    // Switching back to the destination the key was saved for keeps the key.
+    await f.memory.configure(hindsight);
+    expect(f.memory.read().configuration.hasCredential).toBe(true);
+  } finally {
+    await f.close();
+  }
+});
+
+test("forgetting an unknown memory reports not found and changes nothing", async () => {
+  const f = await fixture();
+  try {
+    await f.memory.retain(evidence);
+    expect(await failure(f.memory.forget("made-up-id"))).toBe(
+      "404 Memory not found in this scope.",
+    );
+    expect((await f.memory.recall("jasmine")).evidence).toHaveLength(1);
+    await f.memory.forget(evidence.id);
+    expect(await failure(f.memory.forget(evidence.id))).toContain("404");
+  } finally {
+    await f.close();
+  }
+});
+
+test("an undecryptable saved key leaves the runtime starting, with only Hindsight unavailable", async () => {
+  const f = await fixture();
+  try {
+    await f.memory.configure({ ...hindsight, apiKey: "synthetic-memory-key" });
+    f.memory.close();
+    const broken = {
+      sealMemoryKey: () => null,
+      openMemoryKey: (value: unknown) => {
+        if (value) throw new Error("cannot decrypt");
+        return null;
+      },
+    };
+    const memory = new RuntimeMemory(
+      join(f.directory, "memory.sqlite"),
+      broken,
+    );
+    try {
+      expect(memory.read().error).toContain("cannot be decrypted");
+      expect(await failure(memory.recall("tea"))).toContain(
+        "503 The saved Hindsight API key cannot be decrypted",
+      );
+      // Built-in memory keeps working.
+      await memory.configure(builtin);
+      expect(memory.read().error).toBeNull();
+      await memory.retain(evidence);
+      expect((await memory.recall("jasmine")).evidence).toHaveLength(1);
+    } finally {
+      memory.close();
+    }
+  } finally {
+    f.reopen();
+    await f.close();
+  }
+});
+
+test("slow Hindsight calls do not hold the gate that admits chat messages", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-memory-gate-"));
+  const gate = new ModelConnectionGate();
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch() {
+      await delay(400);
+      return Response.json({ results: [] });
+    },
+  });
+  const memory = new RuntimeMemory(
+    join(directory, "memory.sqlite"),
+    { sealMemoryKey: () => null, openMemoryKey: () => null },
+    gate,
+  );
+  try {
+    await memory.configure({
+      ...hindsight,
+      endpoint: `http://127.0.0.1:${server.port}`,
+    });
+    const recall = memory.recall("tea");
+    await delay(50);
+    const started = performance.now();
+    await gate.run(async () => {});
+    expect(performance.now() - started).toBeLessThan(150);
+    expect((await recall).evidence).toEqual([]);
+  } finally {
+    memory.close();
+    await server.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("Hindsight uses synchronous, scoped API calls and never follows credential redirects", async () => {
   const f = await fixture();
   const calls: { path: string; body: unknown; authorization: string | null }[] =
@@ -390,6 +509,25 @@ test("memory HTTP endpoints share local access protection and expose no key", as
       next: null,
     });
     expect((await fetch(`${url}/evidence?after=invalid`)).status).toBe(400);
+    const post = (path: string, body: unknown) =>
+      fetch(`${url}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Raphie-Client": "web",
+        },
+        body: JSON.stringify(body),
+      });
+    // Unknown IDs are "not found", never a reported success.
+    expect((await post("/evidence/made-up/forget", {})).status).toBe(404);
+    expect((await post("/evidence/made-up", { content: "x" })).status).toBe(
+      404,
+    );
+    // The one configuration schema rejects an empty key at the boundary.
+    expect((await post("", { ...builtin, apiKey: "" })).status).toBe(400);
+    expect((await post(`/evidence/${evidence.id}/forget`, {})).status).toBe(
+      200,
+    );
     const read = await fetch(url);
     expect(read.status).toBe(200);
     expect(await read.json()).toMatchObject({

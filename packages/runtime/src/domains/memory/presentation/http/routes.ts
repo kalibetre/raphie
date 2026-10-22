@@ -6,6 +6,7 @@ import {
   limitBody,
 } from "../../../../infrastructure/http/validation.ts";
 import type { MemoryService } from "../../application/ports.ts";
+import { memoryConfigurationInput } from "../../infrastructure/runtime-memory.ts";
 
 export function memoryRoutes(memory: MemoryService) {
   const query = z
@@ -19,18 +20,8 @@ export function memoryRoutes(memory: MemoryService) {
     .post(
       "/",
       limitBody(8192),
-      jsonInput(
-        z
-          .object({
-            enabled: z.boolean(),
-            provider: z.enum(["builtin", "hindsight"]),
-            scope: z.string().max(80),
-            endpoint: z.string().max(2048),
-            bankId: z.string().max(80),
-            apiKey: z.string().max(4096).nullable().optional(),
-          })
-          .strict(),
-      ),
+      // One schema for HTTP and the service, so they cannot drift.
+      jsonInput(memoryConfigurationInput),
       async (c) => c.json(await memory.configure(c.req.valid("json"))),
     )
     .post(

@@ -138,9 +138,12 @@ export class BuiltinMemory implements MemoryBackend {
       this.db
         .query("DELETE FROM memory_search WHERE scope=? AND id=?")
         .run(scope, id);
-      this.db
+      const { changes } = this.db
         .query("DELETE FROM memory_evidence WHERE scope=? AND id=?")
         .run(scope, id);
+      // Never report forgetting something that was not there (rolls back).
+      if (!changes)
+        throw new InputError("Memory not found in this scope.", 404);
     })();
   }
 

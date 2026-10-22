@@ -165,7 +165,8 @@ export class HindsightMemory implements MemoryBackend {
       evidence: (result.data.based_on?.memories ?? [])
         .slice(0, 8)
         .map((item) => ({
-          id: item.id,
+          // Same ID recall returns, so citations match across both.
+          id: item.document_id ?? item.id,
           content: item.text.slice(0, 8000),
           kind: "fact" as const,
           source: `hindsight:${item.id}`,

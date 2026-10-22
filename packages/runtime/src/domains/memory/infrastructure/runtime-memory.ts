@@ -44,9 +44,17 @@ type Secrets = {
   openMemoryKey(value: EncryptedCredential | null): string | null;
 };
 
+type Destination = { endpoint: string; bankId: string };
+
 type Saved = Omit<MemoryConfiguration, "hasCredential"> & {
   credential: EncryptedCredential | null;
+  // The Hindsight destination the key was saved for. A key is only ever sent
+  // there, so no configuration sequence can redirect it to another host.
+  credentialFor?: Destination;
 };
+
+const sameDestination = (a: Destination, b: Destination | undefined) =>
+  !!b && a.endpoint === b.endpoint && a.bankId === b.bankId;
 
 export class RuntimeMemory implements MemoryService {
   private db: Database;
@@ -54,6 +62,7 @@ export class RuntimeMemory implements MemoryService {
   private saved: Saved;
   private secrets: Secrets;
   private gate: ModelConnectionGate;
+  private keyError: string | null = null;
   isBusy: () => Promise<boolean> = async () => false;
 
   constructor(
@@ -84,9 +93,21 @@ export class RuntimeMemory implements MemoryService {
           bankId: "",
           credential: null,
         };
-    // Fail closed if the OS-backed Settings key cannot decrypt a saved connection.
-    const key = this.secrets.openMemoryKey(this.saved.credential);
-    if (key) registerRedactionSecret(key);
+    // Keys saved before destinations were recorded belong to the saved one.
+    if (this.saved.credential && !this.saved.credentialFor)
+      this.saved.credentialFor = {
+        endpoint: this.saved.endpoint,
+        bankId: this.saved.bankId,
+      };
+    // An undecryptable key fails closed for Hindsight only: it is never used,
+    // and the rest of the runtime (chat, built-in memory) still starts.
+    try {
+      const key = this.secrets.openMemoryKey(this.saved.credential);
+      if (key) registerRedactionSecret(key);
+    } catch {
+      this.keyError =
+        "The saved Hindsight API key cannot be decrypted on this device. Re-enter it in Settings → Memory.";
+    }
   }
 
   read(): MemoryStatus {
@@ -103,7 +124,7 @@ export class RuntimeMemory implements MemoryService {
         forget: !external,
         consolidation: external ? "provider" : "none",
       },
-      error: null,
+      error: external ? this.keyError : null,
     };
   }
 
@@ -117,7 +138,12 @@ export class RuntimeMemory implements MemoryService {
           409,
         );
       const { apiKey, ...configuration } = parsed.data;
-      if (configuration.provider === "hindsight") {
+      // Built-in memory has no destination: keep the saved Hindsight one, so
+      // the destination only changes where the key rules below apply.
+      if (configuration.provider === "builtin") {
+        configuration.endpoint = this.saved.endpoint;
+        configuration.bankId = this.saved.bankId;
+      } else {
         let url: URL;
         try {
           url = new URL(configuration.endpoint);
@@ -144,14 +170,14 @@ export class RuntimeMemory implements MemoryService {
             "Enter a Hindsight bank ID using letters, numbers, underscores or hyphens.",
           );
       }
-      const destinationChanged =
-        configuration.endpoint !== this.saved.endpoint ||
-        configuration.bankId !== this.saved.bankId;
+      const destination = {
+        endpoint: configuration.endpoint,
+        bankId: configuration.bankId,
+      };
       if (
-        configuration.provider === "hindsight" &&
-        destinationChanged &&
         apiKey === undefined &&
-        this.saved.credential
+        this.saved.credential &&
+        !sameDestination(destination, this.saved.credentialFor)
       )
         throw new InputError(
           "Re-enter or clear the API key when changing the Hindsight destination.",
@@ -160,7 +186,13 @@ export class RuntimeMemory implements MemoryService {
         apiKey === undefined
           ? this.saved.credential
           : this.secrets.sealMemoryKey(apiKey);
-      const next = { ...configuration, credential };
+      const next: Saved = {
+        ...configuration,
+        credential,
+        credentialFor:
+          apiKey === undefined ? this.saved.credentialFor : destination,
+      };
+      if (apiKey !== undefined) this.keyError = null;
       this.db
         .query(
           "INSERT INTO memory_settings(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
@@ -178,19 +210,34 @@ export class RuntimeMemory implements MemoryService {
         "Memory is disabled. Enable it in Settings → Memory.",
         409,
       );
-    return this.saved.provider === "builtin"
-      ? this.builtin
-      : new HindsightMemory(
-          this.saved.endpoint,
-          this.saved.bankId,
-          this.secrets.openMemoryKey(this.saved.credential),
-        );
+    if (this.saved.provider === "builtin") return this.builtin;
+    if (this.keyError) throw new InputError(this.keyError, 503);
+    const { endpoint, bankId, credential, credentialFor } = this.saved;
+    // Defense in depth: never send a key to a destination it was not saved for.
+    if (credential && !sameDestination({ endpoint, bankId }, credentialFor))
+      throw new InputError(
+        "Re-enter the Hindsight API key for this destination in Settings → Memory.",
+        409,
+      );
+    return new HindsightMemory(
+      endpoint,
+      bankId,
+      this.secrets.openMemoryKey(credential),
+    );
   }
 
-  private run<T>(
+  /**
+   * Read the configuration under the gate so an operation never sees a
+   * half-applied change, then run it outside: memory I/O (Hindsight calls can
+   * take up to 60 s) must not hold the lock that admits chat messages.
+   */
+  private async run<T>(
     operation: (backend: MemoryBackend, scope: string) => Promise<T>,
   ) {
-    return this.gate.run(() => operation(this.backend(), this.saved.scope));
+    const [backend, scope] = await this.gate.run(
+      async () => [this.backend(), this.saved.scope] as const,
+    );
+    return operation(backend, scope);
   }
 
   async test() {
