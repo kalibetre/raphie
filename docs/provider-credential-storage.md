@@ -1,7 +1,7 @@
 # Provider credential storage
 
 Raphie is a local, single-owner application, run from source under Bun (currently
-pinned to 1.4.2). Its independent runtime and web server bind to loopback; the
+pinned to 1.4.4). Its independent runtime and web server bind to loopback; the
 runtime can also run headlessly for Discord. It is not an individually signed,
 sandboxed desktop application. Host/Origin checks protect browser requests, not
 against native code running as the owner. Use one runtime per data directory.

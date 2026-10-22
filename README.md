@@ -4,7 +4,7 @@ A personal assistant with durable conversations, explicit tool approvals, and an
 
 ## Run locally
 
-Requires Bun 1.4.2 (pinned in `.bun-version` and `packageManager`).
+Requires Bun 1.4.4 (pinned in `.bun-version` and `packageManager`).
 
 ```sh
 bun install --frozen-lockfile
