@@ -29,7 +29,7 @@ export async function checkSidebarNavigation() {
   const groups = [
     ...document.querySelectorAll('[data-slot="sidebar-group-label"]'),
   ].map((element) => element.textContent);
-  if (groups.join(",") !== "Runtime,Preferences")
+  if (groups.join(",") !== "Workspace,Runtime,Preferences")
     throw new Error("Settings destinations are not grouped correctly.");
   choose("Models");
   await waitFor(
@@ -39,11 +39,11 @@ export async function checkSidebarNavigation() {
   );
   if (mobile) await waitFor(() => !document.querySelector('[role="dialog"]'));
   await showNavigation();
-  choose("General");
+  choose("Memory");
   await waitFor(
     () =>
-      section() === "general" &&
-      document.querySelector("h1")?.textContent === "General",
+      section() === "memory" &&
+      document.querySelector("h1")?.textContent === "Memory",
   );
   if (mobile) await waitFor(() => !document.querySelector('[role="dialog"]'));
   await showNavigation();
@@ -51,8 +51,12 @@ export async function checkSidebarNavigation() {
   await waitFor(() => !location.search.includes("view=settings"));
   if (mobile) await waitFor(() => !document.querySelector('[role="dialog"]'));
   await showNavigation();
-  document.querySelector('[aria-label="Settings"]').click();
-  await waitFor(() => location.search.includes("view=settings"));
+  choose("Memory");
+  await waitFor(
+    () =>
+      section() === "memory" &&
+      document.querySelector("h1")?.textContent === "Memory",
+  );
   if (mobile) await waitFor(() => !document.querySelector('[role="dialog"]'));
   if (location.pathname !== path)
     throw new Error("Sidebar navigation lost the selected conversation.");

@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Monitor,
   Moon,
   Puzzle,
@@ -32,7 +33,7 @@ export const sections = [
   { id: "connection", label: "Backend", icon: Server },
   { id: "providers", label: "Providers", icon: KeyRound },
   { id: "models", label: "Models", icon: Brain },
-  { id: "memory", label: "Memory", icon: Brain },
+  { id: "memory", label: "Memory", icon: BookOpen },
   { id: "telemetry", label: "Telemetry", icon: Radio },
   { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "plugins", label: "Plugins", icon: Puzzle },

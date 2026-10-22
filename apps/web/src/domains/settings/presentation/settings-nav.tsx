@@ -11,6 +11,7 @@ import {
 import { type Section, sections } from "./settings";
 
 const groups = [
+  { label: "Workspace", ids: ["memory"] },
   { label: "Runtime", ids: ["connection", "providers", "models", "telemetry"] },
   { label: "Preferences", ids: ["general", "plugins"] },
 ] as const;
