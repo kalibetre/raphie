@@ -17,7 +17,7 @@ import {
 
 /** Current-bot updates use its existing stream; other bots poll without holding browser connections. */
 export function useBotInbox(currentSessions?: SessionSummary[]) {
-  const { workspace } = useBackend();
+  const { workspace, backend } = useBackend();
   const bots = useBots();
   const ids = useMemo(
     () => bots.data?.items.map((b) => b.id) ?? [],
@@ -25,17 +25,29 @@ export function useBotInbox(currentSessions?: SessionSummary[]) {
   );
   const key = `raphie:read-replies:${encodeURIComponent(workspace.url)}`;
   const [ledger, setLedger] = useState(() => parseReplyLedger(readLocal(key)));
-  const summaries = useQueries({
-    queries: ids.map((id) => ({
-      queryKey: ["bot-inbox", id],
-      queryFn: () =>
-        workspace.api<Page<SessionSummary>>(
-          `/api/bots/${id}/sessions?limit=100`,
-        ),
-      enabled: id !== workspace.botId,
-      refetchInterval: 15000,
-    })),
-  });
+  // Backend-wide cache: badges survive bot changes. The current bot is fed
+  // from its live stream below instead of being polled.
+  const summaries = useQueries(
+    {
+      queries: ids.map((id) => ({
+        queryKey: ["bot-inbox", id],
+        queryFn: () =>
+          backend.api<Page<SessionSummary>>(
+            `/api/bots/${id}/sessions?limit=100`,
+          ),
+        enabled: id !== workspace.botId,
+        refetchInterval: 15000,
+      })),
+    },
+    backend.queries,
+  );
+  useEffect(() => {
+    if (currentSessions)
+      backend.queries.setQueryData<Page<SessionSummary>>(
+        ["bot-inbox", workspace.botId],
+        (page) => ({ items: currentSessions, next: page?.next ?? null }),
+      );
+  }, [backend, workspace.botId, currentSessions]);
   useEffect(() => {
     const sync = (event: StorageEvent) => {
       if (event.key !== key) return;
@@ -72,7 +84,7 @@ export function useBotInbox(currentSessions?: SessionSummary[]) {
     ids.map((id, i) => [
       id,
       id === workspace.botId
-        ? (currentSessions ?? [])
+        ? (currentSessions ?? summaries[i]?.data?.items ?? [])
         : (summaries[i]?.data?.items ?? []),
     ]),
   );

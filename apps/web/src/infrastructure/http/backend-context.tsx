@@ -3,7 +3,10 @@ import { createContext, useContext } from "react";
 import type { BackendWorkspace } from "./backend-workspace";
 
 type BackendConnection = {
+  /** The selected bot's scope: replaced, with all its caches, on bot change. */
   workspace: BackendWorkspace;
+  /** Backend-wide scope that outlives bot changes: the bot list and inbox. */
+  backend: BackendWorkspace;
   connect: (url: string) => Promise<void>;
   selectBot: (id: string) => Promise<void>;
 };

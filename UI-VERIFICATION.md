@@ -224,3 +224,7 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   direction derive from its id (integer PRNG, so every browser draws the same
   face) and its colour family. Checked in the chat roster, title bar, settings
   sidebar, scope chip and mobile strip in both themes.
+- Bot switches keep the backend-wide bot roster and inbox summaries cached,
+  while replacing bot-scoped queries and editors. Frame sampling across Research,
+  Builder and Raphie found all four roster entries present in every frame and no
+  intermediate "Loading bot…" screen. Full validation passes all 118 tests.
