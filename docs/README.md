@@ -22,6 +22,7 @@ change that changes the behavior.
 - [Contributing and verification](../CONTRIBUTING.md)
 - [UI scrolling and composer behavior](ui-scrolling.md)
 - [Headless runtime decision](adr/0001-headless-runtime-and-capability-specific-adapters.md)
+- [Accepted bot ownership and workspace decision](adr/0002-bot-owned-workspaces-and-temporary-compute.md)
 
 ## Planned work and history
 

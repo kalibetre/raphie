@@ -3019,10 +3019,14 @@
             <h3>Lightweight workspace</h3>
             <p>
               just-bash: a virtual filesystem and supported shell-like commands.
-              The default tier.
+              Each bot owns one default persistent workspace, shared by its
+              sessions. Sandboxes are replaceable; checkpoints survive them.
             </p>
             <ul class="facts">
-              <li>No VM reserved per conversation or idle identity.</li>
+              <li>
+                Serialize execution per workspace; other bots can proceed.
+              </li>
+              <li>No VM reserved per conversation or idle bot.</li>
               <li>No host-home or settings-database mount.</li>
             </ul>
             <p class="touches">touches → checkpoints · VM leases</p>
@@ -3425,6 +3429,41 @@
           <b>Not built.</b> just-bash integration and the VM adapter are
           planned. The VM backend is not chosen.
         </p>
+
+        <article class="entry" id="bot-ownership">
+          <span class="tag plan">Accepted design · implementation planned</span>
+          <h3>Bot ownership, persistent files, temporary compute</h3>
+          <p>
+            One runtime hosts multiple bots. Each bot owns its configuration,
+            sessions, memory scope and one default workspace. Multiple sessions
+            share the bot's files; only one execution may modify the workspace
+            at a time, across lightweight and native tiers.
+          </p>
+          <ul class="facts">
+            <li>
+              Authorized session/channel context selects the bot and workspace.
+            </li>
+            <li>
+              Cross-bot file and memory sharing requires explicit authorization.
+            </li>
+            <li>
+              Workspace checkpoints survive sandbox shutdown and replacement.
+            </li>
+            <li>
+              Separate budgets bound model generation, lightweight execution and
+              VM leases.
+            </li>
+            <li>
+              Logical scoping is distinct from process or VM security isolation.
+            </li>
+          </ul>
+          <p>
+            Next: preserve existing data under a default bot, then add bot-owned
+            workspaces and just-bash. Native work later acquires fenced VM
+            leases with explicit file transfer; processes and RAM do not
+            migrate.
+          </p>
+        </article>
 
         <div class="toolbar">
           <div class="seg" role="group" aria-label="Task">

@@ -5,8 +5,26 @@ apply consistently to the web workspace and the agent runtime.
 
 ## Language
 
+**Bot**: A persistent Raphie assistant identity with its own instructions,
+permissions, configuration, sessions, memory scope and workspace.
+_Avoid_: Runtime or session as a synonym for a bot.
+
+**Workspace**: A bot's persistent working files and artifacts, shared by its
+sessions and preserved when its execution environment stops.
+_Avoid_: Web workspace when referring to stored bot files; that names the client UI.
+
+**Sandbox**: A replaceable execution environment that operates on a bot's
+workspace within its permitted capabilities.
+
+**Execution**: One bounded operation against a workspace, associated with the
+bot and the session that requested it.
+
+**Compute lease**: Temporary, exclusive use of native execution capacity for a
+bot's work.
+
 **Session**: A durable conversation with its own identity and ordered history,
-independent of the interface through which the owner participates.
+belonging to one bot, independent of the interface through which the owner
+participates.
 _Avoid_: Chat as a synonym for a single message or a temporary browser connection.
 
 **Turn**: One admitted owner message and the agent work that answers it. A turn may
