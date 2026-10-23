@@ -7,6 +7,8 @@ import type {
   SaveMemoryConfiguration,
 } from "@raphie/contracts";
 
+import type { EncryptedCredential } from "../../../shared/application/encrypted-credential.ts";
+
 export type RetainMemory = Omit<MemoryEvidence, "revision">;
 
 /** Scope is supplied by the runtime configuration, never by a model/tool caller. */
@@ -30,4 +32,16 @@ export interface MemoryService {
   reflect(query: string): Promise<MemoryReflection>;
   revise(id: string, content: string): Promise<void>;
   forget(id: string): Promise<void>;
+}
+
+/** The host resolves the active turn; model arguments cannot supply provenance. */
+export type TurnProvenance = (conversationId: number) => Promise<{
+  sessionId: string;
+  turnId: string;
+  eventTime: number;
+} | null>;
+
+export interface MemoryCredentials {
+  sealMemoryKey(value: string | null): EncryptedCredential | null;
+  openMemoryKey(value: EncryptedCredential | null): string | null;
 }

@@ -9,12 +9,13 @@ import type {
 } from "@raphie/contracts";
 import { z } from "zod";
 
+import type { EncryptedCredential } from "../../../shared/application/encrypted-credential.ts";
 import { InputError } from "../../../shared/application/input-error.ts";
 import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
-import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
-import type { EncryptedCredential } from "../../settings/infrastructure/credential-cipher.ts";
+import { registerRedactionSecret } from "../../../shared/infrastructure/redaction.ts";
 import type {
   MemoryBackend,
+  MemoryCredentials,
   MemoryService,
   RetainMemory,
 } from "../application/ports.ts";
@@ -39,11 +40,6 @@ const contentInput = z.string().trim().min(1).max(8000);
 const idInput = z.string().min(1).max(256);
 const queryInput = z.string().trim().min(1).max(2000);
 
-type Secrets = {
-  sealMemoryKey(value: string | null): EncryptedCredential | null;
-  openMemoryKey(value: EncryptedCredential | null): string | null;
-};
-
 type Destination = { endpoint: string; bankId: string };
 
 type Saved = Omit<MemoryConfiguration, "hasCredential"> & {
@@ -60,14 +56,14 @@ export class RuntimeMemory implements MemoryService {
   private db: Database;
   private builtin: BuiltinMemory;
   private saved: Saved;
-  private secrets: Secrets;
+  private secrets: MemoryCredentials;
   private gate: ModelConnectionGate;
   private keyError: string | null = null;
   isBusy: () => Promise<boolean> = async () => false;
 
   constructor(
     path: string,
-    secrets: Secrets,
+    secrets: MemoryCredentials,
     gate = new ModelConnectionGate(),
   ) {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });

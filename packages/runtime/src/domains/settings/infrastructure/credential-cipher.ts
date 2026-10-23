@@ -2,7 +2,10 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { secrets } from "bun";
 
+import type { EncryptedCredential } from "../../../shared/application/encrypted-credential.ts";
 import { InputError } from "../../../shared/application/input-error.ts";
+
+export type { EncryptedCredential } from "../../../shared/application/encrypted-credential.ts";
 
 const service = "com.raphie.provider-credentials";
 
@@ -15,12 +18,6 @@ export type CredentialKeyStore = {
 export const osCredentialKeyStore: CredentialKeyStore = {
   get: (name) => secrets.get({ service, name }),
   set: (name, value) => secrets.set({ service, name, value }),
-};
-
-export type EncryptedCredential = {
-  nonce: string;
-  ciphertext: string;
-  tag: string;
 };
 
 /** AES-256-GCM; SQLite contains only ciphertext and a non-secret OS key identifier. */

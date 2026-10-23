@@ -2,13 +2,12 @@ import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 
 import { InputError } from "../../../shared/application/input-error.ts";
-import type { ChatService } from "../../conversations/infrastructure/pi-conversation-service.ts";
-import type { MemoryService } from "../application/ports.ts";
+import type { MemoryService, TurnProvenance } from "../application/ports.ts";
 
 /** Scope and provenance are supplied by the host, never by model arguments. */
 export function createMemoryTools(
   memory: MemoryService,
-  chats: Pick<ChatService, "state">,
+  provenance: TurnProvenance,
 ) {
   const query = Type.Object(
     { query: Type.String({ minLength: 1, maxLength: 2000 }) },
@@ -71,29 +70,21 @@ export function createMemoryTools(
         try {
           let result: unknown;
           if (tool.name === "memory_retain") {
-            const state = await chats.state();
-            const session = state.conversations.find(
-              (c) => c.id === api.conversationId,
-            );
-            const turn = state.turns.findLast(
-              (t) =>
-                t.conversationId === api.conversationId &&
-                t.status === "pending",
-            );
-            if (!session || !turn)
+            const turn = await provenance(api.conversationId);
+            if (!turn)
               throw new InputError(
                 "No active turn for memory provenance.",
                 409,
               );
             const id = new Bun.CryptoHasher("sha256")
-              .update(`${session.sessionId}:${api.callId}`)
+              .update(`${turn.sessionId}:${api.callId}`)
               .digest("hex");
             await memory.retain({
               id,
               content: args.content as string,
               kind: args.kind as "fact" | "experience",
-              source: `session:${session.sessionId}/turn:${turn.id}`,
-              eventTime: turn.createdAt,
+              source: `session:${turn.sessionId}/turn:${turn.turnId}`,
+              eventTime: turn.eventTime,
             });
             result = { retained: true, id };
           } else if (tool.name === "memory_recall")

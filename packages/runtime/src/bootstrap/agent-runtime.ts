@@ -129,7 +129,25 @@ export class Gateway {
       }),
     );
     if (options.memory)
-      registry.install(createMemoryTools(options.memory, app.chats));
+      registry.install(
+        createMemoryTools(options.memory, async (conversationId) => {
+          const state = await app.chats.state();
+          const session = state.conversations.find(
+            (c) => c.id === conversationId,
+          );
+          const turn = state.turns.findLast(
+            (t) =>
+              t.conversationId === conversationId && t.status === "pending",
+          );
+          return session && turn
+            ? {
+                sessionId: session.sessionId,
+                turnId: turn.id,
+                eventTime: turn.createdAt,
+              }
+            : null;
+        }),
+      );
     if (options.mcp) registry.install(createMcpTools(app, options.mcp));
     app.harness = await Harness.open(
       await openBunSqliteStorage(join(options.directory, "gateway.sqlite")),
