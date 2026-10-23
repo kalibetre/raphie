@@ -1,4 +1,3 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   type ReactNode,
@@ -10,12 +9,12 @@ import {
 import { flushSync } from "react-dom";
 
 import { api } from "../../infrastructure/http/api-client";
-import { BackendContext } from "../../infrastructure/http/backend-context";
 import {
   BackendWorkspace,
   connectWorkspace,
 } from "../../infrastructure/http/backend-workspace";
 import { Button } from "../../shared/ui/button";
+import { BotBoundary } from "./bot-boundary";
 
 export function BackendBoundary({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
@@ -24,34 +23,31 @@ export function BackendBoundary({ children }: { children: ReactNode }) {
   const active = useRef<BackendWorkspace | undefined>(undefined);
   const switching = useRef(false);
 
-  const load = useCallback(
-    async (resetRoute = false) => {
-      setError("");
-      try {
-        const { url } = await api<{ url: string }>("/api/web/connection");
-        if (resetRoute)
-          await navigate({
-            to: "/",
-            search: { view: "settings", section: "connection" },
-            replace: true,
-          });
-        const next = new BackendWorkspace(url);
-        active.current = next;
-        setWorkspace(next);
-      } catch (error) {
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Could not load the backend connection.",
-        );
-      }
-    },
-    [navigate],
-  );
+  const load = useCallback(async (isCurrent: () => boolean = () => true) => {
+    setError("");
+    try {
+      const { url } = await api<{ url: string }>("/api/web/connection");
+      if (!isCurrent()) return;
+      const next = new BackendWorkspace(url);
+      active.current = next;
+      setWorkspace(next);
+    } catch (error) {
+      if (!isCurrent()) return;
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Could not load the backend connection.",
+      );
+    }
+  }, []);
 
   useEffect(() => {
-    void load();
-    return () => active.current?.dispose();
+    let current = true;
+    void load(() => current);
+    return () => {
+      current = false;
+      active.current?.dispose();
+    };
   }, [load]);
 
   async function connect(url: string) {
@@ -86,15 +82,29 @@ export function BackendBoundary({ children }: { children: ReactNode }) {
     <>
       {error && <p role="alert">{error}</p>}
       {workspace ? (
-        <BackendContext.Provider value={{ workspace, connect }}>
-          <QueryClientProvider key={workspace.url} client={workspace.queries}>
-            {children}
-          </QueryClientProvider>
-        </BackendContext.Provider>
+        <BotBoundary
+          key={workspace.url}
+          workspace={workspace}
+          connect={connect}
+        >
+          {children}
+        </BotBoundary>
       ) : (
         <div role="status" className="loading-state">
           <p>Connecting to your workspace…</p>
-          {error && <Button onClick={() => void load(true)}>Try again</Button>}
+          {error && (
+            <Button
+              onClick={() =>
+                void navigate({
+                  to: "/",
+                  search: { view: "settings", section: "connection" },
+                  replace: true,
+                }).then(() => load())
+              }
+            >
+              Try again
+            </Button>
+          )}
         </div>
       )}
     </>

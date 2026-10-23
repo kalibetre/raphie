@@ -10,12 +10,31 @@ export class BackendWorkspace {
   private readonly lifetime = new AbortController();
   private readonly streams = new Set<EventSource>();
 
-  constructor(readonly url: string) {}
+  readonly botId: string;
+
+  constructor(
+    readonly url: string,
+    botId = "default",
+  ) {
+    this.botId = botId;
+  }
+
+  private scopedPath(path: string) {
+    if (
+      this.botId === "default" ||
+      path.startsWith("/api/bots") ||
+      path.startsWith("/api/web/")
+    )
+      return path;
+    if (!path.startsWith("/api/"))
+      throw new Error("Bot requests must use the runtime API.");
+    return `/api/bots/${encodeURIComponent(this.botId)}${path.slice(4)}`;
+  }
 
   readonly api = async <T>(path: string, data?: unknown): Promise<T> => {
     this.assertActive();
     const result = await api<T>(
-      path,
+      this.scopedPath(path),
       data,
       this.lifetime.signal,
       this.url || undefined,
@@ -38,7 +57,7 @@ export class BackendWorkspace {
     },
   ) {
     this.assertActive();
-    const address = new URL(path, "http://localhost");
+    const address = new URL(this.scopedPath(path), "http://localhost");
     if (this.url) address.searchParams.set("_raphie_backend", this.url);
     const events = new EventSource(address.pathname + address.search);
     this.streams.add(events);
@@ -58,7 +77,8 @@ export class BackendWorkspace {
   }
 
   draftKey(sessionId?: string) {
-    return `raphie:draft:${encodeURIComponent(this.url)}:${sessionId ?? "new"}`;
+    const bot = this.botId === "default" ? "" : `bot:${this.botId}:`;
+    return `raphie:draft:${encodeURIComponent(this.url)}:${bot}${sessionId ?? "new"}`;
   }
 
   dispose() {

@@ -25,6 +25,7 @@ import {
   TooltipTrigger,
 } from "../../../../shared/ui/tooltip";
 import { isDark, toggleTheme } from "../../../settings/infrastructure/theme";
+import { BotPicker } from "../../../settings/presentation/bot-picker";
 import { getSessionSummaries } from "../../application/session-summaries";
 import { SessionCard } from "./session-card";
 
@@ -61,13 +62,14 @@ export function SessionSidebar({
   const issues = data?.uncertainToolDeliveries.length ?? 0;
   return (
     <Sidebar label="Main navigation" open={sidebar} onOpenChange={setSidebar}>
-      <SidebarHeader>
+      <SidebarHeader className="sidebar-top bot-sidebar-header">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             r
           </span>
           raphie
         </div>
+        <BotPicker />
       </SidebarHeader>
       <nav className="sidebar-primary" aria-label="Workspace">
         <SidebarMenuButton onClick={() => select()}>

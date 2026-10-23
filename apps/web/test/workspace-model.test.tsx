@@ -87,7 +87,15 @@ async function renderWorkspace({
   await router.load();
   try {
     return renderToStaticMarkup(
-      <BackendContext.Provider value={{ workspace, connect: async () => {} }}>
+      <BackendContext.Provider
+        value={{
+          workspace,
+          connect: async () => {},
+          selectBot: async () => {
+            throw new Error("Bot selection is outside this rendering fixture.");
+          },
+        }}
+      >
         <QueryClientProvider client={client}>
           <RouterProvider router={router} />
         </QueryClientProvider>

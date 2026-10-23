@@ -37,6 +37,7 @@ export function Workspace({
 }) {
   const { workspace } = useBackend();
   const api = workspace.api;
+  const bot = workspace.botId === "default" ? undefined : workspace.botId;
   const navigate = useNavigate();
   const {
     data,
@@ -79,11 +80,22 @@ export function Workspace({
       void navigate({
         to: "/sessions/$sessionId",
         params: { sessionId: conversation.sessionId },
-        search: { view, section: view === "settings" ? section : undefined },
+        search: {
+          bot,
+          view,
+          section: view === "settings" ? section : undefined,
+        },
         replace: true,
       });
     }
-  }, [legacyConversationId, conversation?.sessionId, navigate, view, section]);
+  }, [
+    legacyConversationId,
+    conversation?.sessionId,
+    navigate,
+    view,
+    section,
+    bot,
+  ]);
   const busy = !!data?.turns.some(
     (t) => t.conversationId === conversationId && t.status === "pending",
   );
@@ -117,7 +129,9 @@ export function Workspace({
       await navigate({
         to: "/sessions/$sessionId",
         params: { sessionId: sent.sessionId },
-        search: {},
+        search: {
+          bot,
+        },
       });
   }
 
@@ -128,9 +142,19 @@ export function Workspace({
       void navigate({
         to: "/sessions/$sessionId",
         params: { sessionId: selected.sessionId },
-        search: { view: nextView },
+        search: {
+          bot,
+          view: nextView,
+        },
       });
-    else void navigate({ to: "/", search: { view: nextView } });
+    else
+      void navigate({
+        to: "/",
+        search: {
+          bot,
+          view: nextView,
+        },
+      });
     setSidebar(false);
   }
 
@@ -171,9 +195,21 @@ export function Workspace({
                 void navigate({
                   to: "/sessions/$sessionId",
                   params: { sessionId: conversation.sessionId },
-                  search: { view, section: next },
+                  search: {
+                    bot,
+                    view,
+                    section: next,
+                  },
                 });
-              else void navigate({ to: "/", search: { view, section: next } });
+              else
+                void navigate({
+                  to: "/",
+                  search: {
+                    bot,
+                    view,
+                    section: next,
+                  },
+                });
               setSidebar(false);
             }}
             onBack={() => select(conversationId)}
@@ -185,12 +221,20 @@ export function Workspace({
                 void navigate({
                   to: "/sessions/$sessionId",
                   params: { sessionId: conversation.sessionId },
-                  search: { view: "settings", section: "memory" },
+                  search: {
+                    bot,
+                    view: "settings",
+                    section: "memory",
+                  },
                 });
               else
                 void navigate({
                   to: "/",
-                  search: { view: "settings", section: "memory" },
+                  search: {
+                    bot,
+                    view: "settings",
+                    section: "memory",
+                  },
                 });
               setSidebar(false);
             }}
@@ -300,12 +344,20 @@ export function Workspace({
                     void navigate({
                       to: "/sessions/$sessionId",
                       params: { sessionId: conversation.sessionId },
-                      search: { view: "settings", section: "models" },
+                      search: {
+                        bot,
+                        view: "settings",
+                        section: "models",
+                      },
                     });
                   else
                     void navigate({
                       to: "/",
-                      search: { view: "settings", section: "models" },
+                      search: {
+                        bot,
+                        view: "settings",
+                        section: "models",
+                      },
                     });
                 }}
               />

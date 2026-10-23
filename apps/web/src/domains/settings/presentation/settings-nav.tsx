@@ -10,6 +10,7 @@ import {
   SidebarMenuCollapsible,
   SidebarMenuSubButton,
 } from "../../../shared/ui/sidebar";
+import { BotPicker } from "./bot-picker";
 import { type Section, sections } from "./settings";
 
 // An entry is a section, or a collapsible parent whose children are sections.
@@ -24,7 +25,7 @@ type Entry =
 // Ordered by setup flow: connect a backend, add a provider, pick a model,
 // then shape the workspace; preferences last.
 const groups: readonly { label: string; entries: readonly Entry[] }[] = [
-  { label: "Setup", entries: ["connection", "providers", "models"] },
+  { label: "Setup", entries: ["connection", "bot", "providers", "models"] },
   {
     label: "Workspace",
     entries: [
@@ -61,13 +62,14 @@ export function SettingsNav({
       open={open}
       onOpenChange={onOpenChange}
     >
-      <SidebarHeader>
+      <SidebarHeader className="sidebar-top bot-sidebar-header">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             r
           </span>
           Settings
         </div>
+        <BotPicker />
       </SidebarHeader>
       <SidebarContent label="Settings sections">
         <nav aria-label="Settings">

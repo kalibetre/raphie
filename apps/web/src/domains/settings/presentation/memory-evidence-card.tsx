@@ -2,6 +2,7 @@ import type { MemoryEvidence } from "@raphie/contracts";
 import { Link } from "@tanstack/react-router";
 import { useId, useState } from "react";
 
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 
 export function MemoryEvidenceCard({
@@ -18,6 +19,7 @@ export function MemoryEvidenceCard({
   onForget: (id: string) => Promise<boolean>;
 }) {
   const field = useId();
+  const { workspace } = useBackend();
   const [mode, setMode] = useState<"view" | "edit" | "forget">("view");
   const [content, setContent] = useState(item.content);
   const session =
@@ -134,7 +136,9 @@ export function MemoryEvidenceCard({
           <Link
             to="/sessions/$sessionId"
             params={{ sessionId: session }}
-            search={{}}
+            search={{
+              bot: workspace.botId === "default" ? undefined : workspace.botId,
+            }}
           >
             Open source session
           </Link>
