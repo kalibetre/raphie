@@ -16,15 +16,18 @@ export function SessionCard({
   selected,
   now,
   onSelect,
+  unreadCount,
 }: {
   session: SessionSummary;
   selected: boolean;
   now: number;
   onSelect: () => void;
+  unreadCount: number;
 }) {
   return (
     <button
-      className={selected ? "selected" : ""}
+      className={`conversation-entry${selected ? " selected" : ""}`}
+      data-unread={unreadCount > 0 || undefined}
       aria-current={selected ? "page" : undefined}
       onClick={onSelect}
     >
@@ -41,7 +44,14 @@ export function SessionCard({
         {sessionPreview(session.preview)}
       </span>
       <span className="conversation-card-footer">
-        <SessionBadge session={session} />
+        <span className="conversation-card-status">
+          <SessionBadge session={session} />
+          {unreadCount > 0 && (
+            <span className="library-unread">
+              {unreadCount} new {unreadCount === 1 ? "reply" : "replies"}
+            </span>
+          )}
+        </span>
         <span className="conversation-meta">
           {session.origin === "discord" && (
             <MessageCircle size={12} aria-label="Discord session" />

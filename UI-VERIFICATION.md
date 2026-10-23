@@ -228,3 +228,14 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   while replacing bot-scoped queries and editors. Frame sampling across Research,
   Builder and Raphie found all four roster entries present in every frame and no
   intermediate "Loading bot…" screen. Full validation passes all 118 tests.
+- Settings breadcrumbs now show the bot avatar/scope and the current page icon.
+  The grouped reply card uses a neutral surface, with distinct reply/approval
+  icons; collapse, dismissal and unread behavior are preserved.
+- The conversation library has counted filters, a scoped header, unread badges
+  inside each conversation, and a search empty state. Clearing search restores
+  input focus. Compact filter labels fit narrow windows.
+- Verified these refinements in both themes, including 2× zoom, and checked
+  320/390/768/1024/1440px layouts. Search, unread filtering, keyboard collapse,
+  mobile navigation focus restoration and the unsaved-edit guard pass in the
+  collaborative browser with no console errors. All 118 tests and production
+  build pass; the existing large-chunk build warning remains.

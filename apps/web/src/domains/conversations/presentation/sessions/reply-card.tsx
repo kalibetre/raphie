@@ -1,11 +1,18 @@
 import type { SessionSummary } from "@raphie/contracts";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  MessageSquareText,
+  ShieldQuestion,
+  X,
+} from "lucide-react";
 import { useEffect, useId, useState } from "react";
 
 import {
   readLocal,
   writeLocal,
 } from "../../../../infrastructure/preferences/storage";
+import { Button } from "../../../../shared/ui/button";
 import { sessionPreview } from "../../application/session-summaries";
 
 export function ReplyCard({
@@ -51,13 +58,13 @@ export function ReplyCard({
             writeLocal(storageKey, String(!collapsed));
           }}
         >
-          <span>
-            <i />
+          <span className="reply-card-heading-label">
+            <MessageSquareText size={15} aria-hidden="true" />
             {visible.length}{" "}
             {visible.length === 1 ? "conversation" : "conversations"} with
             updates
           </span>
-          <span>
+          <span className="reply-card-toggle">
             {collapsed ? "Show replies" : "Hide replies"}
             {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
           </span>
@@ -69,21 +76,35 @@ export function ReplyCard({
                 className="reply-card-target"
                 onClick={() => onSelect(s.id)}
               >
-                <span className="reply-card-title">
-                  <span className="reply-card-name">{s.title}</span>
-                  <span
-                    className={s.waiting ? "reply-approval" : "reply-count"}
-                  >
-                    {s.waiting ? "Needs approval" : `${unread(s)} new`}
+                <span
+                  className="reply-card-symbol"
+                  data-approval={s.waiting || undefined}
+                >
+                  {s.waiting ? (
+                    <ShieldQuestion size={16} />
+                  ) : (
+                    <MessageSquareText size={16} />
+                  )}
+                </span>
+                <span className="reply-card-copy">
+                  <span className="reply-card-title">
+                    <span className="reply-card-name">{s.title}</span>
+                    <span
+                      className={s.waiting ? "reply-approval" : "reply-count"}
+                    >
+                      {s.waiting ? "Needs approval" : `${unread(s)} new`}
+                    </span>
+                  </span>
+                  <span className="reply-card-preview">
+                    {s.waiting
+                      ? "A tool action needs your review."
+                      : sessionPreview(s.replyPreview || s.preview)}
                   </span>
                 </span>
-                <span className="reply-card-preview">
-                  {s.waiting
-                    ? "A tool action needs your review."
-                    : sessionPreview(s.replyPreview || s.preview)}
-                </span>
               </button>
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 className="reply-card-dismiss"
                 aria-label={`Dismiss notification for ${s.title}`}
                 onClick={() =>
@@ -94,7 +115,7 @@ export function ReplyCard({
                 }
               >
                 <X size={13} />
-              </button>
+              </Button>
             </div>
           ))}
           {visible.length > 3 && (

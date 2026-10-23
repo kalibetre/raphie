@@ -1,6 +1,13 @@
 import type { SessionSummary } from "@raphie/contracts";
-import { Search } from "lucide-react";
-import { useState } from "react";
+import {
+  ArrowLeft,
+  CheckCheck,
+  MessageSquareText,
+  Search,
+  ShieldQuestion,
+  X,
+} from "lucide-react";
+import { useRef, useState } from "react";
 
 import { Button } from "../../../../shared/ui/button";
 import { ScrollArea } from "../../../../shared/ui/scroll-area";
@@ -26,7 +33,17 @@ export function ConversationLibrary({
   loadMore: () => void;
 }) {
   const [filter, setFilter] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const clearSearch = () => {
+    setFilter("");
+    searchInput.current?.focus();
+  };
   const [tab, setTab] = useState<"all" | "unread" | "approval">("all");
+  const counts = {
+    all: sessions.length,
+    unread: sessions.filter((s) => unread(s) > 0).length,
+    approval: sessions.filter((s) => s.waiting).length,
+  };
   const filtered = sessions.filter(
     (s) =>
       s.title.toLowerCase().includes(filter.toLowerCase()) &&
@@ -40,42 +57,74 @@ export function ConversationLibrary({
     >
       <section className="library-page">
         <header className="library-heading">
-          <div>
+          <div className="library-heading-copy">
+            <span className="library-scope">
+              <MessageSquareText size={13} aria-hidden="true" />
+              {name}
+            </span>
             <h2>Conversations</h2>
             <p>Your history with {name}.</p>
           </div>
           <Button variant="outline" size="sm" onClick={onBack}>
+            <ArrowLeft size={14} />
             Back to chat
           </Button>
         </header>
-        <div className="library-filters" aria-label="Filter conversations">
+        <div
+          className="library-filters"
+          role="group"
+          aria-label="Filter conversations"
+        >
           {(
             [
-              ["all", "All conversations"],
-              ["unread", "New replies"],
-              ["approval", "Needs approval"],
+              ["all", "All conversations", MessageSquareText],
+              ["unread", "New replies", CheckCheck],
+              ["approval", "Needs approval", ShieldQuestion],
             ] as const
-          ).map(([id, label]) => (
+          ).map(([id, label, Icon]) => (
             <Button
               key={id}
               variant={tab === id ? "secondary" : "ghost"}
               size="sm"
               aria-pressed={tab === id}
+              aria-label={`${label}, ${counts[id]}`}
               onClick={() => setTab(id)}
+              className="library-filter"
             >
-              {label}
+              <Icon size={14} aria-hidden="true" />
+              <span className="library-filter-label">{label}</span>
+              <span className="library-filter-compact" aria-hidden="true">
+                {id === "all" ? "All" : id === "approval" ? "Approvals" : label}
+              </span>
+              <span className="library-filter-count">{counts[id]}</span>
             </Button>
           ))}
         </div>
-        <label className="library-search">
+        <div className="library-search">
           <Search size={15} />
           <input
+            ref={searchInput}
             aria-label="Search conversations"
             placeholder="Search conversations…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
-        </label>
+          {filter && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Clear conversation search"
+              onClick={clearSearch}
+            >
+              <X size={13} />
+            </Button>
+          )}
+        </div>
+        <p className="library-results" role="status">
+          {filtered.length}{" "}
+          {filtered.length === 1 ? "conversation" : "conversations"}
+          {filter ? ` matching “${filter}”` : " · Most recent first"}
+        </p>
         <nav
           className="conversation-list library-list"
           aria-label={`${name}’s conversations`}
@@ -87,23 +136,27 @@ export function ConversationLibrary({
                 selected={s.id === selectedId}
                 now={Date.now()}
                 onSelect={() => onSelect(s.id)}
+                unreadCount={unread(s)}
               />
-              {unread(s) > 0 && (
-                <span className="library-unread">
-                  {unread(s)} new {unread(s) === 1 ? "reply" : "replies"}
-                </span>
-              )}
             </div>
           ))}
         </nav>
         {!filtered.length && (
-          <p className="sidebar-empty">
-            {filter
-              ? "No matching conversations."
-              : tab === "all"
-                ? "Your conversations will appear here."
-                : "You’re all caught up."}
-          </p>
+          <div className="library-empty">
+            <MessageSquareText size={24} aria-hidden="true" />
+            <p>
+              {filter
+                ? "No matching conversations."
+                : tab === "all"
+                  ? "Your conversations will appear here."
+                  : "You’re all caught up."}
+            </p>
+            {filter && (
+              <Button variant="outline" size="sm" onClick={clearSearch}>
+                Clear search
+              </Button>
+            )}
+          </div>
         )}
         {hasMore && (
           <Button variant="outline" onClick={loadMore}>
