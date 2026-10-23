@@ -71,6 +71,23 @@ policies through persistence/tool ports. Pi Durable transactions and workflows
 remain adapters behind those ports; transport handlers do not manage harness
 transactions. Bootstrap wires the implementation and owns process lifecycle.
 
+## Accepted bot and workspace extension
+
+[ADR 0002](adr/0002-bot-owned-workspaces-and-temporary-compute.md) extends this
+single-owner runtime to host multiple bots. The owner remains the human actor;
+a bot is an assistant identity, not a new user account. Each bot owns its
+configuration, sessions, memory scope and one default persistent workspace.
+Channel bindings resolve to a bot-owned session. A session's authorized ownership
+selects the bot and workspace for tools, reads, approvals and observations.
+
+Sessions of one bot may share files, so workspace execution is serialized across
+sessions and compute tiers. Different bot workspaces can execute concurrently
+within separate model-generation, lightweight-execution and VM-lease budgets.
+Workspace checkpoints survive sandbox replacement. Explicit artifact transfer
+connects lightweight and native execution; there is no implicit RAM/process
+migration or cross-bot sharing. The bot model and execution tiers are planned;
+the delivered headless interfaces do not yet implement these ownership checks.
+
 ## Application interface
 
 Expose a small interface divided by purpose. Adapters select the operations

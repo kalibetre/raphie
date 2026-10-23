@@ -14,6 +14,22 @@ The original research experiments are retired; Git history and an ignored local
 archive preserve their sources and legacy data. The active configuration schema
 is self-contained at the repository root.
 
+## Accepted next architecture: bot ownership
+
+[ADR 0002](adr/0002-bot-owned-workspaces-and-temporary-compute.md) adopts the bot
+as the ownership boundary within a shared runtime. Each bot has its own
+configuration, sessions, memory scope and one default persistent workspace.
+Multiple sessions can use that workspace; execution is serialized per workspace
+while other workspaces proceed independently. Sandboxes are replaceable compute;
+workspace files and checkpoints persist outside them. Model generation,
+lightweight execution and native VM leases have separate concurrency budgets.
+
+This is accepted design, not implemented multi-bot support. First introduce bot
+ownership and preserve existing data under a default bot; then add lightweight
+execution and later fenced VM leases. Authorized session/channel context selects
+the bot and workspace. Cross-bot sharing requires an explicit authorized
+operation; logical scoping alone does not establish OS-level isolation.
+
 ## Compiler and tooling
 
 The native TypeScript 7 compiler does not provide the old JavaScript compiler

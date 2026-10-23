@@ -148,7 +148,7 @@ continues to be managed through Varlock, not conversational credential prompts.
 ## Next phase: lightweight execution, memory, and VM escalation
 
 Direction recorded 2026-10-22. Execution and the full learning-memory lifecycle
-remain planned. The first configurable-memory slice is implemented locally.
+remain planned. The first configurable-memory slice is delivered.
 Explore the execution, memory, and budget simulations in the
 [HTML architecture guide](architecture.html#execution-memory).
 
@@ -175,10 +175,26 @@ approval where required, and separate concurrency budgets govern escalation.
 Files and explicit artifacts cross tiers; live processes and RAM do not
 implicitly migrate. Credential-bearing integrations remain host-side tools.
 
+Accepted ownership direction (2026-10-23): [ADR 0002](adr/0002-bot-owned-workspaces-and-temporary-compute.md).
+One runtime may host many bots. Each bot owns its configuration, sessions, memory
+scope and one default workspace; multiple sessions share that workspace.
+Sandboxes are replaceable. Serialize execution per workspace and budget model
+generation, lightweight execution and VM leases separately. Derive bot/workspace
+identity from authorized context, never model-selected IDs. Cross-bot sharing is
+explicit. These boundaries are planned, not delivered multi-bot isolation.
+
 Proposed slices:
 
-1. **One durable lightweight workspace:** integrate just-bash, checkpoint files,
-   and prove restart recovery and isolation between workspaces. No host-home or
+0. **Bot ownership first:** introduce durable BotId ownership before execution.
+   Backfill existing sessions and bindings to a default bot without changing
+   public IDs, history, approvals or delivery identities. Preserve existing memory
+   configuration and data for that bot. Test cross-bot denial of session reads,
+   observations, approvals and memory access, including after restart.
+1. **One durable lightweight workspace per bot:** integrate just-bash with the
+   bot's default workspace, serialize execution across its sessions, bound time,
+   output and storage, and persist checkpoints outside compute. Prove restart
+   recovery, shared files across the same bot's sessions, isolation between bots,
+   and that a replaced executor cannot overwrite newer state. No host-home or
    settings-database mount.
 2. **Configurable experience-based memory:** provide a runtime-owned Memory
    interface with adapters for **Raphie built-in memory, Hindsight, Honcho and
@@ -189,9 +205,9 @@ Proposed slices:
    providers are supported integration targets, not mandatory dependencies.
    Settings manages named connections, endpoint and protected credentials or a
    scoped vault path, provider namespace, capabilities and active backend.
-   Start with one active connection per runtime and explicit owner/assistant
-   scoping. Translate source IDs and scope to provider-specific identities in
-   adapters rather than leaking bank/peer/vault details into agent turns.
+   The delivered slice has one active connection per runtime; the bot ownership
+   slice must resolve configuration and memory scope for each bot explicitly.
+   Translate source IDs and scope to provider-specific identities in adapters rather than leaking bank/peer/vault details into agent turns.
 
    Retain facts and confirmed experiences with provenance and event time;
    consolidate revisable observations; recall bounded relevant evidence; reflect
