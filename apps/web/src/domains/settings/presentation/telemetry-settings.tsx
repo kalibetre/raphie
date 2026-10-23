@@ -1,10 +1,25 @@
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Switch } from "../../../shared/ui/switch";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { Group, Row } from "./settings-group";
 
-export function TelemetrySettings() {
+export function TelemetrySettings({ onInspect }: { onInspect: () => void }) {
+  const { workspace } = useBackend();
   const settings = useRuntimeSettings();
+  if (workspace.botId !== "default")
+    return (
+      <Group
+        title="Diagnostics"
+        note="This bot’s conversation activity is available from the activity inspector. Trace export is currently available for the default bot."
+      >
+        <div className="settings-form">
+          <Button variant="outline" onClick={onInspect}>
+            Open diagnostics
+          </Button>
+        </div>
+      </Group>
+    );
   return (
     <Group
       title="Telemetry"
@@ -24,6 +39,9 @@ export function TelemetrySettings() {
         />
       </Row>
       <div className="settings-form">
+        <Button variant="outline" onClick={onInspect}>
+          Open diagnostics
+        </Button>
         <p>
           Turning this off stops new traces. In-flight traces may finish
           exporting. Existing traces remain until retention removes them.

@@ -137,6 +137,12 @@ test("headless HTTP client submits, pages, observes, disconnects, approves and r
     ).json()) as Page<SessionSummary>;
     assert.equal(listed.items[0].id, receipt.sessionId);
     assert.equal(listed.items[0].turnCount, 61);
+    assert.equal(listed.items[0].replyCount, 60);
+    assert.equal(listed.items[0].replyPreview, "answer-59");
+    const observed = (await (
+      await fetch(`${http.url}/api/sessions/${receipt.sessionId}`)
+    ).json()) as SessionObservation;
+    assert.equal(observed.session.replyCount, listed.items[0].replyCount);
     assert.equal("discordThreadId" in listed.items[0], false);
     const proposal = state.toolApprovals[0];
     const decisions = await Promise.all([

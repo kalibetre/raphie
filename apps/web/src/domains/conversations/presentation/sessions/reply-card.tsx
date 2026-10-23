@@ -6,6 +6,7 @@ import {
   readLocal,
   writeLocal,
 } from "../../../../infrastructure/preferences/storage";
+import { sessionPreview } from "../../application/session-summaries";
 
 export function ReplyCard({
   sessions,
@@ -69,7 +70,7 @@ export function ReplyCard({
                 onClick={() => onSelect(s.id)}
               >
                 <span className="reply-card-title">
-                  {s.title}
+                  <span className="reply-card-name">{s.title}</span>
                   <span
                     className={s.waiting ? "reply-approval" : "reply-count"}
                   >
@@ -79,7 +80,7 @@ export function ReplyCard({
                 <span className="reply-card-preview">
                   {s.waiting
                     ? "A tool action needs your review."
-                    : s.replyPreview || s.preview}
+                    : sessionPreview(s.replyPreview || s.preview)}
                 </span>
               </button>
               <button

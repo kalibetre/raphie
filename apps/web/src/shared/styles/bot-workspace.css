@@ -500,3 +500,31 @@
     }
   }
 }
+@layer components {
+  .mobile-create-bot {
+    display: none;
+  }
+  @media (max-width: 767px) {
+    .mobile-create-bot {
+      display: grid;
+      align-self: center;
+      place-items: center;
+      min-width: 36px;
+      height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: none;
+      color: var(--muted-foreground);
+      margin: 0 8px;
+    }
+  }
+}
+@layer components {
+  .reply-card-name {
+    min-width: 0;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

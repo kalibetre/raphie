@@ -9,5 +9,6 @@
 @import "./responsive.css";
 @import "./panels.css";
 @import "./bot-workspace.css";
+@import "./bot-settings.css";
 
 /* App styles stay layered so component utilities can override them. */

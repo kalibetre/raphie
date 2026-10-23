@@ -2,6 +2,27 @@ import type { SessionSummary } from "@raphie/contracts";
 
 export type ReplyLedger = Record<string, Record<string, number>>;
 
+/** Reading in another tab must never move an existing cursor backwards. */
+export function mergeReplyLedgers(...ledgers: ReplyLedger[]): ReplyLedger {
+  const bots = new Map<string, Map<string, number>>();
+  for (const ledger of ledgers) {
+    for (const [bot, sessions] of Object.entries(ledger)) {
+      const counts = bots.get(bot) ?? new Map<string, number>();
+      for (const [id, count] of Object.entries(sessions))
+        counts.set(id, Math.max(count, counts.get(id) ?? 0));
+      bots.set(bot, counts);
+    }
+  }
+  return Object.fromEntries(
+    [...bots]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([bot, counts]) => [
+        bot,
+        Object.fromEntries([...counts].sort(([a], [b]) => a.localeCompare(b))),
+      ]),
+  );
+}
+
 export function unreadReplies(
   ledger: ReplyLedger,
   botId: string,

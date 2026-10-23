@@ -1,8 +1,9 @@
 import type { Page, SessionSummary } from "@raphie/contracts";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  mergeReplyLedgers,
   parseReplyLedger,
   readReplies,
   unreadReplies,
@@ -14,11 +15,10 @@ import {
   writeLocal,
 } from "../../infrastructure/preferences/storage";
 
-/** One summary stream per bot, rather than observing every conversation. */
-export function useBotInbox() {
+/** Current-bot updates use its existing stream; other bots poll without holding browser connections. */
+export function useBotInbox(currentSessions?: SessionSummary[]) {
   const { workspace } = useBackend();
   const bots = useBots();
-  const client = useQueryClient();
   const ids = useMemo(
     () => bots.data?.items.map((b) => b.id) ?? [],
     [bots.data],
@@ -32,29 +32,24 @@ export function useBotInbox() {
         workspace.api<Page<SessionSummary>>(
           `/api/bots/${id}/sessions?limit=100`,
         ),
-      refetchInterval: 30000,
+      enabled: id !== workspace.botId,
+      refetchInterval: 15000,
     })),
   });
   useEffect(() => {
-    const stop = ids.map((id) =>
-      workspace.observe(`/api/bots/${id}/sessions/events`, {
-        message: (event) => {
-          try {
-            client.setQueryData(
-              ["bot-inbox", id],
-              JSON.parse(event.data) as Page<SessionSummary>,
-            );
-          } catch {
-            void client.invalidateQueries({ queryKey: ["bot-inbox", id] });
-          }
-        },
-      }),
-    );
-    return () => stop.forEach((close) => close());
-  }, [ids, client, workspace]);
-  useEffect(() => {
     const sync = (event: StorageEvent) => {
-      if (event.key === key) setLedger(parseReplyLedger(event.newValue));
+      if (event.key !== key) return;
+      setLedger((current) => {
+        const stored = readLocal(key);
+        const next = mergeReplyLedgers(
+          current,
+          parseReplyLedger(stored),
+          parseReplyLedger(event.newValue),
+        );
+        const serialized = JSON.stringify(next);
+        if (stored !== serialized) writeLocal(key, serialized);
+        return serialized === JSON.stringify(current) ? current : next;
+      });
     };
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
@@ -62,15 +57,24 @@ export function useBotInbox() {
   const markRead = useCallback(
     (botId: string, sessionId: string, count: number) => {
       setLedger((current) => {
-        const next = readReplies(current, botId, sessionId, count);
-        if (next !== current) writeLocal(key, JSON.stringify(next));
+        const next = mergeReplyLedgers(
+          readReplies(current, botId, sessionId, count),
+          parseReplyLedger(readLocal(key)),
+        );
+        if (JSON.stringify(next) === JSON.stringify(current)) return current;
+        writeLocal(key, JSON.stringify(next));
         return next;
       });
     },
     [key],
   );
   const byBot = new Map(
-    ids.map((id, i) => [id, summaries[i]?.data?.items ?? []]),
+    ids.map((id, i) => [
+      id,
+      id === workspace.botId
+        ? (currentSessions ?? [])
+        : (summaries[i]?.data?.items ?? []),
+    ]),
   );
   return {
     bots,

@@ -1,0 +1,302 @@
+@layer components {
+  .bot-settings-layout {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+  .bot-settings-nav {
+    min-width: 0;
+    padding: 28px 14px;
+    border-right: 1px solid var(--border);
+    background: color-mix(in srgb, var(--sidebar) 50%, var(--background));
+    overflow: auto;
+  }
+  .settings-nav-identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 6px 26px;
+  }
+  .settings-nav-identity strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 550;
+    margin-bottom: 4px;
+    overflow-wrap: anywhere;
+  }
+  .settings-nav-identity small {
+    font-size: 10px;
+    color: var(--muted-foreground);
+  }
+  .settings-nav-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: none;
+    border-radius: 7px;
+    padding: 10px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+    margin: 0 0 4px;
+  }
+  .settings-nav-item[aria-current] {
+    background: var(--hover);
+    color: var(--foreground);
+  }
+  .settings-nav-item:hover {
+    background: var(--hover);
+  }
+  .settings-nav-note {
+    font-size: 10px;
+    line-height: 1.8;
+    color: var(--muted-foreground);
+    margin: 26px 10px;
+  }
+  .bot-settings-nav > button {
+    max-width: 100%;
+    white-space: normal;
+  }
+  .mobile-settings-nav {
+    display: none;
+  }
+  .bot-settings-layout .settings-page {
+    max-width: 808px;
+    padding: 40px 44px 32px;
+    gap: 26px;
+  }
+  .settings-page-heading {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .settings-page-heading h2 {
+    font-size: 26px;
+    letter-spacing: -0.6px;
+    font-weight: 550;
+    margin: 0 0 10px;
+  }
+  .settings-page-heading p {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    line-height: 1.7;
+    margin: 0;
+  }
+  .settings-scope-tag {
+    flex: none;
+    font-size: 10px;
+    max-width: 150px;
+    overflow-wrap: anywhere;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 6px;
+    padding: 6px 9px;
+  }
+  .bot-editor-section,
+  .bot-settings-layout .settings-group {
+    border-top: 1px solid var(--border);
+    padding: 24px 0;
+  }
+  .bot-editor-section h2,
+  .bot-settings-layout .settings-group h2 {
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--foreground);
+    margin: 0 0 8px;
+  }
+  .bot-editor-section > p,
+  .bot-settings-layout .settings-group > p {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    line-height: 1.8;
+    margin: 0 0 20px;
+  }
+  .bot-settings-layout .settings-card {
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .bot-editor .settings-form {
+    padding: 0;
+  }
+  .bot-editor .bot-form {
+    gap: 10px;
+  }
+  .bot-editor .bot-form label {
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .soul-editor {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .soul-editor-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 14px;
+    background: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--muted-foreground);
+  }
+  .soul-editor-heading strong {
+    font-family: monospace;
+    font-weight: 450;
+    color: var(--foreground);
+  }
+  .bot-editor .bot-soul {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    min-height: 270px;
+    font-size: 12px;
+    line-height: 1.9;
+    padding: 16px;
+    background: var(--card);
+  }
+  .bot-editor .bot-form p {
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+  .bot-profile-identity {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 0 28px;
+  }
+  .bot-profile-identity .bot-avatar {
+    width: 46px;
+    height: 46px;
+  }
+  .bot-profile-identity strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 7px;
+  }
+  .bot-profile-identity small {
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+  .bot-setup-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0;
+    gap: 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .bot-setup-row code {
+    font-size: 11px;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .bot-save-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--background);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid var(--border);
+    padding: 18px 0;
+    z-index: 2;
+  }
+  .bot-save-bar > div {
+    flex: 1;
+    min-width: 0;
+  }
+  .bot-save-bar p {
+    font-size: 11px;
+    color: var(--muted-foreground);
+    line-height: 1.7;
+    margin: 0;
+  }
+  .bot-save-bar .settings-error {
+    color: var(--error);
+  }
+  @media (min-width: 768px) and (max-width: 1100px) {
+    .bot-settings-layout {
+      grid-template-columns: 160px minmax(0, 1fr);
+    }
+    .bot-settings-layout .settings-page {
+      padding: 28px 24px;
+    }
+    .bot-settings-nav {
+      padding: 24px 10px;
+    }
+    .settings-nav-item {
+      font-size: 11px;
+    }
+    .settings-page-heading {
+      flex-wrap: wrap;
+    }
+  }
+  @media (max-width: 767px) {
+    .bot-settings-layout {
+      display: flex;
+      flex-direction: column;
+    }
+    .bot-settings-nav {
+      display: none;
+    }
+    .mobile-settings-nav {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mobile-settings-nav > [data-slot="select-trigger"] {
+      flex: 1;
+      min-width: 0;
+    }
+    .mobile-settings-nav button {
+      font-size: 11px;
+    }
+    .bot-settings-layout .settings-page {
+      padding: 24px 16px;
+      gap: 24px;
+    }
+    .settings-page-heading {
+      gap: 8px;
+    }
+    .settings-page-heading h2 {
+      font-size: 22px;
+    }
+    .settings-scope-tag {
+      font-size: 9px;
+      padding: 5px 7px;
+      max-width: 100px;
+    }
+    .bot-editor .bot-soul {
+      min-height: 240px;
+      font-size: 11px;
+      padding: 12px;
+    }
+    .bot-editor-section {
+      padding: 20px 0;
+    }
+    .bot-editor-section > p {
+      font-size: 11px;
+    }
+    .bot-save-bar {
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .bot-save-bar > div {
+      flex-basis: 100%;
+    }
+    .bot-save-bar button {
+      font-size: 11px;
+    }
+    .bot-save-bar p {
+      font-size: 10px;
+    }
+  }
+}

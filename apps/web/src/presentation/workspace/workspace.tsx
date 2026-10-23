@@ -14,6 +14,7 @@ import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins
 import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
 import type { Section } from "../../domains/settings/presentation/settings";
 import {
+  isAppSection,
   sections,
   Settings,
 } from "../../domains/settings/presentation/settings";
@@ -60,7 +61,7 @@ export function Workspace({
     loadMoreSessions,
     hasMoreSessions,
   } = useLiveState(sessionId, legacyConversationId);
-  const inbox = useBotInbox();
+  const inbox = useBotInbox(data?.conversations);
   const botProfile = inbox.bots.data?.items.find(
     (b) => b.id === workspace.botId,
   );
@@ -75,15 +76,17 @@ export function Workspace({
   ].sort((a, b) => b.lastAt - a.lastAt);
   const unread = (session: (typeof summaries)[number]) =>
     inbox.unread(workspace.botId, session);
-  const lastSessionKey = useCallback((id: string) =>
-    `raphie:last-session:${encodeURIComponent(workspace.url)}:${id}`, [workspace.url]);
+  const lastSessionKey = useCallback(
+    (id: string) =>
+      `raphie:last-session:${encodeURIComponent(workspace.url)}:${id}`,
+    [workspace.url],
+  );
   const conversation = data?.conversations.find(
     (c) => c.sessionId === (sessionId ?? legacySessionId),
   );
   const {
     inspector,
     setInspector,
-    sidebar,
     setSidebar,
     collapsed,
     toggleCollapsed,
@@ -140,7 +143,8 @@ export function Workspace({
     if (readSessionId) markInboxRead(workspace.botId, readSessionId, readCount);
   }, [markInboxRead, workspace.botId, readSessionId, readCount]);
   useEffect(() => {
-    if (readSessionId) writeLocal(lastSessionKey(workspace.botId), readSessionId);
+    if (readSessionId)
+      writeLocal(lastSessionKey(workspace.botId), readSessionId);
   }, [workspace.botId, lastSessionKey, readSessionId]);
   const events =
     data?.activity.filter((e) => e.conversationId === conversationId) ?? [];
@@ -192,6 +196,20 @@ export function Workspace({
     setSidebar(false);
   }
 
+  function openSettings(next: Section) {
+    if (conversation)
+      void navigate({
+        to: "/sessions/$sessionId",
+        params: { sessionId: conversation.sessionId },
+        search: { bot, view: "settings", section: next },
+      });
+    else
+      void navigate({
+        to: "/",
+        search: { bot, view: "settings", section: next },
+      });
+  }
+
   let title: string | undefined =
     conversation?.title ??
     (missing ? "Conversation unavailable" : "New conversation");
@@ -220,79 +238,64 @@ export function Workspace({
             onChange={(value) => resizePanel("left", value)}
           />
         )}
-        {view === "settings" ? (
-          <SettingsNav
-            section={section}
-            open={sidebar}
-            onOpenChange={setSidebar}
-            onSelect={(next) => {
-              if (conversation)
-                void navigate({
-                  to: "/sessions/$sessionId",
-                  params: { sessionId: conversation.sessionId },
-                  search: {
-                    bot,
-                    view,
-                    section: next,
-                  },
-                });
-              else
-                void navigate({
-                  to: "/",
-                  search: {
-                    bot,
-                    view,
-                    section: next,
-                  },
-                });
-              setSidebar(false);
-            }}
-            onBack={() => select(conversationId)}
-          />
-        ) : (
-          <BotSidebar
-            bots={inbox.bots.data?.items ?? []}
-            botId={workspace.botId}
-            byBot={inbox.byBot}
-            unread={inbox.unread}
-            connected={connected}
-            error={!!inbox.bots.error}
-            onRetry={() => void inbox.bots.refetch()}
-            onSelect={(id) => {
-              const last = readLocal(lastSessionKey(id));
-              if (last)
-                void navigate({
-                  to: "/sessions/$sessionId",
-                  params: { sessionId: last },
-                  search: { bot: id === "default" ? undefined : id },
-                });
-              else
-                void navigate({
-                  to: "/",
-                  search: { bot: id === "default" ? undefined : id },
-                });
-            }}
-            onSettings={() => {
-              select(conversationId, "settings");
-            }}
-            onCreate={() => {
+        <BotSidebar
+          bots={inbox.bots.data?.items ?? []}
+          botId={workspace.botId}
+          byBot={inbox.byBot}
+          unread={inbox.unread}
+          connected={connected}
+          error={!!inbox.bots.error}
+          onRetry={() => void inbox.bots.refetch()}
+          onSelect={(id) => {
+            const nextBot = id === "default" ? undefined : id;
+            if (view === "settings") {
               void navigate({
                 to: "/",
-                search: { bot, view: "settings", section: "bot" },
+                search: {
+                  bot: nextBot,
+                  view,
+                  section:
+                    isAppSection(section) || section === "new-bot"
+                      ? "bot"
+                      : section,
+                },
               });
-            }}
-          />
-        )}
+              return;
+            }
+            const last = readLocal(lastSessionKey(id));
+            if (last)
+              void navigate({
+                to: "/sessions/$sessionId",
+                params: { sessionId: last },
+                search: { bot: nextBot },
+              });
+            else void navigate({ to: "/", search: { bot: nextBot } });
+          }}
+          onSettings={() => {
+            openSettings("general");
+          }}
+          onCreate={() => {
+            void navigate({
+              to: "/",
+              search: { bot, view: "settings", section: "new-bot" },
+            });
+          }}
+        />
         <main id="main" className="main-panel">
           <WorkspaceHeader
             title={title}
-            breadcrumb={botProfile?.name ?? "Raphie"}
+            breadcrumb={
+              view === "settings" && isAppSection(section)
+                ? "App"
+                : (botProfile?.name ?? "Raphie")
+            }
             botId={workspace.botId}
             description={
               view === "settings"
                 ? "Settings"
                 : (botProfile?.description ?? "Your personal assistant")
             }
+            onBack={view ? () => select(conversationId) : undefined}
             onNew={!view ? () => select() : undefined}
             onLibrary={!view ? () => setLibrary(!library) : undefined}
             library={library}
@@ -313,13 +316,21 @@ export function Workspace({
             onToggleInspector={() => setInspector(!inspector)}
           />
           {view === "settings" ? (
-            <Settings
-              section={section}
-              data={data}
-              connected={connected}
-              enabled={enabled}
-              setEnabled={setEnabled}
-            />
+            <div className="bot-settings-layout">
+              <SettingsNav
+                section={section}
+                onSelect={openSettings}
+                onBack={() => select(conversationId)}
+                name={botProfile?.name ?? "Raphie"}
+                botId={workspace.botId}
+              />
+              <Settings
+                section={section}
+                enabled={enabled}
+                setEnabled={setEnabled}
+                onDiagnostics={() => select(conversationId, "diagnostics")}
+              />
+            </div>
           ) : error ? (
             <WorkspaceAlert
               title="Couldn’t connect to your workspace"
@@ -443,7 +454,7 @@ export function Workspace({
           )}
         </main>
         {inspector && !view && conversation && (
-          <aside className="inspector" inert={sidebar}>
+          <aside className="inspector">
             <PanelResizeHandle
               side="right"
               value={visibleActivityWidth}

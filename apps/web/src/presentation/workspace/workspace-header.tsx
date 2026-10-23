@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ListFilter,
   PanelLeft,
   PanelRight,
@@ -19,6 +20,7 @@ export function WorkspaceHeader({
   showInspector,
   onToggleNavigation,
   onToggleInspector,
+  onBack,
   onNew,
   onLibrary,
   library,
@@ -35,6 +37,7 @@ export function WorkspaceHeader({
   onOpenNavigation: () => void;
   onToggleNavigation: () => void;
   onToggleInspector: () => void;
+  onBack?: () => void;
   onNew?: () => void;
   onLibrary?: () => void;
   library?: boolean;
@@ -68,6 +71,17 @@ export function WorkspaceHeader({
         {library ? "Conversations" : title}
       </h1>
       <div className="header-actions">
+        {onBack && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Back to conversations"
+            title="Back to conversations"
+            onClick={onBack}
+          >
+            <ArrowLeft size={16} />
+          </Button>
+        )}
         {onNew && (
           <Button
             variant="ghost"

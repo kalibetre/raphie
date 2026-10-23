@@ -47,7 +47,7 @@ export function BotSidebar({
       </label>
       <div className="roster-label">Your bots</div>
       <ScrollArea
-        className="bot-roster-scroll"
+        className="bot-roster-scroll [&_[data-slot=scroll-area-scrollbar]]:hidden"
         viewportLabel="Your bots"
         orientation="both"
       >
@@ -87,6 +87,13 @@ export function BotSidebar({
                 </button>
               );
             })}
+          <button
+            className="mobile-create-bot"
+            onClick={onCreate}
+            aria-label="Create a bot"
+          >
+            <Plus size={18} />
+          </button>
           {error && (
             <button className="sidebar-empty" onClick={onRetry}>
               Couldn’t load bots. Retry
@@ -97,7 +104,11 @@ export function BotSidebar({
           )}
         </nav>
       </ScrollArea>
-      <Button className="new-bot-button" variant="ghost" onClick={onCreate}>
+      <Button
+        className="new-bot-button hidden justify-start md:inline-flex"
+        variant="ghost"
+        onClick={onCreate}
+      >
         <Plus size={14} /> New bot
       </Button>
       <footer className="roster-footer">

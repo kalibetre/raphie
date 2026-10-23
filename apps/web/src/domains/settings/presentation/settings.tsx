@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { Snapshot } from "../../../infrastructure/http/api-client";
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import {
   readLocal,
   writeLocal,
@@ -23,7 +23,7 @@ import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Switch } from "../../../shared/ui/switch";
 import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
-import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
+import { useBots } from "../infrastructure/use-bots";
 import { BotSettings } from "./bot-settings";
 import { ConnectionSettings } from "./connection-settings";
 import { MemoryBrowse, MemorySettings } from "./memory-settings";
@@ -33,16 +33,22 @@ import { Group, Row } from "./settings-group";
 import { TelemetrySettings } from "./telemetry-settings";
 
 export const sections = [
-  { id: "bot", label: "Bot", icon: Bot },
-  { id: "connection", label: "Backend", icon: Server },
+  { id: "bot", label: "Profile", icon: Bot },
+  { id: "personality", label: "Personality", icon: Bot },
+  { id: "bot-history", label: "Revision history", icon: Bot },
+  { id: "new-bot", label: "Create a bot", icon: Bot },
+  { id: "connection", label: "Backend connection", icon: Server },
   { id: "providers", label: "Providers", icon: KeyRound },
   { id: "models", label: "Models", icon: Brain },
   { id: "memory", label: "Memory", icon: BookOpen },
   { id: "memory-browse", label: "Browse memory", icon: Library },
-  { id: "plugins", label: "Plugins", icon: Puzzle },
-  { id: "general", label: "General", icon: SlidersHorizontal },
-  { id: "telemetry", label: "Telemetry", icon: Radio },
+  { id: "plugins", label: "UI plugins", icon: Puzzle },
+  { id: "general", label: "Appearance", icon: SlidersHorizontal },
+  { id: "telemetry", label: "Diagnostics", icon: Radio },
 ] as const;
+
+export const isAppSection = (section: string) =>
+  ["connection", "general", "plugins"].includes(section);
 
 export type Section = (typeof sections)[number]["id"];
 
@@ -51,22 +57,49 @@ export const isSection = (value: unknown): value is Section =>
 
 export function Settings({
   section,
-  data,
-  connected,
   enabled,
   setEnabled,
+  onDiagnostics,
 }: {
   section: Section;
-  data?: Snapshot;
-  connected: boolean;
   enabled: string[];
   setEnabled: (ids: string[]) => void;
+  onDiagnostics: () => void;
 }) {
+  const { workspace } = useBackend();
+  const bots = useBots();
+  const profile = bots.data?.items.find((b) => b.id === workspace.botId);
+  const app = isAppSection(section);
   return (
     <ScrollArea className="settings-scroll" viewportLabel="Settings">
       <section className="settings-page">
+        <header className="settings-page-heading">
+          <div>
+            <h2>{sections.find((s) => s.id === section)?.label}</h2>
+            <p>
+              {app
+                ? "Preferences for this app and browser."
+                : section === "new-bot"
+                  ? "An assistant with its own identity and configuration."
+                  : `Configuration for ${profile?.name ?? "this bot"}.`}
+            </p>
+          </div>
+          <span className="settings-scope-tag">
+            {app
+              ? "App-wide"
+              : section === "new-bot"
+                ? "New bot"
+                : `${profile?.name ?? "This bot"} only`}
+          </span>
+        </header>
         {section === "bot" ? (
           <BotSettings />
+        ) : section === "personality" ? (
+          <BotSettings mode="personality" />
+        ) : section === "bot-history" ? (
+          <BotSettings mode="history" />
+        ) : section === "new-bot" ? (
+          <BotSettings mode="create" />
         ) : section === "providers" ? (
           <ProviderSettings />
         ) : section === "models" ? (
@@ -76,11 +109,11 @@ export function Settings({
         ) : section === "memory-browse" ? (
           <MemoryBrowse />
         ) : section === "telemetry" ? (
-          <TelemetrySettings />
+          <TelemetrySettings onInspect={onDiagnostics} />
         ) : section === "connection" ? (
           <ConnectionSettings />
         ) : section === "general" ? (
-          <General data={data} connected={connected} />
+          <General />
         ) : (
           <Group
             title="Installed"
@@ -120,12 +153,8 @@ export function Settings({
   );
 }
 
-function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
+function General() {
   const [theme, setTheme] = useState<Theme>("system");
-  const settings = useRuntimeSettings();
-  const connection = settings.data?.connections.find(
-    (c) => c.id === data?.model?.provider,
-  );
   useEffect(
     () => setTheme((readLocal("raphie:theme") as Theme) ?? "system"),
     [],
@@ -156,36 +185,6 @@ function General({ data, connected }: { data?: Snapshot; connected: boolean }) {
               </button>
             ))}
           </div>
-        </Row>
-      </Group>
-      <Group
-        title="Runtime"
-        note="Connection and model preferences are available in Backend, Providers, and Models."
-      >
-        <Row title="Runtime" description="The selected local agent backend.">
-          <span className="settings-value">
-            <span className={`status-dot ${connected ? "" : "offline"}`} />
-            {connected ? "Connected" : "Reconnecting…"}
-          </span>
-        </Row>
-        <Row title="Model" description="Used for every conversation.">
-          <span className="settings-value">
-            {data?.model
-              ? `${connection?.name ?? data.model.provider} · ${data.model.modelId}`
-              : "Not configured"}
-          </span>
-        </Row>
-        <Row
-          title="Connected tools"
-          description="MCP server Raphie can call, with your approval."
-        >
-          <span className="settings-value">
-            {data?.mcp.connected
-              ? `${data.mcp.server ?? "MCP"} · ${data.mcp.toolCount} tools`
-              : data?.mcp.error
-                ? "Connection failed"
-                : "None"}
-          </span>
         </Row>
       </Group>
     </>

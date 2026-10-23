@@ -16,6 +16,7 @@ import { Switch } from "../../../shared/ui/switch";
 import { useMemory } from "../infrastructure/use-memory";
 import { MemoryEvidenceBrowser } from "./memory-evidence-browser";
 import { Group, Row } from "./settings-group";
+import { useSettingsGuard } from "./use-settings-guard";
 
 export function MemorySettings() {
   const memory = useMemory();
@@ -105,6 +106,7 @@ function MemoryConfiguration({
   const keyChange = external ? clearKey || !!key : false;
   const saved = JSON.stringify(status.configuration);
   const dirty = JSON.stringify(draft) !== saved || keyChange;
+  const guard = useSettingsGuard(dirty, busy);
   // Follow configuration saved elsewhere unless the owner is editing. Staying
   // mounted (not remounting on save) keeps keyboard focus on the form.
   const [base, setBase] = useState(saved);
@@ -302,6 +304,18 @@ function MemoryConfiguration({
               </>
             )}
             <div className="settings-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy || !dirty}
+                onClick={() => {
+                  setDraft(status.configuration);
+                  setKey("");
+                  setClearKey(false);
+                }}
+              >
+                Discard
+              </Button>
               <Button type="submit" disabled={busy || !dirty}>
                 {memory.update.isPending ? "Saving…" : "Save memory settings"}
               </Button>
@@ -314,6 +328,7 @@ function MemoryConfiguration({
                 {testing ? "Testing…" : "Test saved connection"}
               </Button>
             </div>
+            {guard.message && <p role="status">{guard.message}</p>}
             {dirty && (
               <p>
                 Save changes before testing this connection. The memory view

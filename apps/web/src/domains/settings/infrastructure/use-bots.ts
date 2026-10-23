@@ -14,6 +14,7 @@ export function useBots() {
     queryKey: ["bots"],
     queryFn: () => workspace.api<{ items: BotProfile[] }>("/api/bots"),
     retry: false,
+    refetchInterval: 30000,
   });
   const save = useMutation({
     mutationFn: (input: UpdateBotProfile) =>

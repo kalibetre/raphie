@@ -6,7 +6,10 @@ import {
 } from "lucide-react";
 
 import { relativeTime } from "../../application/run-projection";
-import type { SessionSummary } from "../../application/session-summaries";
+import {
+  sessionPreview,
+  type SessionSummary,
+} from "../../application/session-summaries";
 
 export function SessionCard({
   session,
@@ -35,7 +38,7 @@ export function SessionCard({
         </time>
       </span>
       <span className="conversation-preview">
-        {session.preview.replace(/[*_`#]/g, "").replace(/\s+/g, " ")}
+        {sessionPreview(session.preview)}
       </span>
       <span className="conversation-card-footer">
         <SessionBadge session={session} />

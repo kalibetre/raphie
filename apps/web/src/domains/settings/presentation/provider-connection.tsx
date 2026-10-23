@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "../../../shared/ui/select";
 import { useProviderConnections } from "../infrastructure/use-provider-connections";
+import { useSettingsGuard } from "./use-settings-guard";
 
 export function ProviderConnection({
   connection,
@@ -39,6 +40,12 @@ export function ProviderConnection({
   const [message, setMessage] = useState("");
   const [testing, setTesting] = useState(false);
   const busy = testing || mutation.isPending;
+  const guard = useSettingsGuard(
+    !!key ||
+      name !== (connection?.name ?? suggestedName) ||
+      provider !== (connection?.provider ?? providers[0]?.id ?? ""),
+    busy,
+  );
   const providerName =
     providers.find((p) => p.id === provider)?.name ?? provider;
   const fieldId = connection?.id ?? "new-connection";
@@ -204,6 +211,7 @@ export function ProviderConnection({
             Cancel
           </Button>
         </div>
+        {guard.message && <p role="status">{guard.message}</p>}
         {(message || mutation.error) && (
           <p role="status">{mutation.error?.message ?? message}</p>
         )}
