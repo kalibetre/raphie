@@ -1,6 +1,6 @@
 import type { BotProfile } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
@@ -34,11 +34,30 @@ export function BotForm({
       soul !== saved.soul
     : !!name || !!description || soul !== starterSoul;
   const guard = useSettingsGuard(dirty, pending);
+  const changedElsewhere =
+    !!profile && !!saved && profile.revision !== saved.revision;
+  useEffect(() => {
+    if (
+      !profile ||
+      !saved ||
+      profile.revision === saved.revision ||
+      dirty ||
+      pending
+    )
+      return;
+    setSaved(profile);
+    setName(profile.name);
+    setDescription(profile.description);
+    setSoul(profile.soul);
+    setError("");
+  }, [profile, saved, dirty, pending]);
 
   function discard() {
-    setName(saved?.name ?? "");
-    setDescription(saved?.description ?? "");
-    setSoul(saved?.soul ?? starterSoul);
+    const latest = profile ?? saved;
+    setSaved(latest);
+    setName(latest?.name ?? "");
+    setDescription(latest?.description ?? "");
+    setSoul(latest?.soul ?? starterSoul);
     setError("");
     setMessage("");
   }
@@ -74,6 +93,7 @@ export function BotForm({
         });
       }
     } catch (cause) {
+      void bots.refetch();
       setError(
         cause instanceof Error ? cause.message : "Could not save this bot.",
       );
@@ -152,9 +172,18 @@ export function BotForm({
               ? `Revision ${saved.revision} · Saved to this bot.`
               : "Independent configuration. No settings are copied.")
         }
-        error={error}
+        error={
+          changedElsewhere && dirty
+            ? "This bot changed elsewhere. Your draft is preserved. Copy any edits you want to keep, then Discard to load the latest revision."
+            : error
+        }
         pending={pending}
-        canSave={!!name.trim() && !!soul.trim() && (!saved || dirty)}
+        canSave={
+          !changedElsewhere &&
+          !!name.trim() &&
+          !!soul.trim() &&
+          (!saved || dirty)
+        }
         canDiscard={dirty}
         label={saved ? "Save changes" : "Create bot"}
         onDiscard={discard}
