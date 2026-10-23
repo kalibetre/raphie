@@ -1,3 +1,4 @@
+/* Settings shell and bot profile/personality editors. */
 @layer components {
   /* Full-window settings: the shadcn sidebar plus a scrolling page. */
   .settings-topbar {
@@ -71,35 +72,6 @@
   .settings-page .diagnostics .activity-scroll {
     max-height: 560px;
   }
-  .settings-page-heading {
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
-    justify-content: space-between;
-  }
-  .settings-page-heading h2 {
-    font-size: 26px;
-    letter-spacing: -0.6px;
-    font-weight: 550;
-    margin: 0 0 10px;
-  }
-  .settings-page-heading p {
-    color: var(--muted-foreground);
-    font-size: 12px;
-    line-height: 1.7;
-    margin: 0;
-  }
-  .settings-scope-tag {
-    flex: none;
-    font-size: 10px;
-    max-width: 150px;
-    overflow-wrap: anywhere;
-    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-    background: var(--accent-soft);
-    color: var(--accent);
-    border-radius: 6px;
-    padding: 6px 9px;
-  }
   /* Bot editors use the same cards as every other settings group. */
   .bot-editor-section {
     border: 1px solid var(--border);
@@ -167,25 +139,6 @@
     font-size: 11px;
     color: var(--muted-foreground);
   }
-  .bot-profile-identity {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin: 0 0 28px;
-  }
-  .bot-profile-identity .bot-avatar {
-    width: 46px;
-    height: 46px;
-  }
-  .bot-profile-identity strong {
-    display: block;
-    font-size: 16px;
-    margin-bottom: 7px;
-  }
-  .bot-profile-identity small {
-    font-size: 11px;
-    color: var(--muted-foreground);
-  }
   .bot-setup-row {
     display: flex;
     align-items: center;
@@ -195,41 +148,17 @@
     border-bottom: 1px solid var(--border);
     font-size: 12px;
   }
+  .bot-setup-row:last-child {
+    border-bottom: 0;
+  }
   .bot-setup-row code {
     font-size: 11px;
     overflow-wrap: anywhere;
     min-width: 0;
   }
-  .bot-save-bar {
-    position: sticky;
-    bottom: 0;
-    background: var(--background);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border-top: 1px solid var(--border);
-    padding: 18px 0;
-    z-index: 2;
-  }
-  .bot-save-bar > div {
-    flex: 1;
-    min-width: 0;
-  }
-  .bot-save-bar p {
-    font-size: 11px;
-    color: var(--muted-foreground);
-    line-height: 1.7;
-    margin: 0;
-  }
-  .bot-save-bar .settings-error {
-    color: var(--error);
-  }
   @media (min-width: 768px) and (max-width: 1100px) {
     .main-panel .settings-page {
       padding: 28px 24px;
-    }
-    .settings-page-heading {
-      flex-wrap: wrap;
     }
   }
   @media (max-width: 767px) {
@@ -242,17 +171,6 @@
       padding: 24px 16px;
       gap: 24px;
     }
-    .settings-page-heading {
-      gap: 8px;
-    }
-    .settings-page-heading h2 {
-      font-size: 22px;
-    }
-    .settings-scope-tag {
-      font-size: 9px;
-      padding: 5px 7px;
-      max-width: 100px;
-    }
     .bot-editor .bot-soul {
       min-height: 240px;
       font-size: 11px;
@@ -263,19 +181,6 @@
     }
     .bot-editor-section > p {
       font-size: 11px;
-    }
-    .bot-save-bar {
-      gap: 4px;
-      flex-wrap: wrap;
-    }
-    .bot-save-bar > div {
-      flex-basis: 100%;
-    }
-    .bot-save-bar button {
-      font-size: 11px;
-    }
-    .bot-save-bar p {
-      font-size: 10px;
     }
   }
 }

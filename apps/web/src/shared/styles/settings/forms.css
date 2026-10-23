@@ -1,0 +1,113 @@
+/* Settings building blocks: page, groups, rows, forms. */
+@layer components {
+  .bot-note {
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .bot-form {
+    display: grid;
+    gap: 10px;
+  }
+  .bot-form label {
+    font-size: 13px;
+    font-weight: 560;
+  }
+  .bot-form .bot-soul {
+    min-height: 220px;
+    font-family: var(--font-mono, monospace);
+    line-height: 1.6;
+  }
+  .bot-form p,
+  .bot-note {
+    line-height: 1.6;
+  }
+  .bot-history {
+    height: 180px;
+    margin-top: 8px;
+  }
+  .bot-history pre {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+  }
+  /* Settings */
+  .settings-scroll {
+    flex: 1;
+  }
+  .settings-page {
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 28px 28px 48px;
+    display: grid;
+    align-content: start;
+    gap: 28px;
+  }
+  .settings-card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+  }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+  }
+  .settings-row + .settings-row {
+    border-top: 1px solid var(--border);
+  }
+  .settings-row-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .settings-row h3 {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 560;
+  }
+  .settings-row p {
+    margin: 2px 0 0;
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+  }
+  .settings-row code {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .settings-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+    text-align: right;
+  }
+}
+
+@layer components {
+  .settings-form {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    min-width: 0;
+  }
+  .settings-form label {
+    font-size: 13px;
+    font-weight: 560;
+  }
+  .settings-form p {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

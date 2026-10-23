@@ -1,11 +1,10 @@
-import { ArrowLeft, ChevronRight, Plus, X } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { ArrowLeft, ChevronRight, Plus } from "lucide-react";
+import { useState } from "react";
 
 import {
   readLocal,
   writeLocal,
 } from "../../../infrastructure/preferences/storage";
-import { Button } from "../../../shared/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -24,12 +23,11 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarTrigger,
   useSidebar,
 } from "../../../shared/ui/sidebar";
 import { useBots } from "../infrastructure/use-bots";
 import { BotAvatar } from "./bot-avatar";
-import { isAppSection, type Section, sections } from "./settings";
+import { isAppSection, type Section, sections } from "./settings-sections";
 
 const botEntries: readonly Section[] = [
   "bot",
@@ -47,54 +45,6 @@ const parent: Partial<Record<Section, Section>> = {
 };
 const label = (id: Section) => sections.find((s) => s.id === id)!.label;
 const expandedKey = "raphie:settings-expanded";
-
-/** Settings page area: breadcrumb top bar above the selected section. */
-export function SettingsMain({
-  section,
-  botId,
-  onBack,
-  children,
-}: {
-  section: Section;
-  botId: string;
-  onBack: () => void;
-  children: ReactNode;
-}) {
-  const bots = useBots();
-  const app = isAppSection(section);
-  const name =
-    bots.data?.items.find((b) => b.id === botId)?.name ??
-    (botId === "default" ? "Raphie" : botId);
-  return (
-    <>
-      <header className="settings-topbar">
-        <SidebarTrigger
-          aria-label="Toggle settings navigation (⌘B)"
-          title="Toggle settings navigation (⌘B)"
-        />
-        <p className="settings-breadcrumb">
-          Settings
-          <span aria-hidden="true">/</span>
-          <strong>
-            {app ? "App" : section === "new-bot" ? "New bot" : name}
-          </strong>
-          <span aria-hidden="true">/</span>
-          {label(section)}
-        </p>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Close settings"
-          title="Close settings"
-          onClick={onBack}
-        >
-          <X size={16} />
-        </Button>
-      </header>
-      {children}
-    </>
-  );
-}
 
 /** Settings sidebar content: every bot's pages grouped above the app's. */
 export function SettingsNav({

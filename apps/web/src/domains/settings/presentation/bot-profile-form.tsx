@@ -5,8 +5,8 @@ import { useState } from "react";
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { useBots } from "../infrastructure/use-bots";
-import { BotAvatar } from "./bot-avatar";
 import { BotProfileFields } from "./bot-profile-fields";
+import { SaveBar } from "./save-bar";
 import { useSettingsGuard } from "./use-settings-guard";
 const starterSoul =
   "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
@@ -88,18 +88,6 @@ export function BotForm({
         void save();
       }}
     >
-      {mode === "profile" && saved && (
-        <div className="bot-profile-identity">
-          <BotAvatar id={saved.id} />
-          <div>
-            <strong>{saved.name}</strong>
-            <small>
-              {saved.id === "default" ? "Default bot" : "Independent bot"} ·
-              Revision {saved.revision}
-            </small>
-          </div>
-        </div>
-      )}
       <div className="bot-editor-section">
         <h2>
           {mode === "personality"
@@ -155,6 +143,14 @@ export function BotForm({
         <div className="bot-editor-section">
           <h2>This bot’s setup</h2>
           <div className="bot-setup-row">
+            <span>Kind</span>
+            <span>
+              {saved.id === "default"
+                ? "Default bot · keeps your original data"
+                : "Independent bot"}
+            </span>
+          </div>
+          <div className="bot-setup-row">
             <span>Personality</span>
             <Button
               type="button"
@@ -183,40 +179,26 @@ export function BotForm({
           </div>
         </div>
       )}
-      <div className="bot-save-bar">
-        <div>
-          {error && (
-            <p role="alert" className="settings-error">
-              {error}
-            </p>
-          )}
-          <p role="status">
-            {guard.message ||
-              message ||
-              (dirty
-                ? "Unsaved changes"
-                : saved
-                  ? `Revision ${saved.revision} · Saved to this bot.`
-                  : "Independent configuration. No settings are copied.")}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={pending || !dirty}
-          onClick={discard}
-        >
-          Discard
-        </Button>
-        <Button
-          type="submit"
-          disabled={
-            pending || !name.trim() || !soul.trim() || (!!saved && !dirty)
-          }
-        >
-          {pending ? "Saving…" : saved ? "Save changes" : "Create bot"}
-        </Button>
-      </div>
+      <SaveBar
+        visible={
+          !saved || dirty || pending || !!message || !!error || !!guard.message
+        }
+        status={
+          guard.message ||
+          message ||
+          (dirty
+            ? "Unsaved changes"
+            : saved
+              ? `Revision ${saved.revision} · Saved to this bot.`
+              : "Independent configuration. No settings are copied.")
+        }
+        error={error}
+        pending={pending}
+        canSave={!!name.trim() && !!soul.trim() && (!saved || dirty)}
+        canDiscard={dirty}
+        label={saved ? "Save changes" : "Create bot"}
+        onDiscard={discard}
+      />
     </form>
   );
 }

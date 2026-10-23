@@ -202,3 +202,21 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   separate Diagnostics view and its "Open diagnostics" button are gone, and old
   `?view=diagnostics` links open this page. Named bots still read their own
   empty trace model, never another bot's traces.
+
+## Settings page design pass — 2026-10-24
+
+- Every settings page shares a `SettingsPage` header: the scope chip, the title
+  and a page-specific intro from the section registry (`settings-sections.ts`).
+  Bot pages wash in that bot's avatar colour (`--tone`, shared with avatars), so
+  scope is visible before any field; app pages use the accent green.
+- Shared building blocks: `Group` (with an optional action), `Row` (optional
+  icon tile), `SettingsStatus` for loading/error, and a floating `SaveBar` that
+  appears only with unsaved changes, pending saves or messages.
+- Personality history is a timeline; Appearance previews each theme; Providers
+  and Models no longer repeat the page title. Appearance, plugins, memory
+  browsing, Hindsight fields, memory capabilities and the settings top bar are
+  separate modules, and settings CSS is split per page under `styles/settings/`.
+- Checked every settings page in dark and light, a named bot at 1440 and 390px,
+  save-bar visibility (clean, dirty, discard, create) and the existing settings,
+  diagnostics, resize and chat flows; no overflow from 320px and no browser
+  exceptions. Full validation passes.

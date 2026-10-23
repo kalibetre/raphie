@@ -14,10 +14,8 @@ import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins
 import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
 import type { Section } from "../../domains/settings/presentation/settings";
 import { Settings } from "../../domains/settings/presentation/settings";
-import {
-  SettingsMain,
-  SettingsNav,
-} from "../../domains/settings/presentation/settings-nav";
+import { SettingsMain } from "../../domains/settings/presentation/settings-main";
+import { SettingsNav } from "../../domains/settings/presentation/settings-nav";
 import { useBackend } from "../../infrastructure/http/backend-context";
 import {
   readLocal,

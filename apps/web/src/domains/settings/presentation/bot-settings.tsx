@@ -1,9 +1,8 @@
 import { useBackend } from "../../../infrastructure/http/backend-context";
-import { Button } from "../../../shared/ui/button";
 import { useBots } from "../infrastructure/use-bots";
 import { BotForm } from "./bot-profile-form";
 import { PersonalityHistory } from "./personality-history";
-import { Group } from "./settings-group";
+import { SettingsStatus } from "./settings-status";
 
 type Mode = "profile" | "personality" | "create" | "history";
 
@@ -14,25 +13,24 @@ export function BotSettings({ mode = "profile" }: { mode?: Mode }) {
   if (mode === "create") return <BotForm mode="create" />;
   if (!profile)
     return (
-      <Group title="Bot">
-        <div className="settings-form">
-          <p role="status">
-            {bots.error
-              ? "Bot settings are unavailable."
-              : bots.data
-                ? "This bot no longer exists."
-                : "Loading bot…"}
-          </p>
-          <Button
-            variant="outline"
-            onClick={() =>
-              bots.data ? void selectBot("default") : void bots.refetch()
-            }
-          >
-            {bots.data ? "Open default bot" : "Retry"}
-          </Button>
-        </div>
-      </Group>
+      <SettingsStatus
+        title="Bot"
+        message={
+          bots.error
+            ? "Bot settings are unavailable."
+            : bots.data
+              ? "This bot no longer exists."
+              : "Loading bot…"
+        }
+        onRetry={
+          bots.data
+            ? () => void selectBot("default")
+            : bots.error
+              ? () => void bots.refetch()
+              : undefined
+        }
+        action={bots.data ? "Open default bot" : "Retry"}
+      />
     );
   if (mode === "history") return <PersonalityHistory profile={profile} />;
   return (

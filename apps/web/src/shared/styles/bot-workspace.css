@@ -65,7 +65,7 @@
     justify-content: center;
     gap: 4px;
     border-radius: 43% 51% 46% 48%;
-    background: #b5c99b;
+    background: var(--tone);
     transform: rotate(-9deg);
   }
   .bot-avatar i {
@@ -76,14 +76,18 @@
     background: #273329;
     transform: rotate(-12deg);
   }
-  .bot-avatar.tone-1 {
-    background: #b5b4dc;
+  /* Bot colour families, shared by avatars and bot settings pages. */
+  .tone-0 {
+    --tone: #b5c99b;
   }
-  .bot-avatar.tone-2 {
-    background: #e3b477;
+  .tone-1 {
+    --tone: #b5b4dc;
   }
-  .bot-avatar.tone-3 {
-    background: #83bcb4;
+  .tone-2 {
+    --tone: #e3b477;
+  }
+  .tone-3 {
+    --tone: #83bcb4;
   }
   .bot-roster-copy {
     display: block;
