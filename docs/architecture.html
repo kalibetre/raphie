@@ -3431,36 +3431,39 @@
         </p>
 
         <article class="entry" id="bot-ownership">
-          <span class="tag plan">Accepted design · implementation planned</span>
+          <span class="tag cur"
+            >Bot foundation delivered · execution planned</span
+          >
           <h3>Bot ownership, persistent files, temporary compute</h3>
           <p>
             One runtime hosts multiple bots. Each bot owns its configuration,
-            sessions, memory scope and one default workspace. Multiple sessions
-            share the bot's files; only one execution may modify the workspace
-            at a time, across lightweight and native tiers.
+            sessions, memory scope and a reserved workspace directory. Separate
+            per-bot Gateway stores and actor authorities enforce the current
+            boundary. Names, descriptions and revisioned SOUL.md define
+            personality. Workspace execution and serialization across compute
+            tiers remain planned.
           </p>
           <ul class="facts">
             <li>
-              Authorized session/channel context selects the bot and workspace.
+              Owner HTTP routes select one bot container. Existing Discord and
+              MCP configuration remains attached to the default bot.
             </li>
             <li>
               Cross-bot file and memory sharing requires explicit authorization.
             </li>
+            <li>Planned: workspace checkpoints survive sandbox replacement.</li>
             <li>
-              Workspace checkpoints survive sandbox shutdown and replacement.
-            </li>
-            <li>
-              Separate budgets bound model generation, lightweight execution and
-              VM leases.
+              Planned: separate budgets bound model generation, lightweight
+              execution and VM leases.
             </li>
             <li>
               Logical scoping is distinct from process or VM security isolation.
             </li>
           </ul>
           <p>
-            Next: preserve existing data under a default bot, then add bot-owned
-            workspaces and just-bash. Native work later acquires fenced VM
-            leases with explicit file transfer; processes and RAM do not
+            Existing data is preserved under the default bot. Next: add
+            bot-owned workspace execution with just-bash, then fenced VM leases
+            and explicit artifact transfer. Processes and RAM do not implicitly
             migrate.
           </p>
         </article>

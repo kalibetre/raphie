@@ -7,6 +7,7 @@ change that changes the behavior.
 ## Use and operate Raphie
 
 - [Run locally, configure Settings and verify the app](../README.md)
+- [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
 - [Memory](memory.md): built-in behavior, agent tools, storage, correction,
   forgetting, provider support and recovery.
 - [Provider credential storage and recovery](provider-credential-storage.md)

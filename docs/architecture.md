@@ -14,21 +14,28 @@ The original research experiments are retired; Git history and an ignored local
 archive preserve their sources and legacy data. The active configuration schema
 is self-contained at the repository root.
 
-## Accepted next architecture: bot ownership
+## Bot ownership and personality
 
 [ADR 0002](adr/0002-bot-owned-workspaces-and-temporary-compute.md) adopts the bot
-as the ownership boundary within a shared runtime. Each bot has its own
-configuration, sessions, memory scope and one default persistent workspace.
-Multiple sessions can use that workspace; execution is serialized per workspace
-while other workspaces proceed independently. Sandboxes are replaceable compute;
-workspace files and checkpoints persist outside them. Model generation,
-lightweight execution and native VM leases have separate concurrency budgets.
+as the ownership boundary within a shared process. `BotHost` now composes separate
+Gateway/Pi stores, actor authorities, model registries, Settings, Memory and
+attachments per bot. The stable default bot preserves the current data paths and
+session identifiers; new bots receive runtime-issued IDs and private directories.
+A registry in `bots.sqlite` holds owner-authored names, descriptions and revisioned
+SOUL.md documents. A turn captures its bot's current personality at admission.
 
-This is accepted design, not implemented multi-bot support. First introduce bot
-ownership and preserve existing data under a default bot; then add lightweight
-execution and later fenced VM leases. Authorized session/channel context selects
-the bot and workspace. Cross-bot sharing requires an explicit authorized
-operation; logical scoping alone does not establish OS-level isolation.
+The host resolves bot-prefixed HTTP routes to exactly one container; individual
+route factories receive no peer runtimes. Cross-bot actor contexts are rejected.
+Model arguments cannot select another bot's identity or memory scope. Local owner
+HTTP clients can manage all bots; this is logical separation inside a trusted
+host, not per-bot network authentication or OS-level security isolation.
+
+Workspace directories are reserved, but execution, checkpoints, serialization,
+fencing and separate compute budgets remain planned. The existing environment
+Discord/MCP configuration remains attached to the default bot; named bots start
+without inherited tools or keys. Named-bot connection management and trace export
+remain later work. See [bots and personality](bots.md) for storage, APIs,
+verification and recovery limits.
 
 ## Compiler and tooling
 

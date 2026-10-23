@@ -174,6 +174,33 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
     expect((await get(`/api/sessions/${childReceipt.sessionId}`)).status).toBe(
       404,
     );
+    const privateFile = await original.gateway.files.put(
+      "private.txt",
+      new TextEncoder().encode("Default private attachment"),
+    );
+    const fileApproval = await original.gateway.sessions.copy(
+      original.gateway.actors.establish("web"),
+      {
+        eventId: "private-file",
+        text: "Copy private file",
+        files: [privateFile],
+      },
+    );
+    expect((await get(`/api/files/${privateFile.id}`)).status).toBe(200);
+    expect((await get(`${base}/files/${privateFile.id}`)).status).toBe(404);
+    expect(
+      (await get(`${base}/sessions/${receipt.sessionId}/history`)).status,
+    ).toBe(404);
+    expect(
+      (await get(`${base}/sessions/${receipt.sessionId}/approvals`)).status,
+    ).toBe(404);
+    expect(
+      child.gateway.sessions.decideFile(
+        child.gateway.actors.establish("web"),
+        fileApproval,
+        "approved",
+      ),
+    ).rejects.toThrow("not found");
     expect((await get(`${base}/sessions`)).status).toBe(200);
     expect(await (await get(`${base}/sessions`)).json()).toMatchObject({
       items: [{ sessionId: childReceipt.sessionId }],
@@ -223,6 +250,98 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
     await server.close();
     await host.close();
     await original.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("personality edits serialize with admission and cannot change a pending turn", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-bot-personality-"));
+  const generation = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>();
+  const app = await Gateway.open({
+    directory,
+    ...chatModel({
+      pause: generation.promise,
+      started: () => started.resolve(),
+    }),
+  });
+  const host = await BotHost.open(directory, { gateway: app });
+  try {
+    const turn = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "pending",
+      text: "Wait",
+    });
+    await started.promise;
+    expect(host.update("default", { ...profile, revision: 1 })).rejects.toThrow(
+      "active turns",
+    );
+    expect(host.read("default").revision).toBe(1);
+    generation.resolve();
+    for (
+      let n = 0;
+      n < 200 &&
+      (await app.chats.state()).turns.find((t) => t.id === turn.id)?.status ===
+        "pending";
+      n++
+    )
+      await delay(10);
+    expect(
+      (await host.update("default", { ...profile, revision: 1 })).revision,
+    ).toBe(2);
+  } finally {
+    generation.resolve();
+    await host.close();
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("external memory requests use separate bot namespaces even with the same user-selected scope and bank", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-bot-memory-scope-"));
+  const requests: { tags: string[] }[] = [];
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      requests.push((await request.json()) as { tags: string[] });
+      return Response.json({ results: [] });
+    },
+  });
+  const secrets = { sealMemoryKey: () => null, openMemoryKey: () => null };
+  const a = new RuntimeMemory(
+    join(directory, "a.sqlite"),
+    secrets,
+    undefined,
+    "research",
+  );
+  const b = new RuntimeMemory(
+    join(directory, "b.sqlite"),
+    secrets,
+    undefined,
+    "personal",
+  );
+  try {
+    const configuration = {
+      enabled: true,
+      provider: "hindsight" as const,
+      scope: "owner",
+      endpoint: `http://127.0.0.1:${server.port}`,
+      bankId: "shared",
+    };
+    await a.configure(configuration);
+    await b.configure(configuration);
+    await a.recall("tea");
+    await b.recall("tea");
+    expect(requests.map((request) => request.tags)).toEqual([
+      ["raphie:bot_research_owner"],
+      ["raphie:bot_personal_owner"],
+    ]);
+  } finally {
+    a.close();
+    b.close();
+    await server.stop(true);
     await rm(directory, { recursive: true, force: true });
   }
 });

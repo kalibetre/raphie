@@ -119,13 +119,12 @@ export class BotHost implements BotProfiles {
   }
 
   async close() {
-    try {
-      await Promise.all(
-        [...this.runtimes.values()].map((runtime) => runtime.close()),
-      );
-    } finally {
-      this.profiles.close();
-    }
+    const results = await Promise.allSettled(
+      [...this.runtimes.values()].map((runtime) => runtime.close()),
+    );
+    this.profiles.close();
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
   }
 }
 

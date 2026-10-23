@@ -27,6 +27,15 @@ from environment variables. MCP is optional. Bun's automatic dotenv loading is d
 The product writes to root `.data/`. Discord is disabled by default; enable it
 with `RAPHIE_DISCORD_ENABLED=true` when the owner/channel settings are configured.
 
+## Bots
+
+The runtime starts with a persistent **default** bot named Raphie. Existing
+sessions, model connections and memory stay with it. Named bots have separate
+configuration, stores and model credentials in the same runtime process.
+Owner-managed names, descriptions and revisioned SOUL.md documents define each
+bot's identity and personality. See [bots and personality](docs/bots.md) for APIs,
+storage, isolation guarantees and planned execution capabilities.
+
 ## Sessions and storage
 
 Session links use `/sessions/<uuidv7>`. These public IDs are persisted in SQLite; the durable harness still uses its original numeric conversation IDs internally. Existing sessions receive a public ID once on startup, preserving their messages and approvals. Old `/?conversation=<number>` links redirect to the matching session in the current database.

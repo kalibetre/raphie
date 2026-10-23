@@ -4,7 +4,7 @@ status: accepted
 
 # Bot-owned workspaces and temporary compute
 
-Decision accepted 2026-10-23; implementation remains planned. One self-hosted
+Decision accepted 2026-10-23; bot ownership and personality are now implemented. One self-hosted
 runtime may host multiple Raphie bots. A bot is the ownership boundary for its
 configuration, sessions, memory scope, workspace and permitted tools; it is not
 a separate runtime process or a VM. Each bot starts with one default persistent
@@ -44,5 +44,20 @@ choose process or VM boundaries according to executable capabilities and trust.
    checkpoints, serialization and isolation/recovery acceptance tests.
 3. Add native capability requests, explicit artifact transfer and fenced VM leases.
 
-The current runtime has no BotId ownership model or bot workspace executor.
-This decision changes the target architecture, not current product behavior.
+## First implementation
+
+`BotHost` owns a persistent registry with the stable default identity and generated
+IDs for named bots. It composes an independent Gateway/Pi harness, actor authority,
+model registry, Settings, Memory and attachment store per bot inside the same
+process. This uses existing recovery/authorization paths rather than introducing
+bot filters throughout every legacy query and transaction. Existing default data
+stays in place; named bots use private subdirectories. No second executor owns
+the same durable store.
+
+Profiles include name, description and SOUL.md. Owner saves use optimistic
+revisions and the same admission gate as messages; active turns block edits.
+The host supplies personality when admitting the next turn, and model tools cannot
+write the profile. Workspace execution, fencing and compute budgets are still
+planned. Default-bot Discord and MCP retain their existing configuration; named-bot
+channel/tool connection management is not delivered in this slice. See
+[the implementation guide](../bots.md).

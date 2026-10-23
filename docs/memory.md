@@ -4,6 +4,14 @@ This guide describes the implemented behavior. Update it whenever memory default
 tools, retrieval, storage, provider support or recovery behavior changes. Future
 work is tracked separately in the [roadmap](roadmap.md#next-phase-lightweight-execution-memory-and-vm-escalation).
 
+## Bot ownership
+
+Each bot has separate memory configuration and local evidence storage. Named bots
+use a host-derived `bot_<id>_<configured-scope>` namespace for backend operations,
+including external-provider tags. The default bot keeps its existing scope and
+data unchanged. Credentials are not copied when creating a bot. See
+[bots and personality](bots.md) for ownership, storage and trust limits.
+
 ## Using memory
 
 Built-in memory is enabled by default when the runtime has no saved memory
