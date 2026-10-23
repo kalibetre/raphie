@@ -202,7 +202,11 @@ test("session queries authorize reads and cannot cross Discord connections or th
       );
     }
     await assert.rejects(
-      app.queries.sessions({ subject: "owner", source: "web" }),
+      app.queries.sessions({
+        botId: "default",
+        subject: "owner",
+        source: "web",
+      }),
       /authorized/,
     );
     await assert.rejects(app.queries.activity(actor), /client interface/);

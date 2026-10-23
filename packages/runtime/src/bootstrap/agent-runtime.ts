@@ -14,6 +14,7 @@ import {
   defineExtension,
   Harness,
 } from "@earendil-works/pi-durable";
+import type { BotProfile } from "@raphie/contracts";
 
 import { ActorAuthority } from "../application/access/actors.ts";
 import { Sessions } from "../application/sessions/operations.ts";
@@ -55,9 +56,10 @@ import {
   noTelemetry,
   type Telemetry,
 } from "../shared/application/telemetry.ts";
-import type { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
+import { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
+  botId?: string;
   memory?: MemoryService;
   directory: string;
   discordThreadId?: string;
@@ -73,7 +75,8 @@ type Options = {
 };
 
 export class Gateway {
-  readonly actors = new ActorAuthority();
+  readonly configurationGate: ModelConnectionGate;
+  readonly actors: ActorAuthority;
   readonly sessions: ReturnType<typeof traceSessions>;
   readonly telemetry: Telemetry;
   readonly models: Models;
@@ -91,6 +94,9 @@ export class Gateway {
 
   private constructor(options: Options) {
     this.options = options;
+    this.actors = new ActorAuthority(options.botId ?? "default");
+    this.configurationGate =
+      options.modelConnectionGate ?? new ModelConnectionGate();
     this.telemetry = options.telemetry ?? noTelemetry;
     this.files = new Files(join(options.directory, "files"));
     this.workflow = deliveryWorkflow(
@@ -104,7 +110,7 @@ export class Gateway {
       this,
       this.models,
       options.model,
-      options.modelConnectionGate,
+      this.configurationGate,
     );
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);
@@ -310,6 +316,12 @@ export class Gateway {
 
   async state() {
     return (await this.harness.snapshot(State, context))!;
+  }
+
+  setPersonality(
+    read: () => Pick<BotProfile, "name" | "description" | "soul" | "revision">,
+  ) {
+    this.chats.personality = read;
   }
 
   async close() {
