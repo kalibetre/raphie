@@ -72,12 +72,7 @@
   .settings-scope-tag .brand-mark {
     width: 22px;
     height: 22px;
-    gap: 3px;
     font-size: 14px;
-  }
-  .settings-scope-tag .bot-avatar i {
-    width: 2px;
-    height: 6px;
   }
   /* Drawn in CSS so the label reads only "App-wide". */
   .settings-scope-tag .brand-mark {

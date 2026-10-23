@@ -61,20 +61,12 @@
     flex: none;
     width: 32px;
     height: 32px;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    border-radius: 43% 51% 46% 48%;
-    background: var(--tone);
-    transform: rotate(-9deg);
   }
-  .bot-avatar i {
-    display: block;
-    width: 3px;
-    height: 8px;
-    border-radius: 3px;
-    background: #273329;
-    transform: rotate(-12deg);
+  .bot-avatar-body {
+    fill: var(--tone);
+  }
+  .bot-avatar circle {
+    fill: #273329;
   }
   /* Bot colour families, shared by avatars and bot settings pages. */
   .tone-0 {

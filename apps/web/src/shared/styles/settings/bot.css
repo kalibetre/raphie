@@ -38,11 +38,6 @@
   .settings-bot-trigger .bot-avatar {
     width: 22px;
     height: 22px;
-    gap: 3px;
-  }
-  .settings-bot-trigger .bot-avatar i {
-    width: 2px;
-    height: 6px;
   }
   .settings-default-tag {
     font-size: 10px;

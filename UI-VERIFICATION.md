@@ -220,3 +220,7 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   save-bar visibility (clean, dirty, discard, create) and the existing settings,
   diagnostics, resize and chat flows; no overflow from 320px and no browser
   exceptions. Full validation passes.
+- Bot avatars use the chosen "Glance" design: each bot's blob shape and eye
+  direction derive from its id (integer PRNG, so every browser draws the same
+  face) and its colour family. Checked in the chat roster, title bar, settings
+  sidebar, scope chip and mobile strip in both themes.
