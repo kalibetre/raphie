@@ -13,15 +13,15 @@ import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
 import {
   Popover,
-  PopoverTrigger,
   PopoverContent,
+  PopoverTrigger,
 } from "../../../shared/ui/popover";
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "../../../shared/ui/select";
 import { useRuntimeSettings } from "../../settings/infrastructure/use-runtime-settings";
 import { modelCatalog } from "../application/model-catalog";

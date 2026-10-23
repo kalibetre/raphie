@@ -4,10 +4,10 @@ import { Search } from "lucide-react";
 import { Input } from "../../../shared/ui/input";
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "../../../shared/ui/select";
 
 export function ModelFilters({

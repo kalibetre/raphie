@@ -9,8 +9,7 @@ import type {
   SendMessage,
 } from "../../domains/conversations/application/ports.ts";
 import { InputError } from "../../shared/application/input-error.ts";
-import type { ActorContext } from "../access/actors.ts";
-import type { ActorAuthority } from "../access/actors.ts";
+import type { ActorAuthority, ActorContext } from "../access/actors.ts";
 
 export type MessageReceipt = { id: string; sessionId: string };
 

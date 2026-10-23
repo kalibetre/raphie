@@ -1,7 +1,7 @@
 import { ArrowUpRight, Brain, Check, Image } from "lucide-react";
 
 import { Button } from "../../../shared/ui/button";
-import { modelSource, type LibraryModel } from "../application/model-library";
+import { type LibraryModel, modelSource } from "../application/model-library";
 
 const tokens = (value: number) =>
   new Intl.NumberFormat("en", {

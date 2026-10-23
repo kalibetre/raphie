@@ -2,10 +2,10 @@ import type {
   Page,
   RuntimeInfo,
   SessionActivity,
+  SessionApproval,
   SessionObservation,
   SessionSummary,
   SessionTurn,
-  SessionApproval,
 } from "@raphie/contracts";
 
 import type { ActorContext } from "../access/actors.ts";

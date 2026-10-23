@@ -149,8 +149,8 @@ Plugins are trusted local React modules loaded at build time. Each contribution 
 bun run validate
 ```
 
-This runs Oxfmt, architecture checks, native type-aware Oxlint, TypeScript 7, Bun tests, and the production build. Use
-`bun run format` and `bun run lint:fix` for automatic fixes. The same validation
+This runs `bun fmt --check`, architecture checks, native type-aware Oxlint, TypeScript 7, Bun tests, and the production build. Use
+`bun fmt` and `bun run lint:fix` for automatic fixes. The same validation
 runs in CI on a self-hosted runner. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 code organization, conventions, and the isolated browser workflow.
 
@@ -159,8 +159,8 @@ Tests cover durable chat, interrupted generation, approvals after restart, concu
 For browser acceptance without an API key or external actions, run `bun run dev:fixture` and `bun run dev:web:fixture` in separate terminals, then open **http://127.0.0.1:4321**. The fixture streams a deterministic response and proposes a fake calendar tool when asked to use a tool. It can run alongside the normal app. Fixture state is removed when stopped normally.
 
 Bun owns package installation (`bun.lock`), workspace scripts, parallel process
-startup, TypeScript execution, native HTTP serving, and the test runner. Oxfmt
-and Oxlint remain because the verified Bun releases do not ship the documented
-formatter/linter commands yet. The actual TypeScript 7 compiler remains pinned;
+startup, TypeScript execution, native HTTP serving, the test runner, and formatting
+with `bun fmt`. Formatting and import sorting are configured in `bunfig.toml`.
+Type-aware Oxlint and the actual TypeScript 7 compiler remain pinned;
 Vite remains for TanStack Start and Tailwind’s build plugins. See
 [the migration record](docs/bun-migration.md).

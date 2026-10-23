@@ -10,7 +10,7 @@ import type { ChannelServices } from "../../application/channels/ports.ts";
 import { InputError } from "../../domains/approvals/infrastructure/pi-file-approvals.ts";
 import { MAX_FILE_BYTES } from "../../domains/attachments/infrastructure/local-attachment-store.ts";
 import { createDeliveryWorker } from "../../domains/delivery/application/worker.ts";
-import { discordRenderer, decodeDiscordOperation } from "./delivery.ts";
+import { decodeDiscordOperation, discordRenderer } from "./delivery.ts";
 
 type FetchRequest = (
   ...args: Parameters<typeof fetch>

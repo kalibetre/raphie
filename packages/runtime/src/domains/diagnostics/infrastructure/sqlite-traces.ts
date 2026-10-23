@@ -70,9 +70,11 @@ export class SqliteTraces implements TraceReader {
       .query("DELETE FROM spans WHERE started_at < ?")
       .run(now - retentionMs);
     this.database
-      .query(`DELETE FROM spans WHERE (trace_id, span_id) IN (
+      .query(
+        `DELETE FROM spans WHERE (trace_id, span_id) IN (
       SELECT trace_id, span_id FROM spans ORDER BY started_at DESC, trace_id, span_id LIMIT -1 OFFSET ?
-    )`)
+    )`,
+      )
       .run(this.maxSpans);
   }
 

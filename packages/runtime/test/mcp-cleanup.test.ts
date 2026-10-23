@@ -1,4 +1,4 @@
-import { test, spyOn } from "bun:test";
+import { spyOn, test } from "bun:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 

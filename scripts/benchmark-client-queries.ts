@@ -1,7 +1,6 @@
 // Disposable local baseline: real Pi/SQLite/HTTP, deterministic model, no sandboxes.
 import { mkdtemp, rm } from "node:fs/promises";
-import { arch, platform } from "node:os";
-import { tmpdir } from "node:os";
+import { arch, platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 

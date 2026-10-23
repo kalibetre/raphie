@@ -1,4 +1,4 @@
-import type { Channel, Attachment } from "@raphie/contracts";
+import type { Attachment, Channel } from "@raphie/contracts";
 
 import type { GatewayState } from "../domain/file-approval.ts";
 import type { ToolApproval, ToolDelivery } from "../domain/tool-approval.ts";

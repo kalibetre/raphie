@@ -4,10 +4,10 @@ import { dirname } from "node:path";
 
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import type {
-  RuntimeSettings,
-  UpdateRuntimeSettings,
-  SaveProviderConnection,
   EditProviderConnection,
+  RuntimeSettings,
+  SaveProviderConnection,
+  UpdateRuntimeSettings,
 } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
@@ -16,9 +16,9 @@ import { registerRedactionSecret } from "../../activity/infrastructure/pi-activi
 import type { SettingsService } from "../application/ports.ts";
 import {
   CredentialCipher,
-  osCredentialKeyStore,
   type CredentialKeyStore,
   type EncryptedCredential,
+  osCredentialKeyStore,
 } from "./credential-cipher.ts";
 import {
   PiProviderConnections,

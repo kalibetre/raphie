@@ -7,3 +7,20 @@ bun = true
 
 [test]
 timeout = 15000
+
+[fmt]
+printWidth = 80
+tabWidth = 2
+semi = true
+singleQuote = false
+sortImports = true
+sortPackageJson = true
+ignorePatterns = [
+  ".data/**",
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/.tanstack/**",
+  "**/*routeTree.gen.ts",
+  ".env*",
+  "bun.lock",
+]

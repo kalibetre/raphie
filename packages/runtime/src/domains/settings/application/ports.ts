@@ -1,8 +1,8 @@
 import type {
-  RuntimeSettings,
-  UpdateRuntimeSettings,
-  SaveProviderConnection,
   EditProviderConnection,
+  RuntimeSettings,
+  SaveProviderConnection,
+  UpdateRuntimeSettings,
 } from "@raphie/contracts";
 
 export interface SettingsService {

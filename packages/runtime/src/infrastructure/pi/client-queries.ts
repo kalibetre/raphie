@@ -1,15 +1,15 @@
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type {
   SessionActivity,
-  SessionSummary,
-  SessionTurn,
   SessionApproval,
   SessionObservation,
+  SessionSummary,
+  SessionTurn,
 } from "@raphie/contracts";
 
 import type {
-  ActorContext,
   ActorAuthority,
+  ActorContext,
 } from "../../application/access/actors.ts";
 import type { ClientQueries } from "../../application/queries/ports.ts";
 import { Activity } from "../../domains/activity/infrastructure/pi-activity-journal.ts";

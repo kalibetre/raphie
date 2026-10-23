@@ -7,7 +7,7 @@ from refactoring so behavior changes are reviewable.
 ## Before submitting a change
 
 ```sh
-bun run format
+bun fmt
 bun run lint:fix
 bun run validate
 ```
@@ -17,7 +17,8 @@ build. CI runs the same command on a self-hosted Linux x64 runner with the pinne
 It does not require model credentials or connected integrations. Register a
 self-hosted runner before relying on GitHub's workflow status.
 
-Oxfmt owns formatting and import sorting. Oxlint with its native type-aware
+Bun's built-in `bun fmt` owns formatting and import sorting, configured in
+`bunfig.toml`. Oxlint with its native type-aware
 checker owns correctness, type imports, hooks, and promise handling. TypeScript
 7.0.2 is the sole compiler; do not introduce an older compiler to support a tool.
 Warnings fail validation. React Compiler diagnostics (`purity` and
@@ -28,8 +29,8 @@ hydration currently synchronizes local storage in effects.
 Oxlint also runs the Stylistic declaration-spacing rules. Leave a blank line
 before and after type aliases, interfaces, enums, classes, function declarations,
 and exports. Class methods (including constructors) require separation; related
-fields and properties can stay grouped. Oxfmt preserves these blank lines.
-Use `bun run lint:fix` to insert missing spacing, followed by `bun run format`.
+fields and properties can stay grouped. `bun fmt` preserves these blank lines.
+Use `bun run lint:fix` to insert missing spacing, followed by `bun fmt`.
 Missing spacing fails `bun run lint` and CI; it is not just a visual convention.
 
 Generated routes, build output, local databases, dependencies, and private
