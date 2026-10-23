@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+import type { JsonObject } from "@earendil-works/pi-durable";
+
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memory.ts";
@@ -599,3 +601,128 @@ test("SIGKILL after retention does not replay the unfinished memory tool", async
     await f.close();
   }
 }, 10000);
+
+test("memory configuration rejects changes during a real pending turn and permits them after completion", async () => {
+  const f = await fixture();
+  const generation = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>();
+  const gate = new ModelConnectionGate();
+  const memory = new RuntimeMemory(
+    join(f.directory, "busy-memory.sqlite"),
+    { sealMemoryKey: () => null, openMemoryKey: () => null },
+    gate,
+  );
+  const app = await Gateway.open({
+    directory: f.directory,
+    memory,
+    modelConnectionGate: gate,
+    ...chatModel({
+      pause: generation.promise,
+      started: () => started.resolve(),
+    }),
+  });
+  // Match production wiring, reading persisted turns rather than stubbing isBusy.
+  memory.isBusy = async () =>
+    (await app.chats.state()).turns.some((turn) => turn.status === "pending");
+  try {
+    const turn = await app.chats.send({
+      source: "web",
+      eventId: "memory-busy",
+      actor: "owner",
+      text: "Hold this turn open",
+    });
+    await started.promise;
+    expect(
+      (await app.chats.state()).turns.find((t) => t.id === turn.id)?.status,
+    ).toBe("pending");
+    expect(
+      await failure(memory.configure({ ...builtin, scope: "changed" })),
+    ).toContain("409");
+    expect(memory.read().configuration.scope).toBe("owner");
+    generation.resolve();
+    for (
+      let n = 0;
+      n < 200 &&
+      (await app.chats.state()).turns.find((t) => t.id === turn.id)?.status ===
+        "pending";
+      n++
+    )
+      await delay(10);
+    expect(
+      (await app.chats.state()).turns.find((t) => t.id === turn.id)?.status,
+    ).toBe("done");
+    await memory.configure({ ...builtin, scope: "changed" });
+    expect(memory.read().configuration.scope).toBe("changed");
+  } finally {
+    generation.resolve();
+    await app.close();
+    memory.close();
+    await f.close();
+  }
+});
+
+test("agent tools revise and forget evidence with persisted results and useful errors", async () => {
+  const f = await fixture();
+  let app: Gateway | undefined;
+  try {
+    await f.memory.retain(evidence);
+    const operations: { name: string; args: JsonObject; expected: string }[] = [
+      {
+        name: "memory_revise",
+        args: { id: evidence.id, content: "Owner prefers coffee" },
+        expected: '"updated":true',
+      },
+      {
+        name: "memory_forget",
+        args: { id: evidence.id },
+        expected: '"forgotten":true',
+      },
+      {
+        name: "memory_forget",
+        args: { id: evidence.id },
+        expected: "Memory not found in this scope",
+      },
+    ];
+    for (const operation of operations) {
+      app = await Gateway.open({
+        directory: f.directory,
+        memory: f.memory,
+        ...chatModel({ tool: { name: operation.name, args: operation.args } }),
+      });
+      const turn = await app.chats.send({
+        source: "web",
+        eventId: crypto.randomUUID(),
+        actor: "owner",
+        text: operation.name,
+      });
+      for (
+        let n = 0;
+        n < 200 &&
+        (await app.chats.state()).turns.find((t) => t.id === turn.id)
+          ?.status === "pending";
+        n++
+      )
+        await delay(10);
+      expect(
+        (await app.chats.state()).turns.find((t) => t.id === turn.id)?.answer,
+      ).toContain(operation.expected);
+      await app.close();
+      app = undefined;
+      f.reopen();
+      if (operation.name === "memory_revise") {
+        expect((await f.memory.recall("tea")).evidence).toEqual([]);
+        expect((await f.memory.recall("coffee")).evidence).toEqual([
+          { ...evidence, content: "Owner prefers coffee", revision: 2 },
+        ]);
+      } else {
+        expect((await f.memory.browse()).total).toBe(0);
+      }
+    }
+    // An old retain receipt cannot restore evidence forgotten by an agent.
+    await f.memory.retain(evidence);
+    expect((await f.memory.browse()).total).toBe(0);
+  } finally {
+    await app?.close();
+    await f.close();
+  }
+});
