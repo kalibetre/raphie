@@ -184,7 +184,8 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   groups stay open after the switch; `section=memory-browse` and legacy
   `view=plugins` links; close returns to chat; Create a bot; mobile sheet opens
   from the title-bar trigger, closes on Escape with focus back on the trigger,
-  and closes after choosing a page. Checked 320/390/768/1024/1440px without
+  and closes after choosing a page. Sub-items fill the row. A top-bar toggle and
+  ⌘B collapse the desktop sidebar, sharing the chat sidebar's saved state. Checked 320/390/768/1024/1440px without
   overflow in both themes at 2x; no browser exceptions.
 - Full validation passes 117 tests, formatting, architecture, lint, types and the
   production build.

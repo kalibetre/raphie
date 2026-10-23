@@ -55,12 +55,17 @@ const expandedKey = "raphie:settings-expanded";
 export function SettingsWindow({
   section,
   botId,
+  open,
+  onOpenChange,
   onSelect,
   onBack,
   children,
 }: {
   section: Section;
   botId: string;
+  /** Desktop expansion, shared with the chat sidebar; mobile uses a sheet. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSelect: (botId: string, section: Section) => void;
   onBack: () => void;
   children: ReactNode;
@@ -71,7 +76,11 @@ export function SettingsWindow({
     bots.data?.items.find((b) => b.id === botId)?.name ??
     (botId === "default" ? "Raphie" : botId);
   return (
-    <SidebarProvider className="settings-window">
+    <SidebarProvider
+      className="settings-window"
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       <SettingsNav
         section={section}
         botId={botId}
@@ -82,8 +91,8 @@ export function SettingsWindow({
       <SidebarInset className="settings-inset">
         <header className="settings-topbar">
           <SidebarTrigger
-            className="md:hidden"
-            aria-label="Open settings navigation"
+            aria-label="Toggle settings navigation (⌘B)"
+            title="Toggle settings navigation (⌘B)"
           />
           <p className="settings-breadcrumb">
             Settings
@@ -207,6 +216,7 @@ function SettingsNav({
                             <SidebarMenuSubItem key={entry}>
                               <SidebarMenuSubButton
                                 render={<button type="button" />}
+                                className="w-full"
                                 isActive={active}
                                 aria-current={active ? "page" : undefined}
                                 onClick={() => select(bot.id, entry)}

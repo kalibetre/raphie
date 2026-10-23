@@ -50,6 +50,11 @@ export function useWorkspaceLayout(
   // Desktop collapse; on small screens the sidebar is an overlay instead.
   const [collapsed, setCollapsed] = useState(false);
 
+  function collapse(value: boolean) {
+    setCollapsed(value);
+    writeLocal("raphie:sidebar-collapsed", String(value));
+  }
+
   function toggleCollapsed() {
     setCollapsed((value) => {
       writeLocal("raphie:sidebar-collapsed", String(!value));
@@ -60,6 +65,8 @@ export function useWorkspaceLayout(
   useEffect(() => {
     setCollapsed(readLocal("raphie:sidebar-collapsed") === "true");
     const onKey = (event: KeyboardEvent) => {
+      // Settings' shadcn sidebar handles the same shortcut first.
+      if (event.defaultPrevented) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
         event.preventDefault();
         if (window.innerWidth < 768)
@@ -107,6 +114,7 @@ export function useWorkspaceLayout(
     sidebar,
     setSidebar,
     collapsed,
+    collapse,
     toggleCollapsed,
     resizePanel,
     visibleNavigationWidth,

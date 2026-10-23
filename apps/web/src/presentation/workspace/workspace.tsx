@@ -85,6 +85,7 @@ export function Workspace({
     setInspector,
     setSidebar,
     collapsed,
+    collapse,
     toggleCollapsed,
     resizePanel,
     visibleNavigationWidth,
@@ -216,6 +217,8 @@ export function Workspace({
         <SettingsWindow
           section={section}
           botId={workspace.botId}
+          open={!collapsed}
+          onOpenChange={(open) => collapse(!open)}
           onBack={() => select(conversationId)}
           onSelect={(id, next) => {
             if (id === workspace.botId) openSettings(next);
