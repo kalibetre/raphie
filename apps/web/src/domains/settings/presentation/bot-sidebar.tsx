@@ -31,7 +31,7 @@ export function BotSidebar({
 }) {
   const [filter, setFilter] = useState("");
   return (
-    <aside className="sidebar bot-roster" aria-label="Bots">
+    <div className="bot-roster">
       <div className="roster-brand">
         <span className="brand">raphie</span>
         <span className="local-label">LOCAL</span>
@@ -126,6 +126,6 @@ export function BotSidebar({
           <Settings size={15} />
         </Button>
       </footer>
-    </aside>
+    </div>
   );
 }

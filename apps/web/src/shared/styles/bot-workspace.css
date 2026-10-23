@@ -1,5 +1,9 @@
 @layer components {
   .bot-roster {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
     padding: 22px 12px 18px;
   }
   .roster-brand {
@@ -358,20 +362,13 @@
     }
   }
   @media (max-width: 767px) {
-    .workspace.bot-first,
-    .workspace.bot-first.with-inspector,
-    .workspace.bot-first.sidebar-collapsed {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: 88px minmax(0, 1fr);
-    }
-    .workspace.bot-first > .sidebar.bot-roster {
-      display: flex;
-      position: static;
-      visibility: visible;
-      width: 100%;
+    /* Mobile chat shows the roster as a strip above the conversation. */
+    .bot-roster {
+      flex: none;
+      height: 88px;
       padding: 8px;
       flex-direction: row;
-      border-right: 0;
+      background: var(--sidebar);
       border-bottom: 1px solid var(--border);
       overflow: hidden;
     }

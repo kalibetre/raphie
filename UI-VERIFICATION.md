@@ -186,8 +186,15 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   from the title-bar trigger, closes on Escape with focus back on the trigger,
   and closes after choosing a page. Sub-items fill the row. A top-bar toggle and
   ⌘B collapse the desktop sidebar, sharing the chat sidebar's saved state.
-  The settings sidebar reuses the chat resize handle (drag, arrows, Home/End,
-  double-click reset) and saved width; the handle is hidden on mobile. Checked 320/390/768/1024/1440px without
+  Chat and settings share one shadcn `SidebarProvider`/`Sidebar`/`SidebarInset`
+  shell; only the sidebar content changes, so width, collapse and ⌘B live in
+  one place. The resize handle drives `--sidebar-width` with width transitions
+  disabled, so the sidebar edge tracks the handle on the same frame. Mobile chat
+  keeps the accepted bot strip; mobile settings use the shadcn sheet.
+- Re-ran the earlier chat suite (reply card, drafts, collapse persistence,
+  library, mobile) on a reset fixture and ported its settings steps: guarded
+  save, revision reload, per-bot personality isolation, app scope, layout widths
+  and draft restoration after leaving settings. Checked 320/390/768/1024/1440px without
   overflow in both themes at 2x; no browser exceptions.
 - Full validation passes 117 tests, formatting, architecture, lint, types and the
   production build.

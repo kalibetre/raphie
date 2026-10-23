@@ -1,15 +1,5 @@
 @layer components {
   /* Full-window settings: the shadcn sidebar plus a scrolling page. */
-  .settings-window {
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-  }
-  .settings-inset {
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-  }
   .settings-topbar {
     flex: none;
     display: flex;
@@ -64,7 +54,7 @@
   [data-panel-open] > .settings-chevron {
     transform: rotate(90deg);
   }
-  .settings-window .settings-page {
+  .main-panel .settings-page {
     max-width: 808px;
     padding: 36px 44px 32px;
   }
@@ -103,6 +93,9 @@
     border-radius: 14px;
     background: var(--card);
     padding: 18px;
+  }
+  .bot-editor-section + .bot-editor-section {
+    margin-top: 20px;
   }
   .bot-editor-section h2 {
     font-size: 13px;
@@ -219,7 +212,7 @@
     color: var(--error);
   }
   @media (min-width: 768px) and (max-width: 1100px) {
-    .settings-window .settings-page {
+    .main-panel .settings-page {
       padding: 28px 24px;
     }
     .settings-page-heading {
@@ -232,7 +225,7 @@
       padding: 0 12px;
       gap: 6px;
     }
-    .settings-window .settings-page {
+    .main-panel .settings-page {
       padding: 24px 16px;
       gap: 24px;
     }

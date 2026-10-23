@@ -62,20 +62,9 @@ export function useWorkspaceLayout(
     });
   }
 
+  // The shadcn SidebarProvider owns the ⌘B shortcut.
   useEffect(() => {
     setCollapsed(readLocal("raphie:sidebar-collapsed") === "true");
-    const onKey = (event: KeyboardEvent) => {
-      // Settings' shadcn sidebar handles the same shortcut first.
-      if (event.defaultPrevented) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
-        event.preventDefault();
-        if (window.innerWidth < 768)
-          document.querySelector<HTMLButtonElement>("[data-bot-nav]")?.focus();
-        else toggleCollapsed();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, []);
   const dockedActivity =
     inspector && !view && hasConversation && viewportWidth > 1100;

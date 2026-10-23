@@ -1,19 +1,4 @@
 @layer components {
-  /* Sidebar */
-  .sidebar {
-    min-width: 0;
-    background: var(--sidebar);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    padding: 12px 10px 0;
-  }
-  .sidebar-primary {
-    display: grid;
-    gap: 2px;
-    margin-bottom: 12px;
-  }
   /* Rings and focus outlines are inset: anything outside the button is
      clipped by the sidebar's scroll area. */
   .conversation-list button:focus-visible {

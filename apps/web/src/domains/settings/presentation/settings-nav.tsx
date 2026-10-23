@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronRight, Plus, X } from "lucide-react";
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import {
   readLocal,
@@ -12,21 +12,18 @@ import {
   CollapsibleTrigger,
 } from "../../../shared/ui/collapsible";
 import {
-  Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupAction,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarProvider,
   SidebarTrigger,
   useSidebar,
 } from "../../../shared/ui/sidebar";
@@ -51,28 +48,15 @@ const parent: Partial<Record<Section, Section>> = {
 const label = (id: Section) => sections.find((s) => s.id === id)!.label;
 const expandedKey = "raphie:settings-expanded";
 
-/** Full-window settings: one sidebar groups every bot's pages above the app's. */
-export function SettingsWindow({
+/** Settings page area: breadcrumb top bar above the selected section. */
+export function SettingsMain({
   section,
   botId,
-  open,
-  onOpenChange,
-  width,
-  resizeHandle,
-  onSelect,
   onBack,
   children,
 }: {
   section: Section;
   botId: string;
-  /** Desktop expansion, shared with the chat sidebar; mobile uses a sheet. */
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Desktop width in pixels, shared with the chat sidebar. */
-  width: number;
-  /** Desktop drag handle; it positions itself from --sidebar-width. */
-  resizeHandle: ReactNode;
-  onSelect: (botId: string, section: Section) => void;
   onBack: () => void;
   children: ReactNode;
 }) {
@@ -82,64 +66,49 @@ export function SettingsWindow({
     bots.data?.items.find((b) => b.id === botId)?.name ??
     (botId === "default" ? "Raphie" : botId);
   return (
-    <SidebarProvider
-      className="settings-window"
-      open={open}
-      onOpenChange={onOpenChange}
-      style={{ "--sidebar-width": `${width}px` } as CSSProperties}
-    >
-      {open && <div className="hidden md:block">{resizeHandle}</div>}
-      <SettingsNav
-        section={section}
-        botId={botId}
-        bots={bots.data?.items ?? []}
-        onSelect={onSelect}
-        onBack={onBack}
-      />
-      <SidebarInset className="settings-inset">
-        <header className="settings-topbar">
-          <SidebarTrigger
-            aria-label="Toggle settings navigation (⌘B)"
-            title="Toggle settings navigation (⌘B)"
-          />
-          <p className="settings-breadcrumb">
-            Settings
-            <span aria-hidden="true">/</span>
-            <strong>
-              {app ? "App" : section === "new-bot" ? "New bot" : name}
-            </strong>
-            <span aria-hidden="true">/</span>
-            {label(section)}
-          </p>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Close settings"
-            title="Close settings"
-            onClick={onBack}
-          >
-            <X size={16} />
-          </Button>
-        </header>
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
+    <>
+      <header className="settings-topbar">
+        <SidebarTrigger
+          aria-label="Toggle settings navigation (⌘B)"
+          title="Toggle settings navigation (⌘B)"
+        />
+        <p className="settings-breadcrumb">
+          Settings
+          <span aria-hidden="true">/</span>
+          <strong>
+            {app ? "App" : section === "new-bot" ? "New bot" : name}
+          </strong>
+          <span aria-hidden="true">/</span>
+          {label(section)}
+        </p>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Close settings"
+          title="Close settings"
+          onClick={onBack}
+        >
+          <X size={16} />
+        </Button>
+      </header>
+      {children}
+    </>
   );
 }
 
-function SettingsNav({
+/** Settings sidebar content: every bot's pages grouped above the app's. */
+export function SettingsNav({
   section,
   botId,
-  bots,
   onSelect,
   onBack,
 }: {
   section: Section;
   botId: string;
-  bots: { id: string; name: string }[];
   onSelect: (botId: string, section: Section) => void;
   onBack: () => void;
 }) {
+  const bots = useBots().data?.items ?? [];
   const { setOpenMobile } = useSidebar();
   const current = parent[section] ?? section;
   const app = isAppSection(section) || section === "new-bot";
@@ -167,7 +136,7 @@ function SettingsNav({
     onSelect(id, next);
   };
   return (
-    <Sidebar aria-label="Settings navigation">
+    <>
       <SidebarHeader className="settings-sidebar-header flex-row items-center">
         <span className="brand-mark" aria-hidden="true">
           r
@@ -268,6 +237,6 @@ function SettingsNav({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-    </Sidebar>
+    </>
   );
 }
