@@ -8,7 +8,7 @@ import {
 
 export function useWorkspaceLayout(
   hasConversation: boolean,
-  view?: "diagnostics" | "settings",
+  view?: "settings",
 ) {
   const [inspector, setInspector] = useState(false);
   const [sidebar, setSidebar] = useState(false);

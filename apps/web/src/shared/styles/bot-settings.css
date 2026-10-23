@@ -58,6 +58,19 @@
     max-width: 808px;
     padding: 36px 44px 32px;
   }
+  /* Traces embedded in Settings → Diagnostics read as one more group. */
+  .settings-page .diagnostics {
+    padding: 0;
+    max-width: none;
+  }
+  .settings-page .diagnostics .panel-heading h2 {
+    font-size: 13px;
+    font-weight: 560;
+    color: var(--muted-foreground);
+  }
+  .settings-page .diagnostics .activity-scroll {
+    max-height: 560px;
+  }
   .settings-page-heading {
     display: flex;
     gap: 16px;

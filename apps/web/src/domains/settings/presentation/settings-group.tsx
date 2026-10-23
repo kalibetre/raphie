@@ -7,13 +7,13 @@ export function Group({
 }: {
   title: string;
   note?: string;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <div className="settings-group">
       <h2>{title}</h2>
       {note && <p>{note}</p>}
-      <div className="settings-card">{children}</div>
+      {children && <div className="settings-card">{children}</div>}
     </div>
   );
 }

@@ -12,7 +12,7 @@ import {
   SlidersHorizontal,
   Sun,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import {
@@ -59,12 +59,13 @@ export function Settings({
   section,
   enabled,
   setEnabled,
-  onDiagnostics,
+  traces,
 }: {
   section: Section;
   enabled: string[];
   setEnabled: (ids: string[]) => void;
-  onDiagnostics: () => void;
+  /** Trace list shown under Diagnostics; composed by the workspace. */
+  traces: ReactNode;
 }) {
   const { workspace } = useBackend();
   const bots = useBots();
@@ -109,7 +110,7 @@ export function Settings({
         ) : section === "memory-browse" ? (
           <MemoryBrowse />
         ) : section === "telemetry" ? (
-          <TelemetrySettings onInspect={onDiagnostics} />
+          <TelemetrySettings traces={traces} />
         ) : section === "connection" ? (
           <ConnectionSettings />
         ) : section === "general" ? (

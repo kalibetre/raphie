@@ -45,7 +45,7 @@ export function Workspace({
 }: {
   sessionId?: string;
   legacyConversationId?: number;
-  view?: "diagnostics" | "settings";
+  view?: "settings";
   section?: Section;
 }) {
   const { workspace } = useBackend();
@@ -179,7 +179,7 @@ export function Workspace({
       });
   }
 
-  function select(id?: string, nextView?: "diagnostics" | "settings") {
+  function select(id?: string, nextView?: "settings") {
     setSuggestion(undefined);
     setLibrary(false);
     const selected = summaries.find((c) => c.id === id);
@@ -233,7 +233,6 @@ export function Workspace({
   let title: string | undefined =
     conversation?.title ??
     (missing ? "Conversation unavailable" : "New conversation");
-  if (view === "diagnostics") title = "Diagnostics";
   const settings = view === "settings";
   const roster = (
     <BotSidebar
@@ -318,7 +317,7 @@ export function Workspace({
                 section={section}
                 enabled={enabled}
                 setEnabled={setEnabled}
-                onDiagnostics={() => select(conversationId, "diagnostics")}
+                traces={<Diagnostics />}
               />
             </SettingsMain>
           ) : (
@@ -374,8 +373,6 @@ export function Workspace({
                   onAction={() => select()}
                   action="New conversation"
                 />
-              ) : view === "diagnostics" ? (
-                <Diagnostics />
               ) : library ? (
                 <ConversationLibrary
                   name={botProfile?.name ?? "Raphie"}

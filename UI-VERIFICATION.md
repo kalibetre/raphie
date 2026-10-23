@@ -198,3 +198,7 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   overflow in both themes at 2x; no browser exceptions.
 - Full validation passes 117 tests, formatting, architecture, lint, types and the
   production build.
+- Settings → Diagnostics shows recent traces under the collection toggle; the
+  separate Diagnostics view and its "Open diagnostics" button are gone, and old
+  `?view=diagnostics` links open this page. Named bots still read their own
+  empty trace model, never another bot's traces.

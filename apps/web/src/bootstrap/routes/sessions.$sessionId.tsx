@@ -10,7 +10,7 @@ export const Route = createFileRoute("/sessions/$sessionId")({
   validateSearch: (
     search: Record<string, unknown>,
   ): {
-    view?: "diagnostics" | "settings";
+    view?: "settings";
     section?: Section;
     bot?: string;
   } => ({
@@ -18,11 +18,17 @@ export const Route = createFileRoute("/sessions/$sessionId")({
       typeof search.bot === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(search.bot)
         ? search.bot
         : undefined,
+    // Diagnostics moved into Settings → Diagnostics.
     view:
       search.view === "diagnostics" || search.view === "settings"
-        ? search.view
+        ? "settings"
         : undefined,
-    section: isSection(search.section) ? search.section : undefined,
+    section:
+      search.view === "diagnostics"
+        ? "telemetry"
+        : isSection(search.section)
+          ? search.section
+          : undefined,
   }),
   component: SessionPage,
 });

@@ -99,7 +99,7 @@ sidebar groups each bot's pages (profile, personality, providers, models,
 memory, diagnostics) under an expandable entry, with app-wide preferences below.
 Open Settings to select and test a local backend, connect OpenRouter, search the
 model catalog and choose the default for new sessions, or toggle Diagnostics trace
-collection. Changes are applied without a restart. Backend addresses are saved
+collection and browse recent traces on the same page. Changes are applied without a restart. Backend addresses are saved
 in a browser cookie scoped to the web port; reconnecting switches the workspace in place, closes old streams and requests,
 and reloads sessions and settings from the selected backend. Drafts are scoped
 to each backend. Older drafts without a backend identity remain in browser storage
