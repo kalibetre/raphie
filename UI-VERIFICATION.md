@@ -135,3 +135,34 @@ The test fixture and Vite server were stopped normally. The normal production ap
   retire a scope that was reused, and route navigation could repeat backend
   initialization. Scope state now follows the actual backend instance; initial
   backend lookup is independent of navigation and ignores obsolete completions.
+
+## Bot-first workspace and settings — 2026-10-24
+
+- Applied the approved bot roster, per-bot conversation library, unified title bar
+  with an icon-only new-conversation action, and collapsible grouped reply card.
+  The existing Composer component and floating composer CSS remain unchanged.
+- Settings keep the bot roster visible. Profile, personality, provider/model,
+  memory and diagnostics pages are scoped to the selected bot. App-wide backend,
+  appearance and UI-plugin preferences have a separate navigation group. Mobile
+  uses a compact settings section picker.
+- Used disposable fixture ports 14317/14321, deterministic inference and temporary
+  browser tooling outside the repository. Collaborative-browser interaction
+  checks covered personality revision saves, unsaved-route blocking and bot
+  creation. Screenshot capture failed twice with `Preview automation snapshot
+timed out after 15000ms`, so visual acceptance continued with Playwright.
+- Browser acceptance verified a completed reply arriving while the card stayed
+  collapsed, read and dismiss behavior, library unread filtering, collapse
+  persistence after reload, per-conversation draft restoration, personality
+  save/reload, independent bot personalities, app/bot scope labels and diagnostics
+  navigation. Checked 320/390/768/1024/1440px without page overflow, both themes,
+  keyboard focus on the new icon action and long conversation titles. No browser
+  exceptions occurred.
+- Visual inspection found a mobile button competing with the bot roster and a
+  short personality editor caused by utility precedence. The mobile action now
+  uses a plus icon in the roster; the editor has explicit utility minimum sizes.
+- Unit coverage verifies scoped, monotonic reply cursors and concurrent-tab
+  merges. Runtime query coverage verifies pending user turns do not count as
+  replies, and session-list/detail reply counts agree.
+- Full validation passes 117 tests, formatting, architecture, lint, types and the
+  production build. The existing large client-chunk warning remains. Application
+  data and the normal runtime were not changed during fixture acceptance.
