@@ -95,8 +95,7 @@ export function runUsage(runId: string, activity: ActivityEvent[]) {
   for (const event of activity) {
     if (event.runId !== runId || event.type !== "model.completed") continue;
     const usage = details(event).usage as
-      | { totalTokens?: number; cost?: { total?: number } }
-      | undefined;
+      { totalTokens?: number; cost?: { total?: number } } | undefined;
     tokens += usage?.totalTokens ?? 0;
     cost += usage?.cost?.total ?? 0;
     calls++;

@@ -18,12 +18,19 @@ its self-hosted Linux x64 runner. Typings are pinned separately to
 
 ## Retained deliberately
 
-TypeScript 7.0.2 remains the actual type checker. Oxfmt and type-aware Oxlint
-retain formatting, import sorting, hooks, and promise checks. During the initial
+TypeScript 7.0.2 remains the actual type checker. Type-aware Oxlint retains
+correctness, hooks, and promise checks. During the initial
 migration, Bun 1.4.2 and an isolated official 1.4.3 binary both rejected
 `bun fmt` and `bun lint` with `Script not found`. The 1.4.3 binary reported a
 built-in checker using TypeScript 7.0.2. We retain the explicitly pinned compiler
-and format/lint tools rather than change their implementation with a runtime bump.
+and lint tools rather than change their implementation with a runtime bump.
+
+Bun 1.4.4 adds the built-in `bun fmt` formatter. Formatting and import sorting
+now use it, with the existing style and ignore rules moved to `[fmt]` in
+`bunfig.toml`. The standalone Oxfmt dependency and configuration are removed.
+`bun run format` delegates to `bun fmt`; `bun run format:check` and the full
+validation command use `bun fmt --check`. CI already pins Bun 1.4.4, so it uses
+the same formatter without a separate installation.
 
 Vite is still required for TanStack Start's route/SSR compilation and Tailwind
 plugins. Varlock still validates and injects sensitive configuration. Automatic

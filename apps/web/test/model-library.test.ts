@@ -1,9 +1,9 @@
-import { test, expect } from "bun:test";
+import { expect, test } from "bun:test";
 
 import {
   filterModels,
-  modelSource,
   type LibraryModel,
+  modelSource,
 } from "../src/domains/settings/application/model-library";
 
 const claude: LibraryModel = {

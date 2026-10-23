@@ -76,11 +76,13 @@ export class BuiltinMemory implements MemoryBackend {
         )
         .get(scope)!.total;
       const rows = this.db
-        .query<MemoryEvidence, [string, ...(number | string)[]]>(`
+        .query<MemoryEvidence, [string, ...(number | string)[]]>(
+          `
         SELECT id,content,kind,source,eventTime,revision FROM memory_evidence
         WHERE scope=? ${cursor ? "AND (eventTime,id)<(?,?)" : ""}
         ORDER BY eventTime DESC,id DESC LIMIT 26
-      `)
+      `,
+        )
         .all(scope, ...(cursor ?? []));
       const evidence = rows.slice(0, 25);
       const last = evidence.at(-1);
@@ -105,12 +107,14 @@ export class BuiltinMemory implements MemoryBackend {
     if (!terms.length) return { evidence: [] };
     const expression = terms.map((term) => `"${term}"`).join(" OR ");
     const rows = this.db
-      .query<MemoryEvidence, [string, string]>(`
+      .query<MemoryEvidence, [string, string]>(
+        `
       SELECT e.id,e.content,e.kind,e.source,e.eventTime,e.revision
       FROM memory_search JOIN memory_evidence e
         ON e.scope=memory_search.scope AND e.id=memory_search.id
       WHERE memory_search MATCH ? AND e.scope=? ORDER BY rank LIMIT 8
-    `)
+    `,
+      )
       .all(expression, scope);
     return { evidence: rows };
   }

@@ -4,8 +4,11 @@ import { join } from "node:path";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai/models";
 import { createModels } from "@earendil-works/pi-ai/models";
-import type { Conversation } from "@earendil-works/pi-durable";
-import type { ModelRef, ConversationId } from "@earendil-works/pi-durable";
+import type {
+  Conversation,
+  ConversationId,
+  ModelRef,
+} from "@earendil-works/pi-durable";
 import {
   createRegistry,
   defineExtension,

@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { spyOn, test } from "bun:test";
 import assert from "node:assert/strict";
-import { copyFile, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 

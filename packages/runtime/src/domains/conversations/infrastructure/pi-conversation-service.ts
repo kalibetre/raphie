@@ -17,8 +17,8 @@ import type { ConversationCommands } from "../application/ports.ts";
 import { messageViolation } from "../domain/admission.ts";
 import type {
   ChatConversation,
-  ChatTurn,
   ChatDelivery,
+  ChatTurn,
 } from "../domain/model.ts";
 import { newSessionId } from "./session-id.ts";
 

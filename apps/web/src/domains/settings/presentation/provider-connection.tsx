@@ -10,10 +10,10 @@ import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "../../../shared/ui/select";
 import { useProviderConnections } from "../infrastructure/use-provider-connections";
 

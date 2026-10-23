@@ -10,7 +10,7 @@ The [design](headless-runtime.md) records intent; this file records actual behav
 loads private configuration through Varlock and starts Discord when enabled.
 `bun run start:web` starts only the built client host; it owns no SQLite database
 or model execution. `bun run start` starts both. No additional broker or service
-was introduced. Bun, Hono, TypeScript 7, Oxfmt and Oxlint remain the stack.
+was introduced. Bun (including `bun fmt`), Hono, TypeScript 7 and Oxlint remain the stack.
 
 HTTP retains loopback Host/Origin and browser client-marker checks. The marker is
 not remote authentication. Trusted adapters establish runtime-local actor contexts;

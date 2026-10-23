@@ -8,8 +8,7 @@ import {
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { ChatService } from "../../conversations/infrastructure/pi-conversation-service.ts";
-import type { ToolApprovalService } from "./pi-tool-approvals.ts";
-import type { ToolResult } from "./pi-tool-approvals.ts";
+import type { ToolApprovalService, ToolResult } from "./pi-tool-approvals.ts";
 import { ToolApprovals } from "./pi-tool-approvals.ts";
 
 export type McpTools = {

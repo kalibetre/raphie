@@ -34,13 +34,7 @@ export type SessionActivity = Omit<ActivityEvent, "conversationId"> & {
 export type Page<T> = { items: T[]; next: string | null };
 
 export type RunPhase =
-  | "idle"
-  | "queued"
-  | "model"
-  | "writing"
-  | "tool"
-  | "approval"
-  | "failed";
+  "idle" | "queued" | "model" | "writing" | "tool" | "approval" | "failed";
 
 export type SessionObservation = {
   session: SessionSummary;

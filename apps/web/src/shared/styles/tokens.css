@@ -58,7 +58,12 @@
   --error: #b13e32;
   --shadow: 0 1px 2px #2a24140a, 0 8px 24px #2a24140d;
   color-scheme: light;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   font-size: 14px;
   color: var(--foreground);
   background: var(--background);

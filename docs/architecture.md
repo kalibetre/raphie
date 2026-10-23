@@ -19,7 +19,7 @@ is self-contained at the repository root.
 The native TypeScript 7 compiler does not provide the old JavaScript compiler
 API. Keeping a second older compiler solely for lint integrations would defeat
 this migration. The previous ESLint/typescript-eslint and Prettier stack is
-replaced by Oxfmt (including import sorting), Oxlint, and oxlint-tsgolint's
+replaced by `bun fmt` (including import sorting), Oxlint, and oxlint-tsgolint's
 native type-aware checks. The lockfile pins the entire toolchain. `tsc` points
 to TypeScript 7; there is no compatibility compiler installed.
 

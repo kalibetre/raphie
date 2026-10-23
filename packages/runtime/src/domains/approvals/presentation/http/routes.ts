@@ -11,8 +11,8 @@ import { InputError } from "../../../../shared/application/input-error.ts";
 import type { AttachmentStore } from "../../../attachments/application/ports.ts";
 import { MAX_ATTACHMENT_BYTES } from "../../../attachments/domain/policy.ts";
 import type {
-  ToolApprovalCommands,
   FileApprovalCommands,
+  ToolApprovalCommands,
 } from "../../application/ports.ts";
 
 const decision = z.object({ decision: z.enum(["approved", "rejected"]) });

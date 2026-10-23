@@ -1,15 +1,15 @@
 import {
   BookOpen,
+  Brain,
+  KeyRound,
   Library,
   Monitor,
   Moon,
   Puzzle,
+  Radio,
+  Server,
   SlidersHorizontal,
   Sun,
-  Server,
-  Radio,
-  Brain,
-  KeyRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
