@@ -219,6 +219,15 @@ export function Workspace({
           botId={workspace.botId}
           open={!collapsed}
           onOpenChange={(open) => collapse(!open)}
+          width={visibleNavigationWidth}
+          resizeHandle={
+            <PanelResizeHandle
+              side="left"
+              value={visibleNavigationWidth}
+              maxWidth={navigationMax}
+              onChange={(value) => resizePanel("left", value)}
+            />
+          }
           onBack={() => select(conversationId)}
           onSelect={(id, next) => {
             if (id === workspace.botId) openSettings(next);

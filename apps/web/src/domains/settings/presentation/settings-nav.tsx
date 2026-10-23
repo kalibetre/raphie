@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronRight, Plus, X } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 
 import {
   readLocal,
@@ -57,6 +57,8 @@ export function SettingsWindow({
   botId,
   open,
   onOpenChange,
+  width,
+  resizeHandle,
   onSelect,
   onBack,
   children,
@@ -66,6 +68,10 @@ export function SettingsWindow({
   /** Desktop expansion, shared with the chat sidebar; mobile uses a sheet. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Desktop width in pixels, shared with the chat sidebar. */
+  width: number;
+  /** Desktop drag handle; it positions itself from --sidebar-width. */
+  resizeHandle: ReactNode;
   onSelect: (botId: string, section: Section) => void;
   onBack: () => void;
   children: ReactNode;
@@ -80,7 +86,9 @@ export function SettingsWindow({
       className="settings-window"
       open={open}
       onOpenChange={onOpenChange}
+      style={{ "--sidebar-width": `${width}px` } as CSSProperties}
     >
+      {open && <div className="hidden md:block">{resizeHandle}</div>}
       <SettingsNav
         section={section}
         botId={botId}
