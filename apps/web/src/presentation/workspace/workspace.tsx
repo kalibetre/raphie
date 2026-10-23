@@ -254,7 +254,7 @@ export function Workspace({
         else void navigate({ to: "/", search: { bot: nextBot } });
       }}
       onSettings={() => {
-        openSettings("general");
+        openSettings("bot");
       }}
       onCreate={() => {
         void navigate({
@@ -336,12 +336,7 @@ export function Workspace({
                 unreadCount={
                   summaries.filter((s) => unread(s) > 0 || s.waiting).length
                 }
-                onBotSettings={() => {
-                  void navigate({
-                    to: "/",
-                    search: { bot, view: "settings", section: "bot" },
-                  });
-                }}
+                onBotSettings={() => openSettings("bot")}
                 collapsed={collapsed}
                 inspector={inspector}
                 showInspector={!view && !!conversation}

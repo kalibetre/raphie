@@ -37,7 +37,9 @@ export function BotSidebar({
     <div className="bot-roster">
       <div className="roster-brand">
         <span className="brand">
-          <BotAvatar id="default" />
+          <span className="roster-brand-avatar">
+            <BotAvatar id="default" />
+          </span>
           raphie
         </span>
         <span className="local-label">LOCAL</span>

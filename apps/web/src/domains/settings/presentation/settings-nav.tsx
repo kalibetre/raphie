@@ -88,9 +88,7 @@ export function SettingsNav({
   return (
     <>
       <SidebarHeader className="settings-sidebar-header flex-row items-center">
-        <span className="brand-mark" aria-hidden="true">
-          r
-        </span>
+        <BotAvatar id="default" />
         Settings
       </SidebarHeader>
       <SidebarContent>

@@ -31,11 +31,7 @@ export function SettingsPage({
           <p>{lede}</p>
         </div>
         <span className="settings-scope-tag">
-          {bot ? (
-            <BotAvatar id={bot.id} />
-          ) : (
-            <span className="brand-mark" aria-hidden="true" />
-          )}
+          <BotAvatar id={bot?.id ?? "default"} />
           {bot ? `${bot.name} only` : scope}
         </span>
       </header>

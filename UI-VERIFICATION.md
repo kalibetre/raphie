@@ -257,3 +257,10 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   The welcome screen shows the selected bot's Glance avatar, matching its header
   avatar. Checked toggle direction, avatar identity, both themes and mobile;
   full validation passes all 118 tests.
+- Generic settings entry points (sidebar gear and bot header) always open the
+  current bot's Profile. Both preserve the active conversation route, so closing
+  settings returns to the same conversation. Explicit links to Models or other
+  sections keep their destinations. Verified both entry points and a named bot.
+- Settings sidebar and app-wide scope chips now use the Glance brand avatar.
+  The roster brand has an optical alignment correction: the drawn avatar and
+  lettering centers differ by less than 0.25 CSS pixels in the checked font.

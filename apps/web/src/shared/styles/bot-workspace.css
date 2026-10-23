@@ -27,6 +27,11 @@
     width: 30px;
     height: 30px;
   }
+  .roster-brand-avatar {
+    display: inline-flex;
+    /* Center the drawn blob with the lettering, rather than its SVG box. */
+    transform: translateY(1px);
+  }
   .local-label {
     font-size: 9px;
     color: var(--muted-foreground);
