@@ -1,4 +1,11 @@
 @layer components {
+  .welcome-avatar {
+    margin-bottom: 14px;
+  }
+  .welcome-avatar .bot-avatar {
+    width: 64px;
+    height: 64px;
+  }
   .bot-roster {
     display: flex;
     flex-direction: column;

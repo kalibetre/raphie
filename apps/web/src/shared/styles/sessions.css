@@ -13,8 +13,7 @@
     letter-spacing: -0.2px;
     margin-right: auto;
   }
-  .brand-mark,
-  .welcome-mark {
+  .brand-mark {
     font-family: Georgia, serif;
     font-style: italic;
     color: var(--accent);

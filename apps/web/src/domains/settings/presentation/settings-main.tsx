@@ -43,7 +43,7 @@ export function SettingsMain({
     <>
       <header className="settings-topbar">
         <SidebarTrigger
-          className="settings-navigation-toggle"
+          className="navigation-toggle"
           aria-label="Toggle settings navigation (⌘B)"
           aria-expanded={navigationOpen}
           title={`${navigationOpen ? "Hide" : "Show"} settings navigation (⌘B)`}

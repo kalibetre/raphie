@@ -253,3 +253,7 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   restoration. Verified docking geometry at 768/1024px, mobile open/close and
   focus restoration at 390px, plus light/dark visual checks. Full validation
   passes all 118 tests.
+- Chat and settings share the directional navigation-toggle icons and styling.
+  The welcome screen shows the selected bot's Glance avatar, matching its header
+  avatar. Checked toggle direction, avatar identity, both themes and mobile;
+  full validation passes all 118 tests.

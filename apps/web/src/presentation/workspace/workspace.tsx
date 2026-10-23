@@ -10,6 +10,7 @@ import { ReplyCard } from "../../domains/conversations/presentation/sessions/rep
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
+import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
 import type { Section } from "../../domains/settings/presentation/settings";
 import { Settings } from "../../domains/settings/presentation/settings";
@@ -412,6 +413,7 @@ export function Workspace({
                       />
                     ) : (
                       <Welcome
+                        avatar={<BotAvatar id={workspace.botId} />}
                         disabled={!connected || !data?.model}
                         onSuggest={(text) =>
                           setSuggestion({ text, at: Date.now() })

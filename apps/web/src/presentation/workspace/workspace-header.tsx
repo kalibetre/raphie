@@ -1,7 +1,8 @@
 import {
   ArrowLeft,
+  ChevronsLeft,
+  ChevronsRight,
   ListFilter,
-  PanelLeft,
   PanelRight,
   Settings,
   SquarePen,
@@ -48,14 +49,14 @@ export function WorkspaceHeader({
     <header className="workspace-header bot-workspace-header">
       <div className="header-identity">
         <Button
-          className="hidden md:inline-flex"
+          className="navigation-toggle hidden md:inline-flex"
           variant="ghost"
           size="icon-sm"
           aria-label={collapsed ? "Show sidebar (⌘B)" : "Hide sidebar (⌘B)"}
           aria-pressed={!collapsed}
           onClick={onToggleNavigation}
         >
-          <PanelLeft size={16} />
+          {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         </Button>
         <BotAvatar id={botId} />
         <button
