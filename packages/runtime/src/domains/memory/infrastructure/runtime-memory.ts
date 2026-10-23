@@ -58,6 +58,7 @@ export class RuntimeMemory implements MemoryService {
   private saved: Saved;
   private secrets: MemoryCredentials;
   private gate: ModelConnectionGate;
+  private readonly botId: string;
   private keyError: string | null = null;
   isBusy: () => Promise<boolean> = async () => false;
 
@@ -65,7 +66,9 @@ export class RuntimeMemory implements MemoryService {
     path: string,
     secrets: MemoryCredentials,
     gate = new ModelConnectionGate(),
+    botId = "default",
   ) {
+    this.botId = botId;
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new Database(path, { create: true });
     this.db.exec(
@@ -231,7 +234,13 @@ export class RuntimeMemory implements MemoryService {
     operation: (backend: MemoryBackend, scope: string) => Promise<T>,
   ) {
     const [backend, scope] = await this.gate.run(
-      async () => [this.backend(), this.saved.scope] as const,
+      async () =>
+        [
+          this.backend(),
+          this.botId === "default"
+            ? this.saved.scope
+            : `bot_${this.botId}_${this.saved.scope}`,
+        ] as const,
     );
     return operation(backend, scope);
   }

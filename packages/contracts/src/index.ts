@@ -1,4 +1,10 @@
 /** Public read models. No runtime, framework, or persistence dependencies. */
+export type {
+  BotProfile,
+  SaveBotProfile,
+  UpdateBotProfile,
+} from "./bots/views.ts";
+
 export type { DiagnosticSpan, TraceDiagnostics } from "./diagnostics/views.ts";
 
 export type Channel = "web" | "discord";

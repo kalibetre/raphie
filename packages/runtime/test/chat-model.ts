@@ -11,6 +11,7 @@ export function chatModel(
     fail?: boolean;
     started?: () => void;
     requestedModel?: (id: string) => void;
+    systemPrompt?: (text: string) => void;
     pause?: Promise<void>;
     streamChunkPause?: Promise<void>;
     tool?: { name: string; args: JsonObject };
@@ -24,6 +25,9 @@ export function chatModel(
   };
   const reply: Provider["streamSimple"] = (_model, context, streamOptions) => {
     options.requestedModel?.(_model.id);
+    options.systemPrompt?.(
+      JSON.stringify(context.messages.filter((m) => m.role === "system")),
+    );
     const stream = createAssistantMessageEventStream();
     const answer = context.messages
       .filter((m) => m.role === "user")

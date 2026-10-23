@@ -3,6 +3,7 @@ import type { Channel } from "@raphie/contracts";
 import { InputError } from "../../shared/application/input-error.ts";
 
 export type ActorContext = Readonly<{
+  botId: string;
   subject: "owner";
   source: Channel;
   threadId?: string;
@@ -12,6 +13,12 @@ export type ActorContext = Readonly<{
 /** Only trusted adapters receive the issuer. Contexts are never deserialized from requests. */
 export class ActorAuthority {
   private readonly issued = new WeakSet<ActorContext>();
+
+  private readonly botId: string;
+
+  constructor(botId = "default") {
+    this.botId = botId;
+  }
 
   establish(
     source: Channel,
@@ -24,6 +31,7 @@ export class ActorAuthority {
         403,
       );
     const actor: ActorContext = Object.freeze({
+      botId: this.botId,
       subject: "owner",
       source,
       threadId,

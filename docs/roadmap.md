@@ -181,15 +181,19 @@ scope and one default workspace; multiple sessions share that workspace.
 Sandboxes are replaceable. Serialize execution per workspace and budget model
 generation, lightweight execution and VM leases separately. Derive bot/workspace
 identity from authorized context, never model-selected IDs. Cross-bot sharing is
-explicit. These boundaries are planned, not delivered multi-bot isolation.
+explicit. The bot ownership and personality foundation is delivered through
+separate per-bot stores and authorities, as described in [bots.md](bots.md).
+Sandbox execution, resource budgets and OS-level containment remain planned.
 
 Proposed slices:
 
-0. **Bot ownership first:** introduce durable BotId ownership before execution.
-   Backfill existing sessions and bindings to a default bot without changing
-   public IDs, history, approvals or delivery identities. Preserve existing memory
-   configuration and data for that bot. Test cross-bot denial of session reads,
-   observations, approvals and memory access, including after restart.
+0. **Bot ownership foundation — delivered:** a persistent default bot reuses
+   existing stores and IDs. Named bots have isolated Gateways, authorities,
+   model connections, Settings, Memory and attachments. Profiles provide name,
+   description and owner-authored, revisioned SOUL.md. Integration tests cover
+   cross-bot session/stream/file access, actor and approval rejection, separate
+   credentials and memory, personality admission locking, and restart recovery.
+   Per-bot Discord/MCP connection management remains subsequent work.
 1. **One durable lightweight workspace per bot:** integrate just-bash with the
    bot's default workspace, serialize execution across its sessions, bound time,
    output and storage, and persist checkpoints outside compute. Prove restart
@@ -205,8 +209,7 @@ Proposed slices:
    providers are supported integration targets, not mandatory dependencies.
    Settings manages named connections, endpoint and protected credentials or a
    scoped vault path, provider namespace, capabilities and active backend.
-   The delivered slice has one active connection per runtime; the bot ownership
-   slice must resolve configuration and memory scope for each bot explicitly.
+   Each bot has its own active connection and host-derived memory scope.
    Translate source IDs and scope to provider-specific identities in adapters rather than leaking bank/peer/vault details into agent turns.
 
    Retain facts and confirmed experiences with provenance and event time;

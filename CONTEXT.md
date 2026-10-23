@@ -9,6 +9,9 @@ apply consistently to the web workspace and the agent runtime.
 permissions, configuration, sessions, memory scope and workspace.
 _Avoid_: Runtime or session as a synonym for a bot.
 
+**Personality**: A bot's owner-authored voice, values and interaction style.
+Personality guides its behavior without granting capabilities or access.
+
 **Workspace**: A bot's persistent working files and artifacts, shared by its
 sessions and preserved when its execution environment stops.
 _Avoid_: Web workspace when referring to stored bot files; that names the client UI.

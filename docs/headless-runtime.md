@@ -85,8 +85,13 @@ sessions and compute tiers. Different bot workspaces can execute concurrently
 within separate model-generation, lightweight-execution and VM-lease budgets.
 Workspace checkpoints survive sandbox replacement. Explicit artifact transfer
 connects lightweight and native execution; there is no implicit RAM/process
-migration or cross-bot sharing. The bot model and execution tiers are planned;
-the delivered headless interfaces do not yet implement these ownership checks.
+migration or cross-bot sharing. The bot ownership foundation is delivered through
+separate per-bot Gateway/settings/memory/attachment stores and actor authorities.
+Owner HTTP requests select a container via a bot-prefixed route; the unprefixed
+interface remains the default bot. Bot management is not available to model tools.
+The execution tiers and concurrency budgets remain planned. The existing Discord
+and MCP bootstrap configuration still belongs only to the default bot. See
+[bots.md](bots.md) for the delivered boundaries and later work.
 
 ## Application interface
 

@@ -3,26 +3,19 @@ import { HTTPException } from "hono/http-exception";
 import { secureHeaders } from "hono/secure-headers";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
-import { streamSnapshots } from "../domains/activity/presentation/http/events.ts";
-import { approvalRoutes } from "../domains/approvals/presentation/http/routes.ts";
-import { attachmentRoutes } from "../domains/attachments/presentation/http/routes.ts";
-import { conversationRoutes } from "../domains/conversations/presentation/http/routes.ts";
+import { botRoutes } from "../domains/bots/presentation/http/routes.ts";
 import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
-import { noTraces } from "../domains/diagnostics/application/trace-reader.ts";
-import { diagnosticsRoutes } from "../domains/diagnostics/presentation/http/routes.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
-import { memoryRoutes } from "../domains/memory/presentation/http/routes.ts";
 import type { SettingsService } from "../domains/settings/application/ports.ts";
-import { settingsRoutes } from "../domains/settings/presentation/http/routes.ts";
-import { clientRoutes } from "../infrastructure/http/client-routes.ts";
 import {
   browserCors,
   localAccess,
 } from "../infrastructure/http/local-origin.ts";
 import { limitBody } from "../infrastructure/http/validation.ts";
-import { snapshot } from "../infrastructure/pi/workspace-snapshot.ts";
 import { InputError } from "../shared/application/input-error.ts";
 import type { Gateway } from "./agent-runtime.ts";
+import type { BotHost } from "./bot-host.ts";
+import { runtimeRoutes } from "./runtime-http-routes.ts";
 
 export async function startServer(
   runtime: Gateway,
@@ -34,6 +27,7 @@ export async function startServer(
     diagnostics?: TraceReader;
     settings?: SettingsService;
     memory?: MemoryService;
+    bots?: BotHost;
   } = {},
 ) {
   const app = new Hono();
@@ -103,30 +97,23 @@ export async function startServer(
       web: options.webOrigin ?? "http://127.0.0.1:4320",
     }),
   );
-  if (options.memory) app.route("/api/memory", memoryRoutes(options.memory));
-  if (options.settings)
-    app.route("/api/settings", settingsRoutes(options.settings));
-  app.get("/api/chats", async (c) => c.json(await snapshot(runtime)));
-  app.get("/api/events", (c) => streamSnapshots(c, () => snapshot(runtime)));
-  const owner = runtime.actors.establish("web");
-  app.route("/api", clientRoutes(runtime.queries, owner));
-  app.route(
-    "/api/diagnostics",
-    diagnosticsRoutes(options.diagnostics ?? noTraces),
-  );
-  app.route("/api", conversationRoutes(runtime.sessions, owner));
-  app.route(
-    "/api",
-    approvalRoutes(
-      runtime.toolApprovals,
-      runtime,
-      runtime.files,
-      options.discordConfigured ?? false,
-      runtime.sessions,
-      owner,
-    ),
-  );
-  app.route("/api", attachmentRoutes(runtime.files, runtime));
+  if (options.bots) {
+    app.route("/api/bots", botRoutes(options.bots));
+    const scoped = new Map<string, ReturnType<typeof runtimeRoutes>>();
+    app.all("/api/bots/:botId/*", async (c) => {
+      const id = c.req.param("botId");
+      const bot = options.bots!.runtime(id);
+      let routes = scoped.get(id);
+      if (!routes) {
+        routes = runtimeRoutes(bot.gateway, id === "default" ? options : bot);
+        scoped.set(id, routes);
+      }
+      const url = new URL(c.req.url);
+      url.pathname = `/api/${c.req.path.split("/").slice(4).join("/")}`;
+      return routes.fetch(new Request(url, c.req.raw));
+    });
+  }
+  app.route("/", runtimeRoutes(runtime, options));
   app.notFound((c) => c.json({ error: "Not found." }, 404));
 
   const server = Bun.serve({

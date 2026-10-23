@@ -20,6 +20,7 @@ import { connectMcp, mcpConfig } from "../infrastructure/mcp/client.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../infrastructure/observability/telemetry-switch.ts";
 import { Gateway } from "./agent-runtime.ts";
+import { BotHost } from "./bot-host.ts";
 import { startServer } from "./http-server.ts";
 
 const resource = <A>(
@@ -157,6 +158,10 @@ const program = Effect.gen(function* () {
   };
   memory.isBusy = settings.isBusy = async () =>
     (await app.chats.state()).turns.some((turn) => turn.status === "pending");
+  const bots = yield* resource(
+    () => BotHost.open(directory, { gateway: app, settings, memory }),
+    (host) => host.close(),
+  );
   const stop = yield* Effect.acquireRelease(
     Effect.sync(() => new AbortController()),
     (stop) => Effect.sync(() => stop.abort()),
@@ -206,6 +211,7 @@ const program = Effect.gen(function* () {
         diagnostics: collector.traces,
         settings,
         memory,
+        bots,
       }),
     (http) => http.close(),
   );

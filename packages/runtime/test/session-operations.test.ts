@@ -12,7 +12,11 @@ test("shared operations require issued actors and preserve UUID admission and re
   const directory = await mkdtemp(join(tmpdir(), "raphie-operations-"));
   let app = await Gateway.open({ directory, ...chatModel() });
   try {
-    const forged: ActorContext = { subject: "owner", source: "web" };
+    const forged: ActorContext = {
+      botId: "default",
+      subject: "owner",
+      source: "web",
+    };
     await assert.rejects(
       app.sessions.submit(forged, { eventId: "denied", text: "hello" }),
       /authorized/,
@@ -105,7 +109,10 @@ test("file experiment uses verified actors and restricts decisions to its origin
       );
     }
     await assert.rejects(
-      app.sessions.copy({ subject: "owner", source: "web" }, input),
+      app.sessions.copy(
+        { botId: "default", subject: "owner", source: "web" },
+        input,
+      ),
       /authorized/,
     );
     assert.equal(
