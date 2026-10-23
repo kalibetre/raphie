@@ -13,7 +13,12 @@ export const Route = createFileRoute("/")({
     conversation?: number;
     view?: "diagnostics" | "settings";
     section?: Section;
+    bot?: string;
   } => ({
+    bot:
+      typeof search.bot === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(search.bot)
+        ? search.bot
+        : undefined,
     conversation:
       Number.isSafeInteger(Number(search.conversation)) &&
       Number(search.conversation) > 0

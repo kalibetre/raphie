@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Bot,
   Brain,
   KeyRound,
   Library,
@@ -23,6 +24,7 @@ import { Switch } from "../../../shared/ui/switch";
 import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
+import { BotSettings } from "./bot-settings";
 import { ConnectionSettings } from "./connection-settings";
 import { MemoryBrowse, MemorySettings } from "./memory-settings";
 import { ModelSettings } from "./model-settings";
@@ -31,6 +33,7 @@ import { Group, Row } from "./settings-group";
 import { TelemetrySettings } from "./telemetry-settings";
 
 export const sections = [
+  { id: "bot", label: "Bot", icon: Bot },
   { id: "connection", label: "Backend", icon: Server },
   { id: "providers", label: "Providers", icon: KeyRound },
   { id: "models", label: "Models", icon: Brain },
@@ -62,7 +65,9 @@ export function Settings({
   return (
     <ScrollArea className="settings-scroll" viewportLabel="Settings">
       <section className="settings-page">
-        {section === "providers" ? (
+        {section === "bot" ? (
+          <BotSettings />
+        ) : section === "providers" ? (
           <ProviderSettings />
         ) : section === "models" ? (
           <ModelSettings />

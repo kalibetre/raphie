@@ -12,6 +12,7 @@ import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
+import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import {
   Activity,
@@ -122,6 +123,7 @@ models.setProvider({
   stream: (m, c, o) => reply(m, c, { signal: o?.signal }),
   streamSimple: reply,
 });
+const fixtureProvider = models.getProvider("openrouter")!;
 const settings = await BackendSettings.open(
   join(directory, "settings.sqlite"),
   {
@@ -249,8 +251,57 @@ settings.onChange = () => {
 };
 memory.isBusy = settings.isBusy = async () =>
   (await app.chats.state()).turns.some((turn) => turn.status === "pending");
+const bots = await BotHost.open(
+  directory,
+  { gateway: app, settings, memory },
+  async (botId, path) => {
+    const botModels = createModels();
+    botModels.setProvider(fixtureProvider);
+    const botSettings = await BackendSettings.open(
+      join(path, "settings.sqlite"),
+      {
+        models: botModels,
+        credentialKeyStore: memoryCredentialKeyStore(),
+        defaultModel: model.id,
+        verifyKey: async () => {},
+      },
+    );
+    const botMemory = new RuntimeMemory(
+      join(path, "memory.sqlite"),
+      botSettings,
+      botSettings.connectionGate,
+      botId,
+    );
+    const gateway = await Gateway.open({
+      directory: path,
+      botId,
+      models: botModels,
+      model: botSettings.model,
+      memory: botMemory,
+      modelConnectionGate: botSettings.connectionGate,
+    });
+    botSettings.onChange = () => {
+      gateway.chats.model = botSettings.model;
+    };
+    botMemory.isBusy = botSettings.isBusy = async () =>
+      (await gateway.chats.state()).turns.some(
+        (turn) => turn.status === "pending",
+      );
+    return {
+      gateway,
+      settings: botSettings,
+      memory: botMemory,
+      close: async () => {
+        await gateway.close();
+        botMemory.close();
+        botSettings.close();
+      },
+    };
+  },
+);
 // Override the ports to run beside a real runtime.
 const server = await startServer(app, {
+  bots,
   settings,
   memory,
   diagnostics: collector.traces,
@@ -263,6 +314,7 @@ await new Promise<void>((done) => {
   process.once("SIGTERM", done);
 });
 await server.close();
+await bots.close();
 await app.close();
 await exporter.close();
 await collector.close();

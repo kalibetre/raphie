@@ -153,3 +153,58 @@ for (const saved of ["http://127.0.0.1:4337", "http://127.0.0.1:4338", null]) {
     }
   });
 }
+
+test("bot workspaces scope requests, streams, drafts and caches independently", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEvents = globalThis.EventSource;
+  const paths: string[] = [];
+  let finish!: (response: Response) => void;
+  let lastStream = "";
+  globalThis.fetch = (async (path: string) => {
+    paths.push(path);
+    if (path.endsWith("/slow"))
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    return Response.json({ path });
+  }) as unknown as typeof fetch;
+  globalThis.EventSource = class {
+    constructor(path: string) {
+      lastStream = path;
+    }
+
+    close() {}
+  } as unknown as typeof EventSource;
+  const a = new BackendWorkspace("http://127.0.0.1:4317", "bot-a");
+  const b = new BackendWorkspace("http://127.0.0.1:4317", "bot-b");
+  try {
+    a.queries.setQueryData(["memory-settings"], { owner: "a" });
+    assert.equal(b.queries.getQueryData(["memory-settings"]), undefined);
+    assert.notEqual(a.draftKey(), b.draftKey());
+    await a.api("/api/settings");
+    await b.api("/api/sessions");
+    await a.api("/api/bots");
+    assert.deepEqual(paths, [
+      "/api/bots/bot-a/settings",
+      "/api/bots/bot-b/sessions",
+      "/api/bots",
+    ]);
+    a.observe("/api/sessions/events", { message: () => {} });
+    assert.equal(
+      new URL(lastStream, "http://localhost").pathname,
+      "/api/bots/bot-a/sessions/events",
+    );
+    const pending = a.api("/api/slow");
+    const rejection = assert.rejects(pending, /changed/);
+    a.dispose();
+    finish(Response.json({ bot: "a" }));
+    await rejection;
+    await b.api("/api/memory");
+    assert.equal(paths.at(-1), "/api/bots/bot-b/memory");
+  } finally {
+    a.dispose();
+    b.dispose();
+    globalThis.fetch = originalFetch;
+    globalThis.EventSource = originalEvents;
+  }
+});

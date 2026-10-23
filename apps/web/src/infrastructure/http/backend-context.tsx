@@ -5,6 +5,7 @@ import type { BackendWorkspace } from "./backend-workspace";
 type BackendConnection = {
   workspace: BackendWorkspace;
   connect: (url: string) => Promise<void>;
+  selectBot: (id: string) => Promise<void>;
 };
 
 export const BackendContext = createContext<BackendConnection | undefined>(

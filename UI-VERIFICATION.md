@@ -115,3 +115,23 @@ The test fixture and Vite server were stopped normally. The normal production ap
 - The full validation gate passes 96 tests, formatting, architecture, lint,
   types and production build. A dependency boundary rule prevents new web
   imports from Radix packages. Memory remains separate from this PR to main.
+
+## Bot identity and personality — 2026-10-23
+
+- Used a disposable runtime/web fixture on 14317/14321 with deterministic models
+  and synthetic provider keys. Normal application data and services were untouched.
+- Created a named bot through Settings → Bot, edited SOUL.md, saved revision 2,
+  reloaded and verified the text and history. The default bot's personality stayed
+  unchanged. A new bot had no inherited provider connection.
+- Configured that bot's provider through its own Providers page, switched between
+  it and the default bot, and verified that unsent drafts stayed separate.
+- Sent a named-bot message and reloaded its UUID session URL with the bot query
+  parameter. The correct bot and transcript were restored without resubmission.
+- Checked 320, 390, 768 and 1440px layouts without horizontal page overflow,
+  light/dark form rendering, keyboard field order, and keyboard operation of the
+  bot selector. No browser exceptions occurred. The first preview snapshots timed
+  out twice; acceptance used temporary Playwright tooling outside the repository.
+- Fixed two lifecycle problems found by the browser flow: effect replay could
+  retire a scope that was reused, and route navigation could repeat backend
+  initialization. Scope state now follows the actual backend instance; initial
+  backend lookup is independent of navigation and ignores obsolete completions.

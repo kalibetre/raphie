@@ -32,8 +32,9 @@ with `RAPHIE_DISCORD_ENABLED=true` when the owner/channel settings are configure
 The runtime starts with a persistent **default** bot named Raphie. Existing
 sessions, model connections and memory stay with it. Named bots have separate
 configuration, stores and model credentials in the same runtime process.
-Owner-managed names, descriptions and revisioned SOUL.md documents define each
-bot's identity and personality. See [bots and personality](docs/bots.md) for APIs,
+Use the sidebar's **Current bot** selector and **Manage bot** to create and edit
+bots. Owner-managed names, descriptions and revisioned SOUL.md documents define
+each bot's identity and personality. See [bots and personality](docs/bots.md) for APIs,
 storage, isolation guarantees and planned execution capabilities.
 
 ## Sessions and storage

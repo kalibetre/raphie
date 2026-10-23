@@ -1,4 +1,48 @@
 @layer components {
+  .bot-heading h2 {
+    overflow-wrap: anywhere;
+  }
+  .sidebar-top.bot-sidebar-header {
+    display: block;
+  }
+  .bot-picker {
+    display: grid;
+    gap: 6px;
+    margin-top: 16px;
+    min-width: 0;
+  }
+  .bot-picker-label,
+  .bot-note {
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .bot-form {
+    display: grid;
+    gap: 10px;
+  }
+  .bot-form label {
+    font-size: 13px;
+    font-weight: 560;
+  }
+  .bot-form .bot-soul {
+    min-height: 220px;
+    font-family: var(--font-mono, monospace);
+    line-height: 1.6;
+  }
+  .bot-form p,
+  .bot-note {
+    line-height: 1.6;
+  }
+  .bot-history {
+    height: 180px;
+    margin-top: 8px;
+  }
+  .bot-history pre {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+  }
   /* Settings */
   .settings-scroll {
     flex: 1;

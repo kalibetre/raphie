@@ -5,6 +5,29 @@ its own sessions, model connections and default model, memory configuration,
 attachment store and reserved workspace directory. A session belongs to its bot's
 store; it cannot be opened by addressing its UUID through another bot's API.
 
+## Using bots in the web client
+
+Use **Current bot** in the sidebar to switch assistants. The default selection is
+Raphie. **Manage bot** opens **Settings → Bot**, where you can edit its name,
+description and SOUL.md or create a **New bot**. A new bot is selected after
+creation; add its provider under **Providers**, select a model under **Models**,
+and configure its own backend/scope under **Memory**.
+
+**Personality history** shows the latest saved revisions. Expand a revision to
+read its previous name, description and SOUL.md. Copy older text into the editor
+and save it to restore that personality as a new revision. Refresh after a stale
+revision error; saves made while a turn is pending must wait for it to finish.
+
+Named-bot links carry `?bot=<id>`, including session links and memory source links.
+Switching bots replaces cached queries, observations, forms and draft keys;
+switching back restores that bot's draft. Default-bot draft keys remain compatible
+with existing browser data. Closing a view still does not cancel durable work.
+
+**Backend** selects the shared runtime host; changing it returns to its default
+bot. Providers, models and memory are scoped to the current bot. Theme, panel
+layout and UI-plugin preferences remain browser preferences shared across bots;
+they do not grant runtime tool capabilities.
+
 ## The default bot and existing installations
 
 The first startup creates the stable `default` identity, initially named Raphie.
