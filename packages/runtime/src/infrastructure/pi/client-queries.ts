@@ -109,6 +109,13 @@ export class PiClientQueries implements ClientQueries {
             280,
           ),
           turnCount: turns.length,
+          replyCount: turns.filter(
+            (t) => t.status === "done" && t.answer !== null,
+          ).length,
+          replyPreview:
+            turns
+              .findLast((t) => t.status === "done" && t.answer !== null)
+              ?.answer?.slice(0, 280) ?? "",
           waiting: tools.approvals.some(
             (a) =>
               a.conversationId === c.id &&
@@ -239,6 +246,21 @@ export class PiClientQueries implements ClientQueries {
         ),
         turnCount: chats.turns.filter((t) => t.conversationId === session.id)
           .length,
+        replyCount: chats.turns.filter(
+          (t) =>
+            t.conversationId === session.id &&
+            t.status === "done" &&
+            t.answer !== null,
+        ).length,
+        replyPreview:
+          chats.turns
+            .findLast(
+              (t) =>
+                t.conversationId === session.id &&
+                t.status === "done" &&
+                t.answer !== null,
+            )
+            ?.answer?.slice(0, 280) ?? "",
         waiting,
       },
       turns:

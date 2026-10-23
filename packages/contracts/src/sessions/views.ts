@@ -15,6 +15,9 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   failed: boolean;
   preview: string;
   turnCount: number;
+  /** Completed assistant replies; optional for older runtimes. */
+  replyCount?: number;
+  replyPreview?: string;
   waiting: boolean;
 };
 
