@@ -139,23 +139,6 @@
     font-size: 11px;
     color: var(--muted-foreground);
   }
-  .bot-setup-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 0;
-    gap: 14px;
-    border-bottom: 1px solid var(--border);
-    font-size: 12px;
-  }
-  .bot-setup-row:last-child {
-    border-bottom: 0;
-  }
-  .bot-setup-row code {
-    font-size: 11px;
-    overflow-wrap: anywhere;
-    min-width: 0;
-  }
   @media (min-width: 768px) and (max-width: 1100px) {
     .main-panel .settings-page {
       padding: 28px 24px;

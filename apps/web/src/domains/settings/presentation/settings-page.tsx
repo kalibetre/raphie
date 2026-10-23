@@ -26,6 +26,10 @@ export function SettingsPage({
       <header
         className={`settings-hero ${bot ? `tone-${botTone(bot.id)}` : "settings-hero-app"}`}
       >
+        <div className="settings-hero-copy">
+          <h1>{title}</h1>
+          <p>{lede}</p>
+        </div>
         <span className="settings-scope-tag">
           {bot ? (
             <BotAvatar id={bot.id} />
@@ -34,8 +38,6 @@ export function SettingsPage({
           )}
           {bot ? `${bot.name} only` : scope}
         </span>
-        <h1>{title}</h1>
-        <p>{lede}</p>
       </header>
       {children}
     </section>

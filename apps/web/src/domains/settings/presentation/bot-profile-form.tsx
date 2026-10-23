@@ -139,46 +139,6 @@ export function BotForm({
           </p>
         )}
       </div>
-      {mode === "profile" && saved && (
-        <div className="bot-editor-section">
-          <h2>This bot’s setup</h2>
-          <div className="bot-setup-row">
-            <span>Kind</span>
-            <span>
-              {saved.id === "default"
-                ? "Default bot · keeps your original data"
-                : "Independent bot"}
-            </span>
-          </div>
-          <div className="bot-setup-row">
-            <span>Personality</span>
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              onClick={() =>
-                void navigate({
-                  to: "/",
-                  search: {
-                    bot:
-                      workspace.botId === "default"
-                        ? undefined
-                        : workspace.botId,
-                    view: "settings",
-                    section: "personality",
-                  },
-                })
-              }
-            >
-              Revision {saved.revision} ↗
-            </Button>
-          </div>
-          <div className="bot-setup-row">
-            <span>Bot ID</span>
-            <code>{saved.id}</code>
-          </div>
-        </div>
-      )}
       <SaveBar
         visible={
           !saved || dirty || pending || !!message || !!error || !!guard.message
