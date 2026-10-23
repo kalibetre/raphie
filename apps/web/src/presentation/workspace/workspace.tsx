@@ -13,12 +13,8 @@ import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics"
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
 import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
 import type { Section } from "../../domains/settings/presentation/settings";
-import {
-  isAppSection,
-  sections,
-  Settings,
-} from "../../domains/settings/presentation/settings";
-import { SettingsNav } from "../../domains/settings/presentation/settings-nav";
+import { Settings } from "../../domains/settings/presentation/settings";
+import { SettingsWindow } from "../../domains/settings/presentation/settings-nav";
 import { useBackend } from "../../infrastructure/http/backend-context";
 import {
   readLocal,
@@ -215,7 +211,34 @@ export function Workspace({
     (missing ? "Conversation unavailable" : "New conversation");
   if (view === "diagnostics") title = "Diagnostics";
   if (view === "settings")
-    title = sections.find((s) => s.id === section)?.label;
+    return (
+      <TooltipProvider delay={300}>
+        <SettingsWindow
+          section={section}
+          botId={workspace.botId}
+          onBack={() => select(conversationId)}
+          onSelect={(id, next) => {
+            if (id === workspace.botId) openSettings(next);
+            else
+              void navigate({
+                to: "/",
+                search: {
+                  bot: id === "default" ? undefined : id,
+                  view: "settings",
+                  section: next,
+                },
+              });
+          }}
+        >
+          <Settings
+            section={section}
+            enabled={enabled}
+            setEnabled={setEnabled}
+            onDiagnostics={() => select(conversationId, "diagnostics")}
+          />
+        </SettingsWindow>
+      </TooltipProvider>
+    );
   return (
     <TooltipProvider delay={300}>
       <div
@@ -248,20 +271,6 @@ export function Workspace({
           onRetry={() => void inbox.bots.refetch()}
           onSelect={(id) => {
             const nextBot = id === "default" ? undefined : id;
-            if (view === "settings") {
-              void navigate({
-                to: "/",
-                search: {
-                  bot: nextBot,
-                  view,
-                  section:
-                    isAppSection(section) || section === "new-bot"
-                      ? "bot"
-                      : section,
-                },
-              });
-              return;
-            }
             const last = readLocal(lastSessionKey(id));
             if (last)
               void navigate({
@@ -284,17 +293,9 @@ export function Workspace({
         <main id="main" className="main-panel">
           <WorkspaceHeader
             title={title}
-            breadcrumb={
-              view === "settings" && isAppSection(section)
-                ? "App"
-                : (botProfile?.name ?? "Raphie")
-            }
+            breadcrumb={botProfile?.name ?? "Raphie"}
             botId={workspace.botId}
-            description={
-              view === "settings"
-                ? "Settings"
-                : (botProfile?.description ?? "Your personal assistant")
-            }
+            description={botProfile?.description ?? "Your personal assistant"}
             onBack={view ? () => select(conversationId) : undefined}
             onNew={!view ? () => select() : undefined}
             onLibrary={!view ? () => setLibrary(!library) : undefined}
@@ -315,23 +316,7 @@ export function Workspace({
             onToggleNavigation={toggleCollapsed}
             onToggleInspector={() => setInspector(!inspector)}
           />
-          {view === "settings" ? (
-            <div className="bot-settings-layout">
-              <SettingsNav
-                section={section}
-                onSelect={openSettings}
-                onBack={() => select(conversationId)}
-                name={botProfile?.name ?? "Raphie"}
-                botId={workspace.botId}
-              />
-              <Settings
-                section={section}
-                enabled={enabled}
-                setEnabled={setEnabled}
-                onDiagnostics={() => select(conversationId, "diagnostics")}
-              />
-            </div>
-          ) : error ? (
+          {error ? (
             <WorkspaceAlert
               title="Couldn’t connect to your workspace"
               description="Your saved sessions and drafts are still on this device. Check that the runtime is running, then try again."

@@ -121,22 +121,13 @@
     margin-top: 12px;
   }
   .roster-footer {
-    display: grid;
-    gap: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     margin-top: 18px;
     padding: 12px 10px 0;
     border-top: 1px solid var(--border);
-  }
-  .roster-footer > button {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    font-size: 12px;
-    text-align: left;
-    background: none;
-    border: 0;
-    padding: 0;
-    color: var(--muted-foreground);
   }
   .roster-footer .runtime-status {
     font-size: 10px;

@@ -166,3 +166,25 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
 - Full validation passes 117 tests, formatting, architecture, lint, types and the
   production build. The existing large client-chunk warning remains. Application
   data and the normal runtime were not changed during fixture acceptance.
+
+## Full-window grouped settings — 2026-10-24
+
+- Replaced the roster-plus-settings-column layout with a full-window settings
+  screen built on the shadcn `Sidebar` (`sheet`, `skeleton` and `collapsible`
+  added through the shadcn CLI; existing button, input, separator and tooltip
+  kept). Each bot is an expandable group; Backend connection, Appearance and UI
+  plugins sit in a separate App group. The chat roster's settings entry is now a
+  gear icon beside the connection status.
+- Section ids and links are unchanged; revision history and memory browsing
+  highlight Personality and Memory. Expanded groups persist in browser storage
+  so they survive the remount when selecting another bot's page.
+- Playwright on fixture ports 14317/14321 verified: expanding or collapsing
+  groups keeps the URL and an unsaved personality draft; selecting another
+  bot's page is blocked until discard, then switches bot and section; both
+  groups stay open after the switch; `section=memory-browse` and legacy
+  `view=plugins` links; close returns to chat; Create a bot; mobile sheet opens
+  from the title-bar trigger, closes on Escape with focus back on the trigger,
+  and closes after choosing a page. Checked 320/390/768/1024/1440px without
+  overflow in both themes at 2x; no browser exceptions.
+- Full validation passes 117 tests, formatting, architecture, lint, types and the
+  production build.

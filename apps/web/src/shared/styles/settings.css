@@ -2,9 +2,6 @@
   .bot-heading h2 {
     overflow-wrap: anywhere;
   }
-  .sidebar-top.bot-sidebar-header {
-    display: block;
-  }
   .bot-picker {
     display: grid;
     gap: 6px;

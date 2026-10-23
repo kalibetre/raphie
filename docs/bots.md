@@ -45,7 +45,7 @@ Switching bots replaces cached queries, observations, forms and draft keys;
 switching back restores that bot's draft. Default-bot draft keys remain compatible
 with existing browser data. Closing a view still does not cancel durable work.
 
-**App settings → Backend connection** selects the shared runtime host; changing it returns to its default
+**Settings → App → Backend connection** selects the shared runtime host; changing it returns to its default
 bot. Providers, models and memory are scoped to the current bot. Theme, panel
 layout and UI-plugin preferences remain browser preferences shared across bots;
 they do not grant runtime tool capabilities.

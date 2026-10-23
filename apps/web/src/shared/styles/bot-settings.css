@@ -1,70 +1,72 @@
 @layer components {
-  .bot-settings-layout {
-    flex: 1;
+  /* Full-window settings: the shadcn sidebar plus a scrolling page. */
+  .settings-window {
+    height: 100dvh;
     min-height: 0;
-    display: grid;
-    grid-template-columns: 190px minmax(0, 1fr);
+    overflow: hidden;
   }
-  .bot-settings-nav {
+  .settings-inset {
     min-width: 0;
-    padding: 28px 14px;
-    border-right: 1px solid var(--border);
-    background: color-mix(in srgb, var(--sidebar) 50%, var(--background));
-    overflow: auto;
+    min-height: 0;
+    overflow: hidden;
   }
-  .settings-nav-identity {
+  .settings-topbar {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 0 6px 26px;
+    height: 60px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
   }
-  .settings-nav-identity strong {
-    display: block;
-    font-size: 12px;
-    font-weight: 550;
-    margin-bottom: 4px;
-    overflow-wrap: anywhere;
-  }
-  .settings-nav-identity small {
-    font-size: 10px;
-    color: var(--muted-foreground);
-  }
-  .settings-nav-item {
-    display: block;
-    width: 100%;
-    text-align: left;
-    border: 0;
-    background: none;
-    border-radius: 7px;
-    padding: 10px;
+  .settings-breadcrumb {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 12px;
     color: var(--muted-foreground);
-    margin: 0 0 4px;
   }
-  .settings-nav-item[aria-current] {
-    background: var(--hover);
+  .settings-breadcrumb span {
+    margin: 0 8px;
+    color: var(--faint);
+  }
+  .settings-breadcrumb strong {
+    font-weight: 500;
     color: var(--foreground);
   }
-  .settings-nav-item:hover {
-    background: var(--hover);
+  .settings-sidebar-header {
+    gap: 10px;
+    padding: 20px 16px 12px;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
   }
-  .settings-nav-note {
+  .settings-bot-trigger .bot-avatar {
+    width: 22px;
+    height: 22px;
+    gap: 3px;
+  }
+  .settings-bot-trigger .bot-avatar i {
+    width: 2px;
+    height: 6px;
+  }
+  .settings-default-tag {
     font-size: 10px;
-    line-height: 1.8;
     color: var(--muted-foreground);
-    margin: 26px 10px;
   }
-  .bot-settings-nav > button {
-    max-width: 100%;
-    white-space: normal;
+  .settings-chevron {
+    margin-left: auto;
+    transition: transform 150ms;
   }
-  .mobile-settings-nav {
-    display: none;
+  [data-panel-open] > .settings-chevron {
+    transform: rotate(90deg);
   }
-  .bot-settings-layout .settings-page {
+  .settings-window .settings-page {
     max-width: 808px;
-    padding: 40px 44px 32px;
-    gap: 26px;
+    padding: 36px 44px 32px;
   }
   .settings-page-heading {
     display: flex;
@@ -95,29 +97,24 @@
     border-radius: 6px;
     padding: 6px 9px;
   }
-  .bot-editor-section,
-  .bot-settings-layout .settings-group {
-    border-top: 1px solid var(--border);
-    padding: 24px 0;
+  /* Bot editors use the same cards as every other settings group. */
+  .bot-editor-section {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+    padding: 18px;
   }
-  .bot-editor-section h2,
-  .bot-settings-layout .settings-group h2 {
+  .bot-editor-section h2 {
     font-size: 13px;
     font-weight: 550;
     color: var(--foreground);
     margin: 0 0 8px;
   }
-  .bot-editor-section > p,
-  .bot-settings-layout .settings-group > p {
+  .bot-editor-section > p {
     font-size: 12px;
     color: var(--muted-foreground);
     line-height: 1.8;
     margin: 0 0 20px;
-  }
-  .bot-settings-layout .settings-card {
-    border: 0;
-    border-radius: 0;
-    background: none;
   }
   .bot-editor .settings-form {
     padding: 0;
@@ -222,44 +219,20 @@
     color: var(--error);
   }
   @media (min-width: 768px) and (max-width: 1100px) {
-    .bot-settings-layout {
-      grid-template-columns: 160px minmax(0, 1fr);
-    }
-    .bot-settings-layout .settings-page {
+    .settings-window .settings-page {
       padding: 28px 24px;
-    }
-    .bot-settings-nav {
-      padding: 24px 10px;
-    }
-    .settings-nav-item {
-      font-size: 11px;
     }
     .settings-page-heading {
       flex-wrap: wrap;
     }
   }
   @media (max-width: 767px) {
-    .bot-settings-layout {
-      display: flex;
-      flex-direction: column;
+    .settings-topbar {
+      height: 56px;
+      padding: 0 12px;
+      gap: 6px;
     }
-    .bot-settings-nav {
-      display: none;
-    }
-    .mobile-settings-nav {
-      display: flex;
-      gap: 8px;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .mobile-settings-nav > [data-slot="select-trigger"] {
-      flex: 1;
-      min-width: 0;
-    }
-    .mobile-settings-nav button {
-      font-size: 11px;
-    }
-    .bot-settings-layout .settings-page {
+    .settings-window .settings-page {
       padding: 24px 16px;
       gap: 24px;
     }
@@ -280,7 +253,7 @@
       padding: 12px;
     }
     .bot-editor-section {
-      padding: 20px 0;
+      padding: 16px;
     }
     .bot-editor-section > p {
       font-size: 11px;

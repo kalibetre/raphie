@@ -94,6 +94,9 @@ This first journal keeps the latest **5,000 events**, truncates individual diagn
 
 ## Settings
 
+Settings opens full-window from the gear beside the connection status. Its
+sidebar groups each bot's pages (profile, personality, providers, models,
+memory, diagnostics) under an expandable entry, with app-wide preferences below.
 Open Settings to select and test a local backend, connect OpenRouter, search the
 model catalog and choose the default for new sessions, or toggle Diagnostics trace
 collection. Changes are applied without a restart. Backend addresses are saved

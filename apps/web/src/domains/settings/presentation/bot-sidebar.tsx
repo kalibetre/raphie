@@ -112,13 +112,19 @@ export function BotSidebar({
         <Plus size={14} /> New bot
       </Button>
       <footer className="roster-footer">
-        <button onClick={onSettings}>
-          <Settings size={15} /> App settings
-        </button>
         <span className="runtime-status">
           <span className={`status-dot ${connected ? "" : "offline"}`} />
           {connected ? "Connected locally" : "Reconnecting…"}
         </span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Settings"
+          title="Settings"
+          onClick={onSettings}
+        >
+          <Settings size={15} />
+        </Button>
       </footer>
     </aside>
   );
