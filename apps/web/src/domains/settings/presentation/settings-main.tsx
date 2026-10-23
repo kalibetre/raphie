@@ -1,8 +1,15 @@
-import { ChevronRight, Settings2, X } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Menu,
+  Settings2,
+  X,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "../../../shared/ui/button";
-import { SidebarTrigger } from "../../../shared/ui/sidebar";
+import { SidebarTrigger, useSidebar } from "../../../shared/ui/sidebar";
 import { useBots } from "../infrastructure/use-bots";
 import { BotAvatar, botTone } from "./bot-avatar";
 import { isAppSection, type Section, sectionOf } from "./settings-sections";
@@ -20,6 +27,13 @@ export function SettingsMain({
   children: ReactNode;
 }) {
   const bots = useBots();
+  const { isMobile, open, openMobile } = useSidebar();
+  const navigationOpen = isMobile ? openMobile : open;
+  const NavigationIcon = isMobile
+    ? Menu
+    : navigationOpen
+      ? ChevronsLeft
+      : ChevronsRight;
   const app = isAppSection(section);
   const Icon = sectionOf(section).icon;
   const name =
@@ -29,9 +43,13 @@ export function SettingsMain({
     <>
       <header className="settings-topbar">
         <SidebarTrigger
+          className="settings-navigation-toggle"
           aria-label="Toggle settings navigation (⌘B)"
-          title="Toggle settings navigation (⌘B)"
-        />
+          aria-expanded={navigationOpen}
+          title={`${navigationOpen ? "Hide" : "Show"} settings navigation (⌘B)`}
+        >
+          <NavigationIcon size={16} aria-hidden="true" />
+        </SidebarTrigger>
         <nav className="settings-breadcrumb" aria-label="Settings location">
           <span className="settings-breadcrumb-root">
             <Settings2 size={14} aria-hidden="true" />

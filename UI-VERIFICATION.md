@@ -239,3 +239,9 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   mobile navigation focus restoration and the unsaved-edit guard pass in the
   collaborative browser with no console errors. All 118 tests and production
   build pass; the existing large-chunk build warning remains.
+- Bot navigation uses avatar-tinted tiles, a selected surface with a full outline,
+  and a compact connection footer. Selection must never use a colored left
+  border or stripe; the conversation library follows the same rule.
+- The settings toggle uses directional chevrons on desktop and a menu icon on
+  mobile, retaining shadcn's navigation and focus restoration. Checked search
+  and its empty state, desktop open/close icons, and mobile Escape focus restore.
