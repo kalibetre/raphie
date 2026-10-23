@@ -1,5 +1,6 @@
 import {
   Activity as ActivityIcon,
+  BookOpen,
   Moon,
   Search,
   Settings,
@@ -39,8 +40,10 @@ export function SessionSidebar({
   select,
   hasMore,
   loadMore,
+  onMemory,
 }: {
   data?: Snapshot;
+  onMemory: () => void;
   hasMore?: boolean;
   loadMore: () => void;
   conversationId?: string;
@@ -69,6 +72,9 @@ export function SessionSidebar({
       <nav className="sidebar-primary" aria-label="Workspace">
         <SidebarMenuButton onClick={() => select()}>
           <SquarePen size={15} aria-hidden="true" /> New conversation
+        </SidebarMenuButton>
+        <SidebarMenuButton onClick={onMemory}>
+          <BookOpen size={15} aria-hidden="true" /> Memory
         </SidebarMenuButton>
       </nav>
       <label className="search-field">

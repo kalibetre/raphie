@@ -107,3 +107,14 @@ export type {
   SaveProviderConnection,
   EditProviderConnection,
 } from "./settings/views.ts";
+
+export type {
+  MemoryProvider,
+  MemoryConfiguration,
+  SaveMemoryConfiguration,
+  MemoryEvidence,
+  MemoryRecall,
+  MemoryPage,
+  MemoryReflection,
+  MemoryStatus,
+} from "./memory/views.ts";

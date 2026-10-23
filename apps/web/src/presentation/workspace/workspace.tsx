@@ -180,6 +180,20 @@ export function Workspace({
           />
         ) : (
           <SessionSidebar
+            onMemory={() => {
+              if (conversation)
+                void navigate({
+                  to: "/sessions/$sessionId",
+                  params: { sessionId: conversation.sessionId },
+                  search: { view: "settings", section: "memory" },
+                });
+              else
+                void navigate({
+                  to: "/",
+                  search: { view: "settings", section: "memory" },
+                });
+              setSidebar(false);
+            }}
             data={data}
             conversationId={conversationId}
             view={view}

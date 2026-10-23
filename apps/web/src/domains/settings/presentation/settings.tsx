@@ -1,4 +1,6 @@
 import {
+  BookOpen,
+  Library,
   Monitor,
   Moon,
   Puzzle,
@@ -22,6 +24,7 @@ import { plugins } from "../infrastructure/plugins/index";
 import { applyTheme, type Theme } from "../infrastructure/theme";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { ConnectionSettings } from "./connection-settings";
+import { MemoryBrowse, MemorySettings } from "./memory-settings";
 import { ModelSettings } from "./model-settings";
 import { ProviderSettings } from "./provider-settings";
 import { Group, Row } from "./settings-group";
@@ -31,12 +34,17 @@ export const sections = [
   { id: "connection", label: "Backend", icon: Server },
   { id: "providers", label: "Providers", icon: KeyRound },
   { id: "models", label: "Models", icon: Brain },
-  { id: "telemetry", label: "Telemetry", icon: Radio },
-  { id: "general", label: "General", icon: SlidersHorizontal },
+  { id: "memory", label: "Memory", icon: BookOpen },
+  { id: "memory-browse", label: "Browse memory", icon: Library },
   { id: "plugins", label: "Plugins", icon: Puzzle },
+  { id: "general", label: "General", icon: SlidersHorizontal },
+  { id: "telemetry", label: "Telemetry", icon: Radio },
 ] as const;
 
 export type Section = (typeof sections)[number]["id"];
+
+export const isSection = (value: unknown): value is Section =>
+  sections.some((section) => section.id === value);
 
 export function Settings({
   section,
@@ -58,6 +66,10 @@ export function Settings({
           <ProviderSettings />
         ) : section === "models" ? (
           <ModelSettings />
+        ) : section === "memory" ? (
+          <MemorySettings />
+        ) : section === "memory-browse" ? (
+          <MemoryBrowse />
         ) : section === "telemetry" ? (
           <TelemetrySettings />
         ) : section === "connection" ? (

@@ -43,6 +43,8 @@ import {
   DeliveryPlans,
   PiDeliveryQueue,
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
+import type { MemoryService } from "../domains/memory/application/ports.ts";
+import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
 import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
 import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
 import { openBunSqliteStorage } from "../infrastructure/storage/bun-sqlite.ts";
@@ -53,6 +55,7 @@ import {
 import type { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
+  memory?: MemoryService;
   directory: string;
   discordThreadId?: string;
   discordConnectionId?: string;
@@ -125,6 +128,26 @@ export class Gateway {
         tasks: [app.workflow, chatWorkflow],
       }),
     );
+    if (options.memory)
+      registry.install(
+        createMemoryTools(options.memory, async (conversationId) => {
+          const state = await app.chats.state();
+          const session = state.conversations.find(
+            (c) => c.id === conversationId,
+          );
+          const turn = state.turns.findLast(
+            (t) =>
+              t.conversationId === conversationId && t.status === "pending",
+          );
+          return session && turn
+            ? {
+                sessionId: session.sessionId,
+                turnId: turn.id,
+                eventTime: turn.createdAt,
+              }
+            : null;
+        }),
+      );
     if (options.mcp) registry.install(createMcpTools(app, options.mcp));
     app.harness = await Harness.open(
       await openBunSqliteStorage(join(options.directory, "gateway.sqlite")),

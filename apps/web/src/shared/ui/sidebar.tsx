@@ -1,7 +1,8 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { Collapsible } from "@base-ui/react/collapsible";
 import { Dialog } from "@base-ui/react/dialog";
 import { ScrollArea } from "@base-ui/react/scroll-area";
-import { X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { type ComponentProps, useEffect, useState } from "react";
 
 import { cn } from "./utils";
@@ -125,6 +126,63 @@ export function SidebarMenuButton({
       data-active={active}
       aria-current={active ? "page" : undefined}
       className={cn("sidebar-menu-button", className)}
+      {...props}
+    />
+  );
+}
+
+/**
+ * A menu item that expands to show sub-items, like shadcn's collapsible nav.
+ * It opens whenever one of its items becomes active (including via browser
+ * history), so the current page is never hidden in a collapsed group.
+ */
+export function SidebarMenuCollapsible({
+  label,
+  icon,
+  active = false,
+  children,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  /** One of the sub-items is the current page. */
+  active?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(active);
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+  return (
+    <Collapsible.Root open={open} onOpenChange={setOpen}>
+      <Collapsible.Trigger
+        data-slot="sidebar-menu-button"
+        // Collapsed over the current page: highlight the group instead.
+        data-active={active && !open}
+        className="sidebar-menu-button sidebar-menu-collapsible"
+      >
+        {icon} {label}
+        <ChevronRight
+          size={14}
+          aria-hidden="true"
+          className="sidebar-menu-chevron"
+        />
+      </Collapsible.Trigger>
+      <Collapsible.Panel>
+        <div data-slot="sidebar-menu-sub" className="sidebar-menu-sub">
+          {children}
+        </div>
+      </Collapsible.Panel>
+    </Collapsible.Root>
+  );
+}
+
+export function SidebarMenuSubButton({
+  className,
+  ...props
+}: ComponentProps<typeof SidebarMenuButton>) {
+  return (
+    <SidebarMenuButton
+      className={cn("sidebar-menu-sub-button", className)}
       {...props}
     />
   );

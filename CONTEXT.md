@@ -24,6 +24,20 @@ Its display name is metadata, not its storage identity.
 **Activity**: An observed event in an agent run, including model, tool, approval,
 and recovery progress. Activity is not private model reasoning.
 
+**Memory evidence**: A selected fact or confirmed experience retained across
+sessions, with its source and event time. It belongs to the configured runtime
+memory scope, rather than to a single session. Current evidence is separate from
+historical transcripts and tool outputs.
+
+**Memory backend**: The configured store and retrieval adapter. The first slice
+supports built-in SQLite evidence and Hindsight; Honcho and Markdown remain
+planned. Switching backends preserves data without copying or merging it.
+
+**Reflection**: Reasoning from retained evidence, with support and uncertainty.
+Built-in memory supplies evidence for the conversation model to synthesize;
+Hindsight can supply provider reflection. An inferred reflection is not a new
+confirmed fact unless explicitly retained as such.
+
 **Channel**: An external messaging platform through which the owner communicates
 with Raphie, such as Discord or Telegram.
 

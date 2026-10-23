@@ -20,6 +20,7 @@ import {
 import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
 import { newSessionId } from "../src/domains/conversations/infrastructure/session-id.ts";
 import { openLocalOtlp } from "../src/domains/diagnostics/infrastructure/local-otlp.ts";
+import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memory.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
@@ -36,7 +37,8 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
   const toolResult = context.messages.findLast((m) => m.role === "toolResult");
   const user = context.messages.findLast((m) => m.role === "user");
   const input = user && typeof user.content === "string" ? user.content : "";
-  const useTool = /tool|approval/i.test(input) && !toolResult;
+  const remember = /remember tea/i.test(input);
+  const useTool = (/tool|approval/i.test(input) || remember) && !toolResult;
   const text =
     toolResult?.role === "toolResult"
       ? toolResult.content
@@ -50,10 +52,12 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
           {
             type: "toolCall",
             id: "test-call",
-            name: "mcp_fixture_execute",
-            arguments: {
-              code: 'return calendar.events.list({ date: "2026-10-21" });',
-            },
+            name: remember ? "memory_retain" : "mcp_fixture_execute",
+            arguments: remember
+              ? { content: "Owner prefers jasmine tea", kind: "fact" }
+              : {
+                  code: 'return calendar.events.list({ date: "2026-10-21" });',
+                },
           },
         ]
       : [{ type: "text", text: "" }],
@@ -141,7 +145,30 @@ const telemetry = switchableTelemetry(
   exporter,
   () => settings.telemetryEnabled,
 );
+const memory = new RuntimeMemory(
+  join(directory, "memory.sqlite"),
+  settings,
+  settings.connectionGate,
+);
+// Opt-in inventory for browsing/pagination acceptance; always disposable data.
+if (process.env.RAPHIE_FIXTURE_MEMORY_HISTORY === "true") {
+  for (let index = 1; index <= 60; index++) {
+    const suffix = String(index).padStart(3, "0");
+    await memory.retain({
+      id: `fixture-memory-${suffix}`,
+      content:
+        index === 7
+          ? "Fixture preference: jasmine tea"
+          : `Fixture memory ${suffix}: a synthetic preference for browsing acceptance.`,
+      kind: index % 2 ? "fact" : "experience",
+      source: `fixture:memory-${suffix}`,
+      eventTime: Date.now() - index * 1000,
+    });
+  }
+}
 const app = await Gateway.open({
+  memory,
+  modelConnectionGate: settings.connectionGate,
   directory,
   models,
   model: settings.model,
@@ -220,11 +247,12 @@ if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
 settings.onChange = () => {
   app.chats.model = settings.model;
 };
-settings.isBusy = async () =>
+memory.isBusy = settings.isBusy = async () =>
   (await app.chats.state()).turns.some((turn) => turn.status === "pending");
 // Override the ports to run beside a real runtime.
 const server = await startServer(app, {
   settings,
+  memory,
   diagnostics: collector.traces,
   port: Number(process.env.RAPHIE_FIXTURE_PORT ?? 4317),
   webOrigin: process.env.RAPHIE_FIXTURE_WEB_ORIGIN ?? "http://127.0.0.1:4321",
@@ -238,5 +266,6 @@ await server.close();
 await app.close();
 await exporter.close();
 await collector.close();
+memory.close();
 settings.close();
 await rm(directory, { recursive: true, force: true });

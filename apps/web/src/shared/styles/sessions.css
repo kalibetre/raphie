@@ -74,13 +74,38 @@
     background: var(--hover);
     color: var(--foreground);
   }
+  /* Rings and focus outlines are inset: anything outside the button is
+     clipped by the sidebar's scroll area. */
+  .sidebar-menu-button:focus-visible,
+  .conversation-list button:focus-visible {
+    outline-offset: -2px;
+  }
   .sidebar-menu-button[data-active="true"] {
     background: var(--card);
     color: var(--foreground);
-    box-shadow: 0 0 0 1px var(--border);
+    box-shadow: inset 0 0 0 1px var(--border);
   }
   .sidebar-menu-button svg {
     flex-shrink: 0;
+  }
+  .sidebar-menu-chevron {
+    margin-left: auto;
+    transition: transform 0.15s;
+  }
+  .sidebar-menu-collapsible[data-panel-open] .sidebar-menu-chevron {
+    transform: rotate(90deg);
+  }
+  /* Sub-items hang off a guide line under the parent's icon. */
+  .sidebar-menu-sub {
+    display: grid;
+    gap: 2px;
+    margin: 2px 0 2px 17px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+  }
+  .sidebar-menu-sub-button {
+    min-height: 32px;
+    padding: 6px 10px;
   }
   .sidebar-close {
     position: absolute;
@@ -162,7 +187,7 @@
   }
   .search-field:focus-within {
     background: var(--card);
-    box-shadow: 0 0 0 1px var(--border);
+    box-shadow: inset 0 0 0 1px var(--border);
   }
   .search-field input {
     border: 0;
@@ -295,7 +320,7 @@
     background: var(--card);
     box-shadow:
       0 1px 2px #2a241410,
-      0 0 0 1px var(--border);
+      inset 0 0 0 1px var(--border);
   }
   .conversation-title {
     flex: 1;

@@ -203,6 +203,15 @@ export class BackendSettings implements SettingsService {
     return JSON.stringify(saved);
   }
 
+  /** Memory connection secrets share the OS-backed Settings master key. */
+  sealMemoryKey(value: string | null) {
+    return this.cipher.encrypt(value, "memory-connection", "memory");
+  }
+
+  openMemoryKey(value: EncryptedCredential | null) {
+    return this.cipher.decrypt(value, "memory-connection", "memory");
+  }
+
   private get selectedConnection() {
     return this.state.connections.find((c) => c.id === this.state.connectionId);
   }

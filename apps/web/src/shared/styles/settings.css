@@ -97,7 +97,7 @@
     color: var(--foreground);
     box-shadow:
       0 1px 2px #0002,
-      0 0 0 1px var(--border);
+      inset 0 0 0 1px var(--border);
   }
 }
 
@@ -520,5 +520,112 @@
     min-width: 0;
     max-width: 100%;
     overflow-wrap: anywhere;
+  }
+}
+
+@layer components {
+  .memory-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .memory-search {
+    display: grid;
+    gap: 10px;
+  }
+  .memory-search .settings-actions input {
+    flex: 1 1 180px;
+  }
+  .memory-evidence {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 0;
+  }
+  .memory-evidence .memory-evidence-content {
+    color: var(--foreground);
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  .memory-evidence code,
+  .memory-source {
+    overflow-wrap: anywhere;
+    font-size: 11px;
+  }
+  .memory-evidence form {
+    display: grid;
+    gap: 10px;
+  }
+  .memory-evidence textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--background);
+    color: var(--foreground);
+    resize: vertical;
+  }
+  .memory-evidence textarea:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .memory-record-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--muted-foreground);
+    font-size: 11px;
+  }
+  .memory-kind {
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 6px;
+    color: var(--foreground);
+    text-transform: capitalize;
+  }
+  .memory-record-source {
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .memory-record-source summary {
+    cursor: pointer;
+    width: fit-content;
+  }
+  .memory-record-source[open] {
+    display: grid;
+    gap: 8px;
+  }
+  .memory-record-source a {
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .memory-browse-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .memory-empty {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    text-align: center;
+    padding: 28px 16px;
+    color: var(--muted-foreground);
+  }
+  .memory-empty h3 {
+    margin: 0;
+    color: var(--foreground);
+    font-size: 14px;
   }
 }

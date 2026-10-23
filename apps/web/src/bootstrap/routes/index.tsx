@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import type { Section } from "../../domains/settings/presentation/settings";
+import {
+  isSection,
+  type Section,
+} from "../../domains/settings/presentation/settings";
 import { Workspace } from "../../presentation/workspace/workspace";
 
 export const Route = createFileRoute("/")({
@@ -23,17 +26,11 @@ export const Route = createFileRoute("/")({
         : search.view === "plugins"
           ? "settings"
           : undefined,
-    section:
-      search.section === "models" ||
-      search.section === "providers" ||
-      search.section === "telemetry" ||
-      search.section === "connection" ||
-      search.section === "general" ||
-      search.section === "plugins"
-        ? search.section
-        : search.view === "plugins"
-          ? "plugins"
-          : undefined,
+    section: isSection(search.section)
+      ? search.section
+      : search.view === "plugins"
+        ? "plugins"
+        : undefined,
   }),
   component: IndexPage,
 });

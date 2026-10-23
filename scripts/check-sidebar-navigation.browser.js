@@ -29,7 +29,7 @@ export async function checkSidebarNavigation() {
   const groups = [
     ...document.querySelectorAll('[data-slot="sidebar-group-label"]'),
   ].map((element) => element.textContent);
-  if (groups.join(",") !== "Runtime,Preferences")
+  if (groups.join(",") !== "Setup,Workspace,Preferences")
     throw new Error("Settings destinations are not grouped correctly.");
   choose("Models");
   await waitFor(
@@ -39,20 +39,44 @@ export async function checkSidebarNavigation() {
   );
   if (mobile) await waitFor(() => !document.querySelector('[role="dialog"]'));
   await showNavigation();
-  choose("General");
+  // Memory is a collapsible group; its pages are sub-items.
+  const memoryGroup = () =>
+    document.querySelector(".sidebar-menu-collapsible[aria-expanded]");
+  if (memoryGroup().getAttribute("aria-expanded") !== "true")
+    memoryGroup().click();
+  await waitFor(() => memoryGroup().getAttribute("aria-expanded") === "true");
+  choose("Configuration");
   await waitFor(
     () =>
-      section() === "general" &&
-      document.querySelector("h1")?.textContent === "General",
+      section() === "memory" &&
+      document.querySelector("h1")?.textContent === "Memory",
   );
   if (mobile) await waitFor(() => !document.querySelector('[role="dialog"]'));
+  if (!mobile) {
+    // Collapsed over its own page, the group stays highlighted, and going
+    // back to a memory page through history reopens it.
+    memoryGroup().click();
+    await waitFor(() => memoryGroup().dataset.active === "true");
+    choose("Models");
+    await waitFor(() => section() === "models");
+    history.back();
+    await waitFor(
+      () =>
+        section() === "memory" &&
+        memoryGroup().getAttribute("aria-expanded") === "true",
+    );
+  }
   await showNavigation();
   choose("Back to conversations");
   await waitFor(() => !location.search.includes("view=settings"));
   if (mobile) await waitFor(() => !document.querySelector('[role="dialog"]'));
   await showNavigation();
-  document.querySelector('[aria-label="Settings"]').click();
-  await waitFor(() => location.search.includes("view=settings"));
+  choose("Memory");
+  await waitFor(
+    () =>
+      section() === "memory" &&
+      document.querySelector("h1")?.textContent === "Memory",
+  );
   if (mobile) await waitFor(() => !document.querySelector('[role="dialog"]'));
   if (location.pathname !== path)
     throw new Error("Sidebar navigation lost the selected conversation.");
