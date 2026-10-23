@@ -29,9 +29,11 @@ const time = (at: number) =>
 export function Chat({
   state,
   conversationId,
+  onRead,
 }: {
   state: Snapshot;
   conversationId: string;
+  onRead?: () => void;
 }) {
   const query = useQueryClient();
   const { workspace } = useBackend();
@@ -80,7 +82,7 @@ export function Chat({
   }, [turns, state.activity, state.toolApprovals, conversationId]);
 
   return (
-    <Conversation>
+    <Conversation onRead={onRead}>
       {messages.map((message) => {
         const turnId = message.id.replace(/:reply$/, "");
         const turn = turns.find((t) => t.id === turnId);

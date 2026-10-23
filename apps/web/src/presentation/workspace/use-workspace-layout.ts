@@ -44,7 +44,7 @@ export function useWorkspaceLayout(
   }
 
   useEffect(() => {
-    setInspector(window.innerWidth > 1400);
+    setInspector(false);
     applyTheme();
   }, []);
   // Desktop collapse; on small screens the sidebar is an overlay instead.
@@ -62,7 +62,8 @@ export function useWorkspaceLayout(
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
         event.preventDefault();
-        if (window.innerWidth < 768) setSidebar((value) => !value);
+        if (window.innerWidth < 768)
+          document.querySelector<HTMLButtonElement>("[data-bot-nav]")?.focus();
         else toggleCollapsed();
       }
     };
