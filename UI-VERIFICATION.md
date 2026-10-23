@@ -245,3 +245,11 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
 - The settings toggle uses directional chevrons on desktop and a menu icon on
   mobile, retaining shadcn's navigation and focus restoration. Checked search
   and its empty state, desktop open/close icons, and mobile Escape focus restore.
+- The roster brand uses the same Glance avatar as the bots. The connection
+  footer has no border or background.
+- Activity docks at full height beside the conversation from 768px, matching
+  the navigation breakpoint; it no longer floats over chat below 1100px.
+  Mobile uses the shared Sheet with focus trapping, Escape/close, and focus
+  restoration. Verified docking geometry at 768/1024px, mobile open/close and
+  focus restoration at 390px, plus light/dark visual checks. Full validation
+  passes all 118 tests.

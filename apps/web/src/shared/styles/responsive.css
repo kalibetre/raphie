@@ -32,17 +32,6 @@
   .skip-link:focus {
     top: 10px;
   }
-  @media (max-width: 1100px) {
-    .inspector {
-      position: fixed;
-      right: 0;
-      top: 48px;
-      bottom: 0;
-      z-index: 10;
-      width: var(--inspector-width);
-      box-shadow: var(--shadow);
-    }
-  }
   @media (max-width: 767px) {
     .workspace-header {
       padding: 0 10px;
@@ -59,9 +48,6 @@
     }
     .message-user time {
       display: none;
-    }
-    .inspector {
-      width: min(var(--inspector-width), 100%);
     }
     .settings-row {
       flex-wrap: wrap;

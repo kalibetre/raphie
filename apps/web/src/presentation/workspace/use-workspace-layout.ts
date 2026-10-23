@@ -67,7 +67,7 @@ export function useWorkspaceLayout(
     setCollapsed(readLocal("raphie:sidebar-collapsed") === "true");
   }, []);
   const dockedActivity =
-    inspector && !view && hasConversation && viewportWidth > 1100;
+    inspector && !view && hasConversation && viewportWidth >= 768;
   const visibleNavigationWidth = Math.min(
     navigationWidth,
     Math.max(220, viewportWidth - 320 - (dockedActivity ? 280 : 0)),

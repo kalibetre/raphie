@@ -16,13 +16,9 @@
     gap: 9px;
     font-size: 17px;
   }
-  .roster-brand .brand-mark {
+  .roster-brand .bot-avatar {
     width: 30px;
     height: 30px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    font-size: 22px;
-    background: var(--card);
   }
   .local-label {
     font-size: 9px;
@@ -174,9 +170,6 @@
     gap: 8px;
     margin-top: 18px;
     padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--card) 65%, transparent);
   }
   .roster-footer .runtime-status {
     font-size: 10px;

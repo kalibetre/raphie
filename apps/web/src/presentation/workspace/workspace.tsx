@@ -2,7 +2,6 @@ import type { ModelSelection } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 
-import { Activity } from "../../domains/activity/presentation/activity";
 import { runUsage } from "../../domains/conversations/application/run-projection";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
@@ -28,6 +27,7 @@ import {
 } from "../../shared/ui/sidebar";
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
+import { ActivitySidebar } from "./activity-sidebar";
 import { PanelResizeHandle } from "./panel-resize-handle";
 import { useBotInbox } from "./use-bot-inbox";
 import { useWorkspaceLayout } from "./use-workspace-layout";
@@ -473,16 +473,15 @@ export function Workspace({
             </>
           )}
         </SidebarInset>
-        {inspector && !view && conversation && (
-          <aside className="inspector">
-            <PanelResizeHandle
-              side="right"
-              value={visibleActivityWidth}
-              maxWidth={activityMax}
-              onChange={(value) => resizePanel("right", value)}
-            />
-            <Activity events={events} />
-          </aside>
+        {!view && conversation && (
+          <ActivitySidebar
+            open={inspector}
+            onOpenChange={setInspector}
+            events={events}
+            width={visibleActivityWidth}
+            maxWidth={activityMax}
+            onResize={(value) => resizePanel("right", value)}
+          />
         )}
       </SidebarProvider>
     </TooltipProvider>
