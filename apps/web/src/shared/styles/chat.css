@@ -320,6 +320,34 @@
     letter-spacing: 0.6px;
     color: var(--faint);
   }
+  /* Mermaid diagrams from bot replies (Pele). Colors follow the app theme. */
+  .mermaid-diagram {
+    --pele-bg: transparent;
+    --pele-fg: var(--foreground);
+    --pele-muted: var(--muted-foreground);
+    --pele-line: var(--muted-foreground);
+    --pele-surface: var(--muted);
+    --pele-surface-alt: var(--hover);
+    --pele-border: var(--border);
+    --pele-accent: var(--primary);
+    --pele-font:
+      Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --pele-radius: 8px;
+    margin: 12px 0;
+    overflow-x: auto;
+  }
+  .mermaid-diagram svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+  }
+  .mermaid-pending {
+    min-height: 96px;
+    border-radius: 8px;
+    background: var(--muted);
+  }
+
   .step-body .code-scroll {
     max-height: 260px;
     background: var(--card);
