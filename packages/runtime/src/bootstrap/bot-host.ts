@@ -174,7 +174,7 @@ export class BotHost implements BotProfiles {
         harness: gateway.harness,
         install: (extension) => gateway.install(extension),
         busy,
-        submit: (input) => gateway.sessions.submit(actor, input),
+        submit: (input) => gateway.sessions.submitScheduled(actor, input),
       });
       const connections = mcp;
       gateway.install(createScheduleTools(jobs));

@@ -82,7 +82,7 @@ export function createScheduleTools(jobs: BotJobs) {
           names.includes("schedule_list") &&
             "Use schedule_list to identify the owner's existing reminder before editing or deleting it.",
           names.includes("schedule_update") &&
-            'Use schedule_update to edit an existing reminder IN PLACE. Never delete and recreate a reminder to change its topic, wording, name or timing. For example, "I changed my mind, make it about Pi Durable" means update the existing ID with only its prompt (and optionally name). Preserve its due time, repeat interval and enabled state: omit delaySeconds, everyMinutes and enabled unless the owner explicitly changes them. Confirm the edit only after updated:true.',
+            'Use schedule_update to edit an existing reminder IN PLACE. Never delete and recreate a reminder to change its topic, wording, name or timing. For example, "I changed my mind, make it about Pi Durable" means update the existing ID with its prompt, and its name too when the name describes the old topic. Preserve its due time, repeat interval and enabled state: omit delaySeconds, everyMinutes and enabled unless the owner explicitly changes them. Confirm the edit only after updated:true.',
           names.includes("schedule_create") &&
             "Use schedule_create only for a new reminder, not an edit. Omit everyMinutes for a one-time reminder. Confirm creation only after saved:true.",
           names.includes("schedule_delete") &&

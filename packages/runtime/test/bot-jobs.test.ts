@@ -35,7 +35,7 @@ test("Pi sleeping jobs recover after restart and manual runs reuse the bot's con
       install: (e) => gateway.install(e),
       busy: async () =>
         (await gateway.chats.state()).turns.some((t) => t.status === "pending"),
-      submit: (input) => gateway.sessions.submit(actor, input),
+      submit: (input) => gateway.sessions.submitScheduled(actor, input),
     });
     gateway.harness.resume();
     return { gateway, jobs };
@@ -59,6 +59,16 @@ test("Pi sleeping jobs recover after restart and manual runs reuse the bot's con
       (await app.gateway.chats.state()).turns.every((t) => t.status === "done"),
     );
     expect((await app.gateway.chats.state()).turns).toHaveLength(1);
+    // A delivery, not an owner message: marked, titled by the job, and the
+    // model is told to write the reminder (the fixture echoes its input).
+    const [delivery] = (await app.gateway.chats.state()).turns;
+    expect(delivery.text).toBe("Give me a brief");
+    expect(delivery.scheduled).toEqual({ name: "Brief" });
+    expect(delivery.answer).toContain('Scheduled job "Brief" is due now');
+    expect(delivery.answer).toContain("did not just send this message");
+    expect((await app.gateway.chats.state()).conversations[0].title).toBe(
+      "Brief",
+    );
     const session = (await app.jobs.read())[0].sessionId;
     app.gateway.harness.resume();
     await delay(20);
@@ -126,7 +136,7 @@ test("replacing a sleeping schedule runs the updated prompt once and retires its
     harness: gateway.harness,
     install: (extension) => gateway.install(extension),
     busy: async () => false,
-    submit: (input) => gateway.sessions.submit(actor, input),
+    submit: (input) => gateway.sessions.submitScheduled(actor, input),
   });
   try {
     const [job] = await jobs.add({

@@ -49,7 +49,7 @@ async function open(
     install: (extension) => gateway.install(extension),
     busy: async () =>
       (await gateway.chats.state()).turns.some((t) => t.status === "pending"),
-    submit: (input) => gateway.sessions.submit(actor, input),
+    submit: (input) => gateway.sessions.submitScheduled(actor, input),
   });
   gateway.install(createScheduleTools(jobs));
   gateway.harness.resume();
@@ -90,6 +90,13 @@ test("agent reminder saves without approval, survives restart and replies once i
     expect((await app.gateway.chats.state()).turns[1].text).toBe(
       "Tell me the time and a funny saying.",
     );
+    // Delivered as a scheduled message, not an owner message the bot answers.
+    const delivered = (await app.gateway.chats.state()).turns[1];
+    expect(delivered.scheduled).toEqual({ name: "Funny reminder" });
+    const [history] = (
+      await app.gateway.queries.history(app.actor, receipt.sessionId)
+    ).items.slice(-1);
+    expect(history.scheduled).toEqual({ name: "Funny reminder" });
     expect((await app.jobs.read())[0].enabled).toBe(false);
     app.gateway.harness.resume();
     await delay(60);

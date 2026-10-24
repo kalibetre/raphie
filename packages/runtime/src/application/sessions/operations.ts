@@ -84,6 +84,25 @@ export class Sessions implements SessionOperations {
     return { id: receipt.id, sessionId: receipt.sessionId };
   }
 
+  /** Internal: a due scheduled job, marked so clients show it as scheduled. */
+  async submitScheduled(
+    actor: ActorContext,
+    input: {
+      eventId: string;
+      text: string;
+      sessionId?: string;
+      scheduled: { name: string };
+    },
+  ) {
+    const verified = this.authority.require(actor);
+    const receipt = await this.conversations.send({
+      ...input,
+      source: verified.source,
+      actor: verified.subject,
+    });
+    return { id: receipt.id, sessionId: receipt.sessionId };
+  }
+
   async chooseModel(
     actor: ActorContext,
     sessionId: string,

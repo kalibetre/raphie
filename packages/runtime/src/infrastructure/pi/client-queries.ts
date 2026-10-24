@@ -157,6 +157,7 @@ export class PiClientQueries implements ClientQueries {
       createdAt: t.createdAt,
       status: t.status,
       answer: t.answer,
+      ...(t.scheduled ? { scheduled: t.scheduled } : {}),
     }));
     return { items, next: start > 0 ? items[0]!.id : null };
   }

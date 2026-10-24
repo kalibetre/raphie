@@ -30,7 +30,10 @@ type Options = {
   root: Conversation;
   harness: Harness;
   install: (extension: Extension) => void;
-  submit: (input: Submission) => Promise<{ sessionId: string }>;
+  /** Marked as scheduled, so the turn shows as a delivery, not an owner message. */
+  submit: (
+    input: Submission & { scheduled: { name: string } },
+  ) => Promise<{ sessionId: string }>;
   busy: () => Promise<boolean>;
 };
 
@@ -291,7 +294,10 @@ export class BotJobs {
             let status: "submitted" | "failed" = "failed";
             try {
               sessionId = (
-                await this.options.submit(task.state.checkpoint.input)
+                await this.options.submit({
+                  ...task.state.checkpoint.input,
+                  scheduled: { name: job.name },
+                })
               ).sessionId;
               status = "submitted";
             } catch {

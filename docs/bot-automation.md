@@ -78,6 +78,16 @@ scheduling extension describes the tools currently offered on each turn so old
 assistant claims about missing tools do not define current capabilities. Tool
 selection remains model-driven; deterministic tests verify storage behavior,
 not whether a model will always choose the intended tool.
+A conversation whose earlier replies claimed a tool was missing can keep
+repeating that claim; start a new conversation after upgrading the runtime.
+
+When a job is due, its saved instruction is submitted as a **scheduled** turn,
+not an owner message. The model is told the job is due and to write the message
+itself, so it delivers the reminder instead of answering a request. Chat shows a
+"Scheduled · job name" marker in place of the owner bubble, with the saved
+instruction in its tooltip, and a job created in Settings titles its new
+conversation with the job name. Only the internal job runner can mark a turn as
+scheduled; HTTP message input cannot.
 
 The model cannot select another bot or destination conversation. Changes and
 task-scoped replay receipts commit atomically, preventing duplicate jobs or

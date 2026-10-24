@@ -1,4 +1,23 @@
 @layer components {
+  /* A scheduled job's delivery, shown in place of an owner message. */
+  .turn-scheduled {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: fit-content;
+    margin: 0 auto;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+  }
+  .turn-scheduled strong {
+    font-weight: 600;
+  }
+  .turn-scheduled time {
+    color: var(--muted-foreground);
+  }
   .welcome-avatar {
     margin-bottom: 14px;
   }

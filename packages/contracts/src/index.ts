@@ -42,6 +42,8 @@ export type Turn = {
   createdAt: number;
   status: "pending" | "done" | "error";
   answer: string | null;
+  /** Set when a scheduled job, not the owner, started this turn. */
+  scheduled?: { name: string };
 };
 
 export type ConversationDelivery = {

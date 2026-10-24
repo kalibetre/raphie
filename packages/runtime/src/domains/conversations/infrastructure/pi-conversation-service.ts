@@ -161,6 +161,7 @@ export class ChatService implements ConversationCommands {
     model?: ModelSelection;
     discordThreadId?: string;
     connectionId?: string;
+    scheduled?: { name: string };
   }) {
     this.app.authorize(input.actor);
     const result = await this.connectionGate.run(async () => {
@@ -254,7 +255,7 @@ export class ChatService implements ConversationCommands {
           conversation = {
             id: created.id,
             sessionId: newSessionId(),
-            title: input.text.trim().slice(0, 70),
+            title: (input.scheduled?.name ?? input.text).trim().slice(0, 70),
             createdAt: Date.now(),
             model: { ...(input.model ?? this.model!) },
           };
@@ -300,6 +301,7 @@ export class ChatService implements ConversationCommands {
           status: "pending",
           answer: null,
           replyTo,
+          ...(input.scheduled ? { scheduled: input.scheduled } : {}),
         };
         state.turns.push(turn);
         record(await tx.doc(Activity), "run.accepted", "Message accepted", {
@@ -312,7 +314,9 @@ export class ChatService implements ConversationCommands {
           {
             turnId: turn.id,
             conversationId: conversation.id as ConversationId,
-            text: turn.text,
+            text: input.scheduled
+              ? scheduledInstruction(input.scheduled.name, turn.text)
+              : turn.text,
           },
           { ownership: { kind: "conversation" } },
         );
@@ -375,4 +379,12 @@ export class ChatService implements ConversationCommands {
         status;
     }, context);
   }
+}
+
+/**
+ * A due job's saved instruction, framed so the model writes the reminder
+ * itself instead of answering the owner as if they had just asked.
+ */
+function scheduledInstruction(name: string, instruction: string) {
+  return `Scheduled job "${name}" is due now. The owner did not just send this message; it is the instruction they saved earlier. Write the message to deliver to them now, addressed to them directly. Do not acknowledge a request or mention that you were asked.\n\nSaved instruction:\n${instruction}`;
 }
