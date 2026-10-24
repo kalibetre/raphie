@@ -1,6 +1,5 @@
 import type { BotProfile, SessionSummary } from "@raphie/contracts";
-import { Plus, Search, Settings } from "lucide-react";
-import { useState } from "react";
+import { Plus, Settings } from "lucide-react";
 
 import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
@@ -31,10 +30,6 @@ export function BotSidebar({
   onRetry: () => void;
 }) {
   const botStyle = useBotStyle();
-  const [filter, setFilter] = useState("");
-  const filtered = bots.filter((b) =>
-    b.name.toLowerCase().includes(filter.toLowerCase()),
-  );
   return (
     <div className="bot-roster">
       <div className="roster-brand">
@@ -46,15 +41,6 @@ export function BotSidebar({
         </span>
         <span className="local-label">LOCAL</span>
       </div>
-      <label className="search-field bot-search">
-        <Search size={14} />
-        <input
-          aria-label="Find a bot"
-          placeholder="Find a bot…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-      </label>
       <div className="roster-label">
         Your bots<span className="roster-total">{bots.length}</span>
       </div>
@@ -64,7 +50,7 @@ export function BotSidebar({
         orientation="both"
       >
         <nav className="bot-roster-list" aria-label="Your bots">
-          {filtered.map((b) => {
+          {bots.map((b) => {
             const sessions = byBot.get(b.id) ?? [];
             const count = sessions.filter(
               (s) => unread(b.id, s) > 0 || s.waiting,
@@ -113,20 +99,18 @@ export function BotSidebar({
           {!error && !bots.length && (
             <p className="sidebar-empty">Loading bots…</p>
           )}
-          {!error && bots.length > 0 && !filtered.length && (
-            <p className="sidebar-empty" role="status">
-              No matching bots.
-            </p>
-          )}
         </nav>
       </ScrollArea>
-      <Button
-        className="new-bot-button hidden justify-start md:inline-flex"
-        variant="outline"
+      <button
+        type="button"
+        className="new-bot-row hidden md:flex"
         onClick={onCreate}
       >
-        <Plus size={14} /> New bot
-      </Button>
+        <span className="new-bot-icon">
+          <Plus size={16} />
+        </span>
+        New bot
+      </button>
       <footer className="roster-footer">
         <span className="runtime-status">
           <span className={`status-dot ${connected ? "" : "offline"}`} />

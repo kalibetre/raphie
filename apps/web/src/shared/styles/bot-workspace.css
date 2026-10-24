@@ -106,29 +106,26 @@
   }
   .bot-roster-list {
     display: grid;
-    gap: 6px;
+    gap: 0;
   }
   .bot-roster-item {
     display: flex;
     gap: 12px;
     align-items: center;
     text-align: left;
-    border: 1px solid transparent;
+    border: 0;
     border-radius: 0;
     padding: 12px 22px;
     background: transparent;
     min-width: 0;
     width: 100%;
-    transition:
-      background-color 150ms,
-      border-color 150ms;
+    transition: background-color 150ms;
   }
   .bot-roster-item:hover {
     background: var(--hover);
   }
   .bot-roster-item[aria-current] {
-    background: color-mix(in srgb, var(--tone) 12%, var(--card));
-    border-color: color-mix(in srgb, var(--tone) 40%, var(--border));
+    background: color-mix(in srgb, var(--tone) 22%, transparent);
   }
   .roster-avatar {
     display: grid;
@@ -195,22 +192,49 @@
     background: var(--accent-soft);
     color: var(--accent);
   }
-  .new-bot-button {
-    justify-content: flex-start;
-    margin-top: 12px;
-    border-style: dashed;
-    border-radius: 10px;
+  .new-bot-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: calc(100% + 24px);
+    margin: 12px -12px 0;
+    padding: 10px 22px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    font-weight: 550;
+    text-align: left;
+    transition:
+      color 150ms,
+      background-color 150ms;
+  }
+  .new-bot-row:hover {
+    color: var(--foreground);
+    background: var(--hover);
+  }
+  .new-bot-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--muted);
   }
   .roster-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-top: 18px;
-    padding: 8px 10px;
+    margin: 18px -12px 0;
+    padding: 12px 22px 0;
+    border-top: 0;
   }
   .roster-footer .runtime-status {
-    font-size: 10px;
+    font-size: 11px;
+    color: var(--muted-foreground);
   }
   .bot-workspace-header {
     min-height: 72px;
@@ -525,7 +549,7 @@
     }
     .bot-roster .roster-brand,
     .bot-roster .roster-label,
-    .new-bot-button,
+    .new-bot-row,
     .roster-footer {
       display: none;
     }

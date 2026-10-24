@@ -67,6 +67,19 @@ export function BotForm({
     setMessage("");
   }
 
+  /** Leave without saving; an explicit Cancel is an intentional discard. */
+  function cancel() {
+    guard.allowNavigation();
+    void navigate({
+      to: "/",
+      search: {
+        bot: workspace.botId === "default" ? undefined : workspace.botId,
+        view: "settings",
+        section: "bot",
+      },
+    });
+  }
+
   async function save() {
     setError("");
     setMessage("");
@@ -186,6 +199,13 @@ export function BotForm({
         canDiscard={dirty}
         label={saved ? "Save changes" : "Create bot"}
         onDiscard={discard}
+        extra={
+          mode === "create" ? (
+            <Button type="button" variant="ghost" onClick={cancel}>
+              Cancel
+            </Button>
+          ) : undefined
+        }
       />
     </form>
   );
