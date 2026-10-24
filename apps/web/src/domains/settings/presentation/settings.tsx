@@ -13,6 +13,7 @@ import { MemorySettings } from "./memory-settings";
 import { ModelSettings } from "./model-settings";
 import { PluginSettings } from "./plugin-settings";
 import { ProviderSettings } from "./provider-settings";
+import { SandboxSettings } from "./sandbox-settings";
 import { SettingsPage } from "./settings-page";
 import {
   isAppSection,
@@ -21,6 +22,7 @@ import {
   sectionOf,
 } from "./settings-sections";
 import { TelemetrySettings } from "./telemetry-settings";
+import { WorkspaceFiles } from "./workspace-files";
 
 export {
   isAppSection,
@@ -82,6 +84,10 @@ export function Settings({
           <ModelSettings />
         ) : section === "mcp" ? (
           <McpSettings />
+        ) : section === "sandbox" ? (
+          <SandboxSettings onBrowse={() => onParent("workspace")} />
+        ) : section === "workspace" ? (
+          <WorkspaceFiles onSandbox={() => onParent("sandbox")} />
         ) : section === "jobs" ? (
           <JobSettings />
         ) : section === "memory" ? (

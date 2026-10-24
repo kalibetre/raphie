@@ -204,6 +204,13 @@ const app = await Gateway.open({
     },
   },
 });
+if (process.env.RAPHIE_FIXTURE_WORKSPACE_FILES === "true") {
+  await app.workspace.execute(
+    "fixture",
+    "workspace-seed",
+    "mkdir reports; echo 'A workspace report' > reports/summary.txt; echo AP8= | base64 -d > sample.bin; echo '<h1>Download only</h1>' > 'report 中文.html'; ln -s reports/summary.txt latest",
+  );
+}
 // Opt-in dense UI fixture: synthetic history stays inside the disposable database.
 if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
   await app.root.commit(async (tx) => {

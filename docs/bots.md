@@ -52,6 +52,11 @@ its previous name, description and SOUL.md. Copy older text into the editor and
 save it to restore that personality as a new revision. Refresh after a stale
 revision error; saves made while a turn is pending must wait for it to finish.
 
+**Sandbox** in each bot’s settings shows its active execution provider, capabilities,
+usage and limits. **Workspace** browses committed files with folder navigation and
+individual downloads. Files are shared across that bot’s conversations; links
+are labeled and not followed. See [workspace behavior](bot-workspaces.md).
+
 **Activity** in each bot’s settings shows its latest 100 journal events across
 conversations, refreshes every five seconds, and supports filtering and JSON
 export. Activity requests use the selected bot’s backend scope.

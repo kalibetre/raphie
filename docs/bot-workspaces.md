@@ -59,8 +59,8 @@ processes to own the same Gateway store: stop the old runtime before upgrading.
   returns an explicit error; it does not consume model-generation or VM budgets.
 - 16 MiB of retained execution receipts and a 32 MiB SQLite page ceiling per bot.
   Receipts are never silently evicted, because eviction could replay old writes.
-  At capacity, further operations stop. Owner-managed export/archival and UI file
-  browsing are future work; preserve the store and its backups rather than
+  At capacity, further operations stop. Receipt archival and bulk workspace export are future work;
+  preserve the store and its backups rather than
   resetting receipts. SQLite transaction journal space is additional transient
   disk use. Failed execution outputs also consume receipt space.
 
@@ -69,7 +69,7 @@ updates only guarded-fetch's Undici dependency to patched 7.30.1. Existing Undic
 users stay unchanged. Optional native package install scripts remain blocked;
 they are not required for the workspace interpreter.
 
-VM/native escalation, filesystem imports/exports, cross-bot sharing, workspace UI,
+VM/native escalation, bulk filesystem imports/exports, cross-bot sharing,
 OS memory containment, and separate model-generation concurrency policy remain
 future work. No VM is reserved per bot or session.
 
@@ -83,9 +83,52 @@ prove the receipt rolls back with the files, and fill the receipt budget to prov
 new work stops while committed retries still resolve. Output-format, filesystem
 copy, entry-count and timeout probes verify rollback and continued usability.
 
-Final verification on 2026-10-24: `bun run validate` passed (150 tests, architecture,
+Initial delivery verification on 2026-10-24: `bun run validate` passed (150 tests, architecture,
 formatting, lint, type checks and production build). Production dependency audit
 returned no findings. An isolated browser verified identity/fixture labels and
 keyboard expansion at 320/768/1024/1440 pixels, Backend connection details and
 the floating composer, with no page errors or horizontal overflow. User runtimes
 and data were not used for testing.
+
+## Sandbox visibility and workspace files
+
+Open **Settings → [bot] → Sandbox** to see the active execution provider and version,
+capabilities, checkpoint policy, admitted execution count, file usage and resource
+limits. just-bash is currently the sole provider. Provider selection and policy
+editing remain runtime-managed; this page reports the actual policy rather than
+presenting unavailable alternatives. Execution providers operate on the bot-owned
+workspace; replacing compute does not replace workspace ownership.
+
+**Settings → [bot] → Workspace** browses the latest committed checkpoint. Open
+folders with the keyboard or pointer, use the breadcrumbs or parent button to go
+back, and download individual regular files. Sizes are actual decoded byte sizes;
+modification times use the browser's local timezone. The view refreshes every five
+seconds and has a manual refresh. Downloads preserve binary content and Unicode
+filenames and are served as attachments with an octet-stream content type.
+Symbolic links are identified and never traversed or downloaded. File previews,
+editing, uploads and folder archives are not included.
+
+Reads do not run a command or wait for in-progress execution. Uncommitted files
+remain invisible. Downloads carry the revision shown in the listing; a changed
+checkpoint returns a conflict and asks for a refresh rather than returning
+unexpected bytes. Bot and backend switching retire pending download responses.
+No host paths, settings stores, credentials or execution receipts are exposed.
+
+The read-only owner HTTP surface is `/api/workspace`, `/api/workspace/files?path=`
+and `/api/workspace/download?path=&revision=`. Named bots use the existing
+`/api/bots/<bot-id>/workspace` prefix. Paths refer only to virtual `/workspace`;
+traversal, missing files, directory downloads and symbolic links are rejected.
+Normal local Host/Origin protection applies to every read. Listings contain at
+most the checkpoint's 1,024 entries, without file contents. Download content is
+bounded by the workspace's file budget.
+
+Verification adds `packages/runtime/test/workspace-http.test.ts` and the scoped
+binary download test in `apps/web/test/backend-workspace.test.ts`. Browser checks
+cover responsive layout, keyboard folder navigation, exact text/binary/Unicode
+downloads and cross-bot empty state. Tests use synthetic, separate bot stores.
+
+Visibility follow-up verification: `bun run validate` passed with 152 tests,
+architecture, formatting, lint, type checks and production build. The separate
+browser fixture passed at 320/768/1024/1440 pixels with no page errors or horizontal
+overflow; folder focus, exact downloaded bytes, Unicode filenames and switching
+to another bot’s empty workspace were verified.

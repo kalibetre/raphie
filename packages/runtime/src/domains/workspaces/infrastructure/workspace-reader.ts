@@ -52,7 +52,7 @@ export function sandboxInfo(
           (e.kind === "file" ? Buffer.byteLength(e.content, "base64") : 0),
         0,
       ),
-      entries: checkpoint.filter((e) => e.path !== "/workspace").length,
+      entries: checkpoint.length,
       receiptBytes,
     },
     limits,

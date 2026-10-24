@@ -1,8 +1,10 @@
 import {
   BookOpen,
   Bot,
+  Box,
   Brain,
   Clock,
+  FolderOpen,
   History,
   KeyRound,
   Library,
@@ -21,6 +23,20 @@ import {
  * `lede` introduces the page in the voice of the bot it configures.
  */
 export const sections = [
+  {
+    id: "sandbox",
+    label: "Sandbox",
+    icon: Box,
+    lede: (bot: string) =>
+      `How ${bot} runs commands, with the active execution provider and its limits.`,
+  },
+  {
+    id: "workspace",
+    label: "Workspace",
+    icon: FolderOpen,
+    lede: (bot: string) =>
+      `The files ${bot} keeps between conversations. Browse folders and download saved work.`,
+  },
   {
     id: "mcp",
     label: "MCP tools",

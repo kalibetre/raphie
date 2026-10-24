@@ -1,0 +1,89 @@
+@layer components {
+  .sandbox-status {
+    flex: none;
+    color: var(--foreground);
+    font-size: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.5rem;
+  }
+  .workspace-file-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .workspace-file-toolbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .workspace-file-toolbar nav button {
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+  .workspace-file-actions {
+    display: flex;
+    flex: none;
+    gap: 0.25rem;
+  }
+  .workspace-file-location,
+  .workspace-file-summary,
+  .workspace-file-notice {
+    margin: 0;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+  }
+  .workspace-file-location {
+    font-family: var(--font-mono);
+  }
+  .workspace-file-summary {
+    color: var(--muted-foreground);
+    border-bottom: 1px solid var(--border);
+  }
+  .workspace-file-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .workspace-file-list li {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem 1rem;
+  }
+  .workspace-file-list li + li {
+    border-top: 1px solid var(--border);
+  }
+  .workspace-file-name {
+    flex: 1;
+    min-width: 0;
+  }
+  .workspace-file-name strong,
+  .workspace-file-name button {
+    display: block;
+    max-width: 100%;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  .workspace-file-name button {
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 0.25rem;
+  }
+  .workspace-file-name small {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+  }
+}

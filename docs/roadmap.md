@@ -208,7 +208,11 @@ Proposed slices:
    are no host-home/settings mounts, inherited credentials, network or native
    runtime capabilities. Five seconds, 32 KiB output, 8 MiB files, 1,024 entries,
    16 queued operations per bot and four concurrent lightweight workers are the
-   initial limits. This is not OS/VM isolation or a capacity benchmark. See
+   initial limits. Bot Settings now exposes the active provider, capabilities,
+   policy and usage under Sandbox, plus committed file browsing and downloads
+   under Workspace. just-bash is the only currently available execution provider;
+   owner-facing provider selection and policy editing remain future work.
+   This is not OS/VM isolation or a capacity benchmark. See
    [workspace behavior and limits](bot-workspaces.md).
 
    The prerequisite continuity slice anchors unset data paths to the main checkout,
