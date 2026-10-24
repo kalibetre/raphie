@@ -4,7 +4,7 @@ import { BotForm } from "./bot-profile-form";
 import { PersonalityHistory } from "./personality-history";
 import { SettingsStatus } from "./settings-status";
 
-type Mode = "profile" | "personality" | "create" | "history";
+type Mode = "profile" | "create" | "history";
 
 export function BotSettings({ mode = "profile" }: { mode?: Mode }) {
   const { workspace, selectBot } = useBackend();

@@ -1,0 +1,69 @@
+@layer components {
+  .automation-form {
+    display: grid;
+    gap: 10px;
+  }
+  .automation-form label {
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .automation-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .automation-note {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  .automation-job {
+    padding: 18px 20px;
+  }
+  .automation-job + .automation-job {
+    border-top: 1px solid var(--border);
+  }
+  .automation-job-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .automation-job-heading h3 {
+    margin: 0;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .automation-prompt {
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin: 10px 0;
+  }
+  .automation-job .automation-actions {
+    margin-top: 12px;
+  }
+  .automation-empty {
+    padding: 20px;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+  .automation-schedule-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .automation-schedule-fields label {
+    display: block;
+    margin-bottom: 8px;
+  }
+  @media (max-width: 767px) {
+    .automation-schedule-fields {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}

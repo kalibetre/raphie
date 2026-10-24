@@ -12,6 +12,7 @@ export function chatModel(
     started?: () => void;
     requestedModel?: (id: string) => void;
     systemPrompt?: (text: string) => void;
+    offeredTools?: (names: string[]) => void;
     pause?: Promise<void>;
     streamChunkPause?: Promise<void>;
     tool?: { name: string; args: JsonObject };
@@ -25,6 +26,13 @@ export function chatModel(
   };
   const reply: Provider["streamSimple"] = (_model, context, streamOptions) => {
     options.requestedModel?.(_model.id);
+    options.offeredTools?.(
+      context.messages.flatMap((message) =>
+        message.role === "system"
+          ? (message.toolsAdded ?? []).map((tool) => tool.name)
+          : [],
+      ),
+    );
     options.systemPrompt?.(
       JSON.stringify(context.messages.filter((m) => m.role === "system")),
     );

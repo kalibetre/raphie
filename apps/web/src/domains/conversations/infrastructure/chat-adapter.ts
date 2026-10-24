@@ -4,13 +4,22 @@ import type { SubscribeConnectionAdapter } from "@tanstack/ai-client";
 import type { Snapshot } from "../../../infrastructure/http/api-client.ts";
 import { api } from "../../../infrastructure/http/api-client.ts";
 
+type PartialReply = { turnId: string; text: string };
+
 export function transcript(
   state: Snapshot,
   conversationId: string,
+  retained?: PartialReply,
 ): StreamChunk {
   const turns = state.turns.filter((t) => t.conversationId === conversationId);
   const active = turns.find((t) => t.status === "pending");
   const live = state.live[conversationId];
+  const partialText =
+    live?.generating && live.text
+      ? live.text
+      : retained && retained.turnId === active?.id
+        ? retained.text
+        : "";
   return {
     type: EventType.MESSAGES_SNAPSHOT,
     messages: turns.flatMap((turn) => [
@@ -23,12 +32,12 @@ export function transcript(
               content: turn.answer,
             },
           ]
-        : turn.id === active?.id && live?.generating && live.text
+        : turn.id === active?.id && partialText
           ? [
               {
                 id: `${turn.id}:reply`,
                 role: "assistant" as const,
-                content: live.text,
+                content: partialText,
               },
             ]
           : []),
@@ -47,6 +56,7 @@ export function chatAdapter(
     async *subscribe(signal) {
       let latest: Snapshot | undefined;
       let wake: (() => void) | undefined;
+      let partial: PartialReply | undefined;
       const remove = subscribe((state) => {
         latest = state;
         wake?.();
@@ -63,7 +73,18 @@ export function chatAdapter(
           if (latest) {
             const state = latest;
             latest = undefined;
-            yield transcript(state, conversationId);
+            const active = state.turns.find(
+              (turn) =>
+                turn.conversationId === conversationId &&
+                turn.status === "pending",
+            );
+            if (partial?.turnId !== active?.id) partial = undefined;
+            const live = state.live[conversationId];
+            if (active && live?.generating && live.text)
+              partial = { turnId: active.id, text: live.text };
+            // A turn can span multiple model/tool steps. Empty step boundaries
+            // must not remove an already visible reply while the turn continues.
+            yield transcript(state, conversationId, partial);
           }
         }
       } finally {

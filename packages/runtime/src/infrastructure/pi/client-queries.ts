@@ -23,6 +23,7 @@ import type { DurableContext } from "../../shared/infrastructure/durable-context
 
 type QuerySource = DurableContext & {
   actors: ActorAuthority;
+  mcpConnections?: McpTools[];
   chats: ChatService;
   toolApprovals: ToolApprovalService;
   observations: Observations;
@@ -73,13 +74,21 @@ export class PiClientQueries implements ClientQueries {
     if (actor.source === "discord")
       throw new InputError("Inspection requires a client interface.", 403);
     const tools = await this.app.toolApprovals.state();
+    const connections =
+      this.app.mcpConnections ??
+      (this.app.options.mcp ? [this.app.options.mcp] : []);
     return {
       model: this.app.chats.model ?? null,
       mcp: {
-        connected: !!this.app.options.mcp,
+        connected: connections.length > 0,
         error: this.app.options.mcpError ?? false,
-        server: this.app.options.mcp?.client.server?.name ?? null,
-        toolCount: this.app.options.mcp?.client.tools.length ?? 0,
+        server:
+          connections.map((c) => c.client.server?.name ?? "MCP").join(", ") ||
+          null,
+        toolCount: connections.reduce(
+          (count, c) => count + c.client.tools.length,
+          0,
+        ),
       },
       uncertainToolDeliveries: tools.deliveries
         .filter((d) => d.status === "uncertain")
@@ -157,6 +166,7 @@ export class PiClientQueries implements ClientQueries {
       createdAt: t.createdAt,
       status: t.status,
       answer: t.answer,
+      ...(t.scheduled ? { scheduled: t.scheduled } : {}),
     }));
     return { items, next: start > 0 ? items[0]!.id : null };
   }

@@ -21,6 +21,8 @@ export type ChatTurn = {
   status: "pending" | "done" | "error";
   answer: string | null;
   replyTo?: ReplyDestination | null;
+  /** Started by a scheduled job; its text is the saved instruction. */
+  scheduled?: { name: string };
 };
 
 export type ChatDelivery = {

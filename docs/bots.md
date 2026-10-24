@@ -8,19 +8,32 @@ store; it cannot be opened by addressing its UUID through another bot's API.
 ## Using bots in the web client
 
 Choose an assistant from the bot roster. Raphie is the default bot. Clicking the
-bot’s name in the title bar opens its **Profile**; **Personality** has a dedicated
-SOUL.md editor and revision history. **New bot** in the sidebar (the plus icon on
-mobile) creates an assistant and opens its own provider setup. Add its provider
+bot’s name in the title bar opens **Profile**, which combines its name,
+description, color and SOUL.md personality in one editor with one Save/Discard
+bar. Revision history is available below the personality editor. Existing
+Personality links open this same combined page.
+
+Choose one of eight color presets, use the custom color picker, or select
+**Automatic**. Explicit colors are saved with the bot in `bots.sqlite`, appear in
+revision history and follow it across browsers. Automatic colors are allocated
+in creation order, avoiding colors used by earlier bots until the palette is
+full; beyond eight bots, colors are reused evenly. Explicit choices may share a
+color. A bot's blob shape and gaze still derive from its stable ID.
+
+**New bot** in the sidebar (the plus icon on mobile) creates an assistant and
+opens its own provider setup. Add its provider
 under **Providers**, choose a default under **Models**, and configure its memory
 backend/scope under **Memory**.
 
 The title bar contains the current conversation title and an icon-only **New
-conversation** action. **Conversations** opens the selected bot’s searchable
-library, with filters for new replies and approval requests. Switching assistants
+conversation** action. The right panel opens from the panel icon and starts with a **Conversations** tab: a searchable
+list with filters for new replies and approval requests. On mobile it opens as a
+sheet and closes when you select a conversation. Switching assistants
 resumes their last opened conversation in this browser when available.
 
 A grouped card below the title bar surfaces unread replies and approval requests
-in other conversations. It shows three rows with a link to the library for more.
+in other conversations. It shows three rows with a link to open the Conversations
+panel for more.
 Collapse it to focus; mobile starts collapsed unless a preference was saved.
 Incoming replies update the count without expanding it. Dismissing a row only
 hides the notice until a newer reply or approval state; it does not mark it read.
@@ -31,13 +44,19 @@ Historical replies with no saved cursor count as unread in this browser.
 The selected bot’s session summaries use the existing live stream. Other bot
 badges poll their latest 100 sessions every 15 seconds while this browser is
 active; the roster refreshes every 30 seconds. No stream is opened per bot or
-background conversation. The library retains pagination for older conversations.
+background conversation. The Conversations tab retains pagination for older
+conversations.
 
 **Revision history** shows the latest saved profiles. Expand a revision to read
 its previous name, description and SOUL.md. Copy older text into the editor and
 save it to restore that personality as a new revision. Refresh after a stale
 revision error; saves made while a turn is pending must wait for it to finish.
-Profile, personality, provider and memory editors block navigation with unsaved
+
+**Activity** in each bot’s settings shows its latest 100 journal events across
+conversations, refreshes every five seconds, and supports filtering and JSON
+export. Activity requests use the selected bot’s backend scope.
+
+Profile, provider and memory editors block navigation with unsaved
 changes; save or discard before leaving them.
 
 Named-bot links carry `?bot=<id>`, including session links and memory source links.
@@ -133,15 +152,16 @@ and process account remain trusted and can manage all bots. Local HTTP protectio
 is not bot-token authentication or remote-client authentication. No untrusted
 sandbox code is executed in this slice.
 
-The existing environment-configured Discord connection and MCP server still
-belong to the default bot. Named bots do not inherit them. Named-bot channel and
-MCP connection management remains future work. Operational OTLP export and
+The existing environment-configured Discord connection still belongs to the
+default bot; named-bot channel management remains future work. Each bot manages
+its own MCP servers and recurring prompt jobs in Settings; see
+[bot automation](bot-automation.md). Operational OTLP export and
 Diagnostics remain configured for the default bot; named-bot Diagnostics returns
 an empty trace read model rather than another bot's traces.
 
 Workspace shell execution, checkpointing, executor fencing, VM leases,
 resource/concurrency budgets, bot deletion, cross-bot sharing, and independently
-managed background tasks remain planned. Resident bot harnesses are opened at
+managed arbitrary background tasks remain planned. Resident bot harnesses are opened at
 startup; this change does not establish capacity for 100 active agents or VMs.
 
 ## Verification

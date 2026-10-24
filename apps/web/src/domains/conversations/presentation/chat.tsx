@@ -1,6 +1,6 @@
 import { useChat } from "@tanstack/ai-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleAlert } from "lucide-react";
+import { CalendarClock, CircleAlert } from "lucide-react";
 import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -89,6 +89,17 @@ export function Chat({
         const text = message.parts
           .flatMap((p) => (p.type === "text" ? [p.content] : []))
           .join("");
+        if (message.role === "user" && turn?.scheduled)
+          return (
+            <div key={message.id} className="turn-user">
+              <ScheduledMarker
+                name={turn.scheduled.name}
+                at={turn.createdAt}
+                instruction={text}
+              />
+              {turnWork(turn, steps.get(turn.id) ?? [])}
+            </div>
+          );
         if (message.role === "user")
           return (
             <div key={message.id} className="turn-user">
@@ -178,4 +189,25 @@ export function Chat({
       </>
     );
   }
+}
+
+/** A due job's delivery point: the saved instruction is not an owner message. */
+function ScheduledMarker({
+  name,
+  at,
+  instruction,
+}: {
+  name: string;
+  at: number;
+  instruction: string;
+}) {
+  return (
+    <p className="turn-scheduled" title={`Saved instruction: ${instruction}`}>
+      <CalendarClock size={13} aria-hidden="true" />
+      <span>
+        Scheduled · <strong>{name}</strong>
+      </span>
+      <time dateTime={new Date(at).toISOString()}>{time(at)}</time>
+    </p>
+  );
 }

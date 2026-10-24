@@ -9,6 +9,7 @@ import type { ChatService } from "../../domains/conversations/infrastructure/pi-
 import type { Observations } from "../../domains/conversations/infrastructure/pi-observations.ts";
 
 type WorkspaceSource = {
+  mcpConnections?: McpTools[];
   harness: Harness;
   chats: ChatService;
   toolApprovals: ToolApprovalService;
@@ -21,6 +22,7 @@ export async function snapshot(
 ): Promise<WorkspaceSnapshot> {
   const chats = await app.chats.state();
   const tools = await app.toolApprovals.state();
+  const mcp = app.mcpConnections ?? (app.options.mcp ? [app.options.mcp] : []);
   return {
     ...chats,
     // Compatibility DTO only; channel associations live in ChannelBindings.
@@ -30,10 +32,10 @@ export async function snapshot(
     })),
     model: app.chats.model ?? null,
     mcp: {
-      connected: !!app.options.mcp,
+      connected: mcp.length > 0,
       error: app.options.mcpError ?? false,
-      server: app.options.mcp?.client.server?.name ?? null,
-      toolCount: app.options.mcp?.client.tools.length ?? 0,
+      server: mcp[0]?.client.server?.name ?? null,
+      toolCount: mcp.reduce((n, c) => n + c.client.tools.length, 0),
     },
     toolApprovals: tools.approvals.map(
       ({ taskId, fingerprint, result, ...proposal }) => proposal,

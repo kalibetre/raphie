@@ -156,9 +156,9 @@ test("sessions without a saved model retain the runtime fallback", async () => {
 test("an unavailable runtime retains its warning and disabled composer", async () => {
   const html = await renderWorkspace({ selected: session, defaultModel: null });
   assertComposerModel(html, modelA.modelId);
-  assert.ok(
-    html.includes("Configure a model on the runtime to start chatting."),
-  );
+  assert.ok(html.includes("Connect a model in Settings to start chatting."));
+  assert.ok(!html.includes('class="model-warning"'));
+  assert.ok(!html.includes("Tool actions ask for your approval"));
   const sendButton = html.match(
     /<button[^>]*aria-label="Send message"[^>]*>/,
   )?.[0];

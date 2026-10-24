@@ -18,10 +18,9 @@ Built-in memory is enabled by default when the runtime has no saved memory
 configuration. It needs no separate memory service. A saved disabled setting or
 external backend choice is preserved across restarts.
 
-Settings has a collapsible **Memory** group with two pages. **Configuration**
-holds the backend, scope and connection controls. **Browse** shows **Saved
-memories** immediately, without knowing a search term. When memory is off, Browse
-says so and points to Configuration.
+Open **Settings → [bot] → Memory** for backend, scope and connection controls.
+The **Browse memories** action opens **Saved memories** immediately, without
+knowing a search term. When memory is off, Browse says so and points to configuration.
 
 In Browse, built-in evidence appears newest first, 25 records at a
 time, with the total for the saved owner/assistant scope. Use **Load more** to
@@ -45,7 +44,22 @@ uses the saved configuration; an unsaved Configuration draft does not redirect
 it. Saving configuration is rejected while a turn is in progress; wait for it to
 finish and save again.
 
-For example, ask Raphie:
+When memory is enabled, the agent is instructed to save clearly stated, lasting
+preferences and useful facts without asking for another confirmation. For example,
+"Whenever I ask about integrations, check Executor first so I do not have to
+repeat myself" should be saved as a standing preference. It should acknowledge
+the save briefly after the memory tool confirms it, instead of asking "Should I
+remember this?" One-off requests, temporary tasks, guesses and secrets are skipped;
+sensitive personal details require an explicit request. "Do not remember this"
+takes precedence over proactive retention.
+
+The agent should recall relevant preferences and project context before asking
+you to repeat information in another session. It should check existing evidence
+before saving to avoid duplicates and revise changed preferences when supported.
+Memories describe facts and preferences; they do not grant tool access or bypass
+approvals. Current integration availability still comes from connected tools.
+
+You can also explicitly ask Raphie:
 
 - “Remember that I prefer jasmine tea.”
 - In a new session: “What tea do I prefer?”
@@ -60,8 +74,9 @@ something does not prove a write. Use the evidence browser to inspect the record
 ## How built-in memory works
 
 1. **Select evidence.** The conversation model can call `memory_retain` with a
-   useful fact or confirmed experience. Instructions tell it to retain selected
-   information and avoid secrets, guesses and unconfirmed outcomes. This selection
+   useful fact, standing preference or confirmed experience. Instructions tell it
+   to save clear, lasting owner statements proactively without redundant confirmation,
+   and avoid secrets, one-off tasks, guesses and unconfirmed outcomes. This selection
    is model behavior; there is no separate fact-verification service.
 2. **Stamp and store it.** The runtime supplies the configured scope, a stable
    evidence ID, a session/turn source reference and a timestamp. A SQLite

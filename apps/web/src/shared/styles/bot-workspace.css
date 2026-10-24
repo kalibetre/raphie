@@ -1,4 +1,49 @@
 @layer components {
+  /* Right workspace panel: tabs today, more tools later. */
+  .workspace-panel-tabs {
+    flex: 1;
+    min-height: 0;
+    gap: 0;
+  }
+  .workspace-panel-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .workspace-panel-tab-list .reply-count {
+    margin-left: 6px;
+  }
+  .panel-toggle {
+    position: relative;
+  }
+  .panel-toggle .reply-count {
+    position: absolute;
+    top: -3px;
+    right: -5px;
+    min-width: 15px;
+    padding: 0 4px;
+    font-size: 9px;
+  }
+  /* A scheduled job's delivery, shown in place of an owner message. */
+  .turn-scheduled {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: fit-content;
+    margin: 0 auto;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+  }
+  .turn-scheduled strong {
+    font-weight: 600;
+  }
+  .turn-scheduled time {
+    color: var(--muted-foreground);
+  }
   .welcome-avatar {
     margin-bottom: 14px;
   }
@@ -40,13 +85,6 @@
     padding: 3px 7px;
     letter-spacing: 0.5px;
   }
-  .bot-search {
-    background: color-mix(in srgb, var(--card) 65%, transparent);
-    border: 1px solid var(--border);
-    margin-bottom: 24px;
-    height: 36px;
-    border-radius: 10px;
-  }
   .roster-label {
     display: flex;
     align-items: center;
@@ -64,32 +102,30 @@
   }
   .bot-roster-scroll {
     flex: 1;
+    margin: 0 -12px;
   }
   .bot-roster-list {
     display: grid;
-    gap: 6px;
+    gap: 0;
   }
   .bot-roster-item {
     display: flex;
     gap: 12px;
     align-items: center;
     text-align: left;
-    border: 1px solid transparent;
-    border-radius: 12px;
-    padding: 12px 10px;
+    border: 0;
+    border-radius: 0;
+    padding: 12px 22px;
     background: transparent;
     min-width: 0;
     width: 100%;
-    transition:
-      background-color 150ms,
-      border-color 150ms;
+    transition: background-color 150ms;
   }
   .bot-roster-item:hover {
     background: var(--hover);
   }
   .bot-roster-item[aria-current] {
-    background: color-mix(in srgb, var(--tone) 12%, var(--card));
-    border-color: color-mix(in srgb, var(--tone) 40%, var(--border));
+    background: color-mix(in srgb, var(--tone) 22%, transparent);
   }
   .roster-avatar {
     display: grid;
@@ -113,20 +149,7 @@
     fill: var(--tone);
   }
   .bot-avatar circle {
-    fill: #273329;
-  }
-  /* Bot colour families, shared by avatars and bot settings pages. */
-  .tone-0 {
-    --tone: #b5c99b;
-  }
-  .tone-1 {
-    --tone: #b5b4dc;
-  }
-  .tone-2 {
-    --tone: #e3b477;
-  }
-  .tone-3 {
-    --tone: #83bcb4;
+    fill: var(--bot-eye, #273329);
   }
   .bot-roster-copy {
     display: block;
@@ -169,22 +192,49 @@
     background: var(--accent-soft);
     color: var(--accent);
   }
-  .new-bot-button {
-    justify-content: flex-start;
-    margin-top: 12px;
-    border-style: dashed;
-    border-radius: 10px;
+  .new-bot-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: calc(100% + 24px);
+    margin: 12px -12px 0;
+    padding: 10px 22px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    font-weight: 550;
+    text-align: left;
+    transition:
+      color 150ms,
+      background-color 150ms;
+  }
+  .new-bot-row:hover {
+    color: var(--foreground);
+    background: var(--hover);
+  }
+  .new-bot-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--muted);
   }
   .roster-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-top: 18px;
-    padding: 8px 10px;
+    margin: 18px -12px 0;
+    padding: 12px 22px 0;
+    border-top: 0;
   }
   .roster-footer .runtime-status {
-    font-size: 10px;
+    font-size: 11px;
+    color: var(--muted-foreground);
   }
   .bot-workspace-header {
     min-height: 72px;
@@ -362,70 +412,29 @@
     min-height: 0;
   }
   .library-page {
-    max-width: 780px;
-    margin: 0 auto;
-    padding: 36px 28px;
+    padding: 12px 12px 20px;
   }
-  .library-heading {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 16px;
-    padding: 24px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--accent-soft) 35%, var(--card));
-  }
-  .library-heading-copy {
-    min-width: 0;
-  }
-  .library-scope {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 12px;
-    font-size: 11px;
-    color: var(--accent);
-    overflow-wrap: anywhere;
-  }
-  .library-heading h2 {
-    font-size: 24px;
-    letter-spacing: -0.5px;
-    font-weight: 550;
-    margin: 0 0 8px;
-  }
-  .library-heading p {
-    font-size: 12px;
-    color: var(--muted-foreground);
-    margin: 0;
-  }
+  /* Search narrows the text; these compact chips narrow the reply state. */
   .library-filters {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     flex-wrap: wrap;
-    margin: 24px 0 16px;
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--muted);
+    margin-top: 10px;
   }
   .library-filter {
-    flex: 1;
-  }
-  .library-filter-compact {
-    display: none;
+    flex: none;
+    border-color: transparent;
+    color: var(--muted-foreground);
   }
   .library-filter[aria-pressed="true"] {
-    background: var(--card);
-    color: var(--foreground);
-    box-shadow: 0 1px 3px #00000012;
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+    color: var(--accent);
   }
   .library-filter-count {
-    padding: 0 5px;
-    border-radius: 5px;
-    background: var(--muted);
     font-size: 10px;
-    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.75;
   }
   .library-search {
     display: flex;
@@ -519,22 +528,12 @@
     text-align: center;
   }
   @media (max-width: 1100px) and (min-width: 768px) {
-    .library-filter-label,
-    .library-filter svg {
-      display: none;
-    }
-    .library-filter-compact {
-      display: inline;
-    }
     .header-bot {
       max-width: 105px;
     }
     .bot-workspace-header {
       padding: 0 14px;
       gap: 10px;
-    }
-    .library-button span:not(.reply-count) {
-      display: none;
     }
   }
   @media (max-width: 767px) {
@@ -550,10 +549,12 @@
     }
     .bot-roster .roster-brand,
     .bot-roster .roster-label,
-    .bot-search,
-    .new-bot-button,
+    .new-bot-row,
     .roster-footer {
       display: none;
+    }
+    .bot-roster-scroll {
+      margin: 0;
     }
     .bot-roster-list {
       display: flex;
@@ -562,6 +563,7 @@
     }
     .bot-roster-item {
       position: relative;
+      border-radius: 12px;
       flex-direction: column;
       justify-content: center;
       gap: 7px;
@@ -626,9 +628,6 @@
       gap: 2px;
       margin-left: auto;
     }
-    .library-button span:not(.reply-count) {
-      display: none;
-    }
     .reply-card-area {
       padding: 7px 12px 10px;
     }
@@ -658,34 +657,8 @@
     .library-page {
       padding: 24px 16px;
     }
-    .library-heading h2 {
-      font-size: 21px;
-    }
-    .library-heading {
-      flex-wrap: wrap;
-      padding: 18px;
-    }
-    .library-filters {
-      gap: 2px;
-    }
-    .library-filters button {
-      font-size: 11px;
-      padding: 6px 8px;
-    }
-    .library-filter svg {
-      display: none;
-    }
-    .library-filter-label {
-      display: none;
-    }
-    .library-filter-compact {
-      display: inline;
-    }
     .library-list .conversation-entry {
       padding: 16px;
-    }
-    .library-heading button {
-      font-size: 10px;
     }
   }
 }

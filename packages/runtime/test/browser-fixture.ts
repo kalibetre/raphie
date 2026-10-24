@@ -169,6 +169,7 @@ if (process.env.RAPHIE_FIXTURE_MEMORY_HISTORY === "true") {
   }
 }
 const app = await Gateway.open({
+  deferResume: true,
   memory,
   modelConnectionGate: settings.connectionGate,
   directory,
@@ -273,6 +274,7 @@ const bots = await BotHost.open(
       botId,
     );
     const gateway = await Gateway.open({
+      deferResume: true,
       directory: path,
       botId,
       models: botModels,
@@ -298,6 +300,7 @@ const bots = await BotHost.open(
       },
     };
   },
+  { keyStore: memoryCredentialKeyStore() },
 );
 // Override the ports to run beside a real runtime.
 const server = await startServer(app, {

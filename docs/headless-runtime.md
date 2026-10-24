@@ -90,7 +90,8 @@ separate per-bot Gateway/settings/memory/attachment stores and actor authorities
 Owner HTTP requests select a container via a bot-prefixed route; the unprefixed
 interface remains the default bot. Bot management is not available to model tools.
 The execution tiers and concurrency budgets remain planned. The existing Discord
-and MCP bootstrap configuration still belongs only to the default bot. See
+bootstrap configuration belongs only to the default bot. MCP connections and
+recurring prompts are owner-configured per bot; see [bot automation](bot-automation.md). See
 [bots.md](bots.md) for the delivered boundaries and later work.
 
 ## Application interface

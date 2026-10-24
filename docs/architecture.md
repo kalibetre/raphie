@@ -32,9 +32,11 @@ host, not per-bot network authentication or OS-level security isolation.
 
 Workspace directories are reserved, but execution, checkpoints, serialization,
 fencing and separate compute budgets remain planned. The existing environment
-Discord/MCP configuration remains attached to the default bot; named bots start
-without inherited tools or keys. Named-bot connection management and trace export
-remain later work. See [bots and personality](bots.md) for storage, APIs,
+Discord configuration remains attached to the default bot; named bots start
+without inherited tools or keys. MCP connections and recurring prompts are
+owner-configured per bot using Pi's MCP client, deferred search and durable sleeping
+tasks. Named-bot channel management and trace export remain later work.
+See [bot automation](bot-automation.md) and [bots and personality](bots.md) for storage, APIs,
 verification and recovery limits.
 
 ## Compiler and tooling

@@ -2,9 +2,7 @@ import {
   ArrowLeft,
   ChevronsLeft,
   ChevronsRight,
-  ListFilter,
   PanelRight,
-  Settings,
   SquarePen,
 } from "lucide-react";
 
@@ -23,8 +21,6 @@ export function WorkspaceHeader({
   onToggleInspector,
   onBack,
   onNew,
-  onLibrary,
-  library,
   unreadCount,
   onBotSettings,
 }: {
@@ -40,8 +36,6 @@ export function WorkspaceHeader({
   onToggleInspector: () => void;
   onBack?: () => void;
   onNew?: () => void;
-  onLibrary?: () => void;
-  library?: boolean;
   unreadCount: number;
   onBotSettings: () => void;
 }) {
@@ -68,9 +62,7 @@ export function WorkspaceHeader({
           <small>{description}</small>
         </button>
       </div>
-      <h1 className="header-conversation-title">
-        {library ? "Conversations" : title}
-      </h1>
+      <h1 className="header-conversation-title">{title}</h1>
       <div className="header-actions">
         {onBack && (
           <Button
@@ -94,41 +86,20 @@ export function WorkspaceHeader({
             <SquarePen size={17} />
           </Button>
         )}
-        {onLibrary && (
-          <Button
-            className="library-button"
-            variant={library ? "secondary" : "outline"}
-            size="sm"
-            aria-label={`Conversations${unreadCount ? `, ${unreadCount} need attention` : ""}`}
-            aria-pressed={library}
-            onClick={onLibrary}
-          >
-            <ListFilter size={14} />
-            <span>Conversations</span>
-            {unreadCount > 0 && (
-              <span className="reply-count">{unreadCount}</span>
-            )}
-          </Button>
-        )}
-        {!onLibrary && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Bot settings"
-            onClick={onBotSettings}
-          >
-            <Settings size={16} />
-          </Button>
-        )}
         {showInspector && (
           <Button
+            className="panel-toggle"
             variant="ghost"
             size="icon-sm"
-            aria-label="Toggle activity inspector"
+            aria-label={`${inspector ? "Hide" : "Show"} conversations panel${unreadCount ? `, ${unreadCount} need attention` : ""}`}
+            title="Conversations"
             aria-pressed={inspector}
             onClick={onToggleInspector}
           >
             <PanelRight size={16} />
+            {unreadCount > 0 && (
+              <span className="reply-count">{unreadCount}</span>
+            )}
           </Button>
         )}
       </div>

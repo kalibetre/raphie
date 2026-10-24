@@ -8,6 +8,7 @@ change that changes the behavior.
 
 - [Run locally, configure Settings and verify the app](../README.md)
 - [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
+- [Bot automation](bot-automation.md): per-bot MCP servers, encrypted configuration and recurring prompts.
 - [Memory](memory.md): built-in behavior, agent tools, storage, correction,
   forgetting, provider support and recovery.
 - [Provider credential storage and recovery](provider-credential-storage.md)

@@ -264,3 +264,130 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
 - Settings sidebar and app-wide scope chips now use the Glance brand avatar.
   The roster brand has an optical alignment correction: the drawn avatar and
   lettering centers differ by less than 0.25 CSS pixels in the checked font.
+
+# Per-bot MCP and scheduled prompts — 2026-10-24
+
+- Disposable browser runtime on 14327 and UI on 14331; synthetic MCP server on 14328. No normal application data or external inference was used.
+- MCP connection creation, pause/enable and multiple connections succeed. Another
+  bot opens with an empty inventory and explicit scope in its settings header.
+- Job creation, Run now, pause/resume and result-conversation admission succeed.
+  Unsaved job drafts block navigation until discard; interval and time edits also
+  participate in the guard. MCP drafts and transport changes use the same guard.
+- The two new forms fit at 320, 390 and 1440px without horizontal page overflow;
+  light and dark appearance and the mobile settings sheet were inspected.
+- Automated tests cover encrypted MCP configuration, isolated APIs, Pi tool-search
+  availability without memory, delayed startup/restart recovery and shared job
+  conversations. `bun run validate` passes 121 tests, architecture checks, lint,
+  types, formatting and production builds. The existing large-chunk warning remains.
+
+# Backend restart recovery — 2026-10-24
+
+- Reproduced a terminal EventSource failure: an HTTP 503 during a restart closes
+  the browser's stream permanently, leaving the UI showing “Reconnecting…”.
+- Closed streams now reconnect with backoff from 1 to 15 seconds. Native retries
+  continue for streams that are still reconnecting. Leaving a session or retiring
+  its backend cancels pending retries and ignores queued events from old streams.
+- Transient session-fetch errors no longer prevent the session stream from
+  recovering; missing sessions still retain their 404 handling.
+- Verified an actual dev-backend restart with Chromium: the open conversation
+  recovered without a reload, its draft and document survived, and no POST commands
+  were replayed. A second page opened during the outage also recovered by itself.
+  The regression test covers closed-stream replacement, native retry ownership,
+  scoped URLs, queued events and retry cancellation.
+
+# Streaming reply stability — 2026-10-24
+
+- Reproduced a partial reply disappearing when a model step ends while its turn
+  is still pending. The chat adapter now retains the latest visible text through
+  model/tool pauses and empty step starts, until new text or the final answer
+  replaces it. Retained text is scoped to one active turn.
+- The real TanStack client regression covers pauses, empty starts, final-answer
+  handoff and clearing retained text before the next turn. A Chromium check with
+  synthetic streamed snapshots found no blank reply frames across eight model
+  step transitions; the draft survived, with no commands or browser exceptions.
+
+# Conversations panel and bot Activity — 2026-10-24
+
+- Moved Activity from the chat inspector into each bot's Settings group. It
+  fetches the selected bot's latest 100 journal events every five seconds, with
+  loading/error states, filtering, expandable payloads and JSON export.
+- Replaced the full-page conversation library with a Conversations tab in the
+  resizable right workspace panel, using the shared shadcn/Base UI Tabs wrapper.
+  Search, counted filters, unread/approval badges, previews and pagination remain.
+  The reply card's View all action opens this panel.
+- The panel works from a new chat as well as an existing conversation. Desktop
+  selection leaves it open; mobile selection closes the shared Sheet. Escape
+  restores focus to the panel toggle. The tab list has a screen-reader label.
+- Chromium fixture checks passed at 320, 390, 768, 1024 and 1440 CSS pixels with
+  no horizontal document overflow or browser exceptions. Checked the tab above
+  its content, keyboard entry into the panel, search and empty results, desktop
+  conversation switching, mobile selection/Escape/focus restoration, and Activity
+  filtering. Inspected light/dark screenshots. Named-bot Activity matched its
+  scoped API response and contained no default-bot runs.
+- Fixed the generated Tabs wrapper's orientation selectors to match Base UI's
+  `data-orientation` attribute; the original selectors put content beside tabs.
+- Validation: formatting, architecture, lint, types, all 129 tests and production
+  build pass. Tests require local server permissions outside the sandbox. The
+  existing build chunk-size warning remains.
+
+# Bot color collisions — 2026-10-24
+
+- Reproduced two distinct IDs selecting the same avatar color. The old independent
+  hash had only four buckets. The UI now allocates eight color families across
+  the runtime's stable creation-order roster, preferring each ID's original
+  family and using unused colors before reusing the least-used family.
+- One shared assignment colors avatars, roster highlights and settings accents.
+  Adding bots leaves earlier assignments intact; shapes and gaze are unchanged.
+- Regression tests cover collisions, palette exhaustion, balanced reuse, stable
+  append/reload and default-bot sage. Browser-created fixture bots reached eight
+  unique colors with stable older assignments, matching header/settings colors,
+  and no browser exceptions. Full validation passes all 133 tests and the build.
+
+# Combined profile and owner-selected colors — 2026-10-24
+
+- Profile now contains identity, color and SOUL.md personality in two settings
+  cards with one guarded Save/Discard bar. The separate Personality navigation
+  entry is removed; its existing URL opens Profile and highlights the same entry.
+  Revision history remains available from the editor and shows saved colors.
+- Owners can choose eight presets, a native custom color, or Automatic, with an
+  avatar preview. Six-digit hex colors are normalized and stored with profile
+  revisions; old profiles and clients without a color remain compatible. Clearing
+  a color restores automatic allocation. Dark colors get light avatar eyes.
+- API tests cover create/update normalization, invalid colors, automatic reset,
+  revision history and persistence across runtime restart. Browser checks cover
+  combined saves, full discard, unsaved navigation blockers, preset/custom/reset
+  persistence, old Personality URLs, named-bot creation, matching avatar/settings
+  colors, dark eyes and 320/390/768/1024/1440px layouts without overflow or errors.
+- Full repository validation passes: formatting, architecture, lint, types, 135
+  tests and production builds. The existing bundle-size warning remains.
+
+# Models require a configured provider — 2026-10-24
+
+- Reproduced the backend returning 401 OpenRouter models with zero connections:
+  `read()` manufactured a public-catalog fallback. Removed that fallback; model
+  entries now come exclusively from enabled connections with saved credentials.
+- Models settings now offers Configure providers when none are active, preserving
+  the current bot/session route. The old browse-and-select-without-credentials
+  notice is removed. The composer retains its existing provider setup prompt.
+- Regression coverage exercises fresh configuration, add, disable/re-enable,
+  cleared credentials, last-connection removal and restart. The catalog metadata
+  test now connects a provider before asserting the published model definitions.
+- Browser verification passed on an unconfigured named bot, then UI connection
+  add/removal, reload, mobile and the composer empty state. All 136 tests pass;
+  formatting, architecture, lint, types and production builds pass as well.
+
+# MCP and jobs PR readiness — 2026-10-24
+
+- Preserved default-bot legacy environment MCP connections and added explicit
+  encrypted import. Imported identity and removal survive restart; named bots
+  do not inherit the legacy connection. Malformed argument errors omit secrets.
+- Merged current main, preserving Mermaid guidance alongside current scheduling
+  instructions; installed dependencies from the merged lockfile.
+- Full `bun run validate` passes formatting, architecture, lint, types, all 148
+  tests and production builds. Existing bundle-size warnings remain.
+- Prior browser acceptance for the MCP/jobs forms is recorded above. This
+  readiness pass adds automated migration/restart coverage, not a new browser run.
+- Later work: stable data selection across checkouts and durable bot workspaces
+  are in their separate thread. Jobs require a running runtime and report prompt
+  admission; completion tracking, device push and calendar recurrence remain
+  outside this change.

@@ -1,5 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import { toLlmContent } from "@earendil-works/pi-mcp";
 
 import type { McpClient } from "../../../infrastructure/mcp/client.ts";
 import type { Telemetry } from "../../../shared/application/telemetry.ts";
@@ -12,20 +13,26 @@ import type { ToolApprovalService, ToolResult } from "./pi-tool-approvals.ts";
 import { ToolApprovals } from "./pi-tool-approvals.ts";
 
 export type McpTools = {
+  namespace?: string;
   client: McpClient;
   identity: string;
   documentationTools?: string[];
 };
 
+function toolName(namespace: string, original: string) {
+  const name = `mcp_${namespace}_${original.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+  return name.length <= 64
+    ? name
+    : `${name.slice(0, 55)}_${new Bun.CryptoHasher("sha256").update(original).digest("hex").slice(0, 8)}`;
+}
+
 function normalize(result: Awaited<ReturnType<McpClient["call"]>>): ToolResult {
   const text =
-    result.content
-      ?.map((part) =>
+    toLlmContent(result)
+      .map((part) =>
         part.type === "text"
           ? part.text
-          : part.type === "resource_link"
-            ? `Resource: ${part.name} (${part.uri})`
-            : `[${part.type} content is not rendered in this text interface]`,
+          : `[${part.type} content is not rendered in this text interface]`,
       )
       .join("\n") || JSON.stringify(result.structuredContent ?? {});
   return {
@@ -53,12 +60,18 @@ export function createMcpTools(
   options: McpTools,
 ) {
   const server = options.client.server?.name ?? "mcp";
-  const namespace = server.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 20);
+  const namespace =
+    options.namespace ?? server.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 20);
   const tools = options.client.tools.map((tool) =>
     defineTool({
-      name: `mcp_${namespace}_${tool.name.replace(/[^a-zA-Z0-9_]/g, "_")}`,
+      name: toolName(namespace, tool.name),
+      deferred: options.namespace ? true : undefined,
       description: `${tool.description ?? tool.name}\n${options.documentationTools?.includes(tool.name) ? "Documentation lookup." : "Requires the owner to approve the exact arguments before execution."}`,
-      parameters: Type.Unsafe<Record<string, unknown>>(tool.inputSchema),
+      parameters: Type.Unsafe<Record<string, unknown>>({
+        ...tool.inputSchema,
+        type: "object",
+        properties: tool.inputSchema.properties ?? {},
+      }),
       replay: "safe", // Only this durable gate is replay-safe, not the remote action.
       outputLimits: { maxBytes: 32_000, maxLines: 1000 },
       execute: async (args, api, ctx) => {
@@ -187,5 +200,8 @@ export function createMcpTools(
     tools.some((t) => t.name.length > 64)
   )
     throw new Error("MCP tool names are ambiguous or too long.");
-  return defineExtension({ name: "raphie.mcp", tools });
+  return defineExtension({
+    name: options.namespace ? `raphie.mcp.${options.namespace}` : "raphie.mcp",
+    tools,
+  });
 }

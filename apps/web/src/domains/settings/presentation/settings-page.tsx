@@ -1,6 +1,9 @@
+import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { BotAvatar, botTone } from "./bot-avatar";
+import { Button } from "../../../shared/ui/button";
+import { BotAvatar } from "./bot-avatar";
+import { useBotStyle } from "./bot-tones";
 
 /**
  * The top of every settings page. Bot pages carry the bot's avatar and a wash
@@ -11,6 +14,7 @@ export function SettingsPage({
   lede,
   bot,
   scope = "App-wide",
+  back,
   children,
 }: {
   title: string;
@@ -19,14 +23,29 @@ export function SettingsPage({
   bot?: { id: string; name: string };
   /** Scope label when there is no bot, e.g. "New bot". */
   scope?: string;
+  /** Sub-pages link back to the page they were opened from. */
+  back?: { label: string; onClick: () => void };
   children: ReactNode;
 }) {
+  const botStyle = useBotStyle();
   return (
     <section className="settings-page">
       <header
-        className={`settings-hero ${bot ? `tone-${botTone(bot.id)}` : "settings-hero-app"}`}
+        className={`settings-hero ${bot ? "" : "settings-hero-app"}`}
+        style={bot ? botStyle(bot.id) : undefined}
       >
         <div className="settings-hero-copy">
+          {back && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="settings-back"
+              onClick={back.onClick}
+            >
+              <ArrowLeft size={14} aria-hidden="true" />
+              {back.label}
+            </Button>
+          )}
           <h1>{title}</h1>
           <p>{lede}</p>
         </div>

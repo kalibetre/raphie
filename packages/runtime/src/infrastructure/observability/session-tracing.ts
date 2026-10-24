@@ -16,6 +16,16 @@ export function traceSessions(sessions: Sessions, telemetry: Telemetry) {
           return receipt;
         },
       ),
+    submitScheduled: (...args: Parameters<Sessions["submitScheduled"]>) =>
+      telemetry.run(
+        "session.submit",
+        { source: args[0].source },
+        async (annotate) => {
+          const receipt = await sessions.submitScheduled(...args);
+          annotate({ "session.id": receipt.sessionId, "turn.id": receipt.id });
+          return receipt;
+        },
+      ),
     submitLegacy: (...args: Parameters<Sessions["submitLegacy"]>) =>
       telemetry.run(
         "session.submit",

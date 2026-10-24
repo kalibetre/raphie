@@ -2,10 +2,13 @@ import {
   BookOpen,
   Bot,
   Brain,
+  Clock,
   History,
   KeyRound,
   Library,
+  ListTree,
   Palette,
+  Plug,
   Puzzle,
   Radio,
   Server,
@@ -19,11 +22,25 @@ import {
  */
 export const sections = [
   {
+    id: "mcp",
+    label: "MCP tools",
+    icon: Plug,
+    lede: (bot: string) =>
+      `Connect the tools ${bot} can use. Every connection belongs to this bot.`,
+  },
+  {
+    id: "jobs",
+    label: "Scheduled jobs",
+    icon: Clock,
+    lede: (bot: string) =>
+      `Give ${bot} reminders and recurring work, with results saved in a conversation.`,
+  },
+  {
     id: "bot",
     label: "Profile",
     icon: UserRound,
     lede: (bot: string) =>
-      `How ${bot} introduces itself in your sidebar and conversations.`,
+      `The identity, color and personality ${bot} brings to your conversations.`,
   },
   {
     id: "personality",
@@ -95,6 +112,13 @@ export const sections = [
     lede: () => "How Raphie looks in this browser, for every bot.",
   },
   {
+    id: "activity",
+    label: "Activity",
+    icon: ListTree,
+    lede: (bot: string) =>
+      `Recent activity from ${bot}, across its conversations.`,
+  },
+  {
     id: "telemetry",
     label: "Diagnostics",
     icon: Radio,
@@ -113,3 +137,10 @@ export const isAppSection = (section: string) =>
 
 export const sectionOf = (id: Section) =>
   sections.find((section) => section.id === id)!;
+
+/** Sub-pages reached from inside a page; their parent is the page to go back to. */
+export const parentSection: Partial<Record<Section, Section>> = {
+  "bot-history": "bot",
+  personality: "bot",
+  "memory-browse": "memory",
+};

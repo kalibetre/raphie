@@ -8,7 +8,7 @@ export class BackendWorkspace {
     defaultOptions: { queries: { retry: 1, staleTime: 1000 } },
   });
   private readonly lifetime = new AbortController();
-  private readonly streams = new Set<EventSource>();
+  private readonly observations = new Set<() => void>();
 
   readonly botId: string;
 
@@ -59,21 +59,48 @@ export class BackendWorkspace {
     this.assertActive();
     const address = new URL(this.scopedPath(path), "http://localhost");
     if (this.url) address.searchParams.set("_raphie_backend", this.url);
-    const events = new EventSource(address.pathname + address.search);
-    this.streams.add(events);
-    events.onopen = () => {
-      if (!this.lifetime.signal.aborted) handlers.open?.();
+    let events: EventSource | undefined;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let retryDelay = 1000;
+    let stopped = false;
+    const stop = () => {
+      stopped = true;
+      clearTimeout(retry);
+      events?.close();
+      this.observations.delete(stop);
     };
-    events.onerror = () => {
-      if (!this.lifetime.signal.aborted) handlers.error?.();
+    const connect = () => {
+      if (stopped || this.lifetime.signal.aborted) return;
+      const stream = new EventSource(address.pathname + address.search);
+      events = stream;
+      const active = () =>
+        !stopped && !this.lifetime.signal.aborted && events === stream;
+      stream.onopen = () => {
+        if (!active()) return;
+        retryDelay = 1000;
+        handlers.open?.();
+      };
+      stream.onerror = () => {
+        if (!active()) return;
+        handlers.error?.();
+        // EOF uses native retries, but a non-SSE response (such as a 503
+        // during restart) permanently closes EventSource. Replace that one.
+        if (stream.readyState === EventSource.CLOSED && retry === undefined) {
+          stream.close();
+          retry = setTimeout(() => {
+            retry = undefined;
+            connect();
+          }, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 15_000);
+        }
+      };
+      stream.onmessage = (event) => {
+        if (active()) handlers.message(event);
+      };
     };
-    events.onmessage = (event) => {
-      if (!this.lifetime.signal.aborted) handlers.message(event);
-    };
-    return () => {
-      events.close();
-      this.streams.delete(events);
-    };
+    this.observations.add(stop);
+    connect();
+    return stop;
   }
 
   draftKey(sessionId?: string) {
@@ -85,8 +112,7 @@ export class BackendWorkspace {
     this.lifetime.abort(
       new DOMException("The backend workspace changed.", "AbortError"),
     );
-    for (const stream of this.streams) stream.close();
-    this.streams.clear();
+    for (const stop of this.observations) stop();
     this.queries.clear();
   }
 }

@@ -1,5 +1,12 @@
 /** Public read models. No runtime, framework, or persistence dependencies. */
 export type {
+  BotMcpConnection,
+  SaveMcpConnection,
+  SaveScheduledJob,
+  ScheduledJob,
+} from "./bots/automation.ts";
+
+export type {
   BotProfile,
   SaveBotProfile,
   UpdateBotProfile,
@@ -35,6 +42,8 @@ export type Turn = {
   createdAt: number;
   status: "pending" | "done" | "error";
   answer: string | null;
+  /** Set when a scheduled job, not the owner, started this turn. */
+  scheduled?: { name: string };
 };
 
 export type ConversationDelivery = {

@@ -28,8 +28,7 @@
   .breadcrumb-sep {
     color: var(--faint);
   }
-  .runtime-error,
-  .model-warning {
+  .runtime-error {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -469,6 +468,9 @@
     text-align: center;
     font-size: 11.5px;
     color: var(--faint);
+  }
+  .composer-hint[data-warning] {
+    color: var(--attention);
   }
 
   /* Welcome */

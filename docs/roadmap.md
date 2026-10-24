@@ -193,7 +193,8 @@ Proposed slices:
    description and owner-authored, revisioned SOUL.md. Integration tests cover
    cross-bot session/stream/file access, actor and approval rejection, separate
    credentials and memory, personality admission locking, and restart recovery.
-   Per-bot Discord/MCP connection management remains subsequent work.
+   Per-bot MCP connection management and recurring prompts are delivered; see
+   [bot automation](bot-automation.md). Per-bot Discord management remains subsequent work.
 1. **One durable lightweight workspace per bot:** integrate just-bash with the
    bot's default workspace, serialize execution across its sessions, bound time,
    output and storage, and persist checkpoints outside compute. Prove restart

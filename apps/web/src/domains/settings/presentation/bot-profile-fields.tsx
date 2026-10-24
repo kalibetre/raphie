@@ -2,9 +2,13 @@ import type { BotProfile } from "@raphie/contracts";
 
 import { Input } from "../../../shared/ui/input";
 import { Textarea } from "../../../shared/ui/textarea";
+import { BotColorPicker } from "./bot-color-picker";
 
 export function BotProfileFields({
-  mode,
+  botId,
+  color,
+  automatic,
+  onColor,
   name,
   description,
   soul,
@@ -14,7 +18,10 @@ export function BotProfileFields({
   onDescription,
   onSoul,
 }: {
-  mode: "profile" | "personality" | "create";
+  botId: string;
+  color: string | null;
+  automatic: string;
+  onColor: (color: string | null) => void;
   name: string;
   description: string;
   soul: string;
@@ -25,9 +32,11 @@ export function BotProfileFields({
   onSoul: (value: string) => void;
 }) {
   return (
-    <div className="bot-form settings-form">
-      {mode !== "personality" && (
-        <>
+    <>
+      <section className="bot-editor-section" aria-label="Identity">
+        <h2>Identity</h2>
+        <p>How this bot appears in your sidebar and conversations.</p>
+        <div className="bot-form settings-form">
           <label htmlFor="bot-name">Name</label>
           <Input
             id="bot-name"
@@ -47,11 +56,25 @@ export function BotProfileFields({
             disabled={pending}
             placeholder="What this bot helps you with"
           />
-        </>
-      )}
-      {mode !== "profile" && (
-        <>
-          <label htmlFor="bot-soul">Personality</label>
+          <BotColorPicker
+            botId={botId}
+            color={color}
+            automatic={automatic}
+            pending={pending}
+            onChange={onColor}
+          />
+        </div>
+      </section>
+      <section className="bot-editor-section" aria-label="Personality">
+        <h2>Personality</h2>
+        <p>
+          Tone, values and working style, shared across this bot’s
+          conversations.
+        </p>
+        <div className="bot-form settings-form">
+          <label htmlFor="bot-soul" className="sr-only">
+            Personality
+          </label>
           <div className="soul-editor">
             <div className="soul-editor-heading">
               <strong>SOUL.md</strong>
@@ -74,8 +97,8 @@ export function BotProfileFields({
             Personality guides behavior. Models, connections and memory are
             configured separately.
           </p>
-        </>
-      )}
-    </div>
+        </div>
+      </section>
+    </>
   );
 }

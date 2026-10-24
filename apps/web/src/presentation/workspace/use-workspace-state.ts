@@ -73,7 +73,12 @@ export function useLiveState(sessionId?: string, legacyId?: number) {
     });
   }, [client, workspace]);
   useEffect(() => {
-    if (!selectedId || selected.error) return;
+    // A transient fetch failure must not disable the stream that can recover it.
+    if (
+      !selectedId ||
+      (selected.error instanceof ApiError && selected.error.status === 404)
+    )
+      return;
     setSessionConnected(false);
     return workspace.observe(`/api/sessions/${selectedId}/events`, {
       open: () => setSessionConnected(true),

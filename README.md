@@ -88,7 +88,7 @@ messaging channels; cross-channel session continuation is deferred.
 
 Conversations support streamed text, Markdown, saved drafts, history after refresh, and pending/error states. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
 
-The session Activity inspector records precise UTC timestamps, local display times, run and runtime-attempt IDs, tool operation IDs, model usage, approval decisions, results, and recovery. Events expand to show payloads and export to JSON. Known credential values and sensitive field names are redacted before journal persistence. Diagnostics is a separate trace-only view.
+The bot settings Activity page records precise UTC timestamps, local display times, run and runtime-attempt IDs, tool operation IDs, model usage, approval decisions, results, and recovery. Events expand to show payloads and export to JSON. Known credential values and sensitive field names are redacted before journal persistence. Diagnostics is a separate trace-only view.
 
 This first journal keeps the latest **5,000 events**, truncates individual diagnostic payloads at **24,000 characters**, and does not persist individual text deltas. Timestamps describe when the host observed an event; “Model response started” is the first observed response, not the start of the provider's network request. Executor's nested calls and private model reasoning are not available here. Operation waterfalls and a backend plugin lifecycle are later work.
 
@@ -96,14 +96,22 @@ This first journal keeps the latest **5,000 events**, truncates individual diagn
 
 Settings opens full-window from the gear beside the connection status. Its
 sidebar groups each bot's pages (profile, personality, providers, models,
-memory, diagnostics) under an expandable entry, with app-wide preferences below.
+memory, MCP tools, scheduled jobs, diagnostics) under an expandable entry, with app-wide preferences below.
 Open Settings to select and test a local backend, connect OpenRouter, search the
 model catalog and choose the default for new sessions, or toggle Diagnostics trace
-collection and browse recent traces on the same page. Changes are applied without a restart. Backend addresses are saved
+collection and browse recent traces on the same page. Models are listed only for enabled connections with saved credentials; unconfigured bots are prompted to connect a provider. Changes are applied without a restart. Backend addresses are saved
 in a browser cookie scoped to the web port; reconnecting switches the workspace in place, closes old streams and requests,
 and reloads sessions and settings from the selected backend. Drafts are scoped
 to each backend. Older drafts without a backend identity remain in browser storage
 but are not automatically loaded into a backend. Only local HTTP backends are supported.
+
+Configure independent MCP servers, one-time reminders and recurring prompts under each bot's settings.
+MCP supports Streamable HTTP and local stdio commands, with encrypted credentials
+and approval before model-proposed tool execution. Scheduled jobs keep results in
+a conversation and recover through Pi Durable's persisted sleep/wake tasks.
+Agents can create, modify and delete schedules directly through chat; reminders return to
+the originating conversation. Browse retained evidence from Settings → Memory → Browse memories.
+See [bot automation](docs/bot-automation.md) for controls, APIs and execution limits.
 
 Provider/model and telemetry preferences belong to the selected backend and
 persist in `.data/settings.sqlite`. Provider keys come exclusively from connections
@@ -147,12 +155,12 @@ starts automatically with the runtime and can be disabled in Settings. In-flight
 spans may finish exporting after disabling; existing traces expire normally. Retention is 48 hours / 100,000 spans,
 and queries return the latest 500 spans in a 1, 6 or 24 hour window. Prompts,
 tool arguments/results and raw SDK errors are excluded. The durable activity
-journal remains the recovery record and the source for session Activity.
+journal remains the recovery record and the source for bot Activity.
 See [observability](docs/observability.md).
 
 ## UI plugins
 
-`apps/web/src/domains/settings/infrastructure/plugins/index.tsx` defines host API version 1 and the `composer.footer` slot. Plugins receive `{ draft, model }` and render with shared UI components. The included token counter is an intentionally rough character-based estimate; actual provider usage is separate in session Activity.
+`apps/web/src/domains/settings/infrastructure/plugins/index.tsx` defines host API version 1 and the `composer.footer` slot. Plugins receive `{ draft, model }` and render with shared UI components. The included token counter is an intentionally rough character-based estimate; actual provider usage is separate in bot Activity.
 
 Plugins are trusted local React modules loaded at build time. Each contribution has a render failure boundary. The Plugins screen saves enable/disable preferences in this browser. This is not an isolation boundary or a third-party plugin marketplace.
 

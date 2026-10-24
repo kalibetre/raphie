@@ -119,21 +119,21 @@
     font-size: 12.5px;
   }
 
-  /* Floating save bar, a sibling of the floating composer. Hidden while
-     there is nothing to save, so clean pages stay quiet. */
+  /* Docked save bar: full width along the bottom of the pane, so it reads
+     as part of the page rather than a floating card. Hidden while there is
+     nothing to save, so clean pages stay quiet. */
   .save-bar {
     position: sticky;
-    bottom: 16px;
+    bottom: 0;
     z-index: 5;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 9px 9px 9px 18px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--card) 92%, transparent);
+    gap: 12px;
+    margin: 24px -44px 0;
+    padding: 14px 44px;
+    background: color-mix(in srgb, var(--card) 94%, transparent);
     backdrop-filter: blur(12px);
-    box-shadow: var(--shadow);
+    box-shadow: 0 -12px 28px -20px rgb(0 0 0 / 0.3);
     animation: save-bar-in 160ms ease-out;
   }
   @keyframes save-bar-in {
@@ -155,6 +155,16 @@
     font-weight: 500;
     color: var(--foreground);
     line-height: 1.5;
+  }
+  .save-bar-copy p[role="status"]::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: middle;
   }
   .save-bar-copy .settings-error {
     color: var(--error);
@@ -351,7 +361,8 @@
     }
     .save-bar {
       flex-wrap: wrap;
-      bottom: 10px;
+      margin: 16px -24px 0;
+      padding: 12px 24px;
     }
     .save-bar-copy {
       flex-basis: 100%;

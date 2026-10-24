@@ -1,7 +1,7 @@
+import { useNavigate } from "@tanstack/react-router";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 
-import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { filterModels, modelSource } from "../application/model-library";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
@@ -13,7 +13,7 @@ const PAGE_SIZE = 24;
 
 export function ModelSettings() {
   const settings = useRuntimeSettings();
-  const { workspace } = useBackend();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [provider, setProvider] = useState("all");
   const [source, setSource] = useState("all");
@@ -31,6 +31,25 @@ export function ModelSettings() {
             : "Loading models…"
         }
         onRetry={settings.error ? () => void settings.refetch() : undefined}
+      />
+    );
+
+  if (!data.connections.length)
+    return (
+      <SettingsStatus
+        title="Connect a provider"
+        message="Add a provider connection for this bot to see available models."
+        action="Configure providers"
+        onRetry={() =>
+          void navigate({
+            to: ".",
+            search: (previous) => ({
+              ...previous,
+              view: "settings",
+              section: "providers",
+            }),
+          })
+        }
       />
     );
 
@@ -80,16 +99,6 @@ export function ModelSettings() {
           </p>
         </div>
       </div>
-      {!data.connections.length && (
-        <p className="catalog-notice">
-          <a
-            href={`?${new URLSearchParams({ ...(workspace.botId === "default" ? {} : { bot: workspace.botId }), view: "settings", section: "providers" })}`}
-          >
-            Connect a provider
-          </a>{" "}
-          to use these models. You can browse and choose a default now.
-        </p>
-      )}
       <ModelFilters
         search={search}
         provider={provider}
@@ -153,9 +162,7 @@ export function ModelSettings() {
                   settings.update.mutate(
                     {
                       modelId: model.id,
-                      ...(data.connections.length
-                        ? { connectionId: model.connectionId }
-                        : {}),
+                      connectionId: model.connectionId,
                     },
                     {
                       onSuccess: () =>
