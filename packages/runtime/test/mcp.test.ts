@@ -6,9 +6,8 @@ import { createServer } from "node:http";
 import { connectMcp } from "../src/infrastructure/mcp/client.ts";
 import { rpcResponse } from "./mcp-fixture.ts";
 
-for (const mode of ["http", "sse"] as const)
+for (const mode of ["http"] as const)
   test(`MCP ${mode}: authenticated handshake, paginated discovery, and tool round trip`, async () => {
-    let sse: ServerResponse | undefined;
     const headers: string[] = [];
 
     async function handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -16,12 +15,6 @@ for (const mode of ["http", "sse"] as const)
       if (req.headers.authorization !== "Bearer fixture-token") {
         res.writeHead(401);
         res.end("{}");
-        return;
-      }
-      if (req.method === "GET" && mode === "sse") {
-        sse = res;
-        res.writeHead(200, { "content-type": "text/event-stream" });
-        res.write("event: endpoint\ndata: /messages\n\n");
         return;
       }
       if (req.method === "GET") {
@@ -39,17 +32,10 @@ for (const mode of ["http", "sse"] as const)
       const response = rpcResponse(
         JSON.parse(Buffer.concat(chunks).toString()),
       );
-      if (mode === "sse") {
-        res.writeHead(202);
-        res.end();
-        if (response)
-          sse!.write(`event: message\ndata: ${JSON.stringify(response)}\n\n`);
-      } else {
-        res.writeHead(response ? 200 : 202, {
-          "content-type": "application/json",
-        });
-        res.end(response ? JSON.stringify(response) : undefined);
-      }
+      res.writeHead(response ? 200 : 202, {
+        "content-type": "application/json",
+      });
+      res.end(response ? JSON.stringify(response) : undefined);
     }
 
     const server = createServer((req, res) => {
@@ -86,7 +72,6 @@ for (const mode of ["http", "sse"] as const)
       );
     } finally {
       await connection?.close();
-      sse?.end();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();

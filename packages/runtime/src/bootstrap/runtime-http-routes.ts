@@ -9,13 +9,19 @@ import { noTraces } from "../domains/diagnostics/application/trace-reader.ts";
 import { diagnosticsRoutes } from "../domains/diagnostics/presentation/http/routes.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { memoryRoutes } from "../domains/memory/presentation/http/routes.ts";
+import type { BotJobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
+import { jobRoutes } from "../domains/schedules/presentation/http/routes.ts";
 import type { SettingsService } from "../domains/settings/application/ports.ts";
+import type { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
+import { mcpRoutes } from "../domains/settings/presentation/http/mcp-routes.ts";
 import { settingsRoutes } from "../domains/settings/presentation/http/routes.ts";
 import { clientRoutes } from "../infrastructure/http/client-routes.ts";
 import { snapshot } from "../infrastructure/pi/workspace-snapshot.ts";
 import type { Gateway } from "./agent-runtime.ts";
 
 export type RuntimeHttpOptions = {
+  mcp?: BotMcp;
+  jobs?: BotJobs;
   discordConfigured?: boolean;
   diagnostics?: TraceReader;
   settings?: SettingsService;
@@ -28,6 +34,8 @@ export function runtimeRoutes(
   options: RuntimeHttpOptions = {},
 ) {
   const app = new Hono();
+  if (options.mcp) app.route("/api/mcp", mcpRoutes(options.mcp));
+  if (options.jobs) app.route("/api/jobs", jobRoutes(options.jobs));
   // The outer host owns sanitized transport error responses.
   app.onError((error) => {
     throw error;

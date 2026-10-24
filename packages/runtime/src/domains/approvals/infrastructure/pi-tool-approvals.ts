@@ -23,6 +23,7 @@ export const ToolApprovals = defineDoc<ApprovalState>({
   kind: "raphie.tool-approvals",
   version: 1,
   scope: "session",
+  checkpointWhen: () => false,
   initial: () => ({ approvals: [], deliveries: [] }),
 });
 

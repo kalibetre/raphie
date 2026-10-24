@@ -15,5 +15,6 @@ export const State = defineDoc<GatewayState>({
   kind: "raphie.gateway",
   version: 1,
   scope: "session",
+  checkpointWhen: () => false,
   initial: () => ({ approvals: [], deliveries: [] }),
 });

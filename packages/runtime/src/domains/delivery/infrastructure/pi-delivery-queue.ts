@@ -12,6 +12,7 @@ export const DeliveryPlans = defineDoc<{ plans: DeliveryPlan[] }>({
   kind: "raphie.delivery-plans",
   version: 1,
   scope: "session",
+  checkpointWhen: () => false,
   initial: () => ({ plans: [] }),
 });
 

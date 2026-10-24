@@ -17,6 +17,7 @@ export const Activity = defineDoc<Journal>({
   kind: "raphie.activity",
   version: 1,
   scope: "session",
+  checkpointWhen: () => false,
   initial: () => ({ next: 1, events: [] }),
 });
 

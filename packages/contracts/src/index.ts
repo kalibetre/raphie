@@ -1,5 +1,12 @@
 /** Public read models. No runtime, framework, or persistence dependencies. */
 export type {
+  BotMcpConnection,
+  SaveMcpConnection,
+  SaveScheduledJob,
+  ScheduledJob,
+} from "./bots/automation.ts";
+
+export type {
   BotProfile,
   SaveBotProfile,
   UpdateBotProfile,

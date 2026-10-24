@@ -7,6 +7,7 @@ import { createModels } from "@earendil-works/pi-ai/models";
 import type {
   Conversation,
   ConversationId,
+  Extension,
   ModelRef,
 } from "@earendil-works/pi-durable";
 import {
@@ -14,6 +15,7 @@ import {
   defineExtension,
   Harness,
 } from "@earendil-works/pi-durable";
+import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import type { BotProfile } from "@raphie/contracts";
 
 import { ActorAuthority } from "../application/access/actors.ts";
@@ -59,6 +61,8 @@ import {
 import { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
+  deferResume?: boolean;
+  now?: () => number;
   botId?: string;
   memory?: MemoryService;
   directory: string;
@@ -75,6 +79,26 @@ type Options = {
 };
 
 export class Gateway {
+  mcpConnections: McpTools[] = [];
+  private toolSearch = createToolSearchExtension();
+
+  install(extension: Extension) {
+    this.registry.install(extension);
+  }
+
+  private registry!: ReturnType<typeof createRegistry>;
+  private managedMcp: ReturnType<typeof createMcpTools>[] = [];
+
+  setMcp(connections: McpTools[]) {
+    const extensions = connections.map((c) => createMcpTools(this, c));
+    for (const extension of this.managedMcp) this.registry.uninstall(extension);
+    for (const extension of extensions) this.registry.install(extension);
+    this.managedMcp = extensions;
+    this.mcpConnections = connections;
+    if (connections.length) this.registry.install(this.toolSearch);
+    else this.registry.uninstall(this.toolSearch);
+  }
+
   readonly configurationGate: ModelConnectionGate;
   readonly actors: ActorAuthority;
   readonly sessions: ReturnType<typeof traceSessions>;
@@ -131,6 +155,7 @@ export class Gateway {
     const app = new Gateway(options);
     await mkdir(options.directory, { recursive: true, mode: 0o700 });
     const registry = createRegistry();
+    app.registry = registry;
     registry.install(
       defineExtension({
         name: "raphie.gateway",
@@ -162,6 +187,7 @@ export class Gateway {
       await openBunSqliteStorage(join(options.directory, "gateway.sqlite")),
       {
         registry,
+        now: options.now,
         models: app.models,
         settings: {
           followUpMode: "one-at-a-time",
@@ -310,7 +336,7 @@ export class Gateway {
     }, context);
     for (const conversation of (await app.chats.state()).conversations)
       await app.observations.attach(conversation.id);
-    app.harness.resume();
+    if (!options.deferResume) app.harness.resume();
     return app;
   }
 

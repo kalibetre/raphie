@@ -6,5 +6,6 @@ export const ChannelBindings = defineDoc<{ bindings: ChannelBinding[] }>({
   kind: "raphie.channel-bindings",
   version: 1,
   scope: "session",
+  checkpointWhen: () => false,
   initial: () => ({ bindings: [] }),
 });

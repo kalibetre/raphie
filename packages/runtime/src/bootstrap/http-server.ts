@@ -105,7 +105,10 @@ export async function startServer(
       const bot = options.bots!.runtime(id);
       let routes = scoped.get(id);
       if (!routes) {
-        routes = runtimeRoutes(bot.gateway, id === "default" ? options : bot);
+        routes = runtimeRoutes(
+          bot.gateway,
+          id === "default" ? { ...options, ...bot } : bot,
+        );
         scoped.set(id, routes);
       }
       const url = new URL(c.req.url);
@@ -113,7 +116,15 @@ export async function startServer(
       return routes.fetch(new Request(url, c.req.raw));
     });
   }
-  app.route("/", runtimeRoutes(runtime, options));
+  app.route(
+    "/",
+    runtimeRoutes(
+      runtime,
+      options.bots
+        ? { ...options, ...options.bots.runtime("default") }
+        : options,
+    ),
+  );
   app.notFound((c) => c.json({ error: "Not found." }, 404));
 
   const server = Bun.serve({

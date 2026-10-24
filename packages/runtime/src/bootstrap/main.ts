@@ -16,7 +16,6 @@ import {
   createDiscordBridge,
   resolveDiscordThread,
 } from "../infrastructure/discord/bridge.ts";
-import { connectMcp, mcpConfig } from "../infrastructure/mcp/client.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../infrastructure/observability/telemetry-switch.ts";
 import { Gateway } from "./agent-runtime.ts";
@@ -106,30 +105,11 @@ const program = Effect.gen(function* () {
         }),
       )
     : undefined;
-  const config = mcpConfig(process.env);
-  let mcpError = false;
-  const mcp = config
-    ? yield* resource(
-        async () => {
-          try {
-            return await connectMcp(config);
-          } catch {
-            mcpError = true;
-            console.error(
-              "MCP connection failed. Check configuration and restart.",
-            );
-            return undefined;
-          }
-        },
-        async (client) => {
-          await client?.close();
-        },
-      )
-    : undefined;
   const app = yield* resource(
     () =>
       telemetry.run("runtime.start", {}, () =>
         Gateway.open({
+          deferResume: true,
           directory,
           discordThreadId: threadId,
           discordConnectionId: process.env.DISCORD_APPLICATION_ID,
@@ -138,17 +118,6 @@ const program = Effect.gen(function* () {
           model: settings.model,
           modelConnectionGate: settings.connectionGate,
           memory,
-          mcpError,
-          mcp: mcp
-            ? {
-                client: mcp,
-                identity: new Bun.CryptoHasher("sha256")
-                  .update(JSON.stringify(config))
-                  .digest("hex"),
-                documentationTools:
-                  mcp.server?.name === "executor" ? ["skills"] : [],
-              }
-            : undefined,
         }),
       ),
     (app) => app.close(),
@@ -159,7 +128,13 @@ const program = Effect.gen(function* () {
   memory.isBusy = settings.isBusy = async () =>
     (await app.chats.state()).turns.some((turn) => turn.status === "pending");
   const bots = yield* resource(
-    () => BotHost.open(directory, { gateway: app, settings, memory }),
+    () =>
+      BotHost.open(
+        directory,
+        { gateway: app, settings, memory },
+        undefined,
+        {},
+      ),
     (host) => host.close(),
   );
   const stop = yield* Effect.acquireRelease(
