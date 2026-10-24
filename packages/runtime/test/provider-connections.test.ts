@@ -319,3 +319,47 @@ test("an ambient OpenRouter key cannot configure a provider on a fresh installat
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("model catalog only includes enabled, configured provider connections", async () => {
+  const directory = await mkdtemp("/private/tmp/raphie-configured-catalog-");
+  const path = `${directory}/settings.sqlite`;
+  const options = {
+    credentialKeyStore: memoryCredentialKeyStore(),
+    defaultModel: "history",
+    verifyKey: async () => {},
+  };
+  let settings = await BackendSettings.open(path, {
+    ...options,
+    models: fixtureModels([]),
+  });
+  try {
+    assert.deepEqual((await settings.read()).models, []);
+    await settings.addConnection({
+      provider: "openrouter",
+      name: "Synthetic",
+      apiKey: "synthetic-fixture-key",
+    });
+    const connected = await settings.read();
+    assert.equal(connected.models.length, 1);
+    assert.equal(connected.models[0].connectionId, connected.connections[0].id);
+    await settings.update({ providerEnabled: false });
+    assert.deepEqual((await settings.read()).models, []);
+    await settings.update({ providerEnabled: true });
+    assert.equal((await settings.read()).models.length, 1);
+    await settings.update({ apiKey: null });
+    assert.deepEqual((await settings.read()).models, []);
+    await settings.update({ apiKey: "synthetic-fixture-key" });
+    assert.equal((await settings.read()).models.length, 1);
+    await settings.removeConnection(connected.connections[0].id);
+    assert.deepEqual((await settings.read()).models, []);
+    settings.close();
+    settings = await BackendSettings.open(path, {
+      ...options,
+      models: fixtureModels([]),
+    });
+    assert.deepEqual((await settings.read()).models, []);
+  } finally {
+    settings.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

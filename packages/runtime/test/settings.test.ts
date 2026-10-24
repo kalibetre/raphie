@@ -45,6 +45,16 @@ test("backend settings persist model, credentials and telemetry without exposing
     });
   try {
     assert.equal((await settings.read()).credentialSource, null);
+    assert.deepEqual((await settings.read()).models, []);
+    const response = await post("", {
+      provider: "openrouter",
+      modelId: ids[1],
+      apiKey: "PRIVATE_SAVED_KEY",
+      telemetryEnabled: false,
+    });
+    assert.equal(response.status, 200);
+    const wire = await response.text();
+    assert.equal(wire.includes("PRIVATE"), false);
     const listed = await fetch(`${http.url}/api/settings`).then((response) =>
       response.json(),
     );
@@ -67,15 +77,6 @@ test("backend settings persist model, credentials and telemetry without exposing
     assert.equal(haiku.pricing.output, piHaiku.cost.output);
     assert.equal("modelCatalog" in listed, false);
     assert.equal((await post("/models/refresh", {})).status, 404);
-    const response = await post("", {
-      provider: "openrouter",
-      modelId: ids[1],
-      apiKey: "PRIVATE_SAVED_KEY",
-      telemetryEnabled: false,
-    });
-    assert.equal(response.status, 200);
-    const wire = await response.text();
-    assert.equal(wire.includes("PRIVATE"), false);
     assert.equal(verified, 1);
     assert.equal(settings.key, "PRIVATE_SAVED_KEY");
     assert.equal(settings.telemetryEnabled, false);

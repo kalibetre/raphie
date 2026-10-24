@@ -235,10 +235,7 @@ export class BackendSettings implements SettingsService {
     const active = this.state.connections.filter(
       (c) => c.enabled && this.providers.key(c),
     );
-    const catalogs = active.length
-      ? active
-      : [{ id: "openrouter", provider: "openrouter", name: "OpenRouter" }];
-    const models = catalogs
+    const models = active
       .flatMap((connection) =>
         this.providers.provider.getModels().map((m) => ({
           id: m.id,

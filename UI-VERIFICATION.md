@@ -360,3 +360,18 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   colors, dark eyes and 320/390/768/1024/1440px layouts without overflow or errors.
 - Full repository validation passes: formatting, architecture, lint, types, 135
   tests and production builds. The existing bundle-size warning remains.
+
+# Models require a configured provider — 2026-10-24
+
+- Reproduced the backend returning 401 OpenRouter models with zero connections:
+  `read()` manufactured a public-catalog fallback. Removed that fallback; model
+  entries now come exclusively from enabled connections with saved credentials.
+- Models settings now offers Configure providers when none are active, preserving
+  the current bot/session route. The old browse-and-select-without-credentials
+  notice is removed. The composer retains its existing provider setup prompt.
+- Regression coverage exercises fresh configuration, add, disable/re-enable,
+  cleared credentials, last-connection removal and restart. The catalog metadata
+  test now connects a provider before asserting the published model definitions.
+- Browser verification passed on an unconfigured named bot, then UI connection
+  add/removal, reload, mobile and the composer empty state. All 136 tests pass;
+  formatting, architecture, lint, types and production builds pass as well.
