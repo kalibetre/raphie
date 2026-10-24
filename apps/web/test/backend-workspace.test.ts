@@ -1,10 +1,97 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
   BackendWorkspace,
   connectWorkspace,
 } from "../src/infrastructure/http/backend-workspace";
+
+test("observations recover from a terminal EventSource failure without reloading or replaying commands", async () => {
+  const original = globalThis.EventSource;
+  const streams: MockEvents[] = [];
+
+  class MockEvents {
+    static readonly CLOSED = 2;
+    readyState = 0;
+    onopen: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+
+    constructor(readonly path: string) {
+      streams.push(this);
+    }
+
+    close() {
+      this.readyState = MockEvents.CLOSED;
+    }
+  }
+
+  globalThis.EventSource = MockEvents as unknown as typeof EventSource;
+  const workspace = new BackendWorkspace("http://127.0.0.1:4317", "research");
+  let connected = false;
+  const messages: string[] = [];
+  const stop = workspace.observe("/api/sessions/events", {
+    open: () => {
+      connected = true;
+    },
+    error: () => {
+      connected = false;
+    },
+    message: (event) => messages.push(event.data),
+  });
+  try {
+    streams[0].onopen?.();
+    assert.equal(connected, true);
+    // EOF normally leaves EventSource reconnecting; no second stream is needed.
+    streams[0].onerror?.();
+    await delay(1100);
+    assert.equal(streams.length, 1);
+    assert.equal(connected, false);
+    // A retry while the backend is down receives HTTP 503 and closes permanently.
+    streams[0].readyState = MockEvents.CLOSED;
+    streams[0].onerror?.();
+    streams[0].onerror?.();
+    await delay(1100);
+    assert.equal(streams.length, 2, "a closed SSE connection must be replaced");
+    assert.equal(streams[1].path, streams[0].path);
+    assert.match(streams[1].path, /\/api\/bots\/research\/sessions\/events/);
+    assert.equal(
+      new URL(streams[1].path, "http://localhost").searchParams.get(
+        "_raphie_backend",
+      ),
+      workspace.url,
+    );
+    streams[1].onopen?.();
+    streams[1].onmessage?.(
+      new MessageEvent("message", { data: "fresh snapshot" }),
+    );
+    assert.equal(connected, true);
+    assert.deepEqual(messages, ["fresh snapshot"]);
+    const queued = streams[1].onmessage;
+    streams[1].readyState = MockEvents.CLOSED;
+    streams[1].onerror?.();
+    stop();
+    queued?.(new MessageEvent("message", { data: "stale snapshot" }));
+    await delay(1100);
+    assert.equal(
+      streams.length,
+      2,
+      "unsubscribing must cancel scheduled retries",
+    );
+    assert.deepEqual(messages, ["fresh snapshot"]);
+    workspace.observe("/api/sessions/saved/events", { message: () => {} });
+    streams[2].readyState = MockEvents.CLOSED;
+    streams[2].onerror?.();
+    workspace.dispose();
+    await delay(1100);
+    assert.equal(streams.length, 3, "retiring a workspace must cancel retries");
+  } finally {
+    stop();
+    workspace.dispose();
+    globalThis.EventSource = original;
+  }
+}, 8000);
 
 test("Connect replaces backend state through an in-app route transition and retires old requests and streams", async () => {
   const originalFetch = globalThis.fetch;

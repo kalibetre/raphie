@@ -279,3 +279,18 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   availability without memory, delayed startup/restart recovery and shared job
   conversations. `bun run validate` passes 121 tests, architecture checks, lint,
   types, formatting and production builds. The existing large-chunk warning remains.
+
+# Backend restart recovery — 2026-10-24
+
+- Reproduced a terminal EventSource failure: an HTTP 503 during a restart closes
+  the browser's stream permanently, leaving the UI showing “Reconnecting…”.
+- Closed streams now reconnect with backoff from 1 to 15 seconds. Native retries
+  continue for streams that are still reconnecting. Leaving a session or retiring
+  its backend cancels pending retries and ignores queued events from old streams.
+- Transient session-fetch errors no longer prevent the session stream from
+  recovering; missing sessions still retain their 404 handling.
+- Verified an actual dev-backend restart with Chromium: the open conversation
+  recovered without a reload, its draft and document survived, and no POST commands
+  were replayed. A second page opened during the outage also recovered by itself.
+  The regression test covers closed-stream replacement, native retry ownership,
+  scoped URLs, queued events and retry cancellation.
