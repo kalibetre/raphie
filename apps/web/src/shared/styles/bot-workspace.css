@@ -412,7 +412,7 @@
     min-height: 0;
   }
   .library-page {
-    padding: 12px 12px 20px;
+    padding: 10px 10px 16px;
   }
   /* Search narrows the text; these compact chips narrow the reply state. */
   .library-filters {
@@ -458,59 +458,81 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+  /* Flat, compact rows: no card, no per-row pills. Unread shows as a dot. */
   .library-list {
-    padding: 0;
-    gap: 0;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    overflow: hidden;
-    background: var(--card);
+    display: grid;
+    gap: 2px;
   }
   .library-list:empty {
     display: none;
   }
   .library-list .conversation-entry {
-    padding: 18px 20px;
-    border-radius: 0;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
   }
   .library-list .conversation-entry.selected {
-    box-shadow: inset 0 0 0 1px var(--border);
-    background: color-mix(in srgb, var(--accent-soft) 40%, var(--card));
+    background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+    box-shadow: none;
+  }
+  .conversation-row-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .library-list .conversation-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--foreground);
   }
   .library-list .conversation-entry[data-unread] .conversation-title {
     font-weight: 650;
   }
-  .library-list .conversation-title {
-    font-size: 14px;
+  .library-list .conversation-row-top time {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .conversation-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+  .conversation-origin {
+    flex: none;
+    color: var(--faint);
   }
   .library-list .conversation-preview {
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.4;
+    color: var(--muted-foreground);
+  }
+  .conversation-status {
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+  }
+  .conversation-status.needs-approval {
+    color: var(--attention);
+  }
+  .conversation-status.working,
+  .conversation-status.unread {
+    color: var(--accent);
+  }
+  .conversation-status.failed {
+    color: var(--error);
   }
   .library-row {
     position: relative;
   }
-  .library-row + .library-row {
-    border-top: 1px solid var(--border);
-  }
-  .conversation-card-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .library-unread {
-    display: inline-flex;
-    padding: 2px 7px;
-    border-radius: 6px;
-    background: var(--accent-soft);
-    font-size: 10px;
-    color: var(--accent);
-    font-weight: 550;
-  }
   .library-results {
-    margin: 18px 2px 10px;
+    margin: 10px 4px 6px;
     font-size: 11px;
     color: var(--muted-foreground);
     overflow-wrap: anywhere;
@@ -653,12 +675,6 @@
     }
     .reply-card-symbol {
       display: none;
-    }
-    .library-page {
-      padding: 24px 16px;
-    }
-    .library-list .conversation-entry {
-      padding: 16px;
     }
   }
 }
