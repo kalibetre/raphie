@@ -10,7 +10,10 @@ import {
 // workspace, so the open state lives in storage rather than component state.
 const inspectorKey = (botId: string) => `raphie:inspector-open:${botId}`;
 
-export function useWorkspaceLayout(view: "settings" | undefined, botId: string) {
+export function useWorkspaceLayout(
+  view: "settings" | undefined,
+  botId: string,
+) {
   const [inspector, setInspectorValue] = useState(
     () => readLocal(inspectorKey(botId)) === "true",
   );
