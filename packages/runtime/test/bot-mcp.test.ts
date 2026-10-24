@@ -133,3 +133,33 @@ test("legacy MCP stays host configured until explicit encrypted import, retainin
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("legacy config parsing rejects unsupported transports and never echoes secret arguments", async () => {
+  const { legacyMcpConfig } =
+    await import("../src/infrastructure/mcp/legacy-config.ts");
+  expect(legacyMcpConfig({})).toBeUndefined();
+  expect(
+    legacyMcpConfig({
+      MCP_URL: "http://localhost/mcp",
+      MCP_BEARER_TOKEN: "synthetic",
+    }),
+  ).toEqual({
+    transport: "http",
+    url: "http://localhost/mcp",
+    token: "synthetic",
+  });
+  expect(() =>
+    legacyMcpConfig({ MCP_TRANSPORT: "sse", MCP_URL: "http://localhost/sse" }),
+  ).toThrow("unsupported");
+  try {
+    legacyMcpConfig({
+      MCP_TRANSPORT: "stdio",
+      MCP_COMMAND: "fixture",
+      MCP_ARGS: '["synthetic-private-argument"',
+    });
+    throw new Error("Expected malformed arguments to fail");
+  } catch (error) {
+    expect(String(error)).toContain("JSON array");
+    expect(String(error)).not.toContain("synthetic-private-argument");
+  }
+});

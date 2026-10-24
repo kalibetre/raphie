@@ -22,10 +22,7 @@ export async function snapshot(
 ): Promise<WorkspaceSnapshot> {
   const chats = await app.chats.state();
   const tools = await app.toolApprovals.state();
-  const mcp = [
-    ...(app.mcpConnections ?? []),
-    ...(app.options.mcp ? [app.options.mcp] : []),
-  ];
+  const mcp = app.mcpConnections ?? (app.options.mcp ? [app.options.mcp] : []);
   return {
     ...chats,
     // Compatibility DTO only; channel associations live in ChannelBindings.

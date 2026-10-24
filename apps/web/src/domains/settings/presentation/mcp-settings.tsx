@@ -120,6 +120,15 @@ export function McpSettings() {
         title="Connected servers"
         note="Tools are discovered as needed. Tool actions require your approval; connections are not shared with other bots."
       >
+        {data.data.items.some(
+          (connection) => connection.source === "environment",
+        ) && (
+          <p className="automation-note">
+            Import saves an encrypted copy for this bot. After import, host
+            environment edits are ignored, even if you remove the saved
+            connection. Your environment files stay unchanged.
+          </p>
+        )}
         {data.data.items.length ? (
           data.data.items.map((connection) => (
             <Row

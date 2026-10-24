@@ -9,7 +9,12 @@ export function legacyMcpConfig(
   if (mode === "stdio") {
     if (!env.MCP_COMMAND)
       throw new Error("Legacy MCP stdio requires MCP_COMMAND.");
-    const args: unknown = JSON.parse(env.MCP_ARGS || "[]");
+    let args: unknown;
+    try {
+      args = JSON.parse(env.MCP_ARGS || "[]");
+    } catch {
+      throw new Error("Legacy MCP_ARGS must be a JSON array of strings.");
+    }
     if (!Array.isArray(args) || !args.every((a) => typeof a === "string"))
       throw new Error("Legacy MCP_ARGS must be an array of strings.");
     return { transport: mode, command: env.MCP_COMMAND, args };
