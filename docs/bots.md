@@ -133,15 +133,16 @@ and process account remain trusted and can manage all bots. Local HTTP protectio
 is not bot-token authentication or remote-client authentication. No untrusted
 sandbox code is executed in this slice.
 
-The existing environment-configured Discord connection and MCP server still
-belong to the default bot. Named bots do not inherit them. Named-bot channel and
-MCP connection management remains future work. Operational OTLP export and
+The existing environment-configured Discord connection still belongs to the
+default bot; named-bot channel management remains future work. Each bot manages
+its own MCP servers and recurring prompt jobs in Settings; see
+[bot automation](bot-automation.md). Operational OTLP export and
 Diagnostics remain configured for the default bot; named-bot Diagnostics returns
 an empty trace read model rather than another bot's traces.
 
 Workspace shell execution, checkpointing, executor fencing, VM leases,
 resource/concurrency budgets, bot deletion, cross-bot sharing, and independently
-managed background tasks remain planned. Resident bot harnesses are opened at
+managed arbitrary background tasks remain planned. Resident bot harnesses are opened at
 startup; this change does not establish capacity for 100 active agents or VMs.
 
 ## Verification

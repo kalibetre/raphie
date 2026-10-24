@@ -264,3 +264,18 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
 - Settings sidebar and app-wide scope chips now use the Glance brand avatar.
   The roster brand has an optical alignment correction: the drawn avatar and
   lettering centers differ by less than 0.25 CSS pixels in the checked font.
+
+# Per-bot MCP and scheduled prompts — 2026-10-24
+
+- Disposable browser runtime on 14327 and UI on 14331; synthetic MCP server on 14328. No normal application data or external inference was used.
+- MCP connection creation, pause/enable and multiple connections succeed. Another
+  bot opens with an empty inventory and explicit scope in its settings header.
+- Job creation, Run now, pause/resume and result-conversation admission succeed.
+  Unsaved job drafts block navigation until discard; interval and time edits also
+  participate in the guard. MCP drafts and transport changes use the same guard.
+- The two new forms fit at 320, 390 and 1440px without horizontal page overflow;
+  light and dark appearance and the mobile settings sheet were inspected.
+- Automated tests cover encrypted MCP configuration, isolated APIs, Pi tool-search
+  availability without memory, delayed startup/restart recovery and shared job
+  conversations. `bun run validate` passes 121 tests, architecture checks, lint,
+  types, formatting and production builds. The existing large-chunk warning remains.

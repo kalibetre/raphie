@@ -35,6 +35,8 @@ const botEntries: readonly Section[] = [
   "providers",
   "models",
   "memory",
+  "mcp",
+  "jobs",
   "telemetry",
 ];
 const appEntries: readonly Section[] = ["connection", "general", "plugins"];

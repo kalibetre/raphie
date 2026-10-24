@@ -6,6 +6,8 @@ import { useBots } from "../infrastructure/use-bots";
 import { AppearanceSettings } from "./appearance-settings";
 import { BotSettings } from "./bot-settings";
 import { ConnectionSettings } from "./connection-settings";
+import { JobSettings } from "./job-settings";
+import { McpSettings } from "./mcp-settings";
 import { MemoryBrowse } from "./memory-browse";
 import { MemorySettings } from "./memory-settings";
 import { ModelSettings } from "./model-settings";
@@ -60,6 +62,10 @@ export function Settings({
           <ProviderSettings />
         ) : section === "models" ? (
           <ModelSettings />
+        ) : section === "mcp" ? (
+          <McpSettings />
+        ) : section === "jobs" ? (
+          <JobSettings />
         ) : section === "memory" ? (
           <MemorySettings />
         ) : section === "memory-browse" ? (

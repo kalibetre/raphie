@@ -96,7 +96,7 @@ This first journal keeps the latest **5,000 events**, truncates individual diagn
 
 Settings opens full-window from the gear beside the connection status. Its
 sidebar groups each bot's pages (profile, personality, providers, models,
-memory, diagnostics) under an expandable entry, with app-wide preferences below.
+memory, MCP tools, scheduled jobs, diagnostics) under an expandable entry, with app-wide preferences below.
 Open Settings to select and test a local backend, connect OpenRouter, search the
 model catalog and choose the default for new sessions, or toggle Diagnostics trace
 collection and browse recent traces on the same page. Changes are applied without a restart. Backend addresses are saved
@@ -104,6 +104,12 @@ in a browser cookie scoped to the web port; reconnecting switches the workspace 
 and reloads sessions and settings from the selected backend. Drafts are scoped
 to each backend. Older drafts without a backend identity remain in browser storage
 but are not automatically loaded into a backend. Only local HTTP backends are supported.
+
+Configure independent MCP servers and recurring prompts under each bot's settings.
+MCP supports Streamable HTTP and local stdio commands, with encrypted credentials
+and approval before model-proposed tool execution. Scheduled jobs keep results in
+a conversation and recover through Pi Durable's persisted sleep/wake tasks.
+See [bot automation](docs/bot-automation.md) for controls, APIs and execution limits.
 
 Provider/model and telemetry preferences belong to the selected backend and
 persist in `.data/settings.sqlite`. Provider keys come exclusively from connections

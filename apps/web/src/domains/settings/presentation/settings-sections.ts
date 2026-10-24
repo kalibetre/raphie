@@ -2,10 +2,12 @@ import {
   BookOpen,
   Bot,
   Brain,
+  Clock,
   History,
   KeyRound,
   Library,
   Palette,
+  Plug,
   Puzzle,
   Radio,
   Server,
@@ -18,6 +20,20 @@ import {
  * `lede` introduces the page in the voice of the bot it configures.
  */
 export const sections = [
+  {
+    id: "mcp",
+    label: "MCP tools",
+    icon: Plug,
+    lede: (bot: string) =>
+      `Connect the tools ${bot} can use. Every connection belongs to this bot.`,
+  },
+  {
+    id: "jobs",
+    label: "Scheduled jobs",
+    icon: Clock,
+    lede: (bot: string) =>
+      `Give ${bot} recurring work, with results saved in a conversation.`,
+  },
   {
     id: "bot",
     label: "Profile",
