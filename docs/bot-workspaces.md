@@ -75,3 +75,10 @@ future work. No VM is reserved per bot or session.
 
 Verification: `bun test packages/runtime/test/bot-workspace.test.ts
 packages/runtime/test/workspace-compute.test.ts`. Full gate: `bun run validate`.
+
+Crash acceptance additionally kills a real process during compute and after a
+checkpoint commit but before Pi records the tool result. Recovery preserves files
+and does not repeat an append. Tests inject a failed checkpoint transaction to
+prove the receipt rolls back with the files, and fill the receipt budget to prove
+new work stops while committed retries still resolve. Output-format, filesystem
+copy, entry-count and timeout probes verify rollback and continued usability.

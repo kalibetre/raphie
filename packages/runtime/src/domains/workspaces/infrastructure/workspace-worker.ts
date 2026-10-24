@@ -39,7 +39,7 @@ async function run({ checkpoint, command }: ComputeRequest) {
     executionLimits: {
       maxExecutionTimeMs: limits.timeoutMs,
       maxSourceBytes: limits.sourceBytes,
-      maxOutputSize: limits.outputBytes,
+      maxOutputSize: limits.outputBytes + 1,
       maxFileSystemBytes: limits.fileBytes,
       maxLiveBytes: 32 * 1024 * 1024,
       maxStringLength: limits.fileBytes,
@@ -55,6 +55,19 @@ async function run({ checkpoint, command }: ComputeRequest) {
     replaceEnv: true,
     env: { HOME: "/workspace", PATH: "/bin" },
   });
+  if (
+    Buffer.byteLength(output.stdout) + Buffer.byteLength(output.stderr) >
+    limits.outputBytes
+  )
+    return {
+      checkpoint: [],
+      result: {
+        stdout: "",
+        stderr: "Workspace output limit exceeded; files were not changed.",
+        exitCode: 1,
+        committed: false,
+      },
+    };
   const result = {
     stdout: Buffer.from(output.stdout)
       .subarray(0, limits.outputBytes)

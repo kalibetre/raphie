@@ -28,14 +28,15 @@ export function computeWorkspace(
       settled = true;
       clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
-      void worker.terminate();
-      if (result) resolve(result);
-      else
-        reject(
-          new Error(
-            "Workspace compute was interrupted; no checkpoint was committed.",
-          ),
-        );
+      void worker.terminate().then(() => {
+        if (result) resolve(result);
+        else
+          reject(
+            new Error(
+              "Workspace compute was interrupted; no checkpoint was committed.",
+            ),
+          );
+      }, reject);
     };
     const abort = () => finish();
     const timer = setTimeout(

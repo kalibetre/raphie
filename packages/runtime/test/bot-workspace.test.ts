@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -125,6 +126,127 @@ test("model tool executions derive the bot and session from the runtime, with sh
     }
   } finally {
     await a.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("workspace rolls back time, output, storage and entry overages, then remains usable", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-workspace-bounds-"));
+  const workspace = await BotWorkspace.open(
+    join(directory, "checkpoint.sqlite"),
+  );
+  try {
+    await workspace.execute("one", "seed", "echo safe > marker");
+    const output = await workspace.execute(
+      "one",
+      "output",
+      "echo unsafe > marker; printf '%040000d' 0",
+    );
+    expect(output.committed).toBe(false);
+    expect(
+      Buffer.byteLength(output.stdout) + Buffer.byteLength(output.stderr),
+    ).toBeLessThanOrEqual(32768);
+    const storage = await workspace.execute(
+      "one",
+      "storage",
+      'set -e; mkdir tree; printf "%032000d" 0 > tree/file; for i in $(seq 1 9); do cp -r tree copy; mv copy tree/copy$i; done',
+    );
+    expect(storage.committed).toBe(false);
+    const entries = await workspace.execute(
+      "one",
+      "entries",
+      "mkdir $(seq 1 1100)",
+    );
+    expect(entries.committed).toBe(false);
+    const started = Date.now();
+    const timed = await workspace.execute(
+      "one",
+      "timeout",
+      "echo unsafe > marker; sleep 60",
+    );
+    expect(timed.committed).toBe(false);
+    expect(Date.now() - started).toBeLessThan(6500);
+    expect(
+      (await workspace.execute("two", "read", "cat marker; test ! -e 1"))
+        .stdout,
+    ).toBe("safe\n");
+  } finally {
+    await workspace.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 12_000);
+
+test("queue and runtime compute capacity are independently bounded across bot stores", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-workspace-capacity-"));
+  const stores = await Promise.all(
+    Array.from({ length: 5 }, (_, i) =>
+      BotWorkspace.open(join(directory, `${i}.sqlite`)),
+    ),
+  );
+  try {
+    const runs = stores.map((store) =>
+      store.execute("session", "slow", "sleep 0.3"),
+    );
+    const results = await Promise.allSettled(runs);
+    expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(4);
+    const queued = Array.from({ length: 16 }, (_, i) =>
+      stores[0].execute("session", `queued-${i}`, "sleep 0.1"),
+    );
+    expect(() => stores[0].execute("session", "over-capacity", "true")).toThrow(
+      "queue is full",
+    );
+    const settled = Promise.allSettled(queued);
+    await stores[0].close();
+    expect((await settled).every((r) => r.status === "rejected")).toBe(true);
+  } finally {
+    await Promise.all(stores.map((s) => s.close()));
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("checkpoint and receipt roll back together on a storage failure; full receipts stop new work", async () => {
+  const { Database } = await import("bun:sqlite");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-workspace-atomic-"));
+  const path = join(directory, "checkpoint.sqlite");
+  const workspace = await BotWorkspace.open(path);
+  const db = new Database(path);
+  try {
+    await workspace.execute("session", "seed", "echo safe > note");
+    db.exec(
+      "CREATE TRIGGER fail_checkpoint BEFORE UPDATE OF checkpoint ON workspace BEGIN SELECT RAISE(ABORT,'synthetic disk failure'); END",
+    );
+    await assert.rejects(
+      workspace.execute("session", "append", "echo once >> note"),
+      /synthetic disk failure/,
+    );
+    expect(
+      db.query("SELECT id FROM executions WHERE id='append'").get(),
+    ).toBeNull();
+    db.exec("DROP TRIGGER fail_checkpoint");
+    expect(
+      (await workspace.execute("session", "read", "cat note")).stdout,
+    ).toBe("safe\n");
+    await workspace.execute("session", "append", "echo once >> note");
+    expect(
+      (await workspace.execute("session", "read-after", "cat note")).stdout,
+    ).toBe("safe\nonce\n");
+    db.exec("UPDATE workspace SET receipt_bytes=16777216");
+    await assert.rejects(
+      workspace.execute("session", "new", "echo lost > note"),
+      /history is full/,
+    );
+    // Old calls still resolve at capacity, so recovery never repeats a write.
+    expect(
+      (await workspace.execute("session", "append", "echo once >> note"))
+        .committed,
+    ).toBe(true);
+    expect(
+      db.query("SELECT id FROM executions WHERE id='new'").get(),
+    ).toBeNull();
+  } finally {
+    db.close();
+    await workspace.close();
     await rm(directory, { recursive: true, force: true });
   }
 });
