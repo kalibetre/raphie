@@ -138,6 +138,61 @@
     font-size: 12px;
     margin-top: 8px;
   }
+  .bot-color-picker {
+    min-width: 0;
+    margin: 12px 0 0;
+    padding: 0;
+    border: 0;
+  }
+  .bot-color-picker legend {
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .bot-color-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .bot-color-options {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .bot-color-options [aria-pressed="true"] {
+    outline: 2px solid var(--foreground);
+    outline-offset: 3px;
+  }
+  .bot-color-swatch {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #27332933;
+    border-radius: 50%;
+    color: #273329;
+  }
+  .bot-editor .bot-form .bot-color-custom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    margin: 20px 0 12px;
+    cursor: pointer;
+  }
+  .bot-color-custom input {
+    width: 36px;
+    height: 32px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    cursor: pointer;
+  }
   .soul-editor {
     border: 1px solid var(--border);
     border-radius: 8px;

@@ -31,7 +31,6 @@ import { isAppSection, type Section, sections } from "./settings-sections";
 
 const botEntries: readonly Section[] = [
   "bot",
-  "personality",
   "providers",
   "models",
   "memory",
@@ -43,7 +42,8 @@ const botEntries: readonly Section[] = [
 const appEntries: readonly Section[] = ["connection", "general", "plugins"];
 // Subpages reached from inside a page highlight their parent entry.
 const parent: Partial<Record<Section, Section>> = {
-  "bot-history": "personality",
+  "bot-history": "bot",
+  personality: "bot",
   "memory-browse": "memory",
 };
 const label = (id: Section) => sections.find((s) => s.id === id)!.label;

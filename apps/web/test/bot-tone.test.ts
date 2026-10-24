@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 
 import {
+  botColors,
+  botEyeColor,
   botTone,
   botToneCount,
   botTones,
@@ -35,4 +37,26 @@ test("creation and repeated fetches preserve existing bots' assigned colors", ()
 test("default bot always reserves sage, even when omitted or listed last", () => {
   expect(botTone("default", ["bot-b", "default"])).toBe(0);
   expect(botTone("bot-b", ["bot-b"])).not.toBe(0);
+});
+
+test("custom colors override automatic allocation and older custom colors reserve their preset", () => {
+  const bots = [
+    { id: "default", color: "#123456" },
+    { id: "bot-b", color: "#b5c99b" },
+    { id: "bot-f" },
+  ];
+  const colors = botColors(bots);
+  expect(colors.get("default")).toBe("#123456");
+  expect(colors.get("bot-b")).toBe("#b5c99b");
+  expect(colors.get("bot-f")).not.toBe("#b5c99b");
+  expect(botColors([{ id: "default", color: null }]).get("default")).toBe(
+    "#b5c99b",
+  );
+});
+
+test("avatar eyes contrast with dark and light custom colors", () => {
+  expect(botEyeColor("#000000")).toBe("#ffffff");
+  expect(botEyeColor("#123456")).toBe("#ffffff");
+  expect(botEyeColor("#ffffff")).toBe("#273329");
+  expect(botEyeColor("#b5c99b")).toBe("#273329");
 });

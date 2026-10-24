@@ -7,15 +7,21 @@ store; it cannot be opened by addressing its UUID through another bot's API.
 
 ## Using bots in the web client
 
-Choose an assistant from the bot roster. Raphie is the default bot. Avatars share
-an eight-color palette with their settings accents. Colors are allocated in
-creation order, avoiding repeats until the palette is full; adding or renaming a
-bot keeps older bots' colors stable. Beyond eight bots, colors are reused evenly.
-Each bot's blob shape and gaze remain derived from its stable ID.
+Choose an assistant from the bot roster. Raphie is the default bot. Clicking the
+bot’s name in the title bar opens **Profile**, which combines its name,
+description, color and SOUL.md personality in one editor with one Save/Discard
+bar. Revision history is available below the personality editor. Existing
+Personality links open this same combined page.
 
-Clicking the bot’s name in the title bar opens its **Profile**; **Personality** has a dedicated
-SOUL.md editor and revision history. **New bot** in the sidebar (the plus icon on
-mobile) creates an assistant and opens its own provider setup. Add its provider
+Choose one of eight color presets, use the custom color picker, or select
+**Automatic**. Explicit colors are saved with the bot in `bots.sqlite`, appear in
+revision history and follow it across browsers. Automatic colors are allocated
+in creation order, avoiding colors used by earlier bots until the palette is
+full; beyond eight bots, colors are reused evenly. Explicit choices may share a
+color. A bot's blob shape and gaze still derive from its stable ID.
+
+**New bot** in the sidebar (the plus icon on mobile) creates an assistant and
+opens its own provider setup. Add its provider
 under **Providers**, choose a default under **Models**, and configure its memory
 backend/scope under **Memory**.
 
@@ -50,7 +56,7 @@ revision error; saves made while a turn is pending must wait for it to finish.
 conversations, refreshes every five seconds, and supports filtering and JSON
 export. Activity requests use the selected bot’s backend scope.
 
-Profile, personality, provider and memory editors block navigation with unsaved
+Profile, provider and memory editors block navigation with unsaved
 changes; save or discard before leaving them.
 
 Named-bot links carry `?bot=<id>`, including session links and memory source links.

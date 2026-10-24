@@ -152,32 +152,7 @@
     fill: var(--tone);
   }
   .bot-avatar circle {
-    fill: #273329;
-  }
-  /* Bot colour families, shared by avatars and bot settings pages. */
-  .tone-0 {
-    --tone: #b5c99b;
-  }
-  .tone-1 {
-    --tone: #b5b4dc;
-  }
-  .tone-2 {
-    --tone: #e3b477;
-  }
-  .tone-3 {
-    --tone: #83bcb4;
-  }
-  .tone-4 {
-    --tone: #dda6b5;
-  }
-  .tone-5 {
-    --tone: #91b7df;
-  }
-  .tone-6 {
-    --tone: #d2ca86;
-  }
-  .tone-7 {
-    --tone: #d5aa91;
+    fill: var(--bot-eye, #273329);
   }
   .bot-roster-copy {
     display: block;

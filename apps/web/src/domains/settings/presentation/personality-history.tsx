@@ -47,6 +47,7 @@ export function PersonalityHistory({ profile }: { profile: BotProfile }) {
                 <p className="revision-meta">
                   {revision.name}
                   {revision.description && ` · ${revision.description}`}
+                  {` · Color: ${revision.color ?? "Automatic"}`}
                 </p>
                 <ScrollArea
                   className="bot-history"

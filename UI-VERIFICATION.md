@@ -342,3 +342,21 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   append/reload and default-bot sage. Browser-created fixture bots reached eight
   unique colors with stable older assignments, matching header/settings colors,
   and no browser exceptions. Full validation passes all 133 tests and the build.
+
+# Combined profile and owner-selected colors — 2026-10-24
+
+- Profile now contains identity, color and SOUL.md personality in two settings
+  cards with one guarded Save/Discard bar. The separate Personality navigation
+  entry is removed; its existing URL opens Profile and highlights the same entry.
+  Revision history remains available from the editor and shows saved colors.
+- Owners can choose eight presets, a native custom color, or Automatic, with an
+  avatar preview. Six-digit hex colors are normalized and stored with profile
+  revisions; old profiles and clients without a color remain compatible. Clearing
+  a color restores automatic allocation. Dark colors get light avatar eyes.
+- API tests cover create/update normalization, invalid colors, automatic reset,
+  revision history and persistence across runtime restart. Browser checks cover
+  combined saves, full discard, unsaved navigation blockers, preset/custom/reset
+  persistence, old Personality URLs, named-bot creation, matching avatar/settings
+  colors, dark eyes and 320/390/768/1024/1440px layouts without overflow or errors.
+- Full repository validation passes: formatting, architecture, lint, types, 135
+  tests and production builds. The existing bundle-size warning remains.

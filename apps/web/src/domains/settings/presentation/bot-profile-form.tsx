@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
+import { botColors } from "../application/bot-tone";
 import { useBots } from "../infrastructure/use-bots";
 import { BotProfileFields } from "./bot-profile-fields";
 import { SaveBar } from "./save-bar";
@@ -16,7 +17,7 @@ export function BotForm({
   mode,
 }: {
   profile?: BotProfile;
-  mode: "profile" | "personality" | "create";
+  mode: "profile" | "create";
 }) {
   const { workspace } = useBackend();
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ export function BotForm({
   const [saved, setSaved] = useState(profile);
   const [name, setName] = useState(profile?.name ?? "");
   const [description, setDescription] = useState(profile?.description ?? "");
+  const [color, setColor] = useState<string | null>(profile?.color ?? null);
   const [soul, setSoul] = useState(profile?.soul ?? starterSoul);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -31,8 +33,9 @@ export function BotForm({
   const dirty = saved
     ? name !== saved.name ||
       description !== saved.description ||
-      soul !== saved.soul
-    : !!name || !!description || soul !== starterSoul;
+      soul !== saved.soul ||
+      color !== (saved.color ?? null)
+    : !!name || !!description || soul !== starterSoul || color !== null;
   const guard = useSettingsGuard(dirty, pending);
   const changedElsewhere =
     !!profile && !!saved && profile.revision !== saved.revision;
@@ -49,6 +52,7 @@ export function BotForm({
     setName(profile.name);
     setDescription(profile.description);
     setSoul(profile.soul);
+    setColor(profile.color ?? null);
     setError("");
   }, [profile, saved, dirty, pending]);
 
@@ -58,6 +62,7 @@ export function BotForm({
     setName(latest?.name ?? "");
     setDescription(latest?.description ?? "");
     setSoul(latest?.soul ?? starterSoul);
+    setColor(latest?.color ?? null);
     setError("");
     setMessage("");
   }
@@ -69,6 +74,7 @@ export function BotForm({
       name: name.trim(),
       description: description.trim(),
       soul: soul.trim(),
+      color,
     };
     try {
       if (saved) {
@@ -80,9 +86,8 @@ export function BotForm({
         setName(updated.name);
         setDescription(updated.description);
         setSoul(updated.soul);
-        setMessage(
-          `Saved revision ${updated.revision}. New turns use this personality.`,
-        );
+        setColor(updated.color ?? null);
+        setMessage(`Saved revision ${updated.revision}.`);
       } else {
         const created = await bots.create.mutateAsync(input);
         workspace.assertActive();
@@ -108,57 +113,51 @@ export function BotForm({
         void save();
       }}
     >
-      <div className="bot-editor-section">
-        <h2>
-          {mode === "personality"
-            ? `How ${name} works with you`
-            : mode === "create"
-              ? "A separate assistant"
-              : "Identity"}
-        </h2>
-        <p>
-          {mode === "personality"
-            ? `Tone, values and working style, shared across ${name}’s conversations.`
-            : "How this bot appears in your sidebar and conversations."}
+      <BotProfileFields
+        botId={profile?.id ?? "new-bot"}
+        color={color}
+        automatic={botColors([
+          ...(bots.data?.items ?? []).map((bot) =>
+            bot.id === profile?.id ? { ...bot, color: null } : bot,
+          ),
+          ...(!profile ? [{ id: "new-bot" }] : []),
+        ]).get(profile?.id ?? "new-bot")!}
+        onColor={setColor}
+        name={name}
+        description={description}
+        soul={soul}
+        saved={saved}
+        pending={pending}
+        onName={setName}
+        onDescription={setDescription}
+        onSoul={setSoul}
+      />
+      {saved && (
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          onClick={() =>
+            void navigate({
+              to: "/",
+              search: {
+                bot:
+                  workspace.botId === "default" ? undefined : workspace.botId,
+                view: "settings",
+                section: "bot-history",
+              },
+            })
+          }
+        >
+          View revision history ↗
+        </Button>
+      )}
+      {mode === "create" && (
+        <p className="bot-note">
+          New bots start with their own memory and an empty workspace. Add a
+          provider connection after creation.
         </p>
-        <BotProfileFields
-          mode={mode}
-          name={name}
-          description={description}
-          soul={soul}
-          saved={saved}
-          pending={pending}
-          onName={setName}
-          onDescription={setDescription}
-          onSoul={setSoul}
-        />
-        {mode === "personality" && (
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            onClick={() =>
-              void navigate({
-                to: "/",
-                search: {
-                  bot:
-                    workspace.botId === "default" ? undefined : workspace.botId,
-                  view: "settings",
-                  section: "bot-history",
-                },
-              })
-            }
-          >
-            View revision history ↗
-          </Button>
-        )}
-        {mode === "create" && (
-          <p className="bot-note">
-            New bots start with their own memory and an empty workspace. Add a
-            provider connection after creation.
-          </p>
-        )}
-      </div>
+      )}
       <SaveBar
         visible={
           !saved || dirty || pending || !!message || !!error || !!guard.message

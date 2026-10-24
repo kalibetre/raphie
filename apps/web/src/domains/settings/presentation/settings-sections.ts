@@ -40,7 +40,7 @@ export const sections = [
     label: "Profile",
     icon: UserRound,
     lede: (bot: string) =>
-      `How ${bot} introduces itself in your sidebar and conversations.`,
+      `The identity, color and personality ${bot} brings to your conversations.`,
   },
   {
     id: "personality",

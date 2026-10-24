@@ -42,7 +42,7 @@ export function Settings({
 }) {
   const { workspace } = useBackend();
   const profile = useBots().data?.items.find((b) => b.id === workspace.botId);
-  const page = sectionOf(section);
+  const page = sectionOf(section === "personality" ? "bot" : section);
   const name = profile?.name ?? "this bot";
   const scoped = !isAppSection(section) && section !== "new-bot";
   return (
@@ -53,10 +53,8 @@ export function Settings({
         bot={scoped ? { id: workspace.botId, name } : undefined}
         scope={section === "new-bot" ? "New bot" : "App-wide"}
       >
-        {section === "bot" ? (
+        {section === "bot" || section === "personality" ? (
           <BotSettings />
-        ) : section === "personality" ? (
-          <BotSettings mode="personality" />
         ) : section === "bot-history" ? (
           <BotSettings mode="history" />
         ) : section === "new-bot" ? (
