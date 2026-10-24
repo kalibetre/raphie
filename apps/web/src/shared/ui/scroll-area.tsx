@@ -34,7 +34,14 @@ export function ScrollArea({
         role={viewportLabel ? "group" : undefined}
         className="scroll-area-viewport size-full rounded-[inherit] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <ScrollAreaPrimitive.Content>{children}</ScrollAreaPrimitive.Content>
+        {/* Base UI grows content to fit-content so wide children can scroll
+            sideways. A vertical-only area must instead stay the viewport width,
+            or one long code line widens the whole thread and clips it. */}
+        <ScrollAreaPrimitive.Content
+          style={orientation === "vertical" ? { minWidth: "100%" } : undefined}
+        >
+          {children}
+        </ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
       {orientation !== "horizontal" && <ScrollBar />}
       {orientation !== "vertical" && <ScrollBar orientation="horizontal" />}
