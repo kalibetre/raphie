@@ -16,6 +16,7 @@ const profile = {
   name: "Research",
   description: "Study sources carefully.",
   soul: "Explain evidence and uncertainty. Speak precisely.",
+  color: "#83bcb4",
 };
 
 test("bot containers preserve default data and isolate APIs, actors, credentials, memory and personality across restart", async () => {
@@ -104,6 +105,7 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
     ).toBe(receipt.sessionId);
     const created = await post("/api/bots", profile);
     expect(created.status).toBe(201);
+    expect(host.list()[1].color).toBe(profile.color);
     const bot = (await created.json()) as { id: string };
     const base = `/api/bots/${bot.id}`;
     const child = host.runtime(bot.id);
@@ -208,9 +210,11 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
     const revised = await post(`${base}/profile`, {
       ...profile,
       soul: "Use a calm, direct voice.",
+      color: "#DDA6B5",
       revision: 1,
     });
     expect(revised.status).toBe(200);
+    expect(host.read(bot.id).color).toBe("#dda6b5");
     expect(
       (await post(`${base}/profile`, { ...profile, revision: 1 })).status,
     ).toBe(409);
@@ -232,6 +236,21 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
     });
     expect(host.list()).toHaveLength(2);
     expect(host.read(bot.id).revision).toBe(2);
+    expect(host.read(bot.id).color).toBe("#dda6b5");
+    expect(host.read("default").color).toBeUndefined();
+    expect(host.history(bot.id).map((b) => b.color)).toEqual([
+      "#dda6b5",
+      profile.color,
+    ]);
+    expect(
+      (await post(`${base}/profile`, { ...profile, color: "red", revision: 2 }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await post(`${base}/profile`, { ...profile, color: null, revision: 2 }))
+        .status,
+    ).toBe(200);
+    expect(host.read(bot.id).color).toBeNull();
     expect(
       (await original.gateway.chats.state()).conversations[0]?.sessionId,
     ).toBe(receipt.sessionId);

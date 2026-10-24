@@ -4,11 +4,16 @@ export type BotProfile = {
   name: string;
   description: string;
   soul: string;
+  /** Six-digit hex color; absent/null keeps automatic roster allocation. */
+  color?: string | null;
   revision: number;
   createdAt: number;
   updatedAt: number;
 };
 
-export type SaveBotProfile = Pick<BotProfile, "name" | "description" | "soul">;
+export type SaveBotProfile = Pick<
+  BotProfile,
+  "name" | "description" | "soul" | "color"
+>;
 
 export type UpdateBotProfile = SaveBotProfile & { revision: number };

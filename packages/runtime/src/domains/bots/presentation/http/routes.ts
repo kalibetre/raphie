@@ -12,6 +12,12 @@ const profile = z
     name: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500),
     soul: z.string().trim().min(1).max(16000),
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .transform((value) => value.toLowerCase())
+      .nullable()
+      .optional(),
   })
   .strict();
 
