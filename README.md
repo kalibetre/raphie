@@ -109,7 +109,7 @@ Configure independent MCP servers, one-time reminders and recurring prompts unde
 MCP supports Streamable HTTP and local stdio commands, with encrypted credentials
 and approval before model-proposed tool execution. Scheduled jobs keep results in
 a conversation and recover through Pi Durable's persisted sleep/wake tasks.
-Agents can propose schedules through chat for your approval; reminders return to
+Agents can create, modify and delete schedules directly through chat; reminders return to
 the originating conversation. Browse retained evidence from Settings → Memory → Browse memories.
 See [bot automation](docs/bot-automation.md) for controls, APIs and execution limits.
 

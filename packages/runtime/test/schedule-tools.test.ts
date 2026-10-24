@@ -17,14 +17,21 @@ async function until(check: () => Promise<boolean>) {
   throw new Error("Scheduled reminder did not settle.");
 }
 
-async function open(directory: string, everyMinutes?: number) {
+async function open(
+  directory: string,
+  everyMinutes?: number,
+  tool?: {
+    name: string;
+    args: Record<string, string | number | boolean | null>;
+  },
+) {
   const offered: string[][] = [];
   const gateway = await Gateway.open({
     directory,
     deferResume: true,
     ...chatModel({
       offeredTools: (names) => offered.push(names),
-      tool: {
+      tool: tool ?? {
         name: "schedule_create",
         args: {
           name: "Funny reminder",
@@ -44,12 +51,12 @@ async function open(directory: string, everyMinutes?: number) {
       (await gateway.chats.state()).turns.some((t) => t.status === "pending"),
     submit: (input) => gateway.sessions.submit(actor, input),
   });
-  gateway.install(createScheduleTools(jobs, gateway.toolApprovals));
+  gateway.install(createScheduleTools(jobs));
   gateway.harness.resume();
   return { gateway, jobs, offered, actor };
 }
 
-test("agent reminder waits for approval, survives restart and replies once in the originating conversation", async () => {
+test("agent reminder saves without approval, survives restart and replies once in the originating conversation", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-reminder-"));
   let app = await open(directory);
   try {
@@ -57,25 +64,12 @@ test("agent reminder waits for approval, survives restart and replies once in th
       eventId: "remind",
       text: "Remind me with the time and a funny saying in two seconds.",
     });
-    await until(
-      async () =>
-        (await app.gateway.toolApprovals.state()).approvals.length === 1,
-    );
-    expect(app.offered[0]).toContain("schedule_create");
-    expect(await app.jobs.read()).toEqual([]);
-    const proposal = (await app.gateway.toolApprovals.state()).approvals[0];
-    expect(JSON.parse(proposal.argumentsJson).everyMinutes).toBeNull();
-    expect(JSON.parse(proposal.argumentsJson).destination).toBe(
-      "This conversation",
-    );
-    await app.gateway.close();
-    app = await open(directory);
-    expect((await app.gateway.toolApprovals.state()).approvals).toHaveLength(1);
-    await app.gateway.sessions.decide(app.actor, proposal.id, "approved");
     await until(async () => (await app.jobs.read()).length === 1);
+    expect(app.offered[0]).toContain("schedule_create");
     await until(
       async () => (await app.gateway.chats.state()).turns[0].status === "done",
     );
+    expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
     const [job] = await app.jobs.read();
     expect(job.sessionId).toBe(receipt.sessionId);
     await app.gateway.close();
@@ -111,16 +105,11 @@ test("an agent can propose recurring work without turning it into a one-time rem
       text: "Send me a brief every hour.",
     });
     await until(
-      async () =>
-        (await app.gateway.toolApprovals.state()).approvals.length === 1,
-    );
-    const proposal = (await app.gateway.toolApprovals.state()).approvals[0];
-    expect(JSON.parse(proposal.argumentsJson).everyMinutes).toBe(60);
-    await app.gateway.sessions.decide(app.actor, proposal.id, "approved");
-    await until(
       async () => (await app.jobs.read())[0]?.lastStatus === "submitted",
     );
     const [job] = await app.jobs.read();
+    expect(job.everyMinutes).toBe(60);
+    expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
     expect(job.enabled).toBe(true);
     expect(job.nextRunAt).toBeGreaterThan(job.firstRunAt + 3500_000);
   } finally {
@@ -129,26 +118,104 @@ test("an agent can propose recurring work without turning it into a one-time rem
   }
 });
 
-test("rejecting an agent's schedule never saves a job", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "raphie-rejected-reminder-"));
-  const app = await open(directory);
+test("agent edits and deletes directly; old timers cannot run after replacement or restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-edit-reminder-"));
+  let app = await open(directory);
   try {
+    const [original] = await app.jobs.add({
+      name: "Original",
+      prompt: "Old prompt",
+      everyMinutes: 60,
+      firstRunAt: Date.now() + 300,
+    });
+    await app.gateway.close();
+    app = await open(directory, undefined, {
+      name: "schedule_update",
+      args: {
+        id: original.id,
+        name: "Updated",
+        prompt: "New prompt",
+        delaySeconds: 2,
+        everyMinutes: null,
+      },
+    });
     await app.gateway.sessions.submit(app.actor, {
-      eventId: "reject-reminder",
-      text: "Remind me soon.",
+      eventId: "edit",
+      text: "Make it a one-time reminder in two seconds with the new prompt.",
     });
     await until(
-      async () =>
-        (await app.gateway.toolApprovals.state()).approvals.length === 1,
+      async () => (await app.gateway.chats.state()).turns[0]?.status === "done",
     );
-    const proposal = (await app.gateway.toolApprovals.state()).approvals[0];
-    await app.gateway.sessions.decide(app.actor, proposal.id, "rejected");
+    const [updated] = await app.jobs.read();
+    expect(updated.id).toBe(original.id);
+    expect(updated.name).toBe("Updated");
+    expect(updated.prompt).toBe("New prompt");
+    expect(updated.everyMinutes).toBeNull();
+    expect(updated.nextRunAt).toBeGreaterThan(original.nextRunAt);
+    expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
+    await delay(400);
+    expect((await app.gateway.chats.state()).turns).toHaveLength(1);
+    await app.gateway.close();
+    app = await open(directory, undefined, {
+      name: "schedule_delete",
+      args: { id: original.id },
+    });
+    await app.gateway.sessions.submit(app.actor, {
+      eventId: "delete",
+      text: "Delete that reminder.",
+    });
     await until(
-      async () => (await app.gateway.chats.state()).turns[0].status === "done",
+      async () => (await app.gateway.chats.state()).turns[1]?.status === "done",
     );
+    expect(await app.jobs.read()).toEqual([]);
+    expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
+    await app.gateway.close();
+    app = await open(directory);
+    await delay(2100);
+    expect((await app.gateway.chats.state()).turns).toHaveLength(2);
     expect(await app.jobs.read()).toEqual([]);
   } finally {
     await app.gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("schedule tools cannot edit or delete another bot's schedule", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-foreign-schedule-"));
+  const owner = await open(join(directory, "owner"));
+  let other = await open(join(directory, "other"));
+  try {
+    const [job] = await owner.jobs.add({
+      name: "Private",
+      prompt: "Private prompt",
+      everyMinutes: 60,
+      firstRunAt: Date.now() + 86400_000,
+    });
+    for (const name of ["schedule_update", "schedule_delete"]) {
+      await other.gateway.close();
+      other = await open(join(directory, "other"), undefined, {
+        name,
+        args:
+          name === "schedule_update"
+            ? { id: job.id, prompt: "Changed" }
+            : { id: job.id },
+      });
+      await other.gateway.sessions.submit(other.actor, {
+        eventId: name,
+        text: "Change this schedule.",
+      });
+      await until(async () =>
+        (await other.gateway.chats.state()).turns.every(
+          (turn) => turn.status === "done",
+        ),
+      );
+      expect(await other.jobs.read()).toEqual([]);
+      expect((await owner.jobs.read())[0].prompt).toBe("Private prompt");
+      expect((await other.gateway.toolApprovals.state()).approvals).toEqual([]);
+    }
+  } finally {
+    await owner.gateway.close();
+    await other.gateway.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

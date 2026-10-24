@@ -2,7 +2,7 @@
 
 Each bot has **MCP tools** and **Scheduled jobs** pages in Settings. Connections
 and jobs belong only to that bot. MCP connections are owner configuration.
-Agents can propose schedules through tools, subject to explicit owner approval.
+Agents can create, modify and delete schedules through tools without a separate approval.
 Existing local owner API protection applies to all mutations.
 
 ## MCP tools
@@ -56,18 +56,24 @@ recorded without raw transport error details, and the next interval still runs.
 Configure the bot's model in Settings before running jobs.
 
 Ask the agent, for example, "In two minutes, tell me the time and a funny saying."
-The `schedule_create` tool proposes the exact prompt, run time and optional repeat
-interval for approval. Nothing is saved until approved. One-time reminders use
+The `schedule_create` tool saves the prompt, run time and optional repeat interval
+directly, without an approval prompt or redundant confirmation. One-time reminders use
 `everyMinutes: null`, stop after one submission and show Sent or Failed in Settings.
 Reminders created in chat return to the originating conversation; jobs created in
 Settings create their own. Replies appear in the app, without device push
-notifications. Delays are relative to the tool request; if approval arrives after
-the requested time, the reminder runs when approved and the bot is free.
+notifications. Delays are relative to the tool request; if the bot is busy when
+the reminder is due, delivery waits until it is free.
 
-`schedule_list` lets the agent inspect its own bot's schedules. The model cannot
-select another bot or destination conversation. Creation, approval completion and
-the scheduler task commit atomically, preventing duplicate jobs during recovery.
-Remove or pause schedules from Settings. Scheduling tools are installed at startup;
+`schedule_list` lets the agent inspect its own bot's schedules. `schedule_update`
+changes the name, prompt, next run, recurrence or enabled state; `schedule_delete`
+removes future work while keeping the conversation. Neither asks for approval.
+Only confirm an action after the tool reports success. External tool actions
+performed by a scheduled prompt still use their normal approval gate.
+
+The model cannot select another bot or destination conversation. Changes and
+task-scoped replay receipts commit atomically, preventing duplicate jobs or
+repeated edits during recovery. Replaced timers are retired and fenced from
+submitting stale prompts. You can also remove or pause schedules from Settings. Scheduling tools are installed at startup;
 after upgrading a running runtime, restart it before trying them in chat.
 
 Pi Durable 1.4 sleeping tasks own timing and restart recovery. Job configuration

@@ -177,7 +177,7 @@ export class BotHost implements BotProfiles {
         submit: (input) => gateway.sessions.submit(actor, input),
       });
       const connections = mcp;
-      gateway.install(createScheduleTools(jobs, gateway.toolApprovals));
+      gateway.install(createScheduleTools(jobs));
       return {
         ...runtime,
         mcp,

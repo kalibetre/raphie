@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotJobs } from "../src/domains/schedules/infrastructure/bot-jobs.ts";
 import { chatModel } from "./chat-model.ts";
@@ -110,6 +112,48 @@ test("overlapping first runs checkpoint the shared conversation before submittin
     expect(submissions[1].sessionId).toBe("shared-job-conversation");
   } finally {
     release.resolve();
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("replacing a sleeping schedule runs the updated prompt once and retires its old timer", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-job-update-"));
+  const gateway = await Gateway.open({ directory, ...chatModel() });
+  const actor = gateway.actors.establish("web");
+  const jobs = BotJobs.open({
+    root: gateway.root,
+    harness: gateway.harness,
+    install: (extension) => gateway.install(extension),
+    busy: async () => false,
+    submit: (input) => gateway.sessions.submit(actor, input),
+  });
+  try {
+    const [job] = await jobs.add({
+      name: "Original",
+      prompt: "Old prompt",
+      everyMinutes: 60,
+      firstRunAt: Date.now() + 300,
+    });
+    const { retiredTaskId } = await gateway.root.commit(
+      (tx) =>
+        jobs.update(tx, job.id, {
+          prompt: "Updated prompt",
+          everyMinutes: null,
+          firstRunAt: Date.now() + 30,
+        }),
+      context,
+    );
+    await jobs.retire(retiredTaskId);
+    await until(
+      async () => (await gateway.chats.state()).turns[0]?.status === "done",
+    );
+    await delay(350);
+    const turns = (await gateway.chats.state()).turns;
+    expect(turns).toHaveLength(1);
+    expect(turns[0].text).toBe("Updated prompt");
+    expect((await jobs.read())[0].enabled).toBe(false);
+  } finally {
     await gateway.close();
     await rm(directory, { recursive: true, force: true });
   }

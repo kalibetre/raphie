@@ -71,7 +71,7 @@ export class BotJobs {
     });
   }
 
-  /** A tool approval and its schedule can commit atomically in the same bot. */
+  /** Tool receipts and schedule changes share one transaction within this bot. */
   async schedule(
     tx: Tx,
     input: SaveScheduledJob,
@@ -104,6 +104,44 @@ export class BotJobs {
     };
     jobs.items.push(job);
     return job;
+  }
+
+  async update(
+    tx: Tx,
+    id: string,
+    patch: Partial<SaveScheduledJob> & { enabled?: boolean },
+  ) {
+    const job = (await tx.doc(Jobs)).items.find((item) => item.id === id);
+    if (!job) throw new InputError("Scheduled job not found.", 404);
+    const retiredTaskId = job.taskId;
+    Object.assign(job, patch);
+    if (patch.firstRunAt !== undefined) {
+      job.nextRunAt = patch.firstRunAt;
+      job.enabled = patch.enabled ?? true;
+    }
+    if (job.enabled)
+      job.taskId = await tx.createTask(
+        this.task,
+        { id, at: job.nextRunAt, manual: false },
+        {
+          conversationId: this.options.root.id,
+          ownership: { kind: "conversation" },
+          background: true,
+        },
+      );
+    return { job, retiredTaskId };
+  }
+
+  async remove(tx: Tx, id: string) {
+    const jobs = await tx.doc(Jobs);
+    const job = jobs.items.find((item) => item.id === id);
+    if (!job) throw new InputError("Scheduled job not found.", 404);
+    jobs.items = jobs.items.filter((item) => item.id !== id);
+    return job.taskId;
+  }
+
+  async retire(taskId: TaskId) {
+    await this.options.harness.abortTask(taskId, context);
   }
 
   async change(id: string, action: "enable" | "disable" | "remove" | "run") {
@@ -165,7 +203,10 @@ export class BotJobs {
           const job = (await runtime.snapshot(Jobs, ctx))?.items.find(
             (j) => j.id === task.input.id,
           );
-          if (!job || (!job.enabled && !task.input.manual)) {
+          if (
+            !job ||
+            (!task.input.manual && (!job.enabled || job.taskId !== task.id))
+          ) {
             await runtime.commit(
               () => ({
                 status: "terminal",
@@ -205,7 +246,10 @@ export class BotJobs {
             const job = (await runtime.snapshot(Jobs, ctx))?.items.find(
               (j) => j.id === task.input.id,
             );
-            if (!job || (!job.enabled && !task.input.manual)) {
+            if (
+              !job ||
+              (!task.input.manual && (!job.enabled || job.taskId !== task.id))
+            ) {
               await runtime.commit(
                 () => ({
                   status: "terminal",
@@ -259,14 +303,16 @@ export class BotJobs {
               const current = (await tx.doc(Jobs)).items.find(
                 (j) => j.id === job.id,
               );
-              if (current) {
+              const replaced =
+                !task.input.manual && current?.taskId !== task.id;
+              if (current && !replaced) {
                 current.lastRunAt = task.state.checkpoint.at;
                 current.lastStatus = status;
                 current.sessionId = sessionId;
                 if (!task.input.manual) current.nextRunAt = next;
                 if (once && !task.input.manual) current.enabled = false;
               }
-              return task.input.manual || once
+              return task.input.manual || once || replaced
                 ? {
                     status: "terminal",
                     outcome: { status: "completed", result: null },
