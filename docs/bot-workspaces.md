@@ -82,3 +82,10 @@ and does not repeat an append. Tests inject a failed checkpoint transaction to
 prove the receipt rolls back with the files, and fill the receipt budget to prove
 new work stops while committed retries still resolve. Output-format, filesystem
 copy, entry-count and timeout probes verify rollback and continued usability.
+
+Final verification on 2026-10-24: `bun run validate` passed (150 tests, architecture,
+formatting, lint, type checks and production build). Production dependency audit
+returned no findings. An isolated browser verified identity/fixture labels and
+keyboard expansion at 320/768/1024/1440 pixels, Backend connection details and
+the floating composer, with no page errors or horizontal overflow. User runtimes
+and data were not used for testing.

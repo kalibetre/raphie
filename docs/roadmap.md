@@ -147,8 +147,9 @@ continues to be managed through Varlock, not conversational credential prompts.
 
 ## Next phase: lightweight execution, memory, and VM escalation
 
-Direction recorded 2026-10-22. Execution and the full learning-memory lifecycle
-remain planned. The first configurable-memory slice is delivered.
+Direction recorded 2026-10-22. Durable lightweight execution and the first
+configurable-memory slice are delivered. VM escalation and the full learning-memory
+lifecycle remain planned.
 Explore the execution, memory, and budget simulations in the
 [HTML architecture guide](architecture.html#execution-memory).
 
@@ -183,7 +184,9 @@ generation, lightweight execution and VM leases separately. Derive bot/workspace
 identity from authorized context, never model-selected IDs. Cross-bot sharing is
 explicit. The bot ownership and personality foundation is delivered through
 separate per-bot stores and authorities, as described in [bots.md](bots.md).
-Sandbox execution, resource budgets and OS-level containment remain planned.
+Lightweight workspace execution now has separate queue/concurrency and resource
+bounds. VM/native execution, model-generation concurrency policy and OS-level
+containment remain planned.
 
 Proposed slices:
 
@@ -195,12 +198,26 @@ Proposed slices:
    credentials and memory, personality admission locking, and restart recovery.
    Per-bot MCP connection management and recurring prompts are delivered; see
    [bot automation](bot-automation.md). Per-bot Discord management remains subsequent work.
-1. **One durable lightweight workspace per bot:** integrate just-bash with the
-   bot's default workspace, serialize execution across its sessions, bound time,
-   output and storage, and persist checkpoints outside compute. Prove restart
-   recovery, shared files across the same bot's sessions, isolation between bots,
-   and that a replaced executor cannot overwrite newer state. No host-home or
-   settings-database mount.
+1. **One durable lightweight workspace per bot — delivered (2026-10-24):**
+   `workspace_exec` uses pinned just-bash in disposable workers with only a virtual
+   filesystem. Sessions share their bot’s files; executions serialize per bot.
+   Host-owned SQLite checkpoints and execution receipts commit atomically, outside
+   compute. Persistent generations fence replaced executors. Tests cover binary
+   files, cross-bot separation, Pi recovery after SIGKILL, duplicate append
+   prevention, rollback on failure, and resource/queue/concurrency bounds. There
+   are no host-home/settings mounts, inherited credentials, network or native
+   runtime capabilities. Five seconds, 32 KiB output, 8 MiB files, 1,024 entries,
+   16 queued operations per bot and four concurrent lightweight workers are the
+   initial limits. This is not OS/VM isolation or a capacity benchmark. See
+   [workspace behavior and limits](bot-workspaces.md).
+
+   The prerequisite continuity slice anchors unset data paths to the main checkout,
+   refuses ambiguous separate worktree data, preserves explicit DATA_DIRECTORY
+   and fixture isolation, and shows backend/data identity. Legacy default-bot MCP
+   stays host-configured until explicit encrypted import, without merging saved
+   connections. See [app data continuity](bots.md#app-data-continuity-across-checkouts)
+   and [MCP upgrade semantics](bot-automation.md#mcp-tools).
+
 2. **Configurable experience-based memory:** provide a runtime-owned Memory
    interface with adapters for **Raphie built-in memory, Hindsight, Honcho and
    Obsidian / Markdown vaults**, configured through **Settings → Memory**.

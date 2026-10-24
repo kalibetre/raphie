@@ -2,7 +2,7 @@
 
 A bot is a persistent assistant identity inside one Raphie runtime. Each bot has
 its own sessions, model connections and default model, memory configuration,
-attachment store and reserved workspace directory. A session belongs to its bot's
+attachment store and durable virtual workspace. A session belongs to its bot's
 store; it cannot be opened by addressing its UUID through another bot's API.
 
 ## Using bots in the web client
@@ -104,8 +104,10 @@ credential store. Personality text cannot grant permissions or change ownership.
 `BotHost` owns the registry and composes one Gateway/Pi harness, actor authority,
 model registry, Settings and Memory service per bot in the same process. New bots
 use `bots/<runtime-issued-id>/` under the data directory, containing separate
-SQLite stores and `files/`. Each has a `workspace/` directory reserved for future
-execution; the default bot's reserved directory is `<data>/workspace/`.
+SQLite stores and `files/`. Each has a host-owned `workspace/checkpoint.sqlite`;
+the default bot uses
+`<data>/workspace/checkpoint.sqlite`. Files are interpreted in virtual `/workspace`,
+not mounted from the host. See [workspace execution](bot-workspaces.md).
 
 New bots start with built-in memory enabled and no model credentials or connected
 MCP tools. Configure their own provider before sending messages. Default model
@@ -149,8 +151,9 @@ independent stores. Cross-bot actor contexts are rejected even inside the proces
 
 This is logical ownership separation, not OS or VM isolation. The host, owner UI
 and process account remain trusted and can manage all bots. Local HTTP protection
-is not bot-token authentication or remote-client authentication. No untrusted
-sandbox code is executed in this slice.
+is not bot-token authentication or remote-client authentication. Supported
+shell-like commands run in a bounded just-bash worker over a virtual
+filesystem. No native/VM execution or host filesystem mounts are provided.
 
 The existing environment-configured Discord connection still belongs to the
 default bot; named-bot channel management remains future work. Each bot manages
@@ -159,9 +162,10 @@ its own MCP servers and recurring prompt jobs in Settings; see
 Diagnostics remain configured for the default bot; named-bot Diagnostics returns
 an empty trace read model rather than another bot's traces.
 
-Workspace shell execution, checkpointing, executor fencing, VM leases,
-resource/concurrency budgets, bot deletion, cross-bot sharing, and independently
-managed arbitrary background tasks remain planned. Resident bot harnesses are opened at
+Workspace shell interpretation, checkpointing, executor fencing and lightweight
+resource/concurrency bounds are delivered. VM leases, model-generation concurrency
+policy, bot deletion, cross-bot sharing, and independently managed arbitrary
+background tasks remain planned. Resident bot harnesses are opened at
 startup; this change does not establish capacity for 100 active agents or VMs.
 
 ## Verification
@@ -190,11 +194,18 @@ using that directory before starting another. Do not test new code against live
 databases. Back up SQLite with its backup API while live, or stop the runtime
 before copying the complete directory, and retain credential-store keys.
 
+New runtime bootstrap claims `runtime-owner.sqlite` before opening product stores.
+A live owner makes another launch fail; a dead owner can be reclaimed after a
+crash. Permission errors and reused process IDs fail closed. Older releases do
+not participate in this check: stop them before starting an upgrade. Never run
+two Gateways against the same data directory, including with embedding/test APIs.
+
 A persistent `workspace-identity.json` identifies the app data directory across
 restarts and upgrades. Keep it in backups. The web view displays the backend URL
 and short identity; expand it or open Backend connection settings for the complete
 ID and data path. Older runtimes show “identity unavailable”; this never means
 their data was deleted. Switching backends displays a different server's data;
 it does not transfer conversations or settings. Explicit development/fixture
-backends remain separate. Check the address and data path when history appears
+backends remain separate, and the browser fixture reports “Test fixture”.
+Check the address and data path when history appears
 missing before creating another workspace.
