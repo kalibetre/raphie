@@ -135,6 +135,7 @@ export class Gateway {
       this.models,
       options.model,
       this.configurationGate,
+      options.memory,
     );
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);

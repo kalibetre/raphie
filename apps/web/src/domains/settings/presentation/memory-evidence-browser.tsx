@@ -219,7 +219,7 @@ export function MemoryEvidenceBrowser({
             </h3>
             <p>
               {browsing
-                ? "Ask Raphie to remember a useful fact or preference. Saved evidence will appear here."
+                ? "Lasting preferences and useful facts the agent remembers will appear here. You can also explicitly ask it to remember something."
                 : "Try a word from the saved information, or clear the filter to browse."}
             </p>
           </div>

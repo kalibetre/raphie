@@ -136,7 +136,7 @@ function MemoryConfiguration({
         >
           <Row
             title="Enable memory"
-            description="Allow the agent to retain selected information and recall it in future sessions. Whole conversations are never uploaded automatically."
+            description="Let the agent remember lasting preferences and useful facts you share, and recall them in future sessions. It retains selected memories rather than copies of whole conversations."
           >
             <Switch
               aria-label="Enable memory"
