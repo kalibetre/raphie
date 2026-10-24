@@ -10,6 +10,7 @@ import { BotProfileStore } from "../domains/bots/infrastructure/bot-profiles.ts"
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { BotJobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
+import { createScheduleTools } from "../domains/schedules/infrastructure/schedule-tools.ts";
 import type { SettingsService } from "../domains/settings/application/ports.ts";
 import { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
 import type { CredentialKeyStore } from "../domains/settings/infrastructure/credential-cipher.ts";
@@ -176,6 +177,7 @@ export class BotHost implements BotProfiles {
         submit: (input) => gateway.sessions.submit(actor, input),
       });
       const connections = mcp;
+      gateway.install(createScheduleTools(jobs, gateway.toolApprovals));
       return {
         ...runtime,
         mcp,

@@ -105,10 +105,12 @@ and reloads sessions and settings from the selected backend. Drafts are scoped
 to each backend. Older drafts without a backend identity remain in browser storage
 but are not automatically loaded into a backend. Only local HTTP backends are supported.
 
-Configure independent MCP servers and recurring prompts under each bot's settings.
+Configure independent MCP servers, one-time reminders and recurring prompts under each bot's settings.
 MCP supports Streamable HTTP and local stdio commands, with encrypted credentials
 and approval before model-proposed tool execution. Scheduled jobs keep results in
 a conversation and recover through Pi Durable's persisted sleep/wake tasks.
+Agents can propose schedules through chat for your approval; reminders return to
+the originating conversation. Browse retained evidence from Settings → Memory → Browse memories.
 See [bot automation](docs/bot-automation.md) for controls, APIs and execution limits.
 
 Provider/model and telemetry preferences belong to the selected backend and

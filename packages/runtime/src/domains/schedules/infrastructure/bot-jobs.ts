@@ -7,6 +7,7 @@ import {
   type Extension,
   type Harness,
   type TaskId,
+  type Tx,
 } from "@earendil-works/pi-durable";
 import type { SaveScheduledJob, ScheduledJob } from "@raphie/contracts";
 
@@ -64,30 +65,45 @@ export class BotJobs {
 
   async add(input: SaveScheduledJob) {
     return this.gate.run(async () => {
-      await this.options.root.commit(async (tx) => {
-        const jobs = await tx.doc(Jobs);
-        if (jobs.items.length >= 100)
-          throw new InputError("A bot can have at most 100 scheduled jobs.");
-        const id = crypto.randomUUID();
-        const taskId = await tx.createTask(
-          this.task,
-          { id, at: input.firstRunAt, manual: false },
-          { ownership: { kind: "conversation" }, background: true },
-        );
-        jobs.items.push({
-          ...input,
-          id,
-          taskId,
-          enabled: true,
-          nextRunAt: input.firstRunAt,
-          sessionId: null,
-          lastRunAt: null,
-          lastStatus: null,
-        });
-      }, context);
+      await this.options.root.commit((tx) => this.schedule(tx, input), context);
       this.options.harness.resume();
       return this.read();
     });
+  }
+
+  /** A tool approval and its schedule can commit atomically in the same bot. */
+  async schedule(
+    tx: Tx,
+    input: SaveScheduledJob,
+    id: string = crypto.randomUUID(),
+    sessionId: string | null = null,
+  ): Promise<ScheduledJob> {
+    const jobs = await tx.doc(Jobs);
+    const existing = jobs.items.find((job) => job.id === id);
+    if (existing) return existing;
+    if (jobs.items.length >= 100)
+      throw new InputError("A bot can have at most 100 scheduled jobs.");
+    const taskId = await tx.createTask(
+      this.task,
+      { id, at: input.firstRunAt, manual: false },
+      {
+        conversationId: this.options.root.id,
+        ownership: { kind: "conversation" },
+        background: true,
+      },
+    );
+    const job = {
+      ...input,
+      id,
+      taskId,
+      enabled: true,
+      nextRunAt: input.firstRunAt,
+      sessionId,
+      lastRunAt: null,
+      lastStatus: null,
+    };
+    jobs.items.push(job);
+    return job;
   }
 
   async change(id: string, action: "enable" | "disable" | "remove" | "run") {
@@ -237,7 +253,8 @@ export class BotJobs {
             } catch {
               /* No transport error payload is persisted or exposed. */
             }
-            const next = runtime.now() + job.everyMinutes * 60_000;
+            const once = job.everyMinutes === null;
+            const next = runtime.now() + (job.everyMinutes ?? 0) * 60_000;
             await runtime.commit(async (tx) => {
               const current = (await tx.doc(Jobs)).items.find(
                 (j) => j.id === job.id,
@@ -247,8 +264,9 @@ export class BotJobs {
                 current.lastStatus = status;
                 current.sessionId = sessionId;
                 if (!task.input.manual) current.nextRunAt = next;
+                if (once && !task.input.manual) current.enabled = false;
               }
-              return task.input.manual
+              return task.input.manual || once
                 ? {
                     status: "terminal",
                     outcome: { status: "completed", result: null },

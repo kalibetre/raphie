@@ -32,7 +32,7 @@ export const sections = [
     label: "Scheduled jobs",
     icon: Clock,
     lede: (bot: string) =>
-      `Give ${bot} recurring work, with results saved in a conversation.`,
+      `Give ${bot} reminders and recurring work, with results saved in a conversation.`,
   },
   {
     id: "bot",

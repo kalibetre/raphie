@@ -18,7 +18,7 @@ export function jobRoutes(jobs: BotJobs) {
           .object({
             name: z.string().trim().min(1).max(80),
             prompt: z.string().trim().min(1).max(4000),
-            everyMinutes: z.number().int().min(1).max(525600),
+            everyMinutes: z.number().int().min(1).max(525600).nullable(),
             firstRunAt: z.number().int().min(0).max(8640000000000000),
           })
           .strict(),

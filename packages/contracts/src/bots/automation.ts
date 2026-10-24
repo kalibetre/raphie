@@ -24,7 +24,7 @@ export type BotMcpConnection = {
 export type SaveScheduledJob = {
   name: string;
   prompt: string;
-  everyMinutes: number;
+  everyMinutes: number | null;
   firstRunAt: number;
 };
 

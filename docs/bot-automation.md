@@ -1,8 +1,9 @@
 # Bot MCP tools and scheduled jobs
 
 Each bot has **MCP tools** and **Scheduled jobs** pages in Settings. Connections
-and jobs belong only to that bot. They are owner configuration, unavailable to
-model tools. Existing local owner API protection applies to all mutations.
+and jobs belong only to that bot. MCP connections are owner configuration.
+Agents can propose schedules through tools, subject to explicit owner approval.
+Existing local owner API protection applies to all mutations.
 
 ## MCP tools
 
@@ -34,8 +35,8 @@ No environment-configured MCP bootstrap server is loaded.
 
 ## Scheduled jobs
 
-A job sends a recurring prompt to its bot and keeps the results in one conversation.
-Choose a name, prompt, interval in whole minutes and first-run time. Times are
+A job sends a one-time or recurring prompt to its bot and keeps the results in one conversation.
+Choose a name, prompt, Once or Recurring, interval in whole minutes and first-run time. Times are
 entered in the browser's local timezone; recurrence is a fixed elapsed interval,
 not a cron expression or a daylight-saving-aware calendar rule. The runtime must
 be running to execute a job. After downtime, overdue work runs once; it does not
@@ -53,6 +54,21 @@ The last-run status reports prompt admission, not successful model completion.
 Open the conversation to inspect the answer or failure. A failed admission is
 recorded without raw transport error details, and the next interval still runs.
 Configure the bot's model in Settings before running jobs.
+
+Ask the agent, for example, "In two minutes, tell me the time and a funny saying."
+The `schedule_create` tool proposes the exact prompt, run time and optional repeat
+interval for approval. Nothing is saved until approved. One-time reminders use
+`everyMinutes: null`, stop after one submission and show Sent or Failed in Settings.
+Reminders created in chat return to the originating conversation; jobs created in
+Settings create their own. Replies appear in the app, without device push
+notifications. Delays are relative to the tool request; if approval arrives after
+the requested time, the reminder runs when approved and the bot is free.
+
+`schedule_list` lets the agent inspect its own bot's schedules. The model cannot
+select another bot or destination conversation. Creation, approval completion and
+the scheduler task commit atomically, preventing duplicate jobs during recovery.
+Remove or pause schedules from Settings. Scheduling tools are installed at startup;
+after upgrading a running runtime, restart it before trying them in chat.
 
 Pi Durable 1.4 sleeping tasks own timing and restart recovery. Job configuration
 and checkpoints live in that bot's `gateway.sqlite`; stable event IDs deduplicate
