@@ -32,9 +32,10 @@ async function mutate(
 ) {
   const result = await api.commit(async (tx) => {
     const receipt = await tx.doc(Receipt, api.taskId);
-    if (receipt.result) return receipt.result;
+    if (receipt.result) return { ...receipt.result };
     receipt.result = await change(tx);
-    return receipt.result;
+    // Draft overlays expire when the transaction settles. Return detached values.
+    return { ...receipt.result };
   }, ctx);
   if (result.retiredTaskId !== null) await jobs.retire(result.retiredTaskId);
   return { output: [{ type: "text" as const, text: result.text }] };

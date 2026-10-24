@@ -66,8 +66,13 @@ test("agent reminder saves without approval, survives restart and replies once i
     });
     await until(async () => (await app.jobs.read()).length === 1);
     expect(app.offered[0]).toContain("schedule_create");
+    expect(app.offered[0]).toContain("schedule_update");
+    expect(app.offered[0]).toContain("schedule_delete");
     await until(
       async () => (await app.gateway.chats.state()).turns[0].status === "done",
+    );
+    expect((await app.gateway.chats.state()).turns[0].answer).toContain(
+      '"saved":true',
     );
     expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
     const [job] = await app.jobs.read();
@@ -147,6 +152,9 @@ test("agent edits and deletes directly; old timers cannot run after replacement 
       async () => (await app.gateway.chats.state()).turns[0]?.status === "done",
     );
     const [updated] = await app.jobs.read();
+    expect((await app.gateway.chats.state()).turns[0].answer).toContain(
+      '"updated":true',
+    );
     expect(updated.id).toBe(original.id);
     expect(updated.name).toBe("Updated");
     expect(updated.prompt).toBe("New prompt");
@@ -168,6 +176,9 @@ test("agent edits and deletes directly; old timers cannot run after replacement 
       async () => (await app.gateway.chats.state()).turns[1]?.status === "done",
     );
     expect(await app.jobs.read()).toEqual([]);
+    expect((await app.gateway.chats.state()).turns[1].answer).toContain(
+      '"deleted":true',
+    );
     expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
     await app.gateway.close();
     app = await open(directory);
