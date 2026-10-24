@@ -294,3 +294,14 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   were replayed. A second page opened during the outage also recovered by itself.
   The regression test covers closed-stream replacement, native retry ownership,
   scoped URLs, queued events and retry cancellation.
+
+# Streaming reply stability — 2026-10-24
+
+- Reproduced a partial reply disappearing when a model step ends while its turn
+  is still pending. The chat adapter now retains the latest visible text through
+  model/tool pauses and empty step starts, until new text or the final answer
+  replaces it. Retained text is scoped to one active turn.
+- The real TanStack client regression covers pauses, empty starts, final-answer
+  handoff and clearing retained text before the next turn. A Chromium check with
+  synthetic streamed snapshots found no blank reply frames across eight model
+  step transitions; the draft survived, with no commands or browser exceptions.

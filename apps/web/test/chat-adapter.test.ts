@@ -10,7 +10,13 @@ import {
 } from "../src/domains/conversations/infrastructure/chat-adapter.ts";
 import type { Snapshot } from "../src/infrastructure/http/api-client.ts";
 
-const state = {
+const state: Snapshot = {
+  conversations: [],
+  model: null,
+  mcp: { connected: false, error: false, server: null, toolCount: 0 },
+  uncertainToolDeliveries: [],
+  toolApprovals: [],
+  activity: [],
   turns: [
     {
       id: "turn",
@@ -18,10 +24,12 @@ const state = {
       text: "Hello",
       status: "pending",
       answer: null,
+      source: "web",
+      createdAt: 1,
     },
   ],
-  live: { "session-1": { text: "Hel", generating: true } },
-} as unknown as Snapshot;
+  live: { "session-1": { text: "Hel", generating: true, usage: null } },
+};
 
 test("TanStack AI consumes authoritative partial and completed transcripts without duplicate replies", async () => {
   let publish!: (state: Snapshot) => void;
@@ -77,5 +85,65 @@ test("reconnect reconstructs only the selected conversation and omits stale live
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
     assert.equal(chunk.messages.length, 2);
     assert.equal(chunk.messages[1].content, "Saved answer");
+  }
+});
+
+test("a pending reply stays visible between model steps and yields to the final answer", async () => {
+  let publish!: (state: Snapshot) => void;
+  const client = new ChatClient({
+    connection: chatAdapter("session-1", (listener) => {
+      publish = listener;
+      return () => {};
+    }),
+  });
+  client.subscribe();
+  const show = async (snapshot: Snapshot) => {
+    publish(snapshot);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  const reply = () => client.getMessages().find((m) => m.id === "turn:reply");
+  try {
+    await show(state);
+    assert.deepEqual(reply()?.parts, [{ type: "text", content: "Hel" }]);
+    await show({
+      ...state,
+      live: { "session-1": { text: "Hel", generating: false, usage: null } },
+    } as Snapshot);
+    assert.deepEqual(reply()?.parts, [{ type: "text", content: "Hel" }]);
+    await show({
+      ...state,
+      live: { "session-1": { text: "", generating: true, usage: null } },
+    } as Snapshot);
+    assert.deepEqual(reply()?.parts, [{ type: "text", content: "Hel" }]);
+    await show({
+      ...state,
+      live: { "session-1": { text: "Final", generating: true, usage: null } },
+    } as Snapshot);
+    assert.deepEqual(reply()?.parts, [{ type: "text", content: "Final" }]);
+    await show({
+      ...state,
+      live: { "session-1": { text: "Final", generating: false, usage: null } },
+    } as Snapshot);
+    assert.deepEqual(reply()?.parts, [{ type: "text", content: "Final" }]);
+    const completed = {
+      ...state,
+      turns: [{ ...state.turns[0], status: "done", answer: "Final answer" }],
+    } as Snapshot;
+    await show(completed);
+    assert.deepEqual(reply()?.parts, [
+      { type: "text", content: "Final answer" },
+    ]);
+    await show({
+      ...completed,
+      turns: [
+        ...completed.turns,
+        { ...state.turns[0], id: "next-turn", text: "Another question" },
+      ],
+      live: { "session-1": { text: "Final", generating: false, usage: null } },
+    } as Snapshot);
+    assert.equal(client.getMessages().length, 3);
+    assert(!client.getMessages().some((m) => m.id === "next-turn:reply"));
+  } finally {
+    client.unsubscribe();
   }
 });
