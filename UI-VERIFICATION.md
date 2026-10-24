@@ -375,3 +375,19 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
 - Browser verification passed on an unconfigured named bot, then UI connection
   add/removal, reload, mobile and the composer empty state. All 136 tests pass;
   formatting, architecture, lint, types and production builds pass as well.
+
+# MCP and jobs PR readiness — 2026-10-24
+
+- Preserved default-bot legacy environment MCP connections and added explicit
+  encrypted import. Imported identity and removal survive restart; named bots
+  do not inherit the legacy connection. Malformed argument errors omit secrets.
+- Merged current main, preserving Mermaid guidance alongside current scheduling
+  instructions; installed dependencies from the merged lockfile.
+- Full `bun run validate` passes formatting, architecture, lint, types, all 148
+  tests and production builds. Existing bundle-size warnings remain.
+- Prior browser acceptance for the MCP/jobs forms is recorded above. This
+  readiness pass adds automated migration/restart coverage, not a new browser run.
+- Later work: stable data selection across checkouts and durable bot workspaces
+  are in their separate thread. Jobs require a running runtime and report prompt
+  admission; completion tracking, device push and calendar recurrence remain
+  outside this change.
