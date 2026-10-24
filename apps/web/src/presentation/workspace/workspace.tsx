@@ -1,5 +1,6 @@
 import type { ModelSelection } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
+import { MessageSquareText } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
@@ -462,6 +463,7 @@ export function Workspace({
               {
                 id: "conversations",
                 label: "Conversations",
+                icon: <MessageSquareText aria-hidden="true" />,
                 badge: attention,
                 content: (
                   <ConversationList
