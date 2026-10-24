@@ -287,3 +287,21 @@ test("unknown checkpoint versions fail startup without resetting files or leakin
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("only committed executions invalidate pending downloads", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-workspace-rev-"));
+  const workspace = await BotWorkspace.open(join(directory, "w.sqlite"));
+  try {
+    await workspace.execute("s", "write", "echo x > a");
+    const revision = workspace.list("/workspace").revision;
+    await workspace.execute("s", "read", "cat a");
+    await workspace.execute("s", "fail", "echo y > a; false");
+    expect(workspace.list("/workspace").revision).toBe(revision);
+    expect(workspace.download("/workspace/a", revision).bytes.toString()).toBe(
+      "x\n",
+    );
+  } finally {
+    await workspace.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

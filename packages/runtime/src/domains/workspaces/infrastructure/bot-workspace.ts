@@ -184,10 +184,14 @@ export class BotWorkspace {
           .run(operationId, fingerprint, result);
         this.db
           .query(
-            "UPDATE workspace SET checkpoint=?, revision=revision+1, receipt_bytes=receipt_bytes+? WHERE id=1 AND epoch=?",
+            "UPDATE workspace SET checkpoint=?, revision=revision+?, receipt_bytes=receipt_bytes+? WHERE id=1 AND epoch=?",
           )
           .run(
             response.result.committed ? checkpoint : state.checkpoint,
+            // Only real content changes invalidate listings and pending downloads.
+            response.result.committed && checkpoint !== state.checkpoint
+              ? 1
+              : 0,
             Buffer.byteLength(result) + Buffer.byteLength(operationId) + 64,
             this.epoch,
           );
