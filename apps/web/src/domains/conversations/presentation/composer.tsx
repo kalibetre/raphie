@@ -118,7 +118,7 @@ export function Composer({
         >
           <Textarea
             ref={input}
-            className="min-h-12 resize-none rounded-none border-0 bg-transparent px-0 pt-1 pb-2 text-[14.5px] leading-normal shadow-none focus-visible:ring-0 md:text-[14.5px] dark:bg-transparent"
+            className="min-h-6 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[14.5px] leading-6 shadow-none focus-visible:ring-0 md:text-[14.5px] dark:bg-transparent"
             aria-label="Message Raphie"
             placeholder="Message Raphie…"
             value={draft}
@@ -154,7 +154,7 @@ export function Composer({
             context={{ draft, model: activeModel?.modelId ?? null, usage }}
           />
           <Button
-            className="ml-auto size-[32px] rounded-full"
+            className="ml-auto size-8 rounded-full transition-[transform,opacity,background-color] duration-150 enabled:hover:scale-105 enabled:active:scale-95"
             type="submit"
             size="icon"
             aria-label="Send message"
@@ -164,17 +164,17 @@ export function Composer({
           </Button>
         </div>
       </form>
-      <p
-        className="composer-hint"
-        data-warning={needsModel || undefined}
-        role={needsModel ? "status" : undefined}
-      >
-        {needsModel
-          ? "Connect a model in Settings to start chatting."
-          : busy
-            ? "Raphie is working. You can leave and come back."
-            : "Tool actions ask for your approval · Enter to send, Shift+Enter for a new line"}
-      </p>
+      {(needsModel || busy) && (
+        <p
+          className="composer-hint"
+          data-warning={needsModel || undefined}
+          role={needsModel ? "status" : undefined}
+        >
+          {needsModel
+            ? "Connect a model in Settings to start chatting."
+            : "Raphie is working. You can leave and come back."}
+        </p>
+      )}
     </div>
   );
 }
