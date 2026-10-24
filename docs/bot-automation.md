@@ -31,7 +31,23 @@ Transport configuration, including tokens, arguments and environment values, is
 encrypted in each bot's `mcp.sqlite`, with an OS-held key and owner-only database
 permissions. APIs return connection summaries, never saved credentials. Follow
 the [credential-store prerequisites and recovery guidance](provider-credential-storage.md).
-No environment-configured MCP bootstrap server is loaded.
+Legacy `MCP_TRANSPORT`, `MCP_URL`, `MCP_BEARER_TOKEN`, `MCP_COMMAND` and
+`MCP_ARGS` configuration loaded by Varlock remains available to the default bot
+only. Settings identifies it as environment configuration. **Import encrypted
+copy** explicitly copies the current transport configuration into that bot’s
+encrypted store and records the decision atomically. Subsequent environment edits
+are ignored, including after the saved connection is removed. The source env
+files are never edited. Before import, removing host configuration and restarting
+disables the connection; pause/remove in Settings requires import first. Existing
+saved connections are preserved, never replaced or merged. An unavailable server
+stays visible as disconnected.
+
+Legacy tool names and connection identity stay compatible across import so
+pending approvals cannot acquire a different server. Legacy SSE is unsupported:
+startup fails explicitly without modifying its configuration. Change the host
+configuration to Streamable HTTP or stdio. Stdio receives PATH only, not inherited
+host credentials; supply required environment values in a new encrypted connection.
+No credential or transport argument is returned through the owner API.
 
 ## Scheduled jobs
 

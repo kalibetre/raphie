@@ -88,7 +88,10 @@ export function McpSettings() {
     }
   }
 
-  async function change(id: string, action: "enable" | "disable" | "remove") {
+  async function change(
+    id: string,
+    action: "enable" | "disable" | "remove" | "import",
+  ) {
     setError("");
     try {
       await data.mutation.mutateAsync({ id, input: { action } });
@@ -125,31 +128,45 @@ export function McpSettings() {
               description={`${connection.connected ? `${connection.toolCount} tools` : connection.enabled ? "Disconnected · reconnect to retry" : "Paused"} · ${connection.transport === "http" ? "Streamable HTTP" : "Local command"} · ${connection.address}`}
             >
               <div className="automation-actions">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() =>
-                    void change(
-                      connection.id,
-                      connection.connected ? "disable" : "enable",
-                    )
-                  }
-                >
-                  {connection.connected
-                    ? "Pause"
-                    : connection.enabled
-                      ? "Reconnect"
-                      : "Enable"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() => void change(connection.id, "remove")}
-                >
-                  Remove
-                </Button>
+                {connection.source === "environment" ? (
+                  <>
+                    <span>Environment configuration · default bot only</span>
+                    <Button
+                      disabled={pending}
+                      onClick={() => void change(connection.id, "import")}
+                    >
+                      Import encrypted copy
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() =>
+                        void change(
+                          connection.id,
+                          connection.connected ? "disable" : "enable",
+                        )
+                      }
+                    >
+                      {connection.connected
+                        ? "Pause"
+                        : connection.enabled
+                          ? "Reconnect"
+                          : "Enable"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => void change(connection.id, "remove")}
+                    >
+                      Remove
+                    </Button>
+                  </>
+                )}
               </div>
             </Row>
           ))

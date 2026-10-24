@@ -64,3 +64,72 @@ test("MCP settings encrypt credentials, restore connections and keep bot invento
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("legacy MCP stays host configured until explicit encrypted import, retaining identity and removal across restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-legacy-mcp-"));
+  const path = join(directory, "mcp.sqlite");
+  const keyStore = memoryCredentialKeyStore();
+  const inventories: { namespace?: string; identity: string }[][] = [];
+  const options = {
+    legacy: {
+      transport: "http" as const,
+      url: "http://localhost/mcp",
+      token: "synthetic-legacy-token",
+    },
+    keyStore,
+    gate: new ModelConnectionGate(),
+    busy: async () => false,
+    publish: (tools: { namespace?: string; identity: string }[]) =>
+      inventories.push(tools),
+    connect: async () => ({
+      server: { name: "fixture", version: "1" },
+      tools: [],
+      call: async () => ({ content: [] }),
+      close: async () => {},
+    }),
+  };
+  let service = await BotMcp.open(path, options);
+  try {
+    expect(service.read()[0].source).toBe("environment");
+    const identity = inventories.at(-1)![0];
+    expect(identity.namespace).toBeUndefined();
+    expect(JSON.stringify(service.read())).not.toContain(
+      "synthetic-legacy-token",
+    );
+    await service.add({
+      name: "Other",
+      transport: "http",
+      url: "http://localhost/other",
+    });
+    await service.close();
+    service = await BotMcp.open(path, { ...options, legacy: undefined });
+    expect(service.read()).toHaveLength(1); // No automatic copy of environment config.
+    await service.close();
+    service = await BotMcp.open(path, options);
+    await service.change("legacy-environment", "import");
+    expect(
+      service.read().find((e) => e.id === "legacy-environment")!.source,
+    ).toBe("saved");
+    expect(
+      (await readFile(path)).includes(Buffer.from("synthetic-legacy-token")),
+    ).toBe(false);
+    await service.close();
+    service = await BotMcp.open(path, {
+      ...options,
+      legacy: { ...options.legacy, token: "changed-host-value" },
+    });
+    expect(
+      inventories.at(-1)!.find((entry) => entry.namespace === undefined)
+        ?.identity,
+    ).toBe(identity.identity);
+    await service.change("legacy-environment", "remove");
+    await service.close();
+    service = await BotMcp.open(path, options);
+    expect(service.read().some((e) => e.id === "legacy-environment")).toBe(
+      false,
+    );
+  } finally {
+    await service.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

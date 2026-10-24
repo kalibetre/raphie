@@ -47,7 +47,9 @@ export function mcpRoutes(mcp: BotMcp) {
       "/:id",
       limitBody(1024),
       jsonInput(
-        z.object({ action: z.enum(["enable", "disable", "remove"]) }).strict(),
+        z
+          .object({ action: z.enum(["enable", "disable", "remove", "import"]) })
+          .strict(),
       ),
       async (c) =>
         c.json({

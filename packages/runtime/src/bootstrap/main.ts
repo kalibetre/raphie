@@ -16,6 +16,7 @@ import {
   createDiscordBridge,
   resolveDiscordThread,
 } from "../infrastructure/discord/bridge.ts";
+import { legacyMcpConfig } from "../infrastructure/mcp/legacy-config.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../infrastructure/observability/telemetry-switch.ts";
 import { Gateway } from "./agent-runtime.ts";
@@ -33,6 +34,7 @@ const resource = <A>(
 let lifecycle: "starting" | "running" | "stopping" = "starting";
 
 const program = Effect.gen(function* () {
+  const legacyMcp = legacyMcpConfig(process.env);
   const directory = resolve(
     fileURLToPath(new URL("../../../../", import.meta.url)),
     process.env.DATA_DIRECTORY ?? ".data",
@@ -129,12 +131,9 @@ const program = Effect.gen(function* () {
     (await app.chats.state()).turns.some((turn) => turn.status === "pending");
   const bots = yield* resource(
     () =>
-      BotHost.open(
-        directory,
-        { gateway: app, settings, memory },
-        undefined,
-        {},
-      ),
+      BotHost.open(directory, { gateway: app, settings, memory }, undefined, {
+        legacyMcp,
+      }),
     (host) => host.close(),
   );
   const stop = yield* Effect.acquireRelease(

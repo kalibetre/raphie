@@ -24,9 +24,11 @@ type Entry = {
   name: string;
   enabled: boolean;
   config: McpConnection;
+  legacy?: boolean;
 };
 
 type Options = {
+  legacy?: McpConnection;
   gate: ModelConnectionGate;
   busy: () => Promise<boolean>;
   publish: (tools: McpTools[]) => void;
@@ -40,6 +42,7 @@ export class BotMcp {
   private cipher: CredentialCipher;
   private options: Options;
   private entries: Entry[] = [];
+  private environmentEntry = false;
   private clients = new Map<string, McpClient>();
 
   private constructor(
@@ -76,6 +79,19 @@ export class BotMcp {
           cipher.decrypt(JSON.parse(row.value), "connections", "mcp")!,
         );
       else service.persist();
+      db.exec(
+        "CREATE TABLE IF NOT EXISTS legacy_mcp (id INTEGER PRIMARY KEY CHECK(id=1))",
+      );
+      if (options.legacy && !db.query("SELECT id FROM legacy_mcp").get()) {
+        service.environmentEntry = true;
+        service.entries.push({
+          id: "legacy-environment",
+          name: "Legacy environment MCP",
+          enabled: true,
+          config: options.legacy,
+          legacy: true,
+        });
+      }
       for (const entry of service.entries) {
         service.redact(entry.config);
         if (entry.enabled) {
@@ -98,6 +114,7 @@ export class BotMcp {
   read(): BotMcpConnection[] {
     return this.entries.map((e) => ({
       id: e.id,
+      source: this.environmentEntry && e.legacy ? "environment" : "saved",
       name: e.name,
       enabled: e.enabled,
       transport: e.config.transport,
@@ -142,7 +159,13 @@ export class BotMcp {
           ? [
               {
                 client,
-                namespace: `c_${e.id.replaceAll("-", "")}`,
+                namespace: e.legacy
+                  ? undefined
+                  : `c_${e.id.replaceAll("-", "")}`,
+                documentationTools:
+                  e.legacy && client.server?.name === "executor"
+                    ? ["skills"]
+                    : [],
                 identity: new Bun.CryptoHasher("sha256")
                   .update(JSON.stringify(e.config))
                   .digest("hex"),
@@ -160,7 +183,9 @@ export class BotMcp {
         this.cipher.keyId,
         JSON.stringify(
           this.cipher.encrypt(
-            JSON.stringify(this.entries),
+            JSON.stringify(
+              this.entries.filter((e) => !(this.environmentEntry && e.legacy)),
+            ),
             "connections",
             "mcp",
           ),
@@ -214,11 +239,37 @@ export class BotMcp {
     });
   }
 
-  async change(id: string, action: "enable" | "disable" | "remove") {
+  async change(id: string, action: "enable" | "disable" | "remove" | "import") {
     return this.options.gate.run(async () => {
       await this.idle();
       const entry = this.entries.find((e) => e.id === id);
       if (!entry) throw new InputError("MCP connection not found.", 404);
+      if (action === "import") {
+        if (!entry.legacy || !this.environmentEntry)
+          throw new InputError(
+            "Only environment configuration can be imported.",
+          );
+        if (this.entries.length > 16)
+          throw new InputError("Remove a saved connection before importing.");
+        this.environmentEntry = false;
+        try {
+          this.db.transaction(() => {
+            this.persist();
+            this.db
+              .query("INSERT OR IGNORE INTO legacy_mcp(id) VALUES(1)")
+              .run();
+          })();
+        } catch (error) {
+          this.environmentEntry = true;
+          throw error;
+        }
+        return this.read();
+      }
+      if (entry.legacy && this.environmentEntry && action !== "enable") {
+        throw new InputError(
+          "Import the environment connection before pausing or removing it, or remove its host environment configuration and restart.",
+        );
+      }
       if (action === "enable" && !this.clients.has(id)) {
         try {
           this.clients.set(id, await this.connect(entry.config));

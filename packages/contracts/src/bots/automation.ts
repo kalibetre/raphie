@@ -11,6 +11,7 @@ export type SaveMcpConnection = {
 };
 
 export type BotMcpConnection = {
+  source?: "environment" | "saved";
   id: string;
   name: string;
   transport: McpTransport;

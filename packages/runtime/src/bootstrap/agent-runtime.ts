@@ -183,7 +183,10 @@ export class Gateway {
             : null;
         }),
       );
-    if (options.mcp) registry.install(createMcpTools(app, options.mcp));
+    if (options.mcp) {
+      registry.install(createMcpTools(app, options.mcp));
+      app.mcpConnections = [options.mcp];
+    }
     app.harness = await Harness.open(
       await openBunSqliteStorage(join(options.directory, "gateway.sqlite")),
       {

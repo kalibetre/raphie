@@ -20,10 +20,12 @@ export function useWorkspaceLayout(
   useEffect(() => {
     setInspectorValue(readLocal(inspectorKey(botId)) === "true");
   }, [botId]);
+
   function setInspector(open: boolean) {
     setInspectorValue(open);
     writeLocal(inspectorKey(botId), String(open));
   }
+
   const [sidebar, setSidebar] = useState(false);
   const [navigationWidth, setNavigationWidth] = useState(264);
   const [activityWidth, setActivityWidth] = useState(340);

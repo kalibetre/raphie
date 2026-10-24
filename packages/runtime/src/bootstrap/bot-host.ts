@@ -15,6 +15,7 @@ import type { SettingsService } from "../domains/settings/application/ports.ts";
 import { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
 import type { CredentialKeyStore } from "../domains/settings/infrastructure/credential-cipher.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
+import type { McpConnection } from "../infrastructure/mcp/client.ts";
 import { InputError } from "../shared/application/input-error.ts";
 import { Gateway } from "./agent-runtime.ts";
 
@@ -29,7 +30,7 @@ export type BotRuntime = {
 
 type OpenBot = (id: string, directory: string) => Promise<BotRuntime>;
 
-type Automation = { keyStore?: CredentialKeyStore };
+type Automation = { keyStore?: CredentialKeyStore; legacyMcp?: McpConnection };
 
 /** One process, separate storage and authorities. Only bootstrap holds every bot. */
 export class BotHost implements BotProfiles {
@@ -164,6 +165,8 @@ export class BotHost implements BotProfiles {
         (await gateway.chats.state()).turns.some((t) => t.status === "pending");
       mcp = await BotMcp.open(join(directory, "mcp.sqlite"), {
         keyStore: this.automation.keyStore,
+        legacy:
+          directory === this.directory ? this.automation.legacyMcp : undefined,
         gate: gateway.configurationGate,
         busy,
         publish: (tools) => gateway.setMcp(tools),
