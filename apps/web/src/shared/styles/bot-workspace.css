@@ -85,13 +85,6 @@
     padding: 3px 7px;
     letter-spacing: 0.5px;
   }
-  .bot-search {
-    background: color-mix(in srgb, var(--card) 65%, transparent);
-    border: 1px solid var(--border);
-    margin-bottom: 24px;
-    height: 36px;
-    border-radius: 10px;
-  }
   .roster-label {
     display: flex;
     align-items: center;
@@ -109,6 +102,7 @@
   }
   .bot-roster-scroll {
     flex: 1;
+    margin: 0 -12px;
   }
   .bot-roster-list {
     display: grid;
@@ -120,8 +114,8 @@
     align-items: center;
     text-align: left;
     border: 1px solid transparent;
-    border-radius: 12px;
-    padding: 12px 10px;
+    border-radius: 0;
+    padding: 12px 22px;
     background: transparent;
     min-width: 0;
     width: 100%;
@@ -409,30 +403,27 @@
   .library-page {
     padding: 12px 12px 20px;
   }
+  /* Search narrows the text; these compact chips narrow the reply state. */
   .library-filters {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     flex-wrap: wrap;
-    margin: 0 0 12px;
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--muted);
+    margin-top: 10px;
   }
   .library-filter {
-    flex: 1;
+    flex: none;
+    border-color: transparent;
+    color: var(--muted-foreground);
   }
   .library-filter[aria-pressed="true"] {
-    background: var(--card);
-    color: var(--foreground);
-    box-shadow: 0 1px 3px #00000012;
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+    color: var(--accent);
   }
   .library-filter-count {
-    padding: 0 5px;
-    border-radius: 5px;
-    background: var(--muted);
     font-size: 10px;
-    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.75;
   }
   .library-search {
     display: flex;
@@ -526,10 +517,6 @@
     text-align: center;
   }
   @media (max-width: 1100px) and (min-width: 768px) {
-    .library-filter-label,
-    .library-filter svg {
-      display: none;
-    }
     .header-bot {
       max-width: 105px;
     }
@@ -551,10 +538,12 @@
     }
     .bot-roster .roster-brand,
     .bot-roster .roster-label,
-    .bot-search,
     .new-bot-button,
     .roster-footer {
       display: none;
+    }
+    .bot-roster-scroll {
+      margin: 0;
     }
     .bot-roster-list {
       display: flex;
@@ -563,6 +552,7 @@
     }
     .bot-roster-item {
       position: relative;
+      border-radius: 12px;
       flex-direction: column;
       justify-content: center;
       gap: 7px;
@@ -655,16 +645,6 @@
     }
     .library-page {
       padding: 24px 16px;
-    }
-    .library-filters {
-      gap: 2px;
-    }
-    .library-filters button {
-      font-size: 11px;
-      padding: 6px 8px;
-    }
-    .library-filter svg {
-      display: none;
     }
     .library-list .conversation-entry {
       padding: 16px;

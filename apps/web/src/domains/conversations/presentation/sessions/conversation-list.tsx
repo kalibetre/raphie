@@ -1,11 +1,5 @@
 import type { SessionSummary } from "@raphie/contracts";
-import {
-  CheckCheck,
-  MessageSquareText,
-  Search,
-  ShieldQuestion,
-  X,
-} from "lucide-react";
+import { MessageSquareText, Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "../../../../shared/ui/button";
@@ -54,33 +48,6 @@ export function ConversationList({
       viewportLabel="Conversations"
     >
       <section className="library-page">
-        <div
-          className="library-filters"
-          role="group"
-          aria-label="Filter conversations"
-        >
-          {(
-            [
-              ["all", "All", MessageSquareText],
-              ["unread", "New replies", CheckCheck],
-              ["approval", "Approvals", ShieldQuestion],
-            ] as const
-          ).map(([id, label, Icon]) => (
-            <Button
-              key={id}
-              variant={tab === id ? "secondary" : "ghost"}
-              size="sm"
-              aria-pressed={tab === id}
-              aria-label={`${label}, ${counts[id]}`}
-              onClick={() => setTab(id)}
-              className="library-filter"
-            >
-              <Icon size={14} aria-hidden="true" />
-              <span className="library-filter-label">{label}</span>
-              <span className="library-filter-count">{counts[id]}</span>
-            </Button>
-          ))}
-        </div>
         <div className="library-search">
           <Search size={15} />
           <input
@@ -100,6 +67,36 @@ export function ConversationList({
               <X size={13} />
             </Button>
           )}
+        </div>
+        <div
+          className="library-filters"
+          role="group"
+          aria-label="Filter conversations"
+        >
+          {(
+            [
+              ["all", "All"],
+              ["unread", "New replies"],
+              ["approval", "Approvals"],
+            ] as const
+          ).map(([id, label]) => (
+            <Button
+              key={id}
+              variant="ghost"
+              size="xs"
+              aria-pressed={tab === id}
+              aria-label={`${label}, ${counts[id]}`}
+              onClick={() => setTab(id)}
+              className="library-filter h-7 rounded-full border px-2 text-[11px]"
+            >
+              <span className="library-filter-label">{label}</span>
+              {id !== "all" && counts[id] > 0 && (
+                <span className="library-filter-count" aria-hidden="true">
+                  {counts[id]}
+                </span>
+              )}
+            </Button>
+          ))}
         </div>
         <p className="library-results" role="status">
           {filtered.length}{" "}
