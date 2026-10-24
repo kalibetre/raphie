@@ -191,6 +191,43 @@ test("agent edits and deletes directly; old timers cannot run after replacement 
   }
 });
 
+test("a topic-only update preserves the reminder ID, due time and state across restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-topic-edit-"));
+  let app = await open(directory);
+  try {
+    const [original] = await app.jobs.add({
+      name: "TanStack AI reminder",
+      prompt: "Tell me about TanStack AI.",
+      everyMinutes: null,
+      firstRunAt: Date.now() + 300_000,
+    });
+    await app.gateway.close();
+    app = await open(directory, undefined, {
+      name: "schedule_update",
+      args: { id: original.id, prompt: "Tell me about Pi Durable." },
+    });
+    await app.gateway.sessions.submit(app.actor, {
+      eventId: "change-topic",
+      text: "I changed my mind, make it about Pi Durable.",
+    });
+    await until(
+      async () => (await app.gateway.chats.state()).turns[0]?.status === "done",
+    );
+    const expected = { ...original, prompt: "Tell me about Pi Durable." };
+    expect(await app.jobs.read()).toEqual([expected]);
+    expect((await app.gateway.chats.state()).turns[0].answer).toContain(
+      '"updated":true',
+    );
+    expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
+    await app.gateway.close();
+    app = await open(directory);
+    expect(await app.jobs.read()).toEqual([expected]);
+  } finally {
+    await app.gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("schedule tools cannot edit or delete another bot's schedule", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-foreign-schedule-"));
   const owner = await open(join(directory, "owner"));

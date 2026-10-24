@@ -70,6 +70,15 @@ removes future work while keeping the conversation. Neither asks for approval.
 Only confirm an action after the tool reports success. External tool actions
 performed by a scheduled prompt still use their normal approval gate.
 
+For an edit such as "I changed my mind, make it about Pi Durable", the agent's
+scheduling guidance directs it to update the existing reminder in place. A
+topic-only update keeps its ID, due time, repeat interval and enabled state;
+`delaySeconds` resets the timer only when a timing change is requested. The
+scheduling extension describes the tools currently offered on each turn so old
+assistant claims about missing tools do not define current capabilities. Tool
+selection remains model-driven; deterministic tests verify storage behavior,
+not whether a model will always choose the intended tool.
+
 The model cannot select another bot or destination conversation. Changes and
 task-scoped replay receipts commit atomically, preventing duplicate jobs or
 repeated edits during recovery. Replaced timers are retired and fenced from

@@ -4,6 +4,7 @@ import {
   defineDoc,
   defineExtension,
   defineTool,
+  section,
   type TaskId,
   type ToolExecutionApi,
   type Tx,
@@ -69,11 +70,33 @@ const id = Type.String({
 export function createScheduleTools(jobs: BotJobs) {
   return defineExtension({
     name: "raphie.scheduling",
+    sections: [
+      section("scheduling", ({ agent }) => {
+        const names = agent.tools
+          .map((tool) => tool.name)
+          .filter((name) => name.startsWith("schedule_"));
+        if (!names.length) return;
+        return [
+          `Scheduling is enabled. Your available scheduling tools on this turn are: ${names.join(", ")}. These current capabilities supersede earlier assistant claims that a tool is missing.`,
+          "Manage this bot's schedules directly on the owner's request, without approval or another confirmation. Delivery is a reply in the originating conversation while the runtime is running, not a device push notification. External actions performed by a job still require approval.",
+          names.includes("schedule_list") &&
+            "Use schedule_list to identify the owner's existing reminder before editing or deleting it.",
+          names.includes("schedule_update") &&
+            'Use schedule_update to edit an existing reminder IN PLACE. Never delete and recreate a reminder to change its topic, wording, name or timing. For example, "I changed my mind, make it about Pi Durable" means update the existing ID with only its prompt (and optionally name). Preserve its due time, repeat interval and enabled state: omit delaySeconds, everyMinutes and enabled unless the owner explicitly changes them. Confirm the edit only after updated:true.',
+          names.includes("schedule_create") &&
+            "Use schedule_create only for a new reminder, not an edit. Omit everyMinutes for a one-time reminder. Confirm creation only after saved:true.",
+          names.includes("schedule_delete") &&
+            "Use schedule_delete only when the owner asks to remove or cancel a reminder, including a completed or disabled one. Confirm deletion only after deleted:true.",
+        ]
+          .filter(Boolean)
+          .join("\n");
+      }),
+    ],
     tools: [
       defineTool({
         name: "schedule_create",
         description:
-          "On the owner's request, save a reminder or recurring prompt in this conversation directly, without asking for approval or confirmation. Omit everyMinutes for a one-time reminder. The runtime must be running; delivery is a conversation reply, not a device push notification. Only confirm success after saved:true. External actions performed by the job still require approval.",
+          "Create a NEW reminder or recurring prompt in this conversation directly on the owner's request, without approval or confirmation. To edit an existing reminder, use schedule_update instead; do not delete and recreate it. Omit everyMinutes for a one-time reminder. The runtime must be running; delivery is a conversation reply, not a device push notification. Only confirm success after saved:true. External actions performed by the job still require approval.",
         parameters: Type.Object(
           {
             name,
@@ -127,7 +150,7 @@ export function createScheduleTools(jobs: BotJobs) {
       defineTool({
         name: "schedule_update",
         description:
-          "Modify this bot's schedule directly on the owner's request, without approval or confirmation. List schedules first to identify the right ID. Supply only changed fields. delaySeconds resets the next run relative to now and re-enables the job unless enabled:false. everyMinutes:null makes it one-time. enabled:false pauses it. This does not cancel an already submitted reply or approve external actions.",
+          "Update an existing reminder IN PLACE, keeping its ID. Use this when the owner changes their mind about its topic, wording, name or timing; never delete and recreate it. No approval or confirmation is needed. List schedules first to identify the right ID. Supply only changed fields. A topic or wording change needs only id and prompt; omit delaySeconds to keep the original due time. delaySeconds resets the next run relative to now and re-enables the job unless enabled:false. everyMinutes:null makes it one-time. enabled:false pauses it. This does not cancel an already submitted reply or approve external actions.",
         parameters: Type.Object(
           {
             id,
@@ -187,7 +210,7 @@ export function createScheduleTools(jobs: BotJobs) {
       defineTool({
         name: "schedule_delete",
         description:
-          "Delete this bot's schedule directly when the owner asks, without approval or confirmation. List schedules first to identify the right ID. Stops future scheduled prompts; keeps the conversation and does not cancel a reply already submitted.",
+          "Remove or cancel this bot's schedule directly when the owner asks, without approval or confirmation. Do not use this to edit a reminder or change its topic; use schedule_update for that. List schedules first to identify the right ID. Stops future scheduled prompts; keeps the conversation and does not cancel a reply already submitted.",
         parameters: Type.Object({ id }, { additionalProperties: false }),
         replay: "safe",
         execute: (args, api, ctx) =>
