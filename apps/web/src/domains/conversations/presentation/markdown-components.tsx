@@ -1,5 +1,9 @@
 import type { Components } from "react-markdown";
 
+import {
+  fencedCode,
+  HighlightedCode,
+} from "../../../shared/syntax/highlighted-code";
 import { CodeBlock } from "../../../shared/ui/code-block";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { MermaidDiagram, mermaidSource } from "./mermaid-diagram";
@@ -7,10 +11,12 @@ import { MermaidDiagram, mermaidSource } from "./mermaid-diagram";
 export const markdownComponents: Components = {
   pre: ({ children }) => {
     const source = mermaidSource(children);
-    return source === null ? (
-      <CodeBlock>{children}</CodeBlock>
+    if (source !== null) return <MermaidDiagram source={source} />;
+    const fence = fencedCode(children);
+    return fence ? (
+      <HighlightedCode code={fence.code} language={fence.language} />
     ) : (
-      <MermaidDiagram source={source} />
+      <CodeBlock>{children}</CodeBlock>
     );
   },
   table: ({ children }) => (

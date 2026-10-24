@@ -159,6 +159,32 @@
     border: 0;
     padding: 0;
   }
+  /* Highlighted fenced code (Shiki). Both themes are in the markup as CSS
+     variables; the app's theme choice picks which one shows. */
+  .code-highlight {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .markdown .code-highlight pre.shiki {
+    margin: 0;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent !important;
+    font-size: 12.5px;
+  }
+  .code-highlight .shiki span {
+    color: var(--shiki-light);
+  }
+  :root[data-theme="dark"] .code-highlight .shiki span {
+    color: var(--shiki-dark);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .code-highlight .shiki span {
+      color: var(--shiki-dark);
+    }
+  }
   .markdown table {
     border-collapse: collapse;
     font-size: 13px;
