@@ -415,16 +415,12 @@ export function Workspace({
                         }
                       />
                     )}
-                    {!data?.model && (
-                      <p className="model-warning" role="status">
-                        Configure a model on the runtime to start chatting.
-                      </p>
-                    )}
                     <Composer
                       key={`composer-${conversationId ?? "new"}`}
                       conversationId={conversationId}
                       suggestion={suggestion}
                       model={conversation?.model ?? data?.model ?? null}
+                      needsModel={!data?.model}
                       usage={usage?.tokens ? usage : undefined}
                       disabled={
                         !connected ||

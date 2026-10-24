@@ -18,6 +18,7 @@ export function Composer({
   conversationId,
   suggestion,
   model,
+  needsModel,
   usage,
   disabled,
   busy,
@@ -29,6 +30,7 @@ export function Composer({
   conversationId?: string;
   suggestion?: { text: string; at: number };
   model: ModelSelection | null;
+  needsModel: boolean;
   usage?: { tokens: number; cost: number };
   disabled: boolean;
   busy: boolean;
@@ -162,10 +164,16 @@ export function Composer({
           </Button>
         </div>
       </form>
-      <p className="composer-hint">
-        {busy
-          ? "Raphie is working. You can leave and come back."
-          : "Tool actions ask for your approval · Enter to send, Shift+Enter for a new line"}
+      <p
+        className="composer-hint"
+        data-warning={needsModel || undefined}
+        role={needsModel ? "status" : undefined}
+      >
+        {needsModel
+          ? "Connect a model in Settings to start chatting."
+          : busy
+            ? "Raphie is working. You can leave and come back."
+            : "Tool actions ask for your approval · Enter to send, Shift+Enter for a new line"}
       </p>
     </div>
   );
