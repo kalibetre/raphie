@@ -1,4 +1,5 @@
 import type { MemoryStatus } from "@raphie/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -45,6 +46,7 @@ function MemoryConfiguration({
   memory: ReturnType<typeof useMemory>;
 }) {
   const { workspace } = useBackend();
+  const navigate = useNavigate();
   const [draft, setDraft] = useState(status.configuration);
   const [key, setKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
@@ -83,6 +85,26 @@ function MemoryConfiguration({
     <>
       <Group
         title="Memory backend"
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void navigate({
+                to: ".",
+                search: (previous) => ({
+                  ...previous,
+                  view: "settings",
+                  section: "memory-browse",
+                  bot:
+                    workspace.botId === "default" ? undefined : workspace.botId,
+                }),
+              })
+            }
+          >
+            Browse memories
+          </Button>
+        }
         note="One active backend. Switching preserves existing data; it does not copy or merge memories."
       >
         <form
