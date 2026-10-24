@@ -7,8 +7,13 @@ store; it cannot be opened by addressing its UUID through another bot's API.
 
 ## Using bots in the web client
 
-Choose an assistant from the bot roster. Raphie is the default bot. Clicking the
-bot’s name in the title bar opens its **Profile**; **Personality** has a dedicated
+Choose an assistant from the bot roster. Raphie is the default bot. Avatars share
+an eight-color palette with their settings accents. Colors are allocated in
+creation order, avoiding repeats until the palette is full; adding or renaming a
+bot keeps older bots' colors stable. Beyond eight bots, colors are reused evenly.
+Each bot's blob shape and gaze remain derived from its stable ID.
+
+Clicking the bot’s name in the title bar opens its **Profile**; **Personality** has a dedicated
 SOUL.md editor and revision history. **New bot** in the sidebar (the plus icon on
 mobile) creates an assistant and opens its own provider setup. Add its provider
 under **Providers**, choose a default under **Models**, and configure its memory

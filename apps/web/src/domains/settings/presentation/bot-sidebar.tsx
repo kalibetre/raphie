@@ -4,7 +4,8 @@ import { useState } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
-import { BotAvatar, botTone } from "./bot-avatar";
+import { BotAvatar } from "./bot-avatar";
+import { useBotTones } from "./bot-tones";
 
 export function BotSidebar({
   bots,
@@ -29,6 +30,7 @@ export function BotSidebar({
   error: boolean;
   onRetry: () => void;
 }) {
+  const tone = useBotTones();
   const [filter, setFilter] = useState("");
   const filtered = bots.filter((b) =>
     b.name.toLowerCase().includes(filter.toLowerCase()),
@@ -71,7 +73,7 @@ export function BotSidebar({
               <button
                 key={b.id}
                 data-bot-nav
-                className={`bot-roster-item tone-${botTone(b.id)}`}
+                className={`bot-roster-item tone-${tone(b.id)}`}
                 aria-current={b.id === botId ? "page" : undefined}
                 onClick={() => onSelect(b.id)}
                 aria-label={`${b.name}${count ? `, ${count} conversations need attention` : ""}`}

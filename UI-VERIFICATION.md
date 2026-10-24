@@ -329,3 +329,16 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
 - Validation: formatting, architecture, lint, types, all 129 tests and production
   build pass. Tests require local server permissions outside the sandbox. The
   existing build chunk-size warning remains.
+
+# Bot color collisions — 2026-10-24
+
+- Reproduced two distinct IDs selecting the same avatar color. The old independent
+  hash had only four buckets. The UI now allocates eight color families across
+  the runtime's stable creation-order roster, preferring each ID's original
+  family and using unused colors before reusing the least-used family.
+- One shared assignment colors avatars, roster highlights and settings accents.
+  Adding bots leaves earlier assignments intact; shapes and gaze are unchanged.
+- Regression tests cover collisions, palette exhaustion, balanced reuse, stable
+  append/reload and default-bot sage. Browser-created fixture bots reached eight
+  unique colors with stable older assignments, matching header/settings colors,
+  and no browser exceptions. Full validation passes all 133 tests and the build.

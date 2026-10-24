@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import { BotAvatar, botTone } from "./bot-avatar";
+import { BotAvatar } from "./bot-avatar";
+import { useBotTones } from "./bot-tones";
 
 /**
  * The top of every settings page. Bot pages carry the bot's avatar and a wash
@@ -21,10 +22,11 @@ export function SettingsPage({
   scope?: string;
   children: ReactNode;
 }) {
+  const tone = useBotTones();
   return (
     <section className="settings-page">
       <header
-        className={`settings-hero ${bot ? `tone-${botTone(bot.id)}` : "settings-hero-app"}`}
+        className={`settings-hero ${bot ? `tone-${tone(bot.id)}` : "settings-hero-app"}`}
       >
         <div className="settings-hero-copy">
           <h1>{title}</h1>

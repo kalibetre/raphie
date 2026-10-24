@@ -11,7 +11,8 @@ import type { ReactNode } from "react";
 import { Button } from "../../../shared/ui/button";
 import { SidebarTrigger, useSidebar } from "../../../shared/ui/sidebar";
 import { useBots } from "../infrastructure/use-bots";
-import { BotAvatar, botTone } from "./bot-avatar";
+import { BotAvatar } from "./bot-avatar";
+import { useBotTones } from "./bot-tones";
 import { isAppSection, type Section, sectionOf } from "./settings-sections";
 
 /** Settings page area: breadcrumb top bar above the selected section. */
@@ -26,6 +27,7 @@ export function SettingsMain({
   onBack: () => void;
   children: ReactNode;
 }) {
+  const tone = useBotTones();
   const bots = useBots();
   const { isMobile, open, openMobile } = useSidebar();
   const navigationOpen = isMobile ? openMobile : open;
@@ -60,7 +62,7 @@ export function SettingsMain({
             size={12}
             aria-hidden="true"
           />
-          <span className={`settings-breadcrumb-scope tone-${botTone(botId)}`}>
+          <span className={`settings-breadcrumb-scope tone-${tone(botId)}`}>
             {!app && section !== "new-bot" && <BotAvatar id={botId} />}
             <span className="settings-breadcrumb-label">
               {app ? "App" : section === "new-bot" ? "New bot" : name}

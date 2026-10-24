@@ -14,6 +14,7 @@ import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics"
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
+import { BotTonesProvider } from "../../domains/settings/presentation/bot-tones";
 import type { Section } from "../../domains/settings/presentation/settings";
 import { Settings } from "../../domains/settings/presentation/settings";
 import { SettingsMain } from "../../domains/settings/presentation/settings-main";
@@ -264,7 +265,7 @@ export function Workspace({
       }}
     />
   );
-  return (
+  const content = (
     <TooltipProvider delay={300}>
       {/* One shadcn sidebar shell; only its content changes between views. */}
       <SidebarProvider
@@ -482,5 +483,10 @@ export function Workspace({
         )}
       </SidebarProvider>
     </TooltipProvider>
+  );
+  return (
+    <BotTonesProvider bots={inbox.bots.data?.items ?? []}>
+      {content}
+    </BotTonesProvider>
   );
 }

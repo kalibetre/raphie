@@ -167,6 +167,18 @@
   .tone-3 {
     --tone: #83bcb4;
   }
+  .tone-4 {
+    --tone: #dda6b5;
+  }
+  .tone-5 {
+    --tone: #91b7df;
+  }
+  .tone-6 {
+    --tone: #d2ca86;
+  }
+  .tone-7 {
+    --tone: #d5aa91;
+  }
   .bot-roster-copy {
     display: block;
     min-width: 0;
