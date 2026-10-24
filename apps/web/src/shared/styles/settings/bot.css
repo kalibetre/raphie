@@ -11,9 +11,6 @@
     border-bottom: 1px solid var(--border);
   }
   .navigation-toggle {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--card);
     color: var(--muted-foreground);
   }
   .settings-breadcrumb {
