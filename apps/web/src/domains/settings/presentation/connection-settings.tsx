@@ -47,7 +47,10 @@ export function ConnectionSettings() {
       note="Choose the local server this browser connects to. Connecting displays that server’s data. Each server keeps its own sessions and settings."
     >
       <div className="settings-form">
-        <p>Active backend: {workspace.url}</p>
+        <p>
+          Active backend: {workspace.url}{" "}
+          {info.data?.identity?.kind === "fixture" ? "(test fixture)" : ""}
+        </p>
         {info.data?.identity ? (
           <p>
             App data: {info.data.identity.directory}

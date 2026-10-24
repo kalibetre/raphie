@@ -19,6 +19,7 @@ import {
 import { legacyMcpConfig } from "../infrastructure/mcp/legacy-config.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../infrastructure/observability/telemetry-switch.ts";
+import { ownAppData } from "../infrastructure/workspace/app-data-owner.ts";
 import {
   appDataDirectory,
   appDataIdentity,
@@ -42,6 +43,10 @@ const program = Effect.gen(function* () {
   const directory = appDataDirectory(
     fileURLToPath(new URL("../../../../", import.meta.url)),
     process.env.DATA_DIRECTORY,
+  );
+  yield* resource(
+    () => ownAppData(directory),
+    async (owner) => owner.close(),
   );
   const identity = yield* Effect.tryPromise(() => appDataIdentity(directory));
   const collector = yield* resource(

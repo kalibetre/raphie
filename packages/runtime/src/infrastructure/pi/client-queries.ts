@@ -30,7 +30,7 @@ type QuerySource = DurableContext & {
   options: {
     mcp?: McpTools;
     mcpError?: boolean;
-    identity?: { id: string; directory: string };
+    identity?: { id: string; directory: string; kind?: "fixture" };
   };
 };
 

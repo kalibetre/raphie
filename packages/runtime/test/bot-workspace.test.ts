@@ -250,3 +250,40 @@ test("checkpoint and receipt roll back together on a storage failure; full recei
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("unknown checkpoint versions fail startup without resetting files or leaking the Gateway store", async () => {
+  const { Database } = await import("bun:sqlite");
+  const { Gateway } = await import("../src/bootstrap/agent-runtime.ts");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-workspace-version-"));
+  const path = join(directory, "workspace/checkpoint.sqlite");
+  const workspace = await BotWorkspace.open(path);
+  await workspace.execute("session", "seed", "echo preserved > note");
+  await workspace.close();
+  const db = new Database(path);
+  try {
+    db.exec("UPDATE workspace SET version=999");
+    await assert.rejects(
+      Gateway.open({ directory }),
+      /Unsupported workspace checkpoint version/,
+    );
+    const saved = db
+      .query<{ checkpoint: string; version: number }, []>(
+        "SELECT checkpoint,version FROM workspace",
+      )
+      .get()!;
+    expect(saved.version).toBe(999);
+    expect(saved.checkpoint).toContain("cHJlc2VydmVkCg==");
+    db.exec("UPDATE workspace SET version=1");
+    const gateway = await Gateway.open({ directory });
+    try {
+      expect(
+        (await gateway.workspace.execute("session", "read", "cat note")).stdout,
+      ).toBe("preserved\n");
+    } finally {
+      await gateway.close();
+    }
+  } finally {
+    db.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

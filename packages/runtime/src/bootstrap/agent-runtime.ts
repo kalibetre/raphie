@@ -56,6 +56,7 @@ import { createWorkspaceTools } from "../domains/workspaces/infrastructure/works
 import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
 import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
 import { openBunSqliteStorage } from "../infrastructure/storage/bun-sqlite.ts";
+import { appDataIdentity } from "../infrastructure/workspace/app-data.ts";
 import {
   noTelemetry,
   type Telemetry,
@@ -63,7 +64,7 @@ import {
 import { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
-  identity?: { id: string; directory: string };
+  identity?: { id: string; directory: string; kind?: "fixture" };
   deferResume?: boolean;
   now?: () => number;
   botId?: string;
@@ -157,7 +158,20 @@ export class Gateway {
   }
 
   static async open(options: Options) {
+    options = {
+      ...options,
+      identity: options.identity ?? (await appDataIdentity(options.directory)),
+    };
     const app = new Gateway(options);
+    try {
+      return await Gateway.initialize(app, options);
+    } catch (error) {
+      await app.close().catch(() => {});
+      throw error;
+    }
+  }
+
+  private static async initialize(app: Gateway, options: Options) {
     await mkdir(options.directory, { recursive: true, mode: 0o700 });
     const registry = createRegistry();
     app.registry = registry;
@@ -379,7 +393,7 @@ export class Gateway {
   async close() {
     try {
       await this.observations.close();
-      await this.harness.close(context);
+      await this.harness?.close(context);
     } finally {
       await this.workspace?.close();
     }

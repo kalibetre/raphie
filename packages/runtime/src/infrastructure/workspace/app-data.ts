@@ -20,6 +20,10 @@ export function appDataDirectory(checkout: string, configured?: string) {
     ).trim();
     root = dirname(common);
   } catch {
+    if (existsSync(join(checkout, ".git")))
+      throw new Error(
+        "Could not resolve the Git app data location. Set DATA_DIRECTORY explicitly before starting; no stores were opened.",
+      );
     /* Packaged installations use their installation directory. */
   }
   const stable = join(root, ".data");

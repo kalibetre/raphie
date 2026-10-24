@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
+import assert from "node:assert/strict";
+import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,5 +45,54 @@ test("worktrees reuse a stable default, preserve explicit paths and refuse ambig
     expect(await appDataIdentity(root)).not.toEqual(identity);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("app data rejects another live owner and recovers ownership after SIGKILL", async () => {
+  const { ownAppData } =
+    await import("../src/infrastructure/workspace/app-data-owner.ts");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-data-owner-"));
+  const child = spawn(
+    process.execPath,
+    [
+      new URL("./app-data-owner-worker.ts", import.meta.url).pathname,
+      directory,
+    ],
+    { env: {}, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("Owner fixture did not start")),
+        5000,
+      );
+      child.stdout.once("data", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+      child.once("exit", () => {
+        clearTimeout(timeout);
+        reject(new Error("Owner fixture exited early"));
+      });
+      child.once("error", (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+    });
+    await assert.rejects(ownAppData(directory), /already owned/);
+    const exited = once(child, "exit");
+    child.kill("SIGKILL");
+    await exited;
+    const owner = await ownAppData(directory);
+    try {
+      await assert.rejects(ownAppData(directory), /already owned/);
+    } finally {
+      owner.close();
+    }
+    (await ownAppData(directory)).close();
+  } finally {
+    if (child.exitCode === null && child.signalCode === null)
+      child.kill("SIGKILL");
+    await rm(directory, { recursive: true, force: true });
   }
 });

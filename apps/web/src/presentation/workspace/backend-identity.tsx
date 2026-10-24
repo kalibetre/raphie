@@ -14,7 +14,8 @@ export function BackendIdentity() {
   return (
     <details className="backend-identity">
       <summary>
-        Backend {backend.url} ·{" "}
+        {identity?.kind === "fixture" ? "Test fixture" : "Backend"}{" "}
+        {backend.url} ·{" "}
         {identity ? identity.id.slice(0, 8) : "identity unavailable"}
       </summary>
       <p>

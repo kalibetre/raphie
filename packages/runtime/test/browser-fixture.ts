@@ -25,6 +25,7 @@ import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memo
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
+import { appDataIdentity } from "../src/infrastructure/workspace/app-data.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 const directory = await mkdtemp(join(tmpdir(), "raphie-browser-"));
 const models = createModels();
@@ -169,6 +170,7 @@ if (process.env.RAPHIE_FIXTURE_MEMORY_HISTORY === "true") {
   }
 }
 const app = await Gateway.open({
+  identity: { ...(await appDataIdentity(directory)), kind: "fixture" },
   deferResume: true,
   memory,
   modelConnectionGate: settings.connectionGate,
