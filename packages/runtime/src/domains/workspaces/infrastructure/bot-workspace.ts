@@ -10,6 +10,12 @@ import {
   executionResultSchema,
   workspaceLimits as limits,
 } from "./workspace-protocol.ts";
+import {
+  downloadWorkspaceFile,
+  listWorkspace,
+  readCheckpoint,
+  sandboxInfo,
+} from "./workspace-reader.ts";
 
 type State = {
   epoch: number;
@@ -67,11 +73,42 @@ export class BotWorkspace {
   }
 
   private current() {
-    if (this.closed || this.state().epoch !== this.epoch)
+    const state = this.closed ? undefined : this.state();
+    if (!state || state.epoch !== this.epoch)
       throw new InputError(
         "Workspace executor was replaced or stopped. Retry on the active runtime.",
         409,
       );
+    return state;
+  }
+
+  info() {
+    const state = this.current();
+    return sandboxInfo(
+      readCheckpoint(state.checkpoint),
+      state.revision,
+      state.receipt_bytes,
+      this.queued,
+    );
+  }
+
+  list(path = "/workspace") {
+    const state = this.current();
+    return listWorkspace(
+      readCheckpoint(state.checkpoint),
+      state.revision,
+      path,
+    );
+  }
+
+  download(path: string, revision: number) {
+    const state = this.current();
+    if (state.revision !== revision)
+      throw new InputError(
+        "Workspace changed since this list was loaded. Refresh before downloading.",
+        409,
+      );
+    return downloadWorkspaceFile(readCheckpoint(state.checkpoint), path);
   }
 
   /** Caller derives session and operation identities from trusted tool context. */

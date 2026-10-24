@@ -133,3 +133,9 @@ export type {
   MemoryReflection,
   MemoryStatus,
 } from "./memory/views.ts";
+
+export type {
+  SandboxInfo,
+  WorkspaceEntry,
+  WorkspaceListing,
+} from "./workspaces/views.ts";

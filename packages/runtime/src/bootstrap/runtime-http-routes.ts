@@ -15,6 +15,7 @@ import type { SettingsService } from "../domains/settings/application/ports.ts";
 import type { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
 import { mcpRoutes } from "../domains/settings/presentation/http/mcp-routes.ts";
 import { settingsRoutes } from "../domains/settings/presentation/http/routes.ts";
+import { workspaceRoutes } from "../domains/workspaces/presentation/http/routes.ts";
 import { clientRoutes } from "../infrastructure/http/client-routes.ts";
 import { snapshot } from "../infrastructure/pi/workspace-snapshot.ts";
 import type { Gateway } from "./agent-runtime.ts";
@@ -34,6 +35,7 @@ export function runtimeRoutes(
   options: RuntimeHttpOptions = {},
 ) {
   const app = new Hono();
+  app.route("/api/workspace", workspaceRoutes(runtime.workspace));
   if (options.mcp) app.route("/api/mcp", mcpRoutes(options.mcp));
   if (options.jobs) app.route("/api/jobs", jobRoutes(options.jobs));
   // The outer host owns sanitized transport error responses.
