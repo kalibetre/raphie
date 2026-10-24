@@ -61,6 +61,7 @@ import {
 import { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
+  identity?: { id: string; directory: string };
   deferResume?: boolean;
   now?: () => number;
   botId?: string;

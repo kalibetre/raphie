@@ -172,3 +172,29 @@ separate sessions, streams, credentials, memory and attachments, cross-bot actor
 and approval rejection, personality injection, optimistic revisions, pending-turn
 locking, restart recovery and external memory scopes. Run it with `bun test
 packages/runtime/test/bots.test.ts`; full validation remains `bun run validate`.
+
+## App data continuity across checkouts
+
+With `DATA_DIRECTORY` unset, runtime bootstrap uses the main Git checkout's
+`.data` even when launched from a linked worktree. A packaged installation without
+Git uses its installation directory. Explicit `DATA_DIRECTORY` values keep their
+existing meaning: absolute paths stay absolute; relative paths resolve against
+the running checkout. Fixture launchers pass isolated directories directly and
+never participate in default discovery.
+
+If a linked checkout already contains `.data`, startup stops before opening stores
+and asks for an explicit `DATA_DIRECTORY` choice. It never copies, merges, deletes
+or resets either directory. To keep that checkout's data, set `DATA_DIRECTORY=.data`;
+to use the original installation, set its absolute data path. Stop the runtime
+using that directory before starting another. Do not test new code against live
+databases. Back up SQLite with its backup API while live, or stop the runtime
+before copying the complete directory, and retain credential-store keys.
+
+A persistent `workspace-identity.json` identifies the app data directory across
+restarts and upgrades. Keep it in backups. The web view displays the backend URL
+and short identity; expand it or open Backend connection settings for the complete
+ID and data path. Older runtimes show “identity unavailable”; this never means
+their data was deleted. Switching backends displays a different server's data;
+it does not transfer conversations or settings. Explicit development/fixture
+backends remain separate. Check the address and data path when history appears
+missing before creating another workspace.

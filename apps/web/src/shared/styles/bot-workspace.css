@@ -706,3 +706,16 @@
     text-overflow: ellipsis;
   }
 }
+
+.backend-identity {
+  padding: 0.25rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.backend-identity summary {
+  cursor: pointer;
+}
+.backend-identity p {
+  margin: 0.5rem 0;
+}
