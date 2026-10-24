@@ -159,6 +159,9 @@ export class BotHost implements BotProfiles {
   ): Promise<BotRuntime> {
     if (!this.automation) return runtime;
     const { gateway } = runtime;
+    gateway.options.identity =
+      this.runtimes.get("default")?.gateway.options.identity ??
+      gateway.options.identity;
     let mcp: BotMcp | undefined;
     try {
       const busy = async () =>

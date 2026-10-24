@@ -51,6 +51,8 @@ import {
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
+import { BotWorkspace } from "../domains/workspaces/infrastructure/bot-workspace.ts";
+import { createWorkspaceTools } from "../domains/workspaces/infrastructure/workspace-tools.ts";
 import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
 import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
 import { openBunSqliteStorage } from "../infrastructure/storage/bun-sqlite.ts";
@@ -109,6 +111,7 @@ export class Gateway {
   readonly deliveries: PiDeliveryQueue;
   files: Files;
   harness!: Harness;
+  workspace!: BotWorkspace;
   root!: Conversation;
   options: Options;
   workflow: ReturnType<typeof deliveryWorkflow>;
@@ -203,6 +206,24 @@ export class Gateway {
       context,
     );
     app.root = await app.harness.root(context);
+    app.workspace = await BotWorkspace.open(
+      join(options.directory, "workspace", "checkpoint.sqlite"),
+    );
+    registry.install(
+      createWorkspaceTools(app.workspace, async (conversationId) => {
+        const state = await app.chats.state();
+        const session = state.conversations.find(
+          (s) => s.id === conversationId,
+        );
+        return session &&
+          state.turns.some(
+            (t) =>
+              t.conversationId === conversationId && t.status === "pending",
+          )
+          ? session.sessionId
+          : undefined;
+      }),
+    );
     const previousChats = await app.harness.snapshot(Chats, context);
     const previousModels = new Map<number, ModelRef>();
     for (const session of previousChats?.conversations ?? []) {
@@ -356,8 +377,12 @@ export class Gateway {
   }
 
   async close() {
-    await this.observations.close();
-    await this.harness.close(context);
+    try {
+      await this.observations.close();
+      await this.harness.close(context);
+    } finally {
+      await this.workspace?.close();
+    }
   }
 
   accept(...args: Parameters<FileApprovalService["accept"]>) {
