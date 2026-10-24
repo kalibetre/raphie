@@ -21,9 +21,7 @@ export function PanelResizeHandle({
       className={`panel-resize-handle resize-${side}`}
       role="separator"
       aria-label={
-        side === "left"
-          ? "Resize navigation sidebar"
-          : "Resize activity sidebar"
+        side === "left" ? "Resize navigation sidebar" : "Resize workspace panel"
       }
       aria-orientation="vertical"
       aria-valuemin={min}

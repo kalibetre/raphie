@@ -94,16 +94,19 @@
     padding: 36px 44px 32px;
   }
   /* Traces embedded in Settings → Diagnostics read as one more group. */
-  .settings-page .diagnostics {
+  .settings-page .diagnostics,
+  .settings-page .activity-panel {
     padding: 0;
     max-width: none;
   }
-  .settings-page .diagnostics .panel-heading h2 {
+  .settings-page .diagnostics .panel-heading h2,
+  .settings-page .activity-panel .panel-heading h2 {
     font-size: 13px;
     font-weight: 560;
     color: var(--muted-foreground);
   }
-  .settings-page .diagnostics .activity-scroll {
+  .settings-page .diagnostics .activity-scroll,
+  .settings-page .activity-panel .activity-scroll {
     max-height: 560px;
   }
   /* Bot editors use the same cards as every other settings group. */

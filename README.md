@@ -88,7 +88,7 @@ messaging channels; cross-channel session continuation is deferred.
 
 Conversations support streamed text, Markdown, saved drafts, history after refresh, and pending/error states. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
 
-The session Activity inspector records precise UTC timestamps, local display times, run and runtime-attempt IDs, tool operation IDs, model usage, approval decisions, results, and recovery. Events expand to show payloads and export to JSON. Known credential values and sensitive field names are redacted before journal persistence. Diagnostics is a separate trace-only view.
+The bot settings Activity page records precise UTC timestamps, local display times, run and runtime-attempt IDs, tool operation IDs, model usage, approval decisions, results, and recovery. Events expand to show payloads and export to JSON. Known credential values and sensitive field names are redacted before journal persistence. Diagnostics is a separate trace-only view.
 
 This first journal keeps the latest **5,000 events**, truncates individual diagnostic payloads at **24,000 characters**, and does not persist individual text deltas. Timestamps describe when the host observed an event; “Model response started” is the first observed response, not the start of the provider's network request. Executor's nested calls and private model reasoning are not available here. Operation waterfalls and a backend plugin lifecycle are later work.
 
@@ -155,12 +155,12 @@ starts automatically with the runtime and can be disabled in Settings. In-flight
 spans may finish exporting after disabling; existing traces expire normally. Retention is 48 hours / 100,000 spans,
 and queries return the latest 500 spans in a 1, 6 or 24 hour window. Prompts,
 tool arguments/results and raw SDK errors are excluded. The durable activity
-journal remains the recovery record and the source for session Activity.
+journal remains the recovery record and the source for bot Activity.
 See [observability](docs/observability.md).
 
 ## UI plugins
 
-`apps/web/src/domains/settings/infrastructure/plugins/index.tsx` defines host API version 1 and the `composer.footer` slot. Plugins receive `{ draft, model }` and render with shared UI components. The included token counter is an intentionally rough character-based estimate; actual provider usage is separate in session Activity.
+`apps/web/src/domains/settings/infrastructure/plugins/index.tsx` defines host API version 1 and the `composer.footer` slot. Plugins receive `{ draft, model }` and render with shared UI components. The included token counter is an intentionally rough character-based estimate; actual provider usage is separate in bot Activity.
 
 Plugins are trusted local React modules loaded at build time. Each contribution has a render failure boundary. The Plugins screen saves enable/disable preferences in this browser. This is not an isolation boundary or a third-party plugin marketplace.
 

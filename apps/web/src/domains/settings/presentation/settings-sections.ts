@@ -6,6 +6,7 @@ import {
   History,
   KeyRound,
   Library,
+  ListTree,
   Palette,
   Plug,
   Puzzle,
@@ -109,6 +110,13 @@ export const sections = [
     label: "Appearance",
     icon: Palette,
     lede: () => "How Raphie looks in this browser, for every bot.",
+  },
+  {
+    id: "activity",
+    label: "Activity",
+    icon: ListTree,
+    lede: (bot: string) =>
+      `Recent activity from ${bot}, across its conversations.`,
   },
   {
     id: "telemetry",

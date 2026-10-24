@@ -38,6 +38,7 @@ const botEntries: readonly Section[] = [
   "mcp",
   "jobs",
   "telemetry",
+  "activity",
 ];
 const appEntries: readonly Section[] = ["connection", "general", "plugins"];
 // Subpages reached from inside a page highlight their parent entry.

@@ -2,10 +2,11 @@ import type { ModelSelection } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 
+import { BotActivity } from "../../domains/activity/presentation/bot-activity";
 import { runUsage } from "../../domains/conversations/application/run-projection";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
-import { ConversationLibrary } from "../../domains/conversations/presentation/sessions/conversation-library";
+import { ConversationList } from "../../domains/conversations/presentation/sessions/conversation-list";
 import { ReplyCard } from "../../domains/conversations/presentation/sessions/reply-card";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
@@ -28,13 +29,13 @@ import {
 } from "../../shared/ui/sidebar";
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
-import { ActivitySidebar } from "./activity-sidebar";
 import { PanelResizeHandle } from "./panel-resize-handle";
 import { useBotInbox } from "./use-bot-inbox";
 import { useWorkspaceLayout } from "./use-workspace-layout";
 import { useLiveState } from "./use-workspace-state";
 import { WorkspaceAlert } from "./workspace-alert";
 import { WorkspaceHeader } from "./workspace-header";
+import { WorkspacePanel } from "./workspace-panel";
 
 export function Workspace({
   sessionId,
@@ -69,7 +70,6 @@ export function Workspace({
   const botProfile = inbox.bots.data?.items.find(
     (b) => b.id === workspace.botId,
   );
-  const [library, setLibrary] = useState(false);
   const summaries = [
     ...new Map(
       [
@@ -80,6 +80,7 @@ export function Workspace({
   ].sort((a, b) => b.lastAt - a.lastAt);
   const unread = (session: (typeof summaries)[number]) =>
     inbox.unread(workspace.botId, session);
+  const attention = summaries.filter((s) => unread(s) > 0 || s.waiting).length;
   const lastSessionKey = useCallback(
     (id: string) =>
       `raphie:last-session:${encodeURIComponent(workspace.url)}:${id}`,
@@ -100,7 +101,7 @@ export function Workspace({
     visibleActivityWidth,
     navigationMax,
     activityMax,
-  } = useWorkspaceLayout(!!conversation, view);
+  } = useWorkspaceLayout(view);
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
   const [enabled, setEnabled] = useEnabledPlugins();
   const mobile = useIsMobile();
@@ -152,8 +153,6 @@ export function Workspace({
     if (readSessionId)
       writeLocal(lastSessionKey(workspace.botId), readSessionId);
   }, [workspace.botId, lastSessionKey, readSessionId]);
-  const events =
-    data?.activity.filter((e) => e.conversationId === conversationId) ?? [];
 
   async function send(text: string, eventId: string, model?: ModelSelection) {
     const sent = await api<{
@@ -180,7 +179,7 @@ export function Workspace({
 
   function select(id?: string, nextView?: "settings") {
     setSuggestion(undefined);
-    setLibrary(false);
+    if (mobile) setInspector(false);
     const selected = summaries.find((c) => c.id === id);
     if (selected)
       void navigate({
@@ -317,6 +316,7 @@ export function Workspace({
                 enabled={enabled}
                 setEnabled={setEnabled}
                 traces={<Diagnostics />}
+                activity={<BotActivity />}
               />
             </SettingsMain>
           ) : (
@@ -331,15 +331,11 @@ export function Workspace({
                 }
                 onBack={view ? () => select(conversationId) : undefined}
                 onNew={!view ? () => select() : undefined}
-                onLibrary={!view ? () => setLibrary(!library) : undefined}
-                library={library}
-                unreadCount={
-                  summaries.filter((s) => unread(s) > 0 || s.waiting).length
-                }
+                unreadCount={attention}
                 onBotSettings={() => openSettings("bot")}
                 collapsed={collapsed}
                 inspector={inspector}
-                showInspector={!view && !!conversation}
+                showInspector={!view}
                 onOpenNavigation={() => setSidebar(true)}
                 onToggleNavigation={toggleCollapsed}
                 onToggleInspector={() => setInspector(!inspector)}
@@ -367,17 +363,6 @@ export function Workspace({
                   onAction={() => select()}
                   action="New conversation"
                 />
-              ) : library ? (
-                <ConversationLibrary
-                  name={botProfile?.name ?? "Raphie"}
-                  sessions={summaries}
-                  selectedId={conversationId}
-                  unread={unread}
-                  onSelect={select}
-                  onBack={() => setLibrary(false)}
-                  hasMore={!!hasMoreSessions}
-                  loadMore={() => void loadMoreSessions()}
-                />
               ) : (
                 <>
                   <ReplyCard
@@ -388,7 +373,7 @@ export function Workspace({
                     unread={unread}
                     onSelect={select}
                     storageKey={`raphie:reply-card:${encodeURIComponent(workspace.url)}:${workspace.botId}`}
-                    onViewAll={() => setLibrary(true)}
+                    onViewAll={() => setInspector(true)}
                   />
                   <div className="chat-stage">
                     {nextBefore && (
@@ -466,14 +451,31 @@ export function Workspace({
             </>
           )}
         </SidebarInset>
-        {!view && conversation && (
-          <ActivitySidebar
+        {!view && (
+          <WorkspacePanel
             open={inspector}
             onOpenChange={setInspector}
-            events={events}
             width={visibleActivityWidth}
             maxWidth={activityMax}
             onResize={(value) => resizePanel("right", value)}
+            tabs={[
+              {
+                id: "conversations",
+                label: "Conversations",
+                badge: attention,
+                content: (
+                  <ConversationList
+                    name={botProfile?.name ?? "Raphie"}
+                    sessions={summaries}
+                    selectedId={conversationId}
+                    unread={unread}
+                    onSelect={select}
+                    hasMore={!!hasMoreSessions}
+                    loadMore={() => void loadMoreSessions()}
+                  />
+                ),
+              },
+            ]}
           />
         )}
       </SidebarProvider>

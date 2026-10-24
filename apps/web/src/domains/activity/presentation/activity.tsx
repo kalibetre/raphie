@@ -40,8 +40,8 @@ export function Activity({ events }: { events: ActivityEvent[] }) {
     <section className="activity-panel" aria-label="Activity journal">
       <div className="panel-heading">
         <div>
-          <h2>Activity</h2>
-          <p>Every step, as it happens.</p>
+          <h2>Recent events</h2>
+          <p>Newest first, across this bot’s conversations.</p>
         </div>
         <Button
           variant="ghost"

@@ -6,10 +6,7 @@ import {
   writeLocal,
 } from "../../infrastructure/preferences/storage";
 
-export function useWorkspaceLayout(
-  hasConversation: boolean,
-  view?: "settings",
-) {
+export function useWorkspaceLayout(view?: "settings") {
   const [inspector, setInspector] = useState(false);
   const [sidebar, setSidebar] = useState(false);
   const [navigationWidth, setNavigationWidth] = useState(264);
@@ -66,8 +63,7 @@ export function useWorkspaceLayout(
   useEffect(() => {
     setCollapsed(readLocal("raphie:sidebar-collapsed") === "true");
   }, []);
-  const dockedActivity =
-    inspector && !view && hasConversation && viewportWidth >= 768;
+  const dockedActivity = inspector && !view && viewportWidth >= 768;
   const visibleNavigationWidth = Math.min(
     navigationWidth,
     Math.max(220, viewportWidth - 320 - (dockedActivity ? 280 : 0)),

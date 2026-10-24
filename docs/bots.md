@@ -15,12 +15,14 @@ under **Providers**, choose a default under **Models**, and configure its memory
 backend/scope under **Memory**.
 
 The title bar contains the current conversation title and an icon-only **New
-conversation** action. **Conversations** opens the selected bot’s searchable
-library, with filters for new replies and approval requests. Switching assistants
+conversation** action. The right panel opens from the panel icon and starts with a **Conversations** tab: a searchable
+list with filters for new replies and approval requests. On mobile it opens as a
+sheet and closes when you select a conversation. Switching assistants
 resumes their last opened conversation in this browser when available.
 
 A grouped card below the title bar surfaces unread replies and approval requests
-in other conversations. It shows three rows with a link to the library for more.
+in other conversations. It shows three rows with a link to open the Conversations
+panel for more.
 Collapse it to focus; mobile starts collapsed unless a preference was saved.
 Incoming replies update the count without expanding it. Dismissing a row only
 hides the notice until a newer reply or approval state; it does not mark it read.
@@ -31,12 +33,18 @@ Historical replies with no saved cursor count as unread in this browser.
 The selected bot’s session summaries use the existing live stream. Other bot
 badges poll their latest 100 sessions every 15 seconds while this browser is
 active; the roster refreshes every 30 seconds. No stream is opened per bot or
-background conversation. The library retains pagination for older conversations.
+background conversation. The Conversations tab retains pagination for older
+conversations.
 
 **Revision history** shows the latest saved profiles. Expand a revision to read
 its previous name, description and SOUL.md. Copy older text into the editor and
 save it to restore that personality as a new revision. Refresh after a stale
 revision error; saves made while a turn is pending must wait for it to finish.
+
+**Activity** in each bot’s settings shows its latest 100 journal events across
+conversations, refreshes every five seconds, and supports filtering and JSON
+export. Activity requests use the selected bot’s backend scope.
+
 Profile, personality, provider and memory editors block navigation with unsaved
 changes; save or discard before leaving them.
 

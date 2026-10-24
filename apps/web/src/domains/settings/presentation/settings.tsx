@@ -30,12 +30,15 @@ export function Settings({
   enabled,
   setEnabled,
   traces,
+  activity,
 }: {
   section: Section;
   enabled: string[];
   setEnabled: (ids: string[]) => void;
   /** Trace list shown under Diagnostics; composed by the workspace. */
   traces: ReactNode;
+  /** Bot-wide activity journal; composed by the workspace. */
+  activity: ReactNode;
 }) {
   const { workspace } = useBackend();
   const profile = useBots().data?.items.find((b) => b.id === workspace.botId);
@@ -72,6 +75,8 @@ export function Settings({
           <MemoryBrowse />
         ) : section === "telemetry" ? (
           <TelemetrySettings traces={traces} />
+        ) : section === "activity" ? (
+          activity
         ) : section === "connection" ? (
           <ConnectionSettings />
         ) : section === "general" ? (

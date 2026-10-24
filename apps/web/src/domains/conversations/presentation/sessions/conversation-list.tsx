@@ -1,6 +1,5 @@
 import type { SessionSummary } from "@raphie/contracts";
 import {
-  ArrowLeft,
   CheckCheck,
   MessageSquareText,
   Search,
@@ -13,13 +12,13 @@ import { Button } from "../../../../shared/ui/button";
 import { ScrollArea } from "../../../../shared/ui/scroll-area";
 import { SessionCard } from "./session-card";
 
-export function ConversationLibrary({
+/** Filterable, searchable list of one bot's conversations. */
+export function ConversationList({
   name,
   sessions,
   selectedId,
   unread,
   onSelect,
-  onBack,
   hasMore,
   loadMore,
 }: {
@@ -28,7 +27,6 @@ export function ConversationLibrary({
   selectedId?: string;
   unread: (session: SessionSummary) => number;
   onSelect: (id: string) => void;
-  onBack: () => void;
   hasMore: boolean;
   loadMore: () => void;
 }) {
@@ -52,24 +50,10 @@ export function ConversationLibrary({
   );
   return (
     <ScrollArea
-      className="conversation-library"
-      viewportLabel="Conversation library"
+      className="conversation-library conversation-panel-list"
+      viewportLabel="Conversations"
     >
       <section className="library-page">
-        <header className="library-heading">
-          <div className="library-heading-copy">
-            <span className="library-scope">
-              <MessageSquareText size={13} aria-hidden="true" />
-              {name}
-            </span>
-            <h2>Conversations</h2>
-            <p>Your history with {name}.</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={onBack}>
-            <ArrowLeft size={14} />
-            Back to chat
-          </Button>
-        </header>
         <div
           className="library-filters"
           role="group"
@@ -77,9 +61,9 @@ export function ConversationLibrary({
         >
           {(
             [
-              ["all", "All conversations", MessageSquareText],
+              ["all", "All", MessageSquareText],
               ["unread", "New replies", CheckCheck],
-              ["approval", "Needs approval", ShieldQuestion],
+              ["approval", "Approvals", ShieldQuestion],
             ] as const
           ).map(([id, label, Icon]) => (
             <Button
@@ -93,9 +77,6 @@ export function ConversationLibrary({
             >
               <Icon size={14} aria-hidden="true" />
               <span className="library-filter-label">{label}</span>
-              <span className="library-filter-compact" aria-hidden="true">
-                {id === "all" ? "All" : id === "approval" ? "Approvals" : label}
-              </span>
               <span className="library-filter-count">{counts[id]}</span>
             </Button>
           ))}

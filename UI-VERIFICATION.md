@@ -305,3 +305,27 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   handoff and clearing retained text before the next turn. A Chromium check with
   synthetic streamed snapshots found no blank reply frames across eight model
   step transitions; the draft survived, with no commands or browser exceptions.
+
+# Conversations panel and bot Activity — 2026-10-24
+
+- Moved Activity from the chat inspector into each bot's Settings group. It
+  fetches the selected bot's latest 100 journal events every five seconds, with
+  loading/error states, filtering, expandable payloads and JSON export.
+- Replaced the full-page conversation library with a Conversations tab in the
+  resizable right workspace panel, using the shared shadcn/Base UI Tabs wrapper.
+  Search, counted filters, unread/approval badges, previews and pagination remain.
+  The reply card's View all action opens this panel.
+- The panel works from a new chat as well as an existing conversation. Desktop
+  selection leaves it open; mobile selection closes the shared Sheet. Escape
+  restores focus to the panel toggle. The tab list has a screen-reader label.
+- Chromium fixture checks passed at 320, 390, 768, 1024 and 1440 CSS pixels with
+  no horizontal document overflow or browser exceptions. Checked the tab above
+  its content, keyboard entry into the panel, search and empty results, desktop
+  conversation switching, mobile selection/Escape/focus restoration, and Activity
+  filtering. Inspected light/dark screenshots. Named-bot Activity matched its
+  scoped API response and contained no default-bot runs.
+- Fixed the generated Tabs wrapper's orientation selectors to match Base UI's
+  `data-orientation` attribute; the original selectors put content beside tabs.
+- Validation: formatting, architecture, lint, types, all 129 tests and production
+  build pass. Tests require local server permissions outside the sandbox. The
+  existing build chunk-size warning remains.
