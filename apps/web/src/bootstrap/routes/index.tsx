@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
     search: Record<string, unknown>,
   ): {
     conversation?: number;
-    view?: "diagnostics" | "settings";
+    view?: "settings";
     section?: Section;
     bot?: string;
   } => ({
@@ -24,18 +24,19 @@ export const Route = createFileRoute("/")({
       Number(search.conversation) > 0
         ? Number(search.conversation)
         : undefined,
-    // Older links used view=plugins before Plugins moved into Settings.
-    view:
-      search.view === "diagnostics" || search.view === "settings"
-        ? search.view
+    // Older links used view=plugins and view=diagnostics before both moved
+    // into Settings.
+    view: ["diagnostics", "plugins", "settings"].includes(search.view as string)
+      ? "settings"
+      : undefined,
+    section:
+      search.view === "diagnostics"
+        ? "telemetry"
         : search.view === "plugins"
-          ? "settings"
-          : undefined,
-    section: isSection(search.section)
-      ? search.section
-      : search.view === "plugins"
-        ? "plugins"
-        : undefined,
+          ? "plugins"
+          : isSection(search.section)
+            ? search.section
+            : undefined,
   }),
   component: IndexPage,
 });

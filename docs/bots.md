@@ -7,23 +7,45 @@ store; it cannot be opened by addressing its UUID through another bot's API.
 
 ## Using bots in the web client
 
-Use **Current bot** in the sidebar to switch assistants. The default selection is
-Raphie. **Manage bot** opens **Settings → Bot**, where you can edit its name,
-description and SOUL.md or create a **New bot**. A new bot is selected after
-creation; add its provider under **Providers**, select a model under **Models**,
-and configure its own backend/scope under **Memory**.
+Choose an assistant from the bot roster. Raphie is the default bot. Clicking the
+bot’s name in the title bar opens its **Profile**; **Personality** has a dedicated
+SOUL.md editor and revision history. **New bot** in the sidebar (the plus icon on
+mobile) creates an assistant and opens its own provider setup. Add its provider
+under **Providers**, choose a default under **Models**, and configure its memory
+backend/scope under **Memory**.
 
-**Personality history** shows the latest saved revisions. Expand a revision to
-read its previous name, description and SOUL.md. Copy older text into the editor
-and save it to restore that personality as a new revision. Refresh after a stale
+The title bar contains the current conversation title and an icon-only **New
+conversation** action. **Conversations** opens the selected bot’s searchable
+library, with filters for new replies and approval requests. Switching assistants
+resumes their last opened conversation in this browser when available.
+
+A grouped card below the title bar surfaces unread replies and approval requests
+in other conversations. It shows three rows with a link to the library for more.
+Collapse it to focus; mobile starts collapsed unless a preference was saved.
+Incoming replies update the count without expanding it. Dismissing a row only
+hides the notice until a newer reply or approval state; it does not mark it read.
+Read cursors are browser-local, scoped by backend, bot and session. A completed
+reply is marked read when its conversation is visible and scrolled to the bottom.
+Historical replies with no saved cursor count as unread in this browser.
+
+The selected bot’s session summaries use the existing live stream. Other bot
+badges poll their latest 100 sessions every 15 seconds while this browser is
+active; the roster refreshes every 30 seconds. No stream is opened per bot or
+background conversation. The library retains pagination for older conversations.
+
+**Revision history** shows the latest saved profiles. Expand a revision to read
+its previous name, description and SOUL.md. Copy older text into the editor and
+save it to restore that personality as a new revision. Refresh after a stale
 revision error; saves made while a turn is pending must wait for it to finish.
+Profile, personality, provider and memory editors block navigation with unsaved
+changes; save or discard before leaving them.
 
 Named-bot links carry `?bot=<id>`, including session links and memory source links.
 Switching bots replaces cached queries, observations, forms and draft keys;
 switching back restores that bot's draft. Default-bot draft keys remain compatible
 with existing browser data. Closing a view still does not cancel durable work.
 
-**Backend** selects the shared runtime host; changing it returns to its default
+**Settings → App → Backend connection** selects the shared runtime host; changing it returns to its default
 bot. Providers, models and memory are scoped to the current bot. Theme, panel
 layout and UI-plugin preferences remain browser preferences shared across bots;
 they do not grant runtime tool capabilities.

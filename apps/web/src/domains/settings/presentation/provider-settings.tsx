@@ -7,7 +7,7 @@ import { useProviderConnections } from "../infrastructure/use-provider-connectio
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { ProviderCard } from "./provider-card";
 import { ProviderConnection } from "./provider-connection";
-import { Group } from "./settings-group";
+import { SettingsStatus } from "./settings-status";
 
 export function ProviderSettings() {
   const settings = useRuntimeSettings();
@@ -19,18 +19,13 @@ export function ProviderSettings() {
   const data = settings.data;
   if (!data)
     return (
-      <Group title="Providers">
-        <div className="settings-form">
-          <p role="status">
-            {settings.error
-              ? "Could not load providers."
-              : "Loading providers…"}
-          </p>
-          <Button variant="outline" onClick={() => void settings.refetch()}>
-            Retry
-          </Button>
-        </div>
-      </Group>
+      <SettingsStatus
+        title="Connections"
+        message={
+          settings.error ? "Could not load providers." : "Loading providers…"
+        }
+        onRetry={settings.error ? () => void settings.refetch() : undefined}
+      />
     );
 
   function add() {
@@ -41,19 +36,17 @@ export function ProviderSettings() {
 
   return (
     <>
-      <header className="catalog-heading">
-        <div>
-          <h2>Your providers</h2>
-          <p>
-            Give each connection a name. Connect the same provider more than
-            once.
-          </p>
-        </div>
+      <div className="settings-toolbar">
+        <p>
+          {data.connections.length
+            ? `${data.connections.length} ${data.connections.length === 1 ? "connection" : "connections"} · name each one, and connect a provider more than once if you need to.`
+            : "Name each connection. You can connect the same provider more than once."}
+        </p>
         <Button onClick={add} disabled={adding || busy}>
           <Plus />
           Add connection
         </Button>
-      </header>
+      </div>
       {adding && (
         <ProviderConnection
           providers={data.providers}

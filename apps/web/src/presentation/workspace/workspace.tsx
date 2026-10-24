@@ -1,24 +1,36 @@
 import type { ModelSelection } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useState } from "react";
 
-import { Activity } from "../../domains/activity/presentation/activity";
 import { runUsage } from "../../domains/conversations/application/run-projection";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
-import { SessionSidebar } from "../../domains/conversations/presentation/sessions/session-sidebar";
+import { ConversationLibrary } from "../../domains/conversations/presentation/sessions/conversation-library";
+import { ReplyCard } from "../../domains/conversations/presentation/sessions/reply-card";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
+import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
+import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
 import type { Section } from "../../domains/settings/presentation/settings";
-import {
-  sections,
-  Settings,
-} from "../../domains/settings/presentation/settings";
+import { Settings } from "../../domains/settings/presentation/settings";
+import { SettingsMain } from "../../domains/settings/presentation/settings-main";
 import { SettingsNav } from "../../domains/settings/presentation/settings-nav";
 import { useBackend } from "../../infrastructure/http/backend-context";
+import {
+  readLocal,
+  writeLocal,
+} from "../../infrastructure/preferences/storage";
+import {
+  Sidebar,
+  SidebarInset,
+  SidebarProvider,
+} from "../../shared/ui/sidebar";
 import { TooltipProvider } from "../../shared/ui/tooltip";
+import { useIsMobile } from "../../shared/ui/use-mobile";
+import { ActivitySidebar } from "./activity-sidebar";
 import { PanelResizeHandle } from "./panel-resize-handle";
+import { useBotInbox } from "./use-bot-inbox";
 import { useWorkspaceLayout } from "./use-workspace-layout";
 import { useLiveState } from "./use-workspace-state";
 import { WorkspaceAlert } from "./workspace-alert";
@@ -28,11 +40,11 @@ export function Workspace({
   sessionId,
   legacyConversationId,
   view,
-  section = "general",
+  section = "bot",
 }: {
   sessionId?: string;
   legacyConversationId?: number;
-  view?: "diagnostics" | "settings";
+  view?: "settings";
   section?: Section;
 }) {
   const { workspace } = useBackend();
@@ -53,15 +65,35 @@ export function Workspace({
     loadMoreSessions,
     hasMoreSessions,
   } = useLiveState(sessionId, legacyConversationId);
+  const inbox = useBotInbox(data?.conversations);
+  const botProfile = inbox.bots.data?.items.find(
+    (b) => b.id === workspace.botId,
+  );
+  const [library, setLibrary] = useState(false);
+  const summaries = [
+    ...new Map(
+      [
+        ...(data?.conversations ?? []),
+        ...(inbox.byBot.get(workspace.botId) ?? []),
+      ].map((s) => [s.id, s]),
+    ).values(),
+  ].sort((a, b) => b.lastAt - a.lastAt);
+  const unread = (session: (typeof summaries)[number]) =>
+    inbox.unread(workspace.botId, session);
+  const lastSessionKey = useCallback(
+    (id: string) =>
+      `raphie:last-session:${encodeURIComponent(workspace.url)}:${id}`,
+    [workspace.url],
+  );
   const conversation = data?.conversations.find(
     (c) => c.sessionId === (sessionId ?? legacySessionId),
   );
   const {
     inspector,
     setInspector,
-    sidebar,
     setSidebar,
     collapsed,
+    collapse,
     toggleCollapsed,
     resizePanel,
     visibleNavigationWidth,
@@ -71,6 +103,7 @@ export function Workspace({
   } = useWorkspaceLayout(!!conversation, view);
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
   const [enabled, setEnabled] = useEnabledPlugins();
+  const mobile = useIsMobile();
   const conversationId = conversation?.id;
   const missing =
     sessionMissing ||
@@ -109,6 +142,16 @@ export function Workspace({
       }),
       { tokens: 0, cost: 0 },
     );
+  const readSessionId = conversation?.sessionId;
+  const readCount = conversation?.replyCount ?? 0;
+  const markInboxRead = inbox.markRead;
+  const markRead = useCallback(() => {
+    if (readSessionId) markInboxRead(workspace.botId, readSessionId, readCount);
+  }, [markInboxRead, workspace.botId, readSessionId, readCount]);
+  useEffect(() => {
+    if (readSessionId)
+      writeLocal(lastSessionKey(workspace.botId), readSessionId);
+  }, [workspace.botId, lastSessionKey, readSessionId]);
   const events =
     data?.activity.filter((e) => e.conversationId === conversationId) ?? [];
 
@@ -135,9 +178,10 @@ export function Workspace({
       });
   }
 
-  function select(id?: string, nextView?: "diagnostics" | "settings") {
+  function select(id?: string, nextView?: "settings") {
     setSuggestion(undefined);
-    const selected = data?.conversations.find((c) => c.id === id);
+    setLibrary(false);
+    const selected = summaries.find((c) => c.id === id);
     if (selected)
       void navigate({
         to: "/sessions/$sessionId",
@@ -158,26 +202,102 @@ export function Workspace({
     setSidebar(false);
   }
 
+  function openSettings(next: Section) {
+    if (conversation)
+      void navigate({
+        to: "/sessions/$sessionId",
+        params: { sessionId: conversation.sessionId },
+        search: { bot, view: "settings", section: next },
+      });
+    else
+      void navigate({
+        to: "/",
+        search: { bot, view: "settings", section: next },
+      });
+  }
+
+  function selectSettings(id: string, next: Section) {
+    if (id === workspace.botId) openSettings(next);
+    else
+      void navigate({
+        to: "/",
+        search: {
+          bot: id === "default" ? undefined : id,
+          view: "settings",
+          section: next,
+        },
+      });
+  }
+
   let title: string | undefined =
-    conversation?.title ?? (missing ? "Session unavailable" : "New session");
-  if (view === "diagnostics") title = "Diagnostics";
-  if (view === "settings")
-    title = sections.find((s) => s.id === section)?.label;
+    conversation?.title ??
+    (missing ? "Conversation unavailable" : "New conversation");
+  const settings = view === "settings";
+  const roster = (
+    <BotSidebar
+      bots={inbox.bots.data?.items ?? []}
+      botId={workspace.botId}
+      byBot={inbox.byBot}
+      unread={inbox.unread}
+      connected={connected}
+      error={!!inbox.bots.error}
+      onRetry={() => void inbox.bots.refetch()}
+      onSelect={(id) => {
+        const nextBot = id === "default" ? undefined : id;
+        const last = readLocal(lastSessionKey(id));
+        if (last)
+          void navigate({
+            to: "/sessions/$sessionId",
+            params: { sessionId: last },
+            search: { bot: nextBot },
+          });
+        else void navigate({ to: "/", search: { bot: nextBot } });
+      }}
+      onSettings={() => {
+        openSettings("bot");
+      }}
+      onCreate={() => {
+        void navigate({
+          to: "/",
+          search: { bot, view: "settings", section: "new-bot" },
+        });
+      }}
+    />
+  );
   return (
     <TooltipProvider delay={300}>
-      <div
+      {/* One shadcn sidebar shell; only its content changes between views. */}
+      <SidebarProvider
+        open={!collapsed}
+        onOpenChange={(open) => collapse(!open)}
         style={
           {
             "--sidebar-width": `${visibleNavigationWidth}px`,
             "--inspector-width": `${visibleActivityWidth}px`,
           } as CSSProperties
         }
-        className={`workspace ${inspector && !view && conversation ? "with-inspector" : ""} ${collapsed ? "sidebar-collapsed" : ""}`}
+        // No width animation: the sidebar tracks its resize handle exactly.
+        className="workspace-shell [&_[data-slot=sidebar-container]]:transition-none [&_[data-slot=sidebar-gap]]:transition-none"
       >
         <a className="skip-link" href="#main">
-          Skip to conversation
+          {settings ? "Skip to settings" : "Skip to conversation"}
         </a>
-        {!collapsed && (
+        {/* Mobile chat keeps its bot strip; mobile settings use the sheet. */}
+        {(settings || !mobile) && (
+          <Sidebar aria-label={settings ? "Settings navigation" : "Bots"}>
+            {settings ? (
+              <SettingsNav
+                section={section}
+                botId={workspace.botId}
+                onBack={() => select(conversationId)}
+                onSelect={selectSettings}
+              />
+            ) : (
+              roster
+            )}
+          </Sidebar>
+        )}
+        {!collapsed && !mobile && (
           <PanelResizeHandle
             side="left"
             value={visibleNavigationWidth}
@@ -185,197 +305,182 @@ export function Workspace({
             onChange={(value) => resizePanel("left", value)}
           />
         )}
-        {view === "settings" ? (
-          <SettingsNav
-            section={section}
-            open={sidebar}
-            onOpenChange={setSidebar}
-            onSelect={(next) => {
-              if (conversation)
-                void navigate({
-                  to: "/sessions/$sessionId",
-                  params: { sessionId: conversation.sessionId },
-                  search: {
-                    bot,
-                    view,
-                    section: next,
-                  },
-                });
-              else
-                void navigate({
-                  to: "/",
-                  search: {
-                    bot,
-                    view,
-                    section: next,
-                  },
-                });
-              setSidebar(false);
-            }}
-            onBack={() => select(conversationId)}
-          />
-        ) : (
-          <SessionSidebar
-            onMemory={() => {
-              if (conversation)
-                void navigate({
-                  to: "/sessions/$sessionId",
-                  params: { sessionId: conversation.sessionId },
-                  search: {
-                    bot,
-                    view: "settings",
-                    section: "memory",
-                  },
-                });
-              else
-                void navigate({
-                  to: "/",
-                  search: {
-                    bot,
-                    view: "settings",
-                    section: "memory",
-                  },
-                });
-              setSidebar(false);
-            }}
-            data={data}
-            conversationId={conversationId}
-            view={view}
-            sidebar={sidebar}
-            setSidebar={setSidebar}
-            connected={connected}
-            select={select}
-            hasMore={hasMoreSessions}
-            loadMore={() => void loadMoreSessions()}
-          />
-        )}
-        <main id="main" className="main-panel" inert={sidebar}>
-          <WorkspaceHeader
-            title={title}
-            breadcrumb={view === "settings" ? "Settings" : "raphie"}
-            collapsed={collapsed}
-            inspector={inspector}
-            showInspector={!view && !!conversation}
-            onOpenNavigation={() => setSidebar(true)}
-            onToggleNavigation={toggleCollapsed}
-            onToggleInspector={() => setInspector(!inspector)}
-          />
-          {view === "settings" ? (
-            <Settings
+        <SidebarInset id="main" className="main-panel">
+          {settings ? (
+            <SettingsMain
               section={section}
-              data={data}
-              connected={connected}
-              enabled={enabled}
-              setEnabled={setEnabled}
-            />
-          ) : error ? (
-            <WorkspaceAlert
-              title="Couldn’t connect to your workspace"
-              description="Your saved sessions and drafts are still on this device. Check that the runtime is running, then try again."
-              icon="connection"
-              onAction={() => void refetch()}
-              action="Try again"
-            />
-          ) : isPending ? (
-            <div className="loading-state" role="status">
-              <div />
-              <div />
-              <div />
-              <p>Connecting to your workspace…</p>
-            </div>
-          ) : missing && !view ? (
-            <WorkspaceAlert
-              title="Session not found"
-              description="This link doesn’t match a session in the current workspace. Choose a saved session from the sidebar or start a new one."
-              icon="missing"
-              onAction={() => select()}
-              action="New session"
-            />
-          ) : view === "diagnostics" ? (
-            <Diagnostics />
+              botId={workspace.botId}
+              onBack={() => select(conversationId)}
+            >
+              <Settings
+                section={section}
+                enabled={enabled}
+                setEnabled={setEnabled}
+                traces={<Diagnostics />}
+              />
+            </SettingsMain>
           ) : (
-            <div className="chat-stage">
-              {nextBefore && (
-                <button
-                  disabled={loadingOlder}
-                  onClick={() => void loadOlder()}
-                >
-                  {loadingOlder ? "Loading…" : "Load earlier messages"}
-                </button>
-              )}
-              {conversation && data ? (
-                <Chat
-                  key={conversation.id}
-                  state={data}
-                  conversationId={conversation.id}
+            <>
+              {mobile && roster}
+              <WorkspaceHeader
+                title={title}
+                breadcrumb={botProfile?.name ?? "Raphie"}
+                botId={workspace.botId}
+                description={
+                  botProfile?.description ?? "Your personal assistant"
+                }
+                onBack={view ? () => select(conversationId) : undefined}
+                onNew={!view ? () => select() : undefined}
+                onLibrary={!view ? () => setLibrary(!library) : undefined}
+                library={library}
+                unreadCount={
+                  summaries.filter((s) => unread(s) > 0 || s.waiting).length
+                }
+                onBotSettings={() => openSettings("bot")}
+                collapsed={collapsed}
+                inspector={inspector}
+                showInspector={!view && !!conversation}
+                onOpenNavigation={() => setSidebar(true)}
+                onToggleNavigation={toggleCollapsed}
+                onToggleInspector={() => setInspector(!inspector)}
+              />
+              {error ? (
+                <WorkspaceAlert
+                  title="Couldn’t connect to your workspace"
+                  description="Your saved sessions and drafts are still on this device. Check that the runtime is running, then try again."
+                  icon="connection"
+                  onAction={() => void refetch()}
+                  action="Try again"
+                />
+              ) : isPending ? (
+                <div className="loading-state" role="status">
+                  <div />
+                  <div />
+                  <div />
+                  <p>Connecting to your workspace…</p>
+                </div>
+              ) : missing && !view ? (
+                <WorkspaceAlert
+                  title="Session not found"
+                  description="This link doesn’t match a session in the current workspace. Choose a saved session from the sidebar or start a new one."
+                  icon="missing"
+                  onAction={() => select()}
+                  action="New conversation"
+                />
+              ) : library ? (
+                <ConversationLibrary
+                  name={botProfile?.name ?? "Raphie"}
+                  sessions={summaries}
+                  selectedId={conversationId}
+                  unread={unread}
+                  onSelect={select}
+                  onBack={() => setLibrary(false)}
+                  hasMore={!!hasMoreSessions}
+                  loadMore={() => void loadMoreSessions()}
                 />
               ) : (
-                <Welcome
-                  disabled={!connected || !data?.model}
-                  onSuggest={(text) => setSuggestion({ text, at: Date.now() })}
-                />
+                <>
+                  <ReplyCard
+                    sessions={summaries.filter(
+                      (s) =>
+                        s.id !== conversationId && (unread(s) > 0 || s.waiting),
+                    )}
+                    unread={unread}
+                    onSelect={select}
+                    storageKey={`raphie:reply-card:${encodeURIComponent(workspace.url)}:${workspace.botId}`}
+                    onViewAll={() => setLibrary(true)}
+                  />
+                  <div className="chat-stage">
+                    {nextBefore && (
+                      <button
+                        disabled={loadingOlder}
+                        onClick={() => void loadOlder()}
+                      >
+                        {loadingOlder ? "Loading…" : "Load earlier messages"}
+                      </button>
+                    )}
+                    {conversation && data ? (
+                      <Chat
+                        key={conversation.id}
+                        state={data}
+                        conversationId={conversation.id}
+                        onRead={markRead}
+                      />
+                    ) : (
+                      <Welcome
+                        avatar={<BotAvatar id={workspace.botId} />}
+                        disabled={!connected || !data?.model}
+                        onSuggest={(text) =>
+                          setSuggestion({ text, at: Date.now() })
+                        }
+                      />
+                    )}
+                    {!data?.model && (
+                      <p className="model-warning" role="status">
+                        Configure a model on the runtime to start chatting.
+                      </p>
+                    )}
+                    <Composer
+                      key={`composer-${conversationId ?? "new"}`}
+                      conversationId={conversationId}
+                      suggestion={suggestion}
+                      model={conversation?.model ?? data?.model ?? null}
+                      usage={usage?.tokens ? usage : undefined}
+                      disabled={
+                        !connected ||
+                        !data?.model ||
+                        (!!conversationId && !conversation)
+                      }
+                      busy={busy}
+                      enabledPlugins={enabled}
+                      onSend={send}
+                      onChooseModel={async (model) => {
+                        if (!conversationId) return;
+                        await api(
+                          `/api/sessions/${conversationId}/model`,
+                          model,
+                        );
+                        await refetch();
+                      }}
+                      onModelSettings={() => {
+                        if (conversation)
+                          void navigate({
+                            to: "/sessions/$sessionId",
+                            params: { sessionId: conversation.sessionId },
+                            search: {
+                              bot,
+                              view: "settings",
+                              section: "models",
+                            },
+                          });
+                        else
+                          void navigate({
+                            to: "/",
+                            search: {
+                              bot,
+                              view: "settings",
+                              section: "models",
+                            },
+                          });
+                      }}
+                    />
+                  </div>
+                </>
               )}
-              {!data?.model && (
-                <p className="model-warning" role="status">
-                  Configure a model on the runtime to start chatting.
-                </p>
-              )}
-              <Composer
-                key={`composer-${conversationId ?? "new"}`}
-                conversationId={conversationId}
-                suggestion={suggestion}
-                model={conversation?.model ?? data?.model ?? null}
-                usage={usage?.tokens ? usage : undefined}
-                disabled={
-                  !connected ||
-                  !data?.model ||
-                  (!!conversationId && !conversation)
-                }
-                busy={busy}
-                enabledPlugins={enabled}
-                onSend={send}
-                onChooseModel={async (model) => {
-                  if (!conversationId) return;
-                  await api(`/api/sessions/${conversationId}/model`, model);
-                  await refetch();
-                }}
-                onModelSettings={() => {
-                  if (conversation)
-                    void navigate({
-                      to: "/sessions/$sessionId",
-                      params: { sessionId: conversation.sessionId },
-                      search: {
-                        bot,
-                        view: "settings",
-                        section: "models",
-                      },
-                    });
-                  else
-                    void navigate({
-                      to: "/",
-                      search: {
-                        bot,
-                        view: "settings",
-                        section: "models",
-                      },
-                    });
-                }}
-              />
-            </div>
+            </>
           )}
-        </main>
-        {inspector && !view && conversation && (
-          <aside className="inspector" inert={sidebar}>
-            <PanelResizeHandle
-              side="right"
-              value={visibleActivityWidth}
-              maxWidth={activityMax}
-              onChange={(value) => resizePanel("right", value)}
-            />
-            <Activity events={events} />
-          </aside>
+        </SidebarInset>
+        {!view && conversation && (
+          <ActivitySidebar
+            open={inspector}
+            onOpenChange={setInspector}
+            events={events}
+            width={visibleActivityWidth}
+            maxWidth={activityMax}
+            onResize={(value) => resizePanel("right", value)}
+          />
         )}
-      </div>
+      </SidebarProvider>
     </TooltipProvider>
   );
 }

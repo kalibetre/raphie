@@ -6,22 +6,28 @@ import {
 } from "lucide-react";
 
 import { relativeTime } from "../../application/run-projection";
-import type { SessionSummary } from "../../application/session-summaries";
+import {
+  sessionPreview,
+  type SessionSummary,
+} from "../../application/session-summaries";
 
 export function SessionCard({
   session,
   selected,
   now,
   onSelect,
+  unreadCount,
 }: {
   session: SessionSummary;
   selected: boolean;
   now: number;
   onSelect: () => void;
+  unreadCount: number;
 }) {
   return (
     <button
-      className={selected ? "selected" : ""}
+      className={`conversation-entry${selected ? " selected" : ""}`}
+      data-unread={unreadCount > 0 || undefined}
       aria-current={selected ? "page" : undefined}
       onClick={onSelect}
     >
@@ -35,10 +41,17 @@ export function SessionCard({
         </time>
       </span>
       <span className="conversation-preview">
-        {session.preview.replace(/[*_`#]/g, "").replace(/\s+/g, " ")}
+        {sessionPreview(session.preview)}
       </span>
       <span className="conversation-card-footer">
-        <SessionBadge session={session} />
+        <span className="conversation-card-status">
+          <SessionBadge session={session} />
+          {unreadCount > 0 && (
+            <span className="library-unread">
+              {unreadCount} new {unreadCount === 1 ? "reply" : "replies"}
+            </span>
+          )}
+        </span>
         <span className="conversation-meta">
           {session.origin === "discord" && (
             <MessageCircle size={12} aria-label="Discord session" />

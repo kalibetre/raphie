@@ -135,3 +135,132 @@ The test fixture and Vite server were stopped normally. The normal production ap
   retire a scope that was reused, and route navigation could repeat backend
   initialization. Scope state now follows the actual backend instance; initial
   backend lookup is independent of navigation and ignores obsolete completions.
+
+## Bot-first workspace and settings — 2026-10-24
+
+- Applied the approved bot roster, per-bot conversation library, unified title bar
+  with an icon-only new-conversation action, and collapsible grouped reply card.
+  The existing Composer component and floating composer CSS remain unchanged.
+- Settings keep the bot roster visible. Profile, personality, provider/model,
+  memory and diagnostics pages are scoped to the selected bot. App-wide backend,
+  appearance and UI-plugin preferences have a separate navigation group. Mobile
+  uses a compact settings section picker.
+- Used disposable fixture ports 14317/14321, deterministic inference and temporary
+  browser tooling outside the repository. Collaborative-browser interaction
+  checks covered personality revision saves, unsaved-route blocking and bot
+  creation. Screenshot capture failed twice with `Preview automation snapshot
+timed out after 15000ms`, so visual acceptance continued with Playwright.
+- Browser acceptance verified a completed reply arriving while the card stayed
+  collapsed, read and dismiss behavior, library unread filtering, collapse
+  persistence after reload, per-conversation draft restoration, personality
+  save/reload, independent bot personalities, app/bot scope labels and diagnostics
+  navigation. Checked 320/390/768/1024/1440px without page overflow, both themes,
+  keyboard focus on the new icon action and long conversation titles. No browser
+  exceptions occurred.
+- Visual inspection found a mobile button competing with the bot roster and a
+  short personality editor caused by utility precedence. The mobile action now
+  uses a plus icon in the roster; the editor has explicit utility minimum sizes.
+- Unit coverage verifies scoped, monotonic reply cursors and concurrent-tab
+  merges. Runtime query coverage verifies pending user turns do not count as
+  replies, and session-list/detail reply counts agree.
+- Full validation passes 117 tests, formatting, architecture, lint, types and the
+  production build. The existing large client-chunk warning remains. Application
+  data and the normal runtime were not changed during fixture acceptance.
+
+## Full-window grouped settings — 2026-10-24
+
+- Replaced the roster-plus-settings-column layout with a full-window settings
+  screen built on the shadcn `Sidebar` (`sheet`, `skeleton` and `collapsible`
+  added through the shadcn CLI; existing button, input, separator and tooltip
+  kept). Each bot is an expandable group; Backend connection, Appearance and UI
+  plugins sit in a separate App group. The chat roster's settings entry is now a
+  gear icon beside the connection status.
+- Section ids and links are unchanged; revision history and memory browsing
+  highlight Personality and Memory. Expanded groups persist in browser storage
+  so they survive the remount when selecting another bot's page.
+- Playwright on fixture ports 14317/14321 verified: expanding or collapsing
+  groups keeps the URL and an unsaved personality draft; selecting another
+  bot's page is blocked until discard, then switches bot and section; both
+  groups stay open after the switch; `section=memory-browse` and legacy
+  `view=plugins` links; close returns to chat; Create a bot; mobile sheet opens
+  from the title-bar trigger, closes on Escape with focus back on the trigger,
+  and closes after choosing a page. Sub-items fill the row. A top-bar toggle and
+  ⌘B collapse the desktop sidebar, sharing the chat sidebar's saved state.
+  Chat and settings share one shadcn `SidebarProvider`/`Sidebar`/`SidebarInset`
+  shell; only the sidebar content changes, so width, collapse and ⌘B live in
+  one place. The resize handle drives `--sidebar-width` with width transitions
+  disabled, so the sidebar edge tracks the handle on the same frame. Mobile chat
+  keeps the accepted bot strip; mobile settings use the shadcn sheet.
+- Re-ran the earlier chat suite (reply card, drafts, collapse persistence,
+  library, mobile) on a reset fixture and ported its settings steps: guarded
+  save, revision reload, per-bot personality isolation, app scope, layout widths
+  and draft restoration after leaving settings. Checked 320/390/768/1024/1440px without
+  overflow in both themes at 2x; no browser exceptions.
+- Full validation passes 117 tests, formatting, architecture, lint, types and the
+  production build.
+- Settings → Diagnostics shows recent traces under the collection toggle; the
+  separate Diagnostics view and its "Open diagnostics" button are gone, and old
+  `?view=diagnostics` links open this page. Named bots still read their own
+  empty trace model, never another bot's traces.
+
+## Settings page design pass — 2026-10-24
+
+- Every settings page shares a `SettingsPage` header: the scope chip, the title
+  and a page-specific intro from the section registry (`settings-sections.ts`).
+  Bot pages wash in that bot's avatar colour (`--tone`, shared with avatars), so
+  scope is visible before any field; app pages use the accent green.
+- Shared building blocks: `Group` (with an optional action), `Row` (optional
+  icon tile), `SettingsStatus` for loading/error, and a floating `SaveBar` that
+  appears only with unsaved changes, pending saves or messages.
+- Personality history is a timeline; Appearance previews each theme; Providers
+  and Models no longer repeat the page title. Appearance, plugins, memory
+  browsing, Hindsight fields, memory capabilities and the settings top bar are
+  separate modules, and settings CSS is split per page under `styles/settings/`.
+- Checked every settings page in dark and light, a named bot at 1440 and 390px,
+  save-bar visibility (clean, dirty, discard, create) and the existing settings,
+  diagnostics, resize and chat flows; no overflow from 320px and no browser
+  exceptions. Full validation passes.
+- Bot avatars use the chosen "Glance" design: each bot's blob shape and eye
+  direction derive from its id (integer PRNG, so every browser draws the same
+  face) and its colour family. Checked in the chat roster, title bar, settings
+  sidebar, scope chip and mobile strip in both themes.
+- Bot switches keep the backend-wide bot roster and inbox summaries cached,
+  while replacing bot-scoped queries and editors. Frame sampling across Research,
+  Builder and Raphie found all four roster entries present in every frame and no
+  intermediate "Loading bot…" screen. Full validation passes all 118 tests.
+- Settings breadcrumbs now show the bot avatar/scope and the current page icon.
+  The grouped reply card uses a neutral surface, with distinct reply/approval
+  icons; collapse, dismissal and unread behavior are preserved.
+- The conversation library has counted filters, a scoped header, unread badges
+  inside each conversation, and a search empty state. Clearing search restores
+  input focus. Compact filter labels fit narrow windows.
+- Verified these refinements in both themes, including 2× zoom, and checked
+  320/390/768/1024/1440px layouts. Search, unread filtering, keyboard collapse,
+  mobile navigation focus restoration and the unsaved-edit guard pass in the
+  collaborative browser with no console errors. All 118 tests and production
+  build pass; the existing large-chunk build warning remains.
+- Bot navigation uses avatar-tinted tiles, a selected surface with a full outline,
+  and a compact connection footer. Selection must never use a colored left
+  border or stripe; the conversation library follows the same rule.
+- The settings toggle uses directional chevrons on desktop and a menu icon on
+  mobile, retaining shadcn's navigation and focus restoration. Checked search
+  and its empty state, desktop open/close icons, and mobile Escape focus restore.
+- The roster brand uses the same Glance avatar as the bots. The connection
+  footer has no border or background.
+- Activity docks at full height beside the conversation from 768px, matching
+  the navigation breakpoint; it no longer floats over chat below 1100px.
+  Mobile uses the shared Sheet with focus trapping, Escape/close, and focus
+  restoration. Verified docking geometry at 768/1024px, mobile open/close and
+  focus restoration at 390px, plus light/dark visual checks. Full validation
+  passes all 118 tests.
+- Chat and settings share the directional navigation-toggle icons and styling.
+  The welcome screen shows the selected bot's Glance avatar, matching its header
+  avatar. Checked toggle direction, avatar identity, both themes and mobile;
+  full validation passes all 118 tests.
+- Generic settings entry points (sidebar gear and bot header) always open the
+  current bot's Profile. Both preserve the active conversation route, so closing
+  settings returns to the same conversation. Explicit links to Models or other
+  sections keep their destinations. Verified both entry points and a named bot.
+- Settings sidebar and app-wide scope chips now use the Glance brand avatar.
+  The roster brand has an optical alignment correction: the drawn avatar and
+  lettering centers differ by less than 0.25 CSS pixels in the checked font.

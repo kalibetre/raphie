@@ -32,8 +32,8 @@ with `RAPHIE_DISCORD_ENABLED=true` when the owner/channel settings are configure
 The runtime starts with a persistent **default** bot named Raphie. Existing
 sessions, model connections and memory stay with it. Named bots have separate
 configuration, stores and model credentials in the same runtime process.
-Use the sidebar's **Current bot** selector and **Manage bot** to create and edit
-bots. Owner-managed names, descriptions and revisioned SOUL.md documents define
+Choose a bot in the sidebar. Click its name in the title bar to edit its
+profile or personality; **New bot** creates a separate assistant. Owner-managed names, descriptions and revisioned SOUL.md documents define
 each bot's identity and personality. See [bots and personality](docs/bots.md) for APIs,
 storage, isolation guarantees and planned execution capabilities.
 
@@ -94,9 +94,12 @@ This first journal keeps the latest **5,000 events**, truncates individual diagn
 
 ## Settings
 
+Settings opens full-window from the gear beside the connection status. Its
+sidebar groups each bot's pages (profile, personality, providers, models,
+memory, diagnostics) under an expandable entry, with app-wide preferences below.
 Open Settings to select and test a local backend, connect OpenRouter, search the
 model catalog and choose the default for new sessions, or toggle Diagnostics trace
-collection. Changes are applied without a restart. Backend addresses are saved
+collection and browse recent traces on the same page. Changes are applied without a restart. Backend addresses are saved
 in a browser cookie scoped to the web port; reconnecting switches the workspace in place, closes old streams and requests,
 and reloads sessions and settings from the selected backend. Drafts are scoped
 to each backend. Older drafts without a backend identity remain in browser storage

@@ -1,17 +1,19 @@
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { filterModels, modelSource } from "../application/model-library";
 import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
 import { ModelCard } from "./model-card";
 import { ModelFilters } from "./model-filters";
-import { Group } from "./settings-group";
+import { SettingsStatus } from "./settings-status";
 
 const PAGE_SIZE = 24;
 
 export function ModelSettings() {
   const settings = useRuntimeSettings();
+  const { workspace } = useBackend();
   const [search, setSearch] = useState("");
   const [provider, setProvider] = useState("all");
   const [source, setSource] = useState("all");
@@ -21,18 +23,15 @@ export function ModelSettings() {
   const data = settings.data;
   if (!data)
     return (
-      <Group title="Models">
-        <div className="settings-form">
-          <p role="status">
-            {settings.error
-              ? "Could not load models. Check your backend connection."
-              : "Loading models…"}
-          </p>
-          <Button variant="outline" onClick={() => void settings.refetch()}>
-            Retry
-          </Button>
-        </div>
-      </Group>
+      <SettingsStatus
+        title="Models"
+        message={
+          settings.error
+            ? "Could not load models. Check your backend connection."
+            : "Loading models…"
+        }
+        onRetry={settings.error ? () => void settings.refetch() : undefined}
+      />
     );
 
   const sources = [
@@ -66,16 +65,6 @@ export function ModelSettings() {
 
   return (
     <>
-      <header className="catalog-heading">
-        <div>
-          <h2>Find your next model</h2>
-          <p>
-            Explore capabilities, compare pricing, and choose a default for new
-            sessions.
-          </p>
-        </div>
-        <span className="catalog-badge">{data.models.length} models</span>
-      </header>
       <div className="model-default-summary">
         <span className="model-default-icon">
           <SlidersHorizontal size={18} />
@@ -93,8 +82,12 @@ export function ModelSettings() {
       </div>
       {!data.connections.length && (
         <p className="catalog-notice">
-          <a href="?view=settings&section=providers">Connect a provider</a> to
-          use these models. You can browse and choose a default now.
+          <a
+            href={`?${new URLSearchParams({ ...(workspace.botId === "default" ? {} : { bot: workspace.botId }), view: "settings", section: "providers" })}`}
+          >
+            Connect a provider
+          </a>{" "}
+          to use these models. You can browse and choose a default now.
         </p>
       )}
       <ModelFilters

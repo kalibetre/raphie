@@ -18,22 +18,20 @@ export function BotBoundary({
   const search = useSearch({ strict: false });
   const navigate = useNavigate();
   const botId = search.bot ?? "default";
-  const [scope, setScope] = useState<{
-    backend: BackendWorkspace;
-    workspace: BackendWorkspace;
-  }>();
-  useEffect(() => {
-    const next = new BackendWorkspace(backend.url, botId);
-    setScope({ backend, workspace: next });
-    return () => next.dispose();
-  }, [backend, botId]);
-  const workspace = scope?.workspace;
-  if (!workspace || scope?.backend !== backend || workspace.botId !== botId)
-    return (
-      <div className="loading-state" role="status">
-        <p>Loading bot…</p>
-      </div>
-    );
+  // Derived during render (React's pattern for state from props), so a bot
+  // change never renders an empty frame; the old scope is disposed after.
+  const [scope, setScope] = useState(() => ({
+    backend,
+    workspace: new BackendWorkspace(backend.url, botId),
+  }));
+  let current = scope;
+  if (scope.backend !== backend || scope.workspace.botId !== botId) {
+    current = { backend, workspace: new BackendWorkspace(backend.url, botId) };
+    setScope(current);
+  }
+
+  const workspace = current.workspace;
+  useEffect(() => hold(workspace), [workspace]);
   const selectBot = async (id: string) => {
     await workspace.api(`/api/bots/${encodeURIComponent(id)}/profile`);
     workspace.assertActive();
@@ -43,7 +41,7 @@ export function BotBoundary({
     });
   };
   return (
-    <BackendContext.Provider value={{ workspace, connect, selectBot }}>
+    <BackendContext.Provider value={{ workspace, backend, connect, selectBot }}>
       <QueryClientProvider
         key={`${backend.url}:${botId}`}
         client={workspace.queries}
@@ -52,4 +50,19 @@ export function BotBoundary({
       </QueryClientProvider>
     </BackendContext.Provider>
   );
+}
+
+// StrictMode runs effect cleanups and re-runs them on mount. Dispose a scope
+// on the next microtask only if nothing re-attached it: an actual bot change
+// still retires the old scope before any network response can be handled.
+const holders = new WeakMap<BackendWorkspace, number>();
+
+function hold(workspace: BackendWorkspace) {
+  holders.set(workspace, (holders.get(workspace) ?? 0) + 1);
+  return () => {
+    holders.set(workspace, holders.get(workspace)! - 1);
+    queueMicrotask(() => {
+      if (!holders.get(workspace)) workspace.dispose();
+    });
+  };
 }

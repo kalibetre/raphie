@@ -5,19 +5,20 @@ import {
   MessageSquare,
   ShieldCheck,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 export function Welcome({
   disabled,
   onSuggest,
+  avatar,
 }: {
   disabled: boolean;
   onSuggest: (text: string) => void;
+  avatar: ReactNode;
 }) {
   return (
     <div className="welcome">
-      <div className="welcome-mark">
-        r<span />
-      </div>
+      <div className="welcome-avatar">{avatar}</div>
       <span className="eyebrow">A LITTLE CLARITY FOR YOUR DAY</span>
       <h2>What’s on your mind?</h2>
       <p>

@@ -40,7 +40,7 @@ export function Diagnostics() {
     <section className="diagnostics" aria-label="OTLP trace diagnostics">
       <div className="panel-heading">
         <div>
-          <h2>Diagnostics</h2>
+          <h2>Recent traces</h2>
           <p>Operation timings and failures from exported OTLP traces.</p>
         </div>
         <div className="trace-actions">

@@ -1,123 +1,190 @@
-import { ArrowLeft, BookOpen } from "lucide-react";
+import { ArrowLeft, ChevronRight, Plus } from "lucide-react";
+import { useState } from "react";
 
 import {
-  Sidebar,
+  readLocal,
+  writeLocal,
+} from "../../../infrastructure/preferences/storage";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../../../shared/ui/collapsible";
+import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupAction,
+  SidebarGroupLabel,
   SidebarHeader,
+  SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuCollapsible,
+  SidebarMenuItem,
+  SidebarMenuSub,
   SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
 } from "../../../shared/ui/sidebar";
-import { BotPicker } from "./bot-picker";
-import { type Section, sections } from "./settings";
+import { useBots } from "../infrastructure/use-bots";
+import { BotAvatar } from "./bot-avatar";
+import { isAppSection, type Section, sections } from "./settings-sections";
 
-// An entry is a section, or a collapsible parent whose children are sections.
-type Entry =
-  | Section
-  | {
-      label: string;
-      icon: typeof BookOpen;
-      children: readonly { id: Section; label: string }[];
-    };
-
-// Ordered by setup flow: connect a backend, add a provider, pick a model,
-// then shape the workspace; preferences last.
-const groups: readonly { label: string; entries: readonly Entry[] }[] = [
-  { label: "Setup", entries: ["connection", "bot", "providers", "models"] },
-  {
-    label: "Workspace",
-    entries: [
-      {
-        label: "Memory",
-        icon: BookOpen,
-        children: [
-          { id: "memory", label: "Configuration" },
-          { id: "memory-browse", label: "Browse" },
-        ],
-      },
-      "plugins",
-    ],
-  },
-  { label: "Preferences", entries: ["general", "telemetry"] },
+const botEntries: readonly Section[] = [
+  "bot",
+  "personality",
+  "providers",
+  "models",
+  "memory",
+  "telemetry",
 ];
+const appEntries: readonly Section[] = ["connection", "general", "plugins"];
+// Subpages reached from inside a page highlight their parent entry.
+const parent: Partial<Record<Section, Section>> = {
+  "bot-history": "personality",
+  "memory-browse": "memory",
+};
+const label = (id: Section) => sections.find((s) => s.id === id)!.label;
+const expandedKey = "raphie:settings-expanded";
 
+/** Settings sidebar content: every bot's pages grouped above the app's. */
 export function SettingsNav({
   section,
-  open,
-  onOpenChange,
+  botId,
   onSelect,
   onBack,
 }: {
   section: Section;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSelect: (section: Section) => void;
+  botId: string;
+  onSelect: (botId: string, section: Section) => void;
   onBack: () => void;
 }) {
+  const bots = useBots().data?.items ?? [];
+  const { setOpenMobile } = useSidebar();
+  const current = parent[section] ?? section;
+  const app = isAppSection(section) || section === "new-bot";
+  // Expanding only reveals pages; it never navigates, so drafts stay intact.
+  // Saved because selecting another bot's page remounts the bot scope; the
+  // current bot always starts open.
+  const [expanded, setExpanded] = useState<string[]>(() => {
+    try {
+      const saved = JSON.parse(readLocal(expandedKey) ?? "[]") as unknown;
+      const ids = Array.isArray(saved) ? saved.map(String) : [];
+      return ids.includes(botId) ? ids : [...ids, botId];
+    } catch {
+      return [botId];
+    }
+  });
+  const toggle = (id: string, open: boolean) => {
+    const next = open
+      ? [...new Set([...expanded, id])]
+      : expanded.filter((e) => e !== id);
+    setExpanded(next);
+    writeLocal(expandedKey, JSON.stringify(next));
+  };
+  const select = (id: string, next: Section) => {
+    setOpenMobile(false);
+    onSelect(id, next);
+  };
   return (
-    <Sidebar
-      label="Settings navigation"
-      open={open}
-      onOpenChange={onOpenChange}
-    >
-      <SidebarHeader className="sidebar-top bot-sidebar-header">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            r
-          </span>
-          Settings
-        </div>
-        <BotPicker />
+    <>
+      <SidebarHeader className="settings-sidebar-header flex-row items-center">
+        <BotAvatar id="default" />
+        Settings
       </SidebarHeader>
-      <SidebarContent label="Settings sections">
+      <SidebarContent>
         <nav aria-label="Settings">
-          {groups.map(({ label, entries }) => (
-            <SidebarGroup key={label} label={label}>
-              {entries.map((entry) => {
-                if (typeof entry === "string") {
-                  const item = sections.find((s) => s.id === entry)!;
-                  const Icon = item.icon;
-                  return (
-                    <SidebarMenuButton
-                      key={entry}
-                      active={section === entry}
-                      onClick={() => onSelect(entry)}
-                    >
-                      <Icon size={15} aria-hidden="true" /> {item.label}
-                    </SidebarMenuButton>
-                  );
-                }
-                const Icon = entry.icon;
+          <SidebarGroup>
+            <SidebarGroupLabel>Bots</SidebarGroupLabel>
+            <SidebarGroupAction
+              aria-label="Create a bot"
+              title="Create a bot"
+              onClick={() => select(botId, "new-bot")}
+            >
+              <Plus />
+            </SidebarGroupAction>
+            <SidebarMenu>
+              {bots.map((bot) => {
+                const open = expanded.includes(bot.id);
+                const here = !app && bot.id === botId;
                 return (
-                  <SidebarMenuCollapsible
-                    key={entry.label}
-                    label={entry.label}
-                    icon={<Icon size={15} aria-hidden="true" />}
-                    active={entry.children.some((c) => c.id === section)}
+                  <Collapsible
+                    key={bot.id}
+                    open={open}
+                    onOpenChange={(next) => toggle(bot.id, next)}
+                    render={<SidebarMenuItem />}
                   >
-                    {entry.children.map((child) => (
-                      <SidebarMenuSubButton
-                        key={child.id}
-                        active={section === child.id}
-                        onClick={() => onSelect(child.id)}
-                      >
-                        {child.label}
-                      </SidebarMenuSubButton>
-                    ))}
-                  </SidebarMenuCollapsible>
+                    <CollapsibleTrigger
+                      render={
+                        <SidebarMenuButton
+                          className="settings-bot-trigger"
+                          // Collapsed over the current page: mark the group.
+                          isActive={here && !open}
+                          aria-label={`${bot.name} settings`}
+                        />
+                      }
+                    >
+                      <BotAvatar id={bot.id} />
+                      <span>{bot.name}</span>
+                      {bot.id === "default" && (
+                        <small className="settings-default-tag">default</small>
+                      )}
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="settings-chevron"
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {botEntries.map((entry) => {
+                          const active = here && current === entry;
+                          return (
+                            <SidebarMenuSubItem key={entry}>
+                              <SidebarMenuSubButton
+                                render={<button type="button" />}
+                                className="w-full"
+                                isActive={active}
+                                aria-current={active ? "page" : undefined}
+                                onClick={() => select(bot.id, entry)}
+                              >
+                                {label(entry)}
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
                 );
               })}
-            </SidebarGroup>
-          ))}
+            </SidebarMenu>
+          </SidebarGroup>
+          <SidebarGroup>
+            <SidebarGroupLabel>App</SidebarGroupLabel>
+            <SidebarMenu>
+              {appEntries.map((entry) => (
+                <SidebarMenuItem key={entry}>
+                  <SidebarMenuButton
+                    isActive={section === entry}
+                    aria-current={section === entry ? "page" : undefined}
+                    onClick={() => select(botId, entry)}
+                  >
+                    {label(entry)}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
         </nav>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenuButton onClick={onBack}>
-          <ArrowLeft size={15} aria-hidden="true" /> Back to conversations
-        </SidebarMenuButton>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={onBack}>
+              <ArrowLeft /> Back to conversations
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
-    </Sidebar>
+    </>
   );
 }

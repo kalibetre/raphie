@@ -36,17 +36,15 @@
   }
 
   /* Layout */
-  .workspace {
+  .workspace-shell {
     position: relative;
-    display: grid;
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
     height: 100dvh;
+    min-height: 0;
     overflow: hidden;
   }
-  .workspace.with-inspector {
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(
-        --inspector-width
-      );
+  .workspace-shell .inspector {
+    flex: none;
+    width: var(--inspector-width);
   }
   .scroll-area-viewport {
     max-height: inherit;
@@ -61,18 +59,5 @@
     flex-direction: column;
     min-height: 0;
     min-width: 0;
-  }
-
-  .workspace.sidebar-collapsed {
-    grid-template-columns: 0 minmax(0, 1fr);
-  }
-  .workspace.sidebar-collapsed.with-inspector {
-    grid-template-columns: 0 minmax(0, 1fr) var(--inspector-width);
-  }
-  .workspace.sidebar-collapsed > .sidebar {
-    visibility: hidden;
-    border: 0;
-    padding: 0;
-    overflow: hidden;
   }
 }

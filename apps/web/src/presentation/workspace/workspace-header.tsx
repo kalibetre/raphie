@@ -1,62 +1,125 @@
-import { Menu, PanelLeft, PanelRight } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronsLeft,
+  ChevronsRight,
+  ListFilter,
+  PanelRight,
+  Settings,
+  SquarePen,
+} from "lucide-react";
 
+import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { Button } from "../../shared/ui/button";
 
 export function WorkspaceHeader({
   title,
   breadcrumb,
+  botId,
+  description,
   collapsed,
   inspector,
   showInspector,
-  onOpenNavigation,
   onToggleNavigation,
   onToggleInspector,
+  onBack,
+  onNew,
+  onLibrary,
+  library,
+  unreadCount,
+  onBotSettings,
 }: {
   title: string | undefined;
   breadcrumb: string;
+  botId: string;
+  description: string;
   collapsed: boolean;
   inspector: boolean;
   showInspector: boolean;
   onOpenNavigation: () => void;
   onToggleNavigation: () => void;
   onToggleInspector: () => void;
+  onBack?: () => void;
+  onNew?: () => void;
+  onLibrary?: () => void;
+  library?: boolean;
+  unreadCount: number;
+  onBotSettings: () => void;
 }) {
   return (
-    <header className="workspace-header">
-      <div>
+    <header className="workspace-header bot-workspace-header">
+      <div className="header-identity">
         <Button
-          className="md:hidden"
-          variant="ghost"
-          size="icon"
-          aria-label="Open navigation"
-          onClick={() => {
-            onOpenNavigation();
-            requestAnimationFrame(() =>
-              document
-                .querySelector<HTMLButtonElement>(
-                  '[aria-label="Close navigation"]',
-                )
-                ?.focus(),
-            );
-          }}
-        >
-          <Menu />
-        </Button>
-        <Button
-          className="-ml-2 hidden text-muted-foreground md:inline-flex"
+          className="navigation-toggle hidden md:inline-flex"
           variant="ghost"
           size="icon-sm"
           aria-label={collapsed ? "Show sidebar (⌘B)" : "Hide sidebar (⌘B)"}
           aria-pressed={!collapsed}
           onClick={onToggleNavigation}
         >
-          <PanelLeft size={16} />
+          {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         </Button>
-        <span className="breadcrumb">{breadcrumb}</span>
-        <span className="breadcrumb-sep">/</span>
-        <h1>{title}</h1>
+        <BotAvatar id={botId} />
+        <button
+          className="header-bot"
+          onClick={onBotSettings}
+          aria-label={`Settings for ${breadcrumb}`}
+        >
+          <strong>{breadcrumb}</strong>
+          <small>{description}</small>
+        </button>
       </div>
-      <div>
+      <h1 className="header-conversation-title">
+        {library ? "Conversations" : title}
+      </h1>
+      <div className="header-actions">
+        {onBack && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Back to conversations"
+            title="Back to conversations"
+            onClick={onBack}
+          >
+            <ArrowLeft size={16} />
+          </Button>
+        )}
+        {onNew && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="New conversation"
+            title="New conversation"
+            onClick={onNew}
+          >
+            <SquarePen size={17} />
+          </Button>
+        )}
+        {onLibrary && (
+          <Button
+            className="library-button"
+            variant={library ? "secondary" : "outline"}
+            size="sm"
+            aria-label={`Conversations${unreadCount ? `, ${unreadCount} need attention` : ""}`}
+            aria-pressed={library}
+            onClick={onLibrary}
+          >
+            <ListFilter size={14} />
+            <span>Conversations</span>
+            {unreadCount > 0 && (
+              <span className="reply-count">{unreadCount}</span>
+            )}
+          </Button>
+        )}
+        {!onLibrary && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Bot settings"
+            onClick={onBotSettings}
+          >
+            <Settings size={16} />
+          </Button>
+        )}
         {showInspector && (
           <Button
             variant="ghost"
