@@ -103,7 +103,7 @@ export function Workspace({
     visibleActivityWidth,
     navigationMax,
     activityMax,
-  } = useWorkspaceLayout(view);
+  } = useWorkspaceLayout(view, workspace.botId);
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
   const [enabled, setEnabled] = useEnabledPlugins();
   const mobile = useIsMobile();
@@ -319,6 +319,7 @@ export function Workspace({
                 setEnabled={setEnabled}
                 traces={<Diagnostics />}
                 activity={<BotActivity />}
+                onParent={(next) => selectSettings(workspace.botId, next)}
               />
             </SettingsMain>
           ) : (

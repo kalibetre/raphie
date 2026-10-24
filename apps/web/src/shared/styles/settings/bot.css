@@ -1,6 +1,15 @@
 /* Settings shell and bot profile/personality editors. */
 @layer components {
   /* Full-window settings: the shadcn sidebar plus a scrolling page. */
+  .settings-back {
+    gap: 4px;
+    margin: 0 0 8px -8px;
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+  }
+  .settings-back:hover {
+    color: var(--foreground);
+  }
   .settings-topbar {
     flex: none;
     display: flex;

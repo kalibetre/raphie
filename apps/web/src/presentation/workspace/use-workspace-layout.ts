@@ -6,8 +6,21 @@ import {
   writeLocal,
 } from "../../infrastructure/preferences/storage";
 
-export function useWorkspaceLayout(view?: "settings") {
-  const [inspector, setInspector] = useState(false);
+// The conversations panel stays open per bot: switching bots remounts the
+// workspace, so the open state lives in storage rather than component state.
+const inspectorKey = (botId: string) => `raphie:inspector-open:${botId}`;
+
+export function useWorkspaceLayout(view: "settings" | undefined, botId: string) {
+  const [inspector, setInspectorValue] = useState(
+    () => readLocal(inspectorKey(botId)) === "true",
+  );
+  useEffect(() => {
+    setInspectorValue(readLocal(inspectorKey(botId)) === "true");
+  }, [botId]);
+  function setInspector(open: boolean) {
+    setInspectorValue(open);
+    writeLocal(inspectorKey(botId), String(open));
+  }
   const [sidebar, setSidebar] = useState(false);
   const [navigationWidth, setNavigationWidth] = useState(264);
   const [activityWidth, setActivityWidth] = useState(340);
@@ -41,7 +54,6 @@ export function useWorkspaceLayout(view?: "settings") {
   }
 
   useEffect(() => {
-    setInspector(false);
     applyTheme();
   }, []);
   // Desktop collapse; on small screens the sidebar is an overlay instead.

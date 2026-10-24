@@ -27,7 +27,12 @@ import {
 } from "../../../shared/ui/sidebar";
 import { useBots } from "../infrastructure/use-bots";
 import { BotAvatar } from "./bot-avatar";
-import { isAppSection, type Section, sections } from "./settings-sections";
+import {
+  isAppSection,
+  parentSection,
+  type Section,
+  sections,
+} from "./settings-sections";
 
 const botEntries: readonly Section[] = [
   "bot",
@@ -40,12 +45,6 @@ const botEntries: readonly Section[] = [
   "activity",
 ];
 const appEntries: readonly Section[] = ["connection", "general", "plugins"];
-// Subpages reached from inside a page highlight their parent entry.
-const parent: Partial<Record<Section, Section>> = {
-  "bot-history": "bot",
-  personality: "bot",
-  "memory-browse": "memory",
-};
 const label = (id: Section) => sections.find((s) => s.id === id)!.label;
 const expandedKey = "raphie:settings-expanded";
 
@@ -63,7 +62,7 @@ export function SettingsNav({
 }) {
   const bots = useBots().data?.items ?? [];
   const { setOpenMobile } = useSidebar();
-  const current = parent[section] ?? section;
+  const current = parentSection[section] ?? section;
   const app = isAppSection(section) || section === "new-bot";
   // Expanding only reveals pages; it never navigates, so drafts stay intact.
   // Saved because selecting another bot's page remounts the bot scope; the

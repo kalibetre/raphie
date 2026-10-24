@@ -137,3 +137,10 @@ export const isAppSection = (section: string) =>
 
 export const sectionOf = (id: Section) =>
   sections.find((section) => section.id === id)!;
+
+/** Sub-pages reached from inside a page; their parent is the page to go back to. */
+export const parentSection: Partial<Record<Section, Section>> = {
+  "bot-history": "bot",
+  personality: "bot",
+  "memory-browse": "memory",
+};
