@@ -101,7 +101,7 @@ containerTest(
     await fixture(async (provider, directory) => {
       const checked = await exec(
         provider,
-        "set -e; id -u; grep -E '^(CapEff|NoNewPrivs):' /proc/self/status; test ! -S /var/run/docker.sock; test ! -e /workspace/container.sqlite; test ! -e /workspace/checkpoint.sqlite; ! touch /etc/raphie-test; printf '%s' \"${RAPHIE_TEST_HOST_SENTINEL-unset}\"",
+        "set -e; id -u; grep -E '^(CapEff|NoNewPrivs):' /proc/self/status; test ! -S /var/run/docker.sock; test ! -e /workspace/container.sqlite; test ! -e /workspace/checkpoint.sqlite; if touch /etc/raphie-test 2>/dev/null; then exit 1; fi; printf '%s' \"${RAPHIE_TEST_HOST_SENTINEL-unset}\"",
       );
       expect(checked.exitCode).toBe(0);
       expect(checked.output.split("\n")[0]).not.toBe("0");

@@ -265,7 +265,9 @@ Real probes on Docker 29.8.2 / OrbStack, 2026-10-25, found:
 - The Docker bridge gateway (`192.168.215.1`) refused the fixture connection.
   Other tested host bridge addresses timed out. Neither result proves filtering.
 - TCP probes to `10.0.0.1` timed out or were refused across runs; probes to
-  `172.16.0.1`, `192.168.0.1` and metadata `169.254.169.254` timed out. No controlled service exists at those addresses in
+  `172.16.0.1`, `192.168.0.1` and metadata `169.254.169.254` timed out in the
+  initial runs. A later manual-test run reached `192.168.0.1:80`, further
+  confirming LAN exposure. No controlled service exists at those addresses in
   this test, so **private-range and metadata denial were not established**.
   `fd00::1` was unreachable; that does not establish IPv6 egress filtering.
 

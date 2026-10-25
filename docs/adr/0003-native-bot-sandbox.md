@@ -136,8 +136,8 @@ for later. Slice 1 below delivers settings only.
    loss, detached-process termination, fencing and symlink tests pass.
    **Host-reach denial is not delivered:** `host.docker.internal` reaches even a
    loopback-bound Mac service, and host LAN/VPN interfaces are reachable. Private
-   probes timed out or were refused and metadata probes timed out; neither
-   establishes blocking. CLI-only bridge
+   probes were reachable, refused or timed out across runs; metadata probes
+   timed out. These observations do not establish blocking. CLI-only bridge
    flags cannot enforce the intended policy portably; no host firewall was
    changed. Desktop/Linux/Podman are unverified. See the
    [backend limits and probe results](../bot-workspaces.md#container-backend-native-sandbox-slice-2).
