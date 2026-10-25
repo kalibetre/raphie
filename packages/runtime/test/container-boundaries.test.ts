@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -31,8 +31,10 @@ try {
   );
 }
 const containerTest = available ? test : test.skip;
-const open = (directory: string, workspaceId = "boundary-fixture") =>
-  ContainerWorkspace.open({
+const cleanupScopes = new Map<string, string>();
+
+async function open(directory: string, workspaceId = "boundary-fixture") {
+  const provider = await ContainerWorkspace.open({
     directory,
     workspaceId,
     idleMinutes: 1,
@@ -40,6 +42,14 @@ const open = (directory: string, workspaceId = "boundary-fixture") =>
     namePrefix: "raphie-test",
     cli,
   });
+  cleanupScopes.set(scope(directory), workspaceId);
+  return provider;
+}
+
+afterAll(() => {
+  for (const [scopeId, workspaceId] of cleanupScopes)
+    cli.removeOwned(workspaceId, scopeId);
+});
 
 async function fixture(
   check: (provider: ContainerWorkspace, directory: string) => Promise<void>,

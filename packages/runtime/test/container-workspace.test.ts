@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { afterAll, describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -33,8 +34,10 @@ try {
   );
 }
 const containerTest = available ? test : test.skip;
-const open = (directory: string, workspaceId = "fixture", extra = {}) =>
-  ContainerWorkspace.open({
+const cleanupScopes = new Map<string, string>();
+
+async function open(directory: string, workspaceId = "fixture", extra = {}) {
+  const provider = await ContainerWorkspace.open({
     directory,
     workspaceId,
     idleMinutes: 1,
@@ -43,6 +46,25 @@ const open = (directory: string, workspaceId = "fixture", extra = {}) =>
     namePrefix: "raphie-test",
     ...extra,
   });
+  const db = new Database(join(directory, "workspace", "container.sqlite"), {
+    readonly: true,
+  });
+  try {
+    cleanupScopes.set(
+      db.query<{ scope: string }, []>("SELECT scope FROM lease").get()!.scope,
+      workspaceId,
+    );
+  } finally {
+    db.close();
+  }
+  return provider;
+}
+
+afterAll(() => {
+  // Backstop the per-fixture finally blocks, including failed assertions.
+  for (const [scope, workspaceId] of cleanupScopes)
+    cli.removeOwned(workspaceId, scope);
+});
 
 async function fixture(
   check: (provider: ContainerWorkspace, directory: string) => Promise<void>,
