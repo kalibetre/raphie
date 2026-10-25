@@ -106,20 +106,26 @@ folder or send over open network.
 
 ## Delivery sequence
 
-1. Provider interface and settings: provider, idle minutes and optional quota;
+The first implementation has no credential proxy. The sandbox holds no
+credentials, and authenticated integrations such as GitHub go through the bot's
+existing per-bot MCP connections, which run on the host. Consequences: the bot
+can clone public repositories, edit, and use local `git`, but cannot push or
+clone private repositories from inside the sandbox. It publishes through MCP
+tools instead. The proxy below stays the design for later.
+
+1. Provider setting: provider, idle minutes and optional quota per bot;
    existing bots stay on just-bash.
-2. Container `ExecutionEnv` with the single-folder mount, lease and fencing,
-   host-reach denial and resource bounds. Prove cross-bot isolation, shared
-   files across sessions, idle stop and restart, and interrupted-command
-   recovery with real `git` against a local test repository.
+2. Container `ExecutionEnv`: single-folder mount, lease and fencing, host-reach
+   denial, resource bounds, idle stop. Prove cross-bot isolation, shared files
+   across sessions, restart and interrupted-command recovery with real `git`
+   against a local test repository.
 3. Pi `CodingTools` installed for container bots; Sandbox and Workspace files
    pages read through the environment.
-4. Egress proxy with per-host credential grants, TLS termination, audit log and
-   the optional write-approval toggle. Prove that no credential appears in the
-   container environment, filesystem or process list, and that a non-granted
-   host receives none.
-5. Image contents, including `git`, `gh`, `rg` and common runtimes, and a
-   documented way to extend them.
+4. Image contents (`git`, `rg`, common runtimes) and a documented way to extend
+   them; free-space floor.
+5. Later: egress proxy with per-host credential grants, TLS termination, audit
+   log and the optional write-approval toggle. Prove that no credential appears
+   in the container environment, filesystem or process list.
 
 ## Open points
 
