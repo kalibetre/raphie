@@ -20,6 +20,8 @@ export type BotMcpConnection = {
   connected: boolean;
   toolCount: number;
   credentialConfigured: boolean;
+  authorizationUrl?: string;
+  authorizationFailed?: boolean;
 };
 
 export type SaveScheduledJob = {

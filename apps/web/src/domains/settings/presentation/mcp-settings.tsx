@@ -74,9 +74,13 @@ export function McpSettings() {
         }
         input.env = values;
       }
-      await data.mutation.mutateAsync({ input });
+      const result = await data.mutation.mutateAsync({ input });
       discard();
-      setMessage("Connected. These tools are available only to this bot.");
+      setMessage(
+        result.items.some((item) => item.authorizationUrl)
+          ? "Server added. Choose Authorize to sign in and grant access."
+          : "Connected. These tools are available only to this bot.",
+      );
     } catch (cause) {
       setError(
         cause instanceof SyntaxError
@@ -134,9 +138,20 @@ export function McpSettings() {
             <Row
               key={connection.id}
               title={connection.name}
-              description={`${connection.connected ? `${connection.toolCount} tools` : connection.enabled ? "Disconnected · reconnect to retry" : "Paused"} · ${connection.transport === "http" ? "Streamable HTTP" : "Local command"} · ${connection.address}`}
+              description={`${connection.authorizationUrl ? "Authorization required" : connection.authorizationFailed ? "Authorization did not complete · reconnect to retry" : connection.connected ? `${connection.toolCount} tools` : connection.enabled ? "Disconnected · reconnect to retry" : "Paused"} · ${connection.transport === "http" ? "Streamable HTTP" : "Local command"} · ${connection.address}`}
             >
               <div className="automation-actions">
+                {connection.authorizationUrl && (
+                  <a
+                    className="underline underline-offset-4"
+                    href={connection.authorizationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Authorize ${connection.name} (opens a new tab)`}
+                  >
+                    Authorize
+                  </a>
+                )}
                 {connection.source === "environment" ? (
                   <>
                     <span>Environment configuration · default bot only</span>
@@ -156,15 +171,19 @@ export function McpSettings() {
                       onClick={() =>
                         void change(
                           connection.id,
-                          connection.connected ? "disable" : "enable",
+                          connection.connected || connection.authorizationUrl
+                            ? "disable"
+                            : "enable",
                         )
                       }
                     >
                       {connection.connected
                         ? "Pause"
-                        : connection.enabled
-                          ? "Reconnect"
-                          : "Enable"}
+                        : connection.authorizationUrl
+                          ? "Cancel authorization"
+                          : connection.enabled
+                            ? "Reconnect"
+                            : "Enable"}
                     </Button>
                     <Button
                       variant="ghost"
@@ -246,6 +265,11 @@ export function McpSettings() {
           />
           {transport === "http" ? (
             <>
+              <p className="automation-note">
+                Leave the token empty for automatic browser authorization when
+                the server supports OAuth. After connecting, choose Authorize
+                above to sign in.
+              </p>
               <label htmlFor="mcp-token">Bearer token (optional)</label>
               <Input
                 id="mcp-token"

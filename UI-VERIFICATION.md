@@ -417,3 +417,20 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
 - Targeted runtime and web tests passed. Full `bun run validate` passed formatting,
   architecture, lint, types, tests and production build. Vite emitted its
   non-fatal large-chunk warning. No container behavior was implemented or tested.
+
+# MCP browser authorization — 2026-10-26
+
+- Added OAuth discovery and owner consent through the existing Pi MCP library.
+  Tests cover PKCE, callback state/issuer validation, encrypted access and refresh
+  tokens, refresh after restart, denial, expiry, cancellation and bot isolation.
+- Reconnecting during pending consent preserves the original state and PKCE
+  challenge. Pause/remove/shutdown retire callbacks, and failed consent does not
+  publish tools. Provider error payloads are not rendered on the callback page.
+- Disposable runtime on 14347, web app on 14351 and synthetic OAuth server on
+  14348 exercised Add → Authorize → consent → automatic reconnect with two tools.
+  The link worked with keyboard activation and opened a separate tab. No browser
+  exceptions or horizontal overflow at 320, 768, 1024 and 1440 pixels.
+- Evidence: `/private/tmp/raphie-bot-browser/oauth-pending.png` and
+  `oauth-connected.png`. Normal application services and saved data were untouched.
+- Full validation passed with 156 tests, formatting, architecture checks, lint,
+  types and production builds. The existing large browser chunk warning remains.

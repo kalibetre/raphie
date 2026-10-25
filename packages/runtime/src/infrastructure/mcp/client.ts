@@ -3,6 +3,7 @@ import {
   StdioTransport,
   StreamableHttpTransport,
 } from "@earendil-works/pi-mcp";
+import type { AuthProvider } from "@earendil-works/pi-mcp";
 
 export type McpConnection =
   | { transport: "http"; url: string; token?: string }
@@ -14,7 +15,10 @@ export type McpConnection =
     };
 
 /** Pi owns initialization, pagination, cancellation, HTTP resumption and shutdown. */
-export async function connectMcp(config: McpConnection) {
+export async function connectMcp(
+  config: McpConnection,
+  authProvider?: AuthProvider,
+) {
   const client = new PiMcpClient({
     name: "raphie",
     version: "0.1.0",
@@ -47,6 +51,7 @@ export async function connectMcp(config: McpConnection) {
       );
     transport = new StreamableHttpTransport({
       url: config.url,
+      authProvider,
       headers: config.token
         ? { Authorization: `Bearer ${config.token}` }
         : undefined,
