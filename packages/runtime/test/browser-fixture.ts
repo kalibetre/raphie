@@ -182,7 +182,6 @@ if (process.env.RAPHIE_FIXTURE_MEMORY_HISTORY === "true") {
   }
 }
 const app = await Gateway.open({
-  containerHostNetworkAccepted: nativeWorkspace,
   containerNamePrefix: "raphie-test",
   identity: { ...(await appDataIdentity(directory)), kind: "fixture" },
   deferResume: true,
@@ -229,6 +228,7 @@ if (nativeWorkspace) {
   await app.saveSandboxSettings({
     ...(await app.workspace.info()).settings,
     provider: "container",
+    hostNetworkAcknowledged: true,
   });
   await app.workspace
     .env("fixture-seed")
@@ -310,7 +310,6 @@ const bots = await BotHost.open(
       botId,
     );
     const gateway = await Gateway.open({
-      containerHostNetworkAccepted: nativeWorkspace,
       containerNamePrefix: "raphie-test",
       deferResume: true,
       directory: path,

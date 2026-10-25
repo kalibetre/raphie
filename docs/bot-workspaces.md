@@ -33,15 +33,18 @@ perform an external service action.
 
 ## Per-bot sandbox settings (native sandbox Slice 1)
 
-**Sandbox** settings persist the bot’s provider, idle period and optional container
-disk quota. Existing and new bots default to `just-bash`, 10 idle minutes and no
-disk limit (`diskQuotaMiB: null`). No settings import or file migration is needed.
+**Sandbox** settings persist the bot’s provider, idle period, optional container
+disk quota and host/local-network acknowledgement. Existing and new bots default
+to `just-bash`, 10 idle minutes, no disk limit (`diskQuotaMiB: null`) and no
+acknowledgement (`hostNetworkAcknowledged: false`). No settings import or file
+migration is needed.
 Idle minutes must be an integer from 1 through 1440. A supplied quota must be a
 positive safe integer in MiB; an omitted or null quota means no limit.
 
 Slice 1 made only `just-bash` available. Slice 3 now permits `container` after an
-explicit host-level network opt-in (see below). Without it, selecting container
-is disabled and an owner API save returns 409 without changing settings. There is
+explicit per-bot network acknowledgement (see below). Selecting Container reveals
+a required acknowledgement switch; Save stays disabled until it is on. An owner
+API save without acknowledgement returns 409 without changing settings. There is
 no fallback. Idle time and optional quota apply only to containers; they have
 **no effect on just-bash**, whose fixed limits remain unchanged.
 
@@ -56,8 +59,10 @@ so a settings save does not invalidate a pending file download.
 
 `GET /api/workspace` adds `settings` and `providers` to the existing active provider,
 usage, capabilities and fixed limits. `POST /api/workspace/settings` takes
-`{ provider, idleMinutes, diskQuotaMiB?, revision }` and returns the saved settings
-with an incremented revision. Unknown fields, including caller-selected bot IDs,
+`{ provider, idleMinutes, diskQuotaMiB?, hostNetworkAcknowledged?, revision }` and
+returns the saved settings with an incremented revision. An omitted acknowledgement defaults to false;
+Container requires an explicit `true`. Unknown fields, including caller-selected
+bot IDs,
 are rejected. Named bots use `/api/bots/<bot-id>/workspace/settings`; the existing
 local owner checks and selected bot routing supply the settings capability. There
 is no agent tool for reading or changing sandbox configuration.
@@ -329,12 +334,13 @@ part of verification.
 
 ## Native bot integration (Slice 3)
 
-`RAPHIE_CONTAINER_ALLOW_HOST_NETWORK=false` is the Varlock default. Set it to
-`true` in the runtime's Varlock-loaded configuration and restart only if the owner
-accepts that arbitrary container programs can reach host and LAN services, including
-Raphie's own local HTTP API. This is a host-level release gate, not a network filter.
-The Sandbox page then makes Container selectable separately for each bot. Build
-and configure the fixture image above first; image/toolchain support remains Slice 4.
+In each bot’s **Sandbox** settings, select **Container**, turn on **I understand
+host and local network access**, then Save. This accepts that arbitrary container
+programs can reach host and LAN services, including Raphie’s own local HTTP API.
+The acknowledgement is saved per bot and defaults to false; it does not filter
+traffic or affect another bot. No environment flag or runtime restart is required.
+The former `RAPHIE_CONTAINER_ALLOW_HOST_NETWORK` flag has been removed. Build and
+configure the fixture image above first; image/toolchain support remains Slice 4.
 
 Provider saves still serialize with turn admission, reject active turns, and use
 optimistic settings revisions. Container execution gets the bot data directory and
@@ -349,9 +355,13 @@ fake models, not external model calls.
 Switching providers preserves **two separate file stores**. It does not copy or
 merge files. Switching to just-bash stops native writers before committing the
 selection; switching back reopens the same disk folder. Changed idle/quota settings
-replace the native lease and end its processes. Removing the host opt-in while a
-bot selects Container makes startup fail explicitly after reaping stale compute;
-it does not silently switch providers or delete files.
+replace the native lease and end its processes. To withdraw acknowledgement,
+select just-bash, turn off the acknowledgement switch and Save; Container cannot
+be saved without it. Existing Container selections from before this setting was
+introduced require acknowledgement: startup reaps stale compute, preserves files,
+and keeps Sandbox settings accessible. Tools fail explicitly and file browsing
+returns 409 until the owner acknowledges access or selects just-bash. Usage is unavailable
+while execution is blocked. There is no silent provider fallback.
 
 Sandbox usage is allocated disk usage (`du`), with a nullable quota and no invented
 file-count limit. The Workspace files page lists live guest files through the same
@@ -379,3 +389,12 @@ architecture, lint, types and production build passed. A separate unavailable-CL
 run skipped the two new runtime integration cases cleanly. Sandbox rendering and
 query checks passed; no new browser interaction check was run in this delivery.
 See ADR 0003 for the review and delivery record.
+
+Per-bot acknowledgement update (2026-10-26): settings regressions cover the
+default-off value, API rejection without acknowledgement, independent bot settings,
+restart persistence and older Container selections requiring acknowledgement while
+preserving files. Rendering checks cover both acknowledgement states and unavailable
+usage. The six focused settings tests passed, including the added blocked-state
+case; formatting, lint and types passed after that addition. Full validation also
+passed 214 tests with zero failures or skips, including real Docker/OrbStack;
+the additional blocked-state rendering case passed in the focused run.

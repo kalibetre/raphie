@@ -143,17 +143,20 @@ for later. Slice 1 below delivers settings only.
    [backend limits and probe results](../bot-workspaces.md#container-backend-native-sandbox-slice-2).
    The backend was unavailable to bots until the Slice 3 opt-in policy below.
 3. **Delivered (2026-10-25, Slice 3), explicit network opt-in:** The owner chose
-   disabled-by-default container execution with a host-level acknowledgement of
-   host/LAN access. Varlock `RAPHIE_CONTAINER_ALLOW_HOST_NETWORK=true` enables
-   per-bot selection; it does not filter traffic. Pi coding tools use bot-derived
-   environments and trusted durable conversation/task/call identities. Tools are
+   disabled-by-default container execution with an acknowledgement of host/LAN
+   access. Updated on 2026-10-26: the acknowledgement is now a persisted per-bot
+   Sandbox setting (`hostNetworkAcknowledged`, default false), required to save
+   Container. It replaces the host-level environment flag and does not filter
+   traffic. Pi coding tools use bot-derived environments and trusted durable conversation/task/call identities. Tools are
    unsafe to replay; a real process-crash test proves committed native effects
    are not repeated after Pi recovery. Sandbox usage and Workspace file routes
    read through the environment, with live metadata revisions, bounded browsing
    and downloads. Provider switches retain separate stores without migration.
-   Revoking opt-in reaps stale compute and fails startup explicitly for a selected
-   container bot. Six required Slice 2 review findings were fixed and covered by
-   regressions. Synchronous lifecycle CLI calls were reviewed and retained for
+   Withdrawing acknowledgement requires switching to just-bash. Older Container
+   selections without acknowledgement reap stale compute on startup, preserve
+   files and expose Sandbox settings while blocking tools/file browsing until
+   acknowledged; there is no silent provider fallback. Six required Slice 2 review
+   findings were fixed and covered by regressions. Synchronous lifecycle CLI calls were reviewed and retained for
    fence safety; they can still block the runtime event loop for their bounded
    deadline. No credential proxy, host firewall change or VM isolation is claimed.
    See [native integration](../bot-workspaces.md#native-bot-integration-slice-3).
@@ -207,3 +210,11 @@ Varlock schema validation and staged scans passed. No external model calls or li
 user data are used by these tests. A second external Claude review was rejected by
 automatic approval due to repository disclosure risk; the follow-up review was
 completed locally instead.
+
+The 2026-10-26 per-bot acknowledgement update adds default-off persistence, owner
+API validation, bot separation and restart/legacy-selection regressions to the
+integration checks. Six focused settings tests pass, including both acknowledged
+and blocked Sandbox rendering; formatting, lint and types pass for the update.
+Full validation passed 214 tests with zero failures or skips, including real
+Docker/OrbStack. The added blocked-state rendering case passed separately in the
+focused run.

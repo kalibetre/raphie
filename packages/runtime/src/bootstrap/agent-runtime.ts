@@ -65,7 +65,6 @@ import {
 import { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
-  containerHostNetworkAccepted?: boolean;
   containerNamePrefix?: "raphie-test";
   identity?: { id: string; directory: string; kind?: "fixture" };
   deferResume?: boolean;
@@ -226,9 +225,6 @@ export class Gateway {
     app.workspace = await RuntimeWorkspace.open({
       directory: options.directory,
       workspaceId: options.identity!.id,
-      containerEnabled:
-        options.containerHostNetworkAccepted ??
-        process.env.RAPHIE_CONTAINER_ALLOW_HOST_NETWORK === "true",
       namePrefix: options.containerNamePrefix,
     });
     app.installWorkspaceTools();

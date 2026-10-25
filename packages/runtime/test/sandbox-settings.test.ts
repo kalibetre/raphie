@@ -13,6 +13,7 @@ const defaults = {
   provider: "just-bash" as const,
   idleMinutes: 10,
   diskQuotaMiB: null,
+  hostNetworkAcknowledged: false,
   revision: 1,
 };
 
@@ -57,7 +58,7 @@ test("sandbox defaults need no existing-data migration; settings survive reopen 
   }
 });
 
-test("sandbox HTTP validates owner edits, rejects unavailable providers and isolates bots and revisions", async () => {
+test("sandbox HTTP validates owner edits, requires container acknowledgement and isolates bots and revisions", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-sandbox-http-"));
   const gateway = await Gateway.open({ directory, deferResume: true });
   const host = await BotHost.open(
@@ -93,21 +94,22 @@ test("sandbox HTTP validates owner edits, rejects unavailable providers and isol
       {
         id: "container",
         name: "Container",
-        available: false,
-        reason:
-          "Container execution is disabled: host and local network access are not blocked.",
+        available: true,
+        reason: null,
       },
     ]);
     const unavailable = await save({ ...defaults, provider: "container" });
     expect(unavailable.status).toBe(409);
     expect((await unavailable.json()).error).toBe(
-      "Container execution is disabled: host and local network access are not blocked.",
+      "Acknowledge host and local network access in this bot's Sandbox settings before enabling Container.",
     );
     for (const patch of [
       { idleMinutes: 0 },
       { idleMinutes: 1441 },
       { idleMinutes: 1.5 },
       { idleMinutes: "10" },
+      { hostNetworkAcknowledged: "true" },
+      { hostNetworkAcknowledged: null },
       { diskQuotaMiB: 0 },
       { diskQuotaMiB: -1 },
       { diskQuotaMiB: 1.5 },
@@ -139,6 +141,15 @@ test("sandbox HTTP validates owner edits, rejects unavailable providers and isol
     expect([one.status, two.status].sort((a, b) => a - b)).toEqual([200, 409]);
     expect((await read()).settings.revision).toBe(2);
     expect((await read(otherBase)).settings).toEqual(defaults);
+    const consent = await save({
+      ...(await read()).settings,
+      hostNetworkAcknowledged: true,
+    });
+    expect(consent.status).toBe(200);
+    expect((await read()).settings.hostNetworkAcknowledged).toBe(true);
+    expect((await read(otherBase)).settings.hostNetworkAcknowledged).toBe(
+      false,
+    );
     expect(
       (await save({ ...defaults, idleMinutes: 30 }, otherBase)).status,
     ).toBe(200);

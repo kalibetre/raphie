@@ -9,12 +9,10 @@ import { BotWorkspace } from "./bot-workspace.ts";
 import { containerLimits } from "./container-cli.ts";
 import { ContainerFiles } from "./container-files.ts";
 import { ContainerWorkspace } from "./container-workspace.ts";
-import { sandboxProviders } from "./sandbox-settings.ts";
 
 type Options = {
   directory: string;
   workspaceId: string;
-  containerEnabled: boolean;
   namePrefix?: string;
 };
 
@@ -31,31 +29,21 @@ export class RuntimeWorkspace {
   }
 
   static async open(options: Options) {
-    const providers = sandboxProviders.map((entry) =>
-      entry.id === "container"
-        ? {
-            ...entry,
-            available: options.containerEnabled,
-            reason: options.containerEnabled ? null : entry.reason,
-          }
-        : entry,
-    );
     const checkpoint = await BotWorkspace.open(
       join(options.directory, "workspace", "checkpoint.sqlite"),
-      providers,
     );
     const workspace = new RuntimeWorkspace(checkpoint, options);
     try {
       if (checkpoint.settings().provider === "container") {
-        // Reap the previous epoch even if the owner revoked the network opt-in
-        // after a crash. Opening control state never starts a new container.
+        // Reap the previous epoch even if stored settings lack acknowledgement
+        // after an upgrade. Opening control state never starts a new container.
         workspace.container = await workspace.openContainer(
           checkpoint.settings(),
         );
-        if (!options.containerEnabled)
-          throw new Error(
-            "This bot uses container execution, but the host/LAN network policy has not been accepted. Re-enable the explicit opt-in before starting; files were preserved.",
-          );
+        if (!checkpoint.settings().hostNetworkAcknowledged) {
+          await workspace.container.close();
+          workspace.container = undefined;
+        }
       }
       return workspace;
     } catch (error) {
@@ -107,7 +95,7 @@ export class RuntimeWorkspace {
       } catch (error) {
         await next?.close();
         this.container = undefined;
-        if (before.provider === "container") {
+        if (before.provider === "container" && before.hostNetworkAcknowledged) {
           try {
             this.container = await this.openContainer(before);
           } catch {
@@ -125,6 +113,11 @@ export class RuntimeWorkspace {
 
   private selectedContainer() {
     if (this.settings().provider !== "container") return undefined;
+    if (!this.settings().hostNetworkAcknowledged)
+      throw new InputError(
+        "Acknowledge host and local network access in this bot's Sandbox settings before using Container.",
+        409,
+      );
     if (!this.container)
       throw new InputError(
         "The selected container provider is unavailable. Save its settings again or restart the runtime; files were preserved.",
@@ -153,8 +146,8 @@ export class RuntimeWorkspace {
   async info(): Promise<SandboxInfo> {
     return this.views.run(async () => {
       const base = this.checkpoint.info();
-      const container = this.selectedContainer();
-      if (!container) return base;
+      if (base.settings.provider !== "container") return base;
+      const container = this.container;
       return {
         ...base,
         provider: { id: "container", name: "Container", version: "native" },
@@ -162,12 +155,12 @@ export class RuntimeWorkspace {
         capabilities: { network: true, hostFiles: false, nativeCode: true },
         revision: base.settings.revision,
         executions: {
-          admitted: container.admitted,
+          admitted: container?.admitted ?? 0,
           capacity: containerLimits.queued,
           runtimeConcurrency: containerLimits.concurrent,
         },
         usage: {
-          fileBytes: await container.usage(context),
+          fileBytes: container ? await container.usage(context) : null,
           entries: null,
           receiptBytes: null,
         },

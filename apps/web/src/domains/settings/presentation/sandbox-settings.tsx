@@ -50,11 +50,17 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
           title={info.provider.name}
           description={
             container
-              ? "Active · Native programs in a per-bot container"
+              ? info.settings.hostNetworkAcknowledged
+                ? "Active · Native programs in a per-bot container"
+                : "Awaiting acknowledgement · Native container provider"
               : `Active · Version ${info.provider.version} · Shell commands over a virtual filesystem`
           }
         >
-          <span className="sandbox-status">Active</span>
+          <span className="sandbox-status">
+            {container && !info.settings.hostNetworkAcknowledged
+              ? "Acknowledgement required"
+              : "Active"}
+          </span>
         </Row>
         <Row
           title="Available capabilities"
@@ -113,7 +119,7 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
         />
         <Row
           title="Files"
-          description={`${bytes(info.usage.fileBytes)} used${info.limits.fileBytes === null ? " · No disk quota" : ` of ${bytes(info.limits.fileBytes)}`}${info.usage.entries !== null && info.limits.entries !== null ? ` · ${info.usage.entries.toLocaleString()} of ${info.limits.entries.toLocaleString()} checkpoint entries` : " · Quota is checked before commands, not enforced during writes"}`}
+          description={`${info.usage.fileBytes === null ? "Usage unavailable" : `${bytes(info.usage.fileBytes)} used`}${info.limits.fileBytes === null ? " · No disk quota" : ` of ${bytes(info.limits.fileBytes)}`}${info.usage.entries !== null && info.limits.entries !== null ? ` · ${info.usage.entries.toLocaleString()} of ${info.limits.entries.toLocaleString()} checkpoint entries` : " · Quota is checked before commands, not enforced during writes"}`}
         />
         <Row
           title="Execution history"

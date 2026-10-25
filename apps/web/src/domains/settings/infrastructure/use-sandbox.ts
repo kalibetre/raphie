@@ -43,7 +43,8 @@ export function useSandbox() {
   return { ...query, save };
 }
 
-export function formatWorkspaceBytes(bytes: number) {
+export function formatWorkspaceBytes(bytes: number | null) {
+  if (bytes === null) return "Usage unavailable";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;

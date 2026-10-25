@@ -20,11 +20,17 @@ export type SandboxSettings = {
   idleMinutes: number;
   /** null means no container disk limit; just-bash limits remain fixed. */
   diskQuotaMiB: number | null;
+  /** Owner accepts that this bot's container can reach host and LAN services. */
+  hostNetworkAcknowledged: boolean;
   revision: number;
 };
 
-export type SaveSandboxSettings = Omit<SandboxSettings, "diskQuotaMiB"> & {
+export type SaveSandboxSettings = Omit<
+  SandboxSettings,
+  "diskQuotaMiB" | "hostNetworkAcknowledged"
+> & {
   diskQuotaMiB?: number | null;
+  hostNetworkAcknowledged?: boolean;
 };
 
 export type SandboxProviderInfo = {
@@ -48,7 +54,7 @@ export type SandboxInfo = {
     runtimeConcurrency: number;
   };
   usage: {
-    fileBytes: number;
+    fileBytes: number | null;
     entries: number | null;
     receiptBytes: number | null;
   };

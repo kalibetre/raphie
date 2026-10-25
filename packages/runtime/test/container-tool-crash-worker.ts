@@ -6,7 +6,6 @@ const model = chatModel({
 });
 const gateway = await Gateway.open({
   directory: process.argv[2],
-  containerHostNetworkAccepted: true,
   containerNamePrefix: "raphie-test",
   models: model.models,
   model: { provider: "fixture", modelId: "history" },
@@ -14,6 +13,7 @@ const gateway = await Gateway.open({
 await gateway.saveSandboxSettings({
   ...(await gateway.workspace.info()).settings,
   provider: "container",
+  hostNetworkAcknowledged: true,
 });
 const environment = gateway.workspace.env.bind(gateway.workspace);
 gateway.workspace.env = (operationId) => {

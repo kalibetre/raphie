@@ -75,7 +75,6 @@ containerTest(
       });
       gateway = await Gateway.open({
         directory,
-        containerHostNetworkAccepted: true,
         containerNamePrefix: "raphie-test",
         models: model.models,
         model: { provider: "fixture", modelId: "history" },
@@ -108,7 +107,6 @@ containerTest(
       if (!gateway)
         gateway = await Gateway.open({
           directory,
-          containerHostNetworkAccepted: true,
           containerNamePrefix: "raphie-test",
           deferResume: true,
         });
@@ -140,7 +138,6 @@ containerTest(
     });
     const options = {
       directory,
-      containerHostNetworkAccepted: true,
       containerNamePrefix: "raphie-test" as const,
       models: model.models,
       model: { provider: "fixture", modelId: "history" },
@@ -172,10 +169,16 @@ containerTest(
       const selected = await save({
         ...defaults,
         provider: "container",
+        hostNetworkAcknowledged: true,
         idleMinutes: 1,
       });
       expect(selected.status).toBe(200);
       const nativeSettings = await selected.json();
+      expect(nativeSettings.hostNetworkAcknowledged).toBe(true);
+      expect(
+        (await save({ ...nativeSettings, hostNetworkAcknowledged: false }))
+          .status,
+      ).toBe(409);
       expect((await gateway.workspace.info()).provider.id).toBe("container");
       for (let i = 0; i < 2; i++) {
         await gateway.sessions.submit(gateway.actors.establish("web"), {
@@ -307,7 +310,11 @@ containerTest(
         db.close();
       }
       const prior = gateway.workspace.env("old-view");
-      const switched = await save({ ...nativeSettings, provider: "just-bash" });
+      const switched = await save({
+        ...nativeSettings,
+        provider: "just-bash",
+        hostNetworkAcknowledged: false,
+      });
       expect(switched.status).toBe(200);
       expect((await prior.writeFile("stale", "wrong", context)).ok).toBe(false);
       expect(
@@ -316,18 +323,42 @@ containerTest(
       const back = await save({
         ...(await switched.json()),
         provider: "container",
+        hostNetworkAcknowledged: true,
       });
       expect(back.status).toBe(200);
       await server.close();
       await gateway.close();
-      await assert.rejects(
-        Gateway.open({ ...options, containerHostNetworkAccepted: false }),
-        /policy has not been accepted/,
-      );
       gateway = await Gateway.open(options);
       expect(
         getOrThrow(
           await gateway.workspace.env("verify").readTextFile("note", context),
+        ),
+      ).toBe("shared\nshared\n");
+      await gateway.close();
+      const legacy = new Database(
+        join(directory, "workspace", "checkpoint.sqlite"),
+      );
+      legacy.exec(
+        "UPDATE sandbox_settings SET value=json_remove(value,'$.hostNetworkAcknowledged')",
+      );
+      legacy.close();
+      gateway = await Gateway.open(options);
+      const pending = await gateway.workspace.info();
+      expect(pending.settings.hostNetworkAcknowledged).toBe(false);
+      expect(pending.provider.id).toBe("container");
+      expect(pending.usage.fileBytes).toBeNull();
+      expect(() => gateway.workspace.env("unacknowledged")).toThrow(
+        "Acknowledge",
+      );
+      await gateway.saveSandboxSettings({
+        ...pending.settings,
+        hostNetworkAcknowledged: true,
+      });
+      expect(
+        getOrThrow(
+          await gateway.workspace
+            .env("acknowledged")
+            .readTextFile("note", context),
         ),
       ).toBe("shared\nshared\n");
     } finally {
