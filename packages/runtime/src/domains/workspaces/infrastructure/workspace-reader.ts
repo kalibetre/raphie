@@ -33,7 +33,7 @@ export function sandboxInfo(
   revision: number,
   receiptBytes: number,
   admitted: number,
-): SandboxInfo {
+): Omit<SandboxInfo, "settings" | "providers"> {
   return {
     provider: { id: "just-bash", name: "just-bash", version: "3.6.0" },
     isolation: "virtual-filesystem",

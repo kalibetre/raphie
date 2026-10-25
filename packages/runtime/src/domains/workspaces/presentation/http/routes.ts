@@ -1,12 +1,27 @@
+import type { SandboxSettings, SaveSandboxSettings } from "@raphie/contracts";
 import { Hono } from "hono";
 
+import {
+  jsonInput,
+  limitBody,
+} from "../../../../infrastructure/http/validation.ts";
 import { InputError } from "../../../../shared/application/input-error.ts";
 import type { BotWorkspace } from "../../infrastructure/bot-workspace.ts";
+import { saveSandboxSettingsSchema } from "../../infrastructure/sandbox-settings.ts";
 
 /** Outer local-owner middleware and bot routing supply the workspace capability. */
-export function workspaceRoutes(workspace: BotWorkspace) {
+export function workspaceRoutes(
+  workspace: BotWorkspace,
+  saveSettings: (input: SaveSandboxSettings) => Promise<SandboxSettings>,
+) {
   return new Hono()
     .get("/", (c) => c.json(workspace.info()))
+    .post(
+      "/settings",
+      limitBody(4096),
+      jsonInput(saveSandboxSettingsSchema),
+      async (c) => c.json(await saveSettings(c.req.valid("json"))),
+    )
     .get("/files", (c) => c.json(workspace.list(c.req.query("path"))))
     .get("/download", (c) => {
       const raw = c.req.query("revision");

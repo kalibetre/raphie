@@ -2,7 +2,13 @@ import { Database } from "bun:sqlite";
 import { chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import type { SandboxSettings, SaveSandboxSettings } from "@raphie/contracts";
+
 import { InputError } from "../../../shared/application/input-error.ts";
+import {
+  sandboxProviders,
+  saveSandboxSettingsSchema,
+} from "./sandbox-settings.ts";
 import { computeWorkspace } from "./workspace-compute.ts";
 import {
   checkpointSchema,
@@ -58,6 +64,7 @@ export class BotWorkspace {
       db.exec(`PRAGMA busy_timeout=1000; PRAGMA max_page_count=8192;
         CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, epoch INTEGER NOT NULL, revision INTEGER NOT NULL, checkpoint TEXT NOT NULL, receipt_bytes INTEGER NOT NULL);
         INSERT OR IGNORE INTO workspace VALUES(1,1,0,0,'[]',0);
+        CREATE TABLE IF NOT EXISTS sandbox_settings (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS executions (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result TEXT NOT NULL);`);
       return new BotWorkspace(db);
     } catch (error) {
@@ -84,12 +91,62 @@ export class BotWorkspace {
 
   info() {
     const state = this.current();
-    return sandboxInfo(
-      readCheckpoint(state.checkpoint),
-      state.revision,
-      state.receipt_bytes,
-      this.queued,
-    );
+    return {
+      settings: this.settings(),
+      providers: sandboxProviders.map((provider) => ({ ...provider })),
+      ...sandboxInfo(
+        readCheckpoint(state.checkpoint),
+        state.revision,
+        state.receipt_bytes,
+        this.queued,
+      ),
+    };
+  }
+
+  private settings(): SandboxSettings {
+    const row = this.db
+      .query<{ value: string }, []>(
+        "SELECT value FROM sandbox_settings WHERE id=1",
+      )
+      .get();
+    return row
+      ? (JSON.parse(row.value) as SandboxSettings)
+      : {
+          provider: "just-bash",
+          idleMinutes: 10,
+          diskQuotaMiB: null,
+          revision: 1,
+        };
+  }
+
+  saveSettings(input: SaveSandboxSettings): SandboxSettings {
+    const parsed = saveSandboxSettingsSchema.safeParse(input);
+    if (!parsed.success)
+      throw new InputError(
+        "Invalid sandbox settings. Use idle minutes 1–1440 and a positive integer disk quota or no limit.",
+      );
+    const provider = sandboxProviders.find(
+      (entry) => entry.id === parsed.data.provider,
+    )!;
+    if (!provider.available) throw new InputError(provider.reason!, 409);
+    return this.db.transaction(() => {
+      this.current();
+      const previous = this.settings();
+      if (parsed.data.revision !== previous.revision)
+        throw new InputError(
+          "Sandbox settings changed elsewhere. Reload before saving.",
+          409,
+        );
+      const next = {
+        ...parsed.data,
+        diskQuotaMiB: parsed.data.diskQuotaMiB ?? null,
+        revision: previous.revision + 1,
+      };
+      this.db
+        .query("INSERT OR REPLACE INTO sandbox_settings(id,value) VALUES(1,?)")
+        .run(JSON.stringify(next));
+      return next;
+    })();
   }
 
   list(path = "/workspace") {

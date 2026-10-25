@@ -18,6 +18,7 @@ import { settingsRoutes } from "../domains/settings/presentation/http/routes.ts"
 import { workspaceRoutes } from "../domains/workspaces/presentation/http/routes.ts";
 import { clientRoutes } from "../infrastructure/http/client-routes.ts";
 import { snapshot } from "../infrastructure/pi/workspace-snapshot.ts";
+import { InputError } from "../shared/application/input-error.ts";
 import type { Gateway } from "./agent-runtime.ts";
 
 export type RuntimeHttpOptions = {
@@ -35,7 +36,23 @@ export function runtimeRoutes(
   options: RuntimeHttpOptions = {},
 ) {
   const app = new Hono();
-  app.route("/api/workspace", workspaceRoutes(runtime.workspace));
+  app.route(
+    "/api/workspace",
+    workspaceRoutes(runtime.workspace, (input) =>
+      runtime.configurationGate.run(async () => {
+        if (
+          (await runtime.chats.state()).turns.some(
+            (turn) => turn.status === "pending",
+          )
+        )
+          throw new InputError(
+            "Wait for this bot's active turns to finish before changing sandbox settings.",
+            409,
+          );
+        return runtime.workspace.saveSettings(input);
+      }),
+    ),
+  );
   if (options.mcp) app.route("/api/mcp", mcpRoutes(options.mcp));
   if (options.jobs) app.route("/api/jobs", jobRoutes(options.jobs));
   // The outer host owns sanitized transport error responses.
