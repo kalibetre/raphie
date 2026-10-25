@@ -37,9 +37,9 @@ export type SandboxProviderInfo = {
 export type SandboxInfo = {
   settings: SandboxSettings;
   providers: SandboxProviderInfo[];
-  provider: { id: "just-bash"; name: string; version: string };
-  isolation: "virtual-filesystem";
-  capabilities: { network: false; hostFiles: false; nativeCode: false };
+  provider: { id: SandboxProvider; name: string; version: string };
+  isolation: "virtual-filesystem" | "container";
+  capabilities: { network: boolean; hostFiles: false; nativeCode: boolean };
   root: "/workspace";
   revision: number;
   executions: {
@@ -47,13 +47,17 @@ export type SandboxInfo = {
     capacity: number;
     runtimeConcurrency: number;
   };
-  usage: { fileBytes: number; entries: number; receiptBytes: number };
+  usage: {
+    fileBytes: number;
+    entries: number | null;
+    receiptBytes: number | null;
+  };
   limits: {
     timeoutMs: number;
     sourceBytes: number;
     outputBytes: number;
-    fileBytes: number;
-    entries: number;
-    receiptsBytes: number;
+    fileBytes: number | null;
+    entries: number | null;
+    receiptsBytes: number | null;
   };
 };

@@ -32,7 +32,8 @@ const info: SandboxInfo = {
       id: "container",
       name: "Container",
       available: false,
-      reason: "Container provider is not implemented yet",
+      reason:
+        "Container execution is disabled: host and local network access are not blocked.",
     },
   ],
   provider: { id: "just-bash", name: "just-bash", version: "3.6.0" },
@@ -130,7 +131,10 @@ test("Sandbox renders persisted controls, unlimited quota and truthful provider-
         </QueryClientProvider>
       </BackendContext.Provider>,
     );
-    assert.match(html, /Container provider is not implemented yet/);
+    assert.match(
+      html,
+      /Container execution is disabled: host and local network access are not blocked./,
+    );
     assert.match(html, /Applies to the container provider/);
     assert.match(html, /Has no effect on just-bash/);
     assert.match(html, /placeholder="No limit"/);
@@ -139,6 +143,61 @@ test("Sandbox renders persisted controls, unlimited quota and truthful provider-
     assert.match(html, /0 B used of 8.0 MiB/);
     assert.match(html, /Browse files/);
     assert.match(html, /data-visible="false"/);
+  } finally {
+    workspace.dispose();
+  }
+});
+
+test("container Sandbox renders unlimited disk and open-network/live-write semantics without checkpoint limits", async () => {
+  const workspace = new BackendWorkspace("http://127.0.0.1:4317");
+  workspace.queries.setQueryData(["sandbox"], {
+    ...info,
+    provider: { id: "container", name: "Container", version: "native" },
+    settings: { ...info.settings, provider: "container" },
+    providers: info.providers.map((provider) => ({
+      ...provider,
+      available: true,
+      reason: null,
+    })),
+    isolation: "container",
+    capabilities: { network: true, hostFiles: false, nativeCode: true },
+    usage: { fileBytes: 4096, entries: null, receiptBytes: null },
+    limits: {
+      ...info.limits,
+      fileBytes: null,
+      entries: null,
+      receiptsBytes: null,
+    },
+  } satisfies SandboxInfo);
+  const routeTree = createRootRoute({
+    component: () => <SandboxSettings onBrowse={() => {}} />,
+  });
+  const router = createRouter({ routeTree, history: createMemoryHistory() });
+  await router.load();
+  try {
+    const html = renderToStaticMarkup(
+      <BackendContext.Provider
+        value={{
+          workspace,
+          backend: workspace,
+          connect: async () => {},
+          selectBot: async () => {},
+        }}
+      >
+        <QueryClientProvider client={workspace.queries}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </BackendContext.Provider>,
+    );
+    assert.match(html, /No disk quota/);
+    assert.match(html, /Host and local network services are reachable/);
+    assert.match(html, /Files survive failed and interrupted commands/);
+    assert.match(html, /There is no rollback/);
+    assert.doesNotMatch(
+      html,
+      /checkpoint entries|Failed or interrupted executions discard/,
+    );
+    assert.doesNotMatch(html, /NaN/);
   } finally {
     workspace.dispose();
   }

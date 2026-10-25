@@ -24,6 +24,7 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
         onRetry={query.error ? () => void query.refetch() : undefined}
       />
     );
+  const container = info.provider.id === "container";
   return (
     <>
       {query.error && (
@@ -38,22 +39,38 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
       />
       <Group
         title="Execution provider"
-        note="The provider runs commands against this bot’s durable workspace. The active just-bash provider has fixed, read-only limits."
+        note={
+          container
+            ? "The provider runs commands against this bot’s durable workspace."
+            : "The active just-bash provider has fixed, read-only limits."
+        }
       >
         <Row
           icon={<Box size={18} />}
           title={info.provider.name}
-          description={`Active · Version ${info.provider.version} · Shell commands over a virtual filesystem`}
+          description={
+            container
+              ? "Active · Native programs in a per-bot container"
+              : `Active · Version ${info.provider.version} · Shell commands over a virtual filesystem`
+          }
         >
           <span className="sandbox-status">Active</span>
         </Row>
         <Row
           title="Available capabilities"
-          description="Supported shell commands and file processing. Network access, host files and native programs are unavailable. MCP integrations run separately with their own approvals."
+          description={
+            container
+              ? "Real files, git and native programs with open network. Host and local network services are reachable. Authenticated integrations use host-side MCP with their own approvals."
+              : "Supported shell commands and file processing. Network access, host files and native programs are unavailable. MCP integrations run separately with their own approvals."
+          }
         />
         <Row
           title="Isolation"
-          description="Logical filesystem separation in a disposable worker. This is not OS or VM isolation. just-bash is the currently available provider."
+          description={
+            container
+              ? "Non-root container with a read-only system, limited memory, CPU and processes. Only this bot’s folder is mounted. Containers share a kernel; this is not VM isolation. Host/LAN network access is not blocked."
+              : "Logical filesystem separation in a disposable worker. This is not OS or VM isolation."
+          }
         />
       </Group>
       <Group
@@ -70,8 +87,12 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
           description="Shared by this bot’s conversations and preserved across restarts. Other bots have separate files."
         />
         <Row
-          title="Checkpoint policy"
-          description="A zero shell exit commits file changes. Failed or interrupted executions discard their changes. Shell state and temporary files do not persist."
+          title={container ? "File persistence" : "Checkpoint policy"}
+          description={
+            container
+              ? `Files survive failed and interrupted commands and restarts. There is no rollback. Processes stop after ${info.settings.idleMinutes} idle minutes or on command timeout/abort; files remain. An interrupted command has an unknown outcome: inspect files before retrying.`
+              : "A zero shell exit commits file changes. Failed or interrupted executions discard their changes. Shell state and temporary files do not persist."
+          }
         />
         <Row
           title="Current activity"
@@ -80,11 +101,11 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
       </Group>
       <Group
         title="Execution limits"
-        note="Fixed just-bash limits apply to each execution. A busy workspace queues its own conversations in order."
+        note="A busy workspace queues its own conversations in order."
       >
         <Row
           title="Time"
-          description={`${info.limits.timeoutMs / 1000} seconds, including worker startup`}
+          description={`${info.limits.timeoutMs / 1000} seconds${container ? " per operation; container startup also has a CLI deadline" : ", including worker startup"}`}
         />
         <Row
           title="Command and output"
@@ -92,11 +113,15 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
         />
         <Row
           title="Files"
-          description={`${bytes(info.usage.fileBytes)} used of ${bytes(info.limits.fileBytes)} · ${info.usage.entries.toLocaleString()} of ${info.limits.entries.toLocaleString()} checkpoint entries`}
+          description={`${bytes(info.usage.fileBytes)} used${info.limits.fileBytes === null ? " · No disk quota" : ` of ${bytes(info.limits.fileBytes)}`}${info.usage.entries !== null && info.limits.entries !== null ? ` · ${info.usage.entries.toLocaleString()} of ${info.limits.entries.toLocaleString()} checkpoint entries` : " · Quota is checked before commands, not enforced during writes"}`}
         />
         <Row
           title="Execution history"
-          description={`${bytes(info.usage.receiptBytes)} used of ${bytes(info.limits.receiptsBytes)}. Retained receipts prevent duplicate writes during recovery. New executions stop at capacity.`}
+          description={
+            container
+              ? "Interrupted operations are recorded and never replayed automatically. Durable receipts are retained up to 10,000 entries; new writes stop at capacity. File browsing does not consume receipts."
+              : `${bytes(info.usage.receiptBytes ?? 0)} used of ${bytes(info.limits.receiptsBytes ?? 0)}. Retained receipts prevent duplicate writes during recovery. New executions stop at capacity.`
+          }
         />
       </Group>
     </>

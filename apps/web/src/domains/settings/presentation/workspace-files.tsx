@@ -58,12 +58,17 @@ export function WorkspaceFiles({ onSandbox }: { onSandbox: () => void }) {
     }
   }
 
+  const container = sandbox.data?.provider.id === "container";
   const parent = path.slice(0, path.lastIndexOf("/"));
   return (
     <>
       <Group
         title="Workspace files"
-        note="Browse and download the last committed files. New files appear after the bot’s command finishes successfully."
+        note={
+          container
+            ? "Browse live container files. Writes can appear even when a command fails. Downloads are limited to 8 MiB; files may change while processes run."
+            : "Browse and download the last committed files. New files appear after the bot’s command finishes successfully."
+        }
         action={
           <Button variant="ghost" size="sm" onClick={onSandbox}>
             Sandbox details
@@ -136,10 +141,11 @@ export function WorkspaceFiles({ onSandbox }: { onSandbox: () => void }) {
           <>
             <p className="workspace-file-summary" role="status">
               {listing.data.items.length}{" "}
-              {listing.data.items.length === 1 ? "item" : "items"} · Checkpoint{" "}
+              {listing.data.items.length === 1 ? "item" : "items"} ·{" "}
+              {container ? "Live listing" : "Checkpoint"}{" "}
               {listing.data.revision}
               {sandbox.data
-                ? ` · ${bytes(sandbox.data.usage.fileBytes)} of ${bytes(sandbox.data.limits.fileBytes)}`
+                ? ` · ${bytes(sandbox.data.usage.fileBytes)}${sandbox.data.limits.fileBytes === null ? " · No disk quota" : ` of ${bytes(sandbox.data.limits.fileBytes)}`}`
                 : ""}
             </p>
             {listing.data.items.length ? (

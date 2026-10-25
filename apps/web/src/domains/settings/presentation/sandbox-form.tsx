@@ -95,7 +95,7 @@ export function SandboxForm({
     >
       <Group
         title="Sandbox settings"
-        note="Saved for this bot across restarts. Only just-bash is available today."
+        note="Saved for this bot across restarts. Providers keep separate files; switching does not move or delete them."
       >
         <Row
           title="Provider"
@@ -135,6 +135,12 @@ export function SandboxForm({
               description={entry.reason}
             />
           ))}
+        {provider === "container" && (
+          <Row
+            title="Open network"
+            description="Container programs can reach this machine and local network services. The host’s explicit opt-in accepts this limitation. Host credentials are not provided; use MCP integrations for authenticated actions."
+          />
+        )}
         <Row
           title="Idle minutes"
           description={

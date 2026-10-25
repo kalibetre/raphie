@@ -7,7 +7,8 @@ export const sandboxProviders: SandboxProviderInfo[] = [
     id: "container",
     name: "Container",
     available: false,
-    reason: "Container provider is not implemented yet",
+    reason:
+      "Container execution is disabled: host and local network access are not blocked.",
   },
 ];
 

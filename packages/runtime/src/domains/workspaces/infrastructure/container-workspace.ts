@@ -261,6 +261,7 @@ export class ContainerWorkspace {
     try {
       this.cli.run(["start", id]);
       runningContainers.add(id);
+      this.lastUsed = this.now();
       this.connection = new ContainerRpc(this.cli.exec(id, this.source));
       return id;
     } catch (error) {

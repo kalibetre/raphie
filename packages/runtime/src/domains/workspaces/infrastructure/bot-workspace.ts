@@ -2,7 +2,11 @@ import { Database } from "bun:sqlite";
 import { chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import type { SandboxSettings, SaveSandboxSettings } from "@raphie/contracts";
+import type {
+  SandboxProviderInfo,
+  SandboxSettings,
+  SaveSandboxSettings,
+} from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import {
@@ -41,8 +45,10 @@ export class BotWorkspace {
   private queued = 0;
   private closed = false;
   private readonly stop = new AbortController();
+  private readonly providers: SandboxProviderInfo[];
 
-  private constructor(db: Database) {
+  private constructor(db: Database, providers: SandboxProviderInfo[]) {
+    this.providers = providers;
     this.db = db;
     this.epoch = db.transaction(() => {
       const state = this.state();
@@ -56,7 +62,7 @@ export class BotWorkspace {
     })();
   }
 
-  static async open(path: string) {
+  static async open(path: string, providers = sandboxProviders) {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const db = new Database(path, { strict: true });
     try {
@@ -66,7 +72,7 @@ export class BotWorkspace {
         INSERT OR IGNORE INTO workspace VALUES(1,1,0,0,'[]',0);
         CREATE TABLE IF NOT EXISTS sandbox_settings (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS executions (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result TEXT NOT NULL);`);
-      return new BotWorkspace(db);
+      return new BotWorkspace(db, providers);
     } catch (error) {
       db.close();
       throw error;
@@ -93,7 +99,7 @@ export class BotWorkspace {
     const state = this.current();
     return {
       settings: this.settings(),
-      providers: sandboxProviders.map((provider) => ({ ...provider })),
+      providers: this.providers.map((provider) => ({ ...provider })),
       ...sandboxInfo(
         readCheckpoint(state.checkpoint),
         state.revision,
@@ -103,7 +109,8 @@ export class BotWorkspace {
     };
   }
 
-  private settings(): SandboxSettings {
+  settings(): SandboxSettings {
+    this.current();
     const row = this.db
       .query<{ value: string }, []>(
         "SELECT value FROM sandbox_settings WHERE id=1",
@@ -119,27 +126,38 @@ export class BotWorkspace {
         };
   }
 
-  saveSettings(input: SaveSandboxSettings): SandboxSettings {
+  validateSettings(input: SaveSandboxSettings) {
     const parsed = saveSandboxSettingsSchema.safeParse(input);
     if (!parsed.success)
       throw new InputError(
         "Invalid sandbox settings. Use idle minutes 1–1440 and a positive integer disk quota or no limit.",
       );
-    const provider = sandboxProviders.find(
+    const provider = this.providers.find(
       (entry) => entry.id === parsed.data.provider,
     )!;
     if (!provider.available) throw new InputError(provider.reason!, 409);
+    this.current();
+    if (parsed.data.revision !== this.settings().revision)
+      throw new InputError(
+        "Sandbox settings changed elsewhere. Reload before saving.",
+        409,
+      );
+    return parsed.data;
+  }
+
+  saveSettings(input: SaveSandboxSettings): SandboxSettings {
+    const parsed = this.validateSettings(input);
     return this.db.transaction(() => {
       this.current();
       const previous = this.settings();
-      if (parsed.data.revision !== previous.revision)
+      if (parsed.revision !== previous.revision)
         throw new InputError(
           "Sandbox settings changed elsewhere. Reload before saving.",
           409,
         );
       const next = {
-        ...parsed.data,
-        diskQuotaMiB: parsed.data.diskQuotaMiB ?? null,
+        ...parsed,
+        diskQuotaMiB: parsed.diskQuotaMiB ?? null,
         revision: previous.revision + 1,
       };
       this.db

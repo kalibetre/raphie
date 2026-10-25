@@ -94,13 +94,14 @@ test("sandbox HTTP validates owner edits, rejects unavailable providers and isol
         id: "container",
         name: "Container",
         available: false,
-        reason: "Container provider is not implemented yet",
+        reason:
+          "Container execution is disabled: host and local network access are not blocked.",
       },
     ]);
     const unavailable = await save({ ...defaults, provider: "container" });
     expect(unavailable.status).toBe(409);
     expect((await unavailable.json()).error).toBe(
-      "Container provider is not implemented yet",
+      "Container execution is disabled: host and local network access are not blocked.",
     );
     for (const patch of [
       { idleMinutes: 0 },
