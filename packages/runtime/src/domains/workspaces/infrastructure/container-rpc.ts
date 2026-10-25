@@ -2,7 +2,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 
 import type { Context } from "@earendil-works/chord";
-import { FileError } from "@earendil-works/pi-durable/env";
+import { ExecutionError, FileError } from "@earendil-works/pi-durable/env";
 
 import { containerLimits } from "./container-cli.ts";
 import { decodeWire, encodeWire } from "./container-wire.ts";
@@ -30,6 +30,7 @@ export class ContainerRpc {
     number,
     (kind: string, value: unknown) => void
   >();
+  private readonly watcherEvents = new Map<number, number>();
   private readonly lines;
 
   private readonly child: ChildProcessWithoutNullStreams;
@@ -80,6 +81,7 @@ export class ContainerRpc {
     for (const pending of this.pending.values()) pending.reject(error);
     this.pending.clear();
     this.events.clear();
+    this.watcherEvents.clear();
   }
 
   close() {
@@ -110,7 +112,16 @@ export class ContainerRpc {
     context.abortSignal?.addEventListener("abort", cancel, { once: true });
     try {
       const result = await promise;
-      if (method !== "watch") this.events.delete(id);
+      const opened = result as
+        { ok?: boolean; value?: { $resource?: number } } | undefined;
+      if (method === "watch" && opened?.ok && opened.value?.$resource)
+        this.watcherEvents.set(opened.value.$resource, id);
+      else this.events.delete(id);
+      if (method === "close" && resource !== undefined) {
+        const eventId = this.watcherEvents.get(resource);
+        if (eventId !== undefined) this.events.delete(eventId);
+        this.watcherEvents.delete(resource);
+      }
       if (result && typeof result === "object" && "ok" in result) {
         const response = result as {
           ok: boolean;
@@ -119,11 +130,17 @@ export class ContainerRpc {
         if (!response.ok && response.error)
           return {
             ok: false,
-            error: new FileError(
-              response.error.code,
-              response.error.message,
-              response.error.path,
-            ),
+            error:
+              method === "exec"
+                ? new ExecutionError(
+                    response.error.code as ExecutionError["code"],
+                    response.error.message,
+                  )
+                : new FileError(
+                    response.error.code,
+                    response.error.message,
+                    response.error.path,
+                  ),
           };
       }
       return result;

@@ -2,6 +2,8 @@ import { spawn, spawnSync } from "node:child_process";
 
 export const containerLimits = {
   timeoutMs: 30_000,
+  sourceBytes: 16 * 1024,
+  journalEntries: 10_000,
   outputBytes: 32 * 1024,
   rpcBytes: 24 * 1024 * 1024,
   queued: 16,
