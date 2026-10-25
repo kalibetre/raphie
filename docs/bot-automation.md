@@ -14,6 +14,22 @@ they are not sandboxed. Only PATH and explicitly supplied environment values are
 passed to the command. Remote bearer tokens require HTTPS; loopback HTTP is allowed.
 Legacy SSE transport is not supported.
 
+For servers supporting MCP OAuth discovery and automatic client registration,
+leave the bearer token empty. Add the server, choose **Authorize**, then sign in
+and grant access in the new browser tab. Settings refreshes the connection status
+automatically after consent. Access and refresh tokens are encrypted with that
+bot's connection; reconnects refresh expired grants without another sign-in when
+the server permits it. No grant is shared with another bot.
+
+Consent expires after five minutes. **Cancel authorization**, Pause, Remove and
+runtime shutdown retire the callback. After denial or expiry, choose Reconnect
+for a fresh attempt. The callback validates state, PKCE and the returned issuer
+when supplied. Remote OAuth connections require HTTPS; loopback HTTP is allowed.
+The browser must be on the runtime's machine to reach its loopback
+callback. Servers requiring a pre-registered client ID or custom authorization
+parameters need additional configuration support; pasting a supported bearer
+token remains available.
+
 Pi's MCP client owns initialization, paginated discovery, cancellation and
 transport shutdown. Pi's deferred tool search loads tool definitions as needed.
 Discovering tools does not approve their execution: each model-proposed action

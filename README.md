@@ -107,7 +107,8 @@ but are not automatically loaded into a backend. Only local HTTP backends are su
 
 Configure independent MCP servers, one-time reminders and recurring prompts under each bot's settings.
 MCP supports Streamable HTTP and local stdio commands, with encrypted credentials
-and approval before model-proposed tool execution. Scheduled jobs keep results in
+and browser OAuth authorization for compatible HTTP servers. Model-proposed tool
+execution requires approval. Scheduled jobs keep results in
 a conversation and recover through Pi Durable's persisted sleep/wake tasks.
 Agents can create, modify and delete schedules directly through chat; reminders return to
 the originating conversation. Browse retained evidence from Settings → Memory → Browse memories.

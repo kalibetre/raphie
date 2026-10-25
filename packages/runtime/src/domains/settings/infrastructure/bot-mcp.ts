@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import { McpOAuthAuthorizationRequiredError } from "@earendil-works/pi-mcp/oauth";
 import type { BotMcpConnection, SaveMcpConnection } from "@raphie/contracts";
 
 import {
@@ -9,6 +10,10 @@ import {
   type McpClient,
   type McpConnection,
 } from "../../../infrastructure/mcp/client.ts";
+import {
+  McpOAuth,
+  type SavedMcpOAuth,
+} from "../../../infrastructure/mcp/oauth.ts";
 import { InputError } from "../../../shared/application/input-error.ts";
 import type { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
@@ -25,6 +30,7 @@ type Entry = {
   enabled: boolean;
   config: McpConnection;
   legacy?: boolean;
+  oauth?: SavedMcpOAuth;
 };
 
 type Options = {
@@ -44,6 +50,8 @@ export class BotMcp {
   private entries: Entry[] = [];
   private environmentEntry = false;
   private clients = new Map<string, McpClient>();
+  private oauth = new Map<string, McpOAuth>();
+  private closed = false;
 
   private constructor(
     db: Database,
@@ -96,7 +104,7 @@ export class BotMcp {
         service.redact(entry.config);
         if (entry.enabled) {
           try {
-            service.clients.set(entry.id, await service.connect(entry.config));
+            service.clients.set(entry.id, await service.connect(entry));
           } catch {
             /* An unavailable server must not stop the bot. */
           }
@@ -127,7 +135,9 @@ export class BotMcp {
       credentialConfigured:
         e.config.transport === "stdio"
           ? !!Object.keys(e.config.env ?? {}).length
-          : !!e.config.token,
+          : !!e.config.token || !!e.oauth?.state?.tokens,
+      authorizationUrl: this.oauth.get(e.id)?.authorizationUrl,
+      authorizationFailed: this.oauth.get(e.id)?.failed || undefined,
     }));
   }
 
@@ -139,8 +149,55 @@ export class BotMcp {
     for (const secret of secrets) if (secret) registerRedactionSecret(secret);
   }
 
-  private async connect(config: McpConnection) {
-    const client = await (this.options.connect ?? connectMcp)(config);
+  private async connect(entry: Entry) {
+    const config = entry.config;
+    let oauth = this.oauth.get(entry.id);
+    if (config.transport === "http" && !config.token && !oauth) {
+      const address = new URL(config.url);
+      // Public HTTP remains usable, but it must never receive an OAuth grant.
+      const secure =
+        address.protocol === "https:" ||
+        (address.protocol === "http:" &&
+          ["localhost", "127.0.0.1", "[::1]"].includes(address.hostname));
+      if (secure) {
+        oauth = await McpOAuth.open(
+          config.url,
+          entry.oauth,
+          (value) => {
+            if (this.closed || !this.entries.includes(entry))
+              throw new Error("MCP connection was retired.");
+            entry.oauth = value;
+            for (const secret of [
+              value.state?.tokens?.access_token,
+              value.state?.tokens?.refresh_token,
+              value.state?.clientInformation?.client_secret,
+            ])
+              if (secret) registerRedactionSecret(secret);
+            this.persist();
+          },
+          async () =>
+            this.options.gate.run(async () => {
+              if (
+                this.closed ||
+                !entry.enabled ||
+                !this.entries.includes(entry)
+              )
+                return;
+              await this.idle();
+              const client = await this.connect(entry);
+              const old = this.clients.get(entry.id);
+              this.clients.set(entry.id, client);
+              this.publish();
+              await old?.close().catch(() => {});
+            }),
+        );
+        this.oauth.set(entry.id, oauth);
+      }
+    }
+    const client = await (this.options.connect ?? connectMcp)(
+      config,
+      oauth?.authProvider,
+    );
     const names = client.tools.map((t) =>
       t.name.replace(/[^a-zA-Z0-9_]/g, "_"),
     );
@@ -216,23 +273,30 @@ export class BotMcp {
             }
           : { transport: input.transport, url: input.url!, token: input.token };
       this.redact(config);
-      let client: McpClient;
-      try {
-        client = await this.connect(config);
-      } catch {
-        throw new InputError(
-          "MCP connection failed. Check the address, credentials and server, then retry.",
-          400,
-        );
-      }
-      const entry = {
+      const entry: Entry = {
         id: crypto.randomUUID(),
         name: input.name,
         enabled: true,
         config,
       };
       this.entries.push(entry);
-      this.clients.set(entry.id, client);
+      try {
+        this.clients.set(entry.id, await this.connect(entry));
+      } catch (error) {
+        if (
+          !(error instanceof McpOAuthAuthorizationRequiredError) ||
+          !this.oauth.get(entry.id)?.authorizationUrl
+        ) {
+          await this.oauth.get(entry.id)?.close();
+          this.oauth.delete(entry.id);
+          this.entries = this.entries.filter((e) => e !== entry);
+          this.persist();
+          throw new InputError(
+            "MCP connection failed. Check the address, credentials and server, then retry.",
+            400,
+          );
+        }
+      }
       this.persist();
       this.publish();
       return this.read();
@@ -272,16 +336,24 @@ export class BotMcp {
       }
       if (action === "enable" && !this.clients.has(id)) {
         try {
-          this.clients.set(id, await this.connect(entry.config));
-        } catch {
-          throw new InputError(
-            "MCP connection failed. Check the server and retry.",
-          );
+          this.clients.set(id, await this.connect(entry));
+        } catch (error) {
+          if (
+            !(error instanceof McpOAuthAuthorizationRequiredError) ||
+            !this.oauth.get(id)?.authorizationUrl
+          )
+            throw new InputError(
+              "MCP connection failed. Check the server and retry.",
+            );
         }
       }
       entry.enabled = action === "enable";
       const old = action === "enable" ? undefined : this.clients.get(id);
       if (action !== "enable") this.clients.delete(id);
+      if (action !== "enable") {
+        await this.oauth.get(id)?.close();
+        this.oauth.delete(id);
+      }
       if (action === "remove")
         this.entries = this.entries.filter((e) => e.id !== id);
       this.persist();
@@ -292,6 +364,11 @@ export class BotMcp {
   }
 
   async close() {
+    this.closed = true;
+    await Promise.allSettled(
+      [...this.oauth.values()].map((oauth) => oauth.close()),
+    );
+    this.oauth.clear();
     await Promise.allSettled([...this.clients.values()].map((c) => c.close()));
     this.clients.clear();
     this.cipher.close();
