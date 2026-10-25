@@ -1,6 +1,10 @@
-# Durable lightweight bot workspaces
+# Bot workspaces and execution providers
 
-Each bot has one virtual `/workspace`, shared by its sessions. Ask the bot to
+Each bot defaults to a virtual `/workspace`, shared by its sessions. An owner can
+opt into the native container provider described below; its files and failure
+semantics differ from the default lightweight provider.
+
+For just-bash, each bot has one virtual `/workspace`. Ask the bot to
 write a note or process files with `workspace_exec`. The tool takes only a command;
 bot ownership and session identity come from the admitted turn. Other bots have
 separate stores and cannot select this workspace through tool arguments.
@@ -35,13 +39,11 @@ disk limit (`diskQuotaMiB: null`). No settings import or file migration is neede
 Idle minutes must be an integer from 1 through 1440. A supplied quota must be a
 positive safe integer in MiB; an omitted or null quota means no limit.
 
-Only `just-bash` is available. The provider catalog also lists `container` as
-unavailable with “Container provider is not implemented yet”. Selecting it is
-disabled in the UI; an owner API save requesting it returns 409 without changing
-settings. There is no fallback. Idle time and quota are saved now for the future
-container provider and have **no effect on just-bash**. Its fixed execution,
-checkpoint and file limits below remain unchanged. This slice starts no container
-and delivers no native execution, idle shutdown or quota enforcement.
+Slice 1 made only `just-bash` available. Slice 3 now permits `container` after an
+explicit host-level network opt-in (see below). Without it, selecting container
+is disabled and an owner API save returns 409 without changing settings. There is
+no fallback. Idle time and optional quota apply only to containers; they have
+**no effect on just-bash**, whose fixed limits remain unchanged.
 
 The editor uses Save/Discard and blocks navigation while dirty or saving. Polling
 preserves drafts; a newer settings revision blocks a stale save and Discard loads
@@ -174,11 +176,10 @@ to another bot’s empty workspace were verified.
 
 ## Container backend (native sandbox Slice 2)
 
-The backend-only `ContainerWorkspace` implements Pi's `ExecutionEnv` and is covered
-by real-container tests, including Pi's `registerEnvConformance()` suite. It is
-**not installed in any bot, Pi tool registry, HTTP route or web page**. The catalog
-still rejects selecting `container`. Existing workspaces continue using just-bash;
-no checkpoint files are migrated. Slice 3 owns tool and file-browser integration.
+Slice 2 delivered `ContainerWorkspace`, a Pi `ExecutionEnv`, covered by real-container
+tests and Pi's `registerEnvConformance()` suite. Slice 3 now connects it to opted-in
+bots, Pi coding tools and the existing file/settings pages. Existing bots continue
+using just-bash; checkpoint files are not migrated.
 
 The trusted caller supplies the bot's data directory, stable workspace id and saved
 `idleMinutes`/`diskQuotaMiB`. Default-bot storage is `<data>/workspace/`; named bots
@@ -209,7 +210,7 @@ coordinate independent runtime processes; existing runtime ownership rules still
 prohibit concurrent Gateways over one data directory.
 
 Each guest uses a non-root uid/gid, all capabilities dropped, no-new-privileges,
-a read-only root, a 64 MiB `/tmp` tmpfs, 512 MiB memory, one CPU and 128 PIDs. The
+a read-only root, an init process that reaps orphaned children, a 64 MiB `/tmp` tmpfs, 512 MiB memory, one CPU and 128 PIDs. The
 fixture runs with the runtime owner's uid/gid (or 1000 when the host runs as root);
 root-owned installations need appropriate workspace ownership before use. All CLI
 arguments use argv with no host-shell interpolation. Command source is bounded to
@@ -218,12 +219,19 @@ Guest operations have a 30 second host deadline, shortened by a requested timeou
 each synchronous CLI lifecycle command separately has a 30 second timeout. Startup
 is additional to the guest deadline. Synchronous lifecycle calls hold a SQLite
 write lock to prevent races with another owner's startup; a slow daemon can block
-the runtime event loop during these calls. This is a backend limitation to revisit
-before enabling the provider for interactive bots.
+the runtime event loop during these calls. Slice 3 reviewed and retains this
+tradeoff for the opt-in release: asynchronous lifecycle work needs a separate
+cross-process lock design to preserve the existing fence. A slow daemon can
+therefore still stall unrelated bot activity for the bounded CLI deadline.
 
-A command timeout, abort, output breach or transport loss removes the entire owned
+An operation timeout, abort, output breach or in-flight transport loss removes the entire owned
 container. This includes process groups and detached `setsid` descendants, and also
-invalidates open guest readers/watchers. Successful commands may leave processes
+invalidates open guest readers/watchers, including when a file operation is
+aborted. Closing a stale reader never starts or removes replacement compute.
+View cleanup does not close the bot-wide provider; only its owner does. A broken
+watch callback is contained, and a known-dead shared guest reconnects before new
+work. Transient removal failures are retried before admission; failed shutdown
+still releases the control database and local capacity slot. Successful commands may leave processes
 running until idle stop or replacement. Files already written remain after a failed
 or interrupted command; there is no checkpoint rollback for this provider.
 
@@ -234,11 +242,15 @@ operations first filter at the daemon by `raphie.workspace` and the persisted
 installation `raphie.scope`; test names use `raphie-test-`. `execute()` accepts a
 trusted operation id: committed receipts deduplicate retries and retain bounded streamed output, conflicting arguments
 are rejected, and interrupted retries return an unknown-outcome error. `history()`
-surfaces interrupted intents for the future caller/UI. `env.exec()` creates a fresh
-operation id; slice 3 must use trusted durable call identities where retries need
-receipt lookup. The journal is bounded to 10,000 mutation/command intents; at
-capacity new mutations stop, reads and committed retries still work, and old
-receipts are never evicted. Archival is not implemented.
+surfaces interrupted intents. Native tools use trusted conversation/task/call ids
+plus a per-call operation sequence. Pi marks the coding tools unsafe to replay,
+so a runtime crash reports the tool interrupted even if a native effect committed.
+A one-off environment call still journals intent before submission, but deletes
+its completed row because its random id cannot be retried. Interrupted rows and
+receipts for stable ids remain. The journal is bounded to 10,000 retained entries;
+at capacity new mutations stop, reads and committed retries still work. Stable
+receipts are never evicted and archival is not implemented. Owner browsing and
+usage checks do not consume receipts or renew the bot's idle deadline.
 
 An optional disk quota checks `du -sk /workspace` before a command or an operation
 that grows files. `null` skips this check. Over-quota commands are refused before
@@ -276,8 +288,9 @@ Docker Desktop [provides host/gateway DNS names](https://docs.docker.com/desktop
 Linux Docker [places filtering policy in host firewall chains](https://docs.docker.com/engine/network/firewall-iptables/).
 No Desktop/Linux firewall policy or Podman behavior was verified here. Docker
 bridge peers may also communicate. Container/kernel escapes remain possible;
-this is not VM isolation. Before enabling container bots, the owner must choose
-and verify an enforceable egress boundary or explicitly accept this network gap.
+this is not VM isolation. The owner chose an explicit opt-in release for Slice 3: container execution stays
+disabled by default, and enabling it acknowledges this network gap. This does not
+implement or claim host/LAN/metadata blocking.
 The credential proxy, authenticated sandbox writes and audit flow remain slice 5.
 
 ### Running the backend tests
@@ -313,3 +326,56 @@ messages. Scoped `finally` and `afterAll` cleanup left no labelled test containe
 Varlock masked schema validation and staged scans passed. No model calls, live bot
 data, host firewall changes, bot/provider activation, push, deployment or PR were
 part of verification.
+
+## Native bot integration (Slice 3)
+
+`RAPHIE_CONTAINER_ALLOW_HOST_NETWORK=false` is the Varlock default. Set it to
+`true` in the runtime's Varlock-loaded configuration and restart only if the owner
+accepts that arbitrary container programs can reach host and LAN services, including
+Raphie's own local HTTP API. This is a host-level release gate, not a network filter.
+The Sandbox page then makes Container selectable separately for each bot. Build
+and configure the fixture image above first; image/toolchain support remains Slice 4.
+
+Provider saves still serialize with turn admission, reject active turns, and use
+optimistic settings revisions. Container execution gets the bot data directory and
+stable workspace identity from bootstrap, never tool arguments. All sessions use
+the same environment id. The default bot and named bots get separate capabilities.
+Container bots receive Pi's `read`, `write`, `edit`, and `bash`; just-bash bots retain
+`workspace_exec`. The native `bash` tool uses the image's `/bin/sh` in this baseline.
+Trusted call identities reach the journal for file mutations as well as commands;
+interrupted native tools are never automatically replayed. Model-driven tests use
+fake models, not external model calls.
+
+Switching providers preserves **two separate file stores**. It does not copy or
+merge files. Switching to just-bash stops native writers before committing the
+selection; switching back reopens the same disk folder. Changed idle/quota settings
+replace the native lease and end its processes. Removing the host opt-in while a
+bot selects Container makes startup fail explicitly after reaping stale compute;
+it does not silently switch providers or delete files.
+
+Sandbox usage is allocated disk usage (`du`), with a nullable quota and no invented
+file-count limit. The Workspace files page lists live guest files through the same
+`ExecutionEnv`, including files left by failed commands. It opens directories in
+pages and refuses folders over 4096 entries. Downloads accept only regular files,
+refuse final symlinks using `noFollow`, cap output at 8 MiB and check listing/file
+metadata before and after reading one opened file. Directory revisions are hashes
+of live listing metadata, not checkpoint revisions. Background changes make these
+checks best-effort; this is not an atomic snapshot. All path resolution and reads
+remain inside the container, including a symlink race. Browsing may start temporary
+compute but does not renew its idle deadline or consume command receipts.
+
+Review of Slice 2 found six required lifecycle/journal defects and no critical
+fencing defect. The fixes cover stale reader cleanup, dead shared guest recovery,
+watch callback failures, view cleanup scope, retryable removal failures and shutdown
+resource release, init-based orphan reaping, and completed one-off receipt removal.
+The native integration also tests actual Pi `read`/`write`/`edit`/`bash`, shared
+sessions, HTTP downloads, symlink refusal, provider switching, restart and SIGKILL
+after a native command commits but before Pi records its result.
+
+Verification commands include `bun test packages/runtime/test/container-runtime.test.ts`
+and full `bun run validate`. Final validation passed **214 tests with no failures
+or skips**, including real Docker/OrbStack and Pi conformance; formatting,
+architecture, lint, types and production build passed. A separate unavailable-CLI
+run skipped the two new runtime integration cases cleanly. Sandbox rendering and
+query checks passed; no new browser interaction check was run in this delivery.
+See ADR 0003 for the review and delivery record.

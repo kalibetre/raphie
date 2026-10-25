@@ -141,12 +141,22 @@ for later. Slice 1 below delivers settings only.
    flags cannot enforce the intended policy portably; no host firewall was
    changed. Desktop/Linux/Podman are unverified. See the
    [backend limits and probe results](../bot-workspaces.md#container-backend-native-sandbox-slice-2).
-   The provider remains unavailable in the catalog and is not wired to bots,
-   tools, routes or UI. Enabling it needs an owner decision on the egress gap.
-3. **Planned:** Resolve the network release policy; install Pi `CodingTools`
-   for container bots using trusted durable operation identities; make Sandbox
-   and Workspace files pages read through the environment. Revisit synchronous
-   CLI lifecycle calls that can block the runtime event loop on a slow daemon.
+   The backend was unavailable to bots until the Slice 3 opt-in policy below.
+3. **Delivered (2026-10-25, Slice 3), explicit network opt-in:** The owner chose
+   disabled-by-default container execution with a host-level acknowledgement of
+   host/LAN access. Varlock `RAPHIE_CONTAINER_ALLOW_HOST_NETWORK=true` enables
+   per-bot selection; it does not filter traffic. Pi coding tools use bot-derived
+   environments and trusted durable conversation/task/call identities. Tools are
+   unsafe to replay; a real process-crash test proves committed native effects
+   are not repeated after Pi recovery. Sandbox usage and Workspace file routes
+   read through the environment, with live metadata revisions, bounded browsing
+   and downloads. Provider switches retain separate stores without migration.
+   Revoking opt-in reaps stale compute and fails startup explicitly for a selected
+   container bot. Six required Slice 2 review findings were fixed and covered by
+   regressions. Synchronous lifecycle CLI calls were reviewed and retained for
+   fence safety; they can still block the runtime event loop for their bounded
+   deadline. No credential proxy, host firewall change or VM isolation is claimed.
+   See [native integration](../bot-workspaces.md#native-bot-integration-slice-3).
 4. **Planned:** Image contents (`git`, `rg`, common runtimes) and a documented way to extend
    them; free-space floor.
 5. Later: egress proxy with per-host credential grants, TLS termination, audit
@@ -158,8 +168,9 @@ for later. Slice 1 below delivers settings only.
 - Slice 2 verifies Docker 29.8.2 on OrbStack only. The binary is configurable via
   Varlock; commands/flags target the common Docker/Podman CLI, but Podman remains
   untested. Which runtime/platform combination is supported for release?
-- Which enforceable host/LAN/metadata egress boundary should precede enabling the
-  provider? Plain bridge networking demonstrably exposes Mac host services.
+- An enforced host/LAN/metadata egress boundary remains future work. The owner
+  accepted an explicit disabled-by-default opt-in for Slice 3; plain bridge
+  networking demonstrably exposes Mac host services.
 - Whether the image ships `gh` and package managers, or the bot may install
   tools into its own folder.
 - Where the CA and proxy run when Raphie itself runs in a container.
@@ -175,3 +186,24 @@ missing-runtime check skipped cleanly; scoped cleanup left no test containers.
 See the [workspace guide](../bot-workspaces.md#container-backend-native-sandbox-slice-2)
 for exact resource bounds, storage paths, network observations and the remaining
 limitations. No user data or model credentials were used for container tests.
+
+## Slice 3 verification
+
+The independent five-axis Slice 2 review found six Required findings and no
+Critical findings. All six were fixed in `f3bcd42`, with real-container regression
+checks. The baseline full validation passed 205 tests without failures or skips.
+Native integration checks additionally cover real Pi coding tools, same-bot shared
+sessions, live HTTP files/downloads, provider switches and restart, and SIGKILL
+between a committed native command and Pi's unsafe tool result. A storage-failure
+regression also verifies that a rejected provider save restores native ownership
+and never exposes the wrong file store.
+
+Final `bun run validate` passed on 2026-10-25: **214 tests, zero failures and zero
+skips**, including real Docker/OrbStack tests and Pi conformance. Formatting,
+architecture, lint, types and production build passed. Native Sandbox rendering
+checks cover nullable limits and truthful network/live-write copy. A separate
+missing-runtime run exited successfully with two explicit integration-test skips.
+Varlock schema validation and staged scans passed. No external model calls or live
+user data are used by these tests. A second external Claude review was rejected by
+automatic approval due to repository disclosure risk; the follow-up review was
+completed locally instead.
