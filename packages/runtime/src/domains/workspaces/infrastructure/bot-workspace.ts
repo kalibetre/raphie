@@ -103,23 +103,28 @@ export class BotWorkspace {
     };
   }
 
-  private settings(): SandboxSettings {
+  settings(): SandboxSettings {
+    this.current();
     const row = this.db
       .query<{ value: string }, []>(
         "SELECT value FROM sandbox_settings WHERE id=1",
       )
       .get();
     return row
-      ? (JSON.parse(row.value) as SandboxSettings)
+      ? ({
+          hostNetworkAcknowledged: false,
+          ...JSON.parse(row.value),
+        } as SandboxSettings)
       : {
           provider: "just-bash",
           idleMinutes: 10,
           diskQuotaMiB: null,
+          hostNetworkAcknowledged: false,
           revision: 1,
         };
   }
 
-  saveSettings(input: SaveSandboxSettings): SandboxSettings {
+  validateSettings(input: SaveSandboxSettings) {
     const parsed = saveSandboxSettingsSchema.safeParse(input);
     if (!parsed.success)
       throw new InputError(
@@ -129,17 +134,36 @@ export class BotWorkspace {
       (entry) => entry.id === parsed.data.provider,
     )!;
     if (!provider.available) throw new InputError(provider.reason!, 409);
+    if (
+      parsed.data.provider === "container" &&
+      !parsed.data.hostNetworkAcknowledged
+    )
+      throw new InputError(
+        "Acknowledge host and local network access in this bot's Sandbox settings before enabling Container.",
+        409,
+      );
+    this.current();
+    if (parsed.data.revision !== this.settings().revision)
+      throw new InputError(
+        "Sandbox settings changed elsewhere. Reload before saving.",
+        409,
+      );
+    return parsed.data;
+  }
+
+  saveSettings(input: SaveSandboxSettings): SandboxSettings {
+    const parsed = this.validateSettings(input);
     return this.db.transaction(() => {
       this.current();
       const previous = this.settings();
-      if (parsed.data.revision !== previous.revision)
+      if (parsed.revision !== previous.revision)
         throw new InputError(
           "Sandbox settings changed elsewhere. Reload before saving.",
           409,
         );
       const next = {
-        ...parsed.data,
-        diskQuotaMiB: parsed.data.diskQuotaMiB ?? null,
+        ...parsed,
+        diskQuotaMiB: parsed.diskQuotaMiB ?? null,
         revision: previous.revision + 1,
       };
       this.db

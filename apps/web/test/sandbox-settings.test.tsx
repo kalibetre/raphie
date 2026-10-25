@@ -24,6 +24,7 @@ const info: SandboxInfo = {
     provider: "just-bash",
     idleMinutes: 10,
     diskQuotaMiB: null,
+    hostNetworkAcknowledged: false,
     revision: 1,
   },
   providers: [
@@ -31,8 +32,8 @@ const info: SandboxInfo = {
     {
       id: "container",
       name: "Container",
-      available: false,
-      reason: "Container provider is not implemented yet",
+      available: true,
+      reason: null,
     },
   ],
   provider: { id: "just-bash", name: "just-bash", version: "3.6.0" },
@@ -130,7 +131,7 @@ test("Sandbox renders persisted controls, unlimited quota and truthful provider-
         </QueryClientProvider>
       </BackendContext.Provider>,
     );
-    assert.match(html, /Container provider is not implemented yet/);
+    assert.doesNotMatch(html, /Container · Unavailable/);
     assert.match(html, /Applies to the container provider/);
     assert.match(html, /Has no effect on just-bash/);
     assert.match(html, /placeholder="No limit"/);
@@ -143,3 +144,75 @@ test("Sandbox renders persisted controls, unlimited quota and truthful provider-
     workspace.dispose();
   }
 });
+
+for (const acknowledged of [true, false])
+  test(`container Sandbox renders network acknowledgement ${acknowledged} and live-write limits`, async () => {
+    const workspace = new BackendWorkspace("http://127.0.0.1:4317");
+    workspace.queries.setQueryData(["sandbox"], {
+      ...info,
+      provider: { id: "container", name: "Container", version: "native" },
+      settings: {
+        ...info.settings,
+        provider: "container",
+        hostNetworkAcknowledged: acknowledged,
+      },
+      providers: info.providers.map((provider) => ({
+        ...provider,
+        available: true,
+        reason: null,
+      })),
+      isolation: "container",
+      capabilities: { network: true, hostFiles: false, nativeCode: true },
+      usage: {
+        fileBytes: acknowledged ? 4096 : null,
+        entries: null,
+        receiptBytes: null,
+      },
+      limits: {
+        ...info.limits,
+        fileBytes: null,
+        entries: null,
+        receiptsBytes: null,
+      },
+    } satisfies SandboxInfo);
+    const routeTree = createRootRoute({
+      component: () => <SandboxSettings onBrowse={() => {}} />,
+    });
+    const router = createRouter({ routeTree, history: createMemoryHistory() });
+    await router.load();
+    try {
+      const html = renderToStaticMarkup(
+        <BackendContext.Provider
+          value={{
+            workspace,
+            backend: workspace,
+            connect: async () => {},
+            selectBot: async () => {},
+          }}
+        >
+          <QueryClientProvider client={workspace.queries}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        </BackendContext.Provider>,
+      );
+      assert.match(html, /Acknowledge host and local network access/);
+      assert.match(html, /role="switch"/);
+      assert.match(html, new RegExp(`aria-checked="${acknowledged}"`));
+      if (!acknowledged) {
+        assert.match(html, /Acknowledgement required/);
+        assert.match(html, /Usage unavailable/);
+        assert.doesNotMatch(html, /null used|0 B used/);
+      }
+      assert.match(html, /No disk quota/);
+      assert.match(html, /Host and local network services are reachable/);
+      assert.match(html, /Files survive failed and interrupted commands/);
+      assert.match(html, /There is no rollback/);
+      assert.doesNotMatch(
+        html,
+        /checkpoint entries|Failed or interrupted executions discard/,
+      );
+      assert.doesNotMatch(html, /NaN/);
+    } finally {
+      workspace.dispose();
+    }
+  });

@@ -6,29 +6,34 @@ import {
   limitBody,
 } from "../../../../infrastructure/http/validation.ts";
 import { InputError } from "../../../../shared/application/input-error.ts";
-import type { BotWorkspace } from "../../infrastructure/bot-workspace.ts";
+import type { RuntimeWorkspace } from "../../infrastructure/runtime-workspace.ts";
 import { saveSandboxSettingsSchema } from "../../infrastructure/sandbox-settings.ts";
 
 /** Outer local-owner middleware and bot routing supply the workspace capability. */
 export function workspaceRoutes(
-  workspace: BotWorkspace,
+  workspace: Pick<RuntimeWorkspace, "info" | "list" | "download">,
   saveSettings: (input: SaveSandboxSettings) => Promise<SandboxSettings>,
 ) {
   return new Hono()
-    .get("/", (c) => c.json(workspace.info()))
+    .get("/", async (c) => c.json(await workspace.info()))
     .post(
       "/settings",
       limitBody(4096),
       jsonInput(saveSandboxSettingsSchema),
       async (c) => c.json(await saveSettings(c.req.valid("json"))),
     )
-    .get("/files", (c) => c.json(workspace.list(c.req.query("path"))))
-    .get("/download", (c) => {
+    .get("/files", async (c) =>
+      c.json(await workspace.list(c.req.query("path"))),
+    )
+    .get("/download", async (c) => {
       const raw = c.req.query("revision");
       const revision = Number(raw);
       if (!raw || !/^\d+$/.test(raw) || !Number.isSafeInteger(revision))
         throw new InputError("A workspace revision is required for download.");
-      const file = workspace.download(c.req.query("path") ?? "", revision);
+      const file = await workspace.download(
+        c.req.query("path") ?? "",
+        revision,
+      );
       c.header("Content-Type", "application/octet-stream");
       c.header(
         "Content-Disposition",

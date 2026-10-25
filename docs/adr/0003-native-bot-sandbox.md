@@ -72,9 +72,9 @@ bot runs and could be sent anywhere.
   An optional per-bot toggle can require owner approval for authenticated
   writes; it is off by default, per decision 5.
 
-## Network defaults that stay on
+## Intended network policy (not enforced by the Slice 2 backend)
 
-Open internet does not mean open host. By default the sandbox cannot reach
+The intended release policy is that the sandbox cannot reach
 loopback, the host, private and link-local ranges, cloud metadata addresses or
 the Docker socket. Without this, a prompt-injected bot could call Raphie's own
 HTTP API or services on the local network. An owner can add exceptions
@@ -106,9 +106,9 @@ folder or send over open network.
 
 ## Delivery sequence
 
-The first container implementation is planned in the slices after Slice 1. It
-will have no credential proxy: the sandbox will hold no credentials, and
-authenticated integrations such as GitHub will go through the bot's existing
+Slice 2 now delivers a backend-only container implementation, with the network
+limitation documented below. It has no credential proxy: the sandbox will hold no
+credentials, and authenticated integrations such as GitHub will go through the bot's existing
 per-bot MCP connections, which run on the host. Once those slices are delivered,
 the bot will be able to clone public repositories, edit, and use local `git`, but
 will not be able to push or clone private repositories from inside the sandbox.
@@ -124,12 +124,42 @@ for later. Slice 1 below delivers settings only.
    validated and stored for future container use; just-bash behavior and fixed
    limits are unchanged. No container runs in this slice. See
    [delivered settings](../bot-workspaces.md#per-bot-sandbox-settings-native-sandbox-slice-1).
-2. **Planned:** Container `ExecutionEnv`: single-folder mount, lease and fencing, host-reach
-   denial, resource bounds, idle stop. Prove cross-bot isolation, shared files
-   across sessions, restart and interrupted-command recovery with real `git`
-   against a local test repository.
-3. **Planned:** Pi `CodingTools` installed for container bots; Sandbox and Workspace files
-   pages read through the environment.
+2. **Backend delivered (2026-10-25, Slice 2), network policy incomplete:**
+   `ContainerWorkspace` implements Pi's `ExecutionEnv`, with only
+   `<bot-data>/workspace/files` mounted at `/workspace` and SQLite control state
+   outside the mount. Label/scope-filtered CLI operations, durable epochs and
+   pre-exec intents, interrupted recovery with no replay, serialized session
+   views, runtime-process capacity limits, idle removal, quota admission checks,
+   non-root/read-only/capability/resource restrictions and bounded execution are
+   covered by real Docker/OrbStack tests. Pi conformance, cross-bot files, shared
+   sessions, git init/commit/local clone, restart, actual process crash, container
+   loss, detached-process termination, fencing and symlink tests pass.
+   **Host-reach denial is not delivered:** `host.docker.internal` reaches even a
+   loopback-bound Mac service, and host LAN/VPN interfaces are reachable. Private
+   probes were reachable, refused or timed out across runs; metadata probes
+   timed out. These observations do not establish blocking. CLI-only bridge
+   flags cannot enforce the intended policy portably; no host firewall was
+   changed. Desktop/Linux/Podman are unverified. See the
+   [backend limits and probe results](../bot-workspaces.md#container-backend-native-sandbox-slice-2).
+   The backend was unavailable to bots until the Slice 3 opt-in policy below.
+3. **Delivered (2026-10-25, Slice 3), explicit network opt-in:** The owner chose
+   disabled-by-default container execution with an acknowledgement of host/LAN
+   access. Updated on 2026-10-26: the acknowledgement is now a persisted per-bot
+   Sandbox setting (`hostNetworkAcknowledged`, default false), required to save
+   Container. It replaces the host-level environment flag and does not filter
+   traffic. Pi coding tools use bot-derived environments and trusted durable conversation/task/call identities. Tools are
+   unsafe to replay; a real process-crash test proves committed native effects
+   are not repeated after Pi recovery. Sandbox usage and Workspace file routes
+   read through the environment, with live metadata revisions, bounded browsing
+   and downloads. Provider switches retain separate stores without migration.
+   Withdrawing acknowledgement requires switching to just-bash. Older Container
+   selections without acknowledgement reap stale compute on startup, preserve
+   files and expose Sandbox settings while blocking tools/file browsing until
+   acknowledged; there is no silent provider fallback. Six required Slice 2 review
+   findings were fixed and covered by regressions. Synchronous lifecycle CLI calls were reviewed and retained for
+   fence safety; they can still block the runtime event loop for their bounded
+   deadline. No credential proxy, host firewall change or VM isolation is claimed.
+   See [native integration](../bot-workspaces.md#native-bot-integration-slice-3).
 4. **Planned:** Image contents (`git`, `rg`, common runtimes) and a documented way to extend
    them; free-space floor.
 5. Later: egress proxy with per-host credential grants, TLS termination, audit
@@ -138,10 +168,53 @@ for later. Slice 1 below delivers settings only.
 
 ## Open points
 
-- Docker versus Podman as the first supported runtime, and how Raphie finds it
-  locally and on a server.
+- Slice 2 verifies Docker 29.8.2 on OrbStack only. The binary is configurable via
+  Varlock; commands/flags target the common Docker/Podman CLI, but Podman remains
+  untested. Which runtime/platform combination is supported for release?
+- An enforced host/LAN/metadata egress boundary remains future work. The owner
+  accepted an explicit disabled-by-default opt-in for Slice 3; plain bridge
+  networking demonstrably exposes Mac host services.
 - Whether the image ships `gh` and package managers, or the bot may install
   tools into its own folder.
 - Where the CA and proxy run when Raphie itself runs in a container.
 - The host free-space floor. The default idle period is now 10 minutes, configurable
   per bot from 1 through 1440 minutes.
+
+## Slice 2 verification
+
+On 2026-10-25, `bun run validate` passed: 205 tests, no failures or skips,
+including real Docker/OrbStack acceptance and Pi `ExecutionEnv` conformance.
+Formatting, architecture, lint, types and production build passed. A separate
+missing-runtime check skipped cleanly; scoped cleanup left no test containers.
+See the [workspace guide](../bot-workspaces.md#container-backend-native-sandbox-slice-2)
+for exact resource bounds, storage paths, network observations and the remaining
+limitations. No user data or model credentials were used for container tests.
+
+## Slice 3 verification
+
+The independent five-axis Slice 2 review found six Required findings and no
+Critical findings. All six were fixed in `f3bcd42`, with real-container regression
+checks. The baseline full validation passed 205 tests without failures or skips.
+Native integration checks additionally cover real Pi coding tools, same-bot shared
+sessions, live HTTP files/downloads, provider switches and restart, and SIGKILL
+between a committed native command and Pi's unsafe tool result. A storage-failure
+regression also verifies that a rejected provider save restores native ownership
+and never exposes the wrong file store.
+
+Final `bun run validate` passed on 2026-10-25: **214 tests, zero failures and zero
+skips**, including real Docker/OrbStack tests and Pi conformance. Formatting,
+architecture, lint, types and production build passed. Native Sandbox rendering
+checks cover nullable limits and truthful network/live-write copy. A separate
+missing-runtime run exited successfully with two explicit integration-test skips.
+Varlock schema validation and staged scans passed. No external model calls or live
+user data are used by these tests. A second external Claude review was rejected by
+automatic approval due to repository disclosure risk; the follow-up review was
+completed locally instead.
+
+The 2026-10-26 per-bot acknowledgement update adds default-off persistence, owner
+API validation, bot separation and restart/legacy-selection regressions to the
+integration checks. Six focused settings tests pass, including both acknowledged
+and blocked Sandbox rendering; formatting, lint and types pass for the update.
+Full validation passed 214 tests with zero failures or skips, including real
+Docker/OrbStack. The added blocked-state rendering case passed separately in the
+focused run.

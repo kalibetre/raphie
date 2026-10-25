@@ -6,14 +6,15 @@ export const sandboxProviders: SandboxProviderInfo[] = [
   {
     id: "container",
     name: "Container",
-    available: false,
-    reason: "Container provider is not implemented yet",
+    available: true,
+    reason: null,
   },
 ];
 
 export const saveSandboxSettingsSchema = z
   .object({
     provider: z.enum(["just-bash", "container"]),
+    hostNetworkAcknowledged: z.boolean().default(false),
     idleMinutes: z.number().int().min(1).max(1440),
     diskQuotaMiB: z
       .number()

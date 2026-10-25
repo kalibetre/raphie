@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../shared/ui/select";
+import { Switch } from "../../../shared/ui/switch";
 import { SaveBar } from "./save-bar";
 import { Group, Row } from "./settings-group";
 import { useSettingsGuard } from "./use-settings-guard";
@@ -29,6 +30,9 @@ export function SandboxForm({
 }) {
   const [saved, setSaved] = useState(info.settings);
   const [provider, setProvider] = useState(saved.provider);
+  const [acknowledged, setAcknowledged] = useState(
+    saved.hostNetworkAcknowledged,
+  );
   const [idle, setIdle] = useState(String(saved.idleMinutes));
   const [quota, setQuota] = useState(
     saved.diskQuotaMiB === null ? "" : String(saved.diskQuotaMiB),
@@ -37,11 +41,13 @@ export function SandboxForm({
   const [error, setError] = useState("");
   const dirty =
     provider !== saved.provider ||
+    acknowledged !== saved.hostNetworkAcknowledged ||
     idle !== String(saved.idleMinutes) ||
     quota !== (saved.diskQuotaMiB === null ? "" : String(saved.diskQuotaMiB));
   const guard = useSettingsGuard(dirty, pending);
   const changedElsewhere = info.settings.revision !== saved.revision;
   const valid =
+    (provider !== "container" || acknowledged) &&
     Number.isSafeInteger(Number(idle)) &&
     Number(idle) >= 1 &&
     Number(idle) <= 1440 &&
@@ -51,6 +57,7 @@ export function SandboxForm({
   function load(settings: SandboxSettings) {
     setSaved(settings);
     setProvider(settings.provider);
+    setAcknowledged(settings.hostNetworkAcknowledged);
     setIdle(String(settings.idleMinutes));
     setQuota(
       settings.diskQuotaMiB === null ? "" : String(settings.diskQuotaMiB),
@@ -70,6 +77,7 @@ export function SandboxForm({
     try {
       const updated = await onSave({
         provider,
+        hostNetworkAcknowledged: acknowledged,
         idleMinutes: Number(idle),
         diskQuotaMiB: quota === "" ? null : Number(quota),
         revision: saved.revision,
@@ -95,7 +103,7 @@ export function SandboxForm({
     >
       <Group
         title="Sandbox settings"
-        note="Saved for this bot across restarts. Only just-bash is available today."
+        note="Saved for this bot across restarts. Providers keep separate files; switching does not move or delete them."
       >
         <Row
           title="Provider"
@@ -135,6 +143,31 @@ export function SandboxForm({
               description={entry.reason}
             />
           ))}
+        {(provider === "container" || acknowledged) && (
+          <Row
+            title="I understand host and local network access"
+            description={
+              <span id="sandbox-host-network-description">
+                Required before enabling Container. Container programs can reach
+                services on this machine and the local network, including
+                Raphie’s API. This acknowledgement allows that access for this
+                bot; it does not block traffic. Host credentials are not
+                provided. To withdraw acknowledgement, select just-bash, turn
+                this off and save.
+              </span>
+            }
+          >
+            <Switch
+              id="sandbox-host-network"
+              aria-label="Acknowledge host and local network access"
+              aria-describedby="sandbox-host-network-description"
+              aria-required={provider === "container"}
+              checked={acknowledged}
+              onCheckedChange={setAcknowledged}
+              disabled={pending}
+            />
+          </Row>
+        )}
         <Row
           title="Idle minutes"
           description={
