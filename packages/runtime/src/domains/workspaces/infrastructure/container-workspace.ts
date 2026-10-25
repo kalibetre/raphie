@@ -117,6 +117,8 @@ export class ContainerWorkspace {
       throw new Error("Invalid container workspace settings");
     if (!/^raphie(?:-test)?$/.test(options.namePrefix ?? "raphie"))
       throw new Error("Invalid Raphie container prefix");
+    if (options.directory.includes(","))
+      throw new Error("Container data directory cannot contain a comma");
     const source = await (guestSource ??= bundleGuest());
     const root = join(options.directory, "workspace");
     await mkdir(join(root, "files"), { recursive: true, mode: 0o700 });
@@ -163,13 +165,18 @@ export class ContainerWorkspace {
   }
 
   private current() {
-    if (this.lifecycleError) throw this.lifecycleError;
     if (
       this.closed ||
       this.db.query<Lease, []>("SELECT * FROM lease").get()?.epoch !==
         this.epoch
     )
       throw new Error("Workspace executor was replaced or stopped");
+    if (this.lifecycleError) {
+      // A failed reap is fail-closed until the daemon accepts a retry. Check the
+      // epoch first so a stale provider can never restart lifecycle work.
+      if (this.container) this.removeContainer(this.container);
+      this.lifecycleError = undefined;
+    }
   }
 
   private removeContainer(id: string) {
@@ -186,7 +193,13 @@ export class ContainerWorkspace {
 
   private ensureContainer() {
     this.current();
-    if (this.container) return this.container;
+    if (this.container) {
+      if (this.connection?.isClosed)
+        this.connection = new ContainerRpc(
+          this.cli.exec(this.container, this.source),
+        );
+      return this.container;
+    }
     if (runningContainers.size >= limits.containers)
       throw new Error(
         "Container capacity is busy. Retry after an idle container stops",
@@ -208,6 +221,7 @@ export class ContainerWorkspace {
       "--security-opt",
       "no-new-privileges",
       "--read-only",
+      "--init",
       "--tmpfs",
       "/tmp:rw,nosuid,nodev,size=64m,mode=1777",
       "--memory",
@@ -256,11 +270,19 @@ export class ContainerWorkspace {
   }
 
   /** Every session receives a view with this workspace's stable namespace id. */
-  env(cwd = "/workspace"): ExecutionEnv {
+  env(
+    cwd = "/workspace",
+    operationId?: string,
+    observation = false,
+  ): ExecutionEnv {
+    let sequence = 0;
+    const nextId = () =>
+      operationId ? `${operationId}:${++sequence}` : crypto.randomUUID();
     const target = { id: this.options.workspaceId, cwd };
     return new Proxy(target, {
       get: (object, property) => {
-        if (property === "cleanup") return () => this.close();
+        // A view does not own the shared provider. Only bootstrap calls close().
+        if (property === "cleanup") return async () => {};
         if (
           typeof property === "string" &&
           (envMethods as readonly string[]).includes(property)
@@ -268,11 +290,14 @@ export class ContainerWorkspace {
           return (...args: unknown[]) => {
             const context = args.pop() as Context;
             return this.invoke(
-              crypto.randomUUID(),
+              nextId(),
               property,
               args,
               object.cwd,
               context,
+              undefined,
+              observation,
+              operationId !== undefined,
             );
           };
         return Reflect.get(object, property);
@@ -303,6 +328,8 @@ export class ContainerWorkspace {
     cwd: string,
     context: Context,
     resource?: { rpc: ContainerRpc; id: number },
+    observation = false,
+    retainReceipt = true,
   ): Promise<unknown> {
     const failure = (error: unknown) =>
       err(
@@ -321,20 +348,28 @@ export class ContainerWorkspace {
     this.queued++;
     const result = this.tail.then(async () => {
       this.current();
+      if (
+        resource &&
+        (resource.rpc.isClosed || resource.rpc !== this.connection)
+      )
+        return method === "close"
+          ? undefined
+          : err(new FileError("invalid", "Sandbox resource is closed"));
       context.abortSignal?.throwIfAborted();
       const journal =
-        method === "exec" ||
-        [
-          "writeFile",
-          "appendFile",
-          "truncateFile",
-          "flushFile",
-          "renameFile",
-          "createDir",
-          "remove",
-          "createTempDir",
-          "createTempFile",
-        ].includes(method);
+        !observation &&
+        (method === "exec" ||
+          [
+            "writeFile",
+            "appendFile",
+            "truncateFile",
+            "flushFile",
+            "renameFile",
+            "createDir",
+            "remove",
+            "createTempDir",
+            "createTempFile",
+          ].includes(method));
       const fingerprint = new Bun.CryptoHasher("sha256")
         .update(JSON.stringify([method, args, cwd]))
         .digest("hex");
@@ -463,7 +498,13 @@ export class ContainerWorkspace {
         const event = (kind: string, value: unknown) => {
           this.current();
           if (kind === "change") {
-            callback?.(value);
+            // An observer is not part of the transport. A broken UI callback
+            // must not close readers or the guest shared by other sessions.
+            try {
+              callback?.(value);
+            } catch {
+              /* Listener failure is local. */
+            }
             return;
           }
           const output = value as {
@@ -493,6 +534,7 @@ export class ContainerWorkspace {
           }
         };
         if (
+          !observation &&
           this.options.diskQuotaMiB !== null &&
           [
             "exec",
@@ -549,7 +591,11 @@ export class ContainerWorkspace {
           this.db
             .transaction(() => {
               this.current();
-              if (journal)
+              if (journal && !retainReceipt)
+                this.db
+                  .query("DELETE FROM commands WHERE id=? AND epoch=?")
+                  .run(id, this.epoch);
+              else if (journal)
                 this.db
                   .query(
                     "UPDATE commands SET status='completed', result=? WHERE id=? AND epoch=?",
@@ -586,7 +632,16 @@ export class ContainerWorkspace {
             ok: boolean;
             value?: { $resource?: number; mode?: string };
           };
-          if (opened.ok && opened.value?.$resource) {
+          if (
+            [
+              "openBinaryReader",
+              "openDirReader",
+              "openTextLineReader",
+              "watch",
+            ].includes(method) &&
+            opened.ok &&
+            opened.value?.$resource
+          ) {
             const resourceId = opened.value.$resource;
             return {
               ok: true,
@@ -604,6 +659,8 @@ export class ContainerWorkspace {
                         cwd,
                         callContext,
                         { rpc, id: resourceId },
+                        observation,
+                        retainReceipt,
                       );
                     };
                   },
@@ -620,7 +677,7 @@ export class ContainerWorkspace {
         clearTimeout(timer);
         if (abort) context.abortSignal?.removeEventListener("abort", abort);
         runningCommands--;
-        this.lastUsed = this.now();
+        if (!observation) this.lastUsed = this.now();
         this.scheduleIdle();
       }
     });
@@ -633,12 +690,18 @@ export class ContainerWorkspace {
   private scheduleIdle() {
     clearTimeout(this.idleTimer);
     if (!this.closed && this.container) {
-      this.idleTimer = setTimeout(() => {
-        void this.stopIfIdle().catch((error: unknown) => {
-          this.lifecycleError =
-            error instanceof Error ? error : new Error(String(error));
-        });
-      }, this.options.idleMinutes * 60_000);
+      this.idleTimer = setTimeout(
+        () => {
+          void this.stopIfIdle().catch((error: unknown) => {
+            this.lifecycleError =
+              error instanceof Error ? error : new Error(String(error));
+          });
+        },
+        Math.max(
+          1,
+          this.options.idleMinutes * 60_000 - (this.now() - this.lastUsed),
+        ),
+      );
       this.idleTimer.unref();
     }
   }
@@ -646,13 +709,11 @@ export class ContainerWorkspace {
   /** Injectable clock plus explicit sweep makes idle expiry deterministic in tests. */
   async stopIfIdle() {
     await this.tail;
-    if (
-      this.closed ||
-      !this.container ||
-      this.queued ||
-      this.now() - this.lastUsed < this.options.idleMinutes * 60_000
-    )
+    if (this.closed || !this.container || this.queued) return;
+    if (this.now() - this.lastUsed < this.options.idleMinutes * 60_000) {
+      this.scheduleIdle();
       return;
+    }
     try {
       this.current();
     } catch {
@@ -668,13 +729,44 @@ export class ContainerWorkspace {
       .all();
   }
 
+  get admitted() {
+    return this.queued;
+  }
+
+  async usage(context: Context) {
+    let output = "";
+    const result = await this.env("/workspace", undefined, true).exec(
+      ["du", "-sk", "/workspace"],
+      {
+        onOutput: (text) => {
+          output += text;
+        },
+      },
+      context,
+    );
+    const kib = Number.parseInt(output, 10);
+    if (
+      !result.ok ||
+      result.value.exitCode !== 0 ||
+      !Number.isFinite(kib) ||
+      kib < 0
+    )
+      throw new Error("Cannot measure container workspace usage");
+    return kib * 1024;
+  }
+
   async close() {
     if (this.closed) return;
     clearTimeout(this.idleTimer);
     // Set closed before reaping so queued views cannot start more work.
     this.closed = true;
-    if (this.container) this.removeContainer(this.container);
-    await this.tail;
-    this.db.close();
+    try {
+      if (this.container) this.removeContainer(this.container);
+    } finally {
+      if (this.container) runningContainers.delete(this.container);
+      this.connection?.close();
+      await this.tail;
+      this.db.close();
+    }
   }
 }

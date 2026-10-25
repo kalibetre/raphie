@@ -88,6 +88,10 @@ export class ContainerRpc {
     this.fail(new Error("Sandbox connection closed"));
   }
 
+  get isClosed() {
+    return this.closed;
+  }
+
   async call(
     method: string,
     args: unknown[],

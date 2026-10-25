@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterAll, describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,11 +13,14 @@ import {
 import { type ExecutionEnv, getOrThrow } from "@earendil-works/pi-durable/env";
 import { registerEnvConformance } from "@earendil-works/pi-durable/testing";
 
+import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import {
   ContainerCli,
   containerLimits,
 } from "../src/domains/workspaces/infrastructure/container-cli.ts";
+import { createContainerTools } from "../src/domains/workspaces/infrastructure/container-tools.ts";
 import { ContainerWorkspace } from "../src/domains/workspaces/infrastructure/container-workspace.ts";
+import { chatModel } from "./chat-model.ts";
 
 const cli = new ContainerCli();
 let available = true;
@@ -35,6 +39,74 @@ try {
 }
 const containerTest = available ? test : test.skip;
 const cleanupScopes = new Map<string, string>();
+
+containerTest(
+  "Pi coding tools execute through a bot-bound container with trusted operation ids",
+  async () => {
+    await fixture(async (provider, directory) => {
+      let offered: string[] = [];
+      const model = chatModel({
+        tool: {
+          name: "bash",
+          args: { command: "echo native > pi-file; cat pi-file" },
+        },
+        offeredTools: (names) => {
+          if (names.length) offered = names;
+        },
+      });
+      const gateway = await Gateway.open({
+        directory: join(directory, "gateway"),
+        models: model.models,
+        model: { provider: "fixture", modelId: "history" },
+      });
+      try {
+        const tools = createContainerTools(
+          async (conversationId, operationId) => {
+            expect(
+              (await gateway.chats.state()).conversations.some(
+                (session) => session.id === conversationId,
+              ),
+            ).toBe(true);
+            return provider.env("/workspace", operationId);
+          },
+        );
+        expect(tools.tools!.every((tool) => tool.replay === "unsafe")).toBe(
+          true,
+        );
+        gateway.install(tools);
+        await gateway.sessions.submit(gateway.actors.establish("web"), {
+          eventId: "native-tool",
+          text: "Create a file",
+        });
+        for (
+          let i = 0;
+          i < 300 &&
+          (await gateway.chats.state()).turns.some(
+            (turn) => turn.status === "pending",
+          );
+          i++
+        )
+          await Bun.sleep(20);
+        const state = await gateway.chats.state();
+        expect(state.turns[0].status).toBe("done");
+        expect(state.turns[0].answer).toContain("native");
+        expect(offered).toContain("bash");
+        expect(offered).not.toContain("workspace_exec");
+        expect(
+          getOrThrow(await provider.env().readTextFile("pi-file", context)),
+        ).toBe("native\n");
+        const receipt = provider
+          .history()
+          .find((entry) => entry.method === "exec")!;
+        expect(receipt.id).toStartWith(`${state.conversations[0].id}:`);
+        expect(receipt.id).toContain("fixture-call");
+      } finally {
+        await gateway.close();
+      }
+    });
+  },
+  30_000,
+);
 
 async function open(directory: string, workspaceId = "fixture", extra = {}) {
   const provider = await ContainerWorkspace.open({
@@ -94,6 +166,181 @@ async function shell(env: ExecutionEnv, command: string | readonly string[]) {
   );
   return { ...result, output };
 }
+
+containerTest(
+  "stale readers and view cleanup preserve new compute; ephemeral receipts do not accumulate",
+  async () => {
+    await fixture(async (provider) => {
+      const view = provider.env();
+      getOrThrow(await view.writeFile("readme", "saved", context));
+      const reader = getOrThrow(
+        await view.openBinaryReader("readme", undefined, context),
+      );
+      await view.cleanup(context);
+      expect(
+        getOrThrow(await provider.env().readTextFile("readme", context)),
+      ).toBe("saved");
+      await provider.execute(
+        "timeout-reader",
+        "sleep 100",
+        { timeout: 0.1 },
+        context,
+      );
+      expect(
+        (
+          await shell(
+            provider.env(),
+            "sleep 120 >/dev/null 2>&1 & echo $! > survivor",
+          )
+        ).exitCode,
+      ).toBe(0);
+      await reader.close(context);
+      expect((await reader.read(0, 1, context)).ok).toBe(false);
+      expect(
+        (await shell(provider.env(), "kill -0 $(cat survivor)")).exitCode,
+      ).toBe(0);
+      expect(
+        provider.history().filter((entry) => entry.status === "completed"),
+      ).toHaveLength(0);
+      expect(
+        provider.history().find((entry) => entry.id === "timeout-reader")
+          ?.status,
+      ).toBe("interrupted");
+    });
+  },
+  30_000,
+);
+
+containerTest(
+  "throwing watch callbacks cannot close the shared guest transport",
+  async () => {
+    await fixture(async (provider) => {
+      const view = provider.env();
+      getOrThrow(await view.writeFile("watched", "before", context));
+      let changes = 0;
+      const watcher = getOrThrow(
+        await view.watch(
+          [{ path: "/workspace/watched" }],
+          () => {
+            changes++;
+            throw new Error("broken observer");
+          },
+          context,
+        ),
+      );
+      try {
+        await shell(view, "echo after > watched");
+        for (let i = 0; i < 150 && !changes; i++) await Bun.sleep(20);
+        expect(changes).toBeGreaterThan(0);
+        expect((await view.writeFile("healthy", "yes", context)).ok).toBe(true);
+      } finally {
+        await watcher.close(context);
+      }
+    });
+  },
+  30_000,
+);
+
+containerTest(
+  "a killed shared guest reconnects before the next file mutation",
+  async () => {
+    await fixture(async (provider) => {
+      const view = provider.env();
+      const spawnGuest = cli.exec.bind(cli);
+      const guests: ReturnType<ContainerCli["exec"]>[] = [];
+      cli.exec = (...args) => {
+        const guest = spawnGuest(...args);
+        guests.push(guest);
+        return guest;
+      };
+      try {
+        getOrThrow(await view.writeFile("kept", "before", context));
+        const exited = once(guests[0]!, "exit");
+        const killed = await shell(view, [
+          "node",
+          "-e",
+          "const fs=require('node:fs'); for(const pid of fs.readdirSync('/proc').filter(x=>/^\\d+$/.test(x))) { if(+pid===process.pid||+pid===process.ppid)continue; try { if(fs.readFileSync('/proc/'+pid+'/cmdline','utf8').startsWith('node\\0--input-type=module\\0'))process.kill(+pid,'SIGKILL'); }catch{} }",
+        ]);
+        expect(killed.exitCode).toBe(0);
+        await exited;
+        expect((await view.writeFile("kept", "after", context)).ok).toBe(true);
+        expect(getOrThrow(await view.readTextFile("kept", context))).toBe(
+          "after",
+        );
+        expect(
+          provider.history().filter((entry) => entry.status === "interrupted"),
+        ).toHaveLength(0);
+      } finally {
+        cli.exec = spawnGuest;
+      }
+    });
+  },
+  30_000,
+);
+
+containerTest(
+  "transient removal failures recover on retry and failed shutdown releases local resources",
+  async () => {
+    await fixture(async (provider, directory) => {
+      await shell(provider.env(), "true");
+      const run = cli.run.bind(cli);
+      let failRemoval = true;
+      cli.run = (args) => {
+        if (args[0] === "rm" && failRemoval) {
+          failRemoval = false;
+          throw new Error("synthetic daemon outage");
+        }
+        return run(args);
+      };
+      try {
+        const timed = await provider.execute(
+          "retry-removal",
+          "sleep 100",
+          { timeout: 0.1 },
+          context,
+        );
+        expect(timed.ok).toBe(false);
+        expect(
+          (await provider.env().writeFile("recovered", "yes", context)).ok,
+        ).toBe(true);
+        failRemoval = true;
+        await assert.rejects(provider.close(), /synthetic daemon outage/);
+        // close is idempotent even when the first daemon removal failed. Reopen
+        // reaps the persisted scope and proves the control store is reusable.
+        await provider.close();
+        const reopened = await open(directory);
+        try {
+          expect(
+            getOrThrow(await reopened.env().readTextFile("recovered", context)),
+          ).toBe("yes");
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        cli.run = run;
+      }
+    });
+  },
+  30_000,
+);
+
+containerTest(
+  "init reaps orphaned children before they exhaust the process budget",
+  async () => {
+    await fixture(async (provider) => {
+      expect(
+        (
+          await shell(
+            provider.env(),
+            "i=0; while [ $i -lt 200 ]; do sh -c 'sleep 0 &' || exit 1; i=$((i+1)); done; sleep 0.2; true",
+          )
+        ).exitCode,
+      ).toBe(0);
+      expect((await shell(provider.env(), ["true"])).exitCode).toBe(0);
+    });
+  },
+  30_000,
+);
 
 containerTest(
   "real container shares one bot's files across sessions, isolates bots and runs git",
