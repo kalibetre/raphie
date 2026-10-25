@@ -1,4 +1,21 @@
 @layer components {
+  .sandbox-editor .sandbox-control {
+    width: 12rem;
+    max-width: 100%;
+    flex: none;
+  }
+  @media (max-width: 600px) {
+    .sandbox-editor .settings-row {
+      flex-wrap: wrap;
+    }
+    .sandbox-editor .settings-row-text {
+      flex-basis: 100%;
+    }
+    .sandbox-editor .sandbox-control {
+      width: 100%;
+    }
+  }
+
   .sandbox-status {
     flex: none;
     color: var(--foreground);

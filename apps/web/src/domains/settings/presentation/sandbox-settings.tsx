@@ -5,6 +5,7 @@ import {
   formatWorkspaceBytes as bytes,
   useSandbox,
 } from "../infrastructure/use-sandbox";
+import { SandboxForm } from "./sandbox-form";
 import { Group, Row } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
 
@@ -30,9 +31,14 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
           Sandbox details could not refresh. Showing the last received policy.
         </p>
       )}
+      <SandboxForm
+        info={info}
+        pending={query.save.isPending}
+        onSave={(input) => query.save.mutateAsync(input)}
+      />
       <Group
         title="Execution provider"
-        note="The provider runs commands against this bot’s durable workspace. Provider and limits are managed by the runtime."
+        note="The provider runs commands against this bot’s durable workspace. The active just-bash provider has fixed, read-only limits."
       >
         <Row
           icon={<Box size={18} />}
@@ -74,7 +80,7 @@ export function SandboxSettings({ onBrowse }: { onBrowse: () => void }) {
       </Group>
       <Group
         title="Execution limits"
-        note="Limits apply to each execution. A busy workspace queues its own conversations in order."
+        note="Fixed just-bash limits apply to each execution. A busy workspace queues its own conversations in order."
       >
         <Row
           title="Time"

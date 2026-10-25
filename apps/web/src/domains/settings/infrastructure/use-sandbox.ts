@@ -1,15 +1,46 @@
-import type { SandboxInfo } from "@raphie/contracts";
-import { useQuery } from "@tanstack/react-query";
+import type {
+  SandboxInfo,
+  SandboxSettings,
+  SaveSandboxSettings,
+} from "@raphie/contracts";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
+import type { BackendWorkspace } from "../../../infrastructure/http/backend-workspace";
 
-export function useSandbox() {
-  const { workspace } = useBackend();
-  return useQuery({
+export function sandboxQuery(workspace: BackendWorkspace) {
+  return {
     queryKey: ["sandbox"],
     queryFn: () => workspace.api<SandboxInfo>("/api/workspace"),
     refetchInterval: 5000,
+  };
+}
+
+export async function saveSandboxSettings(
+  workspace: BackendWorkspace,
+  input: SaveSandboxSettings,
+) {
+  const settings = await workspace.api<SandboxSettings>(
+    "/api/workspace/settings",
+    input,
+  );
+  workspace.queries.setQueryData<SandboxInfo>(["sandbox"], (info) =>
+    info ? { ...info, settings } : info,
+  );
+  return settings;
+}
+
+export function useSandbox() {
+  const { workspace } = useBackend();
+  const query = useQuery(sandboxQuery(workspace));
+  const save = useMutation({
+    mutationFn: (input: SaveSandboxSettings) =>
+      saveSandboxSettings(workspace, input),
+    onError: () => {
+      void query.refetch();
+    },
   });
+  return { ...query, save };
 }
 
 export function formatWorkspaceBytes(bytes: number) {
