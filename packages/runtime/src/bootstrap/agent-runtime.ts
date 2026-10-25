@@ -16,7 +16,7 @@ import {
   Harness,
 } from "@earendil-works/pi-durable";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
-import type { BotProfile } from "@raphie/contracts";
+import type { BotProfile, SaveSandboxSettings } from "@raphie/contracts";
 
 import { ActorAuthority } from "../application/access/actors.ts";
 import { Sessions } from "../application/sessions/operations.ts";
@@ -51,7 +51,8 @@ import {
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
-import { BotWorkspace } from "../domains/workspaces/infrastructure/bot-workspace.ts";
+import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
+import { RuntimeWorkspace } from "../domains/workspaces/infrastructure/runtime-workspace.ts";
 import { createWorkspaceTools } from "../domains/workspaces/infrastructure/workspace-tools.ts";
 import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
 import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
@@ -64,6 +65,8 @@ import {
 import { ModelConnectionGate } from "../shared/infrastructure/model-connection-gate.ts";
 
 type Options = {
+  containerHostNetworkAccepted?: boolean;
+  containerNamePrefix?: "raphie-test";
   identity?: { id: string; directory: string; kind?: "fixture" };
   deferResume?: boolean;
   now?: () => number;
@@ -112,7 +115,7 @@ export class Gateway {
   readonly deliveries: PiDeliveryQueue;
   files: Files;
   harness!: Harness;
-  workspace!: BotWorkspace;
+  workspace!: RuntimeWorkspace;
   root!: Conversation;
   options: Options;
   workflow: ReturnType<typeof deliveryWorkflow>;
@@ -220,24 +223,15 @@ export class Gateway {
       context,
     );
     app.root = await app.harness.root(context);
-    app.workspace = await BotWorkspace.open(
-      join(options.directory, "workspace", "checkpoint.sqlite"),
-    );
-    registry.install(
-      createWorkspaceTools(app.workspace, async (conversationId) => {
-        const state = await app.chats.state();
-        const session = state.conversations.find(
-          (s) => s.id === conversationId,
-        );
-        return session &&
-          state.turns.some(
-            (t) =>
-              t.conversationId === conversationId && t.status === "pending",
-          )
-          ? session.sessionId
-          : undefined;
-      }),
-    );
+    app.workspace = await RuntimeWorkspace.open({
+      directory: options.directory,
+      workspaceId: options.identity!.id,
+      containerEnabled:
+        options.containerHostNetworkAccepted ??
+        process.env.RAPHIE_CONTAINER_ALLOW_HOST_NETWORK === "true",
+      namePrefix: options.containerNamePrefix,
+    });
+    app.installWorkspaceTools();
     const previousChats = await app.harness.snapshot(Chats, context);
     const previousModels = new Map<number, ModelRef>();
     for (const session of previousChats?.conversations ?? []) {
@@ -382,6 +376,37 @@ export class Gateway {
 
   async state() {
     return (await this.harness.snapshot(State, context))!;
+  }
+
+  private installWorkspaceTools() {
+    const session = async (conversationId: number) => {
+      const state = await this.chats.state();
+      const selected = state.conversations.find((s) => s.id === conversationId);
+      return selected &&
+        state.turns.some(
+          (t) => t.conversationId === conversationId && t.status === "pending",
+        )
+        ? selected.sessionId
+        : undefined;
+    };
+    this.registry.install(
+      this.workspace.settings().provider === "container"
+        ? createContainerTools(async (conversationId, operationId) => {
+            if (!(await session(conversationId)))
+              throw new InputError(
+                "Workspace execution requires an active session turn.",
+                409,
+              );
+            return this.workspace.env(operationId);
+          })
+        : createWorkspaceTools(this.workspace, session),
+    );
+  }
+
+  async saveSandboxSettings(input: SaveSandboxSettings) {
+    const saved = await this.workspace.saveSettings(input);
+    this.installWorkspaceTools();
+    return saved;
   }
 
   setPersonality(

@@ -28,6 +28,7 @@ import { switchableTelemetry } from "../src/infrastructure/observability/telemet
 import { appDataIdentity } from "../src/infrastructure/workspace/app-data.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 const directory = await mkdtemp(join(tmpdir(), "raphie-browser-"));
+const nativeWorkspace = process.env.RAPHIE_FIXTURE_CONTAINER === "true";
 const models = createModels();
 const model = {
   ...openrouterProvider().getModels()[0],
@@ -40,7 +41,9 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
   const user = context.messages.findLast((m) => m.role === "user");
   const input = user && typeof user.content === "string" ? user.content : "";
   const remember = /remember tea/i.test(input);
-  const useTool = (/tool|approval/i.test(input) || remember) && !toolResult;
+  const useNative = nativeWorkspace && /native workspace/i.test(input);
+  const useTool =
+    (/tool|approval/i.test(input) || remember || useNative) && !toolResult;
   const text =
     toolResult?.role === "toolResult"
       ? toolResult.content
@@ -54,12 +57,21 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
           {
             type: "toolCall",
             id: "test-call",
-            name: remember ? "memory_retain" : "mcp_fixture_execute",
-            arguments: remember
-              ? { content: "Owner prefers jasmine tea", kind: "fact" }
-              : {
-                  code: 'return calendar.events.list({ date: "2026-10-21" });',
-                },
+            name: useNative
+              ? "bash"
+              : remember
+                ? "memory_retain"
+                : "mcp_fixture_execute",
+            arguments: useNative
+              ? {
+                  command:
+                    "echo 'Created through Pi bash' > /workspace/from-chat.txt; cat /workspace/from-chat.txt",
+                }
+              : remember
+                ? { content: "Owner prefers jasmine tea", kind: "fact" }
+                : {
+                    code: 'return calendar.events.list({ date: "2026-10-21" });',
+                  },
           },
         ]
       : [{ type: "text", text: "" }],
@@ -170,6 +182,8 @@ if (process.env.RAPHIE_FIXTURE_MEMORY_HISTORY === "true") {
   }
 }
 const app = await Gateway.open({
+  containerHostNetworkAccepted: nativeWorkspace,
+  containerNamePrefix: "raphie-test",
   identity: { ...(await appDataIdentity(directory)), kind: "fixture" },
   deferResume: true,
   memory,
@@ -210,6 +224,19 @@ if (process.env.RAPHIE_FIXTURE_WORKSPACE_FILES === "true") {
     "workspace-seed",
     "mkdir reports; echo 'A workspace report' > reports/summary.txt; echo AP8= | base64 -d > sample.bin; echo '<h1>Download only</h1>' > 'report 中文.html'; ln -s reports/summary.txt latest",
   );
+}
+if (nativeWorkspace) {
+  await app.saveSandboxSettings({
+    ...(await app.workspace.info()).settings,
+    provider: "container",
+  });
+  await app.workspace
+    .env("fixture-seed")
+    .exec(
+      "mkdir -p reports; echo 'Live container report' > reports/summary.txt; ln -s reports/summary.txt latest",
+      {},
+      durableContext,
+    );
 }
 // Opt-in dense UI fixture: synthetic history stays inside the disposable database.
 if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
@@ -283,6 +310,8 @@ const bots = await BotHost.open(
       botId,
     );
     const gateway = await Gateway.open({
+      containerHostNetworkAccepted: nativeWorkspace,
+      containerNamePrefix: "raphie-test",
       deferResume: true,
       directory: path,
       botId,

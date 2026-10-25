@@ -49,7 +49,7 @@ export function runtimeRoutes(
             "Wait for this bot's active turns to finish before changing sandbox settings.",
             409,
           );
-        return runtime.workspace.saveSettings(input);
+        return runtime.saveSandboxSettings(input);
       }),
     ),
   );

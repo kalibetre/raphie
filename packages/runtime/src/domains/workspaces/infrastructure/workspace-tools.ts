@@ -10,7 +10,7 @@ import type { BotWorkspace } from "./bot-workspace.ts";
 
 /** Capability is closed over the bot container; no model-selected IDs or paths. */
 export function createWorkspaceTools(
-  workspace: BotWorkspace,
+  workspace: Pick<BotWorkspace, "execute">,
   session: (conversationId: number) => Promise<string | undefined>,
 ) {
   return defineExtension({
