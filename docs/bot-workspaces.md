@@ -171,3 +171,143 @@ architecture, formatting, lint, type checks and production build. The separate
 browser fixture passed at 320/768/1024/1440 pixels with no page errors or horizontal
 overflow; folder focus, exact downloaded bytes, Unicode filenames and switching
 to another bot’s empty workspace were verified.
+
+## Container backend (native sandbox Slice 2)
+
+The backend-only `ContainerWorkspace` implements Pi's `ExecutionEnv` and is covered
+by real-container tests, including Pi's `registerEnvConformance()` suite. It is
+**not installed in any bot, Pi tool registry, HTTP route or web page**. The catalog
+still rejects selecting `container`. Existing workspaces continue using just-bash;
+no checkpoint files are migrated. Slice 3 owns tool and file-browser integration.
+
+The trusted caller supplies the bot's data directory, stable workspace id and saved
+`idleMinutes`/`diskQuotaMiB`. Default-bot storage is `<data>/workspace/`; named bots
+use `<data>/bots/<id>/workspace/`. Only its `files/` subdirectory is bound read-write
+at `/workspace`. `container.sqlite` (epoch, installation scope and command journal)
+and the existing `checkpoint.sqlite` are siblings outside that mount. No host
+home, settings, data-directory mount, credentials, Docker socket or published ports
+are supplied. Docker's automatic proxy environment injection is explicitly cleared.
+Docker still provides its ordinary guest `/etc/hosts`, hostname, resolver and kernel
+pseudo-filesystems; these are not additional application data binds.
+
+All file operations, including readers and watchers, run **inside** the container.
+The host bundles Pi's pinned `NodeExecutionEnv` and sends it to `docker exec node`
+over an argv/stdio transport. It never constructs that environment on the host.
+A link to `/etc/passwd` therefore sees the image's file, not the host's. Parent and
+absolute host-path symlinks cannot expose host files or the control database.
+Readers and watchers belong to that container lifetime and must be reopened after
+idle shutdown, interruption or replacement. Each session's environment view has the
+same workspace id; the provider serializes all operations across its views.
+
+One container starts lazily per bot. Removal after the idle interval ends all its
+processes; the bind-mounted files remain, and the next operation creates fresh
+compute. The clock is injectable and `stopIfIdle()` permits explicit sweeps. Work
+in other bots can run concurrently. Runtime-process budgets are four running
+containers and four active operations, with sixteen admitted operations per bot.
+Idle containers consume container capacity until reaped. These budgets do not
+coordinate independent runtime processes; existing runtime ownership rules still
+prohibit concurrent Gateways over one data directory.
+
+Each guest uses a non-root uid/gid, all capabilities dropped, no-new-privileges,
+a read-only root, a 64 MiB `/tmp` tmpfs, 512 MiB memory, one CPU and 128 PIDs. The
+fixture runs with the runtime owner's uid/gid (or 1000 when the host runs as root);
+root-owned installations need appropriate workspace ownership before use. All CLI
+arguments use argv with no host-shell interpolation. Command source is bounded to
+16 KiB encoded, returned shell output to 32 KiB, and one RPC response to 24 MiB.
+Guest operations have a 30 second host deadline, shortened by a requested timeout;
+each synchronous CLI lifecycle command separately has a 30 second timeout. Startup
+is additional to the guest deadline. Synchronous lifecycle calls hold a SQLite
+write lock to prevent races with another owner's startup; a slow daemon can block
+the runtime event loop during these calls. This is a backend limitation to revisit
+before enabling the provider for interactive bots.
+
+A command timeout, abort, output breach or transport loss removes the entire owned
+container. This includes process groups and detached `setsid` descendants, and also
+invalidates open guest readers/watchers. Successful commands may leave processes
+running until idle stop or replacement. Files already written remain after a failed
+or interrupted command; there is no checkpoint rollback for this provider.
+
+Opening the provider reaps that bot's labelled stale compute **before** publishing
+a newer persistent epoch. It marks unfinished intents `interrupted`, never replays
+them, and fences queued/stale operations and receipt writes. All inspect/removal
+operations first filter at the daemon by `raphie.workspace` and the persisted
+installation `raphie.scope`; test names use `raphie-test-`. `execute()` accepts a
+trusted operation id: committed receipts deduplicate retries and retain bounded streamed output, conflicting arguments
+are rejected, and interrupted retries return an unknown-outcome error. `history()`
+surfaces interrupted intents for the future caller/UI. `env.exec()` creates a fresh
+operation id; slice 3 must use trusted durable call identities where retries need
+receipt lookup. The journal is bounded to 10,000 mutation/command intents; at
+capacity new mutations stop, reads and committed retries still work, and old
+receipts are never evicted. Archival is not implemented.
+
+An optional disk quota checks `du -sk /workspace` before a command or an operation
+that grows files. `null` skips this check. Over-quota commands are refused before
+submission; file reads and direct removal remain possible. This is an admission
+check on allocated blocks, **not** a filesystem quota: a running command or its
+background process can exceed it. The host free-space floor remains slice 4.
+
+### Network limitation: host and LAN access are possible
+
+Bridge networking is on by default. CLI-only portable flags do **not** provide the
+ADR's intended internet-only egress policy on OrbStack, Docker Desktop or Linux.
+No application-layer hostname check could enforce that policy against arbitrary
+native programs, DNS changes or direct IP connections. This backend installs no
+host firewall rules, privileged filtering containers or credential proxy.
+
+Real probes on Docker 29.8.2 / OrbStack, 2026-10-25, found:
+
+- Public internet TCP access succeeded.
+- Container `127.0.0.1` and `::1` could not reach the host fixture ports (connection
+  refused), but **`host.docker.internal` reached a host fixture bound only to
+  `127.0.0.1`**, as well as a wildcard-bound fixture.
+- The wildcard fixture was reachable via the host's private LAN address and VPN
+  interfaces (including a `100.64.0.0/10` address). Host/LAN separation is absent.
+- The Docker bridge gateway (`192.168.215.1`) refused the fixture connection.
+  Other tested host bridge addresses timed out. Neither result proves filtering.
+- TCP probes to `10.0.0.1` timed out or were refused across runs; probes to
+  `172.16.0.1`, `192.168.0.1` and metadata `169.254.169.254` timed out. No controlled service exists at those addresses in
+  this test, so **private-range and metadata denial were not established**.
+  `fd00::1` was unreachable; that does not establish IPv6 egress filtering.
+
+OrbStack [documents Mac host access](https://docs.orbstack.dev/docker/network), and
+Docker Desktop [provides host/gateway DNS names](https://docs.docker.com/desktop/features/networking/networking-how-tos/).
+Linux Docker [places filtering policy in host firewall chains](https://docs.docker.com/engine/network/firewall-iptables/).
+No Desktop/Linux firewall policy or Podman behavior was verified here. Docker
+bridge peers may also communicate. Container/kernel escapes remain possible;
+this is not VM isolation. Before enabling container bots, the owner must choose
+and verify an enforceable egress boundary or explicitly accept this network gap.
+The credential proxy, authenticated sandbox writes and audit flow remain slice 5.
+
+### Running the backend tests
+
+The fixture image pins `node:22.16.0-alpine3.22` by digest and adds `git`/`rg`.
+It is a test baseline, not the final supported image/toolchain or security-update
+policy. The dependency stays at the repository's pinned Pi version; no Docker SDK
+or new npm dependency is added.
+
+```sh
+docker build -t raphie-workspace:slice2 packages/runtime/test/fixtures/container
+bun test packages/runtime/test/container-cli.test.ts \
+  packages/runtime/test/container-workspace.test.ts \
+  packages/runtime/test/container-boundaries.test.ts --timeout 30000
+bun run validate
+```
+
+Varlock declares `RAPHIE_CONTAINER_BINARY` (default `docker`) and
+`RAPHIE_CONTAINER_IMAGE` (default local fixture tag `raphie-workspace:slice2`). An
+owner may override the image with an immutable compatible reference. Image builds
+are explicit; tests skip with a clear message when the CLI/daemon or fixture image
+is unavailable. A skipped run is not isolation verification. Tests use temporary
+directories, fixture services and only their labelled/prefixed containers. They
+clean up on success and failure, including a real killed-runtime subprocess.
+The network test prints observations without assuming a timeout means denial.
+
+Slice 2 verification on 2026-10-25: `bun run validate` passed with 205 tests,
+zero failures and zero skips, including 36 real-container cases (24 Pi conformance
+cases) and two CLI/transport unit cases. Architecture, formatting, lint, type checks
+and the production build passed; Vite reported its chunk-size advisory. A separate
+missing-binary run exited successfully with twelve explicit skips and clear runtime
+messages. Scoped `finally` and `afterAll` cleanup left no labelled test containers.
+Varlock masked schema validation and staged scans passed. No model calls, live bot
+data, host firewall changes, bot/provider activation, push, deployment or PR were
+part of verification.
