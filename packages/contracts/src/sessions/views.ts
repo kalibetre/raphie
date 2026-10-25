@@ -53,7 +53,7 @@ export type SessionObservation = {
 export type RuntimeInfo = Pick<
   WorkspaceSnapshot,
   "model" | "mcp" | "uncertainToolDeliveries"
->;
+> & { identity?: { id: string; directory: string; kind?: "fixture" } };
 
 /** Client-side composition of focused queries, never a runtime persistence snapshot. */
 export type ClientWorkspace = RuntimeInfo & {

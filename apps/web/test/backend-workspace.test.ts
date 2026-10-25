@@ -295,3 +295,42 @@ test("bot workspaces scope requests, streams, drafts and caches independently", 
     globalThis.EventSource = originalEvents;
   }
 });
+
+test("binary downloads stay pinned to their bot/backend and retired downloads cannot save stale responses", async () => {
+  const original = globalThis.fetch;
+  const workspace = new BackendWorkspace("http://127.0.0.1:16316", "research");
+  let finish!: (response: Response) => void;
+  let signal: AbortSignal | undefined;
+  globalThis.fetch = (async (path: string, options?: RequestInit) => {
+    assert.equal(
+      path,
+      "/api/bots/research/workspace/download?path=%2Fworkspace%2Fa&revision=1",
+    );
+    assert.equal(
+      new Headers(options?.headers).get("x-raphie-backend"),
+      workspace.url,
+    );
+    signal = options?.signal ?? undefined;
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  }) as typeof fetch;
+  try {
+    const path = "/api/workspace/download?path=%2Fworkspace%2Fa&revision=1";
+    const good = workspace.download(path);
+    finish(new Response(new Uint8Array([0, 255])));
+    assert.deepEqual(
+      [...new Uint8Array(await (await good).arrayBuffer())],
+      [0, 255],
+    );
+    const pending = workspace.download(path);
+    const rejected = assert.rejects(pending, /changed/);
+    workspace.dispose();
+    assert.equal(signal?.aborted, true);
+    finish(new Response("stale bytes"));
+    await rejected;
+  } finally {
+    workspace.dispose();
+    globalThis.fetch = original;
+  }
+});

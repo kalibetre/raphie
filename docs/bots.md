@@ -2,7 +2,7 @@
 
 A bot is a persistent assistant identity inside one Raphie runtime. Each bot has
 its own sessions, model connections and default model, memory configuration,
-attachment store and reserved workspace directory. A session belongs to its bot's
+attachment store and durable virtual workspace. A session belongs to its bot's
 store; it cannot be opened by addressing its UUID through another bot's API.
 
 ## Using bots in the web client
@@ -52,11 +52,22 @@ its previous name, description and SOUL.md. Copy older text into the editor and
 save it to restore that personality as a new revision. Refresh after a stale
 revision error; saves made while a turn is pending must wait for it to finish.
 
+**Sandbox** in each bot’s settings shows its active execution provider, capabilities,
+usage and fixed just-bash limits. It also saves provider, idle minutes (default 10,
+range 1–1440) and optional disk quota in MiB (empty means no limit, the default).
+Only just-bash is available; container is disabled with its unimplemented reason
+and API saves requesting it return 409. Idle minutes and quota apply only to the
+future container provider; no container execution or enforcement is delivered.
+
+**Workspace** browses committed files with folder navigation and
+individual downloads. Files are shared across that bot’s conversations; links
+are labeled and not followed. See [workspace behavior](bot-workspaces.md).
+
 **Activity** in each bot’s settings shows its latest 100 journal events across
 conversations, refreshes every five seconds, and supports filtering and JSON
 export. Activity requests use the selected bot’s backend scope.
 
-Profile, provider and memory editors block navigation with unsaved
+Profile, provider, memory and sandbox editors block navigation with unsaved
 changes; save or discard before leaving them.
 
 Named-bot links carry `?bot=<id>`, including session links and memory source links.
@@ -104,8 +115,10 @@ credential store. Personality text cannot grant permissions or change ownership.
 `BotHost` owns the registry and composes one Gateway/Pi harness, actor authority,
 model registry, Settings and Memory service per bot in the same process. New bots
 use `bots/<runtime-issued-id>/` under the data directory, containing separate
-SQLite stores and `files/`. Each has a `workspace/` directory reserved for future
-execution; the default bot's reserved directory is `<data>/workspace/`.
+SQLite stores and `files/`. Each has a host-owned `workspace/checkpoint.sqlite`
+containing files and separate revisioned sandbox settings; the default bot uses
+`<data>/workspace/checkpoint.sqlite`. Files are interpreted in virtual `/workspace`,
+not mounted from the host. See [workspace execution](bot-workspaces.md).
 
 New bots start with built-in memory enabled and no model credentials or connected
 MCP tools. Configure their own provider before sending messages. Default model
@@ -145,12 +158,19 @@ prefix with `default` aliases the existing default-bot API. Public session UUIDs
 are scoped by their containing bot; internal numeric Pi IDs can repeat in
 independent stores. Cross-bot actor contexts are rejected even inside the process.
 
+Sandbox settings use `GET /api/workspace` and `POST /api/workspace/settings`,
+with the same named-bot prefix. Saves require the current settings revision,
+serialize with admission, and return 409 for stale revisions or pending turns.
+Settings are owner configuration; model tools cannot choose another bot or edit
+these settings. See [sandbox settings](bot-workspaces.md#per-bot-sandbox-settings-native-sandbox-slice-1).
+
 ## Delivered limits and next steps
 
 This is logical ownership separation, not OS or VM isolation. The host, owner UI
 and process account remain trusted and can manage all bots. Local HTTP protection
-is not bot-token authentication or remote-client authentication. No untrusted
-sandbox code is executed in this slice.
+is not bot-token authentication or remote-client authentication. Supported
+shell-like commands run in a bounded just-bash worker over a virtual
+filesystem. No native/VM execution or host filesystem mounts are provided.
 
 The existing environment-configured Discord connection still belongs to the
 default bot; named-bot channel management remains future work. Each bot manages
@@ -159,9 +179,10 @@ its own MCP servers and recurring prompt jobs in Settings; see
 Diagnostics remain configured for the default bot; named-bot Diagnostics returns
 an empty trace read model rather than another bot's traces.
 
-Workspace shell execution, checkpointing, executor fencing, VM leases,
-resource/concurrency budgets, bot deletion, cross-bot sharing, and independently
-managed arbitrary background tasks remain planned. Resident bot harnesses are opened at
+Workspace shell interpretation, checkpointing, executor fencing and lightweight
+resource/concurrency bounds are delivered. VM leases, model-generation concurrency
+policy, bot deletion, cross-bot sharing, and independently managed arbitrary
+background tasks remain planned. Resident bot harnesses are opened at
 startup; this change does not establish capacity for 100 active agents or VMs.
 
 ## Verification
@@ -172,3 +193,36 @@ separate sessions, streams, credentials, memory and attachments, cross-bot actor
 and approval rejection, personality injection, optimistic revisions, pending-turn
 locking, restart recovery and external memory scopes. Run it with `bun test
 packages/runtime/test/bots.test.ts`; full validation remains `bun run validate`.
+
+## App data continuity across checkouts
+
+With `DATA_DIRECTORY` unset, runtime bootstrap uses the main Git checkout's
+`.data` even when launched from a linked worktree. A packaged installation without
+Git uses its installation directory. Explicit `DATA_DIRECTORY` values keep their
+existing meaning: absolute paths stay absolute; relative paths resolve against
+the running checkout. Fixture launchers pass isolated directories directly and
+never participate in default discovery.
+
+If a linked checkout already contains `.data`, startup stops before opening stores
+and asks for an explicit `DATA_DIRECTORY` choice. It never copies, merges, deletes
+or resets either directory. To keep that checkout's data, set `DATA_DIRECTORY=.data`;
+to use the original installation, set its absolute data path. Stop the runtime
+using that directory before starting another. Do not test new code against live
+databases. Back up SQLite with its backup API while live, or stop the runtime
+before copying the complete directory, and retain credential-store keys.
+
+New runtime bootstrap claims `runtime-owner.sqlite` before opening product stores.
+A live owner makes another launch fail; a dead owner can be reclaimed after a
+crash. Permission errors and reused process IDs fail closed. Older releases do
+not participate in this check: stop them before starting an upgrade. Never run
+two Gateways against the same data directory, including with embedding/test APIs.
+
+A persistent `workspace-identity.json` identifies the app data directory across
+restarts and upgrades. Keep it in backups. The web view displays the backend URL
+and short identity; expand it or open Backend connection settings for the complete
+ID and data path. Older runtimes show “identity unavailable”; this never means
+their data was deleted. Switching backends displays a different server's data;
+it does not transfer conversations or settings. Explicit development/fixture
+backends remain separate, and the browser fixture reports “Test fixture”.
+Check the address and data path when history appears
+missing before creating another workspace.

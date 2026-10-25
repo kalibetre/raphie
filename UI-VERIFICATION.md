@@ -391,3 +391,29 @@ timed out after 15000ms`, so visual acceptance continued with Playwright.
   are in their separate thread. Jobs require a running runtime and report prompt
   admission; completion tracking, device push and calendar recurrence remain
   outside this change.
+
+## Native sandbox Slice 1 — 2026-10-25
+
+- Added only the Sandbox settings editor: per-bot provider, idle minutes and
+  optional quota, using the existing Save/Discard bar and unsaved-navigation
+  guard. Container is disabled with the runtime’s reason. Idle time and quota
+  are labeled for the future container provider; fixed just-bash details remain.
+- Used `packages/runtime/test/browser-fixture.ts` with temporary data, runtime
+  port 25317 and web port 25321 because the usual fixture ports were occupied.
+  No external models, user conversations or real data directories were used.
+  Both processes started for this run were stopped afterward.
+- Collaborative preview inspection failed twice with
+  `Preview automation snapshot timed out after 15000ms`. Acceptance used
+  temporary Playwright tooling outside the repository and headless Chrome with
+  a separate browser context. No browser dependency was added to the project.
+- Inspected 2x screenshots in light and dark at 1440 × 1000 and 320 × 1000 CSS
+  pixels. No document/body horizontal overflow or browser exceptions. Fixed a
+  desktop control-width issue found in the first screenshots, then repeated all
+  four checks with the corrected layout.
+- Verified disabled container option, invalid idle input, save/reload, empty
+  quota saved as null, Save/Discard, blocked Browse navigation while dirty,
+  and external-save polling that preserves the draft and disables stale saves.
+  Ran the reusable `scripts/check-sandbox-settings.browser.js` probe successfully.
+- Targeted runtime and web tests passed. Full `bun run validate` passed formatting,
+  architecture, lint, types, tests and production build. Vite emitted its
+  non-fatal large-chunk warning. No container behavior was implemented or tested.

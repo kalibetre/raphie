@@ -57,7 +57,24 @@ the same durable store.
 Profiles include name, description and SOUL.md. Owner saves use optimistic
 revisions and the same admission gate as messages; active turns block edits.
 The host supplies personality when admitting the next turn, and model tools cannot
-write the profile. Workspace execution, fencing and compute budgets are still
-planned. Default-bot Discord and MCP retain their existing configuration; named-bot
-channel/tool connection management is not delivered in this slice. See
+write the profile. Per-bot MCP configuration and recurring jobs are delivered;
+Discord still uses the default bot’s host configuration. See
 [the implementation guide](../bots.md).
+
+## Lightweight workspace delivery (2026-10-24)
+
+Each Gateway now owns a persistent virtual `/workspace`. `workspace_exec` is
+closed over that bot’s store and derives session identity from the admitted tool
+context. just-bash runs in a disposable worker with no host filesystem mounts,
+inherited environment or network/native execution capabilities. The host serializes
+executions, applies resource/concurrency limits, and atomically commits a checkpoint
+plus retry receipt in `workspace/checkpoint.sqlite`. Reopening increments a
+persistent generation so replaced executors cannot overwrite new state. Pi and
+process-crash tests establish shared files, recovery, fencing and isolation.
+
+The initial policy commits files only on a zero shell exit and rolls back failed
+or interrupted executions. Shell state and scratch files do not persist. Receipts
+are bounded and never silently evicted. This supplies logical separation, not an
+OS/VM boundary or an OS memory quota. VM leases, native capability escalation,
+transfer and separate model-generation concurrency policy remain future work. See
+[delivered behavior and limits](../bot-workspaces.md).

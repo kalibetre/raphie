@@ -25,6 +25,7 @@ import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memo
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
+import { appDataIdentity } from "../src/infrastructure/workspace/app-data.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 const directory = await mkdtemp(join(tmpdir(), "raphie-browser-"));
 const models = createModels();
@@ -169,6 +170,7 @@ if (process.env.RAPHIE_FIXTURE_MEMORY_HISTORY === "true") {
   }
 }
 const app = await Gateway.open({
+  identity: { ...(await appDataIdentity(directory)), kind: "fixture" },
   deferResume: true,
   memory,
   modelConnectionGate: settings.connectionGate,
@@ -202,6 +204,13 @@ const app = await Gateway.open({
     },
   },
 });
+if (process.env.RAPHIE_FIXTURE_WORKSPACE_FILES === "true") {
+  await app.workspace.execute(
+    "fixture",
+    "workspace-seed",
+    "mkdir reports; echo 'A workspace report' > reports/summary.txt; echo AP8= | base64 -d > sample.bin; echo '<h1>Download only</h1>' > 'report 中文.html'; ln -s reports/summary.txt latest",
+  );
+}
 // Opt-in dense UI fixture: synthetic history stays inside the disposable database.
 if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
   await app.root.commit(async (tx) => {

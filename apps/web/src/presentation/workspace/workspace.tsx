@@ -31,6 +31,7 @@ import {
 } from "../../shared/ui/sidebar";
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
+import { BackendIdentity } from "./backend-identity";
 import { PanelResizeHandle } from "./panel-resize-handle";
 import { useBotInbox } from "./use-bot-inbox";
 import { useWorkspaceLayout } from "./use-workspace-layout";
@@ -307,6 +308,7 @@ export function Workspace({
           />
         )}
         <SidebarInset id="main" className="main-panel">
+          <BackendIdentity />
           {settings ? (
             <SettingsMain
               section={section}

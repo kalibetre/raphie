@@ -1,3 +1,4 @@
+import type { RuntimeInfo } from "@raphie/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -13,6 +14,10 @@ export function ConnectionSettings() {
     queryKey: ["backend-address"],
     queryFn: () => api<{ url: string }>("/api/web/connection"),
     retry: false,
+  });
+  const info = useQuery({
+    queryKey: ["runtime-info"],
+    queryFn: () => api<RuntimeInfo>("/api/runtime"),
   });
   const [draft, setDraft] = useState<string>();
   const [message, setMessage] = useState("");
@@ -39,9 +44,25 @@ export function ConnectionSettings() {
   return (
     <Group
       title="Backend connection"
-      note="Choose the local server this browser connects to. Connecting opens that server’s sessions and resets the current workspace."
+      note="Choose the local server this browser connects to. Connecting displays that server’s data. Each server keeps its own sessions and settings."
     >
       <div className="settings-form">
+        <p>
+          Active backend: {workspace.url}{" "}
+          {info.data?.identity?.kind === "fixture" ? "(test fixture)" : ""}
+        </p>
+        {info.data?.identity ? (
+          <p>
+            App data: {info.data.identity.directory}
+            <br />
+            Workspace ID: {info.data.identity.id}
+          </p>
+        ) : (
+          <p>
+            This backend does not report its data identity. Upgrade it to
+            identify its workspace.
+          </p>
+        )}
         <label htmlFor="backend-url">Backend address</label>
         <Input
           id="backend-url"

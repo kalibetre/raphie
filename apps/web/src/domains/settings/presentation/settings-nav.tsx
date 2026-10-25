@@ -40,6 +40,8 @@ const botEntries: readonly Section[] = [
   "models",
   "memory",
   "mcp",
+  "sandbox",
+  "workspace",
   "jobs",
   "telemetry",
   "activity",

@@ -34,6 +34,9 @@
     "typescript": "7.0.2",
     "varlock": "1.23.0"
   },
+  "overrides": {
+    "guarded-fetch>undici": "7.30.1"
+  },
   "engines": {
     "bun": ">=1.4.4"
   },

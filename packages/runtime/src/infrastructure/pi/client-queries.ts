@@ -27,7 +27,11 @@ type QuerySource = DurableContext & {
   chats: ChatService;
   toolApprovals: ToolApprovalService;
   observations: Observations;
-  options: { mcp?: McpTools; mcpError?: boolean };
+  options: {
+    mcp?: McpTools;
+    mcpError?: boolean;
+    identity?: { id: string; directory: string; kind?: "fixture" };
+  };
 };
 
 function pageSize(limit = 50) {
@@ -79,6 +83,7 @@ export class PiClientQueries implements ClientQueries {
       (this.app.options.mcp ? [this.app.options.mcp] : []);
     return {
       model: this.app.chats.model ?? null,
+      identity: this.app.options.identity,
       mcp: {
         connected: connections.length > 0,
         error: this.app.options.mcpError ?? false,

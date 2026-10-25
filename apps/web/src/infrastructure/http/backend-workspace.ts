@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 
-import { api } from "./api-client";
+import { api, ApiError } from "./api-client";
 
 /** A retired workspace can never issue commands against a newly selected backend. */
 export class BackendWorkspace {
@@ -42,6 +42,27 @@ export class BackendWorkspace {
     // Even a response already queued before abort must not resume an old action.
     this.assertActive();
     return result;
+  };
+
+  /** Binary downloads retain the same bot/backend scope and cancellation as JSON reads. */
+  readonly download = async (path: string): Promise<Blob> => {
+    this.assertActive();
+    const response = await fetch(this.scopedPath(path), {
+      signal: this.lifetime.signal,
+      headers: this.url ? { "x-raphie-backend": this.url } : {},
+    });
+    if (!response.ok) {
+      const result = await response.json();
+      this.assertActive();
+      throw new ApiError(
+        result.error ?? "File download failed.",
+        response.status,
+        result.code ?? "request_failed",
+      );
+    }
+    const blob = await response.blob();
+    this.assertActive();
+    return blob;
   };
 
   assertActive() {

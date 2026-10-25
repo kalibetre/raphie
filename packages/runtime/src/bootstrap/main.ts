@@ -19,6 +19,11 @@ import {
 import { legacyMcpConfig } from "../infrastructure/mcp/legacy-config.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../infrastructure/observability/telemetry-switch.ts";
+import { ownAppData } from "../infrastructure/workspace/app-data-owner.ts";
+import {
+  appDataDirectory,
+  appDataIdentity,
+} from "../infrastructure/workspace/app-data.ts";
 import { Gateway } from "./agent-runtime.ts";
 import { BotHost } from "./bot-host.ts";
 import { startServer } from "./http-server.ts";
@@ -35,10 +40,15 @@ let lifecycle: "starting" | "running" | "stopping" = "starting";
 
 const program = Effect.gen(function* () {
   const legacyMcp = legacyMcpConfig(process.env);
-  const directory = resolve(
+  const directory = appDataDirectory(
     fileURLToPath(new URL("../../../../", import.meta.url)),
-    process.env.DATA_DIRECTORY ?? ".data",
+    process.env.DATA_DIRECTORY,
   );
+  yield* resource(
+    () => ownAppData(directory),
+    async (owner) => owner.close(),
+  );
+  const identity = yield* Effect.tryPromise(() => appDataIdentity(directory));
   const collector = yield* resource(
     () =>
       openLocalOtlp(
@@ -112,6 +122,7 @@ const program = Effect.gen(function* () {
       telemetry.run("runtime.start", {}, () =>
         Gateway.open({
           deferResume: true,
+          identity,
           directory,
           discordThreadId: threadId,
           discordConnectionId: process.env.DISCORD_APPLICATION_ID,
@@ -190,7 +201,9 @@ const program = Effect.gen(function* () {
     (http) => http.close(),
   );
   lifecycle = "running";
-  console.log(`Raphie runtime: ${http.url}\nRaphie workspace: ${webOrigin}`);
+  console.log(
+    `Raphie runtime: ${http.url}\nRaphie web: ${webOrigin}\nApp data: ${identity.directory} (${identity.id})`,
+  );
   yield* Effect.tryPromise(
     () =>
       new Promise<void>((done) => {
