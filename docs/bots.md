@@ -53,7 +53,13 @@ save it to restore that personality as a new revision. Refresh after a stale
 revision error; saves made while a turn is pending must wait for it to finish.
 
 **Sandbox** in each bot’s settings shows its active execution provider, capabilities,
-usage and limits. **Workspace** browses committed files with folder navigation and
+usage and fixed just-bash limits. It also saves provider, idle minutes (default 10,
+range 1–1440) and optional disk quota in MiB (empty means no limit, the default).
+Only just-bash is available; container is disabled with its unimplemented reason
+and API saves requesting it return 409. Idle minutes and quota apply only to the
+future container provider; no container execution or enforcement is delivered.
+
+**Workspace** browses committed files with folder navigation and
 individual downloads. Files are shared across that bot’s conversations; links
 are labeled and not followed. See [workspace behavior](bot-workspaces.md).
 
@@ -61,7 +67,7 @@ are labeled and not followed. See [workspace behavior](bot-workspaces.md).
 conversations, refreshes every five seconds, and supports filtering and JSON
 export. Activity requests use the selected bot’s backend scope.
 
-Profile, provider and memory editors block navigation with unsaved
+Profile, provider, memory and sandbox editors block navigation with unsaved
 changes; save or discard before leaving them.
 
 Named-bot links carry `?bot=<id>`, including session links and memory source links.
@@ -109,8 +115,8 @@ credential store. Personality text cannot grant permissions or change ownership.
 `BotHost` owns the registry and composes one Gateway/Pi harness, actor authority,
 model registry, Settings and Memory service per bot in the same process. New bots
 use `bots/<runtime-issued-id>/` under the data directory, containing separate
-SQLite stores and `files/`. Each has a host-owned `workspace/checkpoint.sqlite`;
-the default bot uses
+SQLite stores and `files/`. Each has a host-owned `workspace/checkpoint.sqlite`
+containing files and separate revisioned sandbox settings; the default bot uses
 `<data>/workspace/checkpoint.sqlite`. Files are interpreted in virtual `/workspace`,
 not mounted from the host. See [workspace execution](bot-workspaces.md).
 
@@ -151,6 +157,12 @@ example, `/api/bots/:id/sessions`, `/settings`, `/memory`, `/files/:fileId` and
 prefix with `default` aliases the existing default-bot API. Public session UUIDs
 are scoped by their containing bot; internal numeric Pi IDs can repeat in
 independent stores. Cross-bot actor contexts are rejected even inside the process.
+
+Sandbox settings use `GET /api/workspace` and `POST /api/workspace/settings`,
+with the same named-bot prefix. Saves require the current settings revision,
+serialize with admission, and return 409 for stale revisions or pending turns.
+Settings are owner configuration; model tools cannot choose another bot or edit
+these settings. See [sandbox settings](bot-workspaces.md#per-bot-sandbox-settings-native-sandbox-slice-1).
 
 ## Delivered limits and next steps
 

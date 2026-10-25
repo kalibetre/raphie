@@ -106,22 +106,31 @@ folder or send over open network.
 
 ## Delivery sequence
 
-The first implementation has no credential proxy. The sandbox holds no
-credentials, and authenticated integrations such as GitHub go through the bot's
-existing per-bot MCP connections, which run on the host. Consequences: the bot
-can clone public repositories, edit, and use local `git`, but cannot push or
-clone private repositories from inside the sandbox. It publishes through MCP
-tools instead. The proxy below stays the design for later.
+The first container implementation is planned in the slices after Slice 1. It
+will have no credential proxy: the sandbox will hold no credentials, and
+authenticated integrations such as GitHub will go through the bot's existing
+per-bot MCP connections, which run on the host. Once those slices are delivered,
+the bot will be able to clone public repositories, edit, and use local `git`, but
+will not be able to push or clone private repositories from inside the sandbox.
+It will publish through MCP tools instead. The credential proxy stays the design
+for later. Slice 1 below delivers settings only.
 
-1. Provider setting: provider, idle minutes and optional quota per bot;
-   existing bots stay on just-bash.
-2. Container `ExecutionEnv`: single-folder mount, lease and fencing, host-reach
+1. **Provider settings — delivered (2026-10-25, Slice 1):** provider, idle minutes
+   and optional quota persist per bot with optimistic revisions and the existing
+   admission gate. Defaults: just-bash, 10 minutes, no disk limit. The owner
+   Sandbox page supports guarded Save/Discard. The runtime exposes availability
+   and rejects container saves with 409: “Container provider is not implemented
+   yet”. Idle minutes (1–1440) and optional positive integer MiB quota are
+   validated and stored for future container use; just-bash behavior and fixed
+   limits are unchanged. No container runs in this slice. See
+   [delivered settings](../bot-workspaces.md#per-bot-sandbox-settings-native-sandbox-slice-1).
+2. **Planned:** Container `ExecutionEnv`: single-folder mount, lease and fencing, host-reach
    denial, resource bounds, idle stop. Prove cross-bot isolation, shared files
    across sessions, restart and interrupted-command recovery with real `git`
    against a local test repository.
-3. Pi `CodingTools` installed for container bots; Sandbox and Workspace files
+3. **Planned:** Pi `CodingTools` installed for container bots; Sandbox and Workspace files
    pages read through the environment.
-4. Image contents (`git`, `rg`, common runtimes) and a documented way to extend
+4. **Planned:** Image contents (`git`, `rg`, common runtimes) and a documented way to extend
    them; free-space floor.
 5. Later: egress proxy with per-host credential grants, TLS termination, audit
    log and the optional write-approval toggle. Prove that no credential appears
@@ -134,4 +143,5 @@ tools instead. The proxy below stays the design for later.
 - Whether the image ships `gh` and package managers, or the bot may install
   tools into its own folder.
 - Where the CA and proxy run when Raphie itself runs in a container.
-- The default idle period and the host free-space floor.
+- The host free-space floor. The default idle period is now 10 minutes, configurable
+  per bot from 1 through 1440 minutes.

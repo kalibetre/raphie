@@ -211,7 +211,12 @@ Proposed slices:
    initial limits. Bot Settings now exposes the active provider, capabilities,
    policy and usage under Sandbox, plus committed file browsing and downloads
    under Workspace. just-bash is the only currently available execution provider;
-   owner-facing provider selection and policy editing remain future work.
+   native sandbox Slice 1 now persists owner-editable provider, idle minutes
+   (default 10, range 1–1440) and optional disk quota (no limit by default), with
+   optimistic revisions and unsaved-change guards. Container is listed as
+   unavailable and saves requesting it return 409. Idle time and quota have no
+   effect on just-bash. Container execution, enforcement and subsequent native
+   sandbox slices remain planned in [ADR 0003](adr/0003-native-bot-sandbox.md).
    This is not OS/VM isolation or a capacity benchmark. See
    [workspace behavior and limits](bot-workspaces.md).
 

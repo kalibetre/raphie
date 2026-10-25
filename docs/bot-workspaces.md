@@ -27,6 +27,45 @@ and exit zero, as in a shell. Inspect `exitCode` and `committed` before claiming
 success. Local workspace edits need no separate tool approval; they cannot
 perform an external service action.
 
+## Per-bot sandbox settings (native sandbox Slice 1)
+
+**Sandbox** settings persist the bot’s provider, idle period and optional container
+disk quota. Existing and new bots default to `just-bash`, 10 idle minutes and no
+disk limit (`diskQuotaMiB: null`). No settings import or file migration is needed.
+Idle minutes must be an integer from 1 through 1440. A supplied quota must be a
+positive safe integer in MiB; an omitted or null quota means no limit.
+
+Only `just-bash` is available. The provider catalog also lists `container` as
+unavailable with “Container provider is not implemented yet”. Selecting it is
+disabled in the UI; an owner API save requesting it returns 409 without changing
+settings. There is no fallback. Idle time and quota are saved now for the future
+container provider and have **no effect on just-bash**. Its fixed execution,
+checkpoint and file limits below remain unchanged. This slice starts no container
+and delivers no native execution, idle shutdown or quota enforcement.
+
+The editor uses Save/Discard and blocks navigation while dirty or saving. Polling
+preserves drafts; a newer settings revision blocks a stale save and Discard loads
+the latest settings. Saves serialize with message admission and return 409 while
+that bot has pending turns. Other bots have independent settings and revisions.
+Settings are trusted host configuration in a separate `sandbox_settings` table in
+that bot’s `workspace/checkpoint.sqlite`; they are never sent to the worker or
+exposed as virtual files. Settings revisions are independent of file revisions,
+so a settings save does not invalidate a pending file download.
+
+`GET /api/workspace` adds `settings` and `providers` to the existing active provider,
+usage, capabilities and fixed limits. `POST /api/workspace/settings` takes
+`{ provider, idleMinutes, diskQuotaMiB?, revision }` and returns the saved settings
+with an incremented revision. Unknown fields, including caller-selected bot IDs,
+are rejected. Named bots use `/api/bots/<bot-id>/workspace/settings`; the existing
+local owner checks and selected bot routing supply the settings capability. There
+is no agent tool for reading or changing sandbox configuration.
+
+Runtime coverage is in `packages/runtime/test/sandbox-settings.test.ts`; web
+query/rendering coverage is in `apps/web/test/sandbox-settings.test.tsx`. Run
+`scripts/check-sandbox-settings.browser.js` on the disposable fixture’s Sandbox
+page for save, discard, navigation guard, concurrent edit and unlimited quota
+acceptance checks. These checks use no external model calls.
+
 ## Checkpoints and recovery
 
 The host owns `<bot-data>/workspace/checkpoint.sqlite`, outside the worker. It is
@@ -114,7 +153,7 @@ checkpoint returns a conflict and asks for a refresh rather than returning
 unexpected bytes. Bot and backend switching retire pending download responses.
 No host paths, settings stores, credentials or execution receipts are exposed.
 
-The read-only owner HTTP surface is `/api/workspace`, `/api/workspace/files?path=`
+The owner file-read HTTP surface is `/api/workspace`, `/api/workspace/files?path=`
 and `/api/workspace/download?path=&revision=`. Named bots use the existing
 `/api/bots/<bot-id>/workspace` prefix. Paths refer only to virtual `/workspace`;
 traversal, missing files, directory downloads and symbolic links are rejected.
