@@ -56,7 +56,7 @@ export function Notifications({
     mutationFn: ({ botId, id }: { botId: string; id: string }) =>
       backend.api(
         `/api/bots/${encodeURIComponent(botId)}/jobs/runs/${encodeURIComponent(id)}/read`,
-        { method: "POST" },
+        {},
       ),
     onSuccess: (_result, { botId }) => {
       setError(false);
