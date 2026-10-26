@@ -14,7 +14,9 @@ export function jobRunDescription(run: ScheduledJobRun) {
       ? "The reply failed. Open the conversation to inspect it."
       : "The prompt could not start. Check the bot's model connection.";
   if (run.status === "interrupted")
-    return "Execution was interrupted. Inspect the conversation before retrying any actions.";
+    return run.turnId
+      ? "Execution was interrupted. Inspect the conversation before retrying any actions."
+      : "The job was stopped before its prompt was submitted.";
   if (run.status === "running")
     return "Reply in progress; tool actions may be waiting for your approval.";
   if (run.status === "queued") return "Waiting for prompt admission.";
