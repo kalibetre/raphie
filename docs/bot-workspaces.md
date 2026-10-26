@@ -235,7 +235,9 @@ invalidates open guest readers/watchers, including when a file operation is
 aborted. Closing a stale reader never starts or removes replacement compute.
 View cleanup does not close the bot-wide provider; only its owner does. A broken
 watch callback is contained, and a known-dead shared guest reconnects before new
-work. Transient removal failures are retried before admission; failed shutdown
+work. Transient removal failures are retried before admission, including failures
+while reaping after transport loss: no new operation can reuse that container
+until removal succeeds. Failed shutdown
 still releases the control database and local capacity slot. Successful commands may leave processes
 running until idle stop or replacement. Files already written remain after a failed
 or interrupted command; there is no checkpoint rollback for this provider.
@@ -362,6 +364,21 @@ introduced require acknowledgement: startup reaps stale compute, preserves files
 and keeps Sandbox settings accessible. Tools fail explicitly and file browsing
 returns 409 until the owner acknowledges access or selects just-bash. Usage is unavailable
 while execution is blocked. There is no silent provider fallback.
+
+If the container CLI or daemon is unavailable at startup, Raphie still starts and
+exposes saved Sandbox settings. Native tools and file browsing stay blocked until
+ownership can be recovered; files and the selected provider are preserved. Restore
+the container runtime, then save settings again (change a setting to enable Save)
+or restart Raphie. Provider changes still require successful stale-container reaping
+before committing, so an outage cannot bypass the writer fence. A usage measurement
+failure (including a missing image or exhausted container capacity) returns null
+usage and a visible unavailable reason instead of hiding the settings form.
+
+Recovery follow-up verification (2026-10-26): full `bun run validate` passed
+227 tests with no failures or skips, including real Docker/OrbStack. New
+regressions cover missing-runtime startup for acknowledged and legacy selections,
+settings access after failed usage measurement, and transport loss followed by a
+failed reap that blocks new work until cleanup succeeds.
 
 Sandbox usage is allocated disk usage (`du`), with a nullable quota and no invented
 file-count limit. The Workspace files page lists live guest files through the same

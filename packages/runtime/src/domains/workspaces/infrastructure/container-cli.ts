@@ -14,6 +14,11 @@ export const containerLimits = {
   pids: 128,
 } as const;
 
+/** Distinguishes runtime outages from corrupt workspace state during startup. */
+export class ContainerRuntimeError extends Error {
+  override readonly name = "ContainerRuntimeError";
+}
+
 /** CLI arguments are always argv, never interpolated into a host shell. */
 export class ContainerCli {
   readonly binary: string;
@@ -23,17 +28,24 @@ export class ContainerCli {
   }
 
   run(args: string[]) {
-    const result = spawnSync(this.binary, args, {
-      encoding: "utf8",
-      timeout: containerLimits.timeoutMs,
-      maxBuffer: containerLimits.rpcBytes,
-    });
-    if (result.error) throw result.error;
-    if (result.status !== 0)
-      throw new Error(
-        `Container CLI ${args[0]} failed: ${result.stderr.trim()}`,
+    try {
+      const result = spawnSync(this.binary, args, {
+        encoding: "utf8",
+        timeout: containerLimits.timeoutMs,
+        maxBuffer: containerLimits.rpcBytes,
+      });
+      if (result.error) throw result.error;
+      if (result.status !== 0)
+        throw new Error(
+          `Container CLI ${args[0]} failed: ${result.stderr.trim()}`,
+        );
+      return result.stdout.trim();
+    } catch (error) {
+      throw new ContainerRuntimeError(
+        `Container runtime ${args[0]} failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       );
-    return result.stdout.trim();
+    }
   }
 
   exec(id: string, source: string) {

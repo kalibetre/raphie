@@ -6,7 +6,7 @@ import type { SandboxInfo, SaveSandboxSettings } from "@raphie/contracts";
 import { InputError } from "../../../shared/application/input-error.ts";
 import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import { BotWorkspace } from "./bot-workspace.ts";
-import { containerLimits } from "./container-cli.ts";
+import { containerLimits, ContainerRuntimeError } from "./container-cli.ts";
 import { ContainerFiles } from "./container-files.ts";
 import { ContainerWorkspace } from "./container-workspace.ts";
 
@@ -21,6 +21,7 @@ export class RuntimeWorkspace {
   private readonly checkpoint: BotWorkspace;
   private readonly options: Options;
   private container?: ContainerWorkspace;
+  private containerUnavailable = false;
   private readonly views = new ModelConnectionGate();
 
   private constructor(checkpoint: BotWorkspace, options: Options) {
@@ -47,6 +48,13 @@ export class RuntimeWorkspace {
       }
       return workspace;
     } catch (error) {
+      // A daemon outage must not prevent owner recovery or unrelated bots from
+      // starting. No native capability is installed until the stale epoch is reaped.
+      if (error instanceof ContainerRuntimeError) {
+        workspace.container = undefined;
+        workspace.containerUnavailable = true;
+        return workspace;
+      }
       await workspace.close();
       throw error;
     }
@@ -90,6 +98,7 @@ export class RuntimeWorkspace {
       try {
         const saved = this.checkpoint.saveSettings(input);
         this.container = input.provider === "container" ? next : undefined;
+        this.containerUnavailable = false;
         if (input.provider !== "container") await next?.close();
         return saved;
       } catch (error) {
@@ -148,8 +157,31 @@ export class RuntimeWorkspace {
       const base = this.checkpoint.info();
       if (base.settings.provider !== "container") return base;
       const container = this.container;
+      let fileBytes: number | null = null;
+      let reason: string | null = null;
+      if (
+        !container &&
+        (this.containerUnavailable || base.settings.hostNetworkAcknowledged)
+      ) {
+        reason =
+          "Container runtime is unavailable. Restore the runtime, then save settings again or restart Raphie. Files were preserved.";
+      } else if (container) {
+        try {
+          fileBytes = await container.usage(context);
+        } catch {
+          // Usage is auxiliary: even a missing image or full capacity must leave
+          // persisted settings and provider recovery controls available.
+          reason =
+            "Container usage is unavailable. Check the runtime, image and container capacity, then retry. Saved settings remain available.";
+        }
+      }
       return {
         ...base,
+        providers: base.providers.map((provider) =>
+          provider.id === "container" && reason
+            ? { ...provider, available: false, reason }
+            : provider,
+        ),
         provider: { id: "container", name: "Container", version: "native" },
         isolation: "container",
         capabilities: { network: true, hostFiles: false, nativeCode: true },
@@ -160,7 +192,7 @@ export class RuntimeWorkspace {
           runtimeConcurrency: containerLimits.concurrent,
         },
         usage: {
-          fileBytes: container ? await container.usage(context) : null,
+          fileBytes,
           entries: null,
           receiptBytes: null,
         },

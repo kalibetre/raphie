@@ -181,8 +181,16 @@ export class ContainerWorkspace {
 
   private removeContainer(id: string) {
     // Never remove a newer owner's container from a stale abort/close callback.
-    if (this.cli.owned(this.options.workspaceId, this.scope).includes(id))
-      this.cli.run(["rm", "-f", id]);
+    try {
+      if (this.cli.owned(this.options.workspaceId, this.scope).includes(id))
+        this.cli.run(["rm", "-f", id]);
+    } catch (error) {
+      // Every failed reap must block admission, including transport loss without
+      // a timeout/abort. Descendants may still be writing to the mounted files.
+      this.lifecycleError =
+        error instanceof Error ? error : new Error(String(error));
+      throw error;
+    }
     runningContainers.delete(id);
     if (this.container === id) {
       this.connection?.close();
