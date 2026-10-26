@@ -33,7 +33,8 @@ resumes their last opened conversation in this browser when available.
 
 The bell beside New conversation opens Notifications, bringing replies, approval requests
 and finished jobs from all bots together. Its badge counts conversation items and unread
-job runs. Approvals remain until decided; opening a job update acknowledges it.
+job runs, combining a job with its matching latest reply when it is the only unread reply.
+Approvals remain until decided; opening a job update acknowledges it.
 Read cursors are browser-local, scoped by backend, bot and session. A completed
 reply is marked read when its conversation is visible and scrolled to the bottom.
 Historical replies with no saved cursor count as unread in this browser.

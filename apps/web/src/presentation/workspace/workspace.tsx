@@ -31,6 +31,7 @@ import {
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
 import { BackendIdentity } from "./backend-identity";
+import { notificationItems } from "./notification-items";
 import { Notifications, useJobNotifications } from "./notifications";
 import { PanelResizeHandle } from "./panel-resize-handle";
 import { useBotInbox } from "./use-bot-inbox";
@@ -72,15 +73,16 @@ export function Workspace({
   const inbox = useBotInbox(data?.conversations);
   const notificationBots = inbox.bots.data?.items ?? [];
   const jobNotifications = useJobNotifications(notificationBots);
+  const notifications = notificationItems(
+    notificationBots,
+    inbox.byBot,
+    inbox.unread,
+    jobNotifications.entries,
+  );
   const notificationCount =
-    notificationBots.reduce(
-      (total, item) =>
-        total +
-        (inbox.byBot.get(item.id) ?? []).filter(
-          (session) => session.waiting || inbox.unread(item.id, session) > 0,
-        ).length,
-      0,
-    ) + jobNotifications.count;
+    notifications.items.length +
+    jobNotifications.count -
+    jobNotifications.entries.length;
   const botProfile = inbox.bots.data?.items.find(
     (b) => b.id === workspace.botId,
   );
@@ -366,10 +368,9 @@ export function Workspace({
               />
               {view === "notifications" ? (
                 <Notifications
-                  bots={notificationBots}
-                  byBot={inbox.byBot}
-                  unread={inbox.unread}
+                  items={notifications.items}
                   jobs={jobNotifications}
+                  count={notificationCount}
                   onOpen={(botId, id) =>
                     void navigate({
                       to: "/sessions/$sessionId",

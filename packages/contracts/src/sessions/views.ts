@@ -18,6 +18,8 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   /** Completed assistant replies; optional for older runtimes. */
   replyCount?: number;
   replyPreview?: string;
+  /** Identifier of the latest completed reply, when supported by the runtime. */
+  replyTurnId?: string;
   waiting: boolean;
 };
 
