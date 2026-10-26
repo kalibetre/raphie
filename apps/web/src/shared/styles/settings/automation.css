@@ -72,6 +72,9 @@
     justify-content: flex-start;
     font-weight: 400;
   }
+  .job-history-more {
+    padding: 12px 0;
+  }
   .job-history-list {
     margin-top: 12px;
   }

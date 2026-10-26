@@ -15,6 +15,12 @@ export function useJobRuns(jobId?: string) {
       return workspace.api<Page<ScheduledJobRun>>(`/api/jobs/runs?${search}`);
     },
     getNextPageParam: (page) => page.next,
-    refetchInterval: 5000,
+    // TanStack refetches every loaded page in an infinite query. Keep live
+    // updates on the first page without repeatedly reloading a long history.
+    refetchInterval: (query) =>
+      query.state.status === "error" ||
+      (query.state.data?.pages.length ?? 0) > 1
+        ? false
+        : 5000,
   });
 }

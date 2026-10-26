@@ -1,4 +1,5 @@
 import { ArrowUpRight, CalendarClock } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import { jobRunDescription, jobRunStatus } from "../application/job-run-status";
@@ -15,6 +16,31 @@ export function JobRunHistory({
 }) {
   const history = useJobRuns(jobId);
   const runs = history.data?.pages.flatMap((page) => page.items) ?? [];
+  const sentinel = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } =
+    history;
+  useEffect(() => {
+    const target = sentinel.current;
+    if (
+      !target ||
+      !hasNextPage ||
+      isFetching ||
+      isFetchNextPageError ||
+      typeof IntersectionObserver === "undefined"
+    )
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          observer.disconnect();
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetching, isFetchNextPageError, fetchNextPage, jobId]);
   return (
     <section className="settings-group job-history" id="job-run-history">
       <div className="settings-group-heading">
@@ -32,7 +58,7 @@ export function JobRunHistory({
         <p role="status" className="automation-note">
           Loading run history…
         </p>
-      ) : history.error ? (
+      ) : history.error && !history.data ? (
         <p role="alert" className="automation-note">
           Could not refresh run history.{" "}
           <Button
@@ -96,14 +122,31 @@ export function JobRunHistory({
         })}
       </div>
       {history.hasNextPage && (
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={history.isFetchingNextPage}
-          onClick={() => void history.fetchNextPage()}
-        >
-          {history.isFetchingNextPage ? "Loading…" : "Load older runs"}
-        </Button>
+        <div ref={sentinel} className="job-history-more">
+          {history.isFetchingNextPage ? (
+            <p role="status" className="automation-note">
+              Loading older runs…
+            </p>
+          ) : (
+            <>
+              {history.isFetchNextPageError && (
+                <p role="alert" className="automation-note">
+                  Could not load older runs.
+                </p>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={history.isFetching}
+                onClick={() => void history.fetchNextPage()}
+              >
+                {history.isFetchNextPageError
+                  ? "Retry loading older runs"
+                  : "Load older runs"}
+              </Button>
+            </>
+          )}
+        </div>
       )}
     </section>
   );

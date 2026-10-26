@@ -84,7 +84,8 @@ an already-busy bot. Tool actions from scheduled prompts need the same owner
 approval as interactive prompts.
 
 Run history shows queued, running, completed, failed, and interrupted outcomes, with links
-to their conversations where available. Finished runs appear on the Notifications page
+to their conversations where available. It loads 20 runs at a time as you scroll;
+when older pages are open, history stops polling until you reopen or change the filter. Finished runs appear on the Notifications page
 until opened or dismissed; acknowledgement persists across restarts. Active and unread
 runs are retained, along with the newest 500 acknowledged runs per bot. Earlier runs
 created before tracking was added have no completion history. A failed admission is
