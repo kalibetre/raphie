@@ -1,6 +1,6 @@
 import type { ModelSelection } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { MessageSquareText } from "lucide-react";
+import { ArrowLeft, MessageSquareText } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
@@ -8,7 +8,6 @@ import { runUsage } from "../../domains/conversations/application/run-projection
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
 import { ConversationList } from "../../domains/conversations/presentation/sessions/conversation-list";
-import { ReplyCard } from "../../domains/conversations/presentation/sessions/reply-card";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
@@ -24,6 +23,7 @@ import {
   readLocal,
   writeLocal,
 } from "../../infrastructure/preferences/storage";
+import { Button } from "../../shared/ui/button";
 import {
   Sidebar,
   SidebarInset,
@@ -32,6 +32,8 @@ import {
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
 import { BackendIdentity } from "./backend-identity";
+import { notificationItems } from "./notification-items";
+import { Notifications, useJobNotifications } from "./notifications";
 import { PanelResizeHandle } from "./panel-resize-handle";
 import { useBotInbox } from "./use-bot-inbox";
 import { useWorkspaceLayout } from "./use-workspace-layout";
@@ -48,7 +50,7 @@ export function Workspace({
 }: {
   sessionId?: string;
   legacyConversationId?: number;
-  view?: "settings";
+  view?: "settings" | "notifications";
   section?: Section;
 }) {
   const { workspace } = useBackend();
@@ -70,6 +72,18 @@ export function Workspace({
     hasMoreSessions,
   } = useLiveState(sessionId, legacyConversationId);
   const inbox = useBotInbox(data?.conversations);
+  const notificationBots = inbox.bots.data?.items ?? [];
+  const jobNotifications = useJobNotifications(notificationBots);
+  const notifications = notificationItems(
+    notificationBots,
+    inbox.byBot,
+    inbox.unread,
+    jobNotifications.entries,
+  );
+  const notificationCount =
+    notifications.items.length +
+    jobNotifications.count -
+    jobNotifications.entries.length;
   const botProfile = inbox.bots.data?.items.find(
     (b) => b.id === workspace.botId,
   );
@@ -326,26 +340,71 @@ export function Workspace({
             </SettingsMain>
           ) : (
             <>
-              {mobile && roster}
-              <WorkspaceHeader
-                title={title}
-                breadcrumb={botProfile?.name ?? "Raphie"}
-                botId={workspace.botId}
-                description={
-                  botProfile?.description ?? "Your personal assistant"
-                }
-                onBack={view ? () => select(conversationId) : undefined}
-                onNew={!view ? () => select() : undefined}
-                unreadCount={attention}
-                onBotSettings={() => openSettings("bot")}
-                collapsed={collapsed}
-                inspector={inspector}
-                showInspector={!view}
-                onOpenNavigation={() => setSidebar(true)}
-                onToggleNavigation={toggleCollapsed}
-                onToggleInspector={() => setInspector(!inspector)}
-              />
-              {error ? (
+              {mobile && view !== "notifications" && roster}
+              {view === "notifications" ? (
+                <header className="workspace-header notifications-global-header">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Back to conversation"
+                    title="Back to conversation"
+                    onClick={() => {
+                      if (sessionId)
+                        void navigate({
+                          to: "/sessions/$sessionId",
+                          params: { sessionId },
+                          search: { bot },
+                        });
+                      else select(conversationId);
+                    }}
+                  >
+                    <ArrowLeft size={16} />
+                  </Button>
+                  <strong>Inbox</strong>
+                  <span>All bots</span>
+                </header>
+              ) : (
+                <WorkspaceHeader
+                  title={title}
+                  breadcrumb={botProfile?.name ?? "Raphie"}
+                  botId={workspace.botId}
+                  description={
+                    botProfile?.description ?? "Your personal assistant"
+                  }
+                  onBack={view ? () => select(conversationId) : undefined}
+                  onNew={!view ? () => select() : undefined}
+                  unreadCount={attention}
+                  onBotSettings={() => openSettings("bot")}
+                  notificationCount={notificationCount}
+                  onNotifications={() =>
+                    void navigate({
+                      to: sessionId ? "/sessions/$sessionId" : "/",
+                      ...(sessionId ? { params: { sessionId } } : {}),
+                      search: { bot, view: "notifications" },
+                    })
+                  }
+                  collapsed={collapsed}
+                  inspector={inspector}
+                  showInspector={!view}
+                  onOpenNavigation={() => setSidebar(true)}
+                  onToggleNavigation={toggleCollapsed}
+                  onToggleInspector={() => setInspector(!inspector)}
+                />
+              )}
+              {view === "notifications" ? (
+                <Notifications
+                  items={notifications.items}
+                  jobs={jobNotifications}
+                  count={notificationCount}
+                  onOpen={(botId, id) =>
+                    void navigate({
+                      to: "/sessions/$sessionId",
+                      params: { sessionId: id },
+                      search: { bot: botId === "default" ? undefined : botId },
+                    })
+                  }
+                />
+              ) : error ? (
                 <WorkspaceAlert
                   title="Couldn’t connect to your workspace"
                   description="Your saved sessions and drafts are still on this device. Check that the runtime is running, then try again."
@@ -370,16 +429,6 @@ export function Workspace({
                 />
               ) : (
                 <>
-                  <ReplyCard
-                    sessions={summaries.filter(
-                      (s) =>
-                        s.id !== conversationId && (unread(s) > 0 || s.waiting),
-                    )}
-                    unread={unread}
-                    onSelect={select}
-                    storageKey={`raphie:reply-card:${encodeURIComponent(workspace.url)}:${workspace.botId}`}
-                    onViewAll={() => setInspector(true)}
-                  />
                   <div className="chat-stage">
                     {nextBefore && (
                       <button

@@ -68,7 +68,8 @@ No credential or transport argument is returned through the owner API.
 ## Scheduled jobs
 
 A job sends a one-time or recurring prompt to its bot and keeps the results in one conversation.
-Choose a name, prompt, Once or Recurring, interval in whole minutes and first-run time. Times are
+Use **Create job** to choose a name, prompt, Once or Recurring, interval in whole minutes,
+and the first-run date and time in the scheduling dialog. Times are
 entered in the browser's local timezone; recurrence is a fixed elapsed interval,
 not a cron expression or a daylight-saving-aware calendar rule. The runtime must
 be running to execute a job. After downtime, overdue work runs once; it does not
@@ -82,8 +83,12 @@ Jobs wait while the bot has an active turn or pending approval. Run now rejects
 an already-busy bot. Tool actions from scheduled prompts need the same owner
 approval as interactive prompts.
 
-The last-run status reports prompt admission, not successful model completion.
-Open the conversation to inspect the answer or failure. A failed admission is
+Run history shows queued, running, completed, failed, and interrupted outcomes, with links
+to their conversations where available. It loads 20 runs at a time as you scroll;
+the latest page stays live while older pages remain loaded. Refresh returns to the latest page. Finished runs appear on the Notifications page
+until opened or dismissed; acknowledgement persists across restarts. Active and unread
+runs are retained, along with the newest 500 acknowledged runs per bot. Earlier runs
+created before tracking was added have no completion history. A failed admission is
 recorded without raw transport error details, and the next interval still runs.
 Configure the bot's model in Settings before running jobs.
 
@@ -139,7 +144,9 @@ Use `/api/mcp` and `/api/jobs` for the default bot, or
 `/api/bots/<bot-id>/mcp` and `/api/bots/<bot-id>/jobs` for another bot.
 GET returns `{ items }`; POST creates an item. POST to `/<id>` takes an `action`:
 MCP supports `enable`, `disable`, `remove`; jobs add `run`.
-Creation fields are defined in `packages/contracts/src/bots/automation.ts`.
+Run history is available at `GET /runs`, unread updates at `GET /notifications`,
+and `POST /runs/<id>/read` acknowledges an update. Both lists support a `before`
+cursor and report the total number of matching runs. Creation fields are defined in `packages/contracts/src/bots/automation.ts`.
 
 Tests cover encrypted storage, restart recovery, per-bot isolation, deferred tool
 discovery and shared job conversations. Run `bun run validate` for all checks.

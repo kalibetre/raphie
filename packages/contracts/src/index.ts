@@ -4,6 +4,7 @@ export type {
   SaveMcpConnection,
   SaveScheduledJob,
   ScheduledJob,
+  ScheduledJobRun,
 } from "./bots/automation.ts";
 
 export type {

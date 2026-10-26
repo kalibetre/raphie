@@ -10,7 +10,7 @@ export const Route = createFileRoute("/sessions/$sessionId")({
   validateSearch: (
     search: Record<string, unknown>,
   ): {
-    view?: "settings";
+    view?: "settings" | "notifications";
     section?: Section;
     bot?: string;
   } => ({
@@ -20,9 +20,11 @@ export const Route = createFileRoute("/sessions/$sessionId")({
         : undefined,
     // Diagnostics moved into Settings → Diagnostics.
     view:
-      search.view === "diagnostics" || search.view === "settings"
-        ? "settings"
-        : undefined,
+      search.view === "notifications"
+        ? "notifications"
+        : search.view === "diagnostics" || search.view === "settings"
+          ? "settings"
+          : undefined,
     section:
       search.view === "diagnostics"
         ? "telemetry"

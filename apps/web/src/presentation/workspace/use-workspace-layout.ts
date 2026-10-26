@@ -11,7 +11,7 @@ import {
 const inspectorKey = (botId: string) => `raphie:inspector-open:${botId}`;
 
 export function useWorkspaceLayout(
-  view: "settings" | undefined,
+  view: "settings" | "notifications" | undefined,
   botId: string,
 ) {
   const [inspector, setInspectorValue] = useState(

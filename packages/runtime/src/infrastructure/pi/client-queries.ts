@@ -130,6 +130,9 @@ export class PiClientQueries implements ClientQueries {
             turns
               .findLast((t) => t.status === "done" && t.answer !== null)
               ?.answer?.slice(0, 280) ?? "",
+          replyTurnId: turns.findLast(
+            (t) => t.status === "done" && t.answer !== null,
+          )?.id,
           waiting: tools.approvals.some(
             (a) =>
               a.conversationId === c.id &&
@@ -276,6 +279,12 @@ export class PiClientQueries implements ClientQueries {
                 t.answer !== null,
             )
             ?.answer?.slice(0, 280) ?? "",
+        replyTurnId: chats.turns.findLast(
+          (t) =>
+            t.conversationId === session.id &&
+            t.status === "done" &&
+            t.answer !== null,
+        )?.id,
         waiting,
       },
       turns:
