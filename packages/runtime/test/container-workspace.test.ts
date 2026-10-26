@@ -279,6 +279,70 @@ containerTest(
 );
 
 containerTest(
+  "transport loss blocks new work until failed container removal succeeds",
+  async () => {
+    await fixture(async (provider) => {
+      await shell(provider.env(), "true");
+      const run = cli.run.bind(cli);
+      const exec = cli.exec.bind(cli);
+      let transport: ReturnType<ContainerCli["exec"]> | undefined;
+      let failedContainer: string | undefined;
+      let failRemoval = true;
+      let removalAttempts = 0;
+      cli.exec = (id, source) => {
+        failedContainer ??= id;
+        transport = exec(id, source);
+        return transport;
+      };
+      cli.run = (args) => {
+        if (args[0] === "rm") {
+          removalAttempts++;
+          if (failRemoval) throw new Error("synthetic reap failure");
+        }
+        return run(args);
+      };
+      try {
+        const interrupted = await provider.execute(
+          "lost-transport",
+          "setsid sh -c 'sleep 100' </dev/null >/dev/null 2>&1 & echo ready; sleep 100",
+          { onOutput: () => transport!.kill("SIGKILL") },
+          context,
+        );
+        expect(interrupted.ok).toBe(false);
+        expect(removalAttempts).toBe(1);
+        const blocked = await provider
+          .env()
+          .writeFile("must-not-run", "wrong", context);
+        expect(blocked.ok).toBe(false);
+        expect(removalAttempts).toBe(2);
+        failRemoval = false;
+        expect(
+          (await provider.env().writeFile("recovered", "yes", context)).ok,
+        ).toBe(true);
+        expect(
+          run([
+            "ps",
+            "-aq",
+            "--no-trunc",
+            "--filter",
+            "label=raphie.workspace=fixture",
+            "--filter",
+            `id=${failedContainer}`,
+          ]),
+        ).toBe("");
+        expect(
+          getOrThrow(await provider.env().exists("must-not-run", context)),
+        ).toBe(false);
+      } finally {
+        cli.run = run;
+        cli.exec = exec;
+      }
+    });
+  },
+  30_000,
+);
+
+containerTest(
   "transient removal failures recover on retry and failed shutdown releases local resources",
   async () => {
     await fixture(async (provider, directory) => {
