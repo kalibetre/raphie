@@ -41,3 +41,14 @@ export function retainJobRuns(items: ScheduledJobRun[]) {
     return true;
   });
 }
+
+/** Retire only a run that has not been admitted to a conversation. */
+export async function interruptUnadmittedJobRun(tx: Tx, runId: string) {
+  const runs = await tx.doc(JobRuns);
+  const run = runs.items.find((item) => item.id === runId);
+  if (run && !run.turnId && !isFinished(run)) {
+    run.status = "interrupted";
+    run.finishedAt = Date.now();
+  }
+  runs.items = retainJobRuns(runs.items);
+}

@@ -17,7 +17,7 @@ export function JobRunHistory({
 }) {
   const history = useJobRuns(jobId);
   const client = useQueryClient();
-  const runs = history.data?.pages.flatMap((page) => page.items) ?? [];
+  const runs = history.runs;
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } =
     history;
@@ -97,6 +97,18 @@ export function JobRunHistory({
           history.
         </p>
       ) : null}
+      {history.latestError && (
+        <p role="alert" className="automation-note">
+          Could not refresh the latest runs.{" "}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void history.refetchLatest()}
+          >
+            Retry
+          </Button>
+        </p>
+      )}
       <div className="job-history-list">
         {runs.map((run) => {
           const content = (

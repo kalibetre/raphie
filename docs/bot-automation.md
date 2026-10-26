@@ -85,8 +85,7 @@ approval as interactive prompts.
 
 Run history shows queued, running, completed, failed, and interrupted outcomes, with links
 to their conversations where available. It loads 20 runs at a time as you scroll;
-when older pages are open, history stops polling. Refresh returns to the latest page;
-reopening the page or changing the filter also resumes polling. Finished runs appear on the Notifications page
+the latest page stays live while older pages remain loaded. Refresh returns to the latest page. Finished runs appear on the Notifications page
 until opened or dismissed; acknowledgement persists across restarts. Active and unread
 runs are retained, along with the newest 500 acknowledged runs per bot. Earlier runs
 created before tracking was added have no completion history. A failed admission is

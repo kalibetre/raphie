@@ -299,3 +299,74 @@ for (const phase of ["queued", "admitted"]) {
     }
   }, 10_000);
 }
+
+for (const action of ["disable", "remove"] as const) {
+  test(`a queued run interrupted by ${action} after a crash settles once`, async () => {
+    const { spawn } = await import("node:child_process");
+    const directory = await mkdtemp(join(tmpdir(), "raphie-job-retire-"));
+    const child = spawn(
+      process.execPath,
+      [
+        new URL("./job-run-crash-worker.ts", import.meta.url).pathname,
+        directory,
+        "queued",
+      ],
+      { stdio: ["ignore", "pipe", "pipe"], env: {} },
+    );
+    let gateway: Gateway | undefined;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("Run crash fixture timed out")),
+          5000,
+        );
+        let output = "";
+        child.stdout.on("data", (chunk) => {
+          output += chunk;
+          if (output.includes("run-checkpoint-committed")) {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+        child.once("error", reject);
+        child.once("exit", () => {
+          clearTimeout(timer);
+          reject(new Error("Run crash fixture exited early"));
+        });
+      });
+      const exited = once(child, "exit");
+      child.kill("SIGKILL");
+      await exited;
+      gateway = await Gateway.open({
+        directory,
+        deferResume: true,
+        ...chatModel(),
+      });
+      const actor = gateway.actors.establish("web");
+      const jobs = BotJobs.open({
+        root: gateway.root,
+        harness: gateway.harness,
+        install: (extension) => gateway!.install(extension),
+        busy: async () => false,
+        submit: (input) => gateway!.sessions.submitScheduled(actor, input),
+      });
+      const [job] = await jobs.read();
+      await jobs.change(job.id, action);
+      await until(
+        async () => (await jobs.runs()).items[0]?.status === "interrupted",
+      );
+      expect((await gateway.chats.state()).turns).toHaveLength(0);
+      const notices = (await jobs.runs({ unread: true })).items;
+      expect(notices).toHaveLength(1);
+      expect(notices[0].status).toBe("interrupted");
+      expect(notices[0].turnId).toBeNull();
+      await jobs.acknowledge(notices[0].id);
+      expect((await jobs.runs({ unread: true })).items).toHaveLength(0);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill("SIGKILL");
+      await gateway?.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 10_000);
+}

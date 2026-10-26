@@ -18,7 +18,12 @@ import type {
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
-import { isFinished, JobRuns, retainJobRuns } from "./job-runs.ts";
+import {
+  interruptUnadmittedJobRun,
+  isFinished,
+  JobRuns,
+  retainJobRuns,
+} from "./job-runs.ts";
 
 type Submission = { eventId: string; text: string; sessionId?: string };
 
@@ -303,13 +308,16 @@ export class BotJobs {
               !job ||
               (!task.input.manual && (!job.enabled || job.taskId !== task.id))
             ) {
-              await runtime.commit(
-                () => ({
+              await runtime.commit(async (tx) => {
+                await interruptUnadmittedJobRun(
+                  tx,
+                  task.state.checkpoint.input.eventId,
+                );
+                return {
                   status: "terminal",
                   outcome: { status: "completed", result: null },
-                }),
-                ctx,
-              );
+                };
+              }, ctx);
               return;
             }
             if (await this.options.busy()) {
@@ -413,11 +421,15 @@ export class BotJobs {
             }, ctx);
           }),
       },
-      abort: (_task, runtime, ctx) =>
-        runtime.commit(
-          () => ({ status: "terminal", outcome: { status: "aborted" } }),
-          ctx,
-        ),
+      abort: (task, runtime, ctx) =>
+        runtime.commit(async (tx) => {
+          if (task.state.checkpoint.phase === "deliver")
+            await interruptUnadmittedJobRun(
+              tx,
+              task.state.checkpoint.input.eventId,
+            );
+          return { status: "terminal", outcome: { status: "aborted" } };
+        }, ctx),
     });
   }
 }
