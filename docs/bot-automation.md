@@ -68,7 +68,8 @@ No credential or transport argument is returned through the owner API.
 ## Scheduled jobs
 
 A job sends a one-time or recurring prompt to its bot and keeps the results in one conversation.
-Choose a name, prompt, Once or Recurring, interval in whole minutes and first-run time. Times are
+Use **Create job** to choose a name, prompt, Once or Recurring, interval in whole minutes,
+and the first-run date and time in the scheduling dialog. Times are
 entered in the browser's local timezone; recurrence is a fixed elapsed interval,
 not a cron expression or a daylight-saving-aware calendar rule. The runtime must
 be running to execute a job. After downtime, overdue work runs once; it does not

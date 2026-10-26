@@ -1,7 +1,8 @@
+import { ArrowUpRight, CalendarClock } from "lucide-react";
+
 import { Button } from "../../../shared/ui/button";
 import { jobRunDescription, jobRunStatus } from "../application/job-run-status";
 import { useJobRuns } from "../infrastructure/use-job-runs";
-import { Group } from "./settings-group";
 
 export function JobRunHistory({
   jobId,
@@ -15,74 +16,95 @@ export function JobRunHistory({
   const history = useJobRuns(jobId);
   const runs = history.data?.pages.flatMap((page) => page.items) ?? [];
   return (
-    <Group
-      title="Run history"
-      note="Actual reply outcomes, including runs from removed jobs. Active and unread runs remain visible; the newest 500 acknowledged runs per bot are retained."
-    >
-      <div className="automation-job" id="job-run-history">
+    <section className="settings-group job-history" id="job-run-history">
+      <div className="settings-group-heading">
+        <div>
+          <h2>Run history</h2>
+          <p>Recent results, including runs from removed jobs.</p>
+        </div>
         {jobId && (
-          <Button variant="outline" size="sm" onClick={onClear}>
+          <Button variant="ghost" size="sm" onClick={onClear}>
             Show all jobs
           </Button>
         )}
-        {history.isPending ? (
-          <p role="status">Loading run history…</p>
-        ) : history.error ? (
-          <p role="alert">
-            Could not refresh run history.{" "}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void history.refetch()}
-            >
-              Retry
-            </Button>
-          </p>
-        ) : !runs.length ? (
-          <p className="automation-note">
-            No tracked runs yet. Earlier submissions do not have completion
-            history.
-          </p>
-        ) : null}
       </div>
-      {runs.map((run) => (
-        <article className="automation-job" key={run.id}>
-          <div className="automation-job-heading">
-            <h3>{run.name}</h3>
-            <span className="session-status">{jobRunStatus[run.status]}</span>
-          </div>
-          <p className="automation-note">
-            Started {new Date(run.startedAt).toLocaleString()}
-            {run.finishedAt
-              ? ` · Finished ${new Date(run.finishedAt).toLocaleString()}`
-              : ""}
-          </p>
-          <p className="automation-note">{jobRunDescription(run)}</p>
-          {run.sessionId && (
-            <div className="automation-actions">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onOpen(run.sessionId!)}
-              >
-                Open run conversation
-              </Button>
-            </div>
-          )}
-        </article>
-      ))}
-      {history.hasNextPage && (
-        <div className="automation-job">
+      {history.isPending ? (
+        <p role="status" className="automation-note">
+          Loading run history…
+        </p>
+      ) : history.error ? (
+        <p role="alert" className="automation-note">
+          Could not refresh run history.{" "}
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            disabled={history.isFetchingNextPage}
-            onClick={() => void history.fetchNextPage()}
+            onClick={() => void history.refetch()}
           >
-            {history.isFetchingNextPage ? "Loading…" : "Load older runs"}
+            Retry
           </Button>
-        </div>
+        </p>
+      ) : !runs.length ? (
+        <p className="automation-note">
+          No tracked runs yet. Earlier submissions do not have completion
+          history.
+        </p>
+      ) : null}
+      <div className="job-history-list">
+        {runs.map((run) => {
+          const content = (
+            <>
+              <span className="job-history-icon">
+                <CalendarClock size={16} />
+              </span>
+              <span className="job-history-copy">
+                <span className="job-history-meta">
+                  <strong>{run.name}</strong>
+                  <time dateTime={new Date(run.startedAt).toISOString()}>
+                    {new Date(run.startedAt).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </time>
+                </span>
+                <span className="job-history-status">
+                  {jobRunStatus[run.status]}
+                </span>
+                <span className="job-history-description">
+                  {jobRunDescription(run)}
+                </span>
+              </span>
+              {run.sessionId && (
+                <ArrowUpRight size={15} className="job-history-arrow" />
+              )}
+            </>
+          );
+          return (
+            <article key={run.id} className="job-history-row">
+              {run.sessionId ? (
+                <button
+                  className="job-history-target"
+                  onClick={() => onOpen(run.sessionId!)}
+                  aria-label={`${run.name}, ${jobRunStatus[run.status]}, open run conversation`}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div className="job-history-target">{content}</div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+      {history.hasNextPage && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={history.isFetchingNextPage}
+          onClick={() => void history.fetchNextPage()}
+        >
+          {history.isFetchingNextPage ? "Loading…" : "Load older runs"}
+        </Button>
       )}
-    </Group>
+    </section>
   );
 }
