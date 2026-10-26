@@ -1,4 +1,5 @@
-import { ArrowUpRight, CalendarClock } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowUpRight, CalendarClock, RefreshCw } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { Button } from "../../../shared/ui/button";
@@ -15,6 +16,7 @@ export function JobRunHistory({
   onOpen: (sessionId: string) => void;
 }) {
   const history = useJobRuns(jobId);
+  const client = useQueryClient();
   const runs = history.data?.pages.flatMap((page) => page.items) ?? [];
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } =
@@ -48,11 +50,31 @@ export function JobRunHistory({
           <h2>Run history</h2>
           <p>Recent results, including runs from removed jobs.</p>
         </div>
-        {jobId && (
-          <Button variant="ghost" size="sm" onClick={onClear}>
-            Show all jobs
+        <div className="automation-actions">
+          {jobId && (
+            <Button variant="ghost" size="sm" onClick={onClear}>
+              Show all jobs
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Refresh run history"
+            title="Refresh run history"
+            disabled={history.isFetching}
+            onClick={() => {
+              document
+                .getElementById("job-run-history")
+                ?.scrollIntoView({ block: "start" });
+              void client.resetQueries({
+                queryKey: ["job-runs", jobId ?? "all"],
+                exact: true,
+              });
+            }}
+          >
+            <RefreshCw size={15} />
           </Button>
-        )}
+        </div>
       </div>
       {history.isPending ? (
         <p role="status" className="automation-note">
