@@ -1,6 +1,6 @@
 import type { ModelSelection } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { MessageSquareText } from "lucide-react";
+import { ArrowLeft, MessageSquareText } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
@@ -23,6 +23,7 @@ import {
   readLocal,
   writeLocal,
 } from "../../infrastructure/preferences/storage";
+import { Button } from "../../shared/ui/button";
 import {
   Sidebar,
   SidebarInset,
@@ -339,33 +340,57 @@ export function Workspace({
             </SettingsMain>
           ) : (
             <>
-              {mobile && roster}
-              <WorkspaceHeader
-                title={view === "notifications" ? "Notifications" : title}
-                breadcrumb={botProfile?.name ?? "Raphie"}
-                botId={workspace.botId}
-                description={
-                  botProfile?.description ?? "Your personal assistant"
-                }
-                onBack={view ? () => select(conversationId) : undefined}
-                onNew={!view ? () => select() : undefined}
-                unreadCount={attention}
-                onBotSettings={() => openSettings("bot")}
-                notificationCount={notificationCount}
-                onNotifications={() =>
-                  void navigate({
-                    to: sessionId ? "/sessions/$sessionId" : "/",
-                    ...(sessionId ? { params: { sessionId } } : {}),
-                    search: { bot, view: "notifications" },
-                  })
-                }
-                collapsed={collapsed}
-                inspector={inspector}
-                showInspector={!view}
-                onOpenNavigation={() => setSidebar(true)}
-                onToggleNavigation={toggleCollapsed}
-                onToggleInspector={() => setInspector(!inspector)}
-              />
+              {mobile && view !== "notifications" && roster}
+              {view === "notifications" ? (
+                <header className="workspace-header notifications-global-header">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Back to conversation"
+                    title="Back to conversation"
+                    onClick={() => {
+                      if (sessionId)
+                        void navigate({
+                          to: "/sessions/$sessionId",
+                          params: { sessionId },
+                          search: { bot },
+                        });
+                      else select(conversationId);
+                    }}
+                  >
+                    <ArrowLeft size={16} />
+                  </Button>
+                  <strong>Inbox</strong>
+                  <span>All bots</span>
+                </header>
+              ) : (
+                <WorkspaceHeader
+                  title={title}
+                  breadcrumb={botProfile?.name ?? "Raphie"}
+                  botId={workspace.botId}
+                  description={
+                    botProfile?.description ?? "Your personal assistant"
+                  }
+                  onBack={view ? () => select(conversationId) : undefined}
+                  onNew={!view ? () => select() : undefined}
+                  unreadCount={attention}
+                  onBotSettings={() => openSettings("bot")}
+                  notificationCount={notificationCount}
+                  onNotifications={() =>
+                    void navigate({
+                      to: sessionId ? "/sessions/$sessionId" : "/",
+                      ...(sessionId ? { params: { sessionId } } : {}),
+                      search: { bot, view: "notifications" },
+                    })
+                  }
+                  collapsed={collapsed}
+                  inspector={inspector}
+                  showInspector={!view}
+                  onOpenNavigation={() => setSidebar(true)}
+                  onToggleNavigation={toggleCollapsed}
+                  onToggleInspector={() => setInspector(!inspector)}
+                />
+              )}
               {view === "notifications" ? (
                 <Notifications
                   items={notifications.items}

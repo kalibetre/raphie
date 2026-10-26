@@ -294,6 +294,20 @@
   .header-actions button:has(.notification-badge) {
     position: relative;
   }
+  .notifications-global-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+  .notifications-global-header strong {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .notifications-global-header > span {
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
   .notifications-page {
     flex: 1;
     overflow-y: auto;
