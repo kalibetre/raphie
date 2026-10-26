@@ -1,12 +1,14 @@
 import type { ScheduledJob } from "@raphie/contracts";
 
 import { Button } from "../../../shared/ui/button";
+import { jobRunStatus } from "../application/job-run-status";
 
 export function ScheduledJobCard({
   job,
   pending,
   onChange,
   onOpen,
+  onHistory,
 }: {
   job: ScheduledJob;
   pending: boolean;
@@ -15,6 +17,7 @@ export function ScheduledJobCard({
     action: "enable" | "disable" | "remove" | "run",
   ) => void;
   onOpen: (sessionId: string) => void;
+  onHistory: () => void;
 }) {
   const once = job.everyMinutes === null;
   const finished = once && !job.enabled && !!job.lastRunAt;
@@ -26,9 +29,11 @@ export function ScheduledJobCard({
           {job.enabled
             ? "Active"
             : finished
-              ? job.lastStatus === "submitted"
-                ? "Sent"
-                : "Failed"
+              ? job.lastRun
+                ? jobRunStatus[job.lastRun.status]
+                : job.lastStatus === "submitted"
+                  ? "Sent"
+                  : "Failed"
               : "Paused"}
         </span>
       </div>
@@ -42,11 +47,16 @@ export function ScheduledJobCard({
           : ""}
       </p>
       <p className="automation-note">
-        {job.lastRunAt
-          ? `${job.lastStatus === "submitted" ? "Last prompt submitted" : "Last submission failed · check the bot's model connection"}: ${new Date(job.lastRunAt).toLocaleString()}`
-          : "No runs yet"}
+        {job.lastRun
+          ? `Last run: ${jobRunStatus[job.lastRun.status]} · ${new Date(job.lastRun.startedAt).toLocaleString()}`
+          : job.lastRunAt
+            ? `${job.lastStatus === "submitted" ? "Earlier prompt submitted · completion not tracked" : "Last submission failed · check the bot's model connection"}: ${new Date(job.lastRunAt).toLocaleString()}`
+            : "No runs yet"}
       </p>
       <div className="automation-actions">
+        <Button variant="ghost" size="sm" onClick={onHistory}>
+          Run history
+        </Button>
         <Button
           variant="outline"
           size="sm"

@@ -14,6 +14,7 @@ import {
 } from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
 import { useBotAutomation } from "../infrastructure/use-bot-automation";
+import { JobRunHistory } from "./job-run-history";
 import { ScheduledJobCard } from "./scheduled-job-card";
 import { Group } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
@@ -30,6 +31,15 @@ export function JobSettings() {
   const { workspace } = useBackend();
   const navigate = useNavigate();
   const data = useBotAutomation<ScheduledJob>("jobs");
+  const [historyJobId, setHistoryJobId] = useState<string>();
+  const openRun = (sessionId: string) =>
+    void navigate({
+      to: "/sessions/$sessionId",
+      params: { sessionId },
+      search: {
+        bot: workspace.botId === "default" ? undefined : workspace.botId,
+      },
+    });
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
   const [minutes, setMinutes] = useState(60);
@@ -117,6 +127,12 @@ export function JobSettings() {
               key={job.id}
               job={job}
               pending={pending}
+              onHistory={() => {
+                setHistoryJobId(job.id);
+                document
+                  .getElementById("job-run-history")
+                  ?.scrollIntoView({ block: "center" });
+              }}
               onChange={(id, action) => void change(id, action)}
               onOpen={(sessionId) =>
                 void navigate({
@@ -138,6 +154,11 @@ export function JobSettings() {
           </p>
         )}
       </Group>
+      <JobRunHistory
+        jobId={historyJobId}
+        onClear={() => setHistoryJobId(undefined)}
+        onOpen={openRun}
+      />
       <Group
         title="Create a job"
         note="Times use your browser's local timezone. Recurrence is a fixed interval, so a 1,440-minute job repeats every 24 hours."

@@ -38,4 +38,18 @@ export type ScheduledJob = SaveScheduledJob & {
   sessionId: string | null;
   lastRunAt: number | null;
   lastStatus: "submitted" | "failed" | null;
+  lastRun?: ScheduledJobRun;
+};
+
+export type ScheduledJobRun = {
+  id: string;
+  jobId: string;
+  name: string;
+  scheduledFor: number;
+  startedAt: number;
+  finishedAt: number | null;
+  status: "queued" | "running" | "completed" | "failed" | "interrupted";
+  sessionId: string | null;
+  turnId: string | null;
+  acknowledgedAt: number | null;
 };

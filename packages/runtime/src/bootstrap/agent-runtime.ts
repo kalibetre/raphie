@@ -42,6 +42,7 @@ import {
   Chats,
   ChatService,
   chatWorkflow,
+  watchJobRun,
 } from "../domains/conversations/infrastructure/pi-conversation-service.ts";
 import { Observations } from "../domains/conversations/infrastructure/pi-observations.ts";
 import { newSessionId } from "../domains/conversations/infrastructure/session-id.ts";
@@ -180,7 +181,7 @@ export class Gateway {
     registry.install(
       defineExtension({
         name: "raphie.gateway",
-        tasks: [app.workflow, chatWorkflow],
+        tasks: [app.workflow, chatWorkflow, watchJobRun],
       }),
     );
     if (options.memory)

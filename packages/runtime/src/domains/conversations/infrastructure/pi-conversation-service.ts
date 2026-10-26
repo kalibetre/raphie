@@ -1,6 +1,10 @@
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai/models";
-import type { ConversationId, ModelRef } from "@earendil-works/pi-durable";
+import type {
+  ConversationId,
+  ModelRef,
+  TaskId,
+} from "@earendil-works/pi-durable";
 import { configure, defineDoc, defineTask } from "@earendil-works/pi-durable";
 import type {
   BotProfile,
@@ -19,6 +23,10 @@ import { sameDestination } from "../../channels/domain/binding.ts";
 import { ChannelBindings } from "../../channels/infrastructure/pi-bindings.ts";
 import type { MemoryService } from "../../memory/application/ports.ts";
 import { memoryInstructions } from "../../memory/infrastructure/memory-instructions.ts";
+import {
+  finishJobRun,
+  JobRuns,
+} from "../../schedules/infrastructure/job-runs.ts";
 import type { ConversationCommands } from "../application/ports.ts";
 import { messageViolation } from "../domain/admission.ts";
 import type {
@@ -87,6 +95,16 @@ export const chatWorkflow = defineTask<
         const turn = state.turns.find((t) => t.id === task.input.turnId)!;
         turn.status = answer ? "done" : "error";
         turn.answer = answer;
+        if (turn.scheduled)
+          await finishJobRun(
+            tx,
+            turn.id,
+            settled.status === "unanswered" && settled.reason === "aborted"
+              ? "interrupted"
+              : answer
+                ? "completed"
+                : "failed",
+          );
         record(
           await tx.doc(Activity),
           answer ? "run.completed" : "run.failed",
@@ -114,12 +132,56 @@ export const chatWorkflow = defineTask<
       }, ctx);
     },
   },
-  abort: async (_task, runtime, ctx) => {
-    await runtime.commit(
-      () => ({ status: "terminal", outcome: { status: "aborted" } }),
-      ctx,
-    );
+  abort: async (task, runtime, ctx) => {
+    await runtime.commit(async (tx) => {
+      const turn = (await tx.doc(Chats)).turns.find(
+        (item) => item.id === task.input.turnId,
+      );
+      if (turn?.status === "pending") turn.status = "error";
+      if (turn?.scheduled)
+        await finishJobRun(tx, task.input.turnId, "interrupted");
+      return { status: "terminal", outcome: { status: "aborted" } };
+    }, ctx);
   },
+});
+
+/** Covers aborted/faulted reply workflows as well as normal turn settlement. */
+export const watchJobRun = defineTask<
+  { turnId: string; taskId: TaskId },
+  { phase: "wait" },
+  null
+>({
+  name: "raphie.job-run-outcome",
+  version: 1,
+  initial: () => ({ phase: "wait" }),
+  phases: {
+    wait: async (task, runtime, ctx) => {
+      const reply = await runtime.waitForTask(task.input.taskId, ctx);
+      await runtime.commit(async (tx) => {
+        const status = reply.state.outcome.status;
+        const turn = (await tx.doc(Chats)).turns.find(
+          (item) => item.id === task.input.turnId,
+        );
+        if (turn?.status === "pending") turn.status = "error";
+        await finishJobRun(
+          tx,
+          task.input.turnId,
+          status === "aborted" || status === "orphaned"
+            ? "interrupted"
+            : "failed",
+        );
+        return {
+          status: "terminal",
+          outcome: { status: "completed", result: null },
+        };
+      }, ctx);
+    },
+  },
+  abort: (task, runtime, ctx) =>
+    runtime.commit(async (tx) => {
+      await finishJobRun(tx, task.input.turnId, "interrupted");
+      return { status: "terminal", outcome: { status: "aborted" } };
+    }, ctx),
 });
 
 export class ChatService implements ConversationCommands {
@@ -305,12 +367,22 @@ export class ChatService implements ConversationCommands {
           ...(input.scheduled ? { scheduled: input.scheduled } : {}),
         };
         state.turns.push(turn);
+        if (input.scheduled) {
+          const run = (await tx.doc(JobRuns)).items.find(
+            (item) => item.id === input.eventId,
+          );
+          if (run && !run.turnId) {
+            run.turnId = turn.id;
+            run.sessionId = conversation.sessionId;
+            run.status = "running";
+          }
+        }
         record(await tx.doc(Activity), "run.accepted", "Message accepted", {
           conversationId: conversation.id,
           runId: turn.id,
           details: { source: input.source, text: turn.text, model },
         });
-        await tx.createTask(
+        const replyTaskId = await tx.createTask(
           chatWorkflow,
           {
             turnId: turn.id,
@@ -321,6 +393,15 @@ export class ChatService implements ConversationCommands {
           },
           { ownership: { kind: "conversation" } },
         );
+        if (
+          input.scheduled &&
+          (await tx.doc(JobRuns)).items.some((run) => run.turnId === turn.id)
+        )
+          await tx.createTask(
+            watchJobRun,
+            { turnId: turn.id, taskId: replyTaskId },
+            { ownership: { kind: "conversation" }, background: true },
+          );
         return {
           id: turn.id,
           conversationId: conversation.id,

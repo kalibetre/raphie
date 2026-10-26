@@ -15,6 +15,7 @@ import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
 import { BotTonesProvider } from "../../domains/settings/presentation/bot-tones";
+import { JobNotifications } from "../../domains/settings/presentation/job-notifications";
 import type { Section } from "../../domains/settings/presentation/settings";
 import { Settings } from "../../domains/settings/presentation/settings";
 import { SettingsMain } from "../../domains/settings/presentation/settings-main";
@@ -370,6 +371,15 @@ export function Workspace({
                 />
               ) : (
                 <>
+                  <JobNotifications
+                    onOpen={(id) =>
+                      void navigate({
+                        to: "/sessions/$sessionId",
+                        params: { sessionId: id },
+                        search: { bot },
+                      })
+                    }
+                  />
                   <ReplyCard
                     sessions={summaries.filter(
                       (s) =>

@@ -10,6 +10,22 @@ import type { BotJobs } from "../../infrastructure/bot-jobs.ts";
 export function jobRoutes(jobs: BotJobs) {
   return new Hono()
     .get("/", async (c) => c.json({ items: await jobs.read() }))
+    .get("/runs", async (c) =>
+      c.json(
+        await jobs.runs({
+          jobId: c.req.query("jobId"),
+          before: c.req.query("before"),
+          limit: 20,
+        }),
+      ),
+    )
+    .get("/notifications", async (c) =>
+      c.json(await jobs.runs({ unread: true, before: c.req.query("before") })),
+    )
+    .post("/runs/:id/read", async (c) => {
+      await jobs.acknowledge(c.req.param("id"));
+      return c.json({ ok: true });
+    })
     .post(
       "/",
       limitBody(20_000),

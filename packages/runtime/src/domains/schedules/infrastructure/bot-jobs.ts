@@ -9,10 +9,16 @@ import {
   type TaskId,
   type Tx,
 } from "@earendil-works/pi-durable";
-import type { SaveScheduledJob, ScheduledJob } from "@raphie/contracts";
+import type {
+  Page,
+  SaveScheduledJob,
+  ScheduledJob,
+  ScheduledJobRun,
+} from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
+import { isFinished, JobRuns, retainJobRuns } from "./job-runs.ts";
 
 type Submission = { eventId: string; text: string; sessionId?: string };
 
@@ -61,9 +67,52 @@ export class BotJobs {
   }
 
   async read(): Promise<ScheduledJob[]> {
+    const runs =
+      (await this.options.harness.snapshot(JobRuns, context))?.items ?? [];
     return (
       (await this.options.harness.snapshot(Jobs, context))?.items ?? []
-    ).map(({ taskId: _, ...job }) => job);
+    ).map(({ taskId: _, ...job }) => ({
+      ...job,
+      lastRun: runs.findLast((run) => run.jobId === job.id),
+    }));
+  }
+
+  async runs(
+    options: {
+      jobId?: string;
+      before?: string;
+      limit?: number;
+      unread?: boolean;
+    } = {},
+  ): Promise<Page<ScheduledJobRun>> {
+    const runs =
+      (await this.options.harness.snapshot(JobRuns, context))?.items ?? [];
+    const items = runs
+      .filter(
+        (run) =>
+          (!options.jobId || run.jobId === options.jobId) &&
+          (!options.unread || (isFinished(run) && run.acknowledgedAt === null)),
+      )
+      .reverse();
+    const start = options.before
+      ? items.findIndex((run) => run.id === options.before) + 1
+      : 0;
+    if (options.before && start === 0)
+      throw new InputError("Run history cursor expired. Reload the history.");
+    const limit = Math.max(1, Math.min(100, options.limit ?? 20));
+    const page = items.slice(start, start + limit);
+    return {
+      items: page,
+      next: start + limit < items.length ? page.at(-1)!.id : null,
+    };
+  }
+
+  async acknowledge(id: string) {
+    await this.options.root.commit(async (tx) => {
+      const run = (await tx.doc(JobRuns)).items.find((item) => item.id === id);
+      if (!run) throw new InputError("Job run not found.", 404);
+      if (isFinished(run)) run.acknowledgedAt ??= Date.now();
+    }, context);
   }
 
   async add(input: SaveScheduledJob) {
@@ -292,6 +341,24 @@ export class BotJobs {
               return;
             }
             let status: "submitted" | "failed" = "failed";
+            const runId = task.state.checkpoint.input.eventId;
+            await runtime.commit(async (tx) => {
+              const runs = await tx.doc(JobRuns);
+              if (!runs.items.some((run) => run.id === runId))
+                runs.items.push({
+                  id: runId,
+                  jobId: job.id,
+                  name: job.name,
+                  scheduledFor: task.state.checkpoint.at,
+                  startedAt: Date.now(),
+                  finishedAt: null,
+                  status: "queued",
+                  sessionId: sessionId ?? null,
+                  turnId: null,
+                  acknowledgedAt: null,
+                });
+              return { status: "running", checkpoint: task.state.checkpoint };
+            }, ctx);
             try {
               sessionId = (
                 await this.options.submit({
@@ -306,6 +373,20 @@ export class BotJobs {
             const once = job.everyMinutes === null;
             const next = runtime.now() + (job.everyMinutes ?? 0) * 60_000;
             await runtime.commit(async (tx) => {
+              const run = (await tx.doc(JobRuns)).items.find(
+                (item) => item.id === runId,
+              );
+              if (
+                run &&
+                !run.turnId &&
+                status === "failed" &&
+                !isFinished(run)
+              ) {
+                run.status = "failed";
+                run.finishedAt = Date.now();
+              }
+              const runHistory = await tx.doc(JobRuns);
+              runHistory.items = retainJobRuns(runHistory.items);
               const current = (await tx.doc(Jobs)).items.find(
                 (j) => j.id === job.id,
               );
