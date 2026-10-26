@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
     search: Record<string, unknown>,
   ): {
     conversation?: number;
-    view?: "settings";
+    view?: "settings" | "notifications";
     section?: Section;
     bot?: string;
   } => ({
@@ -26,9 +26,12 @@ export const Route = createFileRoute("/")({
         : undefined,
     // Older links used view=plugins and view=diagnostics before both moved
     // into Settings.
-    view: ["diagnostics", "plugins", "settings"].includes(search.view as string)
-      ? "settings"
-      : undefined,
+    view:
+      search.view === "notifications"
+        ? "notifications"
+        : ["diagnostics", "plugins", "settings"].includes(search.view as string)
+          ? "settings"
+          : undefined,
     section:
       search.view === "diagnostics"
         ? "telemetry"

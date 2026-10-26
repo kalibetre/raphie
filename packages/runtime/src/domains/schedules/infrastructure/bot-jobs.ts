@@ -84,7 +84,7 @@ export class BotJobs {
       limit?: number;
       unread?: boolean;
     } = {},
-  ): Promise<Page<ScheduledJobRun>> {
+  ): Promise<Page<ScheduledJobRun> & { total: number }> {
     const runs =
       (await this.options.harness.snapshot(JobRuns, context))?.items ?? [];
     const items = runs
@@ -103,6 +103,7 @@ export class BotJobs {
     const page = items.slice(start, start + limit);
     return {
       items: page,
+      total: items.length,
       next: start + limit < items.length ? page.at(-1)!.id : null,
     };
   }

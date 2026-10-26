@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Bell,
   ChevronsLeft,
   ChevronsRight,
   PanelRight,
@@ -23,6 +24,8 @@ export function WorkspaceHeader({
   onNew,
   unreadCount,
   onBotSettings,
+  onNotifications,
+  notificationCount,
 }: {
   title: string | undefined;
   breadcrumb: string;
@@ -38,6 +41,8 @@ export function WorkspaceHeader({
   onNew?: () => void;
   unreadCount: number;
   onBotSettings: () => void;
+  onNotifications: () => void;
+  notificationCount: number;
 }) {
   return (
     <header className="workspace-header bot-workspace-header">
@@ -86,6 +91,20 @@ export function WorkspaceHeader({
             <SquarePen size={17} />
           </Button>
         )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Notifications${notificationCount ? `, ${notificationCount} updates` : ""}`}
+          title="Notifications"
+          onClick={onNotifications}
+        >
+          <Bell size={17} />
+          {notificationCount > 0 && (
+            <span className="notification-badge">
+              {notificationCount > 99 ? "99+" : notificationCount}
+            </span>
+          )}
+        </Button>
         {showInspector && (
           <Button
             className="panel-toggle"

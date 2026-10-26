@@ -83,7 +83,7 @@ an already-busy bot. Tool actions from scheduled prompts need the same owner
 approval as interactive prompts.
 
 Run history shows queued, running, completed, failed, and interrupted outcomes, with links
-to their conversations where available. Finished runs appear in Job updates in chat
+to their conversations where available. Finished runs appear on the Notifications page
 until opened or dismissed; acknowledgement persists across restarts. Active and unread
 runs are retained, along with the newest 500 acknowledged runs per bot. Earlier runs
 created before tracking was added have no completion history. A failed admission is
@@ -144,7 +144,7 @@ GET returns `{ items }`; POST creates an item. POST to `/<id>` takes an `action`
 MCP supports `enable`, `disable`, `remove`; jobs add `run`.
 Run history is available at `GET /runs`, unread updates at `GET /notifications`,
 and `POST /runs/<id>/read` acknowledges an update. Both lists support a `before`
-cursor. Creation fields are defined in `packages/contracts/src/bots/automation.ts`.
+cursor and report the total number of matching runs. Creation fields are defined in `packages/contracts/src/bots/automation.ts`.
 
 Tests cover encrypted storage, restart recovery, per-bot isolation, deferred tool
 discovery and shared job conversations. Run `bun run validate` for all checks.

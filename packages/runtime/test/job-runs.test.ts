@@ -61,6 +61,7 @@ for (const fail of [false, true]) {
       expect(running.sessionId).toBeTruthy();
       expect(running.finishedAt).toBeNull();
       expect((await jobs.runs({ unread: true })).items).toEqual([]);
+      expect((await jobs.runs({ unread: true })).total).toBe(0);
       release.resolve();
       await until(
         async () => (await jobs.runs()).items[0]?.finishedAt !== null,
@@ -73,6 +74,7 @@ for (const fail of [false, true]) {
       ).toEqual([running.id]);
       await jobs.change(job.id, "remove");
       expect((await jobs.runs()).items).toHaveLength(1);
+      expect((await jobs.runs({ unread: true })).total).toBe(1);
       await gateway.close();
       gateway = await Gateway.open({
         directory,

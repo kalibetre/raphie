@@ -31,12 +31,9 @@ list with filters for new replies and approval requests. On mobile it opens as a
 sheet and closes when you select a conversation. Switching assistants
 resumes their last opened conversation in this browser when available.
 
-A grouped card below the title bar surfaces unread replies and approval requests
-in other conversations. It shows three rows with a link to open the Conversations
-panel for more.
-Collapse it to focus; mobile starts collapsed unless a preference was saved.
-Incoming replies update the count without expanding it. Dismissing a row only
-hides the notice until a newer reply or approval state; it does not mark it read.
+The bell beside New conversation opens Notifications, bringing replies, approval requests
+and finished jobs from all bots together. Its badge counts conversation items and unread
+job runs. Approvals remain until decided; opening a job update acknowledges it.
 Read cursors are browser-local, scoped by backend, bot and session. A completed
 reply is marked read when its conversation is visible and scrolled to the bottom.
 Historical replies with no saved cursor count as unread in this browser.
