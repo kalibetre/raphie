@@ -7,6 +7,7 @@ import { AppearanceSettings } from "./appearance-settings";
 import { BotSettings } from "./bot-settings";
 import { ChannelSettings } from "./channel-settings";
 import { ConnectionSettings } from "./connection-settings";
+import { DeviceSettings } from "./device-settings";
 import { JobSettings } from "./job-settings";
 import { McpSettings } from "./mcp-settings";
 import { MemoryBrowse } from "./memory-browse";
@@ -103,6 +104,8 @@ export function Settings({
           activity
         ) : section === "connection" ? (
           <ConnectionSettings />
+        ) : section === "devices" ? (
+          <DeviceSettings />
         ) : section === "general" ? (
           <AppearanceSettings />
         ) : (

@@ -42,6 +42,14 @@ const server = startWebServer({
           origin: process.env.RAPHIE_WEB_ORIGIN,
           hostname: process.env.RAPHIE_WEB_BIND ?? "127.0.0.1",
           authDatabase: resolve(process.env.DATA_DIRECTORY, "auth.sqlite"),
+          ...(process.env.RAPHIE_EXPERIMENTAL_PAIRING === "1"
+            ? {
+                experimentalPairingDatabase: resolve(
+                  process.env.DATA_DIRECTORY,
+                  "pairing.sqlite",
+                ),
+              }
+            : {}),
         },
       }
     : {}),

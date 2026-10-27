@@ -25,12 +25,8 @@ export function startWebServer(options: {
   };
 }) {
   if (options.remote?.experimentalPairingDatabase) {
-    const address = new URL(options.remote.origin);
-    if (
-      address.protocol === "http:" &&
-      !["127.0.0.1", "::1"].includes(options.remote.hostname)
-    )
-      throw new Error("Loopback HTTP pairing must bind to a loopback address.");
+    if (!["127.0.0.1", "::1"].includes(options.remote.hostname))
+      throw new Error("Experimental pairing must bind to a loopback address.");
   }
   const app = new Hono();
   const owner = options.remote

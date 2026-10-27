@@ -151,7 +151,7 @@ export function serverAuth(
       authenticated
     )
       return Response.json(
-        { enabled: true },
+        { enabled: true, pairingEnabled: !!devices },
         { headers: { "cache-control": "no-store" } },
       );
     if (incoming.pathname === "/auth/login" && request.method === "GET")

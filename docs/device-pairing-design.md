@@ -1,8 +1,9 @@
 # Device pairing: design under consideration
 
-This document describes a proposed design, not an implemented feature. The
-existing owner-password authentication remains in effect. Do not expose an
-installation publicly on the strength of this proposal alone.
+This document describes an experimental implementation and its remaining
+design work. Pairing is disabled by default behind `RAPHIE_EXPERIMENTAL_PAIRING=1`.
+The existing owner-password authentication remains in effect. Do not expose an
+installation publicly on the strength of this experiment alone.
 
 ## Goals and trust boundary
 
@@ -76,3 +77,12 @@ device removal, idle and active event-stream revocation, app reconnection,
 HTTPS proxy behavior, password-to-pairing migration and lost-device recovery.
 Use a synthetic native-client harness before a mobile app exists. Review the
 protocol and public ingress independently before enabling it for deployment.
+
+The gated prototype includes one-time browser and native enrollment,
+device-specific revocation, a browser confirmation page, a QR/link in the
+terminal and Devices settings, and a host-side list/revoke command. Automated
+checks cover replay, concurrent redemption, origin and size checks, rate
+limits, revocation of an idle stream, and synthetic browser pairing. It does
+not yet provide an independent device-approval step, durable mobile client,
+HTTPS proxy deployment, a passwordless migration, portable recovery, or the
+required public-ingress security review.
