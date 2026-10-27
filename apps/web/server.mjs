@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,10 +15,24 @@ if (
     "Server mode requires an absolute DATA_DIRECTORY and RAPHIE_WEB_ORIGIN.",
   );
 
+let build = { id: "development", version: "development" };
+try {
+  const [id, version] = readFileSync(
+    new URL("../../.raphie-build", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n");
+  if (id && version) build = { id, version };
+} catch {
+  // Local development has no release metadata.
+}
+
 const server = startWebServer({
   fetch: (request) => start.fetch(request),
   clientDirectory: fileURLToPath(new URL("./dist/client", import.meta.url)),
   port: Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+  build,
   ...(process.env.RAPHIE_SERVER_MODE === "1"
     ? {
         remote: {

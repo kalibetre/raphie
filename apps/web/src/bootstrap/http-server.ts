@@ -13,6 +13,7 @@ export function startWebServer(options: {
   fetch: (request: Request) => Response | Promise<Response>;
   clientDirectory: string;
   port?: number;
+  build?: { id: string; version: string };
   remote?: { origin: string; hostname: string; authDatabase: string };
 }) {
   const app = new Hono();
@@ -50,6 +51,12 @@ export function startWebServer(options: {
       return c.notFound();
     await next();
     if (owner) c.res = guardEventStream(c.res, owner, sessionToken(c.req.raw));
+  });
+  app.get("/_raphie/version", (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(
+      options.build ?? { id: "development", version: "development" },
+    );
   });
   app.on(["GET", "HEAD"], "*", serveStatic({ root: options.clientDirectory }));
   app.all("*", (c) => options.fetch(c.req.raw));

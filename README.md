@@ -4,6 +4,10 @@ A personal assistant with durable conversations, explicit tool approvals, and an
 
 Browse the [documentation](docs/README.md) for feature guides, operations and architecture.
 
+For the experimental Linux server installer and update process, see
+[Linux server installation](docs/linux-installation.md). The public installer
+requires a published GitHub release; none has been published yet.
+
 ## Run locally
 
 Requires Bun 1.4.4 (pinned in `.bun-version` and `packageManager`).

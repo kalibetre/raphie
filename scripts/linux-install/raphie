@@ -5,6 +5,14 @@ export DATA_DIRECTORY=/var/lib/raphie/data
 case "${1:-}" in
   update)
     shift
+    if [ "$#" -eq 0 ]; then
+      test "$(id -u)" -eq 0 || { echo 'Run update as root.' >&2; exit 1; }
+      tmp=$(mktemp -d)
+      trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+      sh "$root/scripts/linux-install/release-checkout.sh" "$tmp/source"
+      sh "$root/scripts/linux-install/update.sh" "$tmp/source"
+      exit
+    fi
     exec /bin/sh "$root/scripts/linux-install/update.sh" "$@"
     ;;
   restore)

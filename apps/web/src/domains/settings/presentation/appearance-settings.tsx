@@ -21,34 +21,39 @@ export function AppearanceSettings() {
     [],
   );
   return (
-    <Group title="Theme" note="Saved in this browser.">
-      <div className="theme-choices" role="radiogroup" aria-label="Theme">
-        {themes.map(([value, label, hint]) => (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={theme === value}
-            className="theme-choice"
-            onClick={() => {
-              setTheme(value);
-              writeLocal("raphie:theme", value);
-              applyTheme(value);
-            }}
-          >
-            <span
-              className={`theme-preview theme-preview-${value}`}
-              aria-hidden="true"
+    <>
+      <Group title="Theme" note="Saved in this browser.">
+        <div className="theme-choices" role="radiogroup" aria-label="Theme">
+          {themes.map(([value, label, hint]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={theme === value}
+              className="theme-choice"
+              onClick={() => {
+                setTheme(value);
+                writeLocal("raphie:theme", value);
+                applyTheme(value);
+              }}
             >
-              <i />
-              <b />
-              <b />
-            </span>
-            <strong>{label}</strong>
-            <small>{hint}</small>
-          </button>
-        ))}
-      </div>
-    </Group>
+              <span
+                className={`theme-preview theme-preview-${value}`}
+                aria-hidden="true"
+              >
+                <i />
+                <b />
+                <b />
+              </span>
+              <strong>{label}</strong>
+              <small>{hint}</small>
+            </button>
+          ))}
+        </div>
+      </Group>
+      <Group title="About" note="The version of this web app.">
+        <p>Raphie {__RAPHIE_VERSION__}</p>
+      </Group>
+    </>
   );
 }

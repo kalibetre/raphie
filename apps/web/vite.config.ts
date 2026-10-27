@@ -6,6 +6,14 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  define: {
+    __RAPHIE_BUILD_ID__: JSON.stringify(
+      process.env.RAPHIE_BUILD_ID ?? "development",
+    ),
+    __RAPHIE_VERSION__: JSON.stringify(
+      process.env.RAPHIE_VERSION ?? "development",
+    ),
+  },
   plugins: [
     tailwindcss(),
     tanstackStart({

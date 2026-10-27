@@ -11,14 +11,16 @@ source_dir=${1:?Usage: update.sh /path/to/clean/checkout}
 test -L /opt/raphie/current && test -f /etc/systemd/system/raphie.service || { echo 'Raphie is not installed.' >&2; exit 1; }
 test -z "$(git -C "$source_dir" status --porcelain)" || { echo 'The source checkout must be clean.' >&2; exit 1; }
 revision=$(git -C "$source_dir" rev-parse --verify HEAD)
+version=$(git -C "$source_dir" describe --tags --exact-match HEAD 2>/dev/null || printf 'commit-%s' "$(printf %.12s "$revision")")
 target="/opt/raphie/releases/$revision"
 if [ "$(readlink /opt/raphie/current)" = "$target" ]; then echo 'Already on this version.'; exit 0; fi
 if [ -e "$target" ]; then echo 'Release already exists; refusing to overwrite it.' >&2; exit 1; fi
 install -d -m 0755 -o raphie -g raphie "$target"
 git -C "$source_dir" archive HEAD | tar -x -C "$target"
+printf '%s\n%s\n' "$revision" "$version" > "$target/.raphie-build"
 chown -R raphie:raphie "$target"
 runuser -u raphie -- env HOME=/var/lib/raphie /usr/local/bin/bun install --frozen-lockfile --cwd "$target"
-runuser -u raphie -- env HOME=/var/lib/raphie /usr/local/bin/bun run --cwd "$target" build
+runuser -u raphie -- env HOME=/var/lib/raphie RAPHIE_BUILD_ID="$revision" RAPHIE_VERSION="$version" /usr/local/bin/bun run --cwd "$target" build
 # The service account must not be able to replace scripts executed by root.
 chown -R root:root "$target"
 chmod -R go-w "$target"

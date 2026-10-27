@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 
 import { BackendBoundary } from "../../presentation/workspace/backend-boundary";
+import { UpdateNotice } from "../../presentation/workspace/update-notice";
 
 import styles from "../../shared/styles/index.css?url";
 
@@ -46,6 +47,7 @@ function Root() {
         <BackendBoundary>
           <Outlet />
         </BackendBoundary>
+        <UpdateNotice />
         <Scripts />
       </body>
     </html>

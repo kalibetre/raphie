@@ -15,9 +15,16 @@ test("Bun web host serves assets, delegates SSR, and rejects hidden files and fo
   const server = startWebServer({
     clientDirectory: directory,
     port: 0,
+    build: { id: "fixture-revision", version: "v1.2.3" },
     fetch: (request) => new Response(`SSR ${new URL(request.url).pathname}`),
   });
   try {
+    const version = await fetch(new URL("/_raphie/version", server.url));
+    assert.deepEqual(await version.json(), {
+      id: "fixture-revision",
+      version: "v1.2.3",
+    });
+    assert.equal(version.headers.get("cache-control"), "no-store");
     const asset = await fetch(new URL("/asset.js", server.url));
     assert.equal(asset.status, 200);
     assert.match(asset.headers.get("content-type") ?? "", /javascript/);

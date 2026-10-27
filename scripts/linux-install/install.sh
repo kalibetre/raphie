@@ -24,14 +24,16 @@ case "$origin" in *[!a-zA-Z0-9.:/-]*|'') echo 'Invalid URL.' >&2; exit 1;; esac
 case "$bind" in *[!a-zA-Z0-9.:-]*|'') echo 'Invalid bind address.' >&2; exit 1;; esac
 /usr/local/bin/bun -e 'const u = new URL(process.argv[1]); if (!["http:","https:"].includes(u.protocol) || u.origin !== process.argv[1] || u.username || u.password) process.exit(1)' "$origin" || { echo 'Enter an HTTP or HTTPS origin without a path.' >&2; exit 1; }
 revision=$(git -C "$source_dir" rev-parse --verify HEAD)
+version=$(git -C "$source_dir" describe --tags --exact-match HEAD 2>/dev/null || printf 'commit-%s' "$(printf %.12s "$revision")")
 useradd --system --user-group --home-dir /var/lib/raphie --create-home --shell /usr/sbin/nologin raphie
 install -d -m 0700 -o raphie -g raphie /var/lib/raphie/data
 install -d -m 0755 /opt/raphie/releases
 install -d -m 0755 -o raphie -g raphie "/opt/raphie/releases/$revision"
 git -C "$source_dir" archive HEAD | tar -x -C "/opt/raphie/releases/$revision"
+printf '%s\n%s\n' "$revision" "$version" > "/opt/raphie/releases/$revision/.raphie-build"
 chown -R raphie:raphie "/opt/raphie/releases/$revision"
 runuser -u raphie -- env HOME=/var/lib/raphie /usr/local/bin/bun install --frozen-lockfile --cwd "/opt/raphie/releases/$revision"
-runuser -u raphie -- env HOME=/var/lib/raphie /usr/local/bin/bun run --cwd "/opt/raphie/releases/$revision" build
+runuser -u raphie -- env HOME=/var/lib/raphie RAPHIE_BUILD_ID="$revision" RAPHIE_VERSION="$version" /usr/local/bin/bun run --cwd "/opt/raphie/releases/$revision" build
 # The service account must not be able to replace scripts executed by root.
 chown -R root:root "/opt/raphie/releases/$revision"
 chmod -R go-w "/opt/raphie/releases/$revision"
