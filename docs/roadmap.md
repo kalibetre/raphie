@@ -164,6 +164,10 @@ OS-backed Settings cipher. Active turns block configuration changes; switching
 never migrates data or falls back. Memory tools are not automatically replayed
 when interrupted. Honcho, Markdown, named connection libraries, background local
 consolidation and adapter relevance/cost evaluation remain subsequent slices.
+The built-in retrieval evaluation now provides a small repeatable synthetic
+baseline, and an English stemming fallback improves word-form recall. Broader
+semantic retrieval, real-world evaluation and provider comparisons remain open;
+see [memory verification](memory.md#implementation-and-verification).
 The adapter is tested against a local server matching the documented Hindsight
 API, not a live deployment. Forgetting current evidence does not erase chat
 history, old tool outputs, backups or forensic storage remnants.

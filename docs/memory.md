@@ -141,10 +141,15 @@ browsing. Browsing reads SQLite directly and makes no model call.
 
 Built-in recall extracts up to 24 distinct letter/number terms from the query,
 combines them with OR, filters to the configured scope, and returns at most eight
-records ordered by SQLite FTS5 rank. Query length is limited to 2,000 characters.
-Search is lexical: a query for “beverages” may miss evidence containing only “tea.”
-There are no embeddings, synonym expansion, entity graph or recency weighting in
-this slice.
+records. Exact-token FTS5 matches come first in rank order; if fewer than eight
+are found, a second FTS5 index using the English Porter stemmer fills remaining
+slots, deduplicating IDs. Existing evidence is indexed when the database first
+opens with this version; writes, corrections and forgetting update both indexes
+transactionally. Query length is limited to 2,000 characters. Search remains
+lexical: stemming helps with word forms, but “beverages” can still miss “tea.”
+Common words can produce irrelevant hits or fill all eight slots before the
+stemmed search. There are no embeddings, synonym expansion, entity graph or
+recency weighting.
 
 Built-in reflection has no separate reasoning or consolidation engine. The tool
 returns the retrieved evidence plus an instruction for the conversation model to
@@ -152,8 +157,8 @@ synthesize an answer. When no evidence matches, it explicitly says no relevant
 evidence was found. There is no independently validated citation or inference
 checker. Reflections are not automatically saved as new facts.
 
-Background consolidation, contradiction resolution, temporal reasoning and
-retrieval-quality evaluation remain planned. Changing the selected conversation
+Background consolidation, contradiction resolution and temporal reasoning remain
+planned. Changing the selected conversation
 model can change retention choices, search queries and the quality of synthesis.
 
 ## Scope, switching and disabling
@@ -239,6 +244,19 @@ Run `bun test packages/runtime/test/memory.test.ts` for focused runtime checks, 
 `bun run validate` for repository validation. Tests use temporary databases and
 synthetic credentials. Browser acceptance uses `bun run dev:fixture` and
 `bun run dev:web:fixture`; see [contributing](../CONTRIBUTING.md#verification-and-data).
+
+Run `bun packages/runtime/eval/memory-evaluation.ts` for a repeatable synthetic
+retrieval baseline using a temporary database. It measures retention after restart,
+recall@8 for three direct queries and six paraphrases, correction and replay,
+forgetting and replay, and cross-bot isolation. Before stemming the results were
+12/12 retained, 3/3 direct and 2/6 paraphrase recall; after stemming they were
+12/12, 3/3 and 5/6 respectively, with all lifecycle and isolation checks passing.
+This small fixed corpus measures whether the expected ID appears anywhere in the
+results, not ranking quality, precision, or answer correctness. Some paraphrase
+hits share generic words with the evidence; the dog/canine case still misses.
+It does not evaluate model decisions to retain or recall, real conversations,
+multilingual stemming, external providers, latency or production-scale data.
+Treat it as a regression baseline, not a general semantic quality score.
 
 The HTTP surface is under `/api/memory`: configuration read/write, saved-connection
 testing, paginated inventory, recall, correction and forgetting. Retention and reflection are agent
