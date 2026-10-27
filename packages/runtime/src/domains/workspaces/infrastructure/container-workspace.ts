@@ -52,6 +52,10 @@ let runningCommands = 0;
 let guestSource: Promise<string> | undefined;
 
 async function bundleGuest() {
+  if (Bun.isStandaloneExecutable)
+    return Bun.file(
+      new URL("./raphie-sandbox-guest.js", import.meta.url),
+    ).text();
   const build = await Bun.build({
     entrypoints: [
       fileURLToPath(new URL("./container-guest.ts", import.meta.url)),

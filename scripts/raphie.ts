@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { mkdir } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
 
@@ -62,6 +62,38 @@ async function main() {
   if (command === "auth" && (action === "setup" || action === "reset-password"))
     return account(action);
   if (command === "start") {
+    if (Bun.isStandaloneExecutable) {
+      const directory = dirname(process.execPath);
+      const children: ReturnType<typeof Bun.spawn>[] = [];
+      let stopping = false;
+      const stop = () => {
+        stopping = true;
+        for (const child of children) child.kill("SIGTERM");
+      };
+      process.once("SIGINT", stop);
+      process.once("SIGTERM", stop);
+      try {
+        for (const executable of ["raphie-runtime", "raphie-web"])
+          children.push(
+            Bun.spawn([join(directory, executable)], {
+              stdin: "inherit",
+              stdout: "inherit",
+              stderr: "inherit",
+              env: process.env,
+            }),
+          );
+        const exit = await Promise.race(children.map((child) => child.exited));
+        const interrupted = stopping;
+        stop();
+        await Promise.all(children.map((child) => child.exited));
+        process.exitCode = interrupted ? 0 : exit || 1;
+      } finally {
+        stop();
+        process.off("SIGINT", stop);
+        process.off("SIGTERM", stop);
+      }
+      return;
+    }
     const child = Bun.spawn([process.execPath, "run", "start"], {
       cwd: resolve(import.meta.dir, ".."),
       stdin: "inherit",

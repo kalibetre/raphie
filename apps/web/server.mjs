@@ -18,7 +18,10 @@ if (
 let build = { id: "development", version: "development" };
 try {
   const [id, version] = readFileSync(
-    new URL("../../.raphie-build", import.meta.url),
+    new URL(
+      Bun.isStandaloneExecutable ? "./.raphie-build" : "../../.raphie-build",
+      import.meta.url,
+    ),
     "utf8",
   )
     .trim()

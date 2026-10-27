@@ -14,8 +14,14 @@ export function computeWorkspace(
 ): Promise<ComputeResponse> {
   return new Promise((resolve, reject) => {
     signal?.throwIfAborted();
+    // The standalone builder registers this worker as a second entrypoint.
     const worker = new Worker(
-      new URL("./workspace-worker.ts", import.meta.url),
+      new URL(
+        Bun.isStandaloneExecutable
+          ? "./packages/runtime/src/domains/workspaces/infrastructure/workspace-worker.js"
+          : "./workspace-worker.ts",
+        import.meta.url,
+      ),
       {
         workerData: request,
         env: {},
