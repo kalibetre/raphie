@@ -84,5 +84,13 @@ terminal and Devices settings, and a host-side list/revoke command. Automated
 checks cover replay, concurrent redemption, origin and size checks, rate
 limits, revocation of an idle stream, and synthetic browser pairing. It does
 not yet provide an independent device-approval step, durable mobile client,
-HTTPS proxy deployment, a passwordless migration, portable recovery, or the
-required public-ingress security review.
+automatic HTTPS proxy deployment, a passwordless migration, portable recovery,
+or the required public-ingress security review. A loopback-only synthetic test
+through Caddy with a locally trusted test certificate verified browser pairing,
+secure cookies, API requests, and live-stream revocation; it did not exercise
+public certificate issuance or automated VPS setup.
+
+The prototype browser cookie lasts only for the browser session. The stored
+device credential has no automatic expiry or rotation and remains valid until
+revoked, including for native clients. These are experimental semantics, not
+the durable device policy required for a production release.

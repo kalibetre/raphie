@@ -56,6 +56,7 @@ export function DeviceSettings() {
     queryKey: ["paired-devices"],
     queryFn: () => pairingRequest<{ devices: Device[] }>("devices"),
     retry: false,
+    refetchInterval: code ? 3000 : false,
   });
   const create = useMutation({
     mutationFn: () => pairingRequest<Code>("create", {}),
