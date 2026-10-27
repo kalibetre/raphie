@@ -19,6 +19,7 @@ test("one-time pairing codes create individually revocable devices across restar
     assert.ok(device);
     assert.equal(first.redeem(code.secret, "replay", 1099), null);
     assert.equal(first.valid(device.credential, 1100), true);
+    assert.equal(first.isValid(device.credential), true);
     assert.deepEqual(
       first.list().map((item) => item.label),
       ["My phone"],
@@ -47,6 +48,7 @@ test("one-time pairing codes create individually revocable devices across restar
     assert.equal(first.valid(device.credential, 1200), true);
     assert.equal(second.revoke(device.id, 1300), true);
     assert.equal(first.valid(device.credential, 1400), false);
+    assert.equal(first.isValid(device.credential), false);
     assert.equal(second.revoke(device.id, 1400), false);
   } finally {
     first.close();
