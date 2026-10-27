@@ -12,10 +12,6 @@ import {
 import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
-import {
-  createDiscordBridge,
-  resolveDiscordThread,
-} from "../infrastructure/discord/bridge.ts";
 import { legacyMcpConfig } from "../infrastructure/mcp/legacy-config.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../infrastructure/observability/telemetry-switch.ts";
@@ -90,33 +86,10 @@ const program = Effect.gen(function* () {
     exporter,
     () => settings.telemetryEnabled,
   );
-  const discordEnabled = process.env.RAPHIE_DISCORD_ENABLED === "true";
-  const keys = [
-    "DISCORD_BOT_TOKEN",
-    "DISCORD_APPLICATION_ID",
-    "DISCORD_PUBLIC_KEY",
-    "DISCORD_OWNER_ID",
-    "DISCORD_CHANNEL_ID",
-  ];
-  const configured = discordEnabled
-    ? keys.filter((key) => process.env[key])
-    : [];
-  if (configured.length && configured.length !== keys.length)
-    throw new Error("Set all five Discord values, or leave all unset.");
   const port = Number(process.env.PORT ?? 4316);
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error("Invalid PORT.");
   const webOrigin = process.env.RAPHIE_WEB_ORIGIN ?? "http://127.0.0.1:4320";
-  const channelId = discordEnabled ? process.env.DISCORD_CHANNEL_ID : undefined;
-  const threadId = channelId
-    ? yield* Effect.tryPromise(() =>
-        resolveDiscordThread({
-          botToken: process.env.DISCORD_BOT_TOKEN!,
-          channelId,
-          guildId: process.env.DISCORD_GUILD_ID,
-        }),
-      )
-    : undefined;
   const app = yield* resource(
     () =>
       telemetry.run("runtime.start", {}, () =>
@@ -124,8 +97,6 @@ const program = Effect.gen(function* () {
           deferResume: true,
           identity,
           directory,
-          discordThreadId: threadId,
-          discordConnectionId: process.env.DISCORD_APPLICATION_ID,
           telemetry,
           models,
           model: settings.model,
@@ -151,48 +122,11 @@ const program = Effect.gen(function* () {
     Effect.sync(() => new AbortController()),
     (stop) => Effect.sync(() => stop.abort()),
   );
-  const discord = threadId
-    ? createDiscordBridge(app, {
-        botToken: process.env.DISCORD_BOT_TOKEN!,
-        applicationId: process.env.DISCORD_APPLICATION_ID!,
-        publicKey: process.env.DISCORD_PUBLIC_KEY!,
-        ownerId: process.env.DISCORD_OWNER_ID!,
-        threadId,
-        respondToChannelIds: [channelId!],
-      })
-    : null;
-  if (discord) {
-    yield* resource(
-      async () => {
-        await discord.chat.initialize();
-        return discord;
-      },
-      async (bridge) => {
-        await bridge.chat.shutdown();
-      },
-    );
-    yield* Effect.forkScoped(
-      Effect.tryPromise(() => discord.listen(stop.signal)),
-    );
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Effect.gen(function* () {
-          yield* Effect.promise(() =>
-            discord.flush().catch(() => {
-              console.error("Discord delivery pump failed.");
-            }),
-          );
-          yield* Effect.sleep("1 second");
-        }),
-      ),
-    );
-  }
   const http = yield* resource(
     () =>
       startServer(app, {
         port,
         webOrigin,
-        discordConfigured: !!discord,
         diagnostics: collector.traces,
         settings,
         memory,

@@ -7,6 +7,7 @@ import type { SaveBotProfile, UpdateBotProfile } from "@raphie/contracts";
 
 import type { BotProfiles } from "../domains/bots/application/ports.ts";
 import { BotProfileStore } from "../domains/bots/infrastructure/bot-profiles.ts";
+import { BotChannels } from "../domains/channels/infrastructure/bot-channels.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { BotJobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
@@ -25,6 +26,7 @@ export type BotRuntime = {
   memory?: MemoryService;
   mcp?: BotMcp;
   jobs?: BotJobs;
+  channels?: BotChannels;
   close(): Promise<void>;
 };
 
@@ -163,6 +165,7 @@ export class BotHost implements BotProfiles {
       gateway.options.identity;
     if (!this.automation) return runtime;
     let mcp: BotMcp | undefined;
+    let channels: BotChannels | undefined;
     try {
       const busy = async () =>
         (await gateway.chats.state()).turns.some((t) => t.status === "pending");
@@ -174,6 +177,11 @@ export class BotHost implements BotProfiles {
         busy,
         publish: (tools) => gateway.setMcp(tools),
       });
+      channels = await BotChannels.open(
+        join(directory, "channels.sqlite"),
+        gateway,
+        this.automation.keyStore,
+      );
       const actor = gateway.actors.establish("web");
       const jobs = BotJobs.open({
         root: gateway.root,
@@ -188,8 +196,10 @@ export class BotHost implements BotProfiles {
         ...runtime,
         mcp,
         jobs,
+        channels,
         close: async () => {
           try {
+            await channels?.close();
             await runtime.close();
           } finally {
             await connections.close();
@@ -197,6 +207,7 @@ export class BotHost implements BotProfiles {
         },
       };
     } catch (error) {
+      await channels?.close();
       await mcp?.close();
       await runtime.close();
       throw error;

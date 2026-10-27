@@ -24,8 +24,7 @@ the schema through their environment or a private `.env.local` file. Configure
 model provider connections in **Settings → Providers**; model keys are not loaded
 from environment variables. MCP is optional. Bun's automatic dotenv loading is disabled.
 
-The product writes to root `.data/`. Discord is disabled by default; enable it
-with `RAPHIE_DISCORD_ENABLED=true` when the owner/channel settings are configured.
+The product writes to root `.data/`. Configure Discord under the selected bot’s Settings → Channels. Each bot has its own channel settings; Discord is disabled until configured. The token is encrypted using the runtime host’s OS credential store.
 
 ## Bots
 

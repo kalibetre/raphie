@@ -77,16 +77,22 @@ export class ToolApprovalService {
           );
         return { ...existing };
       }
+      const pendingTurns = chats.turns.filter(
+        (t) =>
+          t.conversationId === api.conversationId && t.status === "pending",
+      );
+      const turn = pendingTurns[0];
+      // The tool API identifies a conversation, not its originating turn. Never
+      // assign authority from an ambiguous queue; the web owner can still decide.
+      const initiator =
+        pendingTurns.length === 1 ? turn?.discordUserId : undefined;
       const item: ToolApproval = {
         ...proposal,
         id: crypto.randomUUID(),
         taskId: api.taskId,
         conversationId: api.conversationId,
-        replyTo:
-          chats.turns.find(
-            (t) =>
-              t.conversationId === api.conversationId && t.status === "pending",
-          )?.replyTo ?? null,
+        replyTo: turn?.replyTo ?? null,
+        ...(initiator ? { discordUserId: initiator } : {}),
         createdAt: Date.now(),
         expiresAt: Date.now() + (this.app.options.approvalTtlMs ?? 600_000),
         status: "pending",
@@ -189,6 +195,7 @@ export class ToolApprovalService {
     via: Source,
     threadId?: string,
     connectionId = "legacy-discord",
+    discordUserId?: string,
   ) {
     this.app.authorize(actor);
     if (!isDecision(decision)) throw new InputError("Invalid decision.");
@@ -210,6 +217,14 @@ export class ToolApprovalService {
       if (via === "discord" && destination !== threadId)
         throw new InputError(
           "Approval belongs to another Discord thread.",
+          403,
+        );
+      if (
+        via === "discord" &&
+        (!item.discordUserId || item.discordUserId !== discordUserId)
+      )
+        throw new InputError(
+          "Only the Discord user who initiated this request can decide it. Use the web UI if the initiator cannot be verified.",
           403,
         );
       if (item.status !== "pending") return item.status;

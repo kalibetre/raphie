@@ -161,6 +161,7 @@ export class ChatService implements ConversationCommands {
     model?: ModelSelection;
     discordThreadId?: string;
     connectionId?: string;
+    discordUserId?: string;
     scheduled?: { name: string };
   }) {
     this.app.authorize(input.actor);
@@ -228,6 +229,12 @@ export class ChatService implements ConversationCommands {
               "Event belongs to another Discord connection or thread.",
               403,
             );
+          if (
+            input.source === "discord" &&
+            existing.discordUserId &&
+            existing.discordUserId !== input.discordUserId
+          )
+            throw new InputError("Event belongs to another Discord user.", 403);
           if (existing.fingerprint !== fingerprint)
             throw new InputError(
               "Event ID already used for different content.",
@@ -302,6 +309,9 @@ export class ChatService implements ConversationCommands {
           status: "pending",
           answer: null,
           replyTo,
+          ...(input.source === "discord" && input.discordUserId
+            ? { discordUserId: input.discordUserId }
+            : {}),
           ...(input.scheduled ? { scheduled: input.scheduled } : {}),
         };
         state.turns.push(turn);

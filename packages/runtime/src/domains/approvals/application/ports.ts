@@ -12,6 +12,7 @@ export interface ToolApprovalCommands {
     via: Channel,
     threadId?: string,
     connectionId?: string,
+    discordUserId?: string,
   ): Promise<"approved" | "rejected" | "expired" | "pending">;
 }
 
@@ -25,6 +26,7 @@ export interface FileApprovalCommands {
     files: Attachment[];
     discordThreadId?: string;
     connectionId?: string;
+    discordUserId?: string;
   }): Promise<string>;
   decide(
     id: string,
@@ -33,5 +35,6 @@ export interface FileApprovalCommands {
     via: Channel,
     threadId?: string,
     connectionId?: string,
+    discordUserId?: string,
   ): Promise<string>;
 }

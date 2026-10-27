@@ -55,6 +55,7 @@ const input = {
   eventId: "tool",
   text: "Use the tool",
   discordThreadId: "discord:guild:channel:thread",
+  discordUserId: "initiator",
 };
 
 test("model tool proposal survives reopen; owner decision executes exact arguments once and returns result to model", async () => {
@@ -122,6 +123,8 @@ test("model tool proposal survives reopen; owner decision executes exact argumen
         "owner",
         "discord",
         input.discordThreadId,
+        "legacy-discord",
+        "initiator",
       ),
     ]);
     assert.deepEqual(statuses, ["approved", "approved"]);

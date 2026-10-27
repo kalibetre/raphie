@@ -8,6 +8,7 @@ export type ActorContext = Readonly<{
   source: Channel;
   threadId?: string;
   connectionId?: string;
+  discordUserId?: string;
 }>;
 
 /** Only trusted adapters receive the issuer. Contexts are never deserialized from requests. */
@@ -24,6 +25,7 @@ export class ActorAuthority {
     source: Channel,
     threadId?: string,
     connectionId = "legacy-discord",
+    discordUserId?: string,
   ): ActorContext {
     if (source === "discord" && !threadId)
       throw new InputError(
@@ -36,6 +38,7 @@ export class ActorAuthority {
       source,
       threadId,
       connectionId,
+      discordUserId: source === "discord" ? discordUserId : undefined,
     });
     this.issued.add(actor);
     return actor;

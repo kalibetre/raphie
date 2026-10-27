@@ -9,6 +9,7 @@ export type ToolApproval = {
   taskId: number;
   conversationId: number;
   replyTo?: ReplyDestination | null;
+  discordUserId?: string;
   fingerprint: string;
   server: string;
   tool: string;
