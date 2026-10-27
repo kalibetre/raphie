@@ -12,7 +12,10 @@ export function BotBoundary({
   children,
 }: {
   workspace: BackendWorkspace;
-  connect: (url: string) => Promise<void>;
+  connect: (
+    url: string,
+    credentials?: { username: string; password: string },
+  ) => Promise<void>;
   children: ReactNode;
 }) {
   const search = useSearch({ strict: false });

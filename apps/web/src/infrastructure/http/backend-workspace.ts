@@ -146,8 +146,10 @@ export async function connectWorkspace(
     publish: (workspace: BackendWorkspace | undefined) => void;
     navigate: () => Promise<void>;
   },
+  credentials?: { username: string; password: string },
 ) {
-  await api("/api/web/connection", { action: "test", url });
+  const remote = credentials ? { kind: "remote", ...credentials } : {};
+  await api("/api/web/connection", { action: "test", url, ...remote });
   current.dispose();
   transition.publish(undefined);
   let selected = current.url;
@@ -155,6 +157,7 @@ export async function connectWorkspace(
     const result = await api<{ url: string }>("/api/web/connection", {
       action: "connect",
       url,
+      ...remote,
     });
     selected = result.url;
     await transition.navigate();

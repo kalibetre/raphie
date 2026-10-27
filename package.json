@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --parallel dev:runtime dev:web",
+    "raphie": "bun scripts/raphie.ts",
     "dev:web": "bun run --filter @raphie/web dev",
     "dev:fixture": "bun packages/runtime/test/browser-fixture.ts",
     "dev:web:fixture": "VITE_RAPHIE_TEST_WORKSPACE=1 RAPHIE_WEB_ORIGIN=http://127.0.0.1:4321 RAPHIE_RUNTIME_URL=http://127.0.0.1:4317 bun run --filter @raphie/web dev --port 4321",

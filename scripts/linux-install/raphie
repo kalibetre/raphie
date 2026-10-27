@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+root=/opt/raphie/current
+export DATA_DIRECTORY=/var/lib/raphie/data
+case "${1:-}" in
+  update)
+    shift
+    exec /bin/sh "$root/scripts/linux-install/update.sh" "$@"
+    ;;
+  restore)
+    shift
+    exec /bin/sh "$root/scripts/linux-install/restore.sh" "$@"
+    ;;
+  auth)
+    if [ "$(id -u)" -eq 0 ]; then
+      exec runuser -u raphie -- env HOME=/var/lib/raphie DATA_DIRECTORY="$DATA_DIRECTORY" /usr/local/bin/bun "$root/scripts/raphie.ts" "$@"
+    fi
+    ;;
+esac
+exec /usr/local/bin/bun "$root/scripts/raphie.ts" "$@"

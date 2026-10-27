@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { startWebServer } from "../src/bootstrap/http-server.ts";
+import { OwnerStore } from "../src/infrastructure/auth/owner-store.ts";
 
 test("Bun web host serves assets, delegates SSR, and rejects hidden files and foreign hosts", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-web-host-"));
@@ -41,6 +42,73 @@ test("Bun web host serves assets, delegates SSR, and rejects hidden files and fo
       },
     );
     assert.equal(rejected, 403);
+  } finally {
+    await server.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("remote web host requires an owner before it serves pages or assets", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-remote-web-"));
+  const authDatabase = join(directory, "auth.sqlite");
+  assert.throws(
+    () =>
+      startWebServer({
+        clientDirectory: directory,
+        port: 0,
+        remote: {
+          origin: "http://localhost:4320",
+          hostname: "127.0.0.1",
+          authDatabase,
+        },
+        fetch: () => new Response("private app"),
+      }),
+    /not configured/,
+  );
+  const store = new OwnerStore(authDatabase);
+  await store.setOwner("owner", "synthetic password one");
+  store.close();
+  const origin = "http://localhost:4320";
+  const server = startWebServer({
+    clientDirectory: directory,
+    port: 0,
+    remote: { origin, hostname: "127.0.0.1", authDatabase },
+    fetch: () => new Response("private app"),
+  });
+  const request = async (path: string, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    headers.set("host", "localhost:4320");
+    return fetch(new URL(path, server.url), {
+      ...init,
+      headers,
+      redirect: "manual",
+    });
+  };
+  try {
+    assert.equal((await request("/api/sessions")).status, 401);
+    assert.equal((await request("/")).status, 303);
+    const login = await request("/auth/login", {
+      method: "POST",
+      headers: { origin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        username: "owner",
+        password: "synthetic password one",
+      }),
+    });
+    assert.equal(login.status, 303);
+    const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
+    assert.equal(
+      await (await request("/", { headers: { cookie } })).text(),
+      "private app",
+    );
+    assert.equal(
+      (
+        await request("/api/sessions", {
+          headers: { cookie, origin: "http://evil.test" },
+        })
+      ).status,
+      403,
+    );
   } finally {
     await server.stop(true);
     await rm(directory, { recursive: true, force: true });

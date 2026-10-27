@@ -1,9 +1,16 @@
-import { backendAddress, connectionRequest } from "./backend-connection.server";
+import {
+  backendAddress,
+  connectionRequest,
+  isRemoteGateway,
+} from "./backend-connection.server";
+import { remoteSession } from "./remote-session.server";
 
 export async function proxyRuntime(request: Request) {
   const incoming = new URL(request.url);
   const web = new URL(process.env.RAPHIE_WEB_ORIGIN ?? "http://127.0.0.1:4320");
-  const hosts = [`127.0.0.1:${web.port}`, `localhost:${web.port}`];
+  const hosts = ["127.0.0.1", "localhost"].includes(web.hostname)
+    ? [`127.0.0.1:${web.port}`, `localhost:${web.port}`]
+    : [web.host];
   if (!hosts.includes(incoming.host))
     return new Response("Unrecognized host.", { status: 403 });
   const origin = request.headers.get("origin");
@@ -46,6 +53,24 @@ export async function proxyRuntime(request: Request) {
     const value = request.headers.get(key);
     if (value) headers.set(key, value);
   }
+  const remote = remoteSession(request, base);
+  const targetUrl = new URL(base);
+  if (remote) {
+    headers.set("cookie", remote);
+    if (request.headers.has("origin")) headers.set("origin", base);
+  } else if (
+    isRemoteGateway(request) ||
+    !["127.0.0.1", "localhost"].includes(targetUrl.hostname) ||
+    targetUrl.protocol === "https:"
+  ) {
+    return Response.json(
+      {
+        error: "Sign in to the remote gateway again.",
+        code: "gateway_sign_in_required",
+      },
+      { status: 401 },
+    );
+  }
   try {
     const response = await fetch(target, {
       method: request.method,
@@ -56,9 +81,11 @@ export async function proxyRuntime(request: Request) {
         ? { body: request.body, duplex: "half" }
         : {}),
     } as RequestInit);
+    const responseHeaders = new Headers(response.headers);
+    if (remote) responseHeaders.delete("set-cookie");
     return new Response(response.body, {
       status: response.status,
-      headers: response.headers,
+      headers: responseHeaders,
     });
   } catch {
     return Response.json(
