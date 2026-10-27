@@ -89,11 +89,21 @@ test("pairing protocol limits enrollment, separates browser cookies and native c
     );
     const device = (await native!.json()) as { id: string; credential: string };
     assert.equal(store.valid(device.credential), true);
+    const logoutHeaders = { authorization: `Bearer ${device.credential}` };
     assert.equal(
       (
         await handle(
-          post("/auth/pairing/revoke", { id: device.id }, { origin }),
-          true,
+          post("/auth/pairing/revoke-self", {}, { ...logoutHeaders, origin }),
+          false,
+        )
+      )?.status,
+      403,
+    );
+    assert.equal(
+      (
+        await handle(
+          post("/auth/pairing/revoke-self", {}, logoutHeaders),
+          false,
         )
       )?.status,
       200,

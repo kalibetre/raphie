@@ -117,6 +117,17 @@ export class PairingStore {
     );
   }
 
+  revokeCredential(credential: string, now = Date.now()) {
+    if (!tokenPattern.test(credential)) return false;
+    return (
+      this.db
+        .query(
+          "UPDATE paired_devices SET revoked_at = ? WHERE credential_hash = ? AND revoked_at IS NULL",
+        )
+        .run(now, hash(credential)).changes === 1
+    );
+  }
+
   list() {
     return this.db
       .query<

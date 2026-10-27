@@ -1,5 +1,7 @@
 import { authPage } from "./auth-pages.ts";
 import type { OwnerStore } from "./owner-store.ts";
+import { pairingApi } from "./pairing-api.ts";
+import type { PairingStore } from "./pairing-store.ts";
 
 export function sessionToken(request: Request): string {
   return (
@@ -9,6 +11,25 @@ export function sessionToken(request: Request): string {
       .map((part) => part.trim())
       .find((part) => part.startsWith("raphie_session="))
       ?.slice("raphie_session=".length) ?? ""
+  );
+}
+
+export function deviceToken(request: Request): string {
+  return (
+    request.headers
+      .get("cookie")
+      ?.split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith("raphie_device="))
+      ?.slice("raphie_device=".length) ?? ""
+  );
+}
+
+export function nativeToken(request: Request): string {
+  return (
+    /^Bearer ([A-Za-z0-9_-]{43})$/.exec(
+      request.headers.get("authorization") ?? "",
+    )?.[1] ?? ""
   );
 }
 
@@ -76,7 +97,11 @@ export function guardEventStream(
 }
 
 /** Server mode is opt-in and requires an exact browser-facing origin. */
-export function serverAuth(store: OwnerStore, origin: string) {
+export function serverAuth(
+  store: OwnerStore,
+  origin: string,
+  devices?: PairingStore,
+) {
   const url = new URL(origin);
   if (
     !["http:", "https:"].includes(url.protocol) ||
@@ -92,18 +117,34 @@ export function serverAuth(store: OwnerStore, origin: string) {
     `raphie_session=${value}; HttpOnly; SameSite=Strict; Path=/${secure}`;
   let attempts: number[] = [];
   let activeLogins = 0;
+  const pairing = devices ? pairingApi(devices, origin) : null;
   return async (request: Request): Promise<Response | null> => {
     const incoming = new URL(request.url);
     if (incoming.host !== url.host)
       return new Response("Unrecognized host.", { status: 403 });
     const suppliedOrigin = request.headers.get("origin");
+    const token = sessionToken(request);
+    const device = deviceToken(request);
+    const bearer = nativeToken(request);
+    const isNative =
+      !!devices &&
+      !suppliedOrigin &&
+      !request.headers.has("cookie") &&
+      incoming.pathname.startsWith("/api/") &&
+      devices.valid(bearer);
+    const authenticated =
+      store.valid(token) || (!!devices && devices.valid(device));
+    if (pairing) {
+      const paired = await pairing(request, authenticated);
+      if (paired) return paired;
+    }
     if (
       (suppliedOrigin && suppliedOrigin !== origin) ||
-      (!["GET", "HEAD"].includes(request.method) && suppliedOrigin !== origin)
+      (!["GET", "HEAD"].includes(request.method) &&
+        suppliedOrigin !== origin &&
+        !isNative)
     )
       return new Response("Unrecognized origin.", { status: 403 });
-    const token = sessionToken(request);
-    const authenticated = store.valid(token);
     if (
       incoming.pathname === "/auth/status" &&
       request.method === "GET" &&
@@ -161,8 +202,9 @@ export function serverAuth(store: OwnerStore, origin: string) {
       }
     }
     if (incoming.pathname === "/auth/logout" && request.method === "POST") {
-      if (authenticated) store.signOut(token);
-      return new Response(null, {
+      if (store.valid(token)) store.signOut(token);
+      if (devices && device) devices.revokeCredential(device);
+      const response = new Response(null, {
         status: 303,
         headers: {
           location: "/auth/login",
@@ -170,6 +212,12 @@ export function serverAuth(store: OwnerStore, origin: string) {
           "cache-control": "no-store",
         },
       });
+      if (devices)
+        response.headers.append(
+          "set-cookie",
+          `raphie_device=; HttpOnly; SameSite=Strict; Path=/${secure}; Max-Age=0`,
+        );
+      return response;
     }
     if (
       authenticated &&
@@ -227,7 +275,7 @@ export function serverAuth(store: OwnerStore, origin: string) {
         activeLogins--;
       }
     }
-    if (!authenticated) {
+    if (!authenticated && !isNative) {
       if (incoming.pathname.startsWith("/api/"))
         return Response.json(
           { error: "Sign in required." },

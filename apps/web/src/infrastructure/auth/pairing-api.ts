@@ -71,9 +71,11 @@ export function pairingApi(store: PairingStore, origin: string) {
         : json({ error: "Sign in required." }, 401);
     if (request.method !== "POST") return json({ error: "Not found." }, 404);
     const nativeRedeem = url.pathname === "/auth/pairing/redeem-native";
+    const nativeLogout = url.pathname === "/auth/pairing/revoke-self";
     if (
-      (!nativeRedeem && suppliedOrigin !== origin) ||
-      (nativeRedeem && suppliedOrigin !== null)
+      (!nativeRedeem && !nativeLogout && suppliedOrigin !== origin) ||
+      ((nativeRedeem || nativeLogout) &&
+        (suppliedOrigin !== null || request.headers.has("cookie")))
     )
       return json({ error: "Unrecognized origin." }, 403);
     if (
@@ -84,6 +86,15 @@ export function pairingApi(store: PairingStore, origin: string) {
         .toLowerCase() !== "application/json"
     )
       return json({ error: "JSON required." }, 415);
+    if (nativeLogout) {
+      const bearer =
+        /^Bearer ([A-Za-z0-9_-]{43})$/.exec(
+          request.headers.get("authorization") ?? "",
+        )?.[1] ?? "";
+      return store.revokeCredential(bearer)
+        ? json({ revoked: true })
+        : json({ error: "Sign in required." }, 401);
+    }
     if (url.pathname === "/auth/pairing/redeem" || nativeRedeem) {
       const now = Date.now();
       attempts = attempts.filter((at) => at > now - 60_000);
@@ -113,6 +124,20 @@ export function pairingApi(store: PairingStore, origin: string) {
     if (url.pathname === "/auth/pairing/create") {
       const code = store.createCode();
       return json({ secret: code.secret, expiresAt: code.expiresAt, origin });
+    }
+    if (url.pathname === "/auth/pairing/cancel") {
+      try {
+        const input = await readObject(request);
+        if (
+          typeof input.secret !== "string" ||
+          !/^[A-Za-z0-9_-]{43}$/.test(input.secret)
+        )
+          return json({ error: "Invalid request." }, 400);
+        store.cancelCode(input.secret);
+        return json({ cancelled: true });
+      } catch {
+        return json({ error: "Invalid request." }, 400);
+      }
     }
     if (url.pathname === "/auth/pairing/revoke") {
       try {
