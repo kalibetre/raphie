@@ -54,3 +54,49 @@ test("one-time pairing codes create individually revocable devices across restar
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("two processes cannot redeem the same code", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-pairing-race-"));
+  const path = join(directory, "pairing.sqlite");
+  const store = new PairingStore(path);
+  try {
+    const code = store.createCode();
+    const modulePath = new URL(
+      "../src/infrastructure/auth/pairing-store.ts",
+      import.meta.url,
+    ).href;
+    const program = `import { PairingStore } from ${JSON.stringify(modulePath)};
+      const store = new PairingStore(process.argv[1]);
+      const secret = await Bun.stdin.text();
+      const result = store.redeem(secret, "Race fixture");
+      store.close();
+      console.log(result ? "redeemed" : "rejected");`;
+    const children = [0, 1].map(() =>
+      Bun.spawn([process.execPath, "-e", program, path], {
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      }),
+    );
+    for (const child of children) {
+      await child.stdin.write(code.secret);
+      await child.stdin.end();
+    }
+    const outcomes = await Promise.all(
+      children.map(async (child) => {
+        const [status, stdout, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ]);
+        assert.equal(status, 0, stderr);
+        return stdout.trim();
+      }),
+    );
+    assert.deepEqual(outcomes.sort(), ["redeemed", "rejected"]);
+    assert.equal(store.list().length, 1);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
