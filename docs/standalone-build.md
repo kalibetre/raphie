@@ -1,9 +1,9 @@
 # Standalone build experiment
 
-This is an experimental packaging check, not an installation or release path.
-The existing source-based installer remains unchanged. Pairing, HTTPS setup,
-portable credential recovery and release verification are not implemented by
-this experiment.
+This is an experimental packaging and local installation check. The existing
+source-based installer remains separate. Automatic HTTPS setup, portable
+credential recovery and release verification are not implemented by this
+experiment.
 
 From a clean working tree with the project's pinned Bun and dependencies:
 
@@ -44,7 +44,29 @@ or cross-host credential restoration.
 The tag-triggered release workflow is set up to test both Linux architectures,
 attest the resulting archives, and create a **draft** GitHub release with
 checksums. It does not publish the draft. The current source-based installer
-does not consume these archives, and there is no verified binary installer or
-updater yet; do not publish the draft as a supported installation path until
-those pieces and the security review are complete. Checksums detect accidental
+does not consume these archives. The binary bundle has an experimental local
+installer and an updater that accepts a trusted local bundle, but neither
+downloads nor verifies release provenance. Do not publish the draft as a
+supported installation path until verification and security review are
+complete. Checksums detect accidental
 corruption but are not a substitute for independently verified provenance.
+
+For an isolated Linux test machine with systemd, D-Bus, GNOME Keyring,
+libsecret, Python 3 and the utilities used by `install.sh`, copy the built
+bundle to the machine and run `sudo sh install.sh`. The default browser origin
+is `http://127.0.0.1:4320` and the default data directory is
+`/var/lib/raphie/data`. `--web-origin` and `--data-dir` override them; existing
+data is never overwritten. Existing parents of a custom data directory must be
+root-owned and not group- or world-writable. The experimental pairing UI can
+be enabled with `--experimental-pairing`; use it only on an isolated test
+installation. Access from another machine needs a correctly configured HTTPS
+reverse proxy. The installer does not configure one.
+
+For local test bundles, `sudo raphie update /path/to/trusted/bundle` takes an
+offline backup before switching. `sudo raphie restore /var/backups/raphie/...`
+restores a matching backup after confirmation. These commands have only been
+exercised with synthetic data in a disposable Ubuntu container and on an
+Ubuntu VM using real systemd and temporarily extracted keyring dependencies.
+Portable key recovery and independent release verification remain untested;
+do not rely on this for production. A failed install may require manual
+cleanup.
