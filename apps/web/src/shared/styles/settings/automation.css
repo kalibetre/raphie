@@ -26,6 +26,41 @@
     color: var(--muted-foreground);
     font-size: 12px;
   }
+  .channel-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid color-mix(in srgb, var(--attention) 35%, var(--border));
+    border-radius: 10px;
+    background: var(--attention-soft);
+  }
+  .channel-alert-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--attention) 14%, transparent);
+    color: var(--attention);
+  }
+  .channel-alert-copy {
+    min-width: 0;
+    padding-top: 1px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .channel-alert-copy strong {
+    display: block;
+    font-weight: 600;
+  }
+  .channel-alert-copy p {
+    margin: 3px 0 0;
+    color: var(--foreground);
+    overflow-wrap: anywhere;
+  }
   @media (max-width: 767px) {
     .channel-form {
       grid-template-columns: minmax(0, 1fr);

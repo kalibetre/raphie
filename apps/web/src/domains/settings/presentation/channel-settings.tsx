@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -17,6 +18,20 @@ type Discord = {
 };
 
 type Channels = { discord: Discord | null };
+
+function ChannelAlert({ title, message }: { title: string; message: string }) {
+  return (
+    <div role="alert" className="channel-alert">
+      <span className="channel-alert-icon" aria-hidden="true">
+        <TriangleAlert size={18} />
+      </span>
+      <div className="channel-alert-copy">
+        <strong>{title}</strong>
+        <p>{message}</p>
+      </div>
+    </div>
+  );
+}
 
 export function ChannelSettings() {
   const { workspace } = useBackend();
@@ -154,12 +169,11 @@ export function ChannelSettings() {
             The bot token is encrypted on the runtime host and is never shown
             again. Leave it blank to keep the saved token.
           </p>
-          {saved?.conflict && (
-            <p role="alert" className="settings-error">
-              This Discord application is configured for another bot. Remove it
-              from that bot first, then save here to connect, or remove it from
-              this bot.
-            </p>
+          {saved?.conflict && !error && (
+            <ChannelAlert
+              title="Discord application already in use"
+              message="This Discord application is configured for another bot. Remove it from that bot first, then save here to connect, or remove it from this bot."
+            />
           )}
           <form
             className="settings-form automation-form channel-form"
@@ -263,9 +277,12 @@ export function ChannelSettings() {
               </p>
             </div>
             {(error || guard.message) && (
-              <p role="alert" className="settings-error channel-field-wide">
-                {error || guard.message}
-              </p>
+              <div className="channel-field-wide">
+                <ChannelAlert
+                  title="Discord settings need attention"
+                  message={error || guard.message}
+                />
+              </div>
             )}
             <div className="automation-actions channel-field-wide">
               <Button type="submit" disabled={mutation.isPending}>
