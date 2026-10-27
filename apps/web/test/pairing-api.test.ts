@@ -11,6 +11,20 @@ test("pairing protocol limits enrollment, separates browser cookies and native c
     assert.throws(() => pairingApi(store, "http://public.example"));
     const origin = "https://raphie.example";
     const handle = pairingApi(store, origin);
+    const page = await handle(
+      new Request(`${origin}/auth/pairing/page`),
+      false,
+    );
+    assert.equal(page?.status, 200);
+    assert.equal(page?.headers.get("referrer-policy"), "no-referrer");
+    assert.match(
+      page?.headers.get("content-security-policy") ?? "",
+      /script-src 'sha256-/,
+    );
+    assert.match(
+      await page!.text(),
+      /history\.replaceState\(null, '', location\.pathname\)/,
+    );
     const post = (
       path: string,
       body: unknown,

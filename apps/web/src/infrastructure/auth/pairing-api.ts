@@ -1,3 +1,4 @@
+import { pairingPage } from "./pairing-page.ts";
 import type { PairingStore } from "./pairing-store.ts";
 
 const maxBody = 4096;
@@ -65,6 +66,8 @@ export function pairingApi(store: PairingStore, origin: string) {
       });
     const json = (value: unknown, status = 200) =>
       Response.json(value, { status, headers: noStore });
+    if (request.method === "GET" && url.pathname === "/auth/pairing/page")
+      return pairingPage();
     if (request.method === "GET" && url.pathname === "/auth/pairing/devices")
       return owner
         ? json({ devices: store.list() })

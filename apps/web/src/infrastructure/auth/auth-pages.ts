@@ -2,9 +2,10 @@ import { glance } from "../../domains/settings/application/bot-glance.ts";
 
 // These pages must render before the app and its assets are authenticated.
 const avatar = glance("default");
-const mark = `<svg viewBox="0 0 100 100" aria-hidden="true"><path fill="#b3ca9e" d="${avatar.path}"/>${avatar.eyes.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="6.5" fill="#28362b"/>`).join("")}</svg>`;
 
-const styles = `
+export const authMark = `<svg viewBox="0 0 100 100" aria-hidden="true"><path fill="#b3ca9e" d="${avatar.path}"/>${avatar.eyes.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="6.5" fill="#28362b"/>`).join("")}</svg>`;
+
+export const authStyles = `
   :root{color-scheme:light;--bg:#f7f5ef;--card:#fdfcf8;--text:#24231f;--muted:#6f6b61;--border:#dcd8cc;--soft:#efece4;--primary:#24231f;--on-primary:#f7f5ef;--accent:#4a7a57}
   @media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#1c1b18;--card:#24231f;--text:#ebe8df;--muted:#a29d91;--border:#444139;--soft:#2a2924;--primary:#ebe8df;--on-primary:#1c1b18;--accent:#7fb08b}}
   *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
@@ -26,5 +27,5 @@ export function authPage(account = false): string {
   const fields = account
     ? `<div class="field"><label for="username">New username</label><input id="username" name="username" autocomplete="username" required></div><div class="field"><label for="password">Current password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div><div class="field"><label for="new-password">New password</label><input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="12" required></div><div class="field"><label for="confirm-password">Confirm new password</label><input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required></div>`
     : `<div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" required></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${account ? "Owner account" : "Sign in"} · Raphie</title><style>${styles}</style></head><body><main class="shell"><div class="wrap"><div class="brand">${mark}<span>raphie</span></div><section class="card"><h1>${title}</h1><p>${description}</p><form method="post" action="/auth/${account ? "account" : "login"}">${fields}<button type="submit">${account ? "Save changes" : "Sign in"}</button></form>${account ? '<a class="back" href="/">← Back to workspace</a>' : ""}</section></div></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${account ? "Owner account" : "Sign in"} · Raphie</title><style>${authStyles}</style></head><body><main class="shell"><div class="wrap"><div class="brand">${authMark}<span>raphie</span></div><section class="card"><h1>${title}</h1><p>${description}</p><form method="post" action="/auth/${account ? "account" : "login"}">${fields}<button type="submit">${account ? "Save changes" : "Sign in"}</button></form>${account ? '<a class="back" href="/">← Back to workspace</a>' : ""}</section></div></main></body></html>`;
 }
