@@ -30,7 +30,7 @@ source-based Varlock configuration workflow.
 On Linux with D-Bus, GNOME Keyring, libsecret, curl, and Python installed,
 `sh scripts/standalone-integration.sh "$(pwd)/dist/standalone/bun-linux-x64"`
 starts the compiled service with synthetic data and verifies the web proxy,
-runtime, build metadata, and assets. The experimental CI workflow builds and
+runtime, build metadata, assets, and terminal pairing QR generation. The experimental CI workflow builds and
 exercises both architectures; its uploaded artifacts are not published releases.
 
 The embedded web assets, version endpoint, worker, and guest packaging were
@@ -39,3 +39,11 @@ web API proxy were exercised together on Linux ARM64, and a compiled host
 executed the embedded guest through a real disposable container on macOS.
 This does not yet prove a full installer, a Linux container sandbox end to end,
 or cross-host credential restoration.
+
+The tag-triggered release workflow is set up to test both Linux architectures,
+attest the resulting archives, and create a **draft** GitHub release with
+checksums. It does not publish the draft. The current source-based installer
+does not consume these archives, and there is no verified binary installer or
+updater yet; do not publish the draft as a supported installation path until
+those pieces and the security review are complete. Checksums detect accidental
+corruption but are not a substitute for independently verified provenance.

@@ -11,6 +11,28 @@ test -x "$directory/raphie" && test -x "$directory/raphie-runtime" && test -x "$
 temp=$(mktemp -d)
 trap 'rm -rf "$temp"' EXIT HUP INT TERM
 mkdir -p "$temp/home" "$temp/data"
+env -i PATH=/usr/bin:/bin HOME="$temp/home" DATA_DIRECTORY="$temp/data" RAPHIE_WEB_ORIGIN=http://127.0.0.1:4320 RAPHIE_EXPERIMENTAL_PAIRING=1 python3 -c '
+import hashlib, os, pty, re, sqlite3, subprocess, sys
+master, slave = pty.openpty()
+child = subprocess.Popen([sys.argv[1], "pair"], stdin=slave, stdout=slave, stderr=slave, env=os.environ)
+os.close(slave)
+output = b""
+while True:
+    try:
+        chunk = os.read(master, 4096)
+        if not chunk: break
+        output += chunk
+    except OSError: break
+os.close(master)
+if child.wait() != 0: raise SystemExit("Compiled pairing command failed")
+match = re.search(rb"#token=([A-Za-z0-9_-]{43})", output)
+if not match or "█".encode() not in output: raise SystemExit("Compiled pairing link or QR missing")
+digest = hashlib.sha256(match.group(1)).hexdigest()
+with sqlite3.connect(os.path.join(os.environ["DATA_DIRECTORY"], "pairing.sqlite")) as db:
+    if not db.execute("SELECT 1 FROM pairing_codes WHERE secret_hash = ?", (digest,)).fetchone():
+        raise SystemExit("Compiled pairing code was not persisted")
+print("Compiled terminal pairing passed.")
+' "$directory/raphie"
 ports=$(python3 -c 'import socket; s=[socket.socket(),socket.socket()]; [x.bind(("127.0.0.1",0)) for x in s]; print(*[x.getsockname()[1] for x in s])')
 set -- $ports
 runtime_port=$1
