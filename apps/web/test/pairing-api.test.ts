@@ -40,6 +40,33 @@ test("pairing protocol limits enrollment, separates browser cookies and native c
       true,
     );
     assert.equal(created?.headers.get("cache-control"), "no-store");
+    const cancelled = store.createCode();
+    assert.equal(
+      (
+        await handle(
+          post(
+            "/auth/pairing/cancel",
+            { secret: cancelled.secret },
+            { origin },
+          ),
+          true,
+        )
+      )?.status,
+      200,
+    );
+    assert.equal(
+      (
+        await handle(
+          post(
+            "/auth/pairing/redeem",
+            { secret: cancelled.secret, label: "Cancelled" },
+            { origin },
+          ),
+          false,
+        )
+      )?.status,
+      400,
+    );
     const code = (await created!.json()) as { secret: string };
     const response = await handle(
       post(
