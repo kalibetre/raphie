@@ -15,7 +15,7 @@ export function sessionToken(request: Request): string {
 /** Stop observing when a session is revoked, even if the upstream is idle. */
 export function guardEventStream(
   response: Response,
-  store: OwnerStore,
+  store: { valid(token: string): boolean },
   token: string,
   intervalMs = 1000,
 ): Response {

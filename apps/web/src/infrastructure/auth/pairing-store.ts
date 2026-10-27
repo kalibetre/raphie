@@ -97,6 +97,16 @@ export class PairingStore {
     return result.changes === 1;
   }
 
+  /** Stream checks must not write a timestamp every second. */
+  isValid(credential: string) {
+    if (!tokenPattern.test(credential)) return false;
+    return !!this.db
+      .query(
+        "SELECT 1 FROM paired_devices WHERE credential_hash = ? AND revoked_at IS NULL",
+      )
+      .get(hash(credential));
+  }
+
   revoke(id: string, now = Date.now()) {
     return (
       this.db
