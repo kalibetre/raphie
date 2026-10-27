@@ -7,7 +7,7 @@ The [design](headless-runtime.md) records intent; this file records actual behav
 ## Run without the web application
 
 `bun run dev:runtime` starts the single durable owner on loopback port 4316. It
-loads private configuration through Varlock and starts Discord when enabled.
+loads host configuration through Varlock and starts each bot’s saved channels. Discord is configured in the UI and its token is encrypted using the host OS credential store.
 `bun run start:web` starts only the built client host; it owns no SQLite database
 or model execution. `bun run start` starts both. No additional broker or service
 was introduced. Bun (including `bun fmt`), Hono, TypeScript 7 and Oxlint remain the stack.

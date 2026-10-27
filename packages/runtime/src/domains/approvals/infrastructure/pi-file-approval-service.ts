@@ -31,6 +31,7 @@ export class FileApprovalService {
     files: FileRef[];
     discordThreadId?: string;
     connectionId?: string;
+    discordUserId?: string;
   }) {
     this.context.authorize(input.actor);
     if (!input.eventId || input.eventId.length > 200)
@@ -67,6 +68,12 @@ export class FileApprovalService {
             "Request belongs to another Discord connection or thread.",
             403,
           );
+        if (
+          input.source === "discord" &&
+          existing.discordUserId &&
+          existing.discordUserId !== input.discordUserId
+        )
+          throw new InputError("Request belongs to another Discord user.", 403);
         if (existing.fingerprint !== fingerprint)
           throw new InputError(
             "Event ID already used for different content.",
@@ -86,6 +93,9 @@ export class FileApprovalService {
           input.connectionId ??
           this.context.options.discordConnectionId ??
           "legacy-discord",
+        ...(input.source === "discord" && input.discordUserId
+          ? { discordUserId: input.discordUserId }
+          : {}),
         createdAt: now,
         expiresAt: now + (this.context.options.approvalTtlMs ?? 600_000),
         status: "pending",
@@ -123,6 +133,7 @@ export class FileApprovalService {
     via: Source,
     threadId?: string,
     connectionId = "legacy-discord",
+    discordUserId?: string,
   ) {
     this.context.authorize(actor);
     if (!isDecision(decision)) throw new InputError("Invalid decision.");
@@ -141,6 +152,14 @@ export class FileApprovalService {
             403,
           );
       }
+      if (
+        via === "discord" &&
+        (!approval.discordUserId || approval.discordUserId !== discordUserId)
+      )
+        throw new InputError(
+          "Only the Discord user who initiated this request can decide it. Use the web UI if the initiator cannot be verified.",
+          403,
+        );
       if (approval.status !== "pending") return approval.status;
       approval.status = decideApproval(
         approval.status,

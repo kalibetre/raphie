@@ -92,6 +92,7 @@ test("file experiment uses verified actors and restricts decisions to its origin
       "discord",
       "discord:guild:channel:one",
       "bot-one",
+      "initiator",
     );
     const input = { eventId: "file", text: "Copy once", files: [] };
     const id = await app.sessions.copy(owner, input);

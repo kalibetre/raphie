@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import { streamSnapshots } from "../domains/activity/presentation/http/events.ts";
 import { approvalRoutes } from "../domains/approvals/presentation/http/routes.ts";
 import { attachmentRoutes } from "../domains/attachments/presentation/http/routes.ts";
+import type { BotChannels } from "../domains/channels/infrastructure/bot-channels.ts";
+import { channelRoutes } from "../domains/channels/presentation/http/routes.ts";
 import { conversationRoutes } from "../domains/conversations/presentation/http/routes.ts";
 import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
 import { noTraces } from "../domains/diagnostics/application/trace-reader.ts";
@@ -22,6 +24,7 @@ import { InputError } from "../shared/application/input-error.ts";
 import type { Gateway } from "./agent-runtime.ts";
 
 export type RuntimeHttpOptions = {
+  channels?: BotChannels;
   mcp?: BotMcp;
   jobs?: BotJobs;
   discordConfigured?: boolean;
@@ -53,6 +56,8 @@ export function runtimeRoutes(
       }),
     ),
   );
+  if (options.channels)
+    app.route("/api/channels", channelRoutes(options.channels));
   if (options.mcp) app.route("/api/mcp", mcpRoutes(options.mcp));
   if (options.jobs) app.route("/api/jobs", jobRoutes(options.jobs));
   // The outer host owns sanitized transport error responses.
@@ -77,7 +82,9 @@ export function runtimeRoutes(
       runtime.toolApprovals,
       runtime,
       runtime.files,
-      options.discordConfigured ?? false,
+      options.channels
+        ? !!options.channels.read().discord
+        : (options.discordConfigured ?? false),
       runtime.sessions,
       owner,
     ),

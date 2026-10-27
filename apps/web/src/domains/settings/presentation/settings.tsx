@@ -5,6 +5,7 @@ import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { useBots } from "../infrastructure/use-bots";
 import { AppearanceSettings } from "./appearance-settings";
 import { BotSettings } from "./bot-settings";
+import { ChannelSettings } from "./channel-settings";
 import { ConnectionSettings } from "./connection-settings";
 import { JobSettings } from "./job-settings";
 import { McpSettings } from "./mcp-settings";
@@ -84,6 +85,8 @@ export function Settings({
           <ModelSettings />
         ) : section === "mcp" ? (
           <McpSettings />
+        ) : section === "channels" ? (
+          <ChannelSettings />
         ) : section === "sandbox" ? (
           <SandboxSettings onBrowse={() => onParent("workspace")} />
         ) : section === "workspace" ? (

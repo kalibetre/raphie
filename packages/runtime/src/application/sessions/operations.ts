@@ -80,6 +80,7 @@ export class Sessions implements SessionOperations {
       actor: verified.subject,
       discordThreadId: verified.threadId,
       connectionId: verified.connectionId,
+      discordUserId: verified.discordUserId,
     });
     return { id: receipt.id, sessionId: receipt.sessionId };
   }
@@ -126,6 +127,7 @@ export class Sessions implements SessionOperations {
       actor: verified.subject,
       discordThreadId: verified.threadId,
       connectionId: verified.connectionId,
+      discordUserId: verified.discordUserId,
     });
   }
 
@@ -138,6 +140,7 @@ export class Sessions implements SessionOperations {
       discordThreadId: verified.threadId,
       connectionId:
         verified.source === "discord" ? verified.connectionId : undefined,
+      discordUserId: verified.discordUserId,
     });
   }
 
@@ -154,6 +157,7 @@ export class Sessions implements SessionOperations {
       verified.source,
       verified.threadId,
       verified.connectionId,
+      verified.discordUserId,
     );
   }
 
@@ -170,6 +174,7 @@ export class Sessions implements SessionOperations {
       verified.source,
       verified.threadId,
       verified.connectionId,
+      verified.discordUserId,
     );
   }
 }

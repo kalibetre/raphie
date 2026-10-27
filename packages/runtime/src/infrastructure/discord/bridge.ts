@@ -16,6 +16,25 @@ type FetchRequest = (
   ...args: Parameters<typeof fetch>
 ) => ReturnType<typeof fetch>;
 
+/** Discover a stable connection identity using the bot credential. */
+export async function resolveDiscordApplication(
+  botToken: string,
+  lookup: FetchRequest = fetch,
+) {
+  const response = await lookup(
+    "https://discord.com/api/v10/oauth2/applications/@me",
+    {
+      headers: { Authorization: `Bot ${botToken}` },
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
+  if (!response.ok) throw new Error("Discord application lookup failed.");
+  const application = (await response.json()) as { id?: unknown };
+  if (typeof application.id !== "string" || !/^\d{1,32}$/.test(application.id))
+    throw new Error("Invalid Discord application identity.");
+  return application.id;
+}
+
 /** REST posting only needs a channel ID; incoming SDK routes also contain its guild. */
 export async function resolveDiscordThread(
   config: {
@@ -41,22 +60,48 @@ export async function resolveDiscordThread(
     throw new Error("Discord returned a different channel.");
   const guild = channel.guild_id || "@me";
   if (config.guildId && config.guildId !== guild)
-    throw new Error("DISCORD_GUILD_ID does not match the configured channel.");
+    throw new Error("The server ID does not match the configured channel.");
   return `discord:${guild}:${channel.id}`;
+}
+
+/** The same policy gates messages and approval interactions. */
+export function discordAuthorized(
+  userId: string,
+  allowedUserIds: string[],
+  incoming: { guildId: string; channelId: string; threadId?: string },
+  target?: { guildId: string; channelId: string; threadId?: string } | null,
+) {
+  return (
+    allowedUserIds.includes(userId) &&
+    (!target ||
+      (incoming.guildId === target.guildId &&
+        incoming.channelId === target.channelId &&
+        (!target.threadId || incoming.threadId === target.threadId)))
+  );
 }
 
 export function createDiscordBridge(
   app: ChannelServices,
   config: DiscordAdapterConfig & {
     applicationId: string;
-    ownerId: string;
-    threadId: string;
+    ownerId?: string;
+    allowedUserIds?: string[];
+    threadId?: string;
     attachmentFetch?: FetchRequest;
   },
 ) {
   // SDK info logs include message content; keep it out of service logs.
   const logger = new ConsoleLogger("silent");
-  const adapter = createDiscordAdapter({ ...config, logger });
+  const adapter = createDiscordAdapter({
+    ...config,
+    // This bridge uses Gateway events only; reject any HTTP webhook if invoked.
+    ...(config.publicKey || config.webhookVerifier
+      ? {}
+      : { webhookVerifier: () => false }),
+    mentionRoleIds: config.mentionRoleIds ?? [],
+    respondToChannelIds: config.respondToChannelIds ?? [],
+    logger,
+  });
   const chat = new Chat({
     userName: "raphie",
     adapters: { discord: adapter },
@@ -64,18 +109,16 @@ export function createDiscordBridge(
     logger,
     concurrency: "concurrent",
   });
-  const target = adapter.decodeThreadId(config.threadId);
-  const authorized = (userId: string, threadId: string) => {
-    if (userId !== config.ownerId) return false;
-    const incoming = adapter.decodeThreadId(threadId);
-    // Gateway mentions create child threads; their encoded route retains the
-    // parent channel. Authorize that parent, never an arbitrary thread prefix.
-    return (
-      incoming.guildId === target.guildId &&
-      incoming.channelId === target.channelId &&
-      (!target.threadId || incoming.threadId === target.threadId)
+  const target = config.threadId
+    ? adapter.decodeThreadId(config.threadId)
+    : null;
+  const authorized = (userId: string, threadId: string) =>
+    discordAuthorized(
+      userId,
+      config.allowedUserIds ?? (config.ownerId ? [config.ownerId] : []),
+      adapter.decodeThreadId(threadId),
+      target,
     );
-  };
 
   async function receive(thread: Thread, message: Message) {
     if (!authorized(message.author.userId, thread.id) || message.author.isBot)
@@ -88,7 +131,12 @@ export function createDiscordBridge(
             "Chat currently accepts text only. Use /copy with attachments to run the file approval experiment.",
           );
         await app.sessions.submit(
-          app.actors.establish("discord", thread.id, config.applicationId),
+          app.actors.establish(
+            "discord",
+            thread.id,
+            config.applicationId,
+            message.author.userId,
+          ),
           {
             eventId: message.id,
             text,
@@ -136,7 +184,12 @@ export function createDiscordBridge(
         );
       }
       await app.sessions.copy(
-        app.actors.establish("discord", thread.id, config.applicationId),
+        app.actors.establish(
+          "discord",
+          thread.id,
+          config.applicationId,
+          message.author.userId,
+        ),
         {
           eventId: message.id,
           text: text.replace(/^\/copy\s*/, ""),
@@ -161,7 +214,12 @@ export function createDiscordBridge(
   chat.onAction(["raphie-approve", "raphie-reject"], async (event) => {
     if (!authorized(event.user.userId, event.threadId) || !event.value) return;
     await app.sessions.decideFile(
-      app.actors.establish("discord", event.threadId, config.applicationId),
+      app.actors.establish(
+        "discord",
+        event.threadId,
+        config.applicationId,
+        event.user.userId,
+      ),
       event.value,
       event.actionId === "raphie-approve" ? "approved" : "rejected",
     );
@@ -172,7 +230,12 @@ export function createDiscordBridge(
       if (!authorized(event.user.userId, event.threadId) || !event.value)
         return;
       await app.sessions.decide(
-        app.actors.establish("discord", event.threadId, config.applicationId),
+        app.actors.establish(
+          "discord",
+          event.threadId,
+          config.applicationId,
+          event.user.userId,
+        ),
         event.value,
         event.actionId === "raphie-tool-approve" ? "approved" : "rejected",
       );

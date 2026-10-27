@@ -28,6 +28,7 @@ test("pending workflow survives reopen; competing clients produce one file effec
       text: "Keep this",
       files: [file],
       discordThreadId: "discord:guild:channel:thread",
+      discordUserId: "initiator",
     };
     const id = await app.accept(input);
     assert.equal(await app.accept(input), id);
@@ -44,7 +45,15 @@ test("pending workflow survives reopen; competing clients produce one file effec
     );
     const decisions = await Promise.all([
       app.decide(id, "approved", "owner", "web"),
-      app.decide(id, "rejected", "owner", "discord", input.discordThreadId),
+      app.decide(
+        id,
+        "rejected",
+        "owner",
+        "discord",
+        input.discordThreadId,
+        "legacy-discord",
+        "initiator",
+      ),
       app.decide(id, "approved", "owner", "web"),
     ]);
     assert.deepEqual(decisions, ["approved", "approved", "approved"]);

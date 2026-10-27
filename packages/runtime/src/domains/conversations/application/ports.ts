@@ -10,6 +10,7 @@ export type SendMessage = {
   model?: ModelSelection;
   discordThreadId?: string;
   connectionId?: string;
+  discordUserId?: string;
   /** Internal only: a due scheduled job. Never accepted from HTTP input. */
   scheduled?: { name: string };
 };

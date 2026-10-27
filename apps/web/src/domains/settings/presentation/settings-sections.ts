@@ -9,6 +9,7 @@ import {
   KeyRound,
   Library,
   ListTree,
+  MessagesSquare,
   Palette,
   Plug,
   Puzzle,
@@ -43,6 +44,12 @@ export const sections = [
     icon: Plug,
     lede: (bot: string) =>
       `Connect the tools ${bot} can use. Every connection belongs to this bot.`,
+  },
+  {
+    id: "channels",
+    label: "Channels",
+    icon: MessagesSquare,
+    lede: (bot: string) => `Connect ${bot} to messaging channels.`,
   },
   {
     id: "jobs",

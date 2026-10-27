@@ -197,7 +197,7 @@ Proposed slices:
    cross-bot session/stream/file access, actor and approval rejection, separate
    credentials and memory, personality admission locking, and restart recovery.
    Per-bot MCP connection management and recurring prompts are delivered; see
-   [bot automation](bot-automation.md). Per-bot Discord management remains subsequent work.
+   [bot automation](bot-automation.md). Per-bot channel settings now include Discord.
 1. **One durable lightweight workspace per bot — delivered (2026-10-24):**
    `workspace_exec` uses pinned just-bash in disposable workers with only a virtual
    filesystem. Sessions share their bot’s files; executions serialize per bot.

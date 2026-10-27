@@ -170,8 +170,7 @@ is not bot-token authentication or remote-client authentication. Supported
 shell-like commands run in a bounded just-bash worker over a virtual
 filesystem. No native/VM execution or host filesystem mounts are provided.
 
-The existing environment-configured Discord connection still belongs to the
-default bot; named-bot channel management remains future work. Each bot manages
+Channels are configured per bot in Settings. Discord is the first supported channel; its token is encrypted using the runtime host’s OS credential store. Configure allowed Discord user IDs; an empty list denies all access. Only the initiating Discord user can approve or reject an action in Discord; the owner can also decide in the web UI. Existing pending requests without a recorded user, and tool approvals where queued turns make the initiator ambiguous, can only be decided in the web UI. An optional channel ID restricts the bot to that channel and its threads; otherwise allowed users can DM the bot or mention it in servers. Existing Discord environment variables are ignored: configure the default bot in the UI using the same application ID to retain existing bindings. Legacy records previously assigned `legacy-discord` cannot be automatically matched to an application ID. Each bot manages
 its own MCP servers and recurring prompt jobs in Settings; see
 [bot automation](bot-automation.md). Operational OTLP export and
 Diagnostics remain configured for the default bot; named-bot Diagnostics returns

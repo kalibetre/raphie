@@ -9,6 +9,7 @@ export type Approval = {
   text: string;
   source: Source;
   connectionId?: string;
+  discordUserId?: string;
   files: FileRef[];
   createdAt: number;
   expiresAt: number;
