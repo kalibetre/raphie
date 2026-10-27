@@ -1,9 +1,10 @@
 # Linux server installation (experimental)
 
 This is an experimental installation path, not yet a release. It requires a
-clean committed checkout, Linux with systemd and a Secret Service provider,
-and has not yet been verified with a running systemd instance. Do not deploy it
-until the remaining end-to-end verification and security review are complete.
+clean committed checkout, Linux with systemd and a Secret Service provider.
+Installation, service restart, update, and backup restore have been exercised
+on an Ubuntu 24.04 VM with systemd using synthetic data. Do not deploy it until
+the remaining security review and recovery verification are complete.
 
 The server runs as the `raphie` user. The web listener requires an owner login;
 the runtime listens only on loopback. A private HTTP deployment must bind only
