@@ -13,6 +13,7 @@ type Discord = {
   channelId: string;
   connected: boolean;
   tokenConfigured: boolean;
+  conflict: boolean;
 };
 
 type Channels = { discord: Discord | null };
@@ -120,9 +121,11 @@ export function ChannelSettings() {
         title="Discord"
         description={
           saved
-            ? saved.connected
-              ? "Connected"
-              : "Disconnected · save settings to reconnect"
+            ? saved.conflict
+              ? "Disconnected · application used by another bot"
+              : saved.connected
+                ? "Connected"
+                : "Disconnected · save settings to reconnect"
             : "Not configured"
         }
       >
@@ -151,6 +154,13 @@ export function ChannelSettings() {
             The bot token is encrypted on the runtime host and is never shown
             again. Leave it blank to keep the saved token.
           </p>
+          {saved?.conflict && (
+            <p role="alert" className="settings-error">
+              This Discord application is configured for another bot. Remove it
+              from that bot first, then save here to connect, or remove it from
+              this bot.
+            </p>
+          )}
           <form
             className="settings-form automation-form channel-form"
             onSubmit={(event) => {

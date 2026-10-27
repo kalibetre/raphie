@@ -1,11 +1,15 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
+import { rejects } from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { ChannelServices } from "../src/application/channels/ports.ts";
-import { BotChannels } from "../src/domains/channels/infrastructure/bot-channels.ts";
+import {
+  BotChannels,
+  DiscordApplications,
+} from "../src/domains/channels/infrastructure/bot-channels.ts";
 import { CredentialCipher } from "../src/domains/settings/infrastructure/credential-cipher.ts";
 import {
   discordAuthorized,
@@ -83,6 +87,150 @@ describe("bot channels", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+});
+
+test("concurrent saves reserve an application and release it on removal or failed startup", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-channel-owners-"));
+  const keys = new Map<string, string>();
+  const store = {
+    get: async (id: string) => keys.get(id) ?? null,
+    set: async (id: string, value: string) => {
+      keys.set(id, value);
+    },
+  };
+  const applications = new DiscordApplications();
+  let fail = true;
+  let active = 0;
+  const adapters = {
+    application: async () => "shared",
+    resolve: (async () => "thread") as typeof resolveDiscordThread,
+    create: (() => ({
+      chat: {
+        initialize: async () => {
+          if (fail) {
+            fail = false;
+            throw new Error();
+          }
+          active++;
+        },
+        shutdown: async () => {
+          active--;
+        },
+      },
+      listen: async () => {},
+      flush: async () => {},
+    })) as unknown as typeof createDiscordBridge,
+  };
+  const app = {} as ChannelServices;
+  const first = await BotChannels.open(
+    join(directory, "a.sqlite"),
+    app,
+    store,
+    adapters,
+    applications,
+  );
+  const second = await BotChannels.open(
+    join(directory, "b.sqlite"),
+    app,
+    store,
+    adapters,
+    applications,
+  );
+  const input = { botToken: "token", allowedUserIds: ["1"] };
+  try {
+    await rejects(first.save(input), /Discord connection failed/);
+    const results = await Promise.allSettled([
+      first.save(input),
+      second.save(input),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1);
+    expect(active).toBe(1);
+    const owner = first.read().discord ? first : second;
+    const other = owner === first ? second : first;
+    await rejects(other.save(input), { status: 409 });
+    await owner.remove();
+    await other.save(input);
+    expect(active).toBe(1);
+  } finally {
+    await first.close();
+    await second.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("existing duplicate configurations stay encrypted and only the first reconnects after restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-channel-duplicates-"));
+  const keys = new Map<string, string>();
+  const store = {
+    get: async (id: string) => keys.get(id) ?? null,
+    set: async (id: string, value: string) => {
+      keys.set(id, value);
+    },
+  };
+  let active = 0;
+  const adapters = {
+    application: async () => "shared",
+    resolve: (async () => "thread") as typeof resolveDiscordThread,
+    create: (() => ({
+      chat: {
+        initialize: async () => {
+          active++;
+        },
+        shutdown: async () => {
+          active--;
+        },
+      },
+      listen: async () => {},
+      flush: async () => {},
+    })) as unknown as typeof createDiscordBridge,
+  };
+  const app = {} as ChannelServices;
+  const paths = [join(directory, "a.sqlite"), join(directory, "b.sqlite")];
+  for (const path of paths) {
+    const bot = await BotChannels.open(path, app, store, adapters);
+    await bot.save({ botToken: "secret", allowedUserIds: ["1"] });
+    await bot.close();
+  }
+  const applications = new DiscordApplications();
+  const first = await BotChannels.open(
+    paths[0]!,
+    app,
+    store,
+    adapters,
+    applications,
+  );
+  const second = await BotChannels.open(
+    paths[1]!,
+    app,
+    store,
+    adapters,
+    applications,
+  );
+  try {
+    expect(active).toBe(1);
+    expect(second.read().discord).toMatchObject({
+      connected: false,
+      conflict: true,
+      tokenConfigured: true,
+    });
+    await rejects(second.save({ allowedUserIds: ["1"] }), {
+      status: 409,
+    });
+    await first.remove();
+    expect(second.read().discord?.conflict).toBe(false);
+    await second.save({ allowedUserIds: ["1"] });
+    expect(second.read().discord?.connected).toBe(true);
+    expect(active).toBe(1);
+  } finally {
+    await first.close();
+    await second.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("Discord authorization denies empty lists and enforces optional channel and thread restrictions", () => {

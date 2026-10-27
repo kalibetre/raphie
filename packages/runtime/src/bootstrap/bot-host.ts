@@ -7,7 +7,10 @@ import type { SaveBotProfile, UpdateBotProfile } from "@raphie/contracts";
 
 import type { BotProfiles } from "../domains/bots/application/ports.ts";
 import { BotProfileStore } from "../domains/bots/infrastructure/bot-profiles.ts";
-import { BotChannels } from "../domains/channels/infrastructure/bot-channels.ts";
+import {
+  BotChannels,
+  DiscordApplications,
+} from "../domains/channels/infrastructure/bot-channels.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { BotJobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
@@ -38,6 +41,7 @@ type Automation = { keyStore?: CredentialKeyStore; legacyMcp?: McpConnection };
 export class BotHost implements BotProfiles {
   private readonly profiles: BotProfileStore;
   private readonly runtimes = new Map<string, BotRuntime>();
+  private readonly discordApplications = new DiscordApplications();
 
   private readonly directory: string;
   private readonly openBot: OpenBot;
@@ -181,6 +185,8 @@ export class BotHost implements BotProfiles {
         join(directory, "channels.sqlite"),
         gateway,
         this.automation.keyStore,
+        undefined,
+        this.discordApplications,
       );
       const actor = gateway.actors.establish("web");
       const jobs = BotJobs.open({

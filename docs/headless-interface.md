@@ -8,6 +8,16 @@ The [design](headless-runtime.md) records intent; this file records actual behav
 
 `bun run dev:runtime` starts the single durable owner on loopback port 4316. It
 loads host configuration through Varlock and starts each bot’s saved channels. Discord is configured in the UI and its token is encrypted using the host OS credential store.
+
+Each Discord application can belong to only one bot in an app-data directory.
+Concurrent saves reserve the application before connecting. On startup, ownership
+is rebuilt from each bot's encrypted settings, in profile order (default bot
+first). If older settings contain duplicates, the first bot owns the application;
+the others keep their settings and credentials but do not connect. Their channel
+settings explain the conflict. Remove the connection from unwanted bots; if the
+owner removes it, the next saved bot may reconnect by saving its settings. No
+credentials or conversations are moved or deleted by this migration. The runtime's
+app-data ownership lock prevents another runtime from using the same directory.
 `bun run start:web` starts only the built client host; it owns no SQLite database
 or model execution. `bun run start` starts both. No additional broker or service
 was introduced. Bun (including `bun fmt`), Hono, TypeScript 7 and Oxlint remain the stack.

@@ -43,6 +43,41 @@ type Adapters = {
   create: typeof createDiscordBridge;
 };
 
+const conflict =
+  "This Discord application is already configured for another bot. Remove it from that bot first.";
+
+/** Shared by all bots in one exclusively owned app-data directory. */
+export class DiscordApplications {
+  private owners = new Map<string, BotChannels[]>();
+
+  register(id: string, bot: BotChannels) {
+    const bots = this.owners.get(id) ?? [];
+    if (!bots.includes(bot)) bots.push(bot);
+    this.owners.set(id, bots);
+    return bots[0] === bot;
+  }
+
+  claim(id: string, bot: BotChannels) {
+    if (this.conflicts(id, bot)) return false;
+    return this.register(id, bot);
+  }
+
+  ownedBy(id: string, bot: BotChannels) {
+    return this.owners.get(id)?.[0] === bot;
+  }
+
+  conflicts(id: string, bot: BotChannels) {
+    const owner = this.owners.get(id)?.[0];
+    return !!owner && owner !== bot;
+  }
+
+  release(id: string, bot: BotChannels) {
+    const bots = this.owners.get(id)?.filter((item) => item !== bot) ?? [];
+    if (bots.length) this.owners.set(id, bots);
+    else this.owners.delete(id);
+  }
+}
+
 /** Per-bot channel configuration and lifecycle. Credentials never leave this service. */
 export class BotChannels {
   private config: DiscordConfig | null = null;
@@ -53,6 +88,7 @@ export class BotChannels {
   private cipher: CredentialCipher;
   private app: ChannelServices;
   private adapters: Adapters;
+  private applications: DiscordApplications;
   private queue: Promise<unknown> = Promise.resolve();
 
   private constructor(
@@ -60,11 +96,13 @@ export class BotChannels {
     cipher: CredentialCipher,
     app: ChannelServices,
     adapters: Adapters,
+    applications: DiscordApplications,
   ) {
     this.db = db;
     this.cipher = cipher;
     this.app = app;
     this.adapters = adapters;
+    this.applications = applications;
   }
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {
@@ -82,6 +120,7 @@ export class BotChannels {
       application: resolveDiscordApplication,
       create: createDiscordBridge,
     },
+    applications = new DiscordApplications(),
   ) {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const db = new Database(path, { strict: true });
@@ -100,7 +139,7 @@ export class BotChannels {
         keyStore ?? osCredentialKeyStore,
         row?.key_id,
       );
-      service = new BotChannels(db, cipher, app, adapters);
+      service = new BotChannels(db, cipher, app, adapters, applications);
       if (row) {
         const stored = JSON.parse(
           cipher.decrypt(JSON.parse(row.value), "channels", "channels")!,
@@ -116,13 +155,18 @@ export class BotChannels {
       }
       if (service.config) {
         registerRedactionSecret(service.config.botToken);
-        try {
-          await service.start(service.config);
-        } catch {
+        if (!applications.register(service.config.applicationId, service)) {
           console.error(
-            "Discord channel could not connect. Check this bot's channel settings.",
+            "Discord application is configured for multiple bots; this bot will not connect.",
           );
-        }
+        } else
+          try {
+            await service.start(service.config);
+          } catch {
+            console.error(
+              "Discord channel could not connect. Check this bot's channel settings.",
+            );
+          }
       }
       return service;
     } catch (error) {
@@ -140,6 +184,10 @@ export class BotChannels {
             channelId: this.config.channelId ?? "",
             connected: !!this.bridge,
             tokenConfigured: true,
+            conflict: this.applications.conflicts(
+              this.config.applicationId,
+              this,
+            ),
           }
         : null,
     };
@@ -211,11 +259,18 @@ export class BotChannels {
         "Discord connection failed. Check the token, channel ID and bot permissions.",
       );
     }
-    await this.stop();
+    const previouslyOwned =
+      !!this.config &&
+      this.applications.ownedBy(this.config.applicationId, this);
+    if (!this.applications.claim(next.applicationId, this))
+      throw new InputError(conflict, 409);
     try {
+      await this.stop();
       await this.start(next);
     } catch {
-      if (this.config) await this.start(this.config).catch(() => {});
+      if (this.config && previouslyOwned)
+        await this.start(this.config).catch(() => {});
+      if (!previouslyOwned) this.applications.release(next.applicationId, this);
       throw new InputError(
         "Discord connection failed. Check the settings and try again.",
       );
@@ -232,7 +287,9 @@ export class BotChannels {
       this.config = next;
     } catch (error) {
       await this.stop();
-      if (this.config) await this.start(this.config).catch(() => {});
+      if (this.config && previouslyOwned)
+        await this.start(this.config).catch(() => {});
+      if (!previouslyOwned) this.applications.release(next.applicationId, this);
       throw error;
     }
     return this.read();
@@ -242,6 +299,8 @@ export class BotChannels {
     return this.serialize(async () => {
       await this.stop();
       this.db.query("DELETE FROM channels WHERE id=1").run();
+      if (this.config)
+        this.applications.release(this.config.applicationId, this);
       this.config = null;
       return this.read();
     });
@@ -250,6 +309,8 @@ export class BotChannels {
   close() {
     return this.serialize(async () => {
       await this.stop();
+      if (this.config)
+        this.applications.release(this.config.applicationId, this);
       this.cipher.close();
       this.db.close();
     });
