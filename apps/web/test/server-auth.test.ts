@@ -17,7 +17,12 @@ test("server authentication protects pages and API, validates origin and revokes
       new Request(`http://server.test:4320${path}`, init);
     assert.equal((await check(req("/")))?.status, 303);
     assert.equal((await check(req("/api/sessions")))?.status, 401);
-    assert.equal((await check(req("/auth/login")))?.status, 200);
+    const loginPage = await check(req("/auth/login"));
+    assert.equal(loginPage?.status, 200);
+    const loginMarkup = await loginPage!.text();
+    assert.match(loginMarkup, /<title>Sign in · Raphie<\/title>/);
+    assert.match(loginMarkup, /action="\/auth\/login"/);
+    assert.match(loginMarkup, /<svg viewBox="0 0 100 100"/);
     const body = new URLSearchParams({
       username: "owner",
       password: "synthetic password one",
@@ -35,6 +40,10 @@ test("server authentication protects pages and API, validates origin and revokes
     );
     assert.equal(login?.status, 303);
     const cookie = login!.headers.get("set-cookie")!.split(";")[0]!;
+    const account = await check(req("/auth/account", { headers: { cookie } }));
+    const accountMarkup = await account!.text();
+    assert.match(accountMarkup, /action="\/auth\/account"/);
+    assert.match(accountMarkup, /name="confirmPassword"/);
     assert.equal(
       await check(req("/api/sessions", { headers: { cookie } })),
       null,

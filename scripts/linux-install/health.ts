@@ -22,7 +22,7 @@ try {
   if (
     !runtime.ok ||
     !web.ok ||
-    !(await web.text()).includes("Sign in to Raphie")
+    !(await web.text()).includes("<title>Sign in · Raphie</title>")
   )
     process.exitCode = 1;
 } catch {

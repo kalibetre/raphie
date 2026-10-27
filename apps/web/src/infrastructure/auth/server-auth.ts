@@ -1,20 +1,5 @@
+import { authPage } from "./auth-pages.ts";
 import type { OwnerStore } from "./owner-store.ts";
-
-const loginPage = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · Raphie</title><style>body{font:16px system-ui;background:#141413;color:#eee;display:grid;place-items:center;min-height:100vh;margin:0}main{width:min(24rem,calc(100% - 3rem));padding:2rem;border:1px solid #444;border-radius:12px;background:#20201f}h1{font-size:1.5rem}label{display:block;margin:1rem 0 .4rem}input,button{box-sizing:border-box;width:100%;padding:.7rem;font:inherit;border-radius:6px}input{background:#111;color:#fff;border:1px solid #666}button{margin-top:1.5rem;border:0;background:#e9c99b;color:#181512;font-weight:600}p{color:#d5c7bc}</style></head><body><main><h1>Sign in to Raphie</h1><p>Use the owner account configured on this server.</p><form method="post" action="/auth/login"><label for="username">Username</label><input id="username" name="username" autocomplete="username" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><button>Sign in</button></form></main></body></html>`;
-const accountPage = loginPage
-  .replace("Sign in · Raphie", "Owner account · Raphie")
-  .replace("Sign in to Raphie", "Owner account")
-  .replace(
-    "Use the owner account configured on this server.",
-    "Changing credentials signs out all sessions.",
-  )
-  .replace('action="/auth/login"', 'action="/auth/account"')
-  .replace("Username</label>", "New username</label>")
-  .replace("Password</label>", "Current password</label>")
-  .replace(
-    "<button>Sign in</button>",
-    '<label for="new-password">New password</label><input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="12" required><label for="confirm-password">Confirm new password</label><input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required><button>Change credentials</button>',
-  );
 
 export function sessionToken(request: Request): string {
   return (
@@ -129,7 +114,7 @@ export function serverAuth(store: OwnerStore, origin: string) {
         { headers: { "cache-control": "no-store" } },
       );
     if (incoming.pathname === "/auth/login" && request.method === "GET")
-      return new Response(loginPage, {
+      return new Response(authPage(), {
         headers: {
           "content-type": "text/html; charset=utf-8",
           "cache-control": "no-store",
@@ -191,7 +176,7 @@ export function serverAuth(store: OwnerStore, origin: string) {
       incoming.pathname === "/auth/account" &&
       request.method === "GET"
     )
-      return new Response(accountPage, {
+      return new Response(authPage(true), {
         headers: {
           "content-type": "text/html; charset=utf-8",
           "cache-control": "no-store",

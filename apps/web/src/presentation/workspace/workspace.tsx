@@ -31,6 +31,7 @@ import {
 } from "../../shared/ui/sidebar";
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
+import { AccountMenu, useServerMode } from "./account-menu";
 import { BackendIdentity } from "./backend-identity";
 import { notificationItems } from "./notification-items";
 import { Notifications, useJobNotifications } from "./notifications";
@@ -122,6 +123,7 @@ export function Workspace({
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
   const [enabled, setEnabled] = useEnabledPlugins();
   const mobile = useIsMobile();
+  const serverMode = useServerMode();
   const conversationId = conversation?.id;
   const missing =
     sessionMissing ||
@@ -256,6 +258,7 @@ export function Workspace({
       byBot={inbox.byBot}
       unread={inbox.unread}
       connected={connected}
+      accountMenu={serverMode ? <AccountMenu /> : undefined}
       error={!!inbox.bots.error}
       onRetry={() => void inbox.bots.refetch()}
       onSelect={(id) => {
@@ -365,6 +368,11 @@ export function Workspace({
                 </header>
               ) : (
                 <WorkspaceHeader
+                  accountMenu={
+                    serverMode && (mobile || collapsed) ? (
+                      <AccountMenu />
+                    ) : undefined
+                  }
                   title={title}
                   breadcrumb={botProfile?.name ?? "Raphie"}
                   botId={workspace.botId}

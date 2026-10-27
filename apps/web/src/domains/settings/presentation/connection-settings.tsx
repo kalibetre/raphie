@@ -1,5 +1,6 @@
 import type { RuntimeInfo } from "@raphie/contracts";
 import { useQuery } from "@tanstack/react-query";
+import { Globe, Laptop, Radio } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -20,11 +21,18 @@ export function ConnectionSettings() {
     queryKey: ["runtime-info"],
     queryFn: () => api<RuntimeInfo>("/api/runtime"),
   });
-  const [draft, setDraft] = useState<string>();
+  const [localDraft, setLocalDraft] = useState<string>();
+  const [remoteDraft, setRemoteDraft] = useState<string>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [remoteChoice, setRemote] = useState<boolean>();
   const remote = remoteChoice ?? current.data?.kind === "remote";
+  const draft = remote ? remoteDraft : localDraft;
+  const setDraft = remote ? setRemoteDraft : setLocalDraft;
+  const selectedAddress =
+    draft ??
+    (remote === (current.data?.kind === "remote") ? current.data?.url : "") ??
+    "";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [saved, setSaved] = useState<string[]>([]);
@@ -61,7 +69,7 @@ export function ConnectionSettings() {
     setBusy(true);
     setMessage("");
     try {
-      const url = draft ?? current.data?.url;
+      const url = selectedAddress;
       if (!url) return;
       const credentials = remote ? { username, password } : undefined;
       if (action === "connect") {
@@ -97,46 +105,77 @@ export function ConnectionSettings() {
       note="Choose a local runtime or sign in to a remote Raphie gateway. Each gateway has its own bots and data."
     >
       <div className="settings-form">
-        <p>
-          Active backend: {workspace.url}{" "}
-          {info.data?.identity?.kind === "fixture" ? "(test fixture)" : ""}
-        </p>
-        {info.data?.identity ? (
-          <p>
-            App data: {info.data.identity.directory}
-            <br />
-            Workspace ID: {info.data.identity.id}
-          </p>
-        ) : info.isError ? (
-          <p>
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground">
+            <Radio size={17} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-medium">
+              Current connection
+              {info.data?.identity?.kind === "fixture" ? " · Test fixture" : ""}
+            </div>
+            <p className="mt-1">{workspace.url}</p>
+          </div>
+        </div>
+        {info.isError && (
+          <p role="status">
             Could not load this gateway. Check the connection or sign in again.
           </p>
-        ) : (
-          <p>
-            This backend does not report its data identity. Upgrade it to
-            identify its workspace.
-          </p>
         )}
-        <fieldset>
-          <legend>Connection mode</legend>
-          <label>
-            <input
-              type="radio"
-              name="gateway-mode"
-              checked={!remote}
-              onChange={() => setRemote(false)}
-            />{" "}
-            Local runtime
-          </label>{" "}
-          <label>
-            <input
-              type="radio"
-              name="gateway-mode"
-              checked={remote}
-              onChange={() => setRemote(true)}
-            />{" "}
-            Remote gateway
-          </label>
+        <fieldset className="grid gap-2">
+          <legend className="mb-2 text-sm font-medium">Connect to</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label
+              className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${!remote ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "bg-background hover:bg-muted/50"}`}
+            >
+              <input
+                type="radio"
+                name="gateway-mode"
+                checked={!remote}
+                onChange={() => {
+                  setRemote(false);
+                  setMessage("");
+                }}
+                className="mt-1 accent-[var(--accent)]"
+              />
+              <Laptop
+                size={17}
+                aria-hidden="true"
+                className="mt-0.5 shrink-0 text-muted-foreground"
+              />
+              <span>
+                <span className="block">Local runtime</span>
+                <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                  On this device
+                </span>
+              </span>
+            </label>
+            <label
+              className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${remote ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "bg-background hover:bg-muted/50"}`}
+            >
+              <input
+                type="radio"
+                name="gateway-mode"
+                checked={remote}
+                onChange={() => {
+                  setRemote(true);
+                  setMessage("");
+                }}
+                className="mt-1 accent-[var(--accent)]"
+              />
+              <Globe
+                size={17}
+                aria-hidden="true"
+                className="mt-0.5 shrink-0 text-muted-foreground"
+              />
+              <span>
+                <span className="block">Remote gateway</span>
+                <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                  On another server
+                </span>
+              </span>
+            </label>
+          </div>
         </fieldset>
         {remote && saved.length > 0 && (
           <>
@@ -173,12 +212,14 @@ export function ConnectionSettings() {
           id="backend-url"
           type="url"
           disabled={busy}
-          value={draft ?? current.data?.url ?? ""}
+          value={selectedAddress}
           onChange={(e) => {
             setDraft(e.target.value);
             setMessage("");
           }}
-          placeholder="http://127.0.0.1:4316"
+          placeholder={
+            remote ? "https://your-server.example" : "http://127.0.0.1:4316"
+          }
           autoComplete="url"
         />
         {remote ? (
@@ -210,9 +251,7 @@ export function ConnectionSettings() {
           <Button
             variant="outline"
             disabled={
-              busy ||
-              !(draft ?? current.data?.url) ||
-              (remote && (!username || !password))
+              busy || !selectedAddress || (remote && (!username || !password))
             }
             onClick={() => void connect("test")}
           >
@@ -220,9 +259,7 @@ export function ConnectionSettings() {
           </Button>
           <Button
             disabled={
-              busy ||
-              !(draft ?? current.data?.url) ||
-              (remote && (!username || !password))
+              busy || !selectedAddress || (remote && (!username || !password))
             }
             onClick={() => void connect("connect")}
           >

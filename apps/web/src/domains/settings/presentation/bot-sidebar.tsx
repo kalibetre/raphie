@@ -1,5 +1,6 @@
 import type { BotProfile, SessionSummary } from "@raphie/contracts";
 import { Plus, Settings } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
@@ -17,6 +18,7 @@ export function BotSidebar({
   connected,
   error,
   onRetry,
+  accountMenu,
 }: {
   bots: BotProfile[];
   botId: string;
@@ -28,6 +30,7 @@ export function BotSidebar({
   connected: boolean;
   error: boolean;
   onRetry: () => void;
+  accountMenu?: ReactNode;
 }) {
   const botStyle = useBotStyle();
   return (
@@ -116,15 +119,18 @@ export function BotSidebar({
           <span className={`status-dot ${connected ? "" : "offline"}`} />
           {connected ? "Connected locally" : "Reconnecting…"}
         </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Settings"
-          title="Settings"
-          onClick={onSettings}
-        >
-          <Settings size={15} />
-        </Button>
+        <div className="flex items-center gap-1">
+          {accountMenu}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Settings"
+            title="Settings"
+            onClick={onSettings}
+          >
+            <Settings size={15} />
+          </Button>
+        </div>
       </footer>
     </div>
   );

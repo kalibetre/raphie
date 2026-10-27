@@ -6,10 +6,10 @@ import {
   PanelRight,
   SquarePen,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
-import { Button, buttonVariants } from "../../shared/ui/button";
+import { Button } from "../../shared/ui/button";
 
 export function WorkspaceHeader({
   title,
@@ -27,6 +27,7 @@ export function WorkspaceHeader({
   onBotSettings,
   onNotifications,
   notificationCount,
+  accountMenu,
 }: {
   title: string | undefined;
   breadcrumb: string;
@@ -44,16 +45,8 @@ export function WorkspaceHeader({
   onBotSettings: () => void;
   onNotifications: () => void;
   notificationCount: number;
+  accountMenu?: ReactNode;
 }) {
-  const [serverMode, setServerMode] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetch("/auth/status", { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((status) => setServerMode(status?.enabled === true))
-      .catch(() => {});
-    return () => controller.abort();
-  }, []);
   return (
     <header className="workspace-header bot-workspace-header">
       <div className="header-identity">
@@ -79,21 +72,7 @@ export function WorkspaceHeader({
       </div>
       <h1 className="header-conversation-title">{title}</h1>
       <div className="header-actions">
-        {serverMode && (
-          <>
-            <a
-              className={buttonVariants({ variant: "ghost", size: "sm" })}
-              href="/auth/account"
-            >
-              Account
-            </a>
-            <form method="post" action="/auth/logout">
-              <Button type="submit" variant="ghost" size="sm">
-                Sign out
-              </Button>
-            </form>
-          </>
-        )}
+        {accountMenu}
         {onBack && (
           <Button
             variant="ghost"

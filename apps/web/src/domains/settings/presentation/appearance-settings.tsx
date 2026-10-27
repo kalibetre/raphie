@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -5,7 +6,7 @@ import {
   writeLocal,
 } from "../../../infrastructure/preferences/storage";
 import { applyTheme, type Theme } from "../infrastructure/theme";
-import { Group } from "./settings-group";
+import { Group, Row } from "./settings-group";
 
 const themes = [
   ["system", "System", "Follows your device"],
@@ -51,8 +52,18 @@ export function AppearanceSettings() {
           ))}
         </div>
       </Group>
-      <Group title="About" note="The version of this web app.">
-        <p>Raphie {__RAPHIE_VERSION__}</p>
+      <Group title="About" note="Information about this installation.">
+        <Row
+          icon={<Info size={16} />}
+          title="Raphie version"
+          description="The version currently open in this browser."
+        >
+          <span className="settings-value font-medium">
+            {__RAPHIE_VERSION__ === "development"
+              ? "Development"
+              : __RAPHIE_VERSION__}
+          </span>
+        </Row>
       </Group>
     </>
   );
