@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -10,6 +11,7 @@ import type { JsonObject } from "@earendil-works/pi-durable";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
+import { BuiltinMemory } from "../src/domains/memory/infrastructure/builtin-memory.ts";
 import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memory.ts";
 import { CredentialCipher } from "../src/domains/settings/infrastructure/credential-cipher.ts";
 import { ModelConnectionGate } from "../src/shared/infrastructure/model-connection-gate.ts";
@@ -30,6 +32,34 @@ const evidence = {
   source: "session:test/turn:1",
   eventTime: 1234,
 };
+
+test("stemmed recall backfills existing evidence and tracks corrections and forgetting", async () => {
+  const db = new Database(":memory:");
+  try {
+    db.exec(`CREATE TABLE memory_evidence (scope TEXT NOT NULL, id TEXT NOT NULL, content TEXT NOT NULL,
+      kind TEXT NOT NULL, source TEXT NOT NULL, eventTime INTEGER NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY(scope,id));
+      INSERT INTO memory_evidence VALUES ('owner','old','The owner cycles to work','fact','source',1,1);`);
+    const memory = new BuiltinMemory(db);
+    expect(
+      (await memory.recall("owner", "cycling")).evidence.map((e) => e.id),
+    ).toEqual(["old"]);
+    expect((await memory.recall("other", "cycling")).evidence).toEqual([]);
+    await memory.revise("owner", "old", "The owner schedules meetings");
+    expect((await memory.recall("owner", "cycling")).evidence).toEqual([]);
+    expect(
+      (await memory.recall("owner", "scheduled")).evidence[0]?.revision,
+    ).toBe(2);
+    await memory.forget("owner", "old");
+    expect((await memory.recall("owner", "scheduled")).evidence).toEqual([]);
+    // Reopening must not duplicate or resurrect indexed evidence.
+    expect(
+      (await new BuiltinMemory(db).recall("owner", "scheduled")).evidence,
+    ).toEqual([]);
+  } finally {
+    db.close();
+  }
+});
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "raphie-memory-test-"));

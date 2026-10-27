@@ -22,6 +22,21 @@ export class BuiltinMemory implements MemoryBackend {
     CREATE VIRTUAL TABLE IF NOT EXISTS memory_search USING fts5(
       scope UNINDEXED, id UNINDEXED, content, tokenize='unicode61'
     );`);
+    // Backfill once for databases created before the stemmed index existed.
+    db.transaction(() => {
+      const exists = db
+        .query<{ name: string }, []>(
+          "SELECT name FROM sqlite_master WHERE name='memory_search_stemmed'",
+        )
+        .get();
+      if (!exists) {
+        db.exec(`CREATE VIRTUAL TABLE memory_search_stemmed USING fts5(
+          scope UNINDEXED, id UNINDEXED, content, tokenize='porter unicode61'
+        );
+        INSERT INTO memory_search_stemmed(scope,id,content)
+          SELECT scope,id,content FROM memory_evidence;`);
+      }
+    })();
   }
 
   async retain(scope: string, input: RetainMemory) {
@@ -50,6 +65,11 @@ export class BuiltinMemory implements MemoryBackend {
         );
       this.db
         .query("INSERT INTO memory_search(scope,id,content) VALUES (?,?,?)")
+        .run(scope, input.id, input.content);
+      this.db
+        .query(
+          "INSERT INTO memory_search_stemmed(scope,id,content) VALUES (?,?,?)",
+        )
         .run(scope, input.id, input.content);
     })();
   }
@@ -116,7 +136,24 @@ export class BuiltinMemory implements MemoryBackend {
     `,
       )
       .all(expression, scope);
-    return { evidence: rows };
+    if (rows.length === 8) return { evidence: rows };
+    const stemmed = this.db
+      .query<MemoryEvidence, [string, string]>(
+        `
+        SELECT e.id,e.content,e.kind,e.source,e.eventTime,e.revision
+        FROM memory_search_stemmed JOIN memory_evidence e
+          ON e.scope=memory_search_stemmed.scope AND e.id=memory_search_stemmed.id
+        WHERE memory_search_stemmed MATCH ? AND e.scope=? ORDER BY rank LIMIT 8
+      `,
+      )
+      .all(expression, scope);
+    const ids = new Set(rows.map((row) => row.id));
+    return {
+      evidence: [...rows, ...stemmed.filter((row) => !ids.has(row.id))].slice(
+        0,
+        8,
+      ),
+    };
   }
 
   async revise(scope: string, id: string, content: string) {
@@ -134,6 +171,14 @@ export class BuiltinMemory implements MemoryBackend {
       this.db
         .query("INSERT INTO memory_search(scope,id,content) VALUES (?,?,?)")
         .run(scope, id, content);
+      this.db
+        .query("DELETE FROM memory_search_stemmed WHERE scope=? AND id=?")
+        .run(scope, id);
+      this.db
+        .query(
+          "INSERT INTO memory_search_stemmed(scope,id,content) VALUES (?,?,?)",
+        )
+        .run(scope, id, content);
     })();
   }
 
@@ -141,6 +186,9 @@ export class BuiltinMemory implements MemoryBackend {
     this.db.transaction(() => {
       this.db
         .query("DELETE FROM memory_search WHERE scope=? AND id=?")
+        .run(scope, id);
+      this.db
+        .query("DELETE FROM memory_search_stemmed WHERE scope=? AND id=?")
         .run(scope, id);
       const { changes } = this.db
         .query("DELETE FROM memory_evidence WHERE scope=? AND id=?")
