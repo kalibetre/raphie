@@ -33,6 +33,31 @@ with sqlite3.connect(os.path.join(os.environ["DATA_DIRECTORY"], "pairing.sqlite"
         raise SystemExit("Compiled pairing code was not persisted")
 print("Compiled terminal pairing passed.")
 ' "$directory/raphie"
+env -i PATH=/usr/bin:/bin python3 -c '
+import http.server, os, subprocess, sys, threading
+class Runtime(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200 if self.path == "/api/runtime" else 404); self.end_headers()
+    def log_message(self, *args): pass
+class Web(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        ok = self.path == "/auth/login" and self.headers.get("Host") == "raphie.example"
+        self.send_response(200 if ok else 404); self.end_headers()
+        self.wfile.write("<title>Sign in · Raphie</title>".encode())
+    def log_message(self, *args): pass
+servers = [http.server.HTTPServer(("127.0.0.1", 0), handler) for handler in (Runtime, Web)]
+threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in servers]
+for thread in threads: thread.start()
+env = dict(os.environ, PORT=str(servers[0].server_port), RAPHIE_WEB_PORT=str(servers[1].server_port), RAPHIE_WEB_BIND="127.0.0.1", RAPHIE_WEB_ORIGIN="https://raphie.example")
+try:
+    if subprocess.run([sys.argv[1], "health"], env=env).returncode: raise SystemExit("Compiled health check failed")
+    servers[0].shutdown()
+    if subprocess.run([sys.argv[1], "health"], env=env).returncode == 0: raise SystemExit("Compiled health check accepted an unavailable runtime")
+finally:
+    servers[1].shutdown()
+    for server in servers: server.server_close()
+print("Compiled installation health checks passed.")
+' "$directory/raphie"
 ports=$(python3 -c 'import socket; s=[socket.socket(),socket.socket()]; [x.bind(("127.0.0.1",0)) for x in s]; print(*[x.getsockname()[1] for x in s])')
 set -- $ports
 runtime_port=$1

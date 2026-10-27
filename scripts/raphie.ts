@@ -8,6 +8,7 @@ import * as qr from "qrcode-terminal";
 
 import { OwnerStore } from "../apps/web/src/infrastructure/auth/owner-store.ts";
 import { PairingStore } from "../apps/web/src/infrastructure/auth/pairing-store.ts";
+import { installationHealthy } from "./linux-install/health-check.ts";
 
 async function prompt(label: string, secret = false): Promise<string> {
   if (!process.stdin.isTTY || !process.stderr.isTTY)
@@ -62,6 +63,10 @@ async function account(action: string) {
 
 async function main() {
   const [command, action] = process.argv.slice(2);
+  if (command === "health") {
+    if (!(await installationHealthy(process.env))) process.exitCode = 1;
+    return;
+  }
   if (command === "pair") {
     if (process.env.RAPHIE_EXPERIMENTAL_PAIRING !== "1")
       throw new Error(

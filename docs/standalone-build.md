@@ -30,7 +30,8 @@ source-based Varlock configuration workflow.
 On Linux with D-Bus, GNOME Keyring, libsecret, curl, and Python installed,
 `sh scripts/standalone-integration.sh "$(pwd)/dist/standalone/bun-linux-x64"`
 starts the compiled service with synthetic data and verifies the web proxy,
-runtime, build metadata, assets, and terminal pairing QR generation. The experimental CI workflow builds and
+runtime, build metadata, assets, terminal pairing QR generation, and the
+compiled installation health check. The experimental CI workflow builds and
 exercises both architectures; its uploaded artifacts are not published releases.
 
 The embedded web assets, version endpoint, worker, and guest packaging were
