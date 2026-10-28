@@ -4,6 +4,48 @@ import assert from "node:assert/strict";
 import { pairedAuth } from "../src/infrastructure/auth/paired-auth.ts";
 import { PairingStore } from "../src/infrastructure/auth/pairing-store.ts";
 
+test("device removal identifies whether the requesting browser was revoked", async () => {
+  const store = new PairingStore(":memory:");
+  try {
+    const origin = "https://raphie.example";
+    const auth = pairedAuth(store, origin);
+    const browser = store.redeem(store.createCode().secret, "Browser")!;
+    const other = store.redeem(store.createCode().secret, "Other")!;
+    const revoke = (id: string) =>
+      auth(
+        new Request(`${origin}/auth/pairing/revoke`, {
+          method: "POST",
+          headers: {
+            origin,
+            "content-type": "application/json",
+            cookie: `raphie_device=${browser.credential}`,
+          },
+          body: JSON.stringify({ id }),
+        }),
+      );
+    assert.deepEqual(await (await revoke(other.id))!.json(), {
+      revoked: true,
+      current: false,
+    });
+    assert.deepEqual(await (await revoke(browser.id))!.json(), {
+      revoked: true,
+      current: true,
+    });
+    assert.equal(
+      (
+        await auth(
+          new Request(`${origin}/api/runtime`, {
+            headers: { cookie: `raphie_device=${browser.credential}` },
+          }),
+        )
+      )?.status,
+      401,
+    );
+  } finally {
+    store.close();
+  }
+});
+
 test("pairing-only authentication permits devices and removes access on sign out", async () => {
   const store = new PairingStore(":memory:");
   try {

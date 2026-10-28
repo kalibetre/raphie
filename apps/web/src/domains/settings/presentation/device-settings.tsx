@@ -75,8 +75,13 @@ export function DeviceSettings() {
     },
   });
   const revoke = useMutation({
-    mutationFn: (id: string) => pairingRequest("revoke", { id }),
-    onSuccess: () => {
+    mutationFn: (id: string) =>
+      pairingRequest<{ current: boolean }>("revoke", { id }),
+    onSuccess: (result) => {
+      if (result.current) {
+        window.location.replace("/auth/connect");
+        return;
+      }
       setConfirm(undefined);
       void client.invalidateQueries({ queryKey: ["paired-devices"] });
     },

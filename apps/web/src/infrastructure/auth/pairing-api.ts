@@ -1,5 +1,6 @@
 import { pairingPage } from "./pairing-page.ts";
 import type { PairingStore } from "./pairing-store.ts";
+import { deviceToken } from "./server-auth.ts";
 
 const maxBody = 4096;
 const noStore = {
@@ -148,7 +149,10 @@ export function pairingApi(store: PairingStore, origin: string) {
         if (typeof input.id !== "string" || input.id.length > 80)
           return json({ error: "Invalid device." }, 400);
         return store.revoke(input.id)
-          ? json({ revoked: true })
+          ? json({
+              revoked: true,
+              current: !store.isValid(deviceToken(request)),
+            })
           : json({ error: "Device not found." }, 404);
       } catch {
         return json({ error: "Invalid request." }, 400);

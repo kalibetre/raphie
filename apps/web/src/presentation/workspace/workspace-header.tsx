@@ -6,7 +6,6 @@ import {
   PanelRight,
   SquarePen,
 } from "lucide-react";
-import type { ReactNode } from "react";
 
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { Button } from "../../shared/ui/button";
@@ -27,7 +26,6 @@ export function WorkspaceHeader({
   onBotSettings,
   onNotifications,
   notificationCount,
-  accountMenu,
 }: {
   title: string | undefined;
   breadcrumb: string;
@@ -45,7 +43,6 @@ export function WorkspaceHeader({
   onBotSettings: () => void;
   onNotifications: () => void;
   notificationCount: number;
-  accountMenu?: ReactNode;
 }) {
   return (
     <header className="workspace-header bot-workspace-header">
@@ -72,7 +69,6 @@ export function WorkspaceHeader({
       </div>
       <h1 className="header-conversation-title">{title}</h1>
       <div className="header-actions">
-        {accountMenu}
         {onBack && (
           <Button
             variant="ghost"
