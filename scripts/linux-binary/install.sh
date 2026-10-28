@@ -2,15 +2,13 @@
 set -eu
 
 # Experimental local installation from a build prepared by this checkout.
-usage='Usage: sudo sh install.sh [--data-dir /absolute/path] [--web-origin URL] [--experimental-pairing]'
+usage='Usage: sudo sh install.sh [--data-dir /absolute/path] [--web-origin URL]'
 data_dir=/var/lib/raphie/data
 origin=http://127.0.0.1:4320
-pairing=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --data-dir) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 1; }; data_dir=$2; shift 2 ;;
     --web-origin) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 1; }; origin=$2; shift 2 ;;
-    --experimental-pairing) pairing=1; shift ;;
     --help) echo "$usage"; exit 0 ;;
     *) echo "$usage" >&2; exit 1 ;;
   esac
@@ -54,9 +52,7 @@ except ValueError:
 if not valid:
     raise SystemExit('Enter an HTTP or HTTPS origin without a path.')
 PY
-if [ "$pairing" = 1 ]; then
-  case "$origin" in https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'Pairing requires HTTPS or a loopback HTTP origin.' >&2; exit 1;; esac
-fi
+case "$origin" in https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'Pairing requires HTTPS or a loopback HTTP origin.' >&2; exit 1;; esac
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || [ -e "$data_dir" ] || id raphie >/dev/null 2>&1; then
   echo 'An existing installation or data directory was found; refusing to overwrite it.' >&2; exit 1
 fi
@@ -70,9 +66,8 @@ install -d -m 0700 -o raphie -g raphie "$data_dir"
 install -d -m 0755 "/opt/raphie/releases/$revision"
 for file in raphie raphie-runtime raphie-web raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh; do install -m 0755 "$bundle/$file" "/opt/raphie/releases/$revision/$file"; done
 install -m 0644 "$bundle/raphie.service" "/opt/raphie/releases/$revision/raphie.service"
-runuser -u raphie -- env HOME=/var/lib/raphie DATA_DIRECTORY="$data_dir" "/opt/raphie/releases/$revision/raphie" auth setup
 install -d -m 0700 /etc/raphie
-printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_BIND=127.0.0.1\nRAPHIE_WEB_PORT=4320\nRAPHIE_EXPERIMENTAL_PAIRING=%s\n' "$data_dir" "$origin" "$pairing" > /etc/raphie/raphie.conf
+printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_BIND=127.0.0.1\nRAPHIE_WEB_PORT=4320\n' "$data_dir" "$origin" > /etc/raphie/raphie.conf
 chmod 0600 /etc/raphie/raphie.conf
 umask 077
 head -c 32 /dev/urandom | base64 | systemd-creds encrypt --with-key=host --name=raphie-keyring - /etc/raphie/keyring.cred
@@ -94,4 +89,4 @@ if [ "$ready" != true ]; then
   echo 'Installation was created but the service did not become ready. Check journalctl -u raphie.' >&2
   exit 1
 fi
-echo "Raphie installed. Open $origin and sign in."
+echo "Raphie installed. Run sudo raphie pair to connect your first device."

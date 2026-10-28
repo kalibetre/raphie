@@ -9,7 +9,7 @@ type BackendConnection = {
   backend: BackendWorkspace;
   connect: (
     url: string,
-    credentials?: { username: string; password: string },
+    credentials?: { pairingLink: string },
   ) => Promise<void>;
   selectBot: (id: string) => Promise<void>;
 };

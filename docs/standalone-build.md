@@ -57,9 +57,9 @@ bundle to the machine and run `sudo sh install.sh`. The default browser origin
 is `http://127.0.0.1:4320` and the default data directory is
 `/var/lib/raphie/data`. `--web-origin` and `--data-dir` override them; existing
 data is never overwritten. Existing parents of a custom data directory must be
-root-owned and not group- or world-writable. The experimental pairing UI can
-be enabled with `--experimental-pairing`; use it only on an isolated test
-installation. Access from another machine needs a correctly configured HTTPS
+root-owned and not group- or world-writable. Pair the first browser using
+`sudo raphie pair`; use this only on an isolated test installation. Access
+from another machine needs a correctly configured HTTPS
 reverse proxy. The installer does not configure one.
 
 For local test bundles, `sudo raphie update /path/to/trusted/bundle` takes an

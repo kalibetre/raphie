@@ -33,17 +33,14 @@ export function AccountMenu() {
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="Account menu"
-              title="Account"
+              aria-label="Device menu"
+              title="This device"
             />
           }
         >
           <UserRound size={16} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="end" className="min-w-44">
-          <DropdownMenuItem render={<a href="/auth/account" />}>
-            <UserRound /> Account
-          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => form.current?.requestSubmit()}>
             <LogOut /> Sign out
           </DropdownMenuItem>

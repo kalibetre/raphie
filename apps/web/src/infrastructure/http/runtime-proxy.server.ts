@@ -56,8 +56,8 @@ export async function proxyRuntime(request: Request) {
   const remote = remoteSession(request, base);
   const targetUrl = new URL(base);
   if (remote) {
-    headers.set("cookie", remote);
-    if (request.headers.has("origin")) headers.set("origin", base);
+    headers.set("authorization", `Bearer ${remote}`);
+    headers.delete("origin");
   } else if (
     isRemoteGateway(request) ||
     !["127.0.0.1", "localhost"].includes(targetUrl.hostname) ||
@@ -65,7 +65,7 @@ export async function proxyRuntime(request: Request) {
   ) {
     return Response.json(
       {
-        error: "Sign in to the remote gateway again.",
+        error: "Pair the remote gateway again.",
         code: "gateway_sign_in_required",
       },
       { status: 401 },

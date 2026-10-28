@@ -11,7 +11,7 @@ test -x "$directory/raphie" && test -x "$directory/raphie-runtime" && test -x "$
 temp=$(mktemp -d)
 trap 'rm -rf "$temp"' EXIT HUP INT TERM
 mkdir -p "$temp/home" "$temp/data"
-env -i PATH=/usr/bin:/bin HOME="$temp/home" DATA_DIRECTORY="$temp/data" RAPHIE_WEB_ORIGIN=http://127.0.0.1:4320 RAPHIE_EXPERIMENTAL_PAIRING=1 python3 -c '
+env -i PATH=/usr/bin:/bin HOME="$temp/home" DATA_DIRECTORY="$temp/data" RAPHIE_WEB_ORIGIN=http://127.0.0.1:4320 python3 -c '
 import hashlib, os, pty, re, sqlite3, subprocess, sys
 master, slave = pty.openpty()
 child = subprocess.Popen([sys.argv[1], "pair"], stdin=slave, stdout=slave, stderr=slave, env=os.environ)
@@ -41,9 +41,9 @@ class Runtime(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
 class Web(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        ok = self.path == "/auth/login" and self.headers.get("Host") == "raphie.example"
+        ok = self.path == "/auth/connect" and self.headers.get("Host") == "raphie.example"
         self.send_response(200 if ok else 404); self.end_headers()
-        self.wfile.write("<title>Sign in · Raphie</title>".encode())
+        self.wfile.write("<title>Connect to Raphie</title>".encode())
     def log_message(self, *args): pass
 servers = [http.server.HTTPServer(("127.0.0.1", 0), handler) for handler in (Runtime, Web)]
 threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in servers]

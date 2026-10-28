@@ -1,9 +1,8 @@
-# Device pairing: design under consideration
+# Device pairing
 
-This document describes an experimental implementation and its remaining
-design work. Pairing is disabled by default behind `RAPHIE_EXPERIMENTAL_PAIRING=1`.
-The existing owner-password authentication remains in effect. Do not expose an
-installation publicly on the strength of this experiment alone.
+This document describes the pairing-only server implementation and remaining
+design work. Do not expose an installation publicly on the strength of this
+experimental implementation alone.
 
 ## Goals and trust boundary
 
@@ -41,7 +40,7 @@ party who sees it can race the owner. A proof-of-possession challenge or a
 pending-device approval with a matching confirmation code should be assessed
 before implementing enrollment for public ingress. Do not claim that a pasted
 code or QR alone is phishing-resistant. Validate the exact protocol with a
-security review and threat-focused tests before replacing password access.
+security review and threat-focused tests before public deployment.
 
 ## Device lifecycle and recovery
 
@@ -50,9 +49,12 @@ credential hash and revocation status. The label and timestamps are hints,
 not authentication factors. Allow an owner to list and revoke one device,
 and provide host-side list and revoke commands for recovery. Revocation must
 close existing event streams and prevent reconnects. Define renewal, expiry,
-credential rotation, concurrent use, lost-device recovery and database
-restore semantics before issuing durable credentials. Do not keep native or
-remote gateway credentials only in process memory.
+credential rotation, concurrent use and database restore semantics before a
+public release. A paired browser receives a persistent 90-day cookie and the
+server independently expires its credential after 90 days. After expiry, an
+administrator can run `sudo raphie pair` again. Remote gateway credentials are
+currently held in the local web server's memory and must be paired again after
+that server restarts; a mobile client does not exist yet.
 
 ## Deployment and migration
 
@@ -63,9 +65,9 @@ surfaces with bounded request sizes and rate limits, and test streaming and
 reconnects through the proxy. Public URLs must come from trusted installation
 configuration, not untrusted forwarding headers.
 
-Existing installations with password accounts require an explicit migration
-that preserves access until the owner pairs a device and confirms the new
-recovery path. Backup and restore must account for the authentication store,
+Existing password-based browser sessions no longer authenticate after updating.
+An administrator must run `sudo raphie pair` to regain access; the old account
+database is left untouched. Backup and restore must account for the pairing store,
 revocation state and the separate credential encryption key. A backup copied
 to a different host must be tested before portable recovery is promised.
 
@@ -74,23 +76,22 @@ to a different host must be tested before portable recovery is promised.
 Test first enrollment, replay and simultaneous redemption, expiration,
 cancellation, bad origins, malformed inputs, rate limits, process restart,
 device removal, idle and active event-stream revocation, app reconnection,
-HTTPS proxy behavior, password-to-pairing migration and lost-device recovery.
+HTTPS proxy behavior, upgrade from an older installation and lost-device recovery.
 Use a synthetic native-client harness before a mobile app exists. Review the
 protocol and public ingress independently before enabling it for deployment.
 
-The gated prototype includes one-time browser and native enrollment,
+The implementation includes one-time browser and native enrollment,
 device-specific revocation, a browser confirmation page, a QR/link in the
 terminal and Devices settings, and a host-side list/revoke command. Automated
 checks cover replay, concurrent redemption, origin and size checks, rate
 limits, revocation of an idle stream, and synthetic browser pairing. It does
 not yet provide an independent device-approval step, durable mobile client,
-automatic HTTPS proxy deployment, a passwordless migration, portable recovery,
+automatic HTTPS proxy deployment, portable recovery,
 or the required public-ingress security review. A loopback-only synthetic test
 through Caddy with a locally trusted test certificate verified browser pairing,
 secure cookies, API requests, and live-stream revocation; it did not exercise
 public certificate issuance or automated VPS setup.
 
-The prototype browser cookie lasts only for the browser session. The stored
-device credential has no automatic expiry or rotation and remains valid until
-revoked, including for native clients. These are experimental semantics, not
-the durable device policy required for a production release.
+Device credentials do not currently rotate automatically. Existing prototype
+devices expire 90 days after creation; expired or revoked devices must pair
+again. Public-ingress review and portable recovery remain release gates.

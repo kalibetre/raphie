@@ -1,11 +1,11 @@
 import { randomBytes } from "node:crypto";
 
-type Session = { url: string; cookie: string; expires: number };
+type Session = { url: string; credential: string; expires: number };
 
 const sessions = new Map<string, Session>();
 const lifetime = 30 * 24 * 60 * 60 * 1000;
 
-/** HTTP is limited to loopback tunnels and Tailscale's IPv4 address range. */
+/** HTTP is limited to loopback tunnels. */
 export function remoteAddress(value: string): string {
   const url = new URL(value);
   if (
@@ -18,65 +18,68 @@ export function remoteAddress(value: string): string {
   )
     throw new Error("Enter a gateway origin without a path or credentials.");
   if (url.protocol === "http:") {
-    const match = /^100\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(url.hostname);
-    const tailnetIp =
-      !!match &&
-      Number(match[1]) >= 64 &&
-      Number(match[1]) <= 127 &&
-      Number(match[2]) <= 255 &&
-      Number(match[3]) <= 255;
-    if (!tailnetIp && !["127.0.0.1", "localhost"].includes(url.hostname))
+    if (!["127.0.0.1", "localhost"].includes(url.hostname))
       throw new Error(
-        "HTTP gateways must use a Tailscale IPv4 address or a loopback tunnel; use HTTPS otherwise.",
+        "HTTP gateways require a loopback tunnel; use HTTPS otherwise.",
       );
   }
   return url.origin;
 }
 
-export async function loginRemote(
-  url: string,
-  username: string,
-  password: string,
-): Promise<string> {
-  if (
-    typeof username !== "string" ||
-    typeof password !== "string" ||
-    !username ||
-    username.length > 128 ||
-    !password ||
-    password.length > 1024
-  )
-    throw new Error("Enter the gateway username and password.");
-  const response = await fetch(`${url}/auth/login`, {
-    method: "POST",
-    redirect: "manual",
-    headers: {
-      origin: url,
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ username, password }),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (response.status !== 303 || response.headers.get("location") !== "/")
-    throw new Error("Gateway sign-in failed.");
-  const raw = response.headers
-    .getSetCookie()
-    .find((value) => value.startsWith("raphie_session="));
-  const cookie = raw?.split(";")[0];
-  if (!cookie || !/^raphie_session=[A-Za-z0-9_-]{43}$/.test(cookie))
-    throw new Error("The gateway did not issue a valid session.");
-  const probe = await fetch(`${url}/api/runtime`, {
-    headers: { cookie },
-    redirect: "error",
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!probe.ok) throw new Error("The gateway is unavailable.");
+export async function loginRemote(url: string, link: string): Promise<string> {
   for (const [key, value] of sessions)
     if (value.expires <= Date.now()) sessions.delete(key);
   if (sessions.size >= 100)
     throw new Error("Too many gateway sessions; restart the local web server.");
+  if (typeof link !== "string" || link.length > 2048)
+    throw new Error("Enter a pairing link.");
+  const pairing = new URL(link);
+  const secret = new URLSearchParams(pairing.hash.slice(1)).get("token");
+  if (
+    pairing.origin !== url ||
+    pairing.pathname !== "/auth/pairing/page" ||
+    pairing.search ||
+    !secret ||
+    !/^[A-Za-z0-9_-]{43}$/.test(secret)
+  )
+    throw new Error("Enter a pairing link for this gateway.");
+  const response = await fetch(`${url}/auth/pairing/redeem-native`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ secret, label: "Raphie gateway" }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error("Gateway pairing failed.");
+  const body: unknown = await response.json();
+  const credential =
+    typeof body === "object" && body !== null && "credential" in body
+      ? body.credential
+      : null;
+  if (typeof credential !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(credential))
+    throw new Error("The gateway did not issue a valid device credential.");
+  try {
+    const probe = await fetch(`${url}/api/runtime`, {
+      headers: { authorization: `Bearer ${credential}` },
+      redirect: "error",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!probe.ok) throw new Error("The gateway is unavailable.");
+  } catch (error) {
+    await fetch(`${url}/auth/pairing/revoke-self`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${credential}`,
+        "content-type": "application/json",
+      },
+      body: "{}",
+      redirect: "error",
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => {});
+    throw error;
+  }
   const handle = randomBytes(32).toString("base64url");
-  sessions.set(handle, { url, cookie, expires: Date.now() + lifetime });
+  sessions.set(handle, { url, credential, expires: Date.now() + lifetime });
   return handle;
 }
 
@@ -94,16 +97,29 @@ export function remoteSession(
   const session = handle ? sessions.get(handle) : undefined;
   if (!session || session.url !== url || session.expires <= Date.now())
     return undefined;
-  return session.cookie;
+  return session.credential;
+}
+
+export function validRemoteHandle(
+  handle: unknown,
+  url: string,
+): handle is string {
+  if (typeof handle !== "string") return false;
+  const session = sessions.get(handle);
+  return !!session && session.url === url && session.expires > Date.now();
 }
 
 export function discardRemoteHandle(handle: string): void {
   const session = sessions.get(handle);
   if (!session) return;
   sessions.delete(handle);
-  void fetch(`${session.url}/auth/logout`, {
+  void fetch(`${session.url}/auth/pairing/revoke-self`, {
     method: "POST",
-    headers: { origin: session.url, cookie: session.cookie },
+    headers: {
+      authorization: `Bearer ${session.credential}`,
+      "content-type": "application/json",
+    },
+    body: "{}",
     redirect: "error",
     signal: AbortSignal.timeout(3000),
   }).catch(() => {});

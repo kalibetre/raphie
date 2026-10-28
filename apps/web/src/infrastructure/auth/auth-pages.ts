@@ -18,14 +18,3 @@ export const authStyles = `
   .back{display:inline-block;margin-top:20px;color:var(--muted);text-decoration:none;font-size:13px}.back:hover{color:var(--text)}
   @media(max-width:480px){.shell{padding:24px 16px}.card{padding:24px 20px}.brand{margin-bottom:24px}}
 `;
-
-export function authPage(account = false): string {
-  const title = account ? "Owner account" : "Welcome back";
-  const description = account
-    ? "Update your sign-in details. This will sign out all sessions."
-    : "Sign in to your Raphie workspace.";
-  const fields = account
-    ? `<div class="field"><label for="username">New username</label><input id="username" name="username" autocomplete="username" required></div><div class="field"><label for="password">Current password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div><div class="field"><label for="new-password">New password</label><input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="12" required></div><div class="field"><label for="confirm-password">Confirm new password</label><input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required></div>`
-    : `<div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" required></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${account ? "Owner account" : "Sign in"} · Raphie</title><style>${authStyles}</style></head><body><main class="shell"><div class="wrap"><div class="brand">${authMark}<span>raphie</span></div><section class="card"><h1>${title}</h1><p>${description}</p><form method="post" action="/auth/${account ? "account" : "login"}">${fields}<button type="submit">${account ? "Save changes" : "Sign in"}</button></form>${account ? '<a class="back" href="/">← Back to workspace</a>' : ""}</section></div></main></body></html>`;
-}

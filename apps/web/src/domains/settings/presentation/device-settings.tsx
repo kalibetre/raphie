@@ -13,6 +13,7 @@ type Device = {
   created_at: number;
   last_used_at: number;
   revoked_at: number | null;
+  expires_at: number;
 };
 
 type Code = { secret: string; expiresAt: number; origin: string };
@@ -84,7 +85,9 @@ export function DeviceSettings() {
     ? `${code.origin}/auth/pairing/page#token=${code.secret}`
     : "";
   const active =
-    devices.data?.devices.filter((device) => device.revoked_at === null) ?? [];
+    devices.data?.devices.filter(
+      (device) => device.revoked_at === null && device.expires_at > Date.now(),
+    ) ?? [];
 
   return (
     <>
@@ -210,7 +213,7 @@ export function DeviceSettings() {
               key={device.id}
               icon={<Smartphone size={16} />}
               title={device.label}
-              description={`Last active ${new Date(device.last_used_at).toLocaleDateString()}`}
+              description={`Last active ${new Date(device.last_used_at).toLocaleDateString()} · Access expires ${new Date(device.expires_at).toLocaleDateString()}`}
             >
               {confirm === device.id ? (
                 <div className="flex flex-wrap items-center gap-2">

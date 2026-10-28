@@ -15,7 +15,7 @@ case "$1" in
   enable|start)
     set -a; . /etc/raphie/raphie.conf; set +a
     export HOME=/var/lib/raphie RAPHIE_SERVER_MODE=1
-    setsid runuser -u raphie -- env HOME="$HOME" DATA_DIRECTORY="$DATA_DIRECTORY" RAPHIE_SERVER_MODE=1 RAPHIE_WEB_ORIGIN="$RAPHIE_WEB_ORIGIN" RAPHIE_WEB_BIND="$RAPHIE_WEB_BIND" RAPHIE_WEB_PORT="$RAPHIE_WEB_PORT" RAPHIE_EXPERIMENTAL_PAIRING="$RAPHIE_EXPERIMENTAL_PAIRING" dbus-run-session -- sh -c 'printf "synthetic-only\\n" | gnome-keyring-daemon --unlock >/dev/null; exec /opt/raphie/current/raphie start' >/tmp/raphie-service-test.log 2>&1 &
+    setsid runuser -u raphie -- env HOME="$HOME" DATA_DIRECTORY="$DATA_DIRECTORY" RAPHIE_SERVER_MODE=1 RAPHIE_WEB_ORIGIN="$RAPHIE_WEB_ORIGIN" RAPHIE_WEB_BIND="$RAPHIE_WEB_BIND" RAPHIE_WEB_PORT="$RAPHIE_WEB_PORT" dbus-run-session -- sh -c 'printf "synthetic-only\\n" | gnome-keyring-daemon --unlock >/dev/null; exec /opt/raphie/current/raphie start' >/tmp/raphie-service-test.log 2>&1 &
     echo $! >/tmp/raphie-service-test.pid;;
   is-active) kill -0 "$(cat /tmp/raphie-service-test.pid)";;
   stop) python3 -c 'import os,signal,time; p=int(open("/tmp/raphie-service-test.pid").read()); os.killpg(p,signal.SIGTERM); time.sleep(1)' || true;;
@@ -24,7 +24,7 @@ esac
 ''')
 for path in stub.iterdir(): path.chmod(0o755)
 env = dict(os.environ, PATH=str(stub) + ':' + os.environ['PATH'])
-for args in (['--data-dir', 'relative'], ['--web-origin', 'https://example.com/path'], ['--data-dir', '/'], ['--data-dir', '/var/lib/raphie/.local/share/keyrings'], ['--web-origin', 'http://example.com', '--experimental-pairing']):
+for args in (['--data-dir', 'relative'], ['--web-origin', 'https://example.com/path'], ['--data-dir', '/'], ['--data-dir', '/var/lib/raphie/.local/share/keyrings'], ['--web-origin', 'http://example.com']):
     result = subprocess.run(['sh', '/binaries/install.sh', *args], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     assert result.returncode != 0 and not pathlib.Path('/etc/raphie').exists()
 
@@ -52,12 +52,8 @@ def interactive(command, prompts):
     if code or pending: raise RuntimeError('Interactive command failed or did not complete expected prompts')
     return data
 
-interactive(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:4320', '--experimental-pairing'], [
-    (b'Owner username:', b'test-owner'),
-    (b'Owner password', b'synthetic password one'),
-    (b'Confirm password:', b'synthetic password one'),
-])
-assert pathlib.Path('/srv/raphie-test-data/auth.sqlite').is_file()
+subprocess.run(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
+assert not pathlib.Path('/srv/raphie-test-data/auth.sqlite').exists()
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
 output = interactive(['/usr/local/bin/raphie', 'pair'], [])
 match = re.search(rb'#token=([A-Za-z0-9_-]{43})', output)

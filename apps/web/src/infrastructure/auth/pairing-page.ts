@@ -45,3 +45,17 @@ export function pairingPage(): Response {
     },
   });
 }
+
+export function pairingInstructionsPage(): Response {
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect to Raphie</title><style>${authStyles}</style></head><body><main class="shell"><div class="wrap"><div class="brand">${authMark}<span>raphie</span></div><section class="card"><h1>Connect this device</h1><p>On the machine running Raphie, run <strong>sudo raphie pair</strong>. Open the link or scan the QR code to connect this device.</p></section></div></main></body></html>`;
+  return new Response(html, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      "content-security-policy":
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+    },
+  });
+}

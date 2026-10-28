@@ -116,7 +116,7 @@ export function pairingApi(store: PairingStore, origin: string) {
         const headers = new Headers(noStore);
         headers.append(
           "set-cookie",
-          `raphie_device=${device.credential}; HttpOnly; SameSite=Strict; Path=/${expected.protocol === "https:" ? "; Secure" : ""}`,
+          `raphie_device=${device.credential}; HttpOnly; SameSite=Strict; Path=/; Max-Age=7776000${expected.protocol === "https:" ? "; Secure" : ""}`,
         );
         return Response.json({ id: device.id }, { headers });
       } catch {

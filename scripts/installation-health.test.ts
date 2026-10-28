@@ -23,10 +23,10 @@ test("installation health requires both the runtime and the authenticated web en
     fetch(request) {
       const ok =
         webReady &&
-        new URL(request.url).pathname === "/auth/login" &&
+        new URL(request.url).pathname === "/auth/connect" &&
         request.headers.get("host") === "raphie.example";
       return new Response(
-        ok ? "<title>Sign in · Raphie</title>" : "unavailable",
+        ok ? "<title>Connect to Raphie</title>" : "unavailable",
         { status: ok ? 200 : 503 },
       );
     },

@@ -14,7 +14,7 @@ export function BotBoundary({
   workspace: BackendWorkspace;
   connect: (
     url: string,
-    credentials?: { username: string; password: string },
+    credentials?: { pairingLink: string },
   ) => Promise<void>;
   children: ReactNode;
 }) {

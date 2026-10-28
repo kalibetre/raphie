@@ -1,15 +1,14 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 
-import { OwnerStore } from "../src/infrastructure/auth/owner-store.ts";
-import { serverAuth } from "../src/infrastructure/auth/server-auth.ts";
+import { pairedAuth } from "../src/infrastructure/auth/paired-auth.ts";
+import { PairingStore } from "../src/infrastructure/auth/pairing-store.ts";
 import { remoteAddress } from "../src/infrastructure/http/remote-session.server.ts";
 import { proxyRuntime } from "../src/infrastructure/http/runtime-proxy.server.ts";
 
-test("remote gateway sign-in proxies requests without exposing its session cookie", async () => {
-  const store = new OwnerStore(":memory:");
-  await store.setOwner("owner", "synthetic password one");
-  let auth: ReturnType<typeof serverAuth>;
+test("remote gateway pairing proxies requests without exposing its device credential", async () => {
+  const store = new PairingStore(":memory:");
+  let auth: ReturnType<typeof pairedAuth>;
   const remote = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -27,8 +26,8 @@ test("remote gateway sign-in proxies requests without exposing its session cooki
     },
   });
   const url = `http://127.0.0.1:${remote.port}`;
-  auth = serverAuth(store, url);
-  const connect = (action: "test" | "connect", password: string) =>
+  auth = pairedAuth(store, url);
+  const connect = (action: "test" | "connect", pairing: string) =>
     proxyRuntime(
       new Request("http://127.0.0.1:4320/api/web/connection", {
         method: "POST",
@@ -41,25 +40,31 @@ test("remote gateway sign-in proxies requests without exposing its session cooki
           action,
           url,
           kind: "remote",
-          username: "owner",
-          password,
+          ...(action === "test"
+            ? { pairingLink: pairing }
+            : { pairingHandle: pairing }),
         }),
       }),
     );
   try {
     assert.throws(() => remoteAddress("http://public.example"));
     assert.throws(() => remoteAddress("https://user:pass@example.test"));
-    assert.equal((await connect("test", "wrong password")).status, 400);
-    const tested = await connect("test", "synthetic password one");
+    assert.equal((await connect("test", "invalid link")).status, 400);
+    const secret = store.createCode().secret;
+    const tested = await connect(
+      "test",
+      `${url}/auth/pairing/page#token=${secret}`,
+    );
     assert.equal(tested.status, 200);
     assert.equal(tested.headers.get("set-cookie"), null);
-    const selected = await connect("connect", "synthetic password one");
+    const handle = (await tested.json()).pairingHandle as string;
+    const selected = await connect("connect", handle);
     assert.equal(selected.status, 200);
     const cookies = selected.headers
       .getSetCookie()
       .map((cookie) => cookie.split(";")[0])
       .join("; ");
-    assert.doesNotMatch(cookies, /raphie_session=/);
+    assert.doesNotMatch(cookies, /raphie_device=/);
     const response = await proxyRuntime(
       new Request("http://127.0.0.1:4320/api/runtime", {
         headers: {
@@ -71,7 +76,7 @@ test("remote gateway sign-in proxies requests without exposing its session cooki
     );
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
-    assert.equal((await response.json()).origin, url);
+    assert.equal((await response.json()).origin, null);
     const missingHandle = cookies
       .split("; ")
       .filter((cookie) => !cookie.startsWith("raphie_remote_"))

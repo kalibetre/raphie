@@ -1,13 +1,60 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { get } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { startWebServer } from "../src/bootstrap/http-server.ts";
-import { OwnerStore } from "../src/infrastructure/auth/owner-store.ts";
 import { PairingStore } from "../src/infrastructure/auth/pairing-store.ts";
+
+test("pairing-only server starts without an owner account and protects the runtime", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-pair-only-"));
+  const oldAccount = join(directory, "auth.sqlite");
+  await writeFile(oldAccount, "previous account data");
+  const database = join(directory, "pairing.sqlite");
+  const origin = "http://localhost:4320";
+  const server = startWebServer({
+    clientDirectory: directory,
+    port: 0,
+    remote: {
+      origin,
+      hostname: "127.0.0.1",
+      pairingDatabase: database,
+    },
+    fetch: () => new Response("protected"),
+  });
+  const store = new PairingStore(database);
+  try {
+    const req = (path: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      headers.set("host", "localhost:4320");
+      return fetch(new URL(path, server.url), {
+        ...init,
+        headers,
+        redirect: "manual",
+      });
+    };
+    assert.equal((await req("/")).headers.get("location"), "/auth/connect");
+    const secret = store.createCode().secret;
+    const response = await req("/auth/pairing/redeem", {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ secret, label: "Browser" }),
+    });
+    assert.equal(response.status, 200);
+    const cookie = response.headers.get("set-cookie")!.split(";")[0]!;
+    assert.equal(
+      await (await req("/api/runtime", { headers: { cookie } })).text(),
+      "protected",
+    );
+    assert.equal(await readFile(oldAccount, "utf8"), "previous account data");
+  } finally {
+    store.close();
+    await server.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("Bun web host serves assets, delegates SSR, and rejects hidden files and foreign hosts", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-web-host-"));
@@ -58,11 +105,7 @@ test("Bun web host serves assets, delegates SSR, and rejects hidden files and fo
 
 test("experimental paired browsers and native devices are authorized without weakening origin checks", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-paired-web-"));
-  const authDatabase = join(directory, "auth.sqlite");
   const pairingDatabase = join(directory, "pairing.sqlite");
-  const owner = new OwnerStore(authDatabase);
-  await owner.setOwner("owner", "synthetic password one");
-  owner.close();
   const pairing = new PairingStore(pairingDatabase);
   const browserCode = pairing.createCode();
   const nativeCode = pairing.createCode();
@@ -75,8 +118,7 @@ test("experimental paired browsers and native devices are authorized without wea
         remote: {
           origin,
           hostname: "0.0.0.0",
-          authDatabase,
-          experimentalPairingDatabase: pairingDatabase,
+          pairingDatabase,
         },
         fetch: () => new Response("protected"),
       }),
@@ -88,8 +130,7 @@ test("experimental paired browsers and native devices are authorized without wea
     remote: {
       origin,
       hostname: "127.0.0.1",
-      authDatabase,
-      experimentalPairingDatabase: pairingDatabase,
+      pairingDatabase,
     },
     fetch: (request) =>
       new URL(request.url).pathname === "/api/events"
@@ -193,73 +234,6 @@ test("experimental paired browsers and native devices are authorized without wea
     );
   } finally {
     pairing.close();
-    await server.stop(true);
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test("remote web host requires an owner before it serves pages or assets", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "raphie-remote-web-"));
-  const authDatabase = join(directory, "auth.sqlite");
-  assert.throws(
-    () =>
-      startWebServer({
-        clientDirectory: directory,
-        port: 0,
-        remote: {
-          origin: "http://localhost:4320",
-          hostname: "127.0.0.1",
-          authDatabase,
-        },
-        fetch: () => new Response("private app"),
-      }),
-    /not configured/,
-  );
-  const store = new OwnerStore(authDatabase);
-  await store.setOwner("owner", "synthetic password one");
-  store.close();
-  const origin = "http://localhost:4320";
-  const server = startWebServer({
-    clientDirectory: directory,
-    port: 0,
-    remote: { origin, hostname: "127.0.0.1", authDatabase },
-    fetch: () => new Response("private app"),
-  });
-  const request = async (path: string, init?: RequestInit) => {
-    const headers = new Headers(init?.headers);
-    headers.set("host", "localhost:4320");
-    return fetch(new URL(path, server.url), {
-      ...init,
-      headers,
-      redirect: "manual",
-    });
-  };
-  try {
-    assert.equal((await request("/api/sessions")).status, 401);
-    assert.equal((await request("/")).status, 303);
-    const login = await request("/auth/login", {
-      method: "POST",
-      headers: { origin, "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        username: "owner",
-        password: "synthetic password one",
-      }),
-    });
-    assert.equal(login.status, 303);
-    const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
-    assert.equal(
-      await (await request("/", { headers: { cookie } })).text(),
-      "private app",
-    );
-    assert.equal(
-      (
-        await request("/api/sessions", {
-          headers: { cookie, origin: "http://evil.test" },
-        })
-      ).status,
-      403,
-    );
-  } finally {
     await server.stop(true);
     await rm(directory, { recursive: true, force: true });
   }

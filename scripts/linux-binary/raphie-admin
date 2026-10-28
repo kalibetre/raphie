@@ -12,9 +12,9 @@ case "${1:-}" in
     shift
     exec sh "$root/$command.sh" "$@"
     ;;
-  auth|pair|devices)
+  pair|devices)
     test "$(id -u)" -eq 0 || { echo 'Run this command with sudo.' >&2; exit 1; }
-    exec runuser -u raphie -- env HOME=/var/lib/raphie DATA_DIRECTORY="$DATA_DIRECTORY" RAPHIE_WEB_ORIGIN="$RAPHIE_WEB_ORIGIN" RAPHIE_EXPERIMENTAL_PAIRING="${RAPHIE_EXPERIMENTAL_PAIRING:-0}" "$root/raphie" "$@"
+    exec runuser -u raphie -- env HOME=/var/lib/raphie DATA_DIRECTORY="$DATA_DIRECTORY" RAPHIE_WEB_ORIGIN="$RAPHIE_WEB_ORIGIN" "$root/raphie" "$@"
     ;;
   health)
     exec "$root/raphie" health

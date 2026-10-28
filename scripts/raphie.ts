@@ -1,65 +1,10 @@
 #!/usr/bin/env bun
-import { mkdir } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { createInterface } from "node:readline/promises";
-import { Writable } from "node:stream";
 
 import * as qr from "qrcode-terminal";
 
-import { OwnerStore } from "../apps/web/src/infrastructure/auth/owner-store.ts";
 import { PairingStore } from "../apps/web/src/infrastructure/auth/pairing-store.ts";
 import { installationHealthy } from "./linux-install/health-check.ts";
-
-async function prompt(label: string, secret = false): Promise<string> {
-  if (!process.stdin.isTTY || !process.stderr.isTTY)
-    throw new Error("Account setup requires an interactive terminal.");
-  process.stderr.write(label);
-  const output = secret
-    ? new Writable({
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
-      })
-    : process.stderr;
-  const input = createInterface({
-    input: process.stdin,
-    output,
-    terminal: true,
-  });
-  try {
-    return await input.question("");
-  } finally {
-    input.close();
-    if (secret) process.stderr.write("\n");
-  }
-}
-
-async function account(action: string) {
-  const directory = process.env.DATA_DIRECTORY;
-  if (!directory || !isAbsolute(directory))
-    throw new Error(
-      "Set DATA_DIRECTORY to an absolute installation data directory.",
-    );
-  await mkdir(resolve(directory), { recursive: true, mode: 0o700 });
-  const store = new OwnerStore(resolve(directory, "auth.sqlite"));
-  try {
-    if (action === "setup" && store.configured())
-      throw new Error("Owner account already exists; use auth reset-password.");
-    if (action === "reset-password" && !store.configured())
-      throw new Error("Owner account is not configured; use auth setup.");
-    const username = await prompt("Owner username: ");
-    const password = await prompt(
-      "Owner password (at least 12 characters): ",
-      true,
-    );
-    const confirmation = await prompt("Confirm password: ", true);
-    if (password !== confirmation) throw new Error("Passwords do not match.");
-    await store.setOwner(username, password, action === "setup");
-    console.log("Owner account saved; existing sessions were revoked.");
-  } finally {
-    store.close();
-  }
-}
 
 async function main() {
   const [command, action] = process.argv.slice(2);
@@ -68,10 +13,6 @@ async function main() {
     return;
   }
   if (command === "pair") {
-    if (process.env.RAPHIE_EXPERIMENTAL_PAIRING !== "1")
-      throw new Error(
-        "Experimental pairing is not enabled for this installation.",
-      );
     if (!process.stdout.isTTY)
       throw new Error("Pairing requires an interactive terminal.");
     const directory = process.env.DATA_DIRECTORY;
@@ -110,10 +51,6 @@ async function main() {
     return;
   }
   if (command === "devices") {
-    if (process.env.RAPHIE_EXPERIMENTAL_PAIRING !== "1")
-      throw new Error(
-        "Experimental pairing is not enabled for this installation.",
-      );
     const directory = process.env.DATA_DIRECTORY;
     if (!directory || !isAbsolute(directory))
       throw new Error(
@@ -124,7 +61,10 @@ async function main() {
       if (action === "list") {
         const devices = store
           .list()
-          .filter((device) => device.revoked_at === null);
+          .filter(
+            (device) =>
+              device.revoked_at === null && device.expires_at > Date.now(),
+          );
         if (!devices.length) console.log("No paired devices.");
         for (const device of devices)
           console.log(
@@ -144,8 +84,6 @@ async function main() {
     }
     return;
   }
-  if (command === "auth" && (action === "setup" || action === "reset-password"))
-    return account(action);
   if (command === "start") {
     if (Bun.isStandaloneExecutable) {
       const directory = dirname(process.execPath);
@@ -217,7 +155,7 @@ async function main() {
   }
   if (!command || command === "help" || command === "--help") {
     console.log(
-      "Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie pair                 Create an experimental pairing link\n  raphie devices list          List paired devices\n  raphie devices revoke <id>   Revoke a paired device\n  raphie auth setup           Create the server owner account\n  raphie auth reset-password  Reset the owner account and revoke sessions\n\nSet DATA_DIRECTORY to the installation data directory.",
+      "Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie pair                 Create an experimental pairing link\n  raphie devices list          List paired devices\n  raphie devices revoke <id>   Revoke a paired device\n\nSet DATA_DIRECTORY to the installation data directory.",
     );
     return;
   }

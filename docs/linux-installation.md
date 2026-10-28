@@ -6,20 +6,17 @@ Installation, service restart, update, and backup restore have been exercised
 on an Ubuntu 24.04 VM with systemd using synthetic data. Do not deploy it until
 the remaining security review and recovery verification are complete.
 
-The server runs as the `raphie` user. The web listener requires an owner login;
-the runtime listens only on loopback. A private HTTP deployment must bind only
-to a trusted private interface such as the machine's Tailscale address. HTTP
-does not encrypt traffic itself. Public network access requires HTTPS and a
+The server runs as the `raphie` user. Connect the first device by running
+`sudo raphie pair` on the host. The runtime and web listener bind to loopback.
+Public network access requires HTTPS and a
 trusted reverse proxy. Local development continues to bind to loopback without
 an account.
 
 From a local Raphie installation, Settings → Backend connection can connect to
-an authenticated remote gateway. Enter the gateway URL and owner credentials;
-the browser can save addresses, but passwords are not saved. Remote sessions
-are held in the local web server's memory, so restart requires signing in again.
-HTTP connections are limited to loopback tunnels and Tailscale-range IPv4
-addresses; use HTTPS for other addresses. A 100.64.0.0/10 address alone does not
-prove that traffic is on Tailscale: configure the host and network accordingly.
+an authenticated remote gateway using its URL and a one-time pairing link.
+Remote credentials are held in the local web server's memory, so restart
+requires pairing again. HTTP connections are limited to loopback tunnels;
+use HTTPS for other addresses.
 
 The release installer supports Debian and Ubuntu with systemd. After a stable
 GitHub release has been published and the bootstrap script is available on
@@ -33,15 +30,15 @@ sudo sh install-raphie.sh
 Pass a published version such as `v1.2.3` as an argument to install that
 specific release. Without an argument it selects the latest stable release.
 It installs required OS packages and Bun 1.4.4, verifying Bun against pinned
-checksums. It prompts for a browser-facing origin, bind address, username and
-password, and refuses to replace an existing installation or a different Bun
+checksums. It prompts for a browser-facing origin and bind address, and refuses
+to replace an existing installation or a different Bun
 at `/usr/local/bin/bun`. Failed setup currently needs manual cleanup. The
 repository has no published release yet, so this command is not available
 until the first release is published.
 
-`sudo raphie auth reset-password` resets the owner account and revokes existing
-sessions. The Account link in the web app changes credentials after verifying
-the current password and signs out all sessions. `raphie status` checks the
+`sudo raphie pair` creates a short-lived, single-use link, and `sudo raphie
+devices list` or `sudo raphie devices revoke <id>` manages access from the host.
+`raphie status` checks the
 local runtime. `sudo raphie update` fetches the latest stable GitHub release;
 alternatively, `sudo raphie update /path/to/clean/checkout` uses a local
 committed checkout. The updater prepares the version and stops the service

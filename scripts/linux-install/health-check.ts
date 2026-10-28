@@ -15,7 +15,7 @@ export async function installationHealthy(
       },
     );
     const web = await fetch(
-      `http://${address}:${config.RAPHIE_WEB_PORT}/auth/login`,
+      `http://${address}:${config.RAPHIE_WEB_PORT}/auth/connect`,
       {
         headers: { host: origin.host },
         signal: AbortSignal.timeout(1000),
@@ -24,7 +24,7 @@ export async function installationHealthy(
     return (
       runtime.ok &&
       web.ok &&
-      (await web.text()).includes("<title>Sign in · Raphie</title>")
+      (await web.text()).includes("<title>Connect to Raphie</title>")
     );
   } catch {
     return false;

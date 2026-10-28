@@ -50,10 +50,7 @@ export function BackendBoundary({ children }: { children: ReactNode }) {
     };
   }, [load]);
 
-  async function connect(
-    url: string,
-    credentials?: { username: string; password: string },
-  ) {
+  async function connect(url: string, credentials?: { pairingLink: string }) {
     if (!active.current || switching.current) return;
     const previous = active.current;
     switching.current = true;

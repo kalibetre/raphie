@@ -1,11 +1,43 @@
 import { Database } from "bun:sqlite";
 import { test } from "bun:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { PairingStore } from "../src/infrastructure/auth/pairing-store.ts";
+import {
+  deviceLifetimeMs,
+  PairingStore,
+} from "../src/infrastructure/auth/pairing-store.ts";
+
+test("existing devices receive a fixed expiry during migration", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-pairing-migration-"));
+  const path = join(directory, "pairing.sqlite");
+  const old = new Database(path);
+  const token = "a".repeat(43);
+  old.exec(
+    "CREATE TABLE paired_devices (id TEXT PRIMARY KEY, label TEXT NOT NULL, credential_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL, revoked_at INTEGER)",
+  );
+  old
+    .query("INSERT INTO paired_devices VALUES (?, ?, ?, ?, ?, NULL)")
+    .run(
+      "device",
+      "Browser",
+      createHash("sha256").update(token).digest("hex"),
+      1000,
+      1000,
+    );
+  old.close();
+  const store = new PairingStore(path);
+  try {
+    assert.equal(store.isValid(token, 1001), true);
+    assert.equal(store.isValid(token, 1000 + deviceLifetimeMs), false);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("one-time pairing codes create individually revocable devices across restarts", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-pairing-"));
@@ -19,7 +51,15 @@ test("one-time pairing codes create individually revocable devices across restar
     assert.ok(device);
     assert.equal(first.redeem(code.secret, "replay", 1099), null);
     assert.equal(first.valid(device.credential, 1100), true);
-    assert.equal(first.isValid(device.credential), true);
+    assert.equal(first.isValid(device.credential, 1100), true);
+    assert.equal(
+      first.isValid(device.credential, 1099 + deviceLifetimeMs),
+      false,
+    );
+    assert.equal(
+      first.valid(device.credential, 1099 + deviceLifetimeMs),
+      false,
+    );
     assert.deepEqual(
       first.list().map((item) => item.label),
       ["My phone"],

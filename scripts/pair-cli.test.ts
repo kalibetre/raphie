@@ -13,7 +13,6 @@ test("experimental pair command requires a terminal and issues a redeemable one-
       ...process.env,
       DATA_DIRECTORY: directory,
       RAPHIE_WEB_ORIGIN: "https://raphie.example",
-      RAPHIE_EXPERIMENTAL_PAIRING: "1",
     };
     const nonInteractive = Bun.spawnSync(
       [process.execPath, "scripts/raphie.ts", "pair"],

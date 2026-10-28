@@ -33,8 +33,7 @@ export function ConnectionSettings() {
     draft ??
     (remote === (current.data?.kind === "remote") ? current.data?.url : "") ??
     "";
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [pairingLink, setPairingLink] = useState("");
   const [saved, setSaved] = useState<string[]>([]);
 
   useEffect(() => {
@@ -71,7 +70,7 @@ export function ConnectionSettings() {
     try {
       const url = selectedAddress;
       if (!url) return;
-      const credentials = remote ? { username, password } : undefined;
+      const credentials = remote ? { pairingLink } : undefined;
       if (action === "connect") {
         if (remote)
           saveAddresses(
@@ -94,7 +93,7 @@ export function ConnectionSettings() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Connection failed.");
     } finally {
-      if (action === "connect") setPassword("");
+      if (action === "connect") setPairingLink("");
       setBusy(false);
     }
   }
@@ -102,7 +101,7 @@ export function ConnectionSettings() {
   return (
     <Group
       title="Backend connection"
-      note="Choose a local runtime or sign in to a remote Raphie gateway. Each gateway has its own bots and data."
+      note="Choose a local runtime or pair with a remote Raphie gateway. Each gateway has its own bots and data."
     >
       <div className="settings-form">
         <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
@@ -119,7 +118,7 @@ export function ConnectionSettings() {
         </div>
         {info.isError && (
           <p role="status">
-            Could not load this gateway. Check the connection or sign in again.
+            Could not load this gateway. Check the connection or pair again.
           </p>
         )}
         <fieldset className="grid gap-2">
@@ -225,42 +224,32 @@ export function ConnectionSettings() {
         {remote ? (
           <>
             <p>
-              Use HTTPS, a Tailscale IPv4 address, or a local SSH tunnel. The
-              URL is saved; your password is not.
+              Use HTTPS or a local SSH tunnel. Generate a pairing link on the
+              remote server with sudo raphie pair.
             </p>
-            <label htmlFor="gateway-username">Username</label>
+            <label htmlFor="gateway-pairing-link">Pairing link</label>
             <Input
-              id="gateway-username"
-              value={username}
-              autoComplete="username"
-              onChange={(e) => setUsername(e.target.value)}
-            />
-            <label htmlFor="gateway-password">Password</label>
-            <Input
-              id="gateway-password"
-              type="password"
-              value={password}
-              autoComplete="current-password"
-              onChange={(e) => setPassword(e.target.value)}
+              id="gateway-pairing-link"
+              value={pairingLink}
+              autoComplete="off"
+              onChange={(e) => setPairingLink(e.target.value)}
             />
           </>
         ) : (
           <p>Local HTTP servers only. This address is saved in this browser.</p>
         )}
         <div className="settings-actions">
+          {!remote && (
+            <Button
+              variant="outline"
+              disabled={busy || !selectedAddress}
+              onClick={() => void connect("test")}
+            >
+              Test connection
+            </Button>
+          )}
           <Button
-            variant="outline"
-            disabled={
-              busy || !selectedAddress || (remote && (!username || !password))
-            }
-            onClick={() => void connect("test")}
-          >
-            Test connection
-          </Button>
-          <Button
-            disabled={
-              busy || !selectedAddress || (remote && (!username || !password))
-            }
+            disabled={busy || !selectedAddress || (remote && !pairingLink)}
             onClick={() => void connect("connect")}
           >
             {busy ? "Connecting…" : "Connect"}

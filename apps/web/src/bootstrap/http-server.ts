@@ -1,14 +1,12 @@
 import { serveStatic } from "@hono/bun";
 import { Hono } from "hono";
 
-import { OwnerStore } from "../infrastructure/auth/owner-store.ts";
+import { pairedAuth } from "../infrastructure/auth/paired-auth.ts";
 import { PairingStore } from "../infrastructure/auth/pairing-store.ts";
 import {
   deviceToken,
   guardEventStream,
   nativeToken,
-  serverAuth,
-  sessionToken,
 } from "../infrastructure/auth/server-auth.ts";
 
 /** Bun owns sockets and file responses; Start owns SSR and API proxy routes. */
@@ -20,31 +18,22 @@ export function startWebServer(options: {
   remote?: {
     origin: string;
     hostname: string;
-    authDatabase: string;
-    experimentalPairingDatabase?: string;
+    pairingDatabase: string;
   };
 }) {
-  if (options.remote?.experimentalPairingDatabase) {
+  if (options.remote) {
     if (!["127.0.0.1", "::1"].includes(options.remote.hostname))
       throw new Error("Experimental pairing must bind to a loopback address.");
   }
   const app = new Hono();
-  const owner = options.remote
-    ? new OwnerStore(options.remote.authDatabase)
+  const devices = options.remote
+    ? new PairingStore(options.remote.pairingDatabase)
     : null;
-  const devices = options.remote?.experimentalPairingDatabase
-    ? new PairingStore(options.remote.experimentalPairingDatabase)
-    : null;
-  let authenticate: ReturnType<typeof serverAuth> | null = null;
+  let authenticate: ReturnType<typeof pairedAuth> | null = null;
   try {
-    if (owner && options.remote)
-      authenticate = serverAuth(
-        owner,
-        options.remote.origin,
-        devices ?? undefined,
-      );
+    if (options.remote && devices)
+      authenticate = pairedAuth(devices, options.remote.origin);
   } catch (error) {
-    owner?.close();
     devices?.close();
     throw error;
   }
@@ -58,7 +47,11 @@ export function startWebServer(options: {
       const result = await authenticate(c.req.raw);
       if (result) return result;
     }
-    if (!owner && c.req.path === "/auth/status" && c.req.method === "GET")
+    if (
+      !options.remote &&
+      c.req.path === "/auth/status" &&
+      c.req.method === "GET"
+    )
       return c.json({ enabled: false });
     let path: string;
     try {
@@ -70,7 +63,7 @@ export function startWebServer(options: {
     if (path.split("/").some((part) => part.startsWith(".")))
       return c.notFound();
     await next();
-    if (owner) {
+    if (options.remote) {
       const device = deviceToken(c.req.raw) || nativeToken(c.req.raw);
       c.res =
         devices && device && devices.isValid(device)
@@ -79,7 +72,7 @@ export function startWebServer(options: {
               { valid: (token) => devices.isValid(token) },
               device,
             )
-          : guardEventStream(c.res, owner, sessionToken(c.req.raw));
+          : c.res;
     }
   });
   app.get("/_raphie/version", (c) => {

@@ -14,15 +14,16 @@ test -z "$(git -C "$source_dir" status --porcelain)" || { echo 'The source check
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || id raphie >/dev/null 2>&1; then
   echo 'An existing Raphie installation or user was found; refusing to overwrite it.' >&2; exit 1
 fi
-printf 'Browser URL (for example http://100.x.y.z:4320): ' >&2
+printf 'Browser URL (for example https://raphie.example): ' >&2
 IFS= read -r origin
 printf 'Web bind address [127.0.0.1]: ' >&2
 IFS= read -r bind
 bind=${bind:-127.0.0.1}
+case "$bind" in 127.0.0.1|::1) ;; *) echo 'The web server must bind to loopback; use an HTTPS reverse proxy for remote access.' >&2; exit 1;; esac
 # Keep the systemd environment file free of newlines, substitutions and secrets.
 case "$origin" in *[!a-zA-Z0-9.:/-]*|'') echo 'Invalid URL.' >&2; exit 1;; esac
 case "$bind" in *[!a-zA-Z0-9.:-]*|'') echo 'Invalid bind address.' >&2; exit 1;; esac
-/usr/local/bin/bun -e 'const u = new URL(process.argv[1]); if (!["http:","https:"].includes(u.protocol) || u.origin !== process.argv[1] || u.username || u.password) process.exit(1)' "$origin" || { echo 'Enter an HTTP or HTTPS origin without a path.' >&2; exit 1; }
+/usr/local/bin/bun -e 'const u = new URL(process.argv[1]); if (u.origin !== process.argv[1] || u.username || u.password || !(u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)))) process.exit(1)' "$origin" || { echo 'Enter an HTTPS origin or a loopback HTTP origin without a path.' >&2; exit 1; }
 revision=$(git -C "$source_dir" rev-parse --verify HEAD)
 version=$(git -C "$source_dir" describe --tags --exact-match HEAD 2>/dev/null || printf 'commit-%s' "$(printf %.12s "$revision")")
 useradd --system --user-group --home-dir /var/lib/raphie --create-home --shell /usr/sbin/nologin raphie
@@ -37,7 +38,6 @@ runuser -u raphie -- env HOME=/var/lib/raphie RAPHIE_BUILD_ID="$revision" RAPHIE
 # The service account must not be able to replace scripts executed by root.
 chown -R root:root "/opt/raphie/releases/$revision"
 chmod -R go-w "/opt/raphie/releases/$revision"
-runuser -u raphie -- env HOME=/var/lib/raphie DATA_DIRECTORY=/var/lib/raphie/data /usr/local/bin/bun "/opt/raphie/releases/$revision/scripts/raphie.ts" auth setup
 install -d -m 0700 /etc/raphie
 printf 'RAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_BIND=%s\nRAPHIE_WEB_PORT=4320\n' "$origin" "$bind" > /etc/raphie/raphie.conf
 chmod 0600 /etc/raphie/raphie.conf
@@ -61,4 +61,4 @@ if [ "$ready" != true ]; then
   echo 'Installation was created but the service did not become ready. Check journalctl -u raphie; no existing data was replaced.' >&2
   exit 1
 fi
-echo "Raphie installed. Open $origin and sign in. Check systemctl status raphie for service health."
+echo "Raphie installed. Run sudo raphie pair to connect your first device. Check systemctl status raphie for service health."

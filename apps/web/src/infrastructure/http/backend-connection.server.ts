@@ -1,9 +1,9 @@
 import {
-  discardRemoteHandle,
   discardRemoteSession,
   loginRemote,
   remoteAddress,
   remoteCookie,
+  validRemoteHandle,
 } from "./remote-session.server";
 
 const backendCookie = (request: Request) =>
@@ -88,11 +88,15 @@ export async function connectionRequest(request: Request) {
       const url = remoteAddress(input.url);
       if (new URL(url).host === new URL(request.url).host)
         throw new Error("Gateway cannot point to this web server.");
-      const handle = await loginRemote(url, input.username, input.password);
+      const handle =
+        input.action === "test"
+          ? await loginRemote(url, input.pairingLink)
+          : input.pairingHandle;
       if (input.action === "test") {
-        discardRemoteHandle(handle);
-        return Response.json({ url, connected: true });
+        return Response.json({ url, connected: true, pairingHandle: handle });
       }
+      if (!validRemoteHandle(handle, url))
+        throw new Error("Pair the gateway again.");
       discardRemoteSession(request);
       const headers = new Headers();
       headers.append("set-cookie", remoteCookie(request, handle));
@@ -143,8 +147,7 @@ export async function connectionRequest(request: Request) {
   } catch {
     return Response.json(
       {
-        error:
-          "Could not connect. Check the gateway address and sign-in details.",
+        error: "Could not connect. Check the gateway address and pairing link.",
       },
       { status: 400 },
     );

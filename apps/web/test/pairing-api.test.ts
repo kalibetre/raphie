@@ -92,7 +92,10 @@ test("pairing protocol limits enrollment, separates browser cookies and native c
     );
     assert.equal(response?.status, 200);
     const cookie = response!.headers.get("set-cookie")!;
-    assert.match(cookie, /HttpOnly; SameSite=Strict; Path=\/; Secure/);
+    assert.match(
+      cookie,
+      /HttpOnly; SameSite=Strict; Path=\/; Max-Age=7776000; Secure/,
+    );
     assert.equal("credential" in (await response!.json()), false);
     assert.equal(
       (
