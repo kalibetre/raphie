@@ -101,7 +101,7 @@ export function ConnectionSettings() {
   return (
     <Group
       title="Backend connection"
-      note="Choose a local runtime or pair with a remote Raphie gateway. Each gateway has its own bots and data."
+      note="Choose a runtime on this Raphie server or pair with another Raphie gateway. Each gateway has its own bots and data."
     >
       <div className="settings-form">
         <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
@@ -110,10 +110,13 @@ export function ConnectionSettings() {
           </span>
           <div className="min-w-0">
             <div className="text-sm font-medium">
-              Current connection
+              Current backend
               {info.data?.identity?.kind === "fixture" ? " · Test fixture" : ""}
             </div>
             <p className="mt-1">{workspace.url}</p>
+            {current.data?.kind !== "remote" && (
+              <p className="mt-1">Address as seen by this Raphie server</p>
+            )}
           </div>
         </div>
         {info.isError && (
@@ -143,9 +146,9 @@ export function ConnectionSettings() {
                 className="mt-0.5 shrink-0 text-muted-foreground"
               />
               <span>
-                <span className="block">Local runtime</span>
+                <span className="block">Server runtime</span>
                 <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                  On this device
+                  On the machine hosting Raphie
                 </span>
               </span>
             </label>
@@ -205,7 +208,7 @@ export function ConnectionSettings() {
           </>
         )}
         <label htmlFor="backend-url">
-          {remote ? "Remote gateway URL" : "Local runtime address"}
+          {remote ? "Remote gateway URL" : "Server runtime address"}
         </label>
         <Input
           id="backend-url"
@@ -236,7 +239,10 @@ export function ConnectionSettings() {
             />
           </>
         ) : (
-          <p>Local HTTP servers only. This address is saved in this browser.</p>
+          <p>
+            Loopback HTTP addresses on the Raphie server only. This address is
+            saved in this browser.
+          </p>
         )}
         <div className="settings-actions">
           {!remote && (

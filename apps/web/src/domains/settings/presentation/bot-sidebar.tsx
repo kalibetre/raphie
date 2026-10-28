@@ -114,7 +114,7 @@ export function BotSidebar({
       <footer className="roster-footer">
         <span className="runtime-status">
           <span className={`status-dot ${connected ? "" : "offline"}`} />
-          {connected ? "Connected locally" : "Reconnecting…"}
+          {connected ? "Connected" : "Reconnecting…"}
         </span>
         <div className="flex items-center gap-1">
           <Button

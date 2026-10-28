@@ -92,7 +92,7 @@ export const sections = [
     label: "Backend connection",
     icon: Server,
     lede: () =>
-      "The Raphie runtime this browser talks to. Each backend has its own bots.",
+      "The backend used by this Raphie server. Each backend has its own bots.",
   },
   {
     id: "providers",
