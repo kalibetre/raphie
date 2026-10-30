@@ -1,4 +1,4 @@
-import { backendAddress, connectionRequest } from "./backend-connection.server";
+import { backendAddress } from "./backend-connection.server";
 
 export async function proxyRuntime(request: Request) {
   const incoming = new URL(request.url);
@@ -15,9 +15,16 @@ export async function proxyRuntime(request: Request) {
   )
     return new Response("Unrecognized origin.", { status: 403 });
   if (incoming.pathname === "/api/web/connection") {
-    const response = await connectionRequest(request);
-    response.headers.set("cache-control", "no-store");
-    return response;
+    if (request.method !== "GET")
+      return new Response("Method not allowed.", { status: 405 });
+    try {
+      return Response.json(
+        { url: backendAddress(request) },
+        { headers: { "cache-control": "no-store" } },
+      );
+    } catch {
+      return new Response("Invalid local backend address.", { status: 500 });
+    }
   }
   let base: string;
   try {
@@ -28,8 +35,7 @@ export async function proxyRuntime(request: Request) {
       { status: 400 },
     );
   }
-  // Pin a workspace's requests to its selection, including reconnecting SSE.
-  // Another tab can change the shared cookie while this tab still has old state.
+  // Reject requests from a workspace opened against an earlier runtime configuration.
   const expected =
     request.headers.get("x-raphie-backend") ??
     incoming.searchParams.get("_raphie_backend");

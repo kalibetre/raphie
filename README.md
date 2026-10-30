@@ -44,7 +44,7 @@ storage, isolation guarantees and planned execution capabilities.
 
 Session links use `/sessions/<uuidv7>`. These public IDs are persisted in SQLite; the durable harness still uses its original numeric conversation IDs internally. Existing sessions receive a public ID once on startup, preserving their messages and approvals. Old `/?conversation=<number>` links redirect to the matching session in the current database.
 
-The normal app stores conversations, messages, execution state, and approvals in **`.data/gateway.sqlite`** at the repository root. Attachments live under `.data/files/`. `DATA_DIRECTORY` can select another location; relative paths resolve against the repository root, so changing the shell's working directory cannot silently open a different database. Browser storage holds drafts and UI preferences, not session history.
+In a source checkout, the app stores conversations, messages, execution state, and approvals in **`.data/gateway.sqlite`** at the main repository root. Attachments and authentication data live in the same data directory. Use `raphie start --data-dir PATH` and the same flag with `raphie auth setup` or `raphie auth recover` to select another directory. `DATA_DIRECTORY` also selects a location; source-mode relative values resolve against the checkout root. Standalone defaults and Linux installation paths are described in [standalone builds](docs/standalone-build.md). Browser storage holds drafts and UI preferences, not session history.
 
 The old research tree and its legacy server have been retired. Source history
 remains in Git. A private local archive, including the older prototype database,
@@ -180,6 +180,14 @@ runs in CI on a self-hosted runner. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 code organization, conventions, and the isolated browser workflow.
 
 Tests cover durable chat, interrupted generation, approvals after restart, concurrent decisions, cross-channel decisions, uncertain execution, file integrity, MCP transports, redaction, viewer disconnection, first-chunk streaming, and TanStack AI transcript replacement.
+
+## Sign in
+
+The web UI requires sign-in. On first start it is locked; create the single
+administrator with `bun run raphie auth setup` (interactive; the password is never
+an argument), then sign in at http://127.0.0.1:4320. `bun run raphie auth recover`
+resets a forgotten password and signs every browser out. See
+[Administrator authentication](docs/authentication.md).
 
 For browser acceptance without an API key or external actions, run `bun run dev:fixture` and `bun run dev:web:fixture` in separate terminals, then open **http://127.0.0.1:4321**. The fixture streams a deterministic response and proposes a fake calendar tool when asked to use a tool. It can run alongside the normal app. Fixture state is removed when stopped normally.
 

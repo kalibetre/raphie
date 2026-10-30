@@ -15,6 +15,12 @@ case "${1:-}" in
     fi
     exec /bin/sh "$root/scripts/linux-install/update.sh" "$@"
     ;;
+  auth)
+    # The data belongs to the service account; files made by root would be unreadable to it.
+    test "$(id -u)" -eq 0 || { echo 'Run auth commands with sudo.' >&2; exit 1; }
+    umask 077
+    exec runuser -u raphie -- /usr/local/bin/bun "$root/scripts/raphie.ts" "$@"
+    ;;
   restore)
     shift
     exec /bin/sh "$root/scripts/linux-install/restore.sh" "$@"

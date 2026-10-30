@@ -11,6 +11,7 @@ change that changes the behavior.
 - [Bot automation](bot-automation.md): per-bot MCP servers, encrypted configuration and recurring prompts.
 - [Memory](memory.md): built-in behavior, agent tools, storage, correction,
   forgetting, provider support and recovery.
+- [Administrator authentication](authentication.md): sign-in, setup and recovery commands, protection and limits.
 - [Provider credential storage and recovery](provider-credential-storage.md)
 - [Observability](observability.md): Activity, Diagnostics and trace storage.
 - [Delivered headless HTTP interface](headless-interface.md)

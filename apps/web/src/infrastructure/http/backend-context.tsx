@@ -7,7 +7,6 @@ type BackendConnection = {
   workspace: BackendWorkspace;
   /** Backend-wide scope that outlives bot changes: the bot list and inbox. */
   backend: BackendWorkspace;
-  connect: (url: string) => Promise<void>;
   selectBot: (id: string) => Promise<void>;
 };
 

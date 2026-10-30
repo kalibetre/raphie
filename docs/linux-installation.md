@@ -7,13 +7,11 @@ on an Ubuntu 24.04 VM with systemd using synthetic data. Do not deploy it until
 the remaining security review and recovery verification are complete.
 
 The server runs as the `raphie` user. The runtime and web listener bind to
-loopback, and the web host rejects non-loopback `Host` headers. Raphie currently
-has **no authentication**: anyone who can reach the loopback listener has full
-access, so do not expose it through a reverse proxy. Use an SSH tunnel for
-remote access until authentication is added.
-
-Settings → Backend connection selects a runtime on the same host (loopback HTTP
-only).
+loopback, and the web host rejects non-loopback `Host` headers. The web host is
+locked until you create the administrator with `sudo raphie auth setup`, then
+requires sign-in; see [authentication](authentication.md). Do not expose it
+through a reverse proxy: use an SSH tunnel for remote access. The runtime port
+itself is not authenticated and must stay on loopback.
 
 The release installer supports Debian and Ubuntu with systemd. After a stable
 GitHub release has been published and the bootstrap script is available on
@@ -50,7 +48,8 @@ and keyring backup before attempting recovery. Run `sudo raphie restore
 installed release. The command requires interactive confirmation and preserves
 the replaced data and keyrings under `/var/lib/raphie/.restore-*.before-*`.
 
-The backup includes the data and the encrypted GNOME Keyring files. It does not
+The backup includes the data (including the administrator's `auth.sqlite` and
+`auth.secret`, which are sensitive) and the encrypted GNOME Keyring files. It does not
 include `/etc/raphie/keyring.cred` or the systemd host credential key. Back up
 those separately with appropriate protection and test recovery on the target
 platform; without them the encrypted provider and channel credentials may be

@@ -1,5 +1,7 @@
 import type { ClientWorkspace } from "@raphie/contracts";
 
+import { redirectToSignIn } from "./session";
+
 export type Snapshot = ClientWorkspace;
 
 export type Approval = Snapshot["toolApprovals"][number];
@@ -42,6 +44,8 @@ export async function api<T>(
         },
   );
   const result = await response.json();
+  if (response.status === 401 && result.code === "unauthenticated")
+    redirectToSignIn();
   if (!response.ok)
     throw new ApiError(
       result.error ?? "The runtime is unavailable. Please retry.",

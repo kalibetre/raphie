@@ -122,7 +122,6 @@ test("Sandbox renders persisted controls, unlimited quota and truthful provider-
         value={{
           workspace,
           backend: workspace,
-          connect: async () => {},
           selectBot: async () => {},
         }}
       >
@@ -186,7 +185,6 @@ for (const acknowledged of [true, false])
           value={{
             workspace,
             backend: workspace,
-            connect: async () => {},
             selectBot: async () => {},
           }}
         >

@@ -47,7 +47,7 @@ const botEntries: readonly Section[] = [
   "telemetry",
   "activity",
 ];
-const appEntries: readonly Section[] = ["connection", "general", "plugins"];
+const appEntries: readonly Section[] = ["account", "general", "plugins"];
 const label = (id: Section) => sections.find((s) => s.id === id)!.label;
 const expandedKey = "raphie:settings-expanded";
 

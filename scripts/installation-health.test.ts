@@ -5,6 +5,7 @@ import { installationHealthy } from "./linux-install/health-check.ts";
 test("installation health requires both the runtime and the web server", async () => {
   let runtimeReady = true;
   let webReady = true;
+  let webStatus = "ready";
   const runtime = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -22,8 +23,8 @@ test("installation health requires both the runtime and the web server", async (
     port: 0,
     fetch(request) {
       const ok =
-        webReady && new URL(request.url).pathname === "/_raphie/version";
-      return Response.json(ok ? { id: "fixture" } : {}, {
+        webReady && new URL(request.url).pathname === "/_raphie/health";
+      return Response.json(ok ? { status: webStatus } : {}, {
         status: ok ? 200 : 503,
       });
     },
@@ -34,6 +35,12 @@ test("installation health requires both the runtime and the web server", async (
       RAPHIE_WEB_PORT: String(web.port),
     };
     expect(await installationHealthy(config)).toBe(true);
+    // Locked until the administrator exists, but up and refusing everyone.
+    webStatus = "locked";
+    expect(await installationHealthy(config)).toBe(true);
+    webStatus = "unexpected";
+    expect(await installationHealthy(config)).toBe(false);
+    webStatus = "ready";
     runtimeReady = false;
     expect(await installationHealthy(config)).toBe(false);
     runtimeReady = true;

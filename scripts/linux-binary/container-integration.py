@@ -54,6 +54,13 @@ def interactive(command, prompts):
 
 subprocess.run(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
+def auth_status(): return json.load(urllib.request.urlopen('http://127.0.0.1:4320/auth/status'))
+assert auth_status() == {'configured': False, 'authenticated': False}
+password = b'a long synthetic password'
+interactive(['/usr/local/bin/raphie', 'auth', 'setup'], [(b'Administrator email:', b'admin@example.test'), (b'New password', password), (b'Repeat password', password)])
+assert auth_status() == {'configured': True, 'authenticated': False}
+secret = pathlib.Path('/srv/raphie-test-data/auth.secret')
+assert oct(secret.stat().st_mode & 0o777) == '0o600' and pathlib.Path('/srv/raphie-test-data/auth.sqlite').stat().st_uid == secret.stat().st_uid != 0
 data_dir = pathlib.Path('/srv/raphie-test-data')
 marker = data_dir / 'restore-test-marker'
 marker.write_text('before update')
@@ -68,6 +75,7 @@ assert len(backups) == 1
 interactive(['/usr/local/bin/raphie', 'restore', str(backups[0])], [(b'Type RESTORE to continue:', b'RESTORE')])
 assert os.readlink('/opt/raphie/current') == old_release and marker.read_text() == 'before update'
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
+assert auth_status()['configured'] is True
 shutil.copytree('/binaries', '/tmp/raphie-bad-bundle')
 pathlib.Path('/tmp/raphie-bad-bundle/raphie-web').write_text('#!/bin/sh\nexit 1\n')
 pathlib.Path('/tmp/raphie-bad-bundle/raphie-web').chmod(0o755)
@@ -78,5 +86,6 @@ assert len(failed_backups) == 1
 interactive(['/usr/local/bin/raphie', 'restore', str(failed_backups.pop())], [(b'Type RESTORE to continue:', b'RESTORE')])
 assert os.readlink('/opt/raphie/current') == old_release and marker.read_text() == 'before update'
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
+assert auth_status()['configured'] is True
 print('Binary installation, overrides, update and backup restore passed (systemd simulated).')
 subprocess.run(['systemctl', 'stop', 'raphie.service'], check=True, env=env)

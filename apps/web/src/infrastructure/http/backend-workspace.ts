@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "./api-client";
+import { redirectToSignIn, sessionEnded } from "./session";
 
 /** A retired workspace can never issue commands against a newly selected backend. */
 export class BackendWorkspace {
@@ -54,6 +55,8 @@ export class BackendWorkspace {
     if (!response.ok) {
       const result = await response.json();
       this.assertActive();
+      if (response.status === 401 && result.code === "unauthenticated")
+        redirectToSignIn();
       throw new ApiError(
         result.error ?? "File download failed.",
         response.status,
@@ -108,6 +111,8 @@ export class BackendWorkspace {
         // during restart) permanently closes EventSource. Replace that one.
         if (stream.readyState === EventSource.CLOSED && retry === undefined) {
           stream.close();
+          // A revoked session closes the stream with a 401; do not retry forever.
+          void sessionEnded().then((ended) => ended && redirectToSignIn());
           retry = setTimeout(() => {
             retry = undefined;
             connect();
@@ -136,37 +141,4 @@ export class BackendWorkspace {
     for (const stop of this.observations) stop();
     this.queries.clear();
   }
-}
-
-/** Probe before retiring state; stop all old work before the selection cookie changes. */
-export async function connectWorkspace(
-  current: BackendWorkspace,
-  url: string,
-  transition: {
-    publish: (workspace: BackendWorkspace | undefined) => void;
-    navigate: () => Promise<void>;
-  },
-) {
-  await api("/api/web/connection", { action: "test", url });
-  current.dispose();
-  transition.publish(undefined);
-  let selected = current.url;
-  try {
-    const result = await api<{ url: string }>("/api/web/connection", {
-      action: "connect",
-      url,
-    });
-    selected = result.url;
-    await transition.navigate();
-  } catch (error) {
-    // A lost response may still have saved the cookie. Read it back before
-    // resuming; if that fails, stay suspended rather than guess a backend.
-    const saved = await api<{ url: string }>("/api/web/connection");
-    if (saved.url !== current.url) await transition.navigate();
-    transition.publish(new BackendWorkspace(saved.url));
-    throw error;
-  }
-  const next = new BackendWorkspace(selected);
-  transition.publish(next);
-  return next;
 }

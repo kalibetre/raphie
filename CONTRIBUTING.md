@@ -78,6 +78,10 @@ bun run dev:fixture
 bun run dev:web:fixture
 ```
 
+Sign-in is always required, including for the fixture. Create the administrator
+once with `bun run raphie auth setup` and sign in at the fixture URL; there is no
+bypass flag. Browser check scripts run in a tab that is already signed in.
+
 The normal application uses ports 4316/4320 and persists to `.data/`. The fixture
 uses 4317/4321 and removes its temporary database on shutdown. Never replace the
 normal runtime with the fixture or use production conversations as test data.

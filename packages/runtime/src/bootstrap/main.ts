@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -36,16 +36,10 @@ let lifecycle: "starting" | "running" | "stopping" = "starting";
 
 const program = Effect.gen(function* () {
   const legacyMcp = legacyMcpConfig(process.env);
-  if (
-    Bun.isStandaloneExecutable &&
-    (!process.env.DATA_DIRECTORY || !isAbsolute(process.env.DATA_DIRECTORY))
-  )
-    throw new Error(
-      "A standalone runtime requires an absolute DATA_DIRECTORY.",
-    );
   const directory = appDataDirectory(
     fileURLToPath(new URL("../../../../", import.meta.url)),
     process.env.DATA_DIRECTORY,
+    Bun.isStandaloneExecutable,
   );
   yield* resource(
     () => ownAppData(directory),

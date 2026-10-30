@@ -48,6 +48,17 @@ test("worktrees reuse a stable default, preserve explicit paths and refuse ambig
   }
 });
 
+test("standalone paths use an OS default and reject relative environment overrides", () => {
+  const directory = appDataDirectory("/unused", undefined, true);
+  expect(directory).toBeTruthy();
+  expect(
+    appDataDirectory("/unused", join(tmpdir(), "explicit-data"), true),
+  ).toBe(join(tmpdir(), "explicit-data"));
+  expect(() => appDataDirectory("/unused", "relative", true)).toThrow(
+    "absolute",
+  );
+});
+
 test("app data rejects another live owner and recovers ownership after SIGKILL", async () => {
   const { ownAppData } =
     await import("../src/infrastructure/workspace/app-data-owner.ts");

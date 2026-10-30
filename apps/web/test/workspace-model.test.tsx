@@ -91,7 +91,6 @@ async function renderWorkspace({
         value={{
           workspace,
           backend: workspace,
-          connect: async () => {},
           selectBot: async () => {
             throw new Error("Bot selection is outside this rendering fixture.");
           },

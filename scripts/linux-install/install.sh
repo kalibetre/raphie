@@ -56,4 +56,5 @@ if [ "$ready" != true ]; then
   echo 'Installation was created but the service did not become ready. Check journalctl -u raphie; no existing data was replaced.' >&2
   exit 1
 fi
-echo "Raphie installed. Check systemctl status raphie for service health."
+echo "Raphie installed and locked. Create the administrator, then sign in at the browser URL:"
+echo "  sudo raphie auth setup"

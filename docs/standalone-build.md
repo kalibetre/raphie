@@ -21,8 +21,12 @@ Docker/Podman command and workspace image and executes a disposable sandbox
 command. It creates a temporary workspace and removes it after the check.
 
 The compiled launcher starts the separate runtime and web executables from its
-own directory. The runtime requires an absolute `DATA_DIRECTORY`; test with a
-new empty directory, never the user's normal data. Standalone builds disable
+own directory. Use `raphie start --data-dir /absolute/path` to test with a
+new empty directory, never the user's normal data. Without an override, standalone
+builds use `~/.local/share/raphie` on Linux (or `$XDG_DATA_HOME/raphie`),
+`~/Library/Application Support/Raphie` on macOS, and `%LOCALAPPDATA%/Raphie`
+on Windows. The Linux system installer instead defaults to `/var/lib/raphie/data`.
+Standalone builds disable
 Bun's automatic dotenv and bunfig loading. Configuration must be supplied by
 the surrounding supervisor; this prototype does not yet reproduce the
 source-based Varlock configuration workflow.
@@ -56,9 +60,11 @@ bundle to the machine and run `sudo sh install.sh`. The default browser origin
 is `http://127.0.0.1:4320` and the default data directory is
 `/var/lib/raphie/data`. `--web-origin` and `--data-dir` override them; existing
 data is never overwritten. Existing parents of a custom data directory must be
-root-owned and not group- or world-writable. Raphie has no authentication yet,
-so use this only on an isolated test installation and reach it from another
-machine through an SSH tunnel, not a reverse proxy.
+root-owned and not group- or world-writable. The web host starts locked; create
+the administrator with `sudo raphie auth setup` (see
+[authentication](authentication.md)). Use this only on an isolated test
+installation and reach it from another machine through an SSH tunnel, not a
+reverse proxy.
 
 For local test bundles, `sudo raphie update /path/to/trusted/bundle` takes an
 offline backup before switching. `sudo raphie restore /var/backups/raphie/...`

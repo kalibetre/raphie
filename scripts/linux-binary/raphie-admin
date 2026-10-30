@@ -12,6 +12,12 @@ case "${1:-}" in
     shift
     exec sh "$root/$command.sh" "$@"
     ;;
+  auth)
+    # The data belongs to the service account; files made by root would be unreadable to it.
+    test "$(id -u)" -eq 0 || { echo 'Run auth commands with sudo.' >&2; exit 1; }
+    umask 077
+    exec runuser -u raphie -- "$root/raphie" "$@"
+    ;;
   health)
     exec "$root/raphie" health
     ;;

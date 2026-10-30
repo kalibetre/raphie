@@ -3,6 +3,7 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useLocation,
 } from "@tanstack/react-router";
 
 import { BackendBoundary } from "../../presentation/workspace/backend-boundary";
@@ -30,6 +31,8 @@ export const Route = createRootRoute({
 });
 
 function Root() {
+  // The sign-in page must work before any backend session exists.
+  const signingIn = useLocation({ select: (l) => l.pathname === "/login" });
   return (
     <html lang="en">
       <head>
@@ -44,10 +47,16 @@ function Root() {
             Test workspace · fake models, not your data
           </div>
         )}
-        <BackendBoundary>
+        {signingIn ? (
           <Outlet />
-        </BackendBoundary>
-        <UpdateNotice />
+        ) : (
+          <>
+            <BackendBoundary>
+              <Outlet />
+            </BackendBoundary>
+            <UpdateNotice />
+          </>
+        )}
         <Scripts />
       </body>
     </html>

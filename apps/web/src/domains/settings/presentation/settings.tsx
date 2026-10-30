@@ -3,10 +3,10 @@ import type { ReactNode } from "react";
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { useBots } from "../infrastructure/use-bots";
+import { AccountSettings } from "./account-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { BotSettings } from "./bot-settings";
 import { ChannelSettings } from "./channel-settings";
-import { ConnectionSettings } from "./connection-settings";
 import { JobSettings } from "./job-settings";
 import { McpSettings } from "./mcp-settings";
 import { MemoryBrowse } from "./memory-browse";
@@ -101,8 +101,8 @@ export function Settings({
           <TelemetrySettings traces={traces} />
         ) : section === "activity" ? (
           activity
-        ) : section === "connection" ? (
-          <ConnectionSettings />
+        ) : section === "account" ? (
+          <AccountSettings />
         ) : section === "general" ? (
           <AppearanceSettings />
         ) : (

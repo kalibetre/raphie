@@ -9,12 +9,12 @@ import {
   KeyRound,
   Library,
   ListTree,
+  LogOut,
   MessagesSquare,
   Palette,
   Plug,
   Puzzle,
   Radio,
-  Server,
   Sparkles,
   UserRound,
 } from "lucide-react";
@@ -87,11 +87,10 @@ export const sections = [
       "A separate assistant with its own personality, memory and model connections.",
   },
   {
-    id: "connection",
-    label: "Backend connection",
-    icon: Server,
-    lede: () =>
-      "The backend used by this Raphie server. Each backend has its own bots.",
+    id: "account",
+    label: "Account",
+    icon: LogOut,
+    lede: () => "The administrator signed in to this Raphie server.",
   },
   {
     id: "providers",
@@ -156,7 +155,7 @@ export const isSection = (value: unknown): value is Section =>
   sections.some((section) => section.id === value);
 
 export const isAppSection = (section: string) =>
-  ["connection", "general", "plugins"].includes(section);
+  ["account", "general", "plugins"].includes(section);
 
 export const sectionOf = (id: Section) =>
   sections.find((section) => section.id === id)!;

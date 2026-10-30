@@ -8,11 +8,9 @@ import { BackendWorkspace } from "../../infrastructure/http/backend-workspace";
 /** Bot changes remount every query, observer, composer and configuration form. */
 export function BotBoundary({
   workspace: backend,
-  connect,
   children,
 }: {
   workspace: BackendWorkspace;
-  connect: (url: string) => Promise<void>;
   children: ReactNode;
 }) {
   const search = useSearch({ strict: false });
@@ -41,7 +39,7 @@ export function BotBoundary({
     });
   };
   return (
-    <BackendContext.Provider value={{ workspace, backend, connect, selectBot }}>
+    <BackendContext.Provider value={{ workspace, backend, selectBot }}>
       <QueryClientProvider
         key={`${backend.url}:${botId}`}
         client={workspace.queries}

@@ -39,7 +39,6 @@ export function BotSidebar({
           </span>
           raphie
         </span>
-        <span className="local-label">LOCAL</span>
       </div>
       <div className="roster-label">
         Your bots<span className="roster-total">{bots.length}</span>

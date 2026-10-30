@@ -5,6 +5,8 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+import { developmentGateway } from "./src/bootstrap/dev-gateway.ts";
+
 export default defineConfig({
   define: {
     __RAPHIE_BUILD_ID__: JSON.stringify(
@@ -15,6 +17,7 @@ export default defineConfig({
     ),
   },
   plugins: [
+    developmentGateway(),
     tailwindcss(),
     tanstackStart({
       router: {

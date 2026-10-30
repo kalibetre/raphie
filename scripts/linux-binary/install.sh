@@ -52,7 +52,7 @@ except ValueError:
 if not valid:
     raise SystemExit('Enter an HTTP origin without a path.')
 PY
-case "$origin" in http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'The unauthenticated web server accepts loopback HTTP origins only.' >&2; exit 1;; esac
+case "$origin" in http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'The web server accepts loopback HTTP origins only.' >&2; exit 1;; esac
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || [ -e "$data_dir" ] || id raphie >/dev/null 2>&1; then
   echo 'An existing installation or data directory was found; refusing to overwrite it.' >&2; exit 1
 fi
@@ -89,4 +89,5 @@ if [ "$ready" != true ]; then
   echo 'Installation was created but the service did not become ready. Check journalctl -u raphie.' >&2
   exit 1
 fi
-echo "Raphie installed. Check systemctl status raphie for service health."
+echo "Raphie installed and locked. Create the administrator, then sign in at the browser URL:"
+echo "  sudo raphie auth setup"
