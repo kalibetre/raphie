@@ -50,9 +50,9 @@ try:
 except ValueError:
     valid = False
 if not valid:
-    raise SystemExit('Enter an HTTP or HTTPS origin without a path.')
+    raise SystemExit('Enter an HTTP origin without a path.')
 PY
-case "$origin" in https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'Pairing requires HTTPS or a loopback HTTP origin.' >&2; exit 1;; esac
+case "$origin" in http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'The unauthenticated web server accepts loopback HTTP origins only.' >&2; exit 1;; esac
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || [ -e "$data_dir" ] || id raphie >/dev/null 2>&1; then
   echo 'An existing installation or data directory was found; refusing to overwrite it.' >&2; exit 1
 fi
@@ -67,7 +67,7 @@ install -d -m 0755 "/opt/raphie/releases/$revision"
 for file in raphie raphie-runtime raphie-web raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh; do install -m 0755 "$bundle/$file" "/opt/raphie/releases/$revision/$file"; done
 install -m 0644 "$bundle/raphie.service" "/opt/raphie/releases/$revision/raphie.service"
 install -d -m 0700 /etc/raphie
-printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_BIND=127.0.0.1\nRAPHIE_WEB_PORT=4320\n' "$data_dir" "$origin" > /etc/raphie/raphie.conf
+printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=4320\n' "$data_dir" "$origin" > /etc/raphie/raphie.conf
 chmod 0600 /etc/raphie/raphie.conf
 umask 077
 head -c 32 /dev/urandom | base64 | systemd-creds encrypt --with-key=host --name=raphie-keyring - /etc/raphie/keyring.cred
@@ -89,4 +89,4 @@ if [ "$ready" != true ]; then
   echo 'Installation was created but the service did not become ready. Check journalctl -u raphie.' >&2
   exit 1
 fi
-echo "Raphie installed. Run sudo raphie pair to connect your first device."
+echo "Raphie installed. Check systemctl status raphie for service health."

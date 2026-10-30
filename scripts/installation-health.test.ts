@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { installationHealthy } from "./linux-install/health-check.ts";
 
-test("installation health requires both the runtime and the authenticated web entry point", async () => {
+test("installation health requires both the runtime and the web server", async () => {
   let runtimeReady = true;
   let webReady = true;
   const runtime = Bun.serve({
@@ -22,21 +22,16 @@ test("installation health requires both the runtime and the authenticated web en
     port: 0,
     fetch(request) {
       const ok =
-        webReady &&
-        new URL(request.url).pathname === "/auth/connect" &&
-        request.headers.get("host") === "raphie.example";
-      return new Response(
-        ok ? "<title>Connect to Raphie</title>" : "unavailable",
-        { status: ok ? 200 : 503 },
-      );
+        webReady && new URL(request.url).pathname === "/_raphie/version";
+      return Response.json(ok ? { id: "fixture" } : {}, {
+        status: ok ? 200 : 503,
+      });
     },
   });
   try {
     const config = {
       PORT: String(runtime.port),
-      RAPHIE_WEB_BIND: "127.0.0.1",
       RAPHIE_WEB_PORT: String(web.port),
-      RAPHIE_WEB_ORIGIN: "https://raphie.example",
     };
     expect(await installationHealthy(config)).toBe(true);
     runtimeReady = false;
@@ -44,9 +39,6 @@ test("installation health requires both the runtime and the authenticated web en
     runtimeReady = true;
     webReady = false;
     expect(await installationHealthy(config)).toBe(false);
-    expect(
-      await installationHealthy({ ...config, RAPHIE_WEB_ORIGIN: "invalid" }),
-    ).toBe(false);
   } finally {
     await runtime.stop(true);
     await web.stop(true);

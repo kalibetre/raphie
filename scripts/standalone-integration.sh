@@ -11,28 +11,6 @@ test -x "$directory/raphie" && test -x "$directory/raphie-runtime" && test -x "$
 temp=$(mktemp -d)
 trap 'rm -rf "$temp"' EXIT HUP INT TERM
 mkdir -p "$temp/home" "$temp/data"
-env -i PATH=/usr/bin:/bin HOME="$temp/home" DATA_DIRECTORY="$temp/data" RAPHIE_WEB_ORIGIN=http://127.0.0.1:4320 python3 -c '
-import hashlib, os, pty, re, sqlite3, subprocess, sys
-master, slave = pty.openpty()
-child = subprocess.Popen([sys.argv[1], "pair"], stdin=slave, stdout=slave, stderr=slave, env=os.environ)
-os.close(slave)
-output = b""
-while True:
-    try:
-        chunk = os.read(master, 4096)
-        if not chunk: break
-        output += chunk
-    except OSError: break
-os.close(master)
-if child.wait() != 0: raise SystemExit("Compiled pairing command failed")
-match = re.search(rb"#token=([A-Za-z0-9_-]{43})", output)
-if not match or "█".encode() not in output: raise SystemExit("Compiled pairing link or QR missing")
-digest = hashlib.sha256(match.group(1)).hexdigest()
-with sqlite3.connect(os.path.join(os.environ["DATA_DIRECTORY"], "pairing.sqlite")) as db:
-    if not db.execute("SELECT 1 FROM pairing_codes WHERE secret_hash = ?", (digest,)).fetchone():
-        raise SystemExit("Compiled pairing code was not persisted")
-print("Compiled terminal pairing passed.")
-' "$directory/raphie"
 env -i PATH=/usr/bin:/bin python3 -c '
 import http.server, os, subprocess, sys, threading
 class Runtime(http.server.BaseHTTPRequestHandler):
@@ -41,14 +19,14 @@ class Runtime(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
 class Web(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        ok = self.path == "/auth/connect" and self.headers.get("Host") == "raphie.example"
+        ok = self.path == "/_raphie/version"
         self.send_response(200 if ok else 404); self.end_headers()
-        self.wfile.write("<title>Connect to Raphie</title>".encode())
+        self.wfile.write(b"{\"id\":\"fixture\"}")
     def log_message(self, *args): pass
 servers = [http.server.HTTPServer(("127.0.0.1", 0), handler) for handler in (Runtime, Web)]
 threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in servers]
 for thread in threads: thread.start()
-env = dict(os.environ, PORT=str(servers[0].server_port), RAPHIE_WEB_PORT=str(servers[1].server_port), RAPHIE_WEB_BIND="127.0.0.1", RAPHIE_WEB_ORIGIN="https://raphie.example")
+env = dict(os.environ, PORT=str(servers[0].server_port), RAPHIE_WEB_PORT=str(servers[1].server_port))
 try:
     if subprocess.run([sys.argv[1], "health"], env=env).returncode: raise SystemExit("Compiled health check failed")
     servers[0].shutdown()

@@ -9,7 +9,6 @@ User=raphie
 Group=raphie
 WorkingDirectory=/opt/raphie/current
 Environment=HOME=/var/lib/raphie
-Environment=RAPHIE_SERVER_MODE=1
 EnvironmentFile=/etc/raphie/raphie.conf
 LoadCredentialEncrypted=raphie-keyring:/etc/raphie/keyring.cred
 ExecStart=/bin/sh /opt/raphie/current/keyring-session.sh /opt/raphie/current/raphie start

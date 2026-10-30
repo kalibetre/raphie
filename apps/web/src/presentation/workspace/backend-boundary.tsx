@@ -50,30 +50,25 @@ export function BackendBoundary({ children }: { children: ReactNode }) {
     };
   }, [load]);
 
-  async function connect(url: string, credentials?: { pairingLink: string }) {
+  async function connect(url: string) {
     if (!active.current || switching.current) return;
     const previous = active.current;
     switching.current = true;
     setError("");
     try {
-      await connectWorkspace(
-        previous,
-        url,
-        {
-          publish: (next) => {
-            active.current = next;
-            // Unmount every old observer/form before saving the new selection.
-            flushSync(() => setWorkspace(next));
-          },
-          navigate: () =>
-            navigate({
-              to: "/",
-              search: { view: "settings", section: "connection" },
-              replace: true,
-            }),
+      await connectWorkspace(previous, url, {
+        publish: (next) => {
+          active.current = next;
+          // Unmount every old observer/form before saving the new selection.
+          flushSync(() => setWorkspace(next));
         },
-        credentials,
-      );
+        navigate: () =>
+          navigate({
+            to: "/",
+            search: { view: "settings", section: "connection" },
+            replace: true,
+          }),
+      });
     } catch (error) {
       if (active.current !== previous)
         setError(error instanceof Error ? error.message : "Connection failed.");

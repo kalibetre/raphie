@@ -19,16 +19,5 @@ case "${1:-}" in
     shift
     exec /bin/sh "$root/scripts/linux-install/restore.sh" "$@"
     ;;
-  pair|devices)
-    if [ "$(id -u)" -eq 0 ]; then
-      test -r /etc/raphie/raphie.conf || { echo 'Raphie configuration is unavailable.' >&2; exit 1; }
-      set -a
-      . /etc/raphie/raphie.conf
-      set +a
-      exec runuser -u raphie -- env HOME=/var/lib/raphie DATA_DIRECTORY="$DATA_DIRECTORY" RAPHIE_WEB_ORIGIN="${RAPHIE_WEB_ORIGIN:-}" /usr/local/bin/bun "$root/scripts/raphie.ts" "$@"
-    fi
-    echo 'Run device management as root: sudo raphie pair or sudo raphie devices' >&2
-    exit 1
-    ;;
 esac
 exec /usr/local/bin/bun "$root/scripts/raphie.ts" "$@"

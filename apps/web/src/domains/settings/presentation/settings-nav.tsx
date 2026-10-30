@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronRight, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   readLocal,
@@ -47,12 +47,7 @@ const botEntries: readonly Section[] = [
   "telemetry",
   "activity",
 ];
-const appEntries: readonly Section[] = [
-  "connection",
-  "devices",
-  "general",
-  "plugins",
-];
+const appEntries: readonly Section[] = ["connection", "general", "plugins"];
 const label = (id: Section) => sections.find((s) => s.id === id)!.label;
 const expandedKey = "raphie:settings-expanded";
 
@@ -69,15 +64,6 @@ export function SettingsNav({
   onBack: () => void;
 }) {
   const bots = useBots().data?.items ?? [];
-  const [pairingEnabled, setPairingEnabled] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetch("/auth/status", { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setPairingEnabled(data?.pairingEnabled === true))
-      .catch(() => {});
-    return () => controller.abort();
-  }, []);
   const { setOpenMobile } = useSidebar();
   const current = parentSection[section] ?? section;
   const app = isAppSection(section) || section === "new-bot";
@@ -180,19 +166,17 @@ export function SettingsNav({
           <SidebarGroup>
             <SidebarGroupLabel>App</SidebarGroupLabel>
             <SidebarMenu>
-              {appEntries
-                .filter((entry) => entry !== "devices" || pairingEnabled)
-                .map((entry) => (
-                  <SidebarMenuItem key={entry}>
-                    <SidebarMenuButton
-                      isActive={section === entry}
-                      aria-current={section === entry ? "page" : undefined}
-                      onClick={() => select(botId, entry)}
-                    >
-                      {label(entry)}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+              {appEntries.map((entry) => (
+                <SidebarMenuItem key={entry}>
+                  <SidebarMenuButton
+                    isActive={section === entry}
+                    aria-current={section === entry ? "page" : undefined}
+                    onClick={() => select(botId, entry)}
+                  >
+                    {label(entry)}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroup>
         </nav>

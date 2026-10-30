@@ -1,9 +1,4 @@
-import {
-  backendAddress,
-  connectionRequest,
-  isRemoteGateway,
-} from "./backend-connection.server";
-import { remoteSession } from "./remote-session.server";
+import { backendAddress, connectionRequest } from "./backend-connection.server";
 
 export async function proxyRuntime(request: Request) {
   const incoming = new URL(request.url);
@@ -53,24 +48,6 @@ export async function proxyRuntime(request: Request) {
     const value = request.headers.get(key);
     if (value) headers.set(key, value);
   }
-  const remote = remoteSession(request, base);
-  const targetUrl = new URL(base);
-  if (remote) {
-    headers.set("authorization", `Bearer ${remote}`);
-    headers.delete("origin");
-  } else if (
-    isRemoteGateway(request) ||
-    !["127.0.0.1", "localhost"].includes(targetUrl.hostname) ||
-    targetUrl.protocol === "https:"
-  ) {
-    return Response.json(
-      {
-        error: "Pair the remote gateway again.",
-        code: "gateway_sign_in_required",
-      },
-      { status: 401 },
-    );
-  }
   try {
     const response = await fetch(target, {
       method: request.method,
@@ -81,11 +58,9 @@ export async function proxyRuntime(request: Request) {
         ? { body: request.body, duplex: "half" }
         : {}),
     } as RequestInit);
-    const responseHeaders = new Headers(response.headers);
-    if (remote) responseHeaders.delete("set-cookie");
     return new Response(response.body, {
       status: response.status,
-      headers: responseHeaders,
+      headers: response.headers,
     });
   } catch {
     return Response.json(

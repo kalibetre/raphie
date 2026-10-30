@@ -14,8 +14,8 @@ case "$1" in
   daemon-reload) exit 0;;
   enable|start)
     set -a; . /etc/raphie/raphie.conf; set +a
-    export HOME=/var/lib/raphie RAPHIE_SERVER_MODE=1
-    setsid runuser -u raphie -- env HOME="$HOME" DATA_DIRECTORY="$DATA_DIRECTORY" RAPHIE_SERVER_MODE=1 RAPHIE_WEB_ORIGIN="$RAPHIE_WEB_ORIGIN" RAPHIE_WEB_BIND="$RAPHIE_WEB_BIND" RAPHIE_WEB_PORT="$RAPHIE_WEB_PORT" dbus-run-session -- sh -c 'printf "synthetic-only\\n" | gnome-keyring-daemon --unlock >/dev/null; exec /opt/raphie/current/raphie start' >/tmp/raphie-service-test.log 2>&1 &
+    export HOME=/var/lib/raphie
+    setsid runuser -u raphie -- env HOME="$HOME" DATA_DIRECTORY="$DATA_DIRECTORY" RAPHIE_WEB_ORIGIN="$RAPHIE_WEB_ORIGIN" RAPHIE_WEB_PORT="$RAPHIE_WEB_PORT" dbus-run-session -- sh -c 'printf "synthetic-only\\n" | gnome-keyring-daemon --unlock >/dev/null; exec /opt/raphie/current/raphie start' >/tmp/raphie-service-test.log 2>&1 &
     echo $! >/tmp/raphie-service-test.pid;;
   is-active) kill -0 "$(cat /tmp/raphie-service-test.pid)";;
   stop) python3 -c 'import os,signal,time; p=int(open("/tmp/raphie-service-test.pid").read()); os.killpg(p,signal.SIGTERM); time.sleep(1)' || true;;
@@ -24,7 +24,7 @@ esac
 ''')
 for path in stub.iterdir(): path.chmod(0o755)
 env = dict(os.environ, PATH=str(stub) + ':' + os.environ['PATH'])
-for args in (['--data-dir', 'relative'], ['--web-origin', 'https://example.com/path'], ['--data-dir', '/'], ['--data-dir', '/var/lib/raphie/.local/share/keyrings'], ['--web-origin', 'http://example.com']):
+for args in (['--data-dir', 'relative'], ['--web-origin', 'https://example.com/path'], ['--data-dir', '/'], ['--data-dir', '/var/lib/raphie/.local/share/keyrings'], ['--web-origin', 'http://example.com'], ['--web-origin', 'https://example.com']):
     result = subprocess.run(['sh', '/binaries/install.sh', *args], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     assert result.returncode != 0 and not pathlib.Path('/etc/raphie').exists()
 
@@ -53,16 +53,7 @@ def interactive(command, prompts):
     return data
 
 subprocess.run(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
-assert not pathlib.Path('/srv/raphie-test-data/auth.sqlite').exists()
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
-output = interactive(['/usr/local/bin/raphie', 'pair'], [])
-match = re.search(rb'#token=([A-Za-z0-9_-]{43})', output)
-assert match
-origin = 'http://localhost:4320'
-body = json.dumps({'secret': match.group(1).decode(), 'label': 'Test browser'}).encode()
-request = urllib.request.Request(origin + '/auth/pairing/redeem', data=body, headers={'Origin': origin, 'Content-Type': 'application/json'})
-with urllib.request.urlopen(request) as response:
-    assert response.status == 200 and 'HttpOnly' in response.headers['Set-Cookie']
 data_dir = pathlib.Path('/srv/raphie-test-data')
 marker = data_dir / 'restore-test-marker'
 marker.write_text('before update')
@@ -87,5 +78,5 @@ assert len(failed_backups) == 1
 interactive(['/usr/local/bin/raphie', 'restore', str(failed_backups.pop())], [(b'Type RESTORE to continue:', b'RESTORE')])
 assert os.readlink('/opt/raphie/current') == old_release and marker.read_text() == 'before update'
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
-print('Binary installation, overrides, pairing, update and backup restore passed (systemd simulated).')
+print('Binary installation, overrides, update and backup restore passed (systemd simulated).')
 subprocess.run(['systemctl', 'stop', 'raphie.service'], check=True, env=env)

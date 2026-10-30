@@ -30,8 +30,7 @@ source-based Varlock configuration workflow.
 On Linux with D-Bus, GNOME Keyring, libsecret, curl, and Python installed,
 `sh scripts/standalone-integration.sh "$(pwd)/dist/standalone/bun-linux-x64"`
 starts the compiled service with synthetic data and verifies the web proxy,
-runtime, build metadata, assets, terminal pairing QR generation, and the
-compiled installation health check. The experimental CI workflow builds and
+runtime, build metadata, assets, and the compiled installation health check. The experimental CI workflow builds and
 exercises both architectures; its uploaded artifacts are not published releases.
 
 The embedded web assets, version endpoint, worker, and guest packaging were
@@ -57,10 +56,9 @@ bundle to the machine and run `sudo sh install.sh`. The default browser origin
 is `http://127.0.0.1:4320` and the default data directory is
 `/var/lib/raphie/data`. `--web-origin` and `--data-dir` override them; existing
 data is never overwritten. Existing parents of a custom data directory must be
-root-owned and not group- or world-writable. Pair the first browser using
-`sudo raphie pair`; use this only on an isolated test installation. Access
-from another machine needs a correctly configured HTTPS
-reverse proxy. The installer does not configure one.
+root-owned and not group- or world-writable. Raphie has no authentication yet,
+so use this only on an isolated test installation and reach it from another
+machine through an SSH tunnel, not a reverse proxy.
 
 For local test bundles, `sudo raphie update /path/to/trusted/bundle` takes an
 offline backup before switching. `sudo raphie restore /var/backups/raphie/...`

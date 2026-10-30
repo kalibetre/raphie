@@ -1,26 +1,7 @@
-import {
-  discardRemoteSession,
-  loginRemote,
-  remoteAddress,
-  remoteCookie,
-  validRemoteHandle,
-} from "./remote-session.server";
-
 const backendCookie = (request: Request) =>
   `raphie_backend_${new URL(request.url).port || "80"}`;
-const kindCookie = (request: Request) =>
-  `raphie_gateway_kind_${new URL(request.url).port || "80"}`;
 const cookieSecurity = () =>
   process.env.RAPHIE_WEB_ORIGIN?.startsWith("https://") ? "; Secure" : "";
-
-export function isRemoteGateway(request: Request): boolean {
-  return (
-    request.headers
-      .get("cookie")
-      ?.split(";")
-      .some((part) => part.trim() === `${kindCookie(request)}=remote`) ?? false
-  );
-}
 
 export function localBackend(value: string, webPort?: string) {
   const url = new URL(value);
@@ -47,26 +28,27 @@ export function backendAddress(request: Request) {
     ?.split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${cookieName}=`));
-  const value = cookie
-    ? decodeURIComponent(cookie.slice(cookieName.length + 1))
-    : (process.env.RAPHIE_RUNTIME_URL ?? "http://127.0.0.1:4316");
+  if (cookie) {
+    try {
+      return localBackend(
+        decodeURIComponent(cookie.slice(cookieName.length + 1)),
+        new URL(request.url).port,
+      );
+    } catch {
+      // An obsolete remote selection must not prevent the app from starting.
+    }
+  }
+  const value = process.env.RAPHIE_RUNTIME_URL ?? "http://127.0.0.1:4316";
   if (new URL(value).host === new URL(request.url).host)
     throw new Error("Gateway cannot point to this web server.");
-  try {
-    return localBackend(value, new URL(request.url).port);
-  } catch {
-    return remoteAddress(value);
-  }
+  return localBackend(value, new URL(request.url).port);
 }
 
 /** This endpoint belongs to the web host so an offline backend can be replaced. */
 export async function connectionRequest(request: Request) {
   try {
     if (request.method === "GET")
-      return Response.json({
-        url: backendAddress(request),
-        kind: isRemoteGateway(request) ? "remote" : "local",
-      });
+      return Response.json({ url: backendAddress(request) });
     if (request.method !== "POST")
       return Response.json({ error: "Method not allowed." }, { status: 405 });
     if (request.headers.get("x-raphie-client") !== "web")
@@ -84,32 +66,6 @@ export async function connectionRequest(request: Request) {
       !["test", "connect"].includes(input.action)
     )
       throw new Error("Invalid connection request.");
-    if (input.kind === "remote") {
-      const url = remoteAddress(input.url);
-      if (new URL(url).host === new URL(request.url).host)
-        throw new Error("Gateway cannot point to this web server.");
-      const handle =
-        input.action === "test"
-          ? await loginRemote(url, input.pairingLink)
-          : input.pairingHandle;
-      if (input.action === "test") {
-        return Response.json({ url, connected: true, pairingHandle: handle });
-      }
-      if (!validRemoteHandle(handle, url))
-        throw new Error("Pair the gateway again.");
-      discardRemoteSession(request);
-      const headers = new Headers();
-      headers.append("set-cookie", remoteCookie(request, handle));
-      headers.append(
-        "set-cookie",
-        `${backendCookie(request)}=${encodeURIComponent(url)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000${cookieSecurity()}`,
-      );
-      headers.append(
-        "set-cookie",
-        `${kindCookie(request)}=remote; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000${cookieSecurity()}`,
-      );
-      return Response.json({ url, connected: true }, { headers });
-    }
     const url = localBackend(input.url, new URL(request.url).port);
     let ready = false;
     try {
@@ -131,24 +87,17 @@ export async function connectionRequest(request: Request) {
         { error: "Could not connect to a Raphie backend at that address." },
         { status: 503 },
       );
-    if (input.action === "connect") discardRemoteSession(request);
     const headers = new Headers();
     if (input.action === "connect") {
       headers.append(
         "set-cookie",
         `${backendCookie(request)}=${encodeURIComponent(url)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000${cookieSecurity()}`,
       );
-      headers.append(
-        "set-cookie",
-        `${kindCookie(request)}=local; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000${cookieSecurity()}`,
-      );
     }
     return Response.json({ url, connected: true }, { headers });
   } catch {
     return Response.json(
-      {
-        error: "Could not connect. Check the gateway address and pairing link.",
-      },
+      { error: "Could not connect. Check the backend address." },
       { status: 400 },
     );
   }

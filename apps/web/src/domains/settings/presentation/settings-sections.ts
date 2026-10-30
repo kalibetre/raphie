@@ -15,7 +15,6 @@ import {
   Puzzle,
   Radio,
   Server,
-  Smartphone,
   Sparkles,
   UserRound,
 } from "lucide-react";
@@ -123,13 +122,6 @@ export const sections = [
       `What ${bot} remembers, with sources. Correct or forget anything.`,
   },
   {
-    id: "devices",
-    label: "Devices",
-    icon: Smartphone,
-    lede: () =>
-      "Manage the browsers and devices connected to this Raphie server.",
-  },
-  {
     id: "plugins",
     label: "UI plugins",
     icon: Puzzle,
@@ -164,7 +156,7 @@ export const isSection = (value: unknown): value is Section =>
   sections.some((section) => section.id === value);
 
 export const isAppSection = (section: string) =>
-  ["connection", "devices", "general", "plugins"].includes(section);
+  ["connection", "general", "plugins"].includes(section);
 
 export const sectionOf = (id: Section) =>
   sections.find((section) => section.id === id)!;

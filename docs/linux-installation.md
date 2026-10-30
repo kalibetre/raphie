@@ -6,17 +6,14 @@ Installation, service restart, update, and backup restore have been exercised
 on an Ubuntu 24.04 VM with systemd using synthetic data. Do not deploy it until
 the remaining security review and recovery verification are complete.
 
-The server runs as the `raphie` user. Connect the first device by running
-`sudo raphie pair` on the host. The runtime and web listener bind to loopback.
-Public network access requires HTTPS and a
-trusted reverse proxy. Local development continues to bind to loopback without
-an account.
+The server runs as the `raphie` user. The runtime and web listener bind to
+loopback, and the web host rejects non-loopback `Host` headers. Raphie currently
+has **no authentication**: anyone who can reach the loopback listener has full
+access, so do not expose it through a reverse proxy. Use an SSH tunnel for
+remote access until authentication is added.
 
-From a local Raphie installation, Settings → Backend connection can connect to
-an authenticated remote gateway using its URL and a one-time pairing link.
-Remote credentials are held in the local web server's memory, so restart
-requires pairing again. HTTP connections are limited to loopback tunnels;
-use HTTPS for other addresses.
+Settings → Backend connection selects a runtime on the same host (loopback HTTP
+only).
 
 The release installer supports Debian and Ubuntu with systemd. After a stable
 GitHub release has been published and the bootstrap script is available on
@@ -30,14 +27,12 @@ sudo sh install-raphie.sh
 Pass a published version such as `v1.2.3` as an argument to install that
 specific release. Without an argument it selects the latest stable release.
 It installs required OS packages and Bun 1.4.4, verifying Bun against pinned
-checksums. It prompts for a browser-facing origin and bind address, and refuses
+checksums. It prompts for a loopback browser origin, and refuses
 to replace an existing installation or a different Bun
 at `/usr/local/bin/bun`. Failed setup currently needs manual cleanup. The
 repository has no published release yet, so this command is not available
 until the first release is published.
 
-`sudo raphie pair` creates a short-lived, single-use link, and `sudo raphie
-devices list` or `sudo raphie devices revoke <id>` manages access from the host.
 `raphie status` checks the
 local runtime. `sudo raphie update` fetches the latest stable GitHub release;
 alternatively, `sudo raphie update /path/to/clean/checkout` uses a local
