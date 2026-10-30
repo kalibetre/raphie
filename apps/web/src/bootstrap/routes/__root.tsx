@@ -8,6 +8,7 @@ import {
 
 import { BackendBoundary } from "../../presentation/workspace/backend-boundary";
 import { UpdateNotice } from "../../presentation/workspace/update-notice";
+import favicon from "../../shared/favicon.svg?inline";
 
 import styles from "../../shared/styles/index.css?url";
 
@@ -25,7 +26,10 @@ export const Route = createRootRoute({
           : "Raphie · Personal workspace",
       },
     ],
-    links: [{ rel: "stylesheet", href: styles }],
+    links: [
+      { rel: "icon", type: "image/svg+xml", href: favicon },
+      { rel: "stylesheet", href: styles },
+    ],
   }),
   component: Root,
 });
