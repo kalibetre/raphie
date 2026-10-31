@@ -54,6 +54,9 @@ jobs:
 
   verify-draft:
     if: ${{ inputs.tag != '' }}
+    permissions:
+      contents: write # GitHub requires repository write access to read draft releases.
+      attestations: read
     strategy:
       fail-fast: false
       matrix:
@@ -71,6 +74,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
