@@ -1,6 +1,38 @@
 #!/bin/sh
 set -eu
 root=/opt/raphie/current
+if [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && { [ "$1" = --help ] || [ "$1" = -h ] || [ "$1" = help ]; }; }; then
+  cat <<'HELP'
+Raphie standalone service
+
+Usage: raphie <command> [options]
+
+Service:
+  status                         Check the runtime
+  health                         Check the runtime and web service
+
+Administrator (run with sudo):
+  auth setup                     Create the administrator account
+  auth recover                   Reset the password and revoke sessions
+  update [version|bundle]        Update to latest, a version, or a trusted local bundle
+  restore <backup.tar>           Restore a backup and its matching installed release
+  uninstall                      Remove the service and programs; preserve data
+  uninstall --purge              Also remove Raphie data, keyrings, and backups
+
+Uninstall and restore require confirmation. Normal uninstall preserves the
+configuration, service user, and keyring material as well as data and backups.
+Start, stop, or restart the installed service with `sudo systemctl <action> raphie`.
+Run `sudo raphie <command> --help` for update, restore, or uninstall details.
+HELP
+  exit 0
+fi
+if [ "$#" -eq 2 ] && { [ "$2" = --help ] || [ "$2" = -h ]; }; then
+  case "$1" in
+    update) echo 'Usage: sudo raphie update [version|/path/to/trusted/bundle]'; echo 'Download a verified stable release, or update from a trusted local bundle.'; exit 0 ;;
+    restore) echo 'Usage: sudo raphie restore /var/backups/raphie/raphie-XXXXXXXX.tar'; echo 'Restore the backup and its matching installed release after confirmation.'; exit 0 ;;
+    uninstall) echo 'Usage: sudo raphie uninstall [--purge]'; echo 'Remove service and programs while preserving data, configuration, keyrings, backups, and the service user.'; echo 'With --purge, also delete Raphie data, configuration, keyrings, and backups. Both modes require confirmation.'; exit 0 ;;
+  esac
+fi
 test -r /etc/raphie/raphie.conf || { echo 'Raphie configuration is unavailable.' >&2; exit 1; }
 set -a
 . /etc/raphie/raphie.conf

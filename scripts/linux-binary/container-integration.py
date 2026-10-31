@@ -53,6 +53,9 @@ def interactive(command, prompts):
     return data
 
 subprocess.run(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
+help_text = subprocess.check_output(['/usr/local/bin/raphie', '--help'], env=env, text=True)
+assert all(command in help_text for command in ('auth setup', 'auth recover', 'health', 'update', 'restore', 'uninstall', '--purge'))
+assert 'confirmation' in subprocess.check_output(['/usr/local/bin/raphie', 'uninstall', '--help'], env=env, text=True)
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
 def auth_status(): return json.load(urllib.request.urlopen('http://127.0.0.1:4320/auth/status'))
 assert auth_status() == {'configured': False, 'authenticated': False}

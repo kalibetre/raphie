@@ -62,6 +62,9 @@ it does not install Bun. The installed binary service supports `sudo raphie
 update` for the latest stable release, or `sudo raphie update v1.2.3` for a
 specific stable release. The `gh` command and its authentication, if needed,
 must be available to root as these operations run under sudo.
+Run `sudo raphie --help` to list the installed service and administrator
+commands. Use `sudo raphie update --help`, `sudo raphie restore --help`, or
+`sudo raphie uninstall --help` for their arguments and effects.
 Earlier experimental installers and updaters do not support the current bundle
 layout. They require a separately planned migration; do not assume an in-place
 update from an earlier experimental build is supported.
