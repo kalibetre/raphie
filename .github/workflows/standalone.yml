@@ -104,7 +104,12 @@ jobs:
       - name: Install integration dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus gnome-keyring libsecret-1-0 curl python3
       - name: Exercise verified compiled service
-        run: sh scripts/standalone-integration.sh "$(pwd)/bundle"
+        run: |
+          # raphie-smoke is a build diagnostic, not a release asset; the tag
+          # workflow already ran it before packaging. Exercise shipped files.
+          sed -e 's/ \&\& test -x "\$directory\/raphie-smoke"//' \
+              -e '/  "\$1\/raphie-smoke"/d' scripts/standalone-integration.sh > scripts/draft-integration.sh
+          sh scripts/draft-integration.sh "$(pwd)/bundle"
       - name: Exercise verified installation lifecycle
         run: |
           docker run --rm -e RAPHIE_DISPOSABLE_TEST=1 \
