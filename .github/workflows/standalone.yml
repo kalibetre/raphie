@@ -2,6 +2,11 @@ name: Experimental standalone builds
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Draft release tag to verify (leave empty for the normal build)
+        required: false
+        type: string
   pull_request:
     paths:
       - "apps/web/**"
@@ -12,9 +17,11 @@ on:
 
 permissions:
   contents: read
+  attestations: read
 
 jobs:
   standalone:
+    if: ${{ inputs.tag == '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -44,3 +51,59 @@ jobs:
             dist/standalone/${{ matrix.target }}/raphie-runtime
             dist/standalone/${{ matrix.target }}/raphie-web
           retention-days: 7
+
+  verify-draft:
+    if: ${{ inputs.tag != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            asset: raphie-linux-x64.tar.gz
+          - runner: ubuntu-24.04-arm
+            asset: raphie-linux-arm64.tar.gz
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Validate tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: '[[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Download and verify draft archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          ASSET: ${{ matrix.asset }}
+        run: |
+          gh release download "$TAG" --repo kalibetre/raphie --pattern "$ASSET"
+          gh attestation verify "$ASSET" --hostname github.com --repo kalibetre/raphie \
+            --signer-workflow kalibetre/raphie/.github/workflows/release.yml \
+            --source-ref "refs/tags/$TAG" --deny-self-hosted-runners
+          mkdir bundle
+          python3 - "$ASSET" <<'PY'
+          import os, sys, tarfile
+          expected = {'raphie', 'raphie-runtime', 'raphie-web', 'install.sh', 'raphie.service', 'raphie-admin', 'keyring-session.sh', 'update.sh', 'restore.sh', 'uninstall.sh', 'bundle-id.sh', 'download-release.sh'}
+          with tarfile.open(sys.argv[1], 'r:gz') as archive:
+              members = archive.getmembers()
+              if len(members) != len(expected) or {m.name for m in members} != expected or any(not m.isfile() or m.size > 500_000_000 for m in members):
+                  raise SystemExit('Invalid release archive contents.')
+              for member in members:
+                  with archive.extractfile(member) as source, open(os.path.join('bundle', member.name), 'xb') as target:
+                      while chunk := source.read(1024 * 1024): target.write(chunk)
+                  os.chmod(os.path.join('bundle', member.name), 0o644 if member.name == 'raphie.service' else 0o755)
+          PY
+      - name: Install integration dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus gnome-keyring libsecret-1-0 curl python3
+      - name: Exercise verified compiled service
+        run: sh scripts/standalone-integration.sh "$(pwd)/bundle"
+      - name: Exercise verified installation lifecycle
+        run: |
+          docker run --rm -e RAPHIE_DISPOSABLE_TEST=1 \
+            -v "$(pwd)/bundle:/binaries:ro" \
+            -v "$(pwd)/scripts/linux-binary/container-integration.py:/test.py:ro" \
+            ubuntu:24.04 sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends dbus gnome-keyring libsecret-1-0 python3 >/dev/null && python3 /test.py'
