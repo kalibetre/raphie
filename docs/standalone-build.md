@@ -2,8 +2,7 @@
 
 This is an experimental packaging and local installation check. The existing
 source-based installer remains separate. Automatic HTTPS setup, portable
-credential recovery and release verification are not implemented by this
-experiment.
+credential recovery is not implemented by this experiment.
 
 From a clean working tree with the project's pinned Bun and dependencies:
 
@@ -44,15 +43,28 @@ executed the embedded guest through a real disposable container on macOS.
 This does not yet prove a full installer, a Linux container sandbox end to end,
 or cross-host credential restoration.
 
-The tag-triggered release workflow is set up to test both Linux architectures,
-attest the resulting archives, and create a **draft** GitHub release with
-checksums. It does not publish the draft. The current source-based installer
-does not consume these archives. The binary bundle has an experimental local
-installer and an updater that accepts a trusted local bundle, but neither
-downloads nor verifies release provenance. Do not publish the draft as a
-supported installation path until verification and security review are
-complete. Checksums detect accidental
-corruption but are not a substitute for independently verified provenance.
+The tag-triggered release workflow tests both Linux architectures, attests the
+archives, and creates a **draft** GitHub release. It does not publish the draft.
+The experimental binary downloader verifies the GitHub attestation against the
+repository, release workflow, stable tag, and GitHub-hosted runner before it
+extracts an archive. It requires GitHub CLI with attestation verification and
+network access to GitHub and the Sigstore trust infrastructure. Authentication
+may be needed by GitHub CLI; configure it for the account running the command.
+The bootstrap and downloader scripts must themselves be obtained and inspected
+through a trusted channel. The first real published artifact still needs an
+end-to-end verification test and security review before this is supported.
+
+After a stable release is published, place inspected copies of
+`scripts/linux-binary/bootstrap.sh` and `download-release.sh` together, install
+GitHub CLI, and run `sudo sh bootstrap.sh` (or pass a stable version such as
+`v1.2.3`). The script installs OS dependencies and the verified binary bundle;
+it does not install Bun. The installed binary service supports `sudo raphie
+update` for the latest stable release, or `sudo raphie update v1.2.3` for a
+specific stable release. The `gh` command and its authentication, if needed,
+must be available to root as these operations run under sudo.
+Earlier experimental installations only accept local bundle updates; they need
+one administrator-supplied trusted bundle update before this command can
+download releases itself.
 
 For an isolated Linux test machine with systemd, D-Bus, GNOME Keyring,
 libsecret, Python 3 and the utilities used by `install.sh`, copy the built
@@ -71,7 +83,7 @@ offline backup before switching. `sudo raphie restore /var/backups/raphie/...`
 restores a matching backup after confirmation. These commands have only been
 exercised with synthetic data in a disposable Ubuntu container and on an
 Ubuntu VM using real systemd and temporarily extracted keyring dependencies.
-Portable key recovery and independent release verification remain untested;
+Portable key recovery and verification of an actual published release remain untested;
 do not rely on this for production. A failed install may require manual
 cleanup.
 

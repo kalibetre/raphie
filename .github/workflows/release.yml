@@ -57,7 +57,7 @@ jobs:
             -v "$(pwd)/scripts/linux-binary/container-integration.py:/test.py:ro" \
             ubuntu:24.04 sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends dbus gnome-keyring libsecret-1-0 python3 >/dev/null && python3 /test.py'
       - name: Package release binaries
-        run: tar -C 'dist/standalone/${{ matrix.target }}' -czf '${{ matrix.asset }}' raphie raphie-runtime raphie-web install.sh raphie.service raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh
+        run: tar -C 'dist/standalone/${{ matrix.target }}' -czf '${{ matrix.asset }}' raphie raphie-runtime raphie-web install.sh raphie.service raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh download-release.sh
       - name: Attest build provenance
         uses: actions/attest@v4
         with:

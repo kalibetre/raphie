@@ -57,14 +57,14 @@ if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /u
   echo 'An existing installation or data directory was found; refusing to overwrite it.' >&2; exit 1
 fi
 bundle=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-for file in raphie raphie-runtime raphie-web raphie.service raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh; do
+for file in raphie raphie-runtime raphie-web raphie.service raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh download-release.sh; do
   test -f "$bundle/$file" && test ! -L "$bundle/$file" || { echo "Missing bundle file: $file" >&2; exit 1; }
 done
 revision=$(sh "$bundle/bundle-id.sh" "$bundle")
 useradd --system --user-group --home-dir /var/lib/raphie --create-home --shell /usr/sbin/nologin raphie
 install -d -m 0700 -o raphie -g raphie "$data_dir"
 install -d -m 0755 "/opt/raphie/releases/$revision"
-for file in raphie raphie-runtime raphie-web raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh; do install -m 0755 "$bundle/$file" "/opt/raphie/releases/$revision/$file"; done
+for file in raphie raphie-runtime raphie-web raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh download-release.sh; do install -m 0755 "$bundle/$file" "/opt/raphie/releases/$revision/$file"; done
 install -m 0644 "$bundle/raphie.service" "/opt/raphie/releases/$revision/raphie.service"
 install -d -m 0700 /etc/raphie
 printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=4320\n' "$data_dir" "$origin" > /etc/raphie/raphie.conf

@@ -1,11 +1,18 @@
 #!/bin/sh
 set -eu
 
-# Local, administrator-supplied bundles only. No network download or signature
-# verification is implemented yet; do not use this as a public updater.
 test "$(id -u)" -eq 0 || { echo 'Run update as root.' >&2; exit 1; }
-bundle=${1:?Usage: sudo raphie update /path/to/trusted/bundle}
-test "$#" -eq 1 || { echo 'Expected one bundle directory.' >&2; exit 1; }
+test "$#" -le 1 || { echo 'Expected an optional version or trusted bundle directory.' >&2; exit 1; }
+tmp=
+trap '[ -z "$tmp" ] || rm -rf "$tmp"' EXIT HUP INT TERM
+case "${1:-}" in
+  ''|v[0-9]*)
+    tmp=$(mktemp -d)
+    mkdir "$tmp/bundle"
+    sh /opt/raphie/current/download-release.sh "$tmp/bundle" "${1:-}"
+    bundle="$tmp/bundle" ;;
+  *) bundle=$1 ;;
+esac
 bundle=$(CDPATH='' cd -- "$bundle" && pwd)
 . /etc/raphie/raphie.conf
 exec 9>/run/lock/raphie-update.lock
@@ -16,7 +23,7 @@ previous=$(basename "$(readlink /opt/raphie/current)")
 if [ "$previous" = "$revision" ]; then echo 'Already on this bundle.'; exit 0; fi
 test ! -e "$target" || { echo 'Release already exists; refusing to overwrite it.' >&2; exit 1; }
 install -d -m 0755 "$target"
-for file in raphie raphie-runtime raphie-web raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh; do install -m 0755 "$bundle/$file" "$target/$file"; done
+for file in raphie raphie-runtime raphie-web raphie-admin keyring-session.sh update.sh restore.sh bundle-id.sh download-release.sh; do install -m 0755 "$bundle/$file" "$target/$file"; done
 install -m 0644 "$bundle/raphie.service" "$target/raphie.service"
 test "$(sh /opt/raphie/current/bundle-id.sh "$target")" = "$revision" || { echo 'Bundle changed while copying; refusing update.' >&2; exit 1; }
 systemctl stop raphie.service

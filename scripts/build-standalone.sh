@@ -21,5 +21,5 @@ bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile
 bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig --asset apps/web/dist --asset "$temp/.raphie-build" apps/web/server.mjs --outfile "$output/raphie-web"
 bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig scripts/raphie.ts --outfile "$output/raphie"
 bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig --asset "$temp/raphie-sandbox-guest.js" scripts/standalone-smoke.ts packages/runtime/src/domains/workspaces/infrastructure/workspace-worker.ts --outfile "$output/raphie-smoke"
-cp scripts/linux-binary/install.sh scripts/linux-binary/raphie.service scripts/linux-binary/raphie-admin scripts/linux-binary/update.sh scripts/linux-binary/restore.sh scripts/linux-binary/bundle-id.sh scripts/linux-install/keyring-session.sh "$output/"
+cp scripts/linux-binary/install.sh scripts/linux-binary/raphie.service scripts/linux-binary/raphie-admin scripts/linux-binary/update.sh scripts/linux-binary/restore.sh scripts/linux-binary/bundle-id.sh scripts/linux-binary/download-release.sh scripts/linux-install/keyring-session.sh "$output/"
 echo "Experimental binaries: $output"
