@@ -9,11 +9,12 @@ permissions:
 
 jobs:
   validate:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
+      - run: docker build -t raphie-workspace:slice2 packages/runtime/test/fixtures/container
       - run: bun run validate

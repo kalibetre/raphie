@@ -13,9 +13,9 @@ bun run validate
 ```
 
 `validate` checks formatting, linting, TypeScript, tests, and the production
-build. CI runs the same command on a self-hosted Linux x64 runner with the pinned Bun version.
-It does not require model credentials or connected integrations. Register a
-self-hosted runner before relying on GitHub's workflow status.
+build. CI runs the same command on a GitHub-hosted Linux x64 runner with the
+pinned Bun version and builds the container test fixture first. It does not
+require model credentials or connected integrations.
 
 Bun's built-in `bun fmt` owns formatting and import sorting, configured in
 `bunfig.toml`. Oxlint with its native type-aware
