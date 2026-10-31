@@ -18,7 +18,7 @@ case "$1" in
     setsid runuser -u raphie -- env HOME="$HOME" DATA_DIRECTORY="$DATA_DIRECTORY" RAPHIE_WEB_ORIGIN="$RAPHIE_WEB_ORIGIN" RAPHIE_WEB_PORT="$RAPHIE_WEB_PORT" dbus-run-session -- sh -c 'printf "synthetic-only\\n" | gnome-keyring-daemon --unlock >/dev/null; exec /opt/raphie/current/raphie start' >/tmp/raphie-service-test.log 2>&1 &
     echo $! >/tmp/raphie-service-test.pid;;
   is-active) kill -0 "$(cat /tmp/raphie-service-test.pid)";;
-  stop) python3 -c 'import os,signal,time; p=int(open("/tmp/raphie-service-test.pid").read()); os.killpg(p,signal.SIGTERM); time.sleep(1)' || true;;
+  stop|disable) python3 -c 'import os,signal,time; p=int(open("/tmp/raphie-service-test.pid").read()); os.killpg(p,signal.SIGTERM); time.sleep(1)' || true;;
   *) exit 1;;
 esac
 ''')
@@ -87,5 +87,34 @@ interactive(['/usr/local/bin/raphie', 'restore', str(failed_backups.pop())], [(b
 assert os.readlink('/opt/raphie/current') == old_release and marker.read_text() == 'before update'
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
 assert auth_status()['configured'] is True
-print('Binary installation, overrides, update and backup restore passed (systemd simulated).')
-subprocess.run(['systemctl', 'stop', 'raphie.service'], check=True, env=env)
+cancelled = subprocess.run(['/usr/local/bin/raphie', 'uninstall'], input=b'no\n', env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+assert cancelled.returncode != 0 and pathlib.Path('/usr/local/bin/raphie').exists()
+config = pathlib.Path('/etc/raphie/raphie.conf')
+original = config.read_text()
+config.write_text(original.replace('/srv/raphie-test-data', '/opt/raphie'))
+unsafe_default = subprocess.run(['/usr/local/bin/raphie', 'uninstall'], input=b'UNINSTALL\n', env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+assert unsafe_default.returncode != 0 and pathlib.Path('/usr/local/bin/raphie').exists()
+pathlib.Path('/tmp/raphie-data-symlink').symlink_to('/srv/raphie-test-data')
+for unsafe_path in ('/srv', '/var/lib/raphie', '/tmp/raphie-data-symlink'):
+    config.write_text(original.replace('/srv/raphie-test-data', unsafe_path))
+    unsafe = subprocess.run(['/usr/local/bin/raphie', 'uninstall', '--purge'], input=b'PURGE\n', env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    assert unsafe.returncode != 0 and pathlib.Path('/usr/local/bin/raphie').exists()
+config.write_text(original)
+host_key = pathlib.Path('/var/lib/systemd/credential.secret')
+host_key.parent.mkdir(parents=True, exist_ok=True)
+host_key.write_text('shared host credential marker')
+interactive(['/usr/local/bin/raphie', 'uninstall', '--purge'], [(b'Type PURGE to continue:', b'PURGE')])
+assert all(not pathlib.Path(p).exists() for p in ('/etc/raphie', '/opt/raphie', '/var/lib/raphie', '/usr/local/bin/raphie', '/srv/raphie-test-data', '/var/backups/raphie'))
+assert subprocess.run(['id', 'raphie'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
+assert host_key.read_text() == 'shared host credential marker'
+subprocess.run(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
+pathlib.Path('/srv/raphie-test-data/preserved').write_text('data')
+pathlib.Path('/var/backups/raphie').mkdir(exist_ok=True)
+pathlib.Path('/var/backups/raphie/preserved').write_text('backup')
+interactive(['/usr/local/bin/raphie', 'uninstall'], [(b'Type UNINSTALL to continue:', b'UNINSTALL')])
+assert pathlib.Path('/srv/raphie-test-data/preserved').read_text() == 'data'
+assert pathlib.Path('/var/backups/raphie/preserved').read_text() == 'backup'
+assert pathlib.Path('/etc/raphie/keyring.cred').exists() and pathlib.Path('/var/lib/raphie').exists()
+assert not pathlib.Path('/usr/local/bin/raphie').exists() and not pathlib.Path('/opt/raphie').exists()
+assert subprocess.run(['id', 'raphie'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+print('Binary installation, update, restore and uninstall modes passed (systemd simulated).')

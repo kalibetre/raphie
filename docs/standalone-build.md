@@ -62,9 +62,21 @@ it does not install Bun. The installed binary service supports `sudo raphie
 update` for the latest stable release, or `sudo raphie update v1.2.3` for a
 specific stable release. The `gh` command and its authentication, if needed,
 must be available to root as these operations run under sudo.
-Earlier experimental installations only accept local bundle updates; they need
-one administrator-supplied trusted bundle update before this command can
-download releases itself.
+Earlier experimental installers and updaters do not support the current bundle
+layout. They require a separately planned migration; do not assume an in-place
+update from an earlier experimental build is supported.
+
+`sudo raphie uninstall` stops and removes the service and program files after
+confirmation. It preserves the configured data directory, `/etc/raphie`, the
+service user's home and keyrings, backups, and the `raphie` user and group so
+their ownership and host-bound credential material remain intact. Preserved
+backups still require the matching release and host credential material for
+recovery; the installer currently refuses to overwrite a retained installation.
+Use `sudo raphie uninstall --purge` instead to remove those Raphie data and
+backups as well. Purge requires a separate confirmation and refuses unsafe
+data paths and mounted filesystems. Neither mode removes systemd's shared host
+credential key or shared OS dependencies. Choose purge when uninstalling: after
+the program has been removed, the uninstall command is no longer installed.
 
 For an isolated Linux test machine with systemd, D-Bus, GNOME Keyring,
 libsecret, Python 3 and the utilities used by `install.sh`, copy the built

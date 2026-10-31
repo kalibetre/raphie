@@ -27,6 +27,7 @@ test("binary download verifies provenance before extracting a strict archive", a
     "keyring-session.sh",
     "update.sh",
     "restore.sh",
+    "uninstall.sh",
     "bundle-id.sh",
     "download-release.sh",
   ];

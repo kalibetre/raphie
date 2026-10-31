@@ -6,7 +6,7 @@ set -a
 . /etc/raphie/raphie.conf
 set +a
 case "${1:-}" in
-  update|restore)
+  update|restore|uninstall)
     test "$(id -u)" -eq 0 || { echo 'Run this command with sudo.' >&2; exit 1; }
     command=$1
     shift
