@@ -74,3 +74,9 @@ Ubuntu VM using real systemd and temporarily extracted keyring dependencies.
 Portable key recovery and independent release verification remain untested;
 do not rely on this for production. A failed install may require manual
 cleanup.
+
+On 2026-10-31, the current administrator-authentication build was also tested
+with synthetic data on an x64 Ubuntu VM using unmodified systemd credentials.
+Installation, administrator setup and sign-in, service restart, password
+recovery, update, backup restore, and recovery after a failed update passed.
+This does not establish cross-host credential recovery or release provenance.
