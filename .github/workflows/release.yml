@@ -1,0 +1,87 @@
+name: Prepare release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - run: bun run validate
+
+  build:
+    needs: validate
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: bun-linux-x64
+            asset: raphie-linux-x64.tar.gz
+          - runner: ubuntu-24.04-arm
+            target: bun-linux-arm64
+            asset: raphie-linux-arm64.tar.gz
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: Validate release tag
+        run: '[[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
+      - name: Build release binaries
+        run: sh scripts/build-standalone.sh '${{ matrix.target }}' "$GITHUB_REF_NAME" "$(git rev-parse HEAD)"
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus gnome-keyring libsecret-1-0 curl python3
+      - name: Verify compiled service
+        run: sh scripts/standalone-integration.sh "$(pwd)/dist/standalone/${{ matrix.target }}"
+      - name: Verify local installation lifecycle
+        run: |
+          docker run --rm -e RAPHIE_DISPOSABLE_TEST=1 \
+            -v "$(pwd)/dist/standalone/${{ matrix.target }}:/binaries:ro" \
+            -v "$(pwd)/scripts/linux-binary/container-integration.py:/test.py:ro" \
+            ubuntu:24.04 sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends dbus gnome-keyring libsecret-1-0 python3 >/dev/null && python3 /test.py'
+      - name: Package release binaries
+        run: tar -C 'dist/standalone/${{ matrix.target }}' -czf '${{ matrix.asset }}' raphie raphie-runtime raphie-web install.sh raphie.service raphie-admin keyring-session.sh update.sh restore.sh uninstall.sh bundle-id.sh download-release.sh
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: "${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "${{ matrix.target }}"
+          path: "${{ matrix.asset }}"
+
+  draft:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bun-linux-*
+          path: artifacts
+          merge-multiple: true
+      - name: Create checksums
+        run: cd artifacts && sha256sum raphie-linux-x64.tar.gz raphie-linux-arm64.tar.gz > SHA256SUMS
+      - name: Prepare draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/SHA256SUMS --verify-tag --draft --generate-notes

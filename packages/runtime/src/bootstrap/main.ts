@@ -39,6 +39,7 @@ const program = Effect.gen(function* () {
   const directory = appDataDirectory(
     fileURLToPath(new URL("../../../../", import.meta.url)),
     process.env.DATA_DIRECTORY,
+    Bun.isStandaloneExecutable,
   );
   yield* resource(
     () => ownAppData(directory),

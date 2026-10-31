@@ -3,9 +3,12 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useLocation,
 } from "@tanstack/react-router";
 
 import { BackendBoundary } from "../../presentation/workspace/backend-boundary";
+import { UpdateNotice } from "../../presentation/workspace/update-notice";
+import favicon from "../../shared/favicon.svg?inline";
 
 import styles from "../../shared/styles/index.css?url";
 
@@ -23,12 +26,17 @@ export const Route = createRootRoute({
           : "Raphie · Personal workspace",
       },
     ],
-    links: [{ rel: "stylesheet", href: styles }],
+    links: [
+      { rel: "icon", type: "image/svg+xml", href: favicon },
+      { rel: "stylesheet", href: styles },
+    ],
   }),
   component: Root,
 });
 
 function Root() {
+  // The sign-in page must work before any backend session exists.
+  const signingIn = useLocation({ select: (l) => l.pathname === "/login" });
   return (
     <html lang="en">
       <head>
@@ -43,9 +51,16 @@ function Root() {
             Test workspace · fake models, not your data
           </div>
         )}
-        <BackendBoundary>
+        {signingIn ? (
           <Outlet />
-        </BackendBoundary>
+        ) : (
+          <>
+            <BackendBoundary>
+              <Outlet />
+            </BackendBoundary>
+            <UpdateNotice />
+          </>
+        )}
         <Scripts />
       </body>
     </html>

@@ -39,7 +39,6 @@ export function BotSidebar({
           </span>
           raphie
         </span>
-        <span className="local-label">LOCAL</span>
       </div>
       <div className="roster-label">
         Your bots<span className="roster-total">{bots.length}</span>
@@ -114,17 +113,19 @@ export function BotSidebar({
       <footer className="roster-footer">
         <span className="runtime-status">
           <span className={`status-dot ${connected ? "" : "offline"}`} />
-          {connected ? "Connected locally" : "Reconnecting…"}
+          {connected ? "Connected" : "Reconnecting…"}
         </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Settings"
-          title="Settings"
-          onClick={onSettings}
-        >
-          <Settings size={15} />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Settings"
+            title="Settings"
+            onClick={onSettings}
+          >
+            <Settings size={15} />
+          </Button>
+        </div>
       </footer>
     </div>
   );

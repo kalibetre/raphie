@@ -1,0 +1,23 @@
+[Unit]
+Description=Raphie personal assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=raphie
+Group=raphie
+WorkingDirectory=/opt/raphie/current
+Environment=HOME=/var/lib/raphie
+Environment=DATA_DIRECTORY=/var/lib/raphie/data
+EnvironmentFile=/etc/raphie/raphie.conf
+LoadCredentialEncrypted=raphie-keyring:/etc/raphie/keyring.cred
+ExecStart=/bin/sh /opt/raphie/current/scripts/linux-install/keyring-session.sh /usr/local/bin/bun run start
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

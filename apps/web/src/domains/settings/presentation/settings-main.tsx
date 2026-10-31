@@ -62,17 +62,24 @@ export function SettingsMain({
             size={12}
             aria-hidden="true"
           />
-          <span className="settings-breadcrumb-scope" style={botStyle(botId)}>
-            {!app && section !== "new-bot" && <BotAvatar id={botId} />}
-            <span className="settings-breadcrumb-label">
-              {app ? "App" : section === "new-bot" ? "New bot" : name}
-            </span>
-          </span>
-          <ChevronRight
-            className="settings-breadcrumb-divider"
-            size={12}
-            aria-hidden="true"
-          />
+          {!app && (
+            <>
+              <span
+                className="settings-breadcrumb-scope"
+                style={botStyle(botId)}
+              >
+                {section !== "new-bot" && <BotAvatar id={botId} />}
+                <span className="settings-breadcrumb-label">
+                  {section === "new-bot" ? "New bot" : name}
+                </span>
+              </span>
+              <ChevronRight
+                className="settings-breadcrumb-divider"
+                size={12}
+                aria-hidden="true"
+              />
+            </>
+          )}
           <span className="settings-breadcrumb-page" aria-current="page">
             <Icon size={14} aria-hidden="true" />
             <span className="settings-breadcrumb-label">

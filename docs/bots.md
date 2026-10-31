@@ -73,8 +73,7 @@ Switching bots replaces cached queries, observations, forms and draft keys;
 switching back restores that bot's draft. Default-bot draft keys remain compatible
 with existing browser data. Closing a view still does not cancel durable work.
 
-**Settings → App → Backend connection** selects the shared runtime host; changing it returns to its default
-bot. Providers, models and memory are scoped to the current bot. Theme, panel
+Providers, models and memory are scoped to the current bot. Theme, panel
 layout and UI-plugin preferences remain browser preferences shared across bots;
 they do not grant runtime tool capabilities.
 
@@ -194,11 +193,11 @@ packages/runtime/test/bots.test.ts`; full validation remains `bun run validate`.
 ## App data continuity across checkouts
 
 With `DATA_DIRECTORY` unset, runtime bootstrap uses the main Git checkout's
-`.data` even when launched from a linked worktree. A packaged installation without
-Git uses its installation directory. Explicit `DATA_DIRECTORY` values keep their
-existing meaning: absolute paths stay absolute; relative paths resolve against
-the running checkout. Fixture launchers pass isolated directories directly and
-never participate in default discovery.
+`.data` even when launched from a linked worktree. Standalone builds use the
+platform data directory described in [standalone builds](standalone-build.md).
+Explicit `DATA_DIRECTORY` values in source mode resolve against the running
+checkout; standalone values must be absolute. Fixture launchers pass isolated
+directories directly and never participate in default discovery.
 
 If a linked checkout already contains `.data`, startup stops before opening stores
 and asks for an explicit `DATA_DIRECTORY` choice. It never copies, merges, deletes
@@ -215,11 +214,7 @@ not participate in this check: stop them before starting an upgrade. Never run
 two Gateways against the same data directory, including with embedding/test APIs.
 
 A persistent `workspace-identity.json` identifies the app data directory across
-restarts and upgrades. Keep it in backups. The web view displays the backend URL
-and short identity; expand it or open Backend connection settings for the complete
-ID and data path. Older runtimes show “identity unavailable”; this never means
-their data was deleted. Switching backends displays a different server's data;
-it does not transfer conversations or settings. Explicit development/fixture
-backends remain separate, and the browser fixture reports “Test fixture”.
-Check the address and data path when history appears
-missing before creating another workspace.
+restarts and upgrades. Keep it in backups. The runtime reports its data path and
+workspace identity through its local status API. Explicit development and fixture
+backends remain separate. Check the data path when history appears missing before
+creating another workspace.

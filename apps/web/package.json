@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --bun run vite --host 127.0.0.1 --port 4320 --strictPort",
+    "dev": "bun --bun run varlock run --path ../.. -- bun --bun run vite --host 127.0.0.1 --port 4320 --strictPort",
     "build": "bun --bun run vite build",
     "check": "tsc --noEmit",
     "test": "bun test ./test --timeout 15000",
-    "start": "bun server.mjs"
+    "start": "bun --bun run varlock run --path ../.. -- bun server.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
@@ -20,6 +20,7 @@
     "@tanstack/react-query": "5.104.5",
     "@tanstack/react-router": "1.170.45",
     "@tanstack/react-start": "1.169.3",
+    "better-auth": "1.7.14",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "date-fns": "^4.4.0",

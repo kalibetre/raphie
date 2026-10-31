@@ -77,14 +77,6 @@
     /* Center the drawn blob with the lettering, rather than its SVG box. */
     transform: translateY(1px);
   }
-  .local-label {
-    font-size: 9px;
-    color: var(--muted-foreground);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 3px 7px;
-    letter-spacing: 0.5px;
-  }
   .roster-label {
     display: flex;
     align-items: center;
@@ -878,17 +870,4 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-}
-
-.backend-identity {
-  padding: 0.25rem 1rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.75rem;
-  overflow-wrap: anywhere;
-}
-.backend-identity summary {
-  cursor: pointer;
-}
-.backend-identity p {
-  margin: 0.5rem 0;
 }
