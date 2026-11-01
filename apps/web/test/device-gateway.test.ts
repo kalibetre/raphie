@@ -15,6 +15,165 @@ const origin = "http://127.0.0.1:4320";
 const opened: AuthService[] = [];
 const directories: string[] = [];
 
+test("an HTTPS proxy preserves secure browser and device authorization boundaries", async () => {
+  const publicOrigin = "https://agent.example.ts.net";
+  const directory = await mkdtemp(join(tmpdir(), "raphie-proxy-auth-"));
+  directories.push(directory);
+  const service = await openAuthService({
+    directory,
+    origins: [publicOrigin],
+    role: "admin",
+  });
+  opened.push(service);
+  await service.setup("admin@example.test", "a long test password");
+  const gateway = createGateway({
+    service,
+    origins: [publicOrigin],
+    localPort: 4320,
+  });
+  const check = (path: string, init: RequestInit = {}) =>
+    gateway.check(new Request(`http://agent.example.ts.net${path}`, init));
+  const json = (body: unknown, headers: Record<string, string> = {}) => ({
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+  expect(
+    (await gateway.check(
+      new Request("http://127.0.0.1:4320/_raphie/health"),
+    )) as Response,
+  ).toHaveProperty("status", 200);
+  const login = (await check(
+    "/api/auth/sign-in/email",
+    json(
+      { email: "admin@example.test", password: "a long test password" },
+      { origin: publicOrigin },
+    ),
+  )) as Response;
+  expect(login.status).toBe(200);
+  const setCookie = login.headers.getSetCookie()[0]!;
+  expect(setCookie.toLowerCase()).toContain("secure");
+  const cookie = setCookie.split(";")[0]!;
+  expect(
+    await check("/api/runtime", { headers: { cookie } }),
+  ).not.toBeInstanceOf(Response);
+  expect(
+    (
+      (await check(
+        "/api/auth/sign-out",
+        json({}, { origin: "https://evil.example", cookie }),
+      )) as Response
+    ).status,
+  ).toBe(403);
+  const issued = (await check(
+    "/api/auth/device/code",
+    json({ client_id: "raphie-native" }),
+  )) as Response;
+  expect(issued.status).toBe(200);
+  const code = (await issued.json()) as {
+    user_code: string;
+    device_code: string;
+    verification_uri_complete: string;
+  };
+  expect(new URL(code.verification_uri_complete).origin).toBe(publicOrigin);
+  expect(
+    (
+      (await check(`/api/auth/device?user_code=${code.user_code}`, {
+        headers: { cookie },
+      })) as Response
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      (await check(
+        "/api/auth/device/approve",
+        json({ userCode: code.user_code }, { origin: publicOrigin, cookie }),
+      )) as Response
+    ).status,
+  ).toBe(200);
+  const redeemed = (await check(
+    "/api/auth/device/token",
+    json({
+      client_id: "raphie-native",
+      device_code: code.device_code,
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    }),
+  )) as Response;
+  expect(redeemed.status).toBe(200);
+  const token = ((await redeemed.json()) as { access_token: string })
+    .access_token;
+  expect(
+    await check("/api/runtime", {
+      headers: { authorization: `Bearer ${token}` },
+    }),
+  ).not.toBeInstanceOf(Response);
+  expect(
+    (
+      (await gateway.check(
+        new Request("http://evil.example/api/runtime", { headers: { cookie } }),
+      )) as Response
+    ).status,
+  ).toBe(403);
+});
+
+test("the loopback listener accepts a configured HTTPS proxy host", async () => {
+  const publicOrigin = "https://agent.example.ts.net";
+  const directory = await mkdtemp(join(tmpdir(), "raphie-proxy-listener-"));
+  directories.push(directory);
+  const service = await openAuthService({
+    directory,
+    origins: [publicOrigin],
+    role: "admin",
+  });
+  opened.push(service);
+  await service.setup("admin@example.test", "a long test password");
+  const probe = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () => new Response(),
+  });
+  const port = probe.port!;
+  await probe.stop(true);
+  const gateway = createGateway({
+    service,
+    origins: [publicOrigin],
+    localPort: port,
+  });
+  const server = startWebServer({
+    gateway,
+    port,
+    clientDirectory: directory,
+    fetch: () => new Response("application"),
+  });
+  try {
+    const host = `http://127.0.0.1:${port}`;
+    expect((await fetch(`${host}/_raphie/health`)).status).toBe(200);
+    const login = await fetch(`${host}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: {
+        host: "agent.example.ts.net",
+        origin: publicOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email: "admin@example.test",
+        password: "a long test password",
+      }),
+    });
+    expect(login.status).toBe(200);
+    const cookie = login.headers.getSetCookie()[0]!.split(";")[0]!;
+    const response = await fetch(`${host}/api/runtime`, {
+      headers: { host: "agent.example.ts.net", cookie },
+    });
+    expect(await response.text()).toBe("application");
+    expect(
+      (await fetch(`${host}/api/runtime`, { headers: { cookie } })).status,
+    ).toBe(403);
+  } finally {
+    await server.stop(true);
+  }
+});
+
 afterEach(async () => {
   for (const service of opened.splice(0)) service.close();
   for (const directory of directories.splice(0))

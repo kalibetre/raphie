@@ -42,7 +42,7 @@ exists.
 - The session is re-read from the database on every request, so revocation is
   immediate. Open event streams are re-checked every two seconds and closed when
   their session ends.
-- Requests must use a configured loopback `Host`. Browser state changes require
+- Requests must use the configured `Host`. Browser state changes require
   a matching `Origin`; native API requests use a bearer session without browser
   cookies or an Origin header. Better Auth's sign-up, reset and unrelated routes
   are not served.
@@ -98,12 +98,14 @@ For a local synthetic test, start Raphie and run `bun scripts/device-auth-smoke.
 http://127.0.0.1:4320`. Open the printed URL, compare the code and approve or
 deny it. The test client only checks runtime access and does not save or print
 the bearer token. Disconnect the test client in Account settings afterwards.
-The client and web host remain loopback-only; remote use needs an SSH tunnel.
+The web host listens on loopback. Remote access requires an SSH tunnel or a
+configured HTTPS proxy; see [standalone builds](standalone-build.md#tailnet-access).
 
 ## Limits
 
-- Loopback HTTP only. Cookies are not `Secure`, and a reverse proxy or non-loopback
-  origin is unsupported. Use an SSH tunnel for remote access.
+- The web listener remains loopback-only. Remote access requires an explicitly
+  configured HTTPS origin and a trusted TLS-terminating proxy. HTTPS origins use
+  `Secure` cookies; loopback HTTP cookies are not `Secure`.
 - Port `4316` (the runtime) still trusts any local process, as before; sign-in
   protects the browser-facing web host, not the runtime.
 - In development the Vite hot-reload WebSocket is not gated; it carries no

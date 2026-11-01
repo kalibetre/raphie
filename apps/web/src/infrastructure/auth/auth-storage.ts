@@ -16,6 +16,14 @@ export function webOrigins(configured = "http://127.0.0.1:4320") {
   const url = new URL(configured);
   if (url.origin !== configured || url.username || url.password)
     throw new Error("RAPHIE_WEB_ORIGIN must be an origin without a path.");
+  if (
+    url.protocol !== "https:" &&
+    !(
+      url.protocol === "http:" &&
+      ["127.0.0.1", "localhost"].includes(url.hostname)
+    )
+  )
+    throw new Error("Use HTTPS for a non-loopback web origin.");
   const origins = [url.origin];
   if (["127.0.0.1", "localhost"].includes(url.hostname)) {
     url.hostname = url.hostname === "localhost" ? "127.0.0.1" : "localhost";
