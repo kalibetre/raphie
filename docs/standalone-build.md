@@ -126,23 +126,20 @@ available on the loopback listener. Browser access uses the configured HTTPS
 origin; local browsers can also use `http://127.0.0.1:4320` or
 `http://localhost:4320`. Each address has its own browser sign-in session.
 
-The installer records the primary origin at installation. To add other HTTPS
-addresses to an existing installation, edit `/etc/raphie/raphie.conf` as root and
-add a comma-separated list of exact origins, then restart `raphie`:
-
-```ini
-RAPHIE_WEB_ALLOWED_ORIGINS=https://raphie.example.com,https://another.example.com:8443
-```
+The installer records a primary origin at installation. Inspect it and add
+other HTTPS addresses to an existing installation with:
 
 ```sh
-sudo systemctl restart raphie
+sudo raphie origins
+sudo raphie set-origins "https://raphie.example.com,https://another.example.com:8443"
 ```
 
-Keep `RAPHIE_WEB_ORIGIN` as the existing primary address. Include the scheme and
-any non-default port, with no paths or trailing slashes. Non-loopback addresses
-must use HTTPS; each must have a trusted TLS proxy configured independently.
-Local loopback addresses remain available, and each origin has its own browser
-sign-in session. Tailscale Serve is one way to provide such a proxy. Tailscale
+`set-origins` replaces the additional list and restarts the service. Pass `""`
+to clear that list. The existing primary and local loopback origins remain;
+use `origins` to see all three. Each origin has its own browser sign-in session.
+Include the scheme and any non-default port, with no paths or spaces.
+Non-loopback addresses require HTTPS and a separately configured TLS proxy.
+Tailscale Serve is one way to provide such a proxy. Tailscale
 Serve and custom-domain deployments have not yet been verified end to end in a
 real tailnet. A future custom domain also needs a trusted HTTPS proxy and its
 own network and certificate configuration; Serve's DNS names are limited to
