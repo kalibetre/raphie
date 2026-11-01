@@ -207,13 +207,13 @@ export function createGateway(options: {
           /^Bearer [^\s]+$/.test(request.headers.get("authorization") ?? "");
         if (!SAFE_METHODS.includes(request.method)) {
           const origin = request.headers.get("origin");
-          if (!native && (!origin || !origins.includes(origin)))
+          if (!native && (!origin || origin !== publicOrigin))
             return json({ error: "Unrecognized request origin." }, 403);
         }
         const configured = service.configured();
         if (path === "/auth/status" && request.method === "GET") {
           const session = configured
-            ? await service.session(request.headers)
+            ? await service.session(request.headers, publicOrigin)
             : null;
           return json({ configured, authenticated: session !== null }, 200);
         }
@@ -231,7 +231,7 @@ export function createGateway(options: {
             const suppliedOrigin = request.headers.get("origin");
             if (
               (site && site !== "same-origin" && site !== "none") ||
-              (suppliedOrigin && !origins.includes(suppliedOrigin))
+              (suppliedOrigin && suppliedOrigin !== publicOrigin)
             )
               return json({ error: "Unrecognized request origin." }, 403);
             if (
@@ -239,6 +239,7 @@ export function createGateway(options: {
               !request.headers.has("cookie") ||
               !(await service.session(
                 new Headers({ cookie: request.headers.get("cookie")! }),
+                publicOrigin,
               ))
             )
               return json({ error: "Sign in to continue." }, 401);
@@ -315,12 +316,12 @@ export function createGateway(options: {
         if (!configured) return denyUnauthenticated(request, url, true);
         if (request.headers.has("authorization") && !native)
           return json({ error: "Unrecognized credentials." }, 403);
-        const session = await service.session(request.headers);
+        const session = await service.session(request.headers, publicOrigin);
         if (!session) return denyUnauthenticated(request, url, false);
         return {
           cookies: native ? [] : session.cookies,
           stillValid: async () =>
-            (await service.session(request.headers)) !== null,
+            (await service.session(request.headers, publicOrigin)) !== null,
         };
       } catch {
         return json(

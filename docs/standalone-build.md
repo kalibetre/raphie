@@ -68,6 +68,12 @@ sudo sh bootstrap.sh v0.0.4-alpha.1 --web-origin https://MACHINE.TAILNET.ts.net
 Replace the example origin with the actual lowercase Tailscale DNS name and
 HTTPS port if needed, and configure Tailscale Serve as described below. If you
 omit `--web-origin`, the default is loopback HTTP for use with an SSH tunnel.
+Run `raphie port` to print the configured local web port. Choose another port
+during installation with `--web-port 41838`, or later with
+`sudo raphie set-port 41838`. The latter restarts the service and updates a
+loopback primary origin; update any reverse proxy to forward to the new port.
+Existing installations keep their previous port when updated; the new default
+applies to fresh installs.
 Run `sudo raphie --help` to list the installed service and administrator
 commands. Use `sudo raphie update --help`, `sudo raphie restore --help`, or
 `sudo raphie uninstall --help` for their arguments and effects.
@@ -90,7 +96,7 @@ the program has been removed, the uninstall command is no longer installed.
 For an isolated Linux test machine with systemd, D-Bus, GNOME Keyring,
 libsecret, Python 3 and the utilities used by `install.sh`, copy the built
 bundle to the machine and run `sudo sh install.sh`. The default browser origin
-is `http://127.0.0.1:4320` and the default data directory is
+is `http://127.0.0.1:41837` and the default data directory is
 `/var/lib/raphie/data`. `--web-origin` and `--data-dir` override them; existing
 data is never overwritten. Existing parents of a custom data directory must be
 root-owned and not group- or world-writable. The web host starts locked; create
@@ -113,7 +119,7 @@ Tailscale DNS name, then serve the loopback web port:
 
 ```sh
 sudo sh install.sh --web-origin https://MACHINE.TAILNET.ts.net
-sudo tailscale serve --bg http://127.0.0.1:4320
+sudo tailscale serve --bg http://127.0.0.1:41837
 sudo raphie auth setup
 ```
 
@@ -123,10 +129,23 @@ continues to bind to `127.0.0.1`; the runtime port remains local and must never
 be exposed. A configured HTTPS origin requires a trusted TLS-terminating proxy;
 do not send its traffic over plaintext HTTP. The local health check remains
 available on the loopback listener. Browser access uses the configured HTTPS
-origin, not the previous local HTTP URL.
+origin; local browsers can also use `http://127.0.0.1:41837` or
+`http://localhost:41837`. Each address has its own browser sign-in session.
 
-The installer records the origin at installation; changing an existing install
-requires a separately planned configuration and service restart. Tailscale
+The installer records a primary origin at installation. Inspect it and add
+other HTTPS addresses to an existing installation with:
+
+```sh
+sudo raphie origins
+sudo raphie set-origins "https://raphie.example.com,https://another.example.com:8443"
+```
+
+`set-origins` replaces the additional list and restarts the service. Pass `""`
+to clear that list. The existing primary and local loopback origins remain;
+use `origins` to see all three. Each origin has its own browser sign-in session.
+Include the scheme and any non-default port, with no paths or spaces.
+Non-loopback addresses require HTTPS and a separately configured TLS proxy.
+Tailscale Serve is one way to provide such a proxy. Tailscale
 Serve and custom-domain deployments have not yet been verified end to end in a
 real tailnet. A future custom domain also needs a trusted HTTPS proxy and its
 own network and certificate configuration; Serve's DNS names are limited to

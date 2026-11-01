@@ -3,6 +3,11 @@ set -eu
 
 # Install a clean, committed checkout. This script must be run on the target
 # Linux host, never against an existing installation.
+port=41837
+if [ "${1:-}" = --web-port ] && [ "$#" -eq 2 ]; then port=$2; shift 2; fi
+[ "$#" -eq 0 ] || { echo 'Usage: sudo sh install.sh [--web-port PORT]' >&2; exit 1; }
+case "$port" in ''|0*|*[!0-9]*) echo 'Invalid web port.' >&2; exit 1 ;; esac
+[ "$port" -ge 1024 ] && [ "$port" -le 65535 ] && [ "$port" != 4316 ] || { echo 'Choose a web port from 1024 to 65535 other than 4316.' >&2; exit 1; }
 if [ "$(id -u)" -ne 0 ]; then echo 'Run this installer as root.' >&2; exit 1; fi
 for executable in git tar runuser useradd systemctl systemd-creds dbus-run-session gnome-keyring-daemon; do
   command -v "$executable" >/dev/null || { echo "Missing required command: $executable" >&2; exit 1; }
@@ -14,11 +19,13 @@ test -z "$(git -C "$source_dir" status --porcelain)" || { echo 'The source check
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || id raphie >/dev/null 2>&1; then
   echo 'An existing Raphie installation or user was found; refusing to overwrite it.' >&2; exit 1
 fi
-printf 'Browser URL (loopback HTTP or HTTPS): ' >&2
+printf 'Browser URL (e.g. http://127.0.0.1:%s, or HTTPS): ' "$port" >&2
 IFS= read -r origin
 # Keep the systemd environment file free of newlines, substitutions and secrets.
 case "$origin" in *[!a-zA-Z0-9.:/-]*|'') echo 'Invalid URL.' >&2; exit 1;; esac
 /usr/local/bin/bun -e 'const u = new URL(process.argv[1]); if (u.origin !== process.argv[1] || u.username || u.password || !(u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)))) process.exit(1)' "$origin" || { echo 'Enter an HTTPS origin or loopback HTTP origin without a path.' >&2; exit 1; }
+case "$origin" in https://*|http://localhost:"$port"|http://127.0.0.1:"$port") ;; *) echo 'The loopback browser origin must use the configured web port.' >&2; exit 1;; esac
+/usr/local/bin/bun -e 'try { const s = Bun.serve({hostname: "127.0.0.1", port: Number(process.argv[1]), fetch: () => new Response()}); s.stop(true); } catch { console.error("The requested local web port is unavailable; choose another with --web-port."); process.exit(1); }' "$port"
 revision=$(git -C "$source_dir" rev-parse --verify HEAD)
 version=$(git -C "$source_dir" describe --tags --exact-match HEAD 2>/dev/null || printf 'commit-%s' "$(printf %.12s "$revision")")
 useradd --system --user-group --home-dir /var/lib/raphie --create-home --shell /usr/sbin/nologin raphie
@@ -34,7 +41,7 @@ runuser -u raphie -- env HOME=/var/lib/raphie RAPHIE_BUILD_ID="$revision" RAPHIE
 chown -R root:root "/opt/raphie/releases/$revision"
 chmod -R go-w "/opt/raphie/releases/$revision"
 install -d -m 0700 /etc/raphie
-printf 'RAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=4320\n' "$origin" > /etc/raphie/raphie.conf
+printf 'RAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=%s\n' "$origin" "$port" > /etc/raphie/raphie.conf
 chmod 0600 /etc/raphie/raphie.conf
 umask 077
 head -c 32 /dev/urandom | base64 | systemd-creds encrypt --with-key=host --name=raphie-keyring - /etc/raphie/keyring.cred

@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { secureHeaders } from "hono/secure-headers";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
+import { webOrigins } from "../../../../shared/web-origins.ts";
 import { botRoutes } from "../domains/bots/presentation/http/routes.ts";
 import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
@@ -23,6 +24,7 @@ export async function startServer(
     port?: number;
     discordConfigured?: boolean;
     webOrigin?: string;
+    webOrigins?: string[];
     webhook?: (request: Request) => Promise<Response>;
     diagnostics?: TraceReader;
     settings?: SettingsService;
@@ -88,8 +90,15 @@ export async function startServer(
   }
   app.use(
     "*",
-    localAccess(() => port, options.webOrigin),
-    browserCors(options.webOrigin),
+    localAccess(
+      () => port,
+      options.webOrigins ??
+        (options.webOrigin ? webOrigins(options.webOrigin) : []),
+    ),
+    browserCors(
+      options.webOrigins ??
+        (options.webOrigin ? webOrigins(options.webOrigin) : []),
+    ),
   );
   app.get("/", (c) =>
     c.json({

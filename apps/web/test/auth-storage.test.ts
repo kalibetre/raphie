@@ -129,7 +129,32 @@ test("browser origins are exact, with loopback aliases only for loopback", () =>
   ]);
   expect(webOrigins("https://raphie.example.test")).toEqual([
     "https://raphie.example.test",
+    "http://127.0.0.1:4320",
+    "http://localhost:4320",
   ]);
+  expect(
+    webOrigins(
+      "https://raphie.example.test",
+      4320,
+      "https://second.example.test:8443",
+    ),
+  ).toEqual([
+    "https://raphie.example.test",
+    "https://second.example.test:8443",
+    "http://127.0.0.1:4320",
+    "http://localhost:4320",
+  ]);
+  expect(() =>
+    webOrigins("https://raphie.example.test", 4320, "http://bad.example.test"),
+  ).toThrow();
+  expect(() =>
+    webOrigins(
+      "https://raphie.example.test",
+      4320,
+      "https://second.example.test/path",
+    ),
+  ).toThrow();
+  expect(() => webOrigins("https://localhost:4320")).toThrow();
   expect(() => webOrigins("https://raphie.example.test/path")).toThrow();
   expect(() => webOrigins("https://user:pass@raphie.example.test")).toThrow();
   expect(() => webOrigins("http://raphie.example.test")).toThrow();

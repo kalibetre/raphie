@@ -72,7 +72,11 @@ async function authCommand(action: string | undefined) {
     throw new Error("The passwords do not match.");
   const service = await openAuthService({
     directory,
-    origins: webOrigins(process.env.RAPHIE_WEB_ORIGIN),
+    origins: webOrigins(
+      process.env.RAPHIE_WEB_ORIGIN,
+      Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+      process.env.RAPHIE_WEB_ALLOWED_ORIGINS,
+    ),
     role: "admin",
   });
   try {

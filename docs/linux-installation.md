@@ -25,7 +25,9 @@ sudo sh install-raphie.sh
 Pass a published version such as `v1.2.3` as an argument to install that
 specific release. Without an argument it selects the latest stable release.
 It installs required OS packages and Bun 1.4.4, verifying Bun against pinned
-checksums. It prompts for a loopback browser origin, and refuses
+checksums. It prompts for a browser origin; the local web port defaults to 41837.
+Run `raphie port` to see the running port and `sudo raphie set-port 41838`
+to change it. The source installer also accepts `--web-port 41838`. It refuses
 to replace an existing installation or a different Bun
 at `/usr/local/bin/bun`. Failed setup currently needs manual cleanup. The
 repository has no published release yet, so this command is not available

@@ -129,6 +129,25 @@ export async function openAuthService(options: {
       'CREATE TRIGGER IF NOT EXISTS raphie_clear_device_codes AFTER UPDATE OF password ON "account" WHEN OLD.password IS NOT NEW.password BEGIN DELETE FROM "deviceCode"; END',
     );
     const auth = betterAuth(config);
+    // Each origin needs its own base URL and HTTP/HTTPS cookie policy.
+    // Instances share the database and signing secret, including revocation.
+    const authByOrigin = new Map(
+      options.origins.map((origin) => [
+        origin,
+        origin === primary.origin
+          ? auth
+          : betterAuth({
+              ...config,
+              baseURL: origin,
+              advanced: {
+                ...config.advanced,
+                cookiePrefix: `raphie_${new URL(origin).port || (new URL(origin).protocol === "https:" ? "443" : "80")}`,
+              },
+            }),
+      ]),
+    );
+    const authFor = (origin?: string) =>
+      origin ? (authByOrigin.get(origin) ?? auth) : auth;
     const passwordHash = () =>
       (
         database
@@ -143,7 +162,8 @@ export async function openAuthService(options: {
       /** True once an administrator exists; checked on demand so a running host notices setup. */
       configured: isConfigured,
       /** Handles Better Auth HTTP requests (sign-in and sign-out only are routed here). */
-      handle: (request: Request) => auth.handler(request),
+      handle: (request: Request) =>
+        authFor(new URL(request.url).origin).handler(request),
       /** Record a device session before returning its token to the client. */
       async handleDevice(request: Request) {
         if (savedFingerprint() !== secretFingerprint)
@@ -151,7 +171,9 @@ export async function openAuthService(options: {
         const tokenRequest =
           new URL(request.url).pathname === "/api/auth/device/token";
         const before = tokenRequest ? passwordHash() : undefined;
-        const response = await auth.handler(request);
+        const response = await authFor(new URL(request.url).origin).handler(
+          request,
+        );
         if (!tokenRequest || !response.ok) return response;
         const payload = (await response.clone().json()) as {
           access_token?: unknown;
@@ -213,9 +235,9 @@ export async function openAuthService(options: {
         );
       },
       /** Validates against the database on every call, so revocation is immediate. */
-      async session(headers: Headers) {
+      async session(headers: Headers, origin?: string) {
         if (savedFingerprint() !== secretFingerprint) return null;
-        const result = await auth.api.getSession({
+        const result = await authFor(origin).api.getSession({
           headers,
           query: { disableCookieCache: true },
           returnHeaders: true,

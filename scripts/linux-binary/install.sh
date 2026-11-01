@@ -2,17 +2,22 @@
 set -eu
 
 # Experimental local installation from a build prepared by this checkout.
-usage='Usage: sudo sh install.sh [--data-dir /absolute/path] [--web-origin URL]'
+usage='Usage: sudo sh install.sh [--data-dir /absolute/path] [--web-origin URL] [--web-port PORT]'
 data_dir=/var/lib/raphie/data
-origin=http://127.0.0.1:4320
+port=41837
+origin=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --data-dir) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 1; }; data_dir=$2; shift 2 ;;
+    --web-port) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 1; }; port=$2; shift 2 ;;
     --web-origin) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 1; }; origin=$2; shift 2 ;;
     --help) echo "$usage"; exit 0 ;;
     *) echo "$usage" >&2; exit 1 ;;
   esac
 done
+case "$port" in ''|0*|*[!0-9]*) echo 'Invalid web port.' >&2; exit 1 ;; esac
+[ "$port" -ge 1024 ] && [ "$port" -le 65535 ] && [ "$port" != 4316 ] || { echo 'Choose a web port from 1024 to 65535 other than 4316.' >&2; exit 1; }
+[ -n "$origin" ] || origin="http://127.0.0.1:$port"
 test "$(id -u)" -eq 0 || { echo 'Run this installer with sudo.' >&2; exit 1; }
 for executable in runuser useradd systemctl systemd-creds dbus-run-session gnome-keyring-daemon python3; do
   command -v "$executable" >/dev/null || { echo "Missing required command: $executable" >&2; exit 1; }
@@ -52,7 +57,15 @@ except ValueError:
 if not valid:
     raise SystemExit('Enter an HTTP origin without a path.')
 PY
-case "$origin" in https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'Use HTTPS for a non-loopback browser origin.' >&2; exit 1;; esac
+case "$origin" in https://*|http://localhost:"$port"|http://127.0.0.1:"$port") ;; http://localhost*|http://127.0.0.1*) echo 'The loopback browser origin must use the configured web port.' >&2; exit 1;; *) echo 'Use HTTPS for a non-loopback browser origin.' >&2; exit 1;; esac
+python3 - "$port" <<'PY_PORT'
+import socket, sys
+try:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(('127.0.0.1', int(sys.argv[1])))
+except OSError:
+    raise SystemExit('The requested local web port is unavailable; choose another with --web-port.')
+PY_PORT
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || [ -e "$data_dir" ] || id raphie >/dev/null 2>&1; then
   echo 'An existing installation or data directory was found; refusing to overwrite it.' >&2; exit 1
 fi
@@ -71,7 +84,7 @@ for path in "$bundle"/*; do
 done
 test "$(sh "$bundle/bundle-id.sh" "/opt/raphie/releases/$revision")" = "$revision" || { echo 'Bundle changed while copying; refusing installation.' >&2; exit 1; }
 install -d -m 0700 /etc/raphie
-printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=4320\n' "$data_dir" "$origin" > /etc/raphie/raphie.conf
+printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=%s\n' "$data_dir" "$origin" "$port" > /etc/raphie/raphie.conf
 chmod 0600 /etc/raphie/raphie.conf
 umask 077
 head -c 32 /dev/urandom | base64 | systemd-creds encrypt --with-key=host --name=raphie-keyring - /etc/raphie/keyring.cred

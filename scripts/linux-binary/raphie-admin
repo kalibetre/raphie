@@ -10,6 +10,10 @@ Usage: raphie <command> [options]
 Service:
   status                         Check the runtime
   health                         Check the runtime and web service
+  port                           Show the local web port
+  set-port PORT                  Change the local web port and restart
+  origins                        Show the configured browser origins
+  set-origins "ORIGIN,ORIGIN"    Replace additional browser origins
 
 Administrator (run with sudo):
   auth setup                     Create the administrator account
@@ -29,17 +33,210 @@ HELP
 fi
 if [ "$#" -eq 2 ] && { [ "$2" = --help ] || [ "$2" = -h ]; }; then
   case "$1" in
+    set-port) echo 'Usage: sudo raphie set-port PORT'; echo 'Change the loopback web port and restart Raphie.'; exit 0 ;;
+    origins) echo 'Usage: sudo raphie origins'; echo 'Show the primary, local, and additional browser origins.'; exit 0 ;;
+    set-origins) echo 'Usage: sudo raphie set-origins "ORIGIN,ORIGIN"'; echo 'Replace additional origins and restart Raphie; pass "" to clear them. Local access remains available.'; exit 0 ;;
     update) echo 'Usage: sudo raphie update [version|/path/to/trusted/bundle]'; echo 'Download a stable or explicitly selected alpha release, or update from a trusted local bundle.'; exit 0 ;;
     restore) echo 'Usage: sudo raphie restore BACKUP [--recovery-key ENCRYPTED --identity AGE_IDENTITY]'; echo 'Restore the backup and its matching installed release after confirmation.'; exit 0 ;;
     recovery-key) echo 'Usage: sudo raphie recovery-key export AGE_RECIPIENT OUTPUT'; echo 'Export an age-encrypted keyring unlock credential. Keep the age identity separate and secure.'; exit 0 ;;
     uninstall) echo 'Usage: sudo raphie uninstall [--purge]'; echo 'Remove service and programs while preserving data, configuration, keyrings, backups, and the service user.'; echo 'With --purge, also delete Raphie data, configuration, keyrings, and backups. Both modes require confirmation.'; exit 0 ;;
   esac
 fi
+if [ "${1:-}" = port ]; then
+  [ "$#" -eq 1 ] || { echo 'Usage: raphie port' >&2; exit 1; }
+  if [ -r /run/raphie/web-port ]; then
+    port=$(cat /run/raphie/web-port)
+  elif [ -r /etc/raphie/raphie.conf ]; then
+    . /etc/raphie/raphie.conf
+    port=${RAPHIE_WEB_PORT:-}
+  else
+    echo 'Web port unavailable while Raphie is stopped; run sudo raphie port.' >&2
+    exit 1
+  fi
+  case "$port" in ''|*[!0-9]*) echo 'Invalid configured web port.' >&2; exit 1 ;; esac
+  if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then echo 'Invalid configured web port.' >&2; exit 1; fi
+  printf '%s\n' "$port"
+  exit 0
+fi
 test -r /etc/raphie/raphie.conf || { echo 'Raphie configuration is unavailable.' >&2; exit 1; }
 set -a
 . /etc/raphie/raphie.conf
 set +a
 case "${1:-}" in
+  origins|set-origins|set-port)
+    test "$(id -u)" -eq 0 || { echo 'Run this command with sudo.' >&2; exit 1; }
+    command=$1
+    shift
+    exec python3 - "$command" /etc/raphie/raphie.conf /run/lock/raphie-update.lock "$@" <<'RAPHIE_ORIGINS_PY'
+#!/usr/bin/env python3
+"""Inspect or atomically replace the standalone service's extra origins."""
+import fcntl
+import os
+import re
+import stat
+import socket
+import subprocess
+import time
+import sys
+import tempfile
+import urllib.parse
+from pathlib import Path
+
+
+def entries(config):
+    result = {}
+    for line in config.splitlines():
+        match = re.fullmatch(r'(RAPHIE_WEB_ORIGIN|RAPHIE_WEB_PORT|RAPHIE_WEB_ALLOWED_ORIGINS)=(.*)', line)
+        if match:
+            if match[1] in result:
+                raise ValueError('Duplicate origin configuration; resolve it manually.')
+            result[match[1]] = match[2]
+    return result
+
+
+def validate(value):
+    if not re.fullmatch(r'https?://[a-z0-9.-]+(?::[0-9]+)?', value):
+        raise ValueError('Origins must be lowercase exact HTTP(S) origins without paths or spaces.')
+    try:
+        url = urllib.parse.urlsplit(value)
+        host, port = url.hostname, url.port
+        if not host or port == 0 or port == (443 if url.scheme == 'https' else 80):
+            raise ValueError()
+        labels = host.split('.')
+        if host != '127.0.0.1' and (
+            len(host) > 253 or labels[-1].isdigit() or any(
+                not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+                for label in labels
+            )
+        ):
+            raise ValueError()
+        if url.scheme == 'http' and host not in ('localhost', '127.0.0.1'):
+            raise ValueError()
+    except ValueError:
+        raise ValueError('Use HTTPS for non-loopback origins and omit default ports.') from None
+    return url.netloc
+
+
+def atomic_write(path, text, info):
+    fd, tmp = tempfile.mkstemp(prefix='.raphie-origins-', dir=path.parent)
+    try:
+        os.fchmod(fd, stat.S_IMODE(info.st_mode))
+        os.fchown(fd, info.st_uid, info.st_gid)
+        with os.fdopen(fd, 'w', encoding='utf-8') as file:
+            file.write(text)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def main():
+    if len(sys.argv) < 4 or sys.argv[1] not in ('origins', 'set-origins', 'set-port'):
+        raise ValueError('Invalid origins command.')
+    action, path, lock = sys.argv[1], Path(sys.argv[2]), sys.argv[3]
+    if len(sys.argv) != (4 if action == 'origins' else 5):
+        raise ValueError('Usage: sudo raphie set-origins "ORIGIN,ORIGIN" (use "" to clear).')
+    with open(lock, 'w', encoding='utf-8') as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError('Configuration must be a regular file.')
+        original = path.read_text(encoding='utf-8')
+        current = entries(original)
+        primary = current.get('RAPHIE_WEB_ORIGIN', 'http://127.0.0.1:4320')
+        port = current.get('RAPHIE_WEB_PORT', '4320')
+        if not port.isdigit() or not 1 <= int(port) <= 65535:
+            raise ValueError('Invalid web port in configuration.')
+        def restart_and_check():
+            try:
+                if subprocess.run(['systemctl', 'restart', 'raphie.service'], check=False).returncode:
+                    return False
+                for _ in range(15):
+                    if subprocess.run(['/usr/local/bin/raphie', 'health'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False).returncode == 0:
+                        return True
+                    time.sleep(1)
+            except OSError:
+                pass
+            return False
+        if action == 'origins':
+            print(f'Primary: {primary}')
+            print(f'Local: http://127.0.0.1:{port}, http://localhost:{port}')
+            print(f'Additional: {current.get("RAPHIE_WEB_ALLOWED_ORIGINS") or "(none)"}')
+            return
+        if action == 'set-port':
+            new_port = sys.argv[4]
+            if not re.fullmatch(r'[1-9][0-9]{0,4}', new_port) or not 1024 <= int(new_port) <= 65535 or new_port == '4316':
+                raise ValueError('Choose a web port from 1024 to 65535 other than 4316.')
+            if new_port == port:
+                print('Raphie already uses port ' + port + '.')
+                return
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                try:
+                    probe.bind(('127.0.0.1', int(new_port)))
+                except OSError:
+                    raise ValueError('The requested local port is unavailable.') from None
+            local = urllib.parse.urlsplit(primary)
+            if local.scheme == 'http' and local.hostname in ('localhost', '127.0.0.1'):
+                primary = f'http://{local.hostname}:{new_port}'
+            additional = current.get('RAPHIE_WEB_ALLOWED_ORIGINS', '')
+            if local.scheme == 'https' and local.netloc in (f'localhost:{new_port}', f'127.0.0.1:{new_port}'):
+                raise ValueError('The primary origin conflicts with the new local port.')
+            for origin in filter(None, additional.split(',')):
+                if urllib.parse.urlsplit(origin).netloc in (f'localhost:{new_port}', f'127.0.0.1:{new_port}'):
+                    raise ValueError('An existing allowed origin conflicts with the new local port.')
+            lines = [line for line in original.splitlines() if not line.startswith(('RAPHIE_WEB_PORT=', 'RAPHIE_WEB_ORIGIN='))]
+            lines.extend(('RAPHIE_WEB_ORIGIN=' + primary, 'RAPHIE_WEB_PORT=' + new_port))
+            updated = '\n'.join(lines) + '\n'
+            atomic_write(path, updated, info)
+            if not restart_and_check():
+                atomic_write(path, original, info)
+                restored = restart_and_check()
+                raise ValueError('Port change failed; previous configuration restored' + ('.' if restored else ', but its restart also failed.'))
+            print('Raphie now uses local web port ' + new_port + '.')
+            print('Update any reverse proxy forwarding to the old local port.')
+            return
+        values = sys.argv[4].split(',') if sys.argv[4] else []
+        allowed = []
+        hosts = {validate(primary): primary}
+        for local in (f'http://127.0.0.1:{port}', f'http://localhost:{port}'):
+            hosts[validate(local)] = local
+        for value in values:
+            host = validate(value)
+            if value in (f'http://127.0.0.1:{port}', f'http://localhost:{port}') or value == primary:
+                continue
+            if value.startswith('http://'):
+                raise ValueError('Local origins must use the configured web port.')
+            if host in hosts and hosts[host] != value:
+                raise ValueError('Origins cannot share a host and port across schemes.')
+            hosts[host] = value
+            if value not in allowed:
+                allowed.append(value)
+        lines = [line for line in original.splitlines() if not line.startswith('RAPHIE_WEB_ALLOWED_ORIGINS=')]
+        lines.append('RAPHIE_WEB_ALLOWED_ORIGINS=' + ','.join(allowed))
+        updated = '\n'.join(lines) + '\n'
+        atomic_write(path, updated, info)
+        def restart():
+            try:
+                return subprocess.run(['systemctl', 'restart', 'raphie.service'], check=False).returncode == 0
+            except OSError:
+                return False
+        if not restart():
+            atomic_write(path, original, info)
+            restored = restart()
+            raise ValueError('Restart failed; previous configuration restored' + ('.' if restored else ', but its restart also failed.'))
+        print('Additional origins replaced: ' + (','.join(allowed) or '(none)'))
+        print('Raphie service restarted; local origins remain available.')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (ValueError, OSError) as error:
+        sys.exit(str(error))
+RAPHIE_ORIGINS_PY
+    ;;
   update|restore|uninstall)
     test "$(id -u)" -eq 0 || { echo 'Run this command with sudo.' >&2; exit 1; }
     command=$1
