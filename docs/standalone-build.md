@@ -123,7 +123,8 @@ continues to bind to `127.0.0.1`; the runtime port remains local and must never
 be exposed. A configured HTTPS origin requires a trusted TLS-terminating proxy;
 do not send its traffic over plaintext HTTP. The local health check remains
 available on the loopback listener. Browser access uses the configured HTTPS
-origin, not the previous local HTTP URL.
+origin; local browsers can also use `http://127.0.0.1:4320` or
+`http://localhost:4320`. Each address has its own browser sign-in session.
 
 The installer records the origin at installation; changing an existing install
 requires a separately planned configuration and service restart. Tailscale

@@ -1,18 +1,19 @@
+import { webOrigins } from "../auth/auth-storage";
 import { backendAddress } from "./backend-connection.server";
 
 export async function proxyRuntime(request: Request) {
   const incoming = new URL(request.url);
-  const web = new URL(process.env.RAPHIE_WEB_ORIGIN ?? "http://127.0.0.1:4320");
-  const hosts = ["127.0.0.1", "localhost"].includes(web.hostname)
-    ? [`127.0.0.1:${web.port}`, `localhost:${web.port}`]
-    : [web.host];
-  if (!hosts.includes(incoming.host))
+  const origins = webOrigins(
+    process.env.RAPHIE_WEB_ORIGIN,
+    Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+  );
+  const expectedOrigin = origins.find(
+    (value) => new URL(value).host === incoming.host,
+  );
+  if (!expectedOrigin)
     return new Response("Unrecognized host.", { status: 403 });
   const origin = request.headers.get("origin");
-  if (
-    origin &&
-    !hosts.map((host) => `${web.protocol}//${host}`).includes(origin)
-  )
+  if (origin && origin !== expectedOrigin)
     return new Response("Unrecognized origin.", { status: 403 });
   if (incoming.pathname === "/api/web/connection") {
     if (request.method !== "GET")

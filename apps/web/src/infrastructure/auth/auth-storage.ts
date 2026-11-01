@@ -12,7 +12,10 @@ import { join } from "node:path";
 export { dataDirectory as authDirectory } from "../../../../../shared/data-directory.ts";
 
 /** Browser origins that may reach this web host, including loopback aliases. */
-export function webOrigins(configured = "http://127.0.0.1:4320") {
+export function webOrigins(
+  configured = "http://127.0.0.1:4320",
+  localPort = 4320,
+) {
   const url = new URL(configured);
   if (url.origin !== configured || url.username || url.password)
     throw new Error("RAPHIE_WEB_ORIGIN must be an origin without a path.");
@@ -29,7 +32,13 @@ export function webOrigins(configured = "http://127.0.0.1:4320") {
     url.hostname = url.hostname === "localhost" ? "127.0.0.1" : "localhost";
     origins.push(url.origin);
   }
-  return origins;
+  if (url.protocol === "https:") {
+    origins.push(
+      `http://127.0.0.1:${localPort}`,
+      `http://localhost:${localPort}`,
+    );
+  }
+  return [...new Set(origins)];
 }
 
 /**

@@ -50,3 +50,31 @@ test("the configured runtime is used regardless of an old selection cookie", asy
     await backend.stop(true);
   }
 });
+
+test("HTTPS configuration accepts its host and local HTTP without accepting cross-origin requests", async () => {
+  const previous = process.env.RAPHIE_WEB_ORIGIN;
+  process.env.RAPHIE_WEB_ORIGIN = "https://raphie.example.test";
+  try {
+    for (const host of [
+      "https://raphie.example.test",
+      "http://127.0.0.1:4320",
+      "http://localhost:4320",
+    ]) {
+      const response = await proxyRuntime(
+        new Request(`${host}/api/web/connection`, {
+          headers: { origin: host },
+        }),
+      );
+      assert.equal(response.status, 200);
+    }
+    const rejected = await proxyRuntime(
+      new Request("http://localhost:4320/api/web/connection", {
+        headers: { origin: "https://raphie.example.test" },
+      }),
+    );
+    assert.equal(rejected.status, 403);
+  } finally {
+    if (previous === undefined) delete process.env.RAPHIE_WEB_ORIGIN;
+    else process.env.RAPHIE_WEB_ORIGIN = previous;
+  }
+});

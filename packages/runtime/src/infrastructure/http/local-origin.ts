@@ -11,6 +11,10 @@ function webOrigins(webOrigin?: string) {
     alias.hostname = alias.hostname === "localhost" ? "127.0.0.1" : "localhost";
     origins.push(alias.origin);
   }
+  if (alias.protocol === "https:") {
+    const port = Number(process.env.RAPHIE_WEB_PORT ?? 4320);
+    origins.push(`http://127.0.0.1:${port}`, `http://localhost:${port}`);
+  }
   return origins;
 }
 

@@ -27,7 +27,10 @@ try {
 }
 
 // A host that cannot open its authentication store must not start at all.
-const origins = webOrigins(process.env.RAPHIE_WEB_ORIGIN);
+const origins = webOrigins(
+  process.env.RAPHIE_WEB_ORIGIN,
+  Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+);
 const directory = authDirectory(
   fileURLToPath(new URL("../../", import.meta.url)),
   process.env.DATA_DIRECTORY,

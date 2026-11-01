@@ -60,7 +60,10 @@ export function developmentGateway(): Plugin {
     enforce: "pre",
     async configureServer(server) {
       // Fail closed: no authentication store, no development server.
-      const origins = webOrigins(process.env.RAPHIE_WEB_ORIGIN);
+      const origins = webOrigins(
+        process.env.RAPHIE_WEB_ORIGIN,
+        Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+      );
       const directory = authDirectory(
         fileURLToPath(new URL("../../../../", import.meta.url)),
         process.env.DATA_DIRECTORY,
