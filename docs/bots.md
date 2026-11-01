@@ -2,7 +2,7 @@
 
 A bot is a persistent assistant identity inside one Raphie runtime. Each bot has
 its own sessions, model connections and default model, memory configuration,
-attachment store and durable virtual workspace. A session belongs to its bot's
+attachment store and bot-owned workspace. A session belongs to its bot's
 store; it cannot be opened by addressing its UUID through another bot's API.
 
 ## Using bots in the web client
@@ -50,16 +50,16 @@ its previous name, description and SOUL.md. Copy older text into the editor and
 save it to restore that personality as a new revision. Refresh after a stale
 revision error; saves made while a turn is pending must wait for it to finish.
 
-**Sandbox** in each bot’s settings shows its active execution provider, capabilities,
-usage and fixed just-bash limits. It also saves provider, idle minutes (default 10,
-range 1–1440) and optional disk quota in MiB (empty means no limit, the default).
-Only just-bash is available; container is disabled with its unimplemented reason
-and API saves requesting it return 409. Idle minutes and quota apply only to the
-future container provider; no container execution or enforcement is delivered.
+**Sandbox** settings choose the execution provider. The default is just-bash,
+a bounded virtual workspace. Container execution is opt-in and requires an explicit
+acknowledgement that programs can reach host and local network services. Container
+idle time and optional disk usage limit do not apply to just-bash. The two providers
+keep separate files; switching does not copy them. See [workspace providers and
+limits](bot-workspaces.md).
 
-**Workspace** browses committed files with folder navigation and
-individual downloads. Files are shared across that bot’s conversations; links
-are labeled and not followed. See [workspace behavior](bot-workspaces.md).
+**Workspace** browses the selected provider's files with folder navigation and
+individual downloads. See [workspace behavior](bot-workspaces.md) for how file
+visibility and symlinks differ between providers.
 
 **Activity** in each bot’s settings shows its latest 100 journal events across
 conversations, refreshes every five seconds, and supports filtering and JSON
@@ -113,9 +113,9 @@ credential store. Personality text cannot grant permissions or change ownership.
 model registry, Settings and Memory service per bot in the same process. New bots
 use `bots/<runtime-issued-id>/` under the data directory, containing separate
 SQLite stores and `files/`. Each has a host-owned `workspace/checkpoint.sqlite`
-containing files and separate revisioned sandbox settings; the default bot uses
-`<data>/workspace/checkpoint.sqlite`. Files are interpreted in virtual `/workspace`,
-not mounted from the host. See [workspace execution](bot-workspaces.md).
+containing the just-bash checkpoint and revisioned sandbox settings; the default
+bot uses `<data>/workspace/checkpoint.sqlite`. The opt-in container provider uses
+a separate host-backed workspace. See [workspace execution](bot-workspaces.md).
 
 New bots start with built-in memory enabled and no model credentials or connected
 MCP tools. Configure their own provider before sending messages. Default model
@@ -165,9 +165,10 @@ these settings. See [sandbox settings](bot-workspaces.md#per-bot-sandbox-setting
 
 This is logical ownership separation, not OS or VM isolation. The host, owner UI
 and process account remain trusted and can manage all bots. Local HTTP protection
-is not bot-token authentication or remote-client authentication. Supported
-shell-like commands run in a bounded just-bash worker over a virtual
-filesystem. No native/VM execution or host filesystem mounts are provided.
+is not bot-token authentication or remote-client authentication. The default just-bash provider runs bounded shell-like commands over a virtual
+filesystem. The opt-in container provider runs native processes with a bot-owned
+workspace mount; it is not VM isolation and can reach host and LAN services. See
+[its limitations](bot-workspaces.md#network-limitation-host-and-lan-access-are-possible).
 
 Channels are configured per bot in Settings. Discord is the first supported channel; its token is encrypted using the runtime host’s OS credential store. Configure allowed Discord user IDs; an empty list denies all access. Only the initiating Discord user can approve or reject an action in Discord; the owner can also decide in the web UI. Existing pending requests without a recorded user, and tool approvals where queued turns make the initiator ambiguous, can only be decided in the web UI. An optional channel ID restricts the bot to that channel and its threads; otherwise allowed users can DM the bot or mention it in servers. Existing Discord environment variables are ignored: configure the default bot in the UI using the same application ID to retain existing bindings. Legacy records previously assigned `legacy-discord` cannot be automatically matched to an application ID. Each bot manages
 its own MCP servers and recurring prompt jobs in Settings; see

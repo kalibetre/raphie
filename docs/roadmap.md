@@ -1,5 +1,7 @@
 # Headless architecture roadmap
 
+> Historical planning and delivery record. Individual slice status reflects when it was written; see [current architecture](architecture.md) and [workspace providers](bot-workspaces.md) for current behavior.
+
 Each slice must leave the existing prototype usable. The
 [target design](headless-runtime.md) describes the destination; this roadmap does
 not mark planned capabilities as implemented. Keep Bun, Hono, Pi Durable, SQLite,
@@ -214,13 +216,9 @@ Proposed slices:
    16 queued operations per bot and four concurrent lightweight workers are the
    initial limits. Bot Settings now exposes the active provider, capabilities,
    policy and usage under Sandbox, plus committed file browsing and downloads
-   under Workspace. just-bash is the only currently available execution provider;
-   native sandbox Slice 1 now persists owner-editable provider, idle minutes
-   (default 10, range 1–1440) and optional disk quota (no limit by default), with
-   optimistic revisions and unsaved-change guards. Container is listed as
-   unavailable and saves requesting it return 409. Idle time and quota have no
-   effect on just-bash. Container execution, enforcement and subsequent native
-   sandbox slices remain planned in [ADR 0003](adr/0003-native-bot-sandbox.md).
+   under Workspace. Subsequent native sandbox slices delivered opt-in container
+   execution with per-bot network acknowledgement; idle time and quota apply only
+   to containers. See [workspace providers](bot-workspaces.md) for current behavior.
    This is not OS/VM isolation or a capacity benchmark. See
    [workspace behavior and limits](bot-workspaces.md).
 

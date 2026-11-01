@@ -71,6 +71,6 @@ Raphie can also connect bots to Discord and MCP tools, and run scheduled prompts
 
 ## Need a hand?
 
-[Installation & updates](docs/standalone-build.md) · [Remote access](docs/standalone-build.md#tailnet-access) · [Bots & personality](docs/bots.md) · [Memory](docs/memory.md) · [All documentation](docs/README.md)
+[Installation & updates](docs/linux-installation.md) · [Remote access](docs/standalone-build.md#tailnet-access) · [Commands](docs/commands.md) · [Bots & personality](docs/bots.md) · [Memory](docs/memory.md) · [All documentation](docs/README.md)
 
 Want to contribute or run from source? See [source setup](docs/source-setup.md) and [contributing](CONTRIBUTING.md).
