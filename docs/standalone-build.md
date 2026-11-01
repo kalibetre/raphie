@@ -1,7 +1,8 @@
 # Standalone build experiment
 
-This is an experimental packaging and local installation check. The existing
-source-based installer remains separate. Automatic HTTPS setup is not provided.
+Raphie publishes experimental Linux x64 and ARM64 binary releases. This guide
+covers installation, operation, recovery and building the standalone bundle.
+Automatic HTTPS setup is not provided.
 
 From a clean working tree with the project's pinned Bun and dependencies:
 
@@ -49,20 +50,20 @@ extracting. Obtain and inspect the bootstrap and downloader scripts from a
 trusted source. A compromised download could run code as root during installation.
 
 Place copies of `scripts/linux-binary/bootstrap.sh` and `download-release.sh`
-together, then run `sudo sh bootstrap.sh v0.0.4-alpha.1` for the alpha, or
+together, then run `sudo sh bootstrap.sh v0.0.4-alpha.2` for the alpha, or
 `sudo sh bootstrap.sh` for the latest stable release. The script installs OS
 dependencies and the binary bundle; it does not install Bun. `sudo raphie update`
 selects the latest stable release; pass an explicit version such as
-`sudo raphie update v0.0.4-alpha.1` to select an alpha.
+`sudo raphie update v0.0.4-alpha.2` to select an alpha.
 
 For example, a clean Ubuntu host can obtain the
 two scripts and configure a Tailscale HTTPS origin during installation:
 
 ```sh
 mkdir raphie-install && cd raphie-install
-curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.1/scripts/linux-binary/bootstrap.sh
-curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.1/scripts/linux-binary/download-release.sh
-sudo sh bootstrap.sh v0.0.4-alpha.1 --web-origin https://MACHINE.TAILNET.ts.net
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/download-release.sh
+sudo sh bootstrap.sh v0.0.4-alpha.2 --web-origin https://MACHINE.TAILNET.ts.net
 ```
 
 Replace the example origin with the actual lowercase Tailscale DNS name and

@@ -1,7 +1,7 @@
 # Current architecture and target design
 
-For interactive maps, request flows, and migration phases, open the
-[HTML architecture field guide](architecture.html) directly in a browser.
+The [HTML architecture field guide](architecture.html) is a historical snapshot;
+its execution and roadmap sections predate the current workspace providers.
 
 This file describes the current implementation. The accepted headless direction
 and proposed application interfaces are documented in
@@ -30,13 +30,16 @@ Model arguments cannot select another bot's identity or memory scope. Local owne
 HTTP clients can manage all bots; this is logical separation inside a trusted
 host, not per-bot network authentication or OS-level security isolation.
 
-Workspace directories are reserved, but execution, checkpoints, serialization,
-fencing and separate compute budgets remain planned. Discord configuration is owned by each bot; named bots start
-without inherited tools or keys. MCP connections and recurring prompts are
-owner-configured per bot using Pi's MCP client, deferred search and durable sleeping
-tasks. Additional channel types and trace export remain later work.
-See [bot automation](bot-automation.md) and [bots and personality](bots.md) for storage, APIs,
-verification and recovery limits.
+Each bot owns a workspace shared across its sessions. The default just-bash
+provider uses a virtual filesystem with durable checkpoints, serialized execution
+and bounded worker capacity. An opt-in container provider runs native processes
+against a separate bot-owned workspace. Containers can reach host and LAN services;
+they are not VM isolation. Provider switching does not copy files. See
+[workspace providers and limits](bot-workspaces.md).
+
+Discord configuration, MCP connections and recurring prompts are per bot; named
+bots start without inherited tools or keys. See [bot automation](bot-automation.md)
+and [bots and personality](bots.md) for storage, APIs and recovery limits.
 
 ## Compiler and tooling
 

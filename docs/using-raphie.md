@@ -9,7 +9,7 @@ sessions, model connections and memory stay with it. Named bots have separate
 configuration, stores and model credentials in the same runtime process.
 Choose a bot in the sidebar. Use Settings to edit its profile or personality; **New bot** creates a separate assistant. Owner-managed names, descriptions and revisioned SOUL.md documents define
 each bot's identity and personality. See [bots and personality](bots.md) for APIs,
-storage, isolation guarantees and planned execution capabilities.
+storage and execution limits.
 
 ## Sessions and storage
 
@@ -31,28 +31,7 @@ database and WAL files; copying only an active `.sqlite` file can miss recent wr
 
 The browser fixture uses a temporary database that is removed on normal shutdown. Its `acceptance` model and fake calendar sessions are disposable. It now runs on **4317**, with its UI on **4321**, to keep it separate from the normal app on **4316/4320**.
 
-## Architecture
-
-Open the [interactive HTML architecture guide](architecture.html) directly
-in your browser. It works offline and includes a current/target runtime map,
-capability comparison, request and delivery flows, and migration explorer.
-
-Raphie has a headless runtime shared by clients and messaging channels. Run
-`bun run dev:runtime` on its own to use configured Discord without a web process.
-See the [delivered HTTP interface](headless-interface.md). See the [target design](headless-runtime.md) and
-[migration roadmap](roadmap.md). Inspection interfaces are optional for
-messaging channels; cross-channel session continuation is deferred.
-
-- `apps/web`: TanStack Start and Router, React, TanStack Query, shadcn components, and AI Elements composition patterns.
-- Both applications organize code under `domains/<context>/{domain,application,infrastructure,presentation}`. Conversations, approvals, activity, attachments, and settings have explicit owners. Source roots contain entrypoints; `bootstrap/` owns wiring. See [architecture](architecture.md).
-- `apps/web/src/shared/styles`: theme tokens and separate stylesheets with explicit cascade order. Shared UI primitives live under `shared/ui`.
-- `packages/runtime`: an independent Bun host; Effect scopes own MCP, Pi, HTTP, and Discord lifetimes. Pi Durable and SQLite own persistent execution and approval state.
-- Hono and Bun’s native server own HTTP dispatch, validation, security middleware, and streaming. Domain presentation handlers receive application ports; Pi Durable adapters own transactional execution. `@raphie/contracts` shares wire types without runtime dependencies.
-- The browser reads summary pages and the selected session through focused UUID queries and SSE observations. Older history and diagnostic pages load separately. Reconnect replaces authoritative observed state. Closing a tab only detaches its viewer; it never cancels work or repeats an action.
-- TanStack AI's client renders a projection of the durable transcript. It does not own a second model loop, conversation database, or approval store. Our admission endpoint retains stable event IDs for retrying an ambiguous message submission.
-- Vite proxies `/api` during development. Start server routes proxy the same API in the production build. API origin and host checks restrict access to the local workspace.
-
-## First slice
+## Conversations and activity
 
 Conversations support streamed text, Markdown, saved drafts, history after refresh, and pending/error states. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
 

@@ -140,24 +140,20 @@ and data were not used for testing.
 
 Open **Settings → [bot] → Sandbox** to see the active execution provider and version,
 capabilities, checkpoint policy, admitted execution count, file usage and resource
-limits. just-bash is currently the sole provider. Provider selection and policy
-editing remain runtime-managed; this page reports the actual policy rather than
-presenting unavailable alternatives. Execution providers operate on the bot-owned
+limits. The owner can select just-bash or opt into Container as described above. Execution providers operate on the bot-owned
 workspace; replacing compute does not replace workspace ownership.
 
-**Settings → [bot] → Workspace** browses the latest committed checkpoint. Open
+**Settings → [bot] → Workspace** browses files for the selected provider. For just-bash, it shows the latest committed checkpoint. Open
 folders with the keyboard or pointer, use the breadcrumbs or parent button to go
 back, and download individual regular files. Sizes are actual decoded byte sizes;
 modification times use the browser's local timezone. The view refreshes every five
 seconds and has a manual refresh. Downloads preserve binary content and Unicode
 filenames and are served as attachments with an octet-stream content type.
-Symbolic links are identified and never traversed or downloaded. File previews,
+In just-bash, symbolic links are identified and never traversed or downloaded. File previews,
 editing, uploads and folder archives are not included.
 
-Reads do not run a command or wait for in-progress execution. Uncommitted files
-remain invisible. Downloads carry the revision shown in the listing; a changed
-checkpoint returns a conflict and asks for a refresh rather than returning
-unexpected bytes. Bot and backend switching retire pending download responses.
+For just-bash, reads do not wait for in-progress execution and uncommitted files
+remain invisible. Container file visibility differs; see [native bot integration](#native-bot-integration-slice-3). For just-bash, downloads carry the revision shown in the listing; a changed checkpoint returns a conflict and asks for a refresh rather than returning unexpected bytes. Bot and backend switching retire pending download responses.
 No host paths, settings stores, credentials or execution receipts are exposed.
 
 The owner file-read HTTP surface is `/api/workspace`, `/api/workspace/files?path=`

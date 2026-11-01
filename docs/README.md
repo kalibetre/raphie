@@ -11,6 +11,7 @@ change that changes the behavior.
 - [Linux alpha installation](linux-installation.md) and [standalone builds and operations](standalone-build.md)
 - [Using Raphie](using-raphie.md): conversations, settings, storage and features.
 - [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
+- [Bot workspaces and execution providers](bot-workspaces.md): files, just-bash, containers and their limits.
 - [Bot automation](bot-automation.md): per-bot MCP servers, encrypted configuration and recurring prompts.
 - [Memory](memory.md): built-in behavior, agent tools, storage, correction,
   forgetting, provider support and recovery.
@@ -21,8 +22,8 @@ change that changes the behavior.
 
 ## Understand and extend the system
 
-- [Interactive architecture field guide](architecture.html): offline visual
-  walkthrough with implementation and proposal labels.
+- [Interactive architecture field guide](architecture.html): historical visual
+  walkthrough; its workspace and roadmap sections are outdated.
 - [Current architecture](architecture.md)
 - [Domain language](../CONTEXT.md)
 - [Contributing and verification](../CONTRIBUTING.md)
@@ -33,7 +34,7 @@ change that changes the behavior.
 
 ## Planned work and history
 
-- [Roadmap](roadmap.md): slices, acceptance criteria and outstanding work.
+- [Roadmap](roadmap.md): historical slices and acceptance criteria; some status is outdated.
 - [Target headless runtime](headless-runtime.md)
 - [Bun migration](bun-migration.md)
 - [Repository cleanup record](repository-cleanup.md)
