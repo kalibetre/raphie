@@ -220,9 +220,19 @@ export async function openAuthService(options: {
           query: { disableCookieCache: true },
           returnHeaders: true,
         });
-        return result.response
-          ? { cookies: result.headers.getSetCookie() }
-          : null;
+        if (!result.response || savedFingerprint() !== secretFingerprint)
+          return null;
+        // A browser session token is not a device credential, even if supplied
+        // via Better Auth's bearer plugin. Only issued devices are revocable and
+        // invalidated when the signing secret changes.
+        if (
+          headers.has("authorization") &&
+          !database
+            .query("SELECT 1 FROM raphie_device_session WHERE session_id = ?")
+            .get(result.response.session.id)
+        )
+          return null;
+        return { cookies: result.headers.getSetCookie() };
       },
       async setup(email: string, password: string) {
         const exists = () =>

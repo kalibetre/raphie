@@ -483,6 +483,18 @@ test("a device redemption racing password recovery cannot survive it", async () 
 
 test("replacing the authentication secret invalidates devices and outstanding codes", async () => {
   const { check, json, cookie, directory } = await fixture();
+  const db = new Database(join(directory, "auth.sqlite"), { readonly: true });
+  const browserToken = (
+    db.query('SELECT token FROM "session"').get() as { token: string }
+  ).token;
+  db.close();
+  const bearer = { authorization: `Bearer ${browserToken}` };
+  expect(
+    await check("/api/runtime", { headers: { cookie } }),
+  ).not.toBeInstanceOf(Response);
+  expect(
+    ((await check("/api/runtime", { headers: bearer })) as Response).status,
+  ).toBe(401);
   const issue = async () => {
     const response = (await check(
       "/api/auth/device/code",
@@ -528,6 +540,20 @@ test("replacing the authentication secret invalidates devices and outstanding co
   });
   opened.push(restarted);
   const next = createGateway({ service: restarted, origins: [origin] });
+  expect(
+    (
+      (await next.check(
+        new Request(origin + "/api/runtime", { headers: bearer }),
+      )) as Response
+    ).status,
+  ).toBe(401);
+  expect(
+    (
+      (await next.check(
+        new Request(origin + "/api/runtime", { headers: { cookie } }),
+      )) as Response
+    ).status,
+  ).toBe(401);
   expect(
     (
       (await check("/api/runtime", {
