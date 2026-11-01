@@ -6,7 +6,9 @@ change that changes the behavior.
 
 ## Use and operate Raphie
 
-- [Run locally, configure Settings and verify the app](../README.md)
+- [Project overview and local setup](../README.md)
+- [Linux alpha installation](linux-installation.md) and [standalone builds and operations](standalone-build.md)
+- [Using Raphie](using-raphie.md): conversations, settings, storage and features.
 - [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
 - [Bot automation](bot-automation.md): per-bot MCP servers, encrypted configuration and recurring prompts.
 - [Memory](memory.md): built-in behavior, agent tools, storage, correction,

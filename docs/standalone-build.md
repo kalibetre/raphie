@@ -55,7 +55,7 @@ dependencies and the binary bundle; it does not install Bun. `sudo raphie update
 selects the latest stable release; pass an explicit version such as
 `sudo raphie update v0.0.4-alpha.1` to select an alpha.
 
-For example, once that alpha is published, a clean Ubuntu host can obtain the
+For example, a clean Ubuntu host can obtain the
 two scripts and configure a Tailscale HTTPS origin during installation:
 
 ```sh
