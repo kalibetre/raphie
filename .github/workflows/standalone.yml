@@ -90,11 +90,12 @@ jobs:
             --source-ref "refs/tags/$TAG" --deny-self-hosted-runners
           mkdir bundle
           python3 - "$ASSET" <<'PY'
-          import os, sys, tarfile
+          import os, re, sys, tarfile
           expected = {'raphie', 'raphie-runtime', 'raphie-web', 'install.sh', 'raphie.service', 'raphie-admin', 'keyring-session.sh', 'update.sh', 'restore.sh', 'uninstall.sh', 'bundle-id.sh', 'download-release.sh'}
           with tarfile.open(sys.argv[1], 'r:gz') as archive:
               members = archive.getmembers()
-              if len(members) != len(expected) or {m.name for m in members} != expected or any(not m.isfile() or m.size > 500_000_000 for m in members):
+              names = [m.name for m in members]
+              if len(names) > 64 or len(names) != len(set(names)) or 'raphie-smoke' in names or not expected.issubset(names) or any(not m.isfile() or m.size > 500_000_000 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', m.name) for m in members):
                   raise SystemExit('Invalid release archive contents.')
               for member in members:
                   with archive.extractfile(member) as source, open(os.path.join('bundle', member.name), 'xb') as target:
@@ -115,4 +116,4 @@ jobs:
           docker run --rm -e RAPHIE_DISPOSABLE_TEST=1 \
             -v "$(pwd)/bundle:/binaries:ro" \
             -v "$(pwd)/scripts/linux-binary/container-integration.py:/test.py:ro" \
-            ubuntu:24.04 sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends dbus gnome-keyring libsecret-1-0 python3 >/dev/null && python3 /test.py'
+            ubuntu:24.04 sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends age dbus gnome-keyring libsecret-1-0 python3 >/dev/null && python3 /test.py'

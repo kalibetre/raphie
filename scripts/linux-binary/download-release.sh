@@ -36,11 +36,12 @@ PY
 curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$tag/$asset" -o "$tmp/$asset"
 gh attestation verify "$tmp/$asset" --hostname github.com --repo kalibetre/raphie --signer-workflow kalibetre/raphie/.github/workflows/release.yml --source-ref "refs/tags/$tag" --deny-self-hosted-runners
 python3 - "$tmp/$asset" "$destination" <<'PY'
-import os, sys, tarfile
-expected = {'raphie', 'raphie-runtime', 'raphie-web', 'install.sh', 'raphie.service', 'raphie-admin', 'keyring-session.sh', 'update.sh', 'restore.sh', 'uninstall.sh', 'bundle-id.sh', 'download-release.sh'}
+import os, re, sys, tarfile
+expected = {'raphie', 'raphie-runtime', 'raphie-web', 'install.sh', 'raphie.service', 'raphie-admin', 'keyring-session.sh', 'update.sh', 'restore.sh', 'uninstall.sh', 'recovery-key.py', 'bundle-id.sh', 'download-release.sh'}
 with tarfile.open(sys.argv[1], 'r:gz') as archive:
     members = archive.getmembers()
-    if len(members) != len(expected) or {m.name for m in members} != expected or any(not m.isfile() or m.size > 500_000_000 for m in members):
+    names = [m.name for m in members]
+    if len(names) > 64 or len(names) != len(set(names)) or 'raphie-smoke' in names or not expected.issubset(names) or any(not m.isfile() or m.size > 500_000_000 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', m.name) for m in members):
         raise SystemExit('Invalid release archive contents.')
     for member in members:
         with archive.extractfile(member) as source, open(os.path.join(sys.argv[2], member.name), 'xb') as target:

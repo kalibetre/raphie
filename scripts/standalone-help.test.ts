@@ -18,6 +18,7 @@ test("standalone help describes service commands without requiring an installati
       "auth recover",
       "update",
       "restore",
+      "recovery-key",
       "uninstall",
       "--purge",
     ]) {
@@ -26,7 +27,7 @@ test("standalone help describes service commands without requiring an installati
     assert.match(output, /preserv/i);
     assert.match(output, /systemctl/);
   }
-  for (const command of ["update", "restore", "uninstall"]) {
+  for (const command of ["update", "restore", "recovery-key", "uninstall"]) {
     const result = run(command, "--help");
     assert.equal(result.exitCode, 0);
     assert.match(

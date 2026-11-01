@@ -1,4 +1,4 @@
-import json, os, pathlib, pty, re, select, shutil, subprocess, time, urllib.request
+import json, os, pathlib, pty, re, select, shutil, subprocess, tarfile, time, urllib.request
 
 if os.environ.get('RAPHIE_DISPOSABLE_TEST') != '1' or not pathlib.Path('/.dockerenv').exists():
     raise SystemExit('Run only in a fresh disposable container with RAPHIE_DISPOSABLE_TEST=1.')
@@ -7,7 +7,13 @@ if any(pathlib.Path(p).exists() for p in ('/etc/raphie', '/opt/raphie', '/var/li
 
 stub = pathlib.Path('/tmp/raphie-test-stubs')
 stub.mkdir()
-(stub / 'systemd-creds').write_text('#!/bin/sh\nfor last; do :; done\ncat > "$last"\n')
+(stub / 'systemd-creds').write_text('''#!/bin/sh
+case "$1" in
+  decrypt) for arg; do case "$arg" in /etc/*) input=$arg;; esac; done; cat "$input";;
+  encrypt) for last; do :; done; if [ "$last" = - ]; then cat; else cat > "$last"; fi;;
+  *) exit 1;;
+esac
+''')
 (stub / 'systemctl').write_text('''#!/bin/sh
 set -eu
 case "$1" in
@@ -62,6 +68,11 @@ assert auth_status() == {'configured': False, 'authenticated': False}
 password = b'a long synthetic password'
 interactive(['/usr/local/bin/raphie', 'auth', 'setup'], [(b'Administrator email:', b'admin@example.test'), (b'New password', password), (b'Repeat password', password)])
 assert auth_status() == {'configured': True, 'authenticated': False}
+subprocess.run(['age-keygen', '-o', '/tmp/raphie-test-identity'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+recipient = subprocess.check_output(['age-keygen', '-y', '/tmp/raphie-test-identity'], text=True).strip()
+subprocess.run(['/usr/local/bin/raphie', 'recovery-key', 'export', recipient, '/tmp/raphie-recovery-key.age'], check=True, env=env, stdout=subprocess.DEVNULL)
+assert oct(pathlib.Path('/tmp/raphie-recovery-key.age').stat().st_mode & 0o777) == '0o600'
+subprocess.run(['age-keygen', '-o', '/tmp/raphie-wrong-identity'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 secret = pathlib.Path('/srv/raphie-test-data/auth.secret')
 assert oct(secret.stat().st_mode & 0o777) == '0o600' and pathlib.Path('/srv/raphie-test-data/auth.sqlite').stat().st_uid == secret.stat().st_uid != 0
 data_dir = pathlib.Path('/srv/raphie-test-data')
@@ -69,16 +80,33 @@ marker = data_dir / 'restore-test-marker'
 marker.write_text('before update')
 shutil.copytree('/binaries', '/tmp/raphie-new-bundle')
 with open('/tmp/raphie-new-bundle/raphie.service', 'a') as service: service.write('\n# synthetic second bundle\n')
+pathlib.Path('/tmp/raphie-new-bundle/future-helper.py').write_text('# synthetic future release file\n')
 old_release = os.readlink('/opt/raphie/current')
 subprocess.run(['/usr/local/bin/raphie', 'update', '/tmp/raphie-new-bundle'], check=True, env=env, stdout=subprocess.DEVNULL)
 assert os.readlink('/opt/raphie/current') != old_release and marker.read_text() == 'before update'
+assert pathlib.Path('/opt/raphie/current/future-helper.py').is_file()
 marker.write_text('after update')
 backups = list(pathlib.Path('/var/backups/raphie').glob('raphie-*.tar'))
 assert len(backups) == 1
-interactive(['/usr/local/bin/raphie', 'restore', str(backups[0])], [(b'Type RESTORE to continue:', b'RESTORE')])
+wrong = subprocess.run(['/usr/local/bin/raphie', 'restore', str(backups[0]), '--recovery-key', '/tmp/raphie-recovery-key.age', '--identity', '/tmp/raphie-wrong-identity'], input=b'RESTORE\n', env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+assert wrong.returncode != 0 and auth_status()['configured'] is True
+interactive(['/usr/local/bin/raphie', 'restore', str(backups[0]), '--recovery-key', '/tmp/raphie-recovery-key.age', '--identity', '/tmp/raphie-test-identity'], [(b'Type RESTORE to continue:', b'RESTORE')])
 assert os.readlink('/opt/raphie/current') == old_release and marker.read_text() == 'before update'
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
 assert auth_status()['configured'] is True
+malicious = pathlib.Path('/var/backups/raphie/raphie-malicious.tar')
+with tarfile.open(malicious, 'w') as archive:
+    directory = tarfile.TarInfo('data'); directory.type = tarfile.DIRTYPE; directory.mode = 0o700; archive.addfile(directory)
+    link = tarfile.TarInfo('.local'); link.type = tarfile.SYMTYPE; link.linkname = '/var/lib/raphie/.local'; archive.addfile(link)
+pathlib.Path(str(malicious) + '.release').write_text(pathlib.Path(str(backups[0]) + '.release').read_text())
+unsafe_restore = subprocess.run(['/usr/local/bin/raphie', 'restore', str(malicious)], input=b'RESTORE\n', env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+assert unsafe_restore.returncode != 0 and marker.read_text() == 'before update' and pathlib.Path('/var/lib/raphie/.local/share/keyrings').is_dir()
+subprocess.run(['systemctl', 'start', 'raphie.service'], check=True, env=env)
+for _ in range(30):
+    if subprocess.run(['/usr/local/bin/raphie', 'health'], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0: break
+    time.sleep(1)
+else: raise RuntimeError('Service did not recover after rejected restore')
+malicious.unlink(); pathlib.Path(str(malicious) + '.release').unlink()
 shutil.copytree('/binaries', '/tmp/raphie-bad-bundle')
 pathlib.Path('/tmp/raphie-bad-bundle/raphie-web').write_text('#!/bin/sh\nexit 1\n')
 pathlib.Path('/tmp/raphie-bad-bundle/raphie-web').chmod(0o755)
@@ -110,12 +138,18 @@ interactive(['/usr/local/bin/raphie', 'uninstall', '--purge'], [(b'Type PURGE to
 assert all(not pathlib.Path(p).exists() for p in ('/etc/raphie', '/opt/raphie', '/var/lib/raphie', '/usr/local/bin/raphie', '/srv/raphie-test-data', '/var/backups/raphie'))
 assert subprocess.run(['id', 'raphie'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
 assert host_key.read_text() == 'shared host credential marker'
-subprocess.run(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
-pathlib.Path('/srv/raphie-test-data/preserved').write_text('data')
+subprocess.run(['sh', '/binaries/install.sh', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
+default_marker = pathlib.Path('/var/lib/raphie/data/preserved')
+default_marker.write_text('data')
+subprocess.run(['/usr/local/bin/raphie', 'update', '/tmp/raphie-new-bundle'], check=True, env=env, stdout=subprocess.DEVNULL)
+default_backups = list(pathlib.Path('/var/backups/raphie').glob('raphie-*.tar'))
+assert len(default_backups) == 1
+interactive(['/usr/local/bin/raphie', 'restore', str(default_backups[0])], [(b'Type RESTORE to continue:', b'RESTORE')])
+assert default_marker.read_text() == 'data'
 pathlib.Path('/var/backups/raphie').mkdir(exist_ok=True)
 pathlib.Path('/var/backups/raphie/preserved').write_text('backup')
 interactive(['/usr/local/bin/raphie', 'uninstall'], [(b'Type UNINSTALL to continue:', b'UNINSTALL')])
-assert pathlib.Path('/srv/raphie-test-data/preserved').read_text() == 'data'
+assert default_marker.read_text() == 'data'
 assert pathlib.Path('/var/backups/raphie/preserved').read_text() == 'backup'
 assert pathlib.Path('/etc/raphie/keyring.cred').exists() and pathlib.Path('/var/lib/raphie').exists()
 assert not pathlib.Path('/usr/local/bin/raphie').exists() and not pathlib.Path('/opt/raphie').exists()
