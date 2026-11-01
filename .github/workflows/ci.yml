@@ -8,6 +8,12 @@ permissions:
   contents: read
 
 jobs:
+  desktop:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test --package-path apps/desktop --scratch-path "$RUNNER_TEMP/raphie-desktop-build"
+      - run: sh apps/desktop/build-app.sh
   validate:
     runs-on: ubuntu-24.04
     steps:
