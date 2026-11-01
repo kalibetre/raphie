@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-test("binary download verifies provenance before extracting a strict archive", async () => {
+test("binary download supports explicit public alphas and extracts only safe archives without gh", async () => {
   const dir = await mkdtemp(join(tmpdir(), "raphie-release-"));
   const bin = join(dir, "bin");
   const bundle = join(dir, "bundle");
@@ -52,23 +52,36 @@ test("binary download verifies provenance before extracting a strict archive", a
       `#!/bin/sh\ncase "$2" in *api.github.com*) cp "$FIXTURE/release.json" "$4" ;; *) cp "$FIXTURE/bundle.tar.gz" "$4" ;; esac\n`,
       { mode: 0o755 },
     );
-    await writeFile(
-      join(bin, "gh"),
-      '#!/bin/sh\nprintf "%s\\n" "$*" > "$FIXTURE/gh-args"\nexit "${REJECT:-0}"\n',
-      { mode: 0o755 },
-    );
+    await writeFile(join(bin, "gh"), "#!/bin/sh\nexit 99\n", { mode: 0o755 });
     const env = {
       ...process.env,
       PATH: `${bin}:${process.env.PATH}`,
       FIXTURE: dir,
     };
-    const run = (extra: Record<string, string> = {}) =>
+    const run = (version = "v1.2.3") =>
       Bun.spawnSync(
-        ["sh", "scripts/linux-binary/download-release.sh", out, "v1.2.3"],
-        { env: { ...env, ...extra }, stderr: "pipe", stdout: "pipe" },
+        ["sh", "scripts/linux-binary/download-release.sh", out, version],
+        { env, stderr: "pipe", stdout: "pipe" },
       );
-    assert.notEqual(run({ REJECT: "1" }).exitCode, 0);
-    assert.equal((await readdir(out)).length, 0);
+    await writeFile(
+      join(dir, "release.json"),
+      JSON.stringify({
+        tag_name: "v1.2.3-alpha.1",
+        draft: true,
+        prerelease: true,
+      }),
+    );
+    assert.notEqual(run("v1.2.3-alpha.1").exitCode, 0);
+    await writeFile(
+      join(dir, "release.json"),
+      JSON.stringify({
+        tag_name: "v1.2.3-alpha.1",
+        draft: false,
+        prerelease: false,
+      }),
+    );
+    assert.notEqual(run("v1.2.3-alpha.1").exitCode, 0);
+    assert.notEqual(run("v1.2.3-alpha.1/../../bad").exitCode, 0);
     await writeFile(
       join(dir, "release.json"),
       JSON.stringify({ tag_name: "v1.2.4", draft: false, prerelease: false }),
@@ -120,21 +133,22 @@ test("binary download verifies provenance before extracting a strict archive", a
       ).exitCode,
       0,
     );
-    const success = run();
+    await writeFile(
+      join(dir, "release.json"),
+      JSON.stringify({
+        tag_name: "v1.2.3-alpha.1",
+        draft: false,
+        prerelease: true,
+      }),
+    );
+    assert.notEqual(run("").exitCode, 0);
+    const success = run("v1.2.3-alpha.1");
     assert.equal(success.exitCode, 0, success.stderr.toString());
     assert.equal(await readFile(join(out, "raphie"), "utf8"), "raphie");
     assert.equal(
       await readFile(join(out, "future-helper"), "utf8"),
       "second version",
     );
-    const args = await readFile(join(dir, "gh-args"), "utf8");
-    assert.match(args, /--hostname github\.com/);
-    assert.match(
-      args,
-      /--signer-workflow kalibetre\/raphie\/\.github\/workflows\/release\.yml/,
-    );
-    assert.match(args, /--source-ref refs\/tags\/v1\.2\.3/);
-    assert.match(args, /--deny-self-hosted-runners/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

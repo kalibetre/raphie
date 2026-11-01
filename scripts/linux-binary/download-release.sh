@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 
-# Fetch only stable releases from the project's GitHub repository. Verify the
-# archive before inspecting or extracting any of its contents.
+# Fetch public releases from GitHub. Alpha releases must be selected explicitly;
+# the default remains the latest stable release.
 destination=${1:?Destination directory required}
 requested=${2:-}
 test "$#" -le 2 || { echo 'Expected destination and optional version.' >&2; exit 1; }
-for command in curl gh python3; do
+for command in curl python3; do
   command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
 case "$(uname -m)" in
@@ -15,7 +15,7 @@ case "$(uname -m)" in
   *) echo 'Unsupported Linux architecture.' >&2; exit 1 ;;
 esac
 if [ -n "$requested" ]; then
-  printf '%s' "$requested" | python3 -c 'import re,sys; re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", sys.stdin.read()) or sys.exit("Expected a version such as v1.2.3.")'
+  printf '%s' "$requested" | python3 -c 'import re,sys; re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.[0-9]+)?", sys.stdin.read()) or sys.exit("Expected a version such as v1.2.3 or v1.2.3-alpha.1.")'
   url="https://api.github.com/repos/kalibetre/raphie/releases/tags/$requested"
 else
   url=https://api.github.com/repos/kalibetre/raphie/releases/latest
@@ -28,13 +28,15 @@ tag=$(python3 - "$tmp/release.json" "$requested" <<'PY'
 import json, re, sys
 with open(sys.argv[1]) as f: release = json.load(f)
 tag = release.get('tag_name', '')
-if release.get('draft') is not False or release.get('prerelease') is not False or not isinstance(tag, str) or not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag) or (sys.argv[2] and tag != sys.argv[2]):
-    raise SystemExit('No matching stable Raphie release is available.')
+if not isinstance(tag, str) or not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.[0-9]+)?', tag):
+    raise SystemExit('No matching Raphie release is available.')
+alpha = '-alpha.' in tag
+if release.get('draft') is not False or release.get('prerelease') is not alpha or (sys.argv[2] and tag != sys.argv[2]) or (not sys.argv[2] and alpha):
+    raise SystemExit('No matching Raphie release is available.')
 print(tag)
 PY
 )
 curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$tag/$asset" -o "$tmp/$asset"
-gh attestation verify "$tmp/$asset" --hostname github.com --repo kalibetre/raphie --signer-workflow kalibetre/raphie/.github/workflows/release.yml --source-ref "refs/tags/$tag" --deny-self-hosted-runners
 python3 - "$tmp/$asset" "$destination" <<'PY'
 import os, re, sys, tarfile
 expected = {'raphie', 'raphie-runtime', 'raphie-web', 'install.sh', 'raphie.service', 'raphie-admin', 'keyring-session.sh', 'update.sh', 'restore.sh', 'uninstall.sh', 'recovery-key.py', 'bundle-id.sh', 'download-release.sh'}
@@ -48,4 +50,4 @@ with tarfile.open(sys.argv[1], 'r:gz') as archive:
             while chunk := source.read(1024 * 1024): target.write(chunk)
         os.chmod(os.path.join(sys.argv[2], member.name), 0o644 if member.name == 'raphie.service' else 0o755)
 PY
-echo "Verified $tag ($asset)."
+echo "Downloaded $tag ($asset)."

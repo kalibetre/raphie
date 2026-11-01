@@ -138,7 +138,22 @@ interactive(['/usr/local/bin/raphie', 'uninstall', '--purge'], [(b'Type PURGE to
 assert all(not pathlib.Path(p).exists() for p in ('/etc/raphie', '/opt/raphie', '/var/lib/raphie', '/usr/local/bin/raphie', '/srv/raphie-test-data', '/var/backups/raphie'))
 assert subprocess.run(['id', 'raphie'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
 assert host_key.read_text() == 'shared host credential marker'
-subprocess.run(['sh', '/binaries/install.sh', '--web-origin', 'https://agent.example.ts.net'], check=True, env=env, stdout=subprocess.DEVNULL)
+# Exercise a public alpha bootstrap without GitHub CLI or external downloads.
+alpha_archive = pathlib.Path('/tmp/raphie-public-alpha.tar.gz')
+with tarfile.open(alpha_archive, 'w:gz') as archive:
+    for path in pathlib.Path('/binaries').iterdir():
+        if path.is_file() and path.name != 'raphie-smoke': archive.add(path, arcname=path.name)
+pathlib.Path('/tmp/raphie-alpha-release.json').write_text(json.dumps({'tag_name':'v0.0.4-alpha.1','draft':False,'prerelease':True}))
+(stub / 'apt-get').write_text('#!/bin/sh\nexit 0\n')
+(stub / 'gh').write_text('#!/bin/sh\nexit 99\n')
+(stub / 'curl').write_text('''#!/bin/sh
+case "$2" in
+  *api.github.com*) cp /tmp/raphie-alpha-release.json "$4";;
+  *) cp /tmp/raphie-public-alpha.tar.gz "$4";;
+esac
+''')
+for name in ('apt-get','gh','curl'): (stub / name).chmod(0o755)
+subprocess.run(['sh', '/test-bootstrap/bootstrap.sh', 'v0.0.4-alpha.1', '--web-origin', 'https://agent.example.ts.net'], check=True, env=env, stdout=subprocess.DEVNULL)
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
 default_marker = pathlib.Path('/var/lib/raphie/data/preserved')
 default_marker.write_text('data')
