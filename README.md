@@ -1,41 +1,76 @@
-# Raphie
+<p align="center">
+  <img src="apps/web/src/shared/favicon.svg" alt="Raphie logo" width="112">
+</p>
 
-Raphie is a self-hosted personal AI assistant. It keeps conversations and work on your own runtime, with a web interface for chatting, configuring bots, reviewing tool approvals and inspecting activity. You connect your own model provider.
+<h1 align="center">Raphie</h1>
 
-Each bot has its own personality, conversations, provider configuration and memory. Bots share one runtime; separate bot configuration does not imply separate machines or a security boundary against the host owner. Raphie can also connect bots to Discord and MCP tools, and run scheduled prompts. See [bots](docs/bots.md) and [automation](docs/bot-automation.md) for details and limitations.
+<p align="center"><strong>Your assistant. Your space.</strong><br>
+A personal AI assistant you run yourself, with a place for every conversation, bot, and idea.</p>
 
-## Install on Linux
+<p align="center">Linux x64 &amp; ARM64 · Experimental alpha · No Bun required</p>
 
-An **experimental alpha** binary is available for Debian and Ubuntu systems with systemd on x64 and ARM64. It installs a local service and does not require Bun. Download and inspect both installer scripts from the release tag before running them; the installer does not verify downloaded release provenance or checksums. Follow the [installation guide](docs/linux-installation.md) for the commands, prerequisites, remote access, updates and recovery.
+<p align="center"><a href="#get-raphie-running">Get started</a> · <a href="#a-little-more-room-to-think">What Raphie can do</a> · <a href="#need-a-hand">Documentation</a></p>
 
-## Run from source
+## Get Raphie running
 
-You need [Bun](https://bun.sh/) 1.4.4 (pinned in `.bun-version`) and an OS credential store supported by the runtime. See [credential storage](docs/provider-credential-storage.md) for platform requirements.
+Install the alpha on a Debian or Ubuntu machine with systemd (x64 or ARM64). You’ll need `sudo` access and an internet connection.
+
+> [!WARNING]
+> **Experimental alpha.** The installer runs as root and does not verify release checksums or provenance. Inspect both scripts before running them. See the [installation and recovery guide](docs/standalone-build.md) for limitations.
+
+### 1. Download the installer
+
+Get both scripts from the release and read them before running:
 
 ```sh
-git clone https://github.com/kalibetre/raphie.git
-cd raphie
-bun install --frozen-lockfile
-bun run dev
+mkdir raphie-install && cd raphie-install
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/download-release.sh
+less bootstrap.sh download-release.sh
 ```
 
-In a second terminal, create the administrator interactively:
+### 2. Install and create your account
 
 ```sh
-bun run raphie auth setup
+sudo sh bootstrap.sh v0.0.4-alpha.2
+sudo raphie auth setup
 ```
 
-Open **http://127.0.0.1:4320** and sign in. The web server and runtime listen on loopback ports 4320 and 4316 respectively. In Settings, expand your bot and configure a provider connection and default model; provider keys are entered there, not loaded from environment variables. See [authentication](docs/authentication.md) for password recovery and device authorization.
+Follow the prompts to create your administrator account.
 
-Source configuration is loaded through Varlock using `.env.schema` and optional private `.env` or `.env.local` files. The app stores its data in `.data/` by default. See [using Raphie](docs/using-raphie.md) for storage, settings and backup details.
+### 3. Open Raphie
 
-For a production web bundle from source, run `bun run build` followed by `bun run start`. Use a process supervisor if you need automatic restarts. To validate a checkout, run `bun run validate`; see [contributing](CONTRIBUTING.md) for development and test workflows.
+On the same machine, visit **http://127.0.0.1:41837** and sign in. In Settings, expand your bot, connect a model provider and choose a model. You’re ready to chat.
 
-## Documentation
+On a remote server, run this on your own computer first, then open the same address:
 
-The [documentation index](docs/README.md) links to installation, usage, operations, architecture and project decisions. Useful starting points:
+```sh
+ssh -L 41837:127.0.0.1:41837 you@your-server
+```
 
-- [Using Raphie](docs/using-raphie.md) — conversations, settings and data.
-- [Linux installation](docs/linux-installation.md) — alpha installation and service operation.
-- [Bots and personality](docs/bots.md), [memory](docs/memory.md), and [automation](docs/bot-automation.md).
-- [Architecture](docs/architecture.md) and [contributing](CONTRIBUTING.md).
+For HTTPS and other access options, see [remote access](docs/standalone-build.md#tailnet-access). If you chose a different port, run `raphie port` on the server and use that port instead.
+
+<details>
+<summary><strong>Already installed? Update to this alpha</strong></summary>
+
+```sh
+sudo raphie update v0.0.4-alpha.2
+```
+
+Alpha versions need an explicit tag. See [updates, backups and recovery](docs/standalone-build.md) before updating.
+
+</details>
+
+## A little more room to think
+
+- **Make it yours.** Create bots with their own personality, model settings and memory.
+- **Keep the thread.** Return to conversations and see activity as work progresses.
+- **Stay in control.** Review tool requests and connect the services you choose.
+
+Raphie can also connect bots to Discord and MCP tools, and run scheduled prompts. Bots share a runtime; their separate configuration does not provide isolation from the host owner.
+
+## Need a hand?
+
+[Installation & updates](docs/standalone-build.md) · [Remote access](docs/standalone-build.md#tailnet-access) · [Bots & personality](docs/bots.md) · [Memory](docs/memory.md) · [All documentation](docs/README.md)
+
+Want to contribute or run from source? See [source setup](docs/source-setup.md) and [contributing](CONTRIBUTING.md).

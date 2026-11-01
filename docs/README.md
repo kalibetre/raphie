@@ -6,7 +6,8 @@ change that changes the behavior.
 
 ## Use and operate Raphie
 
-- [Project overview and local setup](../README.md)
+- [Project overview and release setup](../README.md)
+- [Run from source](source-setup.md)
 - [Linux alpha installation](linux-installation.md) and [standalone builds and operations](standalone-build.md)
 - [Using Raphie](using-raphie.md): conversations, settings, storage and features.
 - [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
