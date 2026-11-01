@@ -22,7 +22,7 @@ the password is neither echoed nor logged. A second `setup` is refused; the
 database also enforces a single user, so racing commands create one account.
 
 To reset a forgotten password run `raphie auth recover`. It changes the password
-through Better Auth's reset flow and **signs out every browser**. It also
+through Better Auth's reset flow and **signs out every browser and device**. It also
 repairs a half-finished setup. Recovery needs local access to the data
 directory; nothing about it is reachable over HTTP, and the running web host
 cannot create an administrator or reset a password even if a route were exposed.
@@ -32,17 +32,20 @@ cannot create an administrator or reset a password even if a route were exposed.
 The gateway runs before the application in both the production host and the
 Vite development server; there is no development or standalone bypass. Every
 page, server function, `/api/*` runtime proxy request, download and event stream
-is checked. Only these are public: `GET /login`, built `/assets/*`, `GET
-/_raphie/health` (`ready` or `locked`), `GET /auth/status`, and sign-in/sign-out.
+is checked. Public endpoints include `GET /login`, built `/assets/*`, `GET
+/_raphie/health` (`ready` or `locked`), `GET /auth/status`, sign-in/sign-out,
+and the native device-code request and polling endpoints once an administrator
+exists.
 
 - Sessions last 30 days and refresh daily. The cookie is `HttpOnly`,
   `SameSite=Lax` and named per web port (`raphie_<port>.session_token`).
 - The session is re-read from the database on every request, so revocation is
   immediate. Open event streams are re-checked every two seconds and closed when
   their session ends.
-- Requests must use a configured loopback `Host`. State-changing requests must
-  carry a matching `Origin`. Better Auth's sign-up, reset and other routes are
-  not served.
+- Requests must use a configured loopback `Host`. Browser state changes require
+  a matching `Origin`; native API requests use a bearer session without browser
+  cookies or an Origin header. Better Auth's sign-up, reset and unrelated routes
+  are not served.
 - Sign-in is rate limited to 5 attempts per minute, other authentication calls
   to 60. Because Raphie has one administrator and does not trust forwarded
   address headers, the limit is **one shared bucket**: someone who can reach the
@@ -63,14 +66,39 @@ Restoring a backup restores its administrator, password and sessions as of the
 backup; run `raphie auth recover` afterwards if any of that is in doubt. The
 schema migrates automatically at every start, so upgrades and restarts keep the
 administrator and sessions. If `auth.secret` is lost Raphie creates a new one and
-everyone must sign in again; a malformed or group/world-readable secret is
-refused rather than replaced.
+everyone must sign in again; active device sessions and outstanding device codes
+are also invalidated. Password recovery invalidates outstanding device codes as
+well as active sessions. A malformed or group/world-readable secret is refused
+rather than replaced.
 
 The runtime, web host, and admin CLI use the same data-directory resolver.
 Source-mode commands load Varlock configuration for all three. Use
 `raphie start --data-dir PATH` and `raphie auth setup --data-dir PATH` (or
 `recover`) to select a directory explicitly. The web host prints its selected
 path at startup. Installed Linux services retain the directory selected at install time.
+
+## Connect a native device
+
+A first-party client requests a short-lived device code, then shows a user code
+and the local `/device` page. Sign in in a browser, enter or review that code,
+and explicitly approve or deny it. Compare the code with the one on the device
+in your possession. Never approve a code someone sent unexpectedly. A client ID
+or device name is a claim, not proof of identity; an approved device receives
+full workspace access.
+
+The device code expires after 10 minutes and polling has a minimum interval of
+5 seconds. A successful client receives its own 30-day bearer session, separate
+from the browser. Settings → Account lists connected devices without exposing
+their tokens and allows each to be disconnected. Revocation takes effect on the
+next request and closes open event streams. Device tokens are credentials: a
+real native client must store them in the operating system's credential store,
+not in logs or plaintext files.
+
+For a local synthetic test, start Raphie and run `bun scripts/device-auth-smoke.ts
+http://127.0.0.1:4320`. Open the printed URL, compare the code and approve or
+deny it. The test client only checks runtime access and does not save or print
+the bearer token. Disconnect the test client in Account settings afterwards.
+The client and web host remain loopback-only; remote use needs an SSH tunnel.
 
 ## Limits
 
@@ -80,7 +108,6 @@ path at startup. Installed Linux services retain the directory selected at insta
   protects the browser-facing web host, not the runtime.
 - In development the Vite hot-reload WebSocket is not gated; it carries no
   application data.
-- Device authorization, multiple users and passwordless sign-in are not
-  implemented.
+- Multiple users and passwordless sign-in are not implemented.
 - For browser acceptance, create an administrator with `bun run raphie auth setup`
   first and sign in at the fixture URL; the fixture has no sign-in bypass.

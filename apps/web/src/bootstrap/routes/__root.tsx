@@ -35,8 +35,10 @@ export const Route = createRootRoute({
 });
 
 function Root() {
-  // The sign-in page must work before any backend session exists.
-  const signingIn = useLocation({ select: (l) => l.pathname === "/login" });
+  // Authentication pages do not depend on the runtime workspace.
+  const authPage = useLocation({
+    select: (l) => l.pathname === "/login" || l.pathname === "/device",
+  });
   return (
     <html lang="en">
       <head>
@@ -51,7 +53,7 @@ function Root() {
             Test workspace · fake models, not your data
           </div>
         )}
-        {signingIn ? (
+        {authPage ? (
           <Outlet />
         ) : (
           <>
