@@ -14,11 +14,11 @@ test -z "$(git -C "$source_dir" status --porcelain)" || { echo 'The source check
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || id raphie >/dev/null 2>&1; then
   echo 'An existing Raphie installation or user was found; refusing to overwrite it.' >&2; exit 1
 fi
-printf 'Browser URL (loopback HTTP, for example http://127.0.0.1:4320): ' >&2
+printf 'Browser URL (loopback HTTP or HTTPS): ' >&2
 IFS= read -r origin
 # Keep the systemd environment file free of newlines, substitutions and secrets.
 case "$origin" in *[!a-zA-Z0-9.:/-]*|'') echo 'Invalid URL.' >&2; exit 1;; esac
-/usr/local/bin/bun -e 'const u = new URL(process.argv[1]); if (u.origin !== process.argv[1] || u.username || u.password || !(u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname))) process.exit(1)' "$origin" || { echo 'Enter a loopback HTTP origin without a path.' >&2; exit 1; }
+/usr/local/bin/bun -e 'const u = new URL(process.argv[1]); if (u.origin !== process.argv[1] || u.username || u.password || !(u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)))) process.exit(1)' "$origin" || { echo 'Enter an HTTPS origin or loopback HTTP origin without a path.' >&2; exit 1; }
 revision=$(git -C "$source_dir" rev-parse --verify HEAD)
 version=$(git -C "$source_dir" describe --tags --exact-match HEAD 2>/dev/null || printf 'commit-%s' "$(printf %.12s "$revision")")
 useradd --system --user-group --home-dir /var/lib/raphie --create-home --shell /usr/sbin/nologin raphie

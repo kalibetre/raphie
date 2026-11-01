@@ -91,8 +91,41 @@ data is never overwritten. Existing parents of a custom data directory must be
 root-owned and not group- or world-writable. The web host starts locked; create
 the administrator with `sudo raphie auth setup` (see
 [authentication](authentication.md)). Use this only on an isolated test
-installation and reach it from another machine through an SSH tunnel, not a
-reverse proxy.
+installation. A loopback HTTP origin can be reached from another machine with
+an SSH tunnel.
+
+### Tailnet access
+
+For an experimental tailnet deployment, Tailscale Serve can provide HTTPS to
+the loopback web host. Enable MagicDNS and HTTPS certificates in the tailnet,
+and configure tailnet access controls for the devices allowed to connect.
+Tailscale's certificate names are published in Certificate Transparency logs.
+The service remains protected by Raphie's administrator sign-in and device
+authorization; Tailscale identity headers are not used as authentication.
+
+On a fresh test installation, set the exact HTTPS origin for the machine's
+Tailscale DNS name, then serve the loopback web port:
+
+```sh
+sudo sh install.sh --web-origin https://MACHINE.TAILNET.ts.net
+sudo tailscale serve --bg http://127.0.0.1:4320
+sudo raphie auth setup
+```
+
+Use the machine's actual, lowercase Tailscale DNS name, without a trailing
+slash. Visit that HTTPS origin from a permitted tailnet device. The web service
+continues to bind to `127.0.0.1`; the runtime port remains local and must never
+be exposed. A configured HTTPS origin requires a trusted TLS-terminating proxy;
+do not send its traffic over plaintext HTTP. The local health check remains
+available on the loopback listener. Browser access uses the configured HTTPS
+origin, not the previous local HTTP URL.
+
+The installer records the origin at installation; changing an existing install
+requires a separately planned configuration and service restart. Tailscale
+Serve and custom-domain deployments have not yet been verified end to end in a
+real tailnet. A future custom domain also needs a trusted HTTPS proxy and its
+own network and certificate configuration; Serve's DNS names are limited to
+the tailnet domain. Do not use Funnel to make this experimental service public.
 
 For local test bundles, `sudo raphie update /path/to/trusted/bundle` takes an
 offline backup before switching. `sudo raphie restore /var/backups/raphie/...`

@@ -41,7 +41,11 @@ if (!auth.configured())
   );
 
 const server = startWebServer({
-  gateway: createGateway({ service: auth, origins }),
+  gateway: createGateway({
+    service: auth,
+    origins,
+    localPort: Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+  }),
   fetch: (request) => start.fetch(request),
   clientDirectory: fileURLToPath(new URL("./dist/client", import.meta.url)),
   port: Number(process.env.RAPHIE_WEB_PORT ?? 4320),

@@ -65,6 +65,8 @@ export function createGateway(options: {
     | "revokeDevice"
   >;
   origins: string[];
+  /** Loopback listener port for the installation health probe. */
+  localPort?: number;
   /** How often an open event stream re-reads its session. */
   streamCheckMs?: number;
 }) {
@@ -171,14 +173,31 @@ export function createGateway(options: {
     async check(request: Request): Promise<Response | Admission> {
       try {
         const url = new URL(request.url);
-        if (!hosts.includes(url.host))
-          return new Response("Unrecognized host.", { status: 403 });
         const path = url.pathname;
+        if (!hosts.includes(url.host)) {
+          if (
+            path === "/_raphie/health" &&
+            request.method === "GET" &&
+            ["127.0.0.1", "localhost"].includes(url.hostname) &&
+            url.port === String(options.localPort ?? 4320)
+          )
+            return json(
+              { status: service.configured() ? "ready" : "locked" },
+              200,
+            );
+          return new Response("Unrecognized host.", { status: 403 });
+        }
+        // The listener is loopback HTTP behind an HTTPS proxy. Derive the
+        // public scheme from the configured host, never forwarded headers.
+        const publicOrigin = origins.find(
+          (origin) => new URL(origin).host === url.host,
+        )!;
+        const publicUrl = new URL(url.pathname + url.search, publicOrigin);
         if (
           path === "/api/auth/device/code" ||
           path === "/api/auth/device/token"
         )
-          return await nativeDeviceRequest(request, url);
+          return await nativeDeviceRequest(request, publicUrl);
         const native =
           path.startsWith("/api/") &&
           !path.startsWith("/api/auth/") &&
@@ -266,7 +285,7 @@ export function createGateway(options: {
                 "x-forwarded-for": "127.0.0.1",
               });
               const result = await service.handle(
-                new Request(url, { headers }),
+                new Request(publicUrl, { headers }),
               );
               const response = new Response(result.body, result);
               response.headers.set("cache-control", "no-store");
@@ -276,7 +295,7 @@ export function createGateway(options: {
               path === "/api/auth/device/approve" ||
               path === "/api/auth/device/deny"
             )
-              return await signInOrOut(request, url);
+              return await signInOrOut(request, publicUrl);
             return json({ error: "Method not allowed." }, 405);
           }
           if (
@@ -285,7 +304,7 @@ export function createGateway(options: {
           )
             return json({ error: "Not found." }, 404);
           return configured
-            ? await signInOrOut(request, url)
+            ? await signInOrOut(request, publicUrl)
             : denyUnauthenticated(request, url, true);
         }
         if (

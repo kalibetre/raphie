@@ -30,7 +30,7 @@ esac
 ''')
 for path in stub.iterdir(): path.chmod(0o755)
 env = dict(os.environ, PATH=str(stub) + ':' + os.environ['PATH'])
-for args in (['--data-dir', 'relative'], ['--web-origin', 'https://example.com/path'], ['--data-dir', '/'], ['--data-dir', '/var/lib/raphie/.local/share/keyrings'], ['--web-origin', 'http://example.com'], ['--web-origin', 'https://example.com']):
+for args in (['--data-dir', 'relative'], ['--web-origin', 'https://example.com/path'], ['--data-dir', '/'], ['--data-dir', '/var/lib/raphie/.local/share/keyrings'], ['--web-origin', 'http://example.com']):
     result = subprocess.run(['sh', '/binaries/install.sh', *args], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     assert result.returncode != 0 and not pathlib.Path('/etc/raphie').exists()
 
@@ -138,7 +138,8 @@ interactive(['/usr/local/bin/raphie', 'uninstall', '--purge'], [(b'Type PURGE to
 assert all(not pathlib.Path(p).exists() for p in ('/etc/raphie', '/opt/raphie', '/var/lib/raphie', '/usr/local/bin/raphie', '/srv/raphie-test-data', '/var/backups/raphie'))
 assert subprocess.run(['id', 'raphie'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
 assert host_key.read_text() == 'shared host credential marker'
-subprocess.run(['sh', '/binaries/install.sh', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
+subprocess.run(['sh', '/binaries/install.sh', '--web-origin', 'https://agent.example.ts.net'], check=True, env=env, stdout=subprocess.DEVNULL)
+subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
 default_marker = pathlib.Path('/var/lib/raphie/data/preserved')
 default_marker.write_text('data')
 subprocess.run(['/usr/local/bin/raphie', 'update', '/tmp/raphie-new-bundle'], check=True, env=env, stdout=subprocess.DEVNULL)

@@ -52,7 +52,7 @@ except ValueError:
 if not valid:
     raise SystemExit('Enter an HTTP origin without a path.')
 PY
-case "$origin" in http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'The web server accepts loopback HTTP origins only.' >&2; exit 1;; esac
+case "$origin" in https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'Use HTTPS for a non-loopback browser origin.' >&2; exit 1;; esac
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || [ -e "$data_dir" ] || id raphie >/dev/null 2>&1; then
   echo 'An existing installation or data directory was found; refusing to overwrite it.' >&2; exit 1
 fi

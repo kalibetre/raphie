@@ -132,4 +132,6 @@ test("browser origins are exact, with loopback aliases only for loopback", () =>
   ]);
   expect(() => webOrigins("https://raphie.example.test/path")).toThrow();
   expect(() => webOrigins("https://user:pass@raphie.example.test")).toThrow();
+  expect(() => webOrigins("http://raphie.example.test")).toThrow();
+  expect(() => webOrigins("ftp://raphie.example.test")).toThrow();
 });

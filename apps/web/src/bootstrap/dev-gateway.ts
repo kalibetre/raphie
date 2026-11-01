@@ -72,7 +72,11 @@ export function developmentGateway(): Plugin {
       });
       server.config.logger.info(`Authentication store: ${directory}`);
       server.httpServer?.once("close", () => auth.close());
-      const gateway = createGateway({ service: auth, origins });
+      const gateway = createGateway({
+        service: auth,
+        origins,
+        localPort: Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+      });
       if (!auth.configured())
         server.config.logger.warn(
           "Raphie is locked until an administrator is created: run `bun run raphie auth setup`.",
