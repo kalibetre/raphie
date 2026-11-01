@@ -68,8 +68,28 @@ jobs:
           name: "${{ matrix.target }}"
           path: "${{ matrix.asset }}"
 
+  desktop:
+    needs: validate
+    runs-on: macos-15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test --package-path apps/desktop --scratch-path "$RUNNER_TEMP/raphie-desktop-build"
+      - run: sh apps/desktop/build-app.sh
+      - run: ditto -c -k --sequesterRsrc --keepParent dist/desktop/Raphie.app raphie-macos-arm64-experimental.zip
+      - uses: actions/attest@v4
+        with:
+          subject-path: raphie-macos-arm64-experimental.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-desktop
+          path: raphie-macos-arm64-experimental.zip
+
   draft:
-    needs: build
+    needs: [build, desktop]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -79,10 +99,14 @@ jobs:
           pattern: bun-linux-*
           path: artifacts
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-desktop
+          path: artifacts
       - name: Create checksums
-        run: cd artifacts && sha256sum raphie-linux-x64.tar.gz raphie-linux-arm64.tar.gz > SHA256SUMS
+        run: cd artifacts && sha256sum raphie-linux-x64.tar.gz raphie-linux-arm64.tar.gz raphie-macos-arm64-experimental.zip > SHA256SUMS
       - name: Prepare draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/SHA256SUMS --verify-tag --draft --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/raphie-macos-arm64-experimental.zip artifacts/SHA256SUMS --verify-tag --draft --generate-notes
