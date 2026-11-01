@@ -8,10 +8,13 @@ Type=simple
 User=raphie
 Group=raphie
 WorkingDirectory=/opt/raphie/current
+RuntimeDirectory=raphie
+RuntimeDirectoryMode=0755
 Environment=HOME=/var/lib/raphie
 Environment=DATA_DIRECTORY=/var/lib/raphie/data
 EnvironmentFile=/etc/raphie/raphie.conf
 LoadCredentialEncrypted=raphie-keyring:/etc/raphie/keyring.cred
+ExecStartPre=/bin/sh -c 'umask 022; printenv RAPHIE_WEB_PORT > /run/raphie/web-port'
 ExecStart=/bin/sh /opt/raphie/current/scripts/linux-install/keyring-session.sh /usr/local/bin/bun run start
 Restart=on-failure
 RestartSec=3

@@ -2,6 +2,22 @@
 set -eu
 root=/opt/raphie/current
 export DATA_DIRECTORY=/var/lib/raphie/data
+if [ "${1:-}" = port ]; then
+  [ "$#" -eq 1 ] || { echo 'Usage: raphie port' >&2; exit 1; }
+  if [ -r /run/raphie/web-port ]; then
+    port=$(cat /run/raphie/web-port)
+  elif [ -r /etc/raphie/raphie.conf ]; then
+    . /etc/raphie/raphie.conf
+    port=${RAPHIE_WEB_PORT:-}
+  else
+    echo 'Web port unavailable while Raphie is stopped; run sudo raphie port.' >&2
+    exit 1
+  fi
+  case "$port" in ''|*[!0-9]*) echo 'Invalid configured web port.' >&2; exit 1 ;; esac
+  if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then echo 'Invalid configured web port.' >&2; exit 1; fi
+  printf '%s\n' "$port"
+  exit 0
+fi
 case "${1:-}" in
   update)
     shift

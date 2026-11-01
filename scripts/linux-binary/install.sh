@@ -4,7 +4,7 @@ set -eu
 # Experimental local installation from a build prepared by this checkout.
 usage='Usage: sudo sh install.sh [--data-dir /absolute/path] [--web-origin URL]'
 data_dir=/var/lib/raphie/data
-origin=http://127.0.0.1:4320
+origin=http://127.0.0.1:41837
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --data-dir) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 1; }; data_dir=$2; shift 2 ;;
@@ -52,7 +52,7 @@ except ValueError:
 if not valid:
     raise SystemExit('Enter an HTTP origin without a path.')
 PY
-case "$origin" in https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;; *) echo 'Use HTTPS for a non-loopback browser origin.' >&2; exit 1;; esac
+case "$origin" in https://*|http://localhost:41837|http://127.0.0.1:41837) ;; http://localhost*|http://127.0.0.1*) echo 'The loopback browser origin must use port 41837.' >&2; exit 1;; *) echo 'Use HTTPS for a non-loopback browser origin.' >&2; exit 1;; esac
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || [ -e "$data_dir" ] || id raphie >/dev/null 2>&1; then
   echo 'An existing installation or data directory was found; refusing to overwrite it.' >&2; exit 1
 fi
@@ -71,7 +71,7 @@ for path in "$bundle"/*; do
 done
 test "$(sh "$bundle/bundle-id.sh" "/opt/raphie/releases/$revision")" = "$revision" || { echo 'Bundle changed while copying; refusing installation.' >&2; exit 1; }
 install -d -m 0700 /etc/raphie
-printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=4320\n' "$data_dir" "$origin" > /etc/raphie/raphie.conf
+printf 'DATA_DIRECTORY=%s\nRAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=41837\n' "$data_dir" "$origin" > /etc/raphie/raphie.conf
 chmod 0600 /etc/raphie/raphie.conf
 umask 077
 head -c 32 /dev/urandom | base64 | systemd-creds encrypt --with-key=host --name=raphie-keyring - /etc/raphie/keyring.cred

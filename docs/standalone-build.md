@@ -68,6 +68,8 @@ sudo sh bootstrap.sh v0.0.4-alpha.1 --web-origin https://MACHINE.TAILNET.ts.net
 Replace the example origin with the actual lowercase Tailscale DNS name and
 HTTPS port if needed, and configure Tailscale Serve as described below. If you
 omit `--web-origin`, the default is loopback HTTP for use with an SSH tunnel.
+Run `raphie port` to print the configured local web port. Existing installations
+keep their previous port when updated; the new default applies to fresh installs.
 Run `sudo raphie --help` to list the installed service and administrator
 commands. Use `sudo raphie update --help`, `sudo raphie restore --help`, or
 `sudo raphie uninstall --help` for their arguments and effects.
@@ -90,7 +92,7 @@ the program has been removed, the uninstall command is no longer installed.
 For an isolated Linux test machine with systemd, D-Bus, GNOME Keyring,
 libsecret, Python 3 and the utilities used by `install.sh`, copy the built
 bundle to the machine and run `sudo sh install.sh`. The default browser origin
-is `http://127.0.0.1:4320` and the default data directory is
+is `http://127.0.0.1:41837` and the default data directory is
 `/var/lib/raphie/data`. `--web-origin` and `--data-dir` override them; existing
 data is never overwritten. Existing parents of a custom data directory must be
 root-owned and not group- or world-writable. The web host starts locked; create
@@ -113,7 +115,7 @@ Tailscale DNS name, then serve the loopback web port:
 
 ```sh
 sudo sh install.sh --web-origin https://MACHINE.TAILNET.ts.net
-sudo tailscale serve --bg http://127.0.0.1:4320
+sudo tailscale serve --bg http://127.0.0.1:41837
 sudo raphie auth setup
 ```
 
@@ -123,8 +125,8 @@ continues to bind to `127.0.0.1`; the runtime port remains local and must never
 be exposed. A configured HTTPS origin requires a trusted TLS-terminating proxy;
 do not send its traffic over plaintext HTTP. The local health check remains
 available on the loopback listener. Browser access uses the configured HTTPS
-origin; local browsers can also use `http://127.0.0.1:4320` or
-`http://localhost:4320`. Each address has its own browser sign-in session.
+origin; local browsers can also use `http://127.0.0.1:41837` or
+`http://localhost:41837`. Each address has its own browser sign-in session.
 
 The installer records a primary origin at installation. Inspect it and add
 other HTTPS addresses to an existing installation with:

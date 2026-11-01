@@ -14,11 +14,12 @@ test -z "$(git -C "$source_dir" status --porcelain)" || { echo 'The source check
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || id raphie >/dev/null 2>&1; then
   echo 'An existing Raphie installation or user was found; refusing to overwrite it.' >&2; exit 1
 fi
-printf 'Browser URL (loopback HTTP or HTTPS): ' >&2
+printf 'Browser URL (e.g. http://127.0.0.1:41837, or HTTPS): ' >&2
 IFS= read -r origin
 # Keep the systemd environment file free of newlines, substitutions and secrets.
 case "$origin" in *[!a-zA-Z0-9.:/-]*|'') echo 'Invalid URL.' >&2; exit 1;; esac
 /usr/local/bin/bun -e 'const u = new URL(process.argv[1]); if (u.origin !== process.argv[1] || u.username || u.password || !(u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)))) process.exit(1)' "$origin" || { echo 'Enter an HTTPS origin or loopback HTTP origin without a path.' >&2; exit 1; }
+case "$origin" in https://*|http://localhost:41837|http://127.0.0.1:41837) ;; *) echo 'The loopback browser origin must use port 41837.' >&2; exit 1;; esac
 revision=$(git -C "$source_dir" rev-parse --verify HEAD)
 version=$(git -C "$source_dir" describe --tags --exact-match HEAD 2>/dev/null || printf 'commit-%s' "$(printf %.12s "$revision")")
 useradd --system --user-group --home-dir /var/lib/raphie --create-home --shell /usr/sbin/nologin raphie
@@ -34,7 +35,7 @@ runuser -u raphie -- env HOME=/var/lib/raphie RAPHIE_BUILD_ID="$revision" RAPHIE
 chown -R root:root "/opt/raphie/releases/$revision"
 chmod -R go-w "/opt/raphie/releases/$revision"
 install -d -m 0700 /etc/raphie
-printf 'RAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=4320\n' "$origin" > /etc/raphie/raphie.conf
+printf 'RAPHIE_WEB_ORIGIN=%s\nRAPHIE_WEB_PORT=41837\n' "$origin" > /etc/raphie/raphie.conf
 chmod 0600 /etc/raphie/raphie.conf
 umask 077
 head -c 32 /dev/urandom | base64 | systemd-creds encrypt --with-key=host --name=raphie-keyring - /etc/raphie/keyring.cred

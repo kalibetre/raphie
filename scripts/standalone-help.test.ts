@@ -14,6 +14,7 @@ test("standalone help describes service commands without requiring an installati
     for (const command of [
       "status",
       "health",
+      "port",
       "origins",
       "set-origins",
       "auth setup",

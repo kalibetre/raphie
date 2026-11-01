@@ -30,7 +30,7 @@ esac
 ''')
 for path in stub.iterdir(): path.chmod(0o755)
 env = dict(os.environ, PATH=str(stub) + ':' + os.environ['PATH'])
-for args in (['--data-dir', 'relative'], ['--web-origin', 'https://example.com/path'], ['--data-dir', '/'], ['--data-dir', '/var/lib/raphie/.local/share/keyrings'], ['--web-origin', 'http://example.com']):
+for args in (['--data-dir', 'relative'], ['--web-origin', 'https://example.com/path'], ['--data-dir', '/'], ['--data-dir', '/var/lib/raphie/.local/share/keyrings'], ['--web-origin', 'http://example.com'], ['--web-origin', 'http://localhost:4320']):
     result = subprocess.run(['sh', '/binaries/install.sh', *args], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     assert result.returncode != 0 and not pathlib.Path('/etc/raphie').exists()
 
@@ -58,12 +58,13 @@ def interactive(command, prompts):
     if code or pending: raise RuntimeError('Interactive command failed or did not complete expected prompts')
     return data
 
-subprocess.run(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:4320'], check=True, env=env, stdout=subprocess.DEVNULL)
+subprocess.run(['sh', '/binaries/install.sh', '--data-dir', '/srv/raphie-test-data', '--web-origin', 'http://localhost:41837'], check=True, env=env, stdout=subprocess.DEVNULL)
 help_text = subprocess.check_output(['/usr/local/bin/raphie', '--help'], env=env, text=True)
 assert all(command in help_text for command in ('auth setup', 'auth recover', 'health', 'update', 'restore', 'uninstall', '--purge'))
 assert 'confirmation' in subprocess.check_output(['/usr/local/bin/raphie', 'uninstall', '--help'], env=env, text=True)
 subprocess.run(['/usr/local/bin/raphie', 'health'], check=True, env=env)
-def auth_status(): return json.load(urllib.request.urlopen('http://127.0.0.1:4320/auth/status'))
+assert subprocess.check_output(['/usr/local/bin/raphie', 'port'], env=env, text=True).strip() == '41837'
+def auth_status(): return json.load(urllib.request.urlopen('http://127.0.0.1:41837/auth/status'))
 assert auth_status() == {'configured': False, 'authenticated': False}
 password = b'a long synthetic password'
 interactive(['/usr/local/bin/raphie', 'auth', 'setup'], [(b'Administrator email:', b'admin@example.test'), (b'New password', password), (b'Repeat password', password)])
