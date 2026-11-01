@@ -23,8 +23,11 @@ previous=$(basename "$(readlink /opt/raphie/current)")
 if [ "$previous" = "$revision" ]; then echo 'Already on this bundle.'; exit 0; fi
 test ! -e "$target" || { echo 'Release already exists; refusing to overwrite it.' >&2; exit 1; }
 install -d -m 0755 "$target"
-for file in raphie raphie-runtime raphie-web raphie-admin keyring-session.sh update.sh restore.sh uninstall.sh bundle-id.sh download-release.sh; do install -m 0755 "$bundle/$file" "$target/$file"; done
-install -m 0644 "$bundle/raphie.service" "$target/raphie.service"
+for path in "$bundle"/*; do
+  file=${path##*/}
+  case "$file" in raphie-smoke) continue ;; raphie.service) mode=0644 ;; *) mode=0755 ;; esac
+  install -m "$mode" "$path" "$target/$file"
+done
 test "$(sh /opt/raphie/current/bundle-id.sh "$target")" = "$revision" || { echo 'Bundle changed while copying; refusing update.' >&2; exit 1; }
 systemctl stop raphie.service
 install -d -m 0700 /var/backups/raphie

@@ -2,6 +2,8 @@ import { Database } from "bun:sqlite";
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { RuntimeSettings } from "@raphie/contracts";
@@ -29,7 +31,7 @@ function fixtureModels(requests: string[]) {
 }
 
 test("two connections to OpenRouter isolate credentials, session choices, edits and removal across restarts", async () => {
-  const directory = await mkdtemp("/private/tmp/raphie-connections-");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-connections-"));
   const requests: string[] = [];
   const models = fixtureModels(requests);
   const path = `${directory}/settings.sqlite`;
@@ -182,7 +184,7 @@ test("two connections to OpenRouter isolate credentials, session choices, edits 
 });
 
 test("legacy saved connections keep session identity and removed connections stay removed after restart", async () => {
-  const directory = await mkdtemp("/private/tmp/raphie-legacy-connections-");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-legacy-connections-"));
   const path = `${directory}/settings.sqlite`;
   const db = new Database(path);
   db.exec(
@@ -228,7 +230,7 @@ test("legacy saved connections keep session identity and removed connections sta
 });
 
 test("old environment-only entries disappear while saved connections survive migration", async () => {
-  const directory = await mkdtemp("/private/tmp/raphie-env-migration-");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-env-migration-"));
   const path = `${directory}/settings.sqlite`;
   const db = new Database(path);
   db.exec(
@@ -292,7 +294,7 @@ test("old environment-only entries disappear while saved connections survive mig
 });
 
 test("an ambient OpenRouter key cannot configure a provider on a fresh installation", async () => {
-  const directory = await mkdtemp("/private/tmp/raphie-ignore-env-");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-ignore-env-"));
   const modulePath = new URL(
     "../src/domains/settings/infrastructure/runtime-settings.ts",
     import.meta.url,
@@ -321,7 +323,7 @@ test("an ambient OpenRouter key cannot configure a provider on a fresh installat
 });
 
 test("model catalog only includes enabled, configured provider connections", async () => {
-  const directory = await mkdtemp("/private/tmp/raphie-configured-catalog-");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-configured-catalog-"));
   const path = `${directory}/settings.sqlite`;
   const options = {
     credentialKeyStore: memoryCredentialKeyStore(),

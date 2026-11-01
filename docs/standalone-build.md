@@ -1,8 +1,7 @@
 # Standalone build experiment
 
 This is an experimental packaging and local installation check. The existing
-source-based installer remains separate. Automatic HTTPS setup, portable
-credential recovery is not implemented by this experiment.
+source-based installer remains separate. Automatic HTTPS setup is not provided.
 
 From a clean working tree with the project's pinned Bun and dependencies:
 
@@ -40,8 +39,7 @@ The embedded web assets, version endpoint, worker, and guest packaging were
 checked on Linux x64 and ARM64 using synthetic data. The launcher, runtime and
 web API proxy were exercised together on Linux ARM64, and a compiled host
 executed the embedded guest through a real disposable container on macOS.
-This does not yet prove a full installer, a Linux container sandbox end to end,
-or cross-host credential restoration.
+This does not yet prove a Linux container sandbox end to end.
 
 The tag-triggered release workflow tests both Linux architectures, attests the
 archives, and creates a **draft** GitHub release. It does not publish the draft.
@@ -51,8 +49,11 @@ extracts an archive. It requires GitHub CLI with attestation verification and
 network access to GitHub and the Sigstore trust infrastructure. Authentication
 may be needed by GitHub CLI; configure it for the account running the command.
 The bootstrap and downloader scripts must themselves be obtained and inspected
-through a trusted channel. The first real published artifact still needs an
-end-to-end verification test and security review before this is supported.
+through a trusted channel. Draft `v0.0.1` was verified on GitHub-hosted x64 and
+ARM64 runners using its actual signed archives, including the compiled service
+and disposable installation lifecycle. It predates the recovery work below and
+is not a final release candidate. The public stable download path and the final
+candidate still need end-to-end verification before this is supported.
 
 After a stable release is published, place inspected copies of
 `scripts/linux-binary/bootstrap.sh` and `download-release.sh` together, install
@@ -98,12 +99,51 @@ offline backup before switching. `sudo raphie restore /var/backups/raphie/...`
 restores a matching backup after confirmation. These commands have only been
 exercised with synthetic data in a disposable Ubuntu container and on an
 Ubuntu VM using real systemd and temporarily extracted keyring dependencies.
-Portable key recovery and verification of an actual published release remain untested;
-do not rely on this for production. A failed install may require manual
-cleanup.
+Verification of an actual published release remains untested; do not rely on
+this for production. A failed install may require manual cleanup.
+
+### Cross-host credential recovery
+
+The normal offline backup contains the data and encrypted GNOME Keyring files,
+but not the host-bound credential that unlocks that keyring. Before losing the
+original host, install `age` and export an encrypted recovery key using a native
+age public recipient:
+
+```sh
+sudo raphie recovery-key export AGE_PUBLIC_RECIPIENT /secure/path/raphie-key.age
+```
+
+Create the age identity in a secure location and store it separately from both
+the recovery key and the backup. Anyone with both the identity and recovery key
+can unlock the keyring in a matching backup. The export refuses to overwrite an
+existing file, writes mode `0600`, and never writes the plaintext unlock
+credential to disk. Keep an export corresponding to each backup; if the source
+host and this recovery material are lost, encrypted provider and channel
+credentials cannot be recovered.
+
+On the replacement host, install the exact matching binary bundle, including
+its release metadata, and put the offline backup and its `.release` file under
+`/var/backups/raphie`. Make the encrypted recovery key and age identity readable
+by root through a secure transfer, install `age`, then run:
+
+```sh
+sudo raphie restore /var/backups/raphie/raphie-XXXXXXXX.tar \
+  --recovery-key /secure/path/raphie-key.age --identity /secure/path/age-identity
+```
+
+The restore checks and re-encrypts the unlock credential for the new host
+before stopping the service; a wrong identity leaves the running service alone.
+It then restores the matching data and keyring. Previous data, keyrings and the
+destination's prior host credential are retained beside the staging directory
+for manual recovery. Protect and eventually remove those retained files.
+Store the identity separately from the server when the operation is complete.
+This procedure was exercised using synthetic keyring data on two isolated
+Ubuntu ARM64 machines with distinct systemd host keys. Their LXC environment
+required a test-only systemd credential override; both installations and test
+keys were removed afterward.
 
 On 2026-10-31, the current administrator-authentication build was also tested
 with synthetic data on an x64 Ubuntu VM using unmodified systemd credentials.
 Installation, administrator setup and sign-in, service restart, password
 recovery, update, backup restore, and recovery after a failed update passed.
-This does not establish cross-host credential recovery or release provenance.
+This does not establish release provenance.
