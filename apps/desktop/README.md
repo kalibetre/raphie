@@ -27,3 +27,26 @@ Run the unit tests with `swift test --package-path apps/desktop`. The optional
 integration test requires a disposable fixture with synthetic credentials and an
 HTTPS endpoint; it is skipped unless `RAPHIE_TEST_ORIGIN` is set. Never point it
 at a real installation: it creates a conversation and revokes a device.
+
+To reproduce it on a test machine with Tailscale Serve, first check that port
+8443 has no existing Serve configuration (`tailscale serve status`). Replace
+the example hostname below with that machine's actual tailnet DNS name. Build
+the web app with `bun run build`, then start the fixture:
+
+```sh
+RAPHIE_TEST_ORIGIN=https://machine.tailnet.ts.net:8443 bun apps/desktop/test-fixture.ts
+```
+
+In another terminal, start a foreground proxy, then in a third terminal run the
+test:
+
+```sh
+tailscale serve --https=8443 http://127.0.0.1:14329
+```
+
+```sh
+RAPHIE_TEST_ORIGIN=https://machine.tailnet.ts.net:8443 swift test --package-path apps/desktop --filter IntegrationTests
+```
+
+Stop the foreground proxy and fixture with Ctrl+C. The fixture uses temporary
+data and fixed synthetic credentials; it never connects to the normal runtime.
