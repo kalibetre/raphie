@@ -1,46 +1,10 @@
-# Linux server installation (experimental)
+# Linux server installation (alpha)
 
-This is an experimental installation path, not yet a release. It requires a
-clean committed checkout, Linux with systemd and a Secret Service provider.
-Installation, service restart, update, and backup restore have been exercised
-on an Ubuntu 24.04 VM with systemd using synthetic data. Do not deploy it until
-the remaining security review and recovery verification are complete.
+Raphie's standalone binary installer is experimental and supports Debian and Ubuntu with systemd on x64 and ARM64. It installs a service running as the `raphie` user, with the runtime and web host bound to loopback. See [standalone builds](standalone-build.md) for prerequisites, installation commands, HTTPS access, updates, uninstall and limitations. Use an explicit published alpha tag: the installer and updater select stable releases by default.
 
-The server runs as the `raphie` user. The runtime and web listener bind to
-loopback, and the web host rejects non-loopback `Host` headers. The web host is
-locked until you create the administrator with `sudo raphie auth setup`, then
-requires sign-in; see [authentication](authentication.md). Do not expose it
-through a reverse proxy: use an SSH tunnel for remote access. The runtime port
-itself is not authenticated and must stay on loopback.
+The installer downloads public releases over HTTPS but does not verify their provenance or checksums. Download and inspect both scripts from a trusted release tag before running them as root. A compromised download could execute code as root.
 
-The release installer supports Debian and Ubuntu with systemd. After a stable
-GitHub release has been published and the bootstrap script is available on
-`main`, download and inspect the script before running it:
-
-```sh
-curl -fsSLo install-raphie.sh https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/linux-install/bootstrap.sh
-sudo sh install-raphie.sh
-```
-
-Pass a published version such as `v1.2.3` as an argument to install that
-specific release. Without an argument it selects the latest stable release.
-It installs required OS packages and Bun 1.4.4, verifying Bun against pinned
-checksums. It prompts for a browser origin; the local web port defaults to 41837.
-Run `raphie port` to see the running port and `sudo raphie set-port 41838`
-to change it. The source installer also accepts `--web-port 41838`. It refuses
-to replace an existing installation or a different Bun
-at `/usr/local/bin/bun`. Failed setup currently needs manual cleanup. The
-repository has no published release yet, so this command is not available
-until the first release is published.
-
-`raphie status` checks the
-local runtime. `sudo raphie update` fetches the latest stable GitHub release;
-alternatively, `sudo raphie update /path/to/clean/checkout` uses a local
-committed checkout. The updater prepares the version and stops the service
-before backing up the data and keyring. It then switches the release and waits
-for the runtime and web host to respond. Long-running work can be interrupted.
-The web app shows its version in Appearance settings and offers to reload when
-its web host changes versions; it never reloads automatically.
+After installation, create the administrator with `sudo raphie auth setup` and sign in through the web interface. The default local web port is 41837; `raphie port` displays it and `sudo raphie set-port 41838` changes it. For remote access, configure a trusted HTTPS proxy as described in the standalone guide. Keep the unauthenticated runtime port on loopback. See [authentication](authentication.md) for sign-in and device authorization.
 
 If startup fails after the version switch, the updater leaves the service
 stopped and prints the backup location. Database migrations may be irreversible:

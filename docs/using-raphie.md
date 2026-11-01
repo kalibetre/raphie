@@ -1,0 +1,134 @@
+# Using Raphie
+
+This guide covers the web workspace, settings and data. For installation and first sign-in, start with the [README](../README.md).
+
+## Bots
+
+The runtime starts with a persistent **default** bot named Raphie. Existing
+sessions, model connections and memory stay with it. Named bots have separate
+configuration, stores and model credentials in the same runtime process.
+Choose a bot in the sidebar. Use Settings to edit its profile or personality; **New bot** creates a separate assistant. Owner-managed names, descriptions and revisioned SOUL.md documents define
+each bot's identity and personality. See [bots and personality](bots.md) for APIs,
+storage, isolation guarantees and planned execution capabilities.
+
+## Sessions and storage
+
+Session links use `/sessions/<uuidv7>`. These public IDs are persisted in SQLite; the durable harness still uses its original numeric conversation IDs internally. Existing sessions receive a public ID once on startup, preserving their messages and approvals. Old `/?conversation=<number>` links redirect to the matching session in the current database.
+
+In a source checkout, the app stores conversations, messages, execution state, and approvals in **`.data/gateway.sqlite`** at the main repository root. Attachments and authentication data live in the same data directory. Use `raphie start --data-dir PATH` and the same flag with `raphie auth setup` or `raphie auth recover` to select another directory. `DATA_DIRECTORY` also selects a location; source-mode relative values resolve against the checkout root. Standalone defaults and Linux installation paths are described in [standalone builds](standalone-build.md). Browser storage holds drafts and UI preferences, not session history.
+
+Provider connection names, model defaults, telemetry preferences and encrypted
+provider keys are stored in **`.data/settings.sqlite`** (or
+`DATA_DIRECTORY/settings.sqlite`), restricted to the owner (`0600`). Keys use
+AES-256-GCM with a random master held in the OS credential store, never alongside
+the ciphertext. Startup migrates existing plaintext keys while preserving connection
+IDs and fails closed if the OS store is unavailable. Keys are never returned to
+the browser. See [credential storage and recovery](provider-credential-storage.md)
+for platform prerequisites, migration, backup handling and threat-model limits.
+
+Back up SQLite with its backup API, or stop the runtime before copying the
+database and WAL files; copying only an active `.sqlite` file can miss recent writes.
+
+The browser fixture uses a temporary database that is removed on normal shutdown. Its `acceptance` model and fake calendar sessions are disposable. It now runs on **4317**, with its UI on **4321**, to keep it separate from the normal app on **4316/4320**.
+
+## Architecture
+
+Open the [interactive HTML architecture guide](architecture.html) directly
+in your browser. It works offline and includes a current/target runtime map,
+capability comparison, request and delivery flows, and migration explorer.
+
+Raphie has a headless runtime shared by clients and messaging channels. Run
+`bun run dev:runtime` on its own to use configured Discord without a web process.
+See the [delivered HTTP interface](headless-interface.md). See the [target design](headless-runtime.md) and
+[migration roadmap](roadmap.md). Inspection interfaces are optional for
+messaging channels; cross-channel session continuation is deferred.
+
+- `apps/web`: TanStack Start and Router, React, TanStack Query, shadcn components, and AI Elements composition patterns.
+- Both applications organize code under `domains/<context>/{domain,application,infrastructure,presentation}`. Conversations, approvals, activity, attachments, and settings have explicit owners. Source roots contain entrypoints; `bootstrap/` owns wiring. See [architecture](architecture.md).
+- `apps/web/src/shared/styles`: theme tokens and separate stylesheets with explicit cascade order. Shared UI primitives live under `shared/ui`.
+- `packages/runtime`: an independent Bun host; Effect scopes own MCP, Pi, HTTP, and Discord lifetimes. Pi Durable and SQLite own persistent execution and approval state.
+- Hono and Bun’s native server own HTTP dispatch, validation, security middleware, and streaming. Domain presentation handlers receive application ports; Pi Durable adapters own transactional execution. `@raphie/contracts` shares wire types without runtime dependencies.
+- The browser reads summary pages and the selected session through focused UUID queries and SSE observations. Older history and diagnostic pages load separately. Reconnect replaces authoritative observed state. Closing a tab only detaches its viewer; it never cancels work or repeats an action.
+- TanStack AI's client renders a projection of the durable transcript. It does not own a second model loop, conversation database, or approval store. Our admission endpoint retains stable event IDs for retrying an ambiguous message submission.
+- Vite proxies `/api` during development. Start server routes proxy the same API in the production build. API origin and host checks restrict access to the local workspace.
+
+## First slice
+
+Conversations support streamed text, Markdown, saved drafts, history after refresh, and pending/error states. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
+
+The bot settings Activity page records precise UTC timestamps, local display times, run and runtime-attempt IDs, tool operation IDs, model usage, approval decisions, results, and recovery. Events expand to show payloads and export to JSON. Known credential values and sensitive field names are redacted before journal persistence. Diagnostics is a separate trace-only view.
+
+This first journal keeps the latest **5,000 events**, truncates individual diagnostic payloads at **24,000 characters**, and does not persist individual text deltas. Timestamps describe when the host observed an event; “Model response started” is the first observed response, not the start of the provider's network request. Executor's nested calls and private model reasoning are not available here. Operation waterfalls and a backend plugin lifecycle are later work.
+
+## Settings
+
+Settings opens full-window from the gear beside the connection status. Its
+sidebar groups each bot's pages (profile, personality, providers, models,
+memory, MCP tools, scheduled jobs, diagnostics) under an expandable entry, with app-wide preferences below.
+Open Settings to select and test a local backend, connect OpenRouter, search the
+model catalog and choose the default for new sessions, or toggle Diagnostics trace
+collection and browse recent traces on the same page. Models are listed only for enabled connections with saved credentials; unconfigured bots are prompted to connect a provider. Changes are applied without a restart. Backend addresses are saved
+in a browser cookie scoped to the web port; reconnecting switches the workspace in place, closes old streams and requests,
+and reloads sessions and settings from the selected backend. Drafts are scoped
+to each backend. Older drafts without a backend identity remain in browser storage
+but are not automatically loaded into a backend. See [authentication](authentication.md) and [standalone builds](standalone-build.md) for access configuration.
+
+Configure independent MCP servers, one-time reminders and recurring prompts under each bot's settings.
+MCP supports Streamable HTTP and local stdio commands, with encrypted credentials
+and browser OAuth authorization for compatible HTTP servers. Model-proposed tool
+execution requires approval. Scheduled jobs keep results in
+a conversation and recover through Pi Durable's persisted sleep/wake tasks.
+Agents can create, modify and delete schedules directly through chat; reminders return to
+the originating conversation. Browse retained evidence from Settings → Memory → Browse memories.
+See [bot automation](bot-automation.md) for controls, APIs and execution limits.
+
+Provider/model and telemetry preferences belong to the selected backend and
+persist in `.data/settings.sqlite`. Provider keys come exclusively from connections
+saved in Settings → Providers. `OPENROUTER_API_KEY` is ignored for provider setup;
+removing a saved key never restores an environment key. Old environment-only
+connections are removed on startup; saved connections retain their identities.
+`RAPHIE_MODEL` supplies the initial model choice. Active turns must finish before
+provider connections can change. Each session keeps its model across
+default changes and restarts; a session model can change only while that session
+is idle. The composer picker supports search, model-family filters and local
+favorites. Choosing before the first message sets the new session’s model;
+choosing later updates only that session. Legacy sessions inherit their previously
+saved Pi model. Saved keys are never returned to the
+browser or written to session history. The settings database contains encrypted
+keys; its OS-stored master is required for recovery. Old plaintext backups remain
+sensitive. Encryption does not isolate arbitrary same-user processes from the
+credential store or running runtime.
+Provider testing uses [OpenRouter's key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key)
+without generating a model response. Additional providers and authenticated remote
+backend connections are not available yet.
+
+## Memory
+
+Built-in memory is enabled by default and stores selected facts and experiences
+in `.data/memory.sqlite`. The agent uses explicit tools to retain and search
+source-linked evidence across sessions, then reasons over the results. Settings →
+Memory → Browse opens a paginated list of saved evidence with sources and a total
+count, where you can filter, correct or forget records. Memory → Configuration sets
+the backend and scope. Saved disabled settings are preserved. Hindsight is supported
+through a connector; Honcho and Obsidian/Markdown are planned.
+
+See [how memory works](memory.md) for retrieval behavior, model-dependent
+retention, storage/privacy, recovery and current limitations.
+
+## Operational telemetry
+
+Effect's built-in exporter sends OTLP JSON to a loopback receiver owned by the
+runtime. Diagnostics reads only those traces from `.data/traces.sqlite`, using
+native Bun SQLite; no additional process or cloud service is required. Tracing
+starts automatically with the runtime and can be disabled in Settings. In-flight
+spans may finish exporting after disabling; existing traces expire normally. Retention is 48 hours / 100,000 spans,
+and queries return the latest 500 spans in a 1, 6 or 24 hour window. Prompts,
+tool arguments/results and raw SDK errors are excluded. The durable activity
+journal remains the recovery record and the source for bot Activity.
+See [observability](observability.md).
+
+## UI plugins
+
+`apps/web/src/domains/settings/infrastructure/plugins/index.tsx` defines host API version 1 and the `composer.footer` slot. Plugins receive `{ draft, model }` and render with shared UI components. The included token counter is an intentionally rough character-based estimate; actual provider usage is separate in bot Activity.
+
+Plugins are trusted local React modules loaded at build time. Each contribution has a render failure boundary. The Plugins screen saves enable/disable preferences in this browser. This is not an isolation boundary or a third-party plugin marketplace.
