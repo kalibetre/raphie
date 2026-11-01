@@ -129,17 +129,25 @@ export async function openAuthService(options: {
       'CREATE TRIGGER IF NOT EXISTS raphie_clear_device_codes AFTER UPDATE OF password ON "account" WHEN OLD.password IS NOT NEW.password BEGIN DELETE FROM "deviceCode"; END',
     );
     const auth = betterAuth(config);
-    // HTTP loopback and HTTPS require separate cookie policies. Both instances
-    // share the same database, signing secret and session revocation.
-    const localOrigin = options.origins.find((origin) =>
-      origin.startsWith("http://"),
+    // Each origin needs its own base URL and HTTP/HTTPS cookie policy.
+    // Instances share the database and signing secret, including revocation.
+    const authByOrigin = new Map(
+      options.origins.map((origin) => [
+        origin,
+        origin === primary.origin
+          ? auth
+          : betterAuth({
+              ...config,
+              baseURL: origin,
+              advanced: {
+                ...config.advanced,
+                cookiePrefix: `raphie_${new URL(origin).port || (new URL(origin).protocol === "https:" ? "443" : "80")}`,
+              },
+            }),
+      ]),
     );
-    const localAuth =
-      localOrigin && primary.protocol === "https:"
-        ? betterAuth({ ...config, baseURL: localOrigin })
-        : auth;
     const authFor = (origin?: string) =>
-      origin?.startsWith("http://") ? localAuth : auth;
+      origin ? (authByOrigin.get(origin) ?? auth) : auth;
     const passwordHash = () =>
       (
         database

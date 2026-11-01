@@ -6,6 +6,7 @@ export async function proxyRuntime(request: Request) {
   const origins = webOrigins(
     process.env.RAPHIE_WEB_ORIGIN,
     Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+    process.env.RAPHIE_WEB_ALLOWED_ORIGINS,
   );
   const expectedOrigin = origins.find(
     (value) => new URL(value).host === incoming.host,

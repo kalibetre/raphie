@@ -54,9 +54,12 @@ test("the configured runtime is used regardless of an old selection cookie", asy
 test("HTTPS configuration accepts its host and local HTTP without accepting cross-origin requests", async () => {
   const previous = process.env.RAPHIE_WEB_ORIGIN;
   process.env.RAPHIE_WEB_ORIGIN = "https://raphie.example.test";
+  const previousAdditional = process.env.RAPHIE_WEB_ALLOWED_ORIGINS;
+  process.env.RAPHIE_WEB_ALLOWED_ORIGINS = "https://second.example.test:8443";
   try {
     for (const host of [
       "https://raphie.example.test",
+      "https://second.example.test:8443",
       "http://127.0.0.1:4320",
       "http://localhost:4320",
     ]) {
@@ -74,6 +77,9 @@ test("HTTPS configuration accepts its host and local HTTP without accepting cros
     );
     assert.equal(rejected.status, 403);
   } finally {
+    if (previousAdditional === undefined)
+      delete process.env.RAPHIE_WEB_ALLOWED_ORIGINS;
+    else process.env.RAPHIE_WEB_ALLOWED_ORIGINS = previousAdditional;
     if (previous === undefined) delete process.env.RAPHIE_WEB_ORIGIN;
     else process.env.RAPHIE_WEB_ORIGIN = previous;
   }

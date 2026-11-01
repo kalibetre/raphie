@@ -62,7 +62,8 @@ const cookieOf = (response: Response) =>
 
 test("local HTTP and configured HTTPS have independent usable sessions", async () => {
   const remote = "https://raphie.example.test";
-  const allowed = [remote, origin, "http://localhost:4320"];
+  const secondRemote = "https://raphie.example.test:8443";
+  const allowed = [remote, secondRemote, origin, "http://localhost:4320"];
   const { open } = await fixture();
   const admin = await open("admin", allowed);
   await admin.setup(email, password);
@@ -70,7 +71,8 @@ test("local HTTP and configured HTTPS have independent usable sessions", async (
     service: await open("server", allowed),
     origins: allowed,
   });
-  for (const host of [remote, origin, "http://localhost:4320"]) {
+  const cookieNames = new Set<string>();
+  for (const host of [remote, secondRemote, origin, "http://localhost:4320"]) {
     const login = (await gateway.check(
       request(
         "/api/auth/sign-in/email",
@@ -84,7 +86,9 @@ test("local HTTP and configured HTTPS have independent usable sessions", async (
     )) as Response;
     expect(login.status).toBe(200);
     const cookie = login.headers.getSetCookie()[0]!;
-    expect(cookie.includes("Secure")).toBe(host === remote);
+    if (host === remote || host === secondRemote)
+      cookieNames.add(cookie.split("=")[0]!);
+    expect(cookie.includes("Secure")).toBe(host.startsWith("https:"));
     const admitted = await gateway.check(
       request(
         "/api/sessions",
@@ -107,6 +111,7 @@ test("local HTTP and configured HTTPS have independent usable sessions", async (
     )) as Response;
     expect(crossOrigin.status).toBe(403);
   }
+  expect(cookieNames.size).toBe(2);
 });
 
 test("a host with no administrator refuses everything except the login page", async () => {

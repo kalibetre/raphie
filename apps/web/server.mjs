@@ -30,6 +30,7 @@ try {
 const origins = webOrigins(
   process.env.RAPHIE_WEB_ORIGIN,
   Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+  process.env.RAPHIE_WEB_ALLOWED_ORIGINS,
 );
 const directory = authDirectory(
   fileURLToPath(new URL("../../", import.meta.url)),

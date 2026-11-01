@@ -3,34 +3,16 @@ import { cors } from "hono/cors";
 
 import { InputError } from "../../shared/application/input-error.ts";
 
-function webOrigins(webOrigin?: string) {
-  if (!webOrigin) return [];
-  const origins = [webOrigin];
-  const alias = new URL(webOrigin);
-  if (["127.0.0.1", "localhost"].includes(alias.hostname)) {
-    alias.hostname = alias.hostname === "localhost" ? "127.0.0.1" : "localhost";
-    origins.push(alias.origin);
-  }
-  if (alias.protocol === "https:") {
-    const port = Number(process.env.RAPHIE_WEB_PORT ?? 4320);
-    origins.push(`http://127.0.0.1:${port}`, `http://localhost:${port}`);
-  }
-  return origins;
-}
-
 export function localAccess(
   port: () => number,
-  webOrigin?: string,
+  webOrigins: string[] = [],
 ): MiddlewareHandler {
   return async (c, next) => {
     const hosts = [`127.0.0.1:${port()}`, `localhost:${port()}`];
     if (!hosts.includes(c.req.header("host") ?? ""))
       throw new InputError("Unrecognized host.", 403);
     const origin = c.req.header("origin");
-    const origins = [
-      ...hosts.map((h) => `http://${h}`),
-      ...webOrigins(webOrigin),
-    ];
+    const origins = [...hosts.map((h) => `http://${h}`), ...webOrigins];
     if (origin && !origins.includes(origin))
       throw new InputError("Unrecognized request origin.", 403);
     if (
@@ -42,8 +24,7 @@ export function localAccess(
   };
 }
 
-export function browserCors(webOrigin?: string) {
-  const origins = webOrigins(webOrigin);
+export function browserCors(origins: string[] = []) {
   return cors({
     origin: (origin) => (origins.includes(origin) ? origin : ""),
     allowHeaders: ["content-type", "x-raphie-client"],

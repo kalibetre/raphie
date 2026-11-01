@@ -5,6 +5,7 @@ import { createModels } from "@earendil-works/pi-ai/models";
 import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
 import { Effect } from "effect";
 
+import { webOrigins } from "../../../../shared/web-origins.ts";
 import {
   attemptId,
   redact,
@@ -128,6 +129,11 @@ const program = Effect.gen(function* () {
       startServer(app, {
         port,
         webOrigin,
+        webOrigins: webOrigins(
+          webOrigin,
+          Number(process.env.RAPHIE_WEB_PORT ?? 4320),
+          process.env.RAPHIE_WEB_ALLOWED_ORIGINS,
+        ),
         diagnostics: collector.traces,
         settings,
         memory,
