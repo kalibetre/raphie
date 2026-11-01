@@ -1,9 +1,11 @@
 import { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
+import { bearer, deviceAuthorization } from "better-auth/plugins";
 
 import { authSecret } from "./auth-storage.ts";
 
@@ -36,12 +38,23 @@ export async function openAuthService(options: {
     database.run(
       "PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON; PRAGMA secure_delete = ON",
     );
+    const secret = authSecret(options.directory);
+    const secretFingerprint = createHash("sha256").update(secret).digest("hex");
     const config = {
       database,
-      secret: authSecret(options.directory),
+      secret,
       baseURL: primary.origin,
       trustedOrigins: options.origins,
       telemetry: { enabled: false },
+      plugins: [
+        bearer(),
+        deviceAuthorization({
+          verificationUri: "/device",
+          expiresIn: "10m",
+          interval: "5s",
+          validateClient: (clientId) => clientId === "raphie-native",
+        }),
+      ],
       advanced: {
         // Migrations just ran; a background check would race the CLI's close().
         database: { validateSchema: false },
@@ -81,7 +94,47 @@ export async function openAuthService(options: {
     database.run(
       'CREATE UNIQUE INDEX IF NOT EXISTS "raphie_single_user" ON "user" ((1))',
     );
+    database.run(
+      'CREATE TABLE IF NOT EXISTS raphie_device_session (session_id TEXT PRIMARY KEY REFERENCES "session"(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at INTEGER NOT NULL)',
+    );
+    database.run(
+      "CREATE TABLE IF NOT EXISTS raphie_auth_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    );
+    const savedFingerprint = () =>
+      (
+        database
+          .query(
+            "SELECT value FROM raphie_auth_meta WHERE key = 'secret_fingerprint'",
+          )
+          .get() as { value: string } | null
+      )?.value;
+    database
+      .transaction(() => {
+        if (savedFingerprint() !== secretFingerprint) {
+          database.run(
+            'DELETE FROM "session" WHERE id IN (SELECT session_id FROM raphie_device_session)',
+          );
+          database.run('DELETE FROM "deviceCode"');
+          database
+            .query(
+              "INSERT INTO raphie_auth_meta (key, value) VALUES ('secret_fingerprint', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            )
+            .run(secretFingerprint);
+        }
+      })
+      .immediate();
+    // Better Auth changes the password and revokes sessions in one transaction.
+    // Invalidate all outstanding device codes in that same transaction.
+    database.run(
+      'CREATE TRIGGER IF NOT EXISTS raphie_clear_device_codes AFTER UPDATE OF password ON "account" WHEN OLD.password IS NOT NEW.password BEGIN DELETE FROM "deviceCode"; END',
+    );
     const auth = betterAuth(config);
+    const passwordHash = () =>
+      (
+        database
+          .query('SELECT password FROM "account" WHERE providerId = ? LIMIT 1')
+          .get("credential") as { password: string | null } | null
+      )?.password;
     let configured = false;
     const isConfigured = () =>
       (configured ||=
@@ -91,8 +144,77 @@ export async function openAuthService(options: {
       configured: isConfigured,
       /** Handles Better Auth HTTP requests (sign-in and sign-out only are routed here). */
       handle: (request: Request) => auth.handler(request),
+      /** Record a device session before returning its token to the client. */
+      async handleDevice(request: Request) {
+        if (savedFingerprint() !== secretFingerprint)
+          throw new Error("Authentication secret changed.");
+        const tokenRequest =
+          new URL(request.url).pathname === "/api/auth/device/token";
+        const before = tokenRequest ? passwordHash() : undefined;
+        const response = await auth.handler(request);
+        if (!tokenRequest || !response.ok) return response;
+        const payload = (await response.clone().json()) as {
+          access_token?: unknown;
+        };
+        if (typeof payload.access_token !== "string")
+          throw new Error("Device authorization failed.");
+        const token = payload.access_token;
+        try {
+          const name =
+            (request.headers.get("user-agent") ?? "Raphie device")
+              .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+              .trim()
+              .slice(0, 80) || "Raphie device";
+          database
+            .transaction(() => {
+              if (
+                !before ||
+                passwordHash() !== before ||
+                savedFingerprint() !== secretFingerprint
+              )
+                throw new Error("Administrator credentials changed.");
+              const session = database
+                .query('SELECT id FROM "session" WHERE token = ?')
+                .get(token) as { id: string } | null;
+              if (!session) throw new Error("Device session missing.");
+              database
+                .query(
+                  "INSERT INTO raphie_device_session (session_id, name, created_at) VALUES (?, ?, ?)",
+                )
+                .run(session.id, name, Date.now());
+            })
+            .immediate();
+        } catch {
+          database.query('DELETE FROM "session" WHERE token = ?').run(token);
+          throw new Error("Device authorization failed.");
+        }
+        const headers = new Headers(response.headers);
+        headers.delete("set-cookie");
+        headers.delete("set-auth-token");
+        return new Response(response.body, {
+          status: response.status,
+          headers,
+        });
+      },
+      devices() {
+        return database
+          .query(
+            'SELECT d.session_id AS id, d.name, d.created_at AS createdAt, s.expiresAt AS expiresAt FROM raphie_device_session d JOIN "session" s ON s.id = d.session_id WHERE s.expiresAt > ? ORDER BY d.created_at DESC',
+          )
+          .all(Date.now());
+      },
+      revokeDevice(id: string) {
+        return (
+          database
+            .query(
+              'DELETE FROM "session" WHERE id = ? AND EXISTS (SELECT 1 FROM raphie_device_session WHERE session_id = ?)',
+            )
+            .run(id, id).changes > 0
+        );
+      },
       /** Validates against the database on every call, so revocation is immediate. */
       async session(headers: Headers) {
+        if (savedFingerprint() !== secretFingerprint) return null;
         const result = await auth.api.getSession({
           headers,
           query: { disableCookieCache: true },
