@@ -15,6 +15,7 @@ test("standalone help describes service commands without requiring an installati
       "status",
       "health",
       "port",
+      "set-port",
       "origins",
       "set-origins",
       "auth setup",
@@ -37,6 +38,7 @@ test("standalone help describes service commands without requiring an installati
     "uninstall",
     "origins",
     "set-origins",
+    "set-port",
   ]) {
     const result = run(command, "--help");
     assert.equal(result.exitCode, 0);

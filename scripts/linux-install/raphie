@@ -19,6 +19,15 @@ if [ "${1:-}" = port ]; then
   exit 0
 fi
 case "${1:-}" in
+  set-port)
+    exec /bin/sh "$root/scripts/linux-binary/raphie-admin" "$@"
+    ;;
+  health)
+    test -r /etc/raphie/raphie.conf || { echo 'Raphie configuration is unavailable.' >&2; exit 1; }
+    set -a
+    . /etc/raphie/raphie.conf
+    set +a
+    ;;
   update)
     shift
     if [ "$#" -eq 0 ]; then

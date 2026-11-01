@@ -68,8 +68,12 @@ sudo sh bootstrap.sh v0.0.4-alpha.1 --web-origin https://MACHINE.TAILNET.ts.net
 Replace the example origin with the actual lowercase Tailscale DNS name and
 HTTPS port if needed, and configure Tailscale Serve as described below. If you
 omit `--web-origin`, the default is loopback HTTP for use with an SSH tunnel.
-Run `raphie port` to print the configured local web port. Existing installations
-keep their previous port when updated; the new default applies to fresh installs.
+Run `raphie port` to print the configured local web port. Choose another port
+during installation with `--web-port 41838`, or later with
+`sudo raphie set-port 41838`. The latter restarts the service and updates a
+loopback primary origin; update any reverse proxy to forward to the new port.
+Existing installations keep their previous port when updated; the new default
+applies to fresh installs.
 Run `sudo raphie --help` to list the installed service and administrator
 commands. Use `sudo raphie update --help`, `sudo raphie restore --help`, or
 `sudo raphie uninstall --help` for their arguments and effects.
