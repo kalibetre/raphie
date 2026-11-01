@@ -43,26 +43,31 @@ This does not yet prove a Linux container sandbox end to end.
 
 The tag-triggered release workflow tests both Linux architectures, attests the
 archives, and creates a **draft** GitHub release. It does not publish the draft.
-The experimental binary downloader verifies the GitHub attestation against the
-repository, release workflow, stable tag, and GitHub-hosted runner before it
-extracts an archive. It requires GitHub CLI with attestation verification and
-network access to GitHub and the Sigstore trust infrastructure. Authentication
-may be needed by GitHub CLI; configure it for the account running the command.
-The bootstrap and downloader scripts must themselves be obtained and inspected
-through a trusted channel. Draft `v0.0.1` was verified on GitHub-hosted x64 and
-ARM64 runners using its actual signed archives, including the compiled service
-and disposable installation lifecycle. It predates the recovery work below and
-is not a final release candidate. The public stable download path and the final
-candidate still need end-to-end verification before this is supported.
+The installer downloads public releases over HTTPS without GitHub CLI and does
+not verify their provenance or checksums. It checks archive structure before
+extracting. Obtain and inspect the bootstrap and downloader scripts from a
+trusted source. A compromised download could run code as root during installation.
 
-After a stable release is published, place inspected copies of
-`scripts/linux-binary/bootstrap.sh` and `download-release.sh` together, install
-GitHub CLI, and run `sudo sh bootstrap.sh` (or pass a stable version such as
-`v1.2.3`). The script installs OS dependencies and the verified binary bundle;
-it does not install Bun. The installed binary service supports `sudo raphie
-update` for the latest stable release, or `sudo raphie update v1.2.3` for a
-specific stable release. The `gh` command and its authentication, if needed,
-must be available to root as these operations run under sudo.
+Place copies of `scripts/linux-binary/bootstrap.sh` and `download-release.sh`
+together, then run `sudo sh bootstrap.sh v0.0.4-alpha.1` for the alpha, or
+`sudo sh bootstrap.sh` for the latest stable release. The script installs OS
+dependencies and the binary bundle; it does not install Bun. `sudo raphie update`
+selects the latest stable release; pass an explicit version such as
+`sudo raphie update v0.0.4-alpha.1` to select an alpha.
+
+For example, once that alpha is published, a clean Ubuntu host can obtain the
+two scripts and configure a Tailscale HTTPS origin during installation:
+
+```sh
+mkdir raphie-install && cd raphie-install
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.1/scripts/linux-binary/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.1/scripts/linux-binary/download-release.sh
+sudo sh bootstrap.sh v0.0.4-alpha.1 --web-origin https://MACHINE.TAILNET.ts.net
+```
+
+Replace the example origin with the actual lowercase Tailscale DNS name and
+HTTPS port if needed, and configure Tailscale Serve as described below. If you
+omit `--web-origin`, the default is loopback HTTP for use with an SSH tunnel.
 Run `sudo raphie --help` to list the installed service and administrator
 commands. Use `sudo raphie update --help`, `sudo raphie restore --help`, or
 `sudo raphie uninstall --help` for their arguments and effects.

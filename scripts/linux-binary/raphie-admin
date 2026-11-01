@@ -29,7 +29,7 @@ HELP
 fi
 if [ "$#" -eq 2 ] && { [ "$2" = --help ] || [ "$2" = -h ]; }; then
   case "$1" in
-    update) echo 'Usage: sudo raphie update [version|/path/to/trusted/bundle]'; echo 'Download a verified stable release, or update from a trusted local bundle.'; exit 0 ;;
+    update) echo 'Usage: sudo raphie update [version|/path/to/trusted/bundle]'; echo 'Download a stable or explicitly selected alpha release, or update from a trusted local bundle.'; exit 0 ;;
     restore) echo 'Usage: sudo raphie restore BACKUP [--recovery-key ENCRYPTED --identity AGE_IDENTITY]'; echo 'Restore the backup and its matching installed release after confirmation.'; exit 0 ;;
     recovery-key) echo 'Usage: sudo raphie recovery-key export AGE_RECIPIENT OUTPUT'; echo 'Export an age-encrypted keyring unlock credential. Keep the age identity separate and secure.'; exit 0 ;;
     uninstall) echo 'Usage: sudo raphie uninstall [--purge]'; echo 'Remove service and programs while preserving data, configuration, keyrings, backups, and the service user.'; echo 'With --purge, also delete Raphie data, configuration, keyrings, and backups. Both modes require confirmation.'; exit 0 ;;

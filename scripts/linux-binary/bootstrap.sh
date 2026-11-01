@@ -3,10 +3,21 @@ set -eu
 
 # Download and inspect this script and download-release.sh before running.
 test "$(id -u)" -eq 0 || { echo 'Run this installer with sudo.' >&2; exit 1; }
-test "$#" -le 1 || { echo 'Usage: sudo sh bootstrap.sh [version]' >&2; exit 1; }
+usage='Usage: sudo sh bootstrap.sh [version] [--web-origin URL] [--data-dir PATH]'
+version=
+origin=
+data_dir=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --web-origin) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 1; }; origin=$2; shift 2 ;;
+    --data-dir) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 1; }; data_dir=$2; shift 2 ;;
+    --help|-h) echo "$usage"; exit 0 ;;
+    -*) echo "$usage" >&2; exit 1 ;;
+    *) [ -z "$version" ] || { echo "$usage" >&2; exit 1; }; version=$1; shift ;;
+  esac
+done
 directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 test -f "$directory/download-release.sh" && test ! -L "$directory/download-release.sh" || { echo 'Place the inspected download-release.sh next to this script.' >&2; exit 1; }
-command -v gh >/dev/null || { echo 'Install GitHub CLI with attestation support first.' >&2; exit 1; }
 command -v apt-get >/dev/null || { echo 'This installer currently supports Debian and Ubuntu.' >&2; exit 1; }
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || id raphie >/dev/null 2>&1; then
   echo 'An existing Raphie installation or user was found; refusing to overwrite it.' >&2; exit 1
@@ -16,5 +27,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-cer
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 mkdir "$tmp/bundle"
-sh "$directory/download-release.sh" "$tmp/bundle" "${1:-}"
-sh "$tmp/bundle/install.sh"
+sh "$directory/download-release.sh" "$tmp/bundle" "$version"
+set --
+if [ -n "$origin" ]; then set -- "$@" --web-origin "$origin"; fi
+if [ -n "$data_dir" ]; then set -- "$@" --data-dir "$data_dir"; fi
+sh "$tmp/bundle/install.sh" "$@"
