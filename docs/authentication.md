@@ -80,8 +80,9 @@ path at startup. Installed Linux services retain the directory selected at insta
 ## Connect a native device
 
 A first-party client requests a short-lived device code, then shows a user code
-and the local `/device` page. Sign in in a browser, enter or review that code,
-and explicitly approve or deny it. Compare the code with the one on the device
+and an approval link. Sign in in a browser, review the code on the approval page,
+and explicitly approve or deny it. The link must include the code; opening
+`/device` without one asks you to start from the device. Compare the code with the one on the device
 in your possession. Never approve a code someone sent unexpectedly. A client ID
 or device name is a claim, not proof of identity; an approved device receives
 full workspace access.
