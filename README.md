@@ -16,17 +16,16 @@ A personal AI assistant you run yourself, with a place for every conversation, b
 Install the alpha on a Debian or Ubuntu machine with systemd (x64 or ARM64). You’ll need `sudo` access and an internet connection.
 
 > [!WARNING]
-> **Experimental alpha.** The installer runs as root and does not verify release checksums or provenance. Inspect both scripts before running them. See the [installation and recovery guide](docs/standalone-build.md) for limitations.
+> **Experimental alpha.** The installer runs as root and does not verify release checksums or provenance. Inspect the script before running it. See the [installation and recovery guide](docs/standalone-build.md) for limitations.
 
 ### 1. Download the installer
 
-Get both scripts from the release and read them before running:
+Download the installer and read it before running:
 
 ```sh
 mkdir raphie-install && cd raphie-install
-curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/bootstrap.sh
-curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/download-release.sh
-less bootstrap.sh download-release.sh
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/linux-binary/bootstrap.sh
+less bootstrap.sh
 ```
 
 ### 2. Install and create your account

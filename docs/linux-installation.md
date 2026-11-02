@@ -3,7 +3,7 @@
 The standalone release is an **experimental alpha** for Debian and Ubuntu with systemd, on x64 or ARM64. You need an internet connection, `sudo`, and a free local web port. The release includes the runtime; you do not need Bun or GitHub CLI.
 
 > [!WARNING]
-> The installer runs as root. It downloads releases over HTTPS but does not verify checksums or provenance. Download and inspect both scripts before running them. Use this alpha on a machine you are comfortable experimenting on; a failed installation may require manual cleanup.
+> The installer runs as root. It downloads releases over HTTPS but does not verify checksums or provenance. Download and inspect the script before running it. Use this alpha on a machine you are comfortable experimenting on; a failed installation may require manual cleanup.
 
 ## 1. Download the installer
 
@@ -11,12 +11,11 @@ On the machine that will run Raphie:
 
 ```sh
 mkdir raphie-install && cd raphie-install
-curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/bootstrap.sh
-curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/download-release.sh
-less bootstrap.sh download-release.sh
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/linux-binary/bootstrap.sh
+less bootstrap.sh
 ```
 
-Both scripts must be in the same directory. To install a later published alpha, use its tag in the script URLs and command below. Without a version, the installer selects the latest **stable** release; alphas must be selected explicitly.
+The installer above comes from the current main branch. To install a later published alpha, use its explicit tag in the command below. Without a version, the installer selects the latest **stable** release; alphas must be selected explicitly.
 
 ## 2. Install and create your account
 

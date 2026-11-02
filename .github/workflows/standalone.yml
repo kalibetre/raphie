@@ -49,7 +49,6 @@ jobs:
             -v "$(pwd)/dist/standalone/${{ matrix.target }}:/binaries:ro" \
             -v "$(pwd)/scripts/linux-binary/container-integration.py:/test.py:ro" \
             -v "$(pwd)/scripts/linux-binary/bootstrap.sh:/test-bootstrap/bootstrap.sh:ro" \
-            -v "$(pwd)/scripts/linux-binary/download-release.sh:/test-bootstrap/download-release.sh:ro" \
             ubuntu:24.04 sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends age dbus gnome-keyring libsecret-1-0 python3 >/dev/null && python3 /test.py'
       - uses: actions/upload-artifact@v4
         with:
@@ -125,5 +124,4 @@ jobs:
             -v "$(pwd)/bundle:/binaries:ro" \
             -v "$(pwd)/scripts/linux-binary/container-integration.py:/test.py:ro" \
             -v "$(pwd)/scripts/linux-binary/bootstrap.sh:/test-bootstrap/bootstrap.sh:ro" \
-            -v "$(pwd)/scripts/linux-binary/download-release.sh:/test-bootstrap/download-release.sh:ro" \
             ubuntu:24.04 sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends age dbus gnome-keyring libsecret-1-0 python3 >/dev/null && python3 /test.py'

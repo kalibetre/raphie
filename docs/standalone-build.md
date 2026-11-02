@@ -46,23 +46,20 @@ The tag-triggered release workflow tests both Linux architectures, attests the
 archives, and creates a **draft** GitHub release. It does not publish the draft.
 The installer downloads public releases over HTTPS without GitHub CLI and does
 not verify their provenance or checksums. It checks archive structure before
-extracting. Obtain and inspect the bootstrap and downloader scripts from a
-trusted source. A compromised download could run code as root during installation.
+extracting. Obtain and inspect the bootstrap script from a trusted source. A compromised download could run code as root during installation.
 
-Place copies of `scripts/linux-binary/bootstrap.sh` and `download-release.sh`
-together, then run `sudo sh bootstrap.sh v0.0.4-alpha.2` for the alpha, or
+Download and inspect `scripts/linux-binary/bootstrap.sh`, then run `sudo sh bootstrap.sh v0.0.4-alpha.2` for the alpha, or
 `sudo sh bootstrap.sh` for the latest stable release. The script installs OS
 dependencies and the binary bundle; it does not install Bun. `sudo raphie update`
 selects the latest stable release; pass an explicit version such as
 `sudo raphie update v0.0.4-alpha.2` to select an alpha.
 
-For example, a clean Ubuntu host can obtain the
-two scripts and configure a Tailscale HTTPS origin during installation:
+For example, a clean Ubuntu host can download the installer
+and configure a Tailscale HTTPS origin during installation:
 
 ```sh
 mkdir raphie-install && cd raphie-install
-curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/bootstrap.sh
-curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/v0.0.4-alpha.2/scripts/linux-binary/download-release.sh
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/linux-binary/bootstrap.sh
 sudo sh bootstrap.sh v0.0.4-alpha.2 --web-origin https://MACHINE.TAILNET.ts.net
 ```
 

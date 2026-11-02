@@ -13,6 +13,23 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+test("standalone bootstrap embeds the same downloader used by updates", async () => {
+  const bootstrap = await readFile("scripts/linux-binary/bootstrap.sh", "utf8");
+  const downloader = await readFile(
+    "scripts/linux-binary/download-release.sh",
+    "utf8",
+  );
+  const embedded = bootstrap
+    .split(
+      "# BEGIN EMBEDDED DOWNLOAD-RELEASE (keep in sync with download-release.sh)\n",
+    )[1]
+    ?.split("\n# END EMBEDDED DOWNLOAD-RELEASE")[0];
+  assert.equal(
+    embedded,
+    downloader.slice(downloader.indexOf("\n") + 1).trimEnd(),
+  );
+});
+
 test("binary download supports explicit public alphas and extracts only safe archives without gh", async () => {
   const dir = await mkdtemp(join(tmpdir(), "raphie-release-"));
   const bin = join(dir, "bin");
