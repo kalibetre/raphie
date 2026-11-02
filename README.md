@@ -19,12 +19,12 @@ Install Raphie for your user on Linux or macOS. You need `curl`, `python3` and a
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
 ```
 
-The installer selects the latest stable release, or the latest alpha if no stable release is available. To install a particular release, append `-s -- v0.0.4-alpha.2` to `bash`. The installer executes code downloaded from GitHub; [download and inspect it first](docs/user-installation.md) if you prefer.
+The installer selects the latest stable release for your platform, or the latest compatible alpha if no stable release is available. To install a particular release, append `-s -- v0.0.4-alpha.2` to `bash`. The installer executes code downloaded from GitHub; [download and inspect it first](docs/user-installation.md) if you prefer.
 
 Once installed, open a terminal and create your administrator:
 
 ```sh
-raphie auth setup
+~/.local/bin/raphie auth setup
 ```
 
 Open **http://127.0.0.1:4320**, sign in, and connect a model provider in Settings. The installer attempts to start a user service; if it cannot, run `raphie start` in a terminal first. See [installation and service setup](docs/user-installation.md) for background service requirements, remote access and troubleshooting.

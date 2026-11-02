@@ -122,13 +122,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           pattern: bun-*
           path: artifacts
           merge-multiple: true
       - name: Create checksums
-        run: cd artifacts && sha256sum raphie-linux-x64.tar.gz raphie-linux-arm64.tar.gz raphie-darwin-x64.tar.gz raphie-darwin-arm64.tar.gz > SHA256SUMS
+        run: |
+          cp scripts/install.sh artifacts/install.sh
+          cd artifacts && sha256sum raphie-linux-x64.tar.gz raphie-linux-arm64.tar.gz raphie-darwin-x64.tar.gz raphie-darwin-arm64.tar.gz install.sh > SHA256SUMS
       - name: Prepare draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -136,4 +141,4 @@ jobs:
         run: |
           flags=()
           if [[ "$GITHUB_REF_NAME" == *-alpha.* ]]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/raphie-darwin-x64.tar.gz artifacts/raphie-darwin-arm64.tar.gz artifacts/SHA256SUMS --verify-tag --draft --generate-notes "${flags[@]}"
+          gh release create "$GITHUB_REF_NAME" artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/raphie-darwin-x64.tar.gz artifacts/raphie-darwin-arm64.tar.gz artifacts/install.sh artifacts/SHA256SUMS --verify-tag --draft --generate-notes "${flags[@]}"

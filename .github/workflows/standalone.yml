@@ -51,6 +51,8 @@ jobs:
             -v "$(pwd)/scripts/linux-binary/bootstrap.sh:/test-bootstrap/bootstrap.sh:ro" \
             -v "$(pwd)/scripts/linux-binary/download-release.sh:/test-bootstrap/download-release.sh:ro" \
             ubuntu:24.04 sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends age dbus gnome-keyring libsecret-1-0 python3 >/dev/null && python3 /test.py'
+      - name: Exercise a real systemd user service when available
+        run: RAPHIE_DISPOSABLE_TEST=1 bash scripts/user-install-systemd-integration.sh "$(pwd)/dist/standalone/${{ matrix.target }}"
       - name: Verify unprivileged user installation
         run: |
           docker run --rm -e RAPHIE_DISPOSABLE_TEST=1 \
@@ -87,6 +89,8 @@ jobs:
       - run: sh scripts/build-standalone.sh '${{ matrix.target }}' ci "$GITHUB_SHA"
       - run: dist/standalone/${{ matrix.target }}/raphie-smoke
       - run: bun test scripts/user-installer.test.ts
+      - name: Exercise real user-installed macOS service
+        run: RAPHIE_DISPOSABLE_TEST=1 bash scripts/user-install-macos-integration.sh "$(pwd)/dist/standalone/${{ matrix.target }}"
 
   verify-draft:
     if: ${{ inputs.tag != '' }}
