@@ -8,6 +8,7 @@ import {
   webOrigins,
 } from "../apps/web/src/infrastructure/auth/auth-storage.ts";
 import { installationHealthy } from "./linux-install/health-check.ts";
+import { isOtherOwner, standaloneChildren } from "./standalone-platform.ts";
 
 /** Reads one line from the terminal; hidden input never reaches arguments, logs or history. */
 function readLine(label: string, hidden: boolean) {
@@ -56,7 +57,7 @@ async function authCommand(action: string | undefined) {
   );
   // Files created by another account would be unreadable to the service.
   try {
-    if (statSync(directory).uid !== process.getuid?.())
+    if (isOtherOwner(statSync(directory).uid, process.getuid?.()))
       throw new Error(
         "Run this command as the account that owns the data directory (the service user).",
       );
@@ -135,7 +136,7 @@ async function main() {
       process.once("SIGINT", stop);
       process.once("SIGTERM", stop);
       try {
-        for (const executable of ["raphie-runtime", "raphie-web"])
+        for (const executable of standaloneChildren(process.platform))
           children.push(
             Bun.spawn([join(directory, executable)], {
               stdin: "inherit",
