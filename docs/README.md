@@ -8,7 +8,8 @@ change that changes the behavior.
 
 - [Project overview and release setup](../README.md)
 - [Run from source](source-setup.md)
-- [Linux alpha installation](linux-installation.md): install, sign in, operate and recover.
+- [User installation on Linux and macOS](user-installation.md): no-sudo setup and user services.
+- [Linux system installation](linux-installation.md): install, sign in, operate and recover.
 - [Installed service commands](commands.md): status, ports, origins, updates and recovery.
 - [Standalone builds and operations](standalone-build.md): detailed deployment and recovery notes.
 - [Using Raphie](using-raphie.md): conversations, settings, storage and features.

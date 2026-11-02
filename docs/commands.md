@@ -1,5 +1,7 @@
 # Installed service commands
 
+For the no-sudo user installation, use `~/.local/bin/raphie start`, `status`, `health`, `auth setup`, and `auth recover`. Re-run the [user installer](user-installation.md#updates-and-recovery) to update. The commands below apply only to the separate Linux system installation.
+
 These commands apply to the Linux standalone installation. Run `raphie --help` for the installed version's help. Commands that change service configuration or data require `sudo`.
 
 | Command                                                             | What it does                                                                                                                               |
