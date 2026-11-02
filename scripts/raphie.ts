@@ -13,9 +13,9 @@ import { installationHealthy } from "./linux-install/health-check.ts";
 function readLine(label: string, hidden: boolean) {
   if (!process.stdin.isTTY || !process.stdout.isTTY)
     throw new Error("This command needs an interactive terminal.");
-  process.stdout.write(label);
   const input = process.stdin;
   input.setRawMode(true);
+  process.stdout.write(label);
   input.setEncoding("utf8");
   input.resume();
   return new Promise<string>((resolve, reject) => {

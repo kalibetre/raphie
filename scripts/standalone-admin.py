@@ -9,6 +9,7 @@ pid, fd = pty.fork()
 if pid == 0:
     os.execv(command, [command, "auth", "setup"])
 seen = b""
+observed = b""
 for prompt, answer in ((b"email:", email), (b"New password", password), (b"Repeat password", password)):
     deadline = time.monotonic() + 30
     while prompt not in seen:
@@ -19,6 +20,7 @@ for prompt, answer in ((b"email:", email), (b"New password", password), (b"Repea
             if not chunk:
                 raise SystemExit("The auth command ended early.")
             seen += chunk
+            observed += chunk
     seen = b""
     os.write(fd, answer.encode() + b"\r")
 while select.select([fd], [], [], 5)[0]:
@@ -29,6 +31,7 @@ while select.select([fd], [], [], 5)[0]:
     if not chunk:
         break
     seen += chunk
+    observed += chunk
 code = os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1])
-if code or password.encode() in seen:
+if code or password.encode() in observed:
     raise SystemExit("Administrator setup failed or echoed the password.")
