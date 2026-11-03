@@ -15,10 +15,10 @@ import { ModelConnectionGate } from "../../../shared/infrastructure/model-connec
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { SettingsService } from "../application/ports.ts";
 import {
+  configuredCredentialKeyStore,
   CredentialCipher,
   type CredentialKeyStore,
   type EncryptedCredential,
-  osCredentialKeyStore,
 } from "./credential-cipher.ts";
 import {
   PiProviderConnections,
@@ -116,7 +116,7 @@ export class BackendSettings implements SettingsService {
       )
         throw new Error();
       cipher = await CredentialCipher.open(
-        options.credentialKeyStore ?? osCredentialKeyStore,
+        options.credentialKeyStore ?? configuredCredentialKeyStore(),
         saved && "version" in saved && saved.version === 4
           ? saved.keyId
           : undefined,
@@ -203,7 +203,7 @@ export class BackendSettings implements SettingsService {
     return JSON.stringify(saved);
   }
 
-  /** Memory connection secrets share the OS-backed Settings master key. */
+  /** Memory connection secrets share the Settings master key. */
   sealMemoryKey(value: string | null) {
     return this.cipher.encrypt(value, "memory-connection", "memory");
   }

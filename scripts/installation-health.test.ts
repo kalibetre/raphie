@@ -51,3 +51,24 @@ test("installation health requires both the runtime and the web server", async (
     await web.stop(true);
   }
 });
+
+test("health checks the default web port when no override is set", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    urls.push(url);
+    return url.endsWith("/_raphie/health")
+      ? Response.json({ status: "ready" })
+      : new Response("runtime");
+  }) as typeof fetch;
+  try {
+    expect(await installationHealthy({})).toBe(true);
+    expect(urls).toEqual([
+      "http://127.0.0.1:4316/api/runtime",
+      "http://127.0.0.1:4320/_raphie/health",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

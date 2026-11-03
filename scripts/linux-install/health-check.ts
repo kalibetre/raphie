@@ -11,7 +11,7 @@ export async function installationHealthy(
       { signal: AbortSignal.timeout(1000) },
     );
     const web = await fetch(
-      `http://127.0.0.1:${config.RAPHIE_WEB_PORT}/_raphie/health`,
+      `http://127.0.0.1:${config.RAPHIE_WEB_PORT ?? "4320"}/_raphie/health`,
       { signal: AbortSignal.timeout(1000) },
     );
     return (

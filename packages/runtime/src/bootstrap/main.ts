@@ -12,6 +12,7 @@ import {
 } from "../domains/activity/infrastructure/pi-activity-journal.ts";
 import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
+import { CredentialStoreError } from "../domains/settings/infrastructure/credential-cipher.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
 import { legacyMcpConfig } from "../infrastructure/mcp/legacy-config.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
@@ -72,6 +73,9 @@ const program = Effect.gen(function* () {
       BackendSettings.open(resolve(directory, "settings.sqlite"), {
         models,
         defaultModel: process.env.RAPHIE_MODEL ?? "anthropic/claude-haiku-5.5",
+      }).catch((error: unknown) => {
+        if (error instanceof CredentialStoreError) console.error(error.message);
+        throw error;
       }),
     async (settings) => settings.close(),
   );

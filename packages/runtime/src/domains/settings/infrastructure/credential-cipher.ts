@@ -4,12 +4,22 @@ import { secrets } from "bun";
 
 import type { EncryptedCredential } from "../../../shared/application/encrypted-credential.ts";
 import { InputError } from "../../../shared/application/input-error.ts";
+import { fileCredentialKeyStore } from "./file-credential-key-store.ts";
 
 export type { EncryptedCredential } from "../../../shared/application/encrypted-credential.ts";
 
 const service = "com.raphie.provider-credentials";
 
-/** Injectable only at the persistence boundary; production always uses the OS store. */
+export class CredentialStoreError extends InputError {
+  constructor() {
+    super(
+      "Provider credential store unavailable or key missing. Unlock the OS credential store or check the configured headless key file and its owner-only permissions, then restart; restore the matching key backup if it was deleted. No automatic fallback is available.",
+      503,
+    );
+  }
+}
+
+/** Injectable only at the persistence boundary. */
 export type CredentialKeyStore = {
   get(name: string): Promise<string | null>;
   set(name: string, value: string): Promise<void>;
@@ -20,7 +30,14 @@ export const osCredentialKeyStore: CredentialKeyStore = {
   set: (name, value) => secrets.set({ service, name, value }),
 };
 
-/** AES-256-GCM; SQLite contains only ciphertext and a non-secret OS key identifier. */
+export function configuredCredentialKeyStore(): CredentialKeyStore {
+  const path = process.env.RAPHIE_CREDENTIAL_KEY_FILE;
+  return path === undefined
+    ? osCredentialKeyStore
+    : fileCredentialKeyStore(path);
+}
+
+/** AES-256-GCM; SQLite contains only ciphertext and a non-secret key identifier. */
 export class CredentialCipher {
   readonly keyId: string;
   private key: Buffer;
@@ -37,17 +54,14 @@ export class CredentialCipher {
       if (value === null && !existingKeyId) {
         value = randomBytes(32).toString("base64");
         await store.set(keyId, value);
-        // Do not replace plaintext until durable OS storage can be read back.
+        // Do not replace plaintext until durable key storage can be read back.
         if ((await store.get(keyId)) !== value) throw new Error();
       }
       if (!value || !/^[A-Za-z0-9+/]{43}=$/.test(value)) throw new Error();
       return new CredentialCipher(keyId, Buffer.from(value, "base64"));
     } catch {
-      // OS errors can contain secret material. Never propagate them or their causes.
-      throw new InputError(
-        "Provider credential store unavailable or key missing. Unlock the OS credential store and restart; restore the matching credential-store backup if the key was deleted. No plaintext fallback is available.",
-        503,
-      );
+      // Store errors can contain secret material. Never propagate them or their causes.
+      throw new CredentialStoreError();
     }
   }
 
@@ -92,7 +106,7 @@ export class CredentialCipher {
       ]).toString("utf8");
     } catch {
       throw new InputError(
-        "Provider credentials could not be authenticated. Restore matching settings and OS credential-store backups; saved connections were not changed.",
+        "Provider credentials could not be authenticated. Restore matching settings and credential-key backups; saved connections were not changed.",
         503,
       );
     }

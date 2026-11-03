@@ -65,7 +65,7 @@ Settings owns browser preferences, the selected local backend connection, and
 backend model/provider and telemetry preferences. Private backend settings live
 in a dedicated SQLite store behind a Settings application port; credentials never
 enter conversation documents or read responses. Provider keys are encrypted at rest
-with an OS credential-store master; see [credential storage](provider-credential-storage.md).
+with an OS credential-store master or an explicitly configured headless key file; see [credential storage](provider-credential-storage.md).
 
 Memory owns cross-session evidence through a Memory application port. Built-in
 memory starts enabled; an explicitly saved disabled setting is preserved.

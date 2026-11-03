@@ -30,7 +30,19 @@ The installer verifies release archives against the published SHA256SUMS. This d
 
 Run `~/.local/bin/raphie auth setup` in a terminal and create the administrator, then sign in at http://127.0.0.1:4320. Configure a model provider and a default model under your bot in Settings. If no user service is available, run `~/.local/bin/raphie start` in a terminal and leave it running. If startup fails, use the log hint printed by the installer, fix the underlying issue, then re-enable the service as described below. `raphie status` checks the local runtime; `raphie auth recover` resets the password and signs out all sessions.
 
-Raphie stores provider credentials using the current user's OS credential store. On macOS, unlock the login Keychain and allow access if prompted. Linux needs libsecret and an unlocked Secret Service provider in the user's D-Bus session. A headless machine without one cannot start the runtime; see [credential storage](provider-credential-storage.md). The installer does not install or unlock a credential service.
+Raphie stores provider credentials using the current user's OS credential store. On macOS, unlock the login Keychain and allow access if prompted. Linux needs libsecret and an unlocked Secret Service provider in the user's D-Bus session. For unattended hosts, explicitly select the file backend instead; see [credential storage](provider-credential-storage.md). The installer does not install system packages. For an explicitly opted-in headless setup, see below.
+
+## Headless Linux
+
+For a Linux host without an unlocked desktop Secret Service, opt into an automatically readable master-key file:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --headless --channel nightly
+```
+
+Omit `--channel nightly` for a stable installation. On an existing user installation, rerun with `--headless` to configure its service. This requires a systemd user manager, with no D-Bus session, GNOME Keyring or libsecret dependency. It refuses to switch an existing encrypted settings database from a different credential store, including the earlier experimental headless keyring; migration is not automatic. Existing keys are never replaced.
+
+The random master key lives in `~/.local/share/raphie-headless/master-key` (mode `0600`), in a private directory (mode `0700`) separate from Raphie data. The service selects it through `RAPHIE_CREDENTIAL_KEY_FILE`; only the path is in the environment. It starts without an unlock prompt and preserves the key across updates. Anyone who can read both the key and encrypted databases can decrypt credentials. Protect and back up the key separately from Raphie data. Losing it makes saved credentials unrecoverable; startup fails rather than replacing it. Restore the matching file with its original ownership and permissions before restarting. Provider, memory, MCP and channel credentials for every bot use this backend. No sudo is required for setup. The installer tries to enable user lingering so the service can start at boot and stay running after logout. Some hosts require administrator authorization for `loginctl enable-linger "$USER"`; if that attempt fails, the installer prints a warning and boot-time startup is not enabled.
 
 ## Background service
 
@@ -46,6 +58,6 @@ Re-run the installer to update a recognized user installation. It remembers the 
 
 A channel switch is saved immediately. If the selected release does not contain the currently installed commit, the installer leaves the running version unchanged and waits for a safe release. It checks release ancestry with the GitHub API before replacing binaries; if it cannot verify ancestry, it refuses the update. Existing installations without a saved channel default to stable. Historical alpha and beta releases remain accessible as existing installations but are not selected by either channel. It stops its managed service, refuses to proceed if either Raphie port is still in use, and copies the stopped data directory to `~/.local/share/raphie-backups/` before replacing binaries. Previous binaries are retained in `~/.local/lib/.raphie-previous.*`. Stop a foreground `raphie start` yourself before updating. Keep the same `XDG_DATA_HOME` used at installation; the installer refuses to guess if it has changed.
 
-A backup contains sensitive data. It does not include the matching OS credential-store key: preserve that separately as described in [credential storage and recovery](provider-credential-storage.md). Database migrations may be irreversible. If an update fails after startup, stop the service, preserve the current data, then restore the offline data backup and its matching previous binaries together; do not run old binaries against newly migrated data. The installer stops an unhealthy service and prints the relevant log location.
+A backup contains sensitive data. It does not include the matching credential key (OS store or headless master-key file): preserve that separately as described in [credential storage and recovery](provider-credential-storage.md). Database migrations may be irreversible. If an update fails after startup, stop the service, preserve the current data, then restore the offline data backup and its matching previous binaries together; do not run old binaries against newly migrated data. The installer stops an unhealthy service and prints the relevant log location.
 
 The user installation does not yet provide an uninstall command or automated off-host backups.

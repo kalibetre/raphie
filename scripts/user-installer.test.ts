@@ -82,6 +82,9 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     await writeFile(join(bin, "systemctl"), "#!/bin/sh\nexit 0\n", {
       mode: 0o755,
     });
+    await writeFile(join(bin, "loginctl"), "#!/bin/sh\nexit 0\n", {
+      mode: 0o755,
+    });
     const input = await readFile(resolve("scripts/install.sh"));
     const env = {
       ...process.env,
@@ -104,6 +107,24 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       { tag_name: "nightly-10-1", prerelease: true },
       { tag_name: "v0.0.4-alpha.3", prerelease: true },
     ]);
+    const headlessHome = join(temp, "fresh-headless-home");
+    await mkdir(headlessHome);
+    const freshHeadless = run(["--headless", "--channel", "nightly"], {
+      HOME: headlessHome,
+    });
+    assert.equal(freshHeadless.exitCode, 0, freshHeadless.stderr.toString());
+    assert.match(
+      freshHeadless.stdout.toString(),
+      /Headless credential store configured/,
+    );
+    assert.equal(
+      existsSync(join(headlessHome, ".local/share/raphie-headless/master-key")),
+      true,
+    );
+    assert.equal(
+      existsSync(join(headlessHome, ".local/share/raphie-headless/start")),
+      false,
+    );
     const defaultInstall = run();
     assert.notEqual(defaultInstall.exitCode, 0);
     assert.match(defaultInstall.stdout.toString(), /No stable release/);
@@ -133,6 +154,27 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     assert.equal(sameVersion.exitCode, 0, sameVersion.stderr.toString());
     assert.match(sameVersion.stdout.toString(), /Already on nightly-10-1/);
     assert.equal(existsSync(join(home, ".local/share/raphie-backups")), false);
+    const headless = run(["--headless"]);
+    assert.equal(headless.exitCode, 0, headless.stderr.toString());
+    assert.match(
+      headless.stdout.toString(),
+      /Headless credential store configured/,
+    );
+    assert.equal(
+      existsSync(join(home, ".local/share/raphie-headless/master-key")),
+      true,
+    );
+
+    const headlessKey = await readFile(
+      join(home, ".local/share/raphie-headless/master-key"),
+    );
+    const headlessConfig = await readFile(
+      join(home, ".config/systemd/user/raphie.service.d/raphie-headless.conf"),
+      "utf8",
+    );
+    assert.match(headlessConfig, /Environment="RAPHIE_CREDENTIAL_KEY_FILE=/);
+    assert.doesNotMatch(headlessConfig, /ExecStart|dbus|gnome/);
+
     const data = join(home, ".local/share/raphie");
     await mkdir(data, { recursive: true });
     await writeFile(join(data, "saved.txt"), "important data");
@@ -143,6 +185,10 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     const update = run();
     assert.equal(update.exitCode, 0, update.stderr.toString());
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-11-1");
+    assert.deepEqual(
+      await readFile(join(home, ".local/share/raphie-headless/master-key")),
+      headlessKey,
+    );
     assert.equal(
       (await readdir(join(home, ".local/share/raphie-backups"))).length,
       1,

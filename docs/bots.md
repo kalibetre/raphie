@@ -104,8 +104,9 @@ Names are display labels; stable IDs identify bots even after renaming.
 
 Do not put credentials in SOUL.md: the owner can read personality and its history,
 and the configured model receives the active personality as instructions.
-Provider and memory keys continue to use encrypted Settings storage and the OS
-credential store. Personality text cannot grant permissions or change ownership.
+Provider and memory keys use encrypted Settings storage with the OS credential
+store by default, or an explicitly configured headless master-key file outside app
+data; see [credential storage](provider-credential-storage.md). Personality text cannot grant permissions or change ownership.
 
 ## Runtime and persistence boundary
 
@@ -170,7 +171,7 @@ filesystem. The opt-in container provider runs native processes with a bot-owned
 workspace mount; it is not VM isolation and can reach host and LAN services. See
 [its limitations](bot-workspaces.md#network-limitation-host-and-lan-access-are-possible).
 
-Channels are configured per bot in Settings. Discord is the first supported channel; its token is encrypted using the runtime host’s OS credential store. Configure allowed Discord user IDs; an empty list denies all access. Only the initiating Discord user can approve or reject an action in Discord; the owner can also decide in the web UI. Existing pending requests without a recorded user, and tool approvals where queued turns make the initiator ambiguous, can only be decided in the web UI. An optional channel ID restricts the bot to that channel and its threads; otherwise allowed users can DM the bot or mention it in servers. Existing Discord environment variables are ignored: configure the default bot in the UI using the same application ID to retain existing bindings. Legacy records previously assigned `legacy-discord` cannot be automatically matched to an application ID. Each bot manages
+Channels are configured per bot in Settings. Discord is the first supported channel; its token is encrypted using the runtime host’s selected credential backend (OS store by default, explicit file backend on headless hosts). Configure allowed Discord user IDs; an empty list denies all access. Only the initiating Discord user can approve or reject an action in Discord; the owner can also decide in the web UI. Existing pending requests without a recorded user, and tool approvals where queued turns make the initiator ambiguous, can only be decided in the web UI. An optional channel ID restricts the bot to that channel and its threads; otherwise allowed users can DM the bot or mention it in servers. Existing Discord environment variables are ignored: configure the default bot in the UI using the same application ID to retain existing bindings. Legacy records previously assigned `legacy-discord` cannot be automatically matched to an application ID. Each bot manages
 its own MCP servers and recurring prompt jobs in Settings; see
 [bot automation](bot-automation.md). Operational OTLP export and
 Diagnostics remain configured for the default bot; named-bot Diagnostics returns

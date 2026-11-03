@@ -10,9 +10,10 @@ Provider keys are entered only in Settings; environment keys are ignored.
 ## Decision and boundary
 
 Settings schema v4 encrypts each provider key using AES-256-GCM. A random 256-bit
-master key lives only in the OS credential store under service
+master key lives in the OS credential store by default, under service
 `com.raphie.provider-credentials`, account/name equal to the database's random
-`keyId`. SQLite stores that non-secret identifier, connection metadata, and each
+`keyId`. Explicit headless mode instead uses a private master-key file outside
+Raphie data. SQLite stores that non-secret identifier, connection metadata, and each
 credential's base64 ciphertext, random 96-bit nonce and 128-bit authentication
 tag. Additional authenticated data binds the format, keyId, connection ID and
 provider. Nonces are regenerated on every save. Names, defaults and other
@@ -28,9 +29,10 @@ That avoids application encryption, but add/edit/remove/migration would need a
 recoverable protocol across two stores with no shared transaction. Envelope
 encryption keeps all connection updates atomic in the existing SQLite row. The
 single small master secret also avoids platform credential size limits for
-provider keys. A plaintext master file beside the database would provide little
-protection against copying the data directory and is deliberately unsupported.
-No new dependency or environment-secret mechanism is needed.
+provider keys. Headless installs keep the master file outside the database/data
+directory so copying app data alone does not disclose the key. The environment
+setting selects a file path; the key itself is never an environment variable.
+No new dependency is needed.
 
 ## Platforms and locked/unavailable stores
 
@@ -38,19 +40,42 @@ No new dependency or environment-secret mechanism is needed.
 Linux libsecret and Windows Credential Manager. On macOS this uses the login
 keychain and may prompt for permission; Raphie does not enable unrestricted access.
 On Linux, install libsecret and run an unlocked Secret Service provider (such as
-GNOME Keyring/KWallet) in the runtime user's login/D-Bus session. A headless
-supervisor must have access to that session; an unattended container without a
-credential service is unsupported. Windows requires Credential Manager; Bun's
-default persistence can roam with a domain profile. This is user-account storage,
+GNOME Keyring/KWallet) in the runtime user's login/D-Bus session, or explicitly
+select the file backend described below for an unattended host. Windows requires
+Credential Manager; Bun's default persistence can roam with a domain profile. This is user-account storage,
 not guaranteed hardware-bound or biometric protection.
 
 On startup, a missing, locked, denied or unavailable store stops startup with a
-fixed, actionable error; native error details are suppressed. Allow/unlock OS
-access and restart. An existing encrypted database's missing or malformed master
-key is never silently replaced. Restore the corresponding OS credential-store
-backup if it was deleted. If the key is irretrievably lost, encrypted credentials
-cannot be recovered; the database is retained without discarding connection IDs.
-There is no plaintext, environment or file-key fallback.
+fixed, actionable error; native error details are suppressed. An existing encrypted
+database's missing or malformed master key is never silently replaced. Restore
+its corresponding credential-key backup if it was deleted. If the key is
+irretrievably lost, encrypted credentials cannot be recovered; databases and
+connection IDs are retained. Raphie never automatically falls back between stores.
+
+### Explicit file backend for headless hosts
+
+Set `RAPHIE_CREDENTIAL_KEY_FILE` to an absolute path outside app data, or use
+`install.sh --headless` to configure it for the Linux user service. The installer
+uses `~/.local/share/raphie-headless/master-key`. No D-Bus session, libsecret or
+GNOME Keyring is needed in this mode. Desktop mode is unchanged when the variable
+is unset. Empty or invalid paths fail closed.
+
+The file holds one random 256-bit master encoded as base64. It is shared by the
+installation's bots and secret stores, while each database retains its own keyId
+and authenticated record identities. This does not add cryptographic isolation
+between bots against a compromised runtime. The immediate directory must be owned
+by the runtime user with mode `0700`; the regular key file must be owned by that
+user with mode `0600`. Symlinked directories/files and hard-linked keys are
+rejected. Existing files are never overwritten, including malformed files.
+
+A runtime can create the file exclusively for a fresh database if the directory's
+parent already exists. After encryption, a missing key aborts startup. The
+installer also refuses to regenerate a lost key or switch an existing encrypted
+OS-store/experimental-keyring installation automatically. Such migrations need a
+separate recovery plan. Store keys and data backups separately, and protect both.
+Anyone who can read the key and encrypted databases can decrypt their credentials;
+this mode relies on filesystem permissions and does not protect a full account or
+disk compromise. See [headless installation](user-installation.md#headless-linux).
 
 The master and resolved credentials are cached for the running process lifetime.
 Locking the OS store later does not revoke those copies or stop an existing turn.
@@ -66,13 +91,15 @@ formats. Version 3 entries retain their IDs, names, enabled state and credential
 including unconfigured entries. Earlier environment-only entries are discarded
 as before; earlier saved keys keep their original `openrouter` identity.
 
-A new master is stored and read back from the OS store before any plaintext row
+A master is stored and read back from the selected backend before any plaintext row
 is replaced. All keys are encrypted into one atomic SQLite update. Failure before
 commit leaves the previous row recoverable and prevents serving the runtime.
-There is intentionally no plaintext backup made by migration. A crash between OS
-key creation and SQLite commit can leave an unused random master entry; retry
-creates a new one without overwriting existing masters. Do not bulk-delete entries
-from the service: other installations/backups may depend on them.
+There is intentionally no plaintext backup made by migration. In OS-store mode,
+a crash between key creation and SQLite commit can leave an unused random master
+entry; retry creates a new one without overwriting existing masters. File mode
+reuses its installation master after an interrupted database commit. Do not
+bulk-delete entries from the OS service: other installations/backups may depend
+on them.
 
 Startup drains/removes an existing WAL by requiring DELETE journal mode, enables
 `secure_delete`, uses memory for temporary tables, commits the encrypted state,
@@ -87,7 +114,7 @@ Removing/clearing a key removes its ciphertext from current settings and active
 provider registration. SQLite secure deletion remains enabled; DELETE mode avoids
 retaining historical WAL frames. The database master is retained for other
 connections and backup recovery. Removal is not cryptographic erasure of all
-copies: a prior encrypted backup plus its matching OS master can still recover
+copies: a prior encrypted backup plus its matching master can still recover
 removed credentials. Revoke/rotate the provider key when that is required.
 
 ## Threats and backups
@@ -111,16 +138,20 @@ from SSD wear-leveling, copy-on-write filesystems, snapshots, swap or old copies
 **Old plaintext databases, WAL/journal copies, archives and backups remain secret.**
 Migration never searches for or deletes unrelated backups (including `.data/backups`).
 Protect those copies and rotate exposed provider keys; manage backup retention
-explicitly. New encrypted backups need the matching OS master to restore on a new
-machine or account. Back up that store through supported OS facilities separately
-from SQLite; never export a plaintext master beside the database. Restoring an
+explicitly. New encrypted backups need the matching master to restore on a new
+machine or account. Back up the OS store through supported OS facilities, or
+preserve the headless master file with owner-only permissions, separately from
+SQLite; never export a plaintext master beside the database. Restoring an
 old plaintext backup runs migration again.
 
 ## Verification and primary references
 
-Automated tests inject an in-memory master store and use synthetic keys with
-isolated temporary databases. They cover authenticated identity binding/tampering,
-random nonces, restart, browser/activity redaction, per-connection model auth,
+Automated tests use synthetic keys with isolated temporary databases and
+in-memory or temporary file stores. Fresh-process tests reopen provider, MCP and
+Discord credentials for default and named bots without an OS credential service.
+File tests cover key loss/restoration, restart, permissions, symlinks, hard links,
+malformed files and exclusive creation. The wider suite covers authenticated
+identity binding/tampering, random nonces, restart, browser/activity redaction, per-connection model auth,
 editing/removal, legacy IDs, historical WAL/freelist cleanup, locked/missing stores,
 SQLite write rollback and cleanup failure after commit. No real local provider
 credentials are read for testing. The disposable browser fixture also uses this

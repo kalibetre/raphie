@@ -7,7 +7,7 @@ The [design](headless-runtime.md) records intent; this file records actual behav
 ## Run without the web application
 
 `bun run dev:runtime` starts the single durable owner on loopback port 4316. It
-loads host configuration through Varlock and starts each bot’s saved channels. Discord is configured in the UI and its token is encrypted using the host OS credential store.
+loads host configuration through Varlock and starts each bot’s saved channels. Discord is configured in the UI and its token is encrypted using the host’s selected credential backend (OS store by default, explicit file backend on headless hosts). See [credential storage](provider-credential-storage.md).
 
 Each Discord application can belong to only one bot in an app-data directory.
 Concurrent saves reserve the application before connecting. On startup, ownership
