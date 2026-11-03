@@ -6,6 +6,8 @@ The user installer supports glibc Linux and macOS on x64 and ARM64. Alpine/musl 
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
 ```
 
+Nightly versions include the base version, UTC build date, workflow run, and attempt, for example `v0.0.4-nightly.20261103.41616363919.1`. The release title includes the source commit.
+
 The default channel is **stable**. If no stable release exists for your platform, the installer stops without choosing a nightly. To install nightly builds explicitly:
 
 ```sh
