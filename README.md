@@ -27,10 +27,10 @@ curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/insta
 
 The selected channel is remembered for updates. Use `raphie channel stable` or `raphie channel nightly` to switch. The installer executes code downloaded from GitHub; [download and inspect it first](docs/user-installation.md) if you prefer.
 
-Once installed, open a terminal and create your administrator:
+The installer configures PATH for new Bash/Zsh terminals. Once installed, open a new terminal and create your administrator:
 
 ```sh
-~/.local/bin/raphie auth setup
+raphie auth setup
 ```
 
 Open **http://127.0.0.1:4320**, sign in, and connect a model provider in Settings. The installer attempts to start a user service; if it cannot, run `raphie start` in a terminal first. See [installation and service setup](docs/user-installation.md) for background service requirements, remote access and troubleshooting.

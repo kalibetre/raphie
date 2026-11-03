@@ -1,6 +1,6 @@
 # Install Raphie for your user
 
-The user installer supports glibc Linux and macOS on x64 and ARM64. Alpine/musl and native Windows are not supported; Windows is deferred. It installs prebuilt binaries in `~/.local/lib/raphie` and a `~/.local/bin/raphie` command. It does not install operating-system packages or require sudo. Install `curl` and Python 3 first, and ensure `~/.local/bin` is on your PATH.
+The user installer supports glibc Linux and macOS on x64 and ARM64. Alpine/musl and native Windows are not supported; Windows is deferred. It installs prebuilt binaries in `~/.local/lib/raphie` and a `~/.local/bin/raphie` command. It does not install operating-system packages or require sudo. Install `curl` and Python 3 first. The installer adds `~/.local/bin` to your Bash or Zsh startup configuration, so new terminals can run `raphie` directly. It preserves existing configuration and does not duplicate its guarded PATH block when rerun. Bash setup covers `.bashrc` and the active login profile; Zsh setup covers `.zshrc` and `.zprofile`, respecting `ZDOTDIR` within your home directory. Pass `--no-modify-path` to manage PATH yourself. Other shells and shell files outside your home need manual configuration.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
@@ -28,7 +28,9 @@ The installer verifies release archives against the published SHA256SUMS. This d
 
 ## First run
 
-Run `~/.local/bin/raphie auth setup` in a terminal and create the administrator, then sign in at http://127.0.0.1:4320. Configure a model provider and a default model under your bot in Settings. If no user service is available, run `~/.local/bin/raphie start` in a terminal and leave it running. If startup fails, use the log hint printed by the installer, fix the underlying issue, then re-enable the service as described below. `raphie status` checks the local runtime; `raphie auth recover` resets the password and signs out all sessions.
+Open a new terminal after installation, or apply the printed `export PATH="$HOME/.local/bin:$PATH"` command in your current Bash/Zsh session. An installer subprocess cannot change its parent terminal’s environment.
+
+Run `raphie auth setup` in a terminal and create the administrator, then sign in at http://127.0.0.1:4320. Configure a model provider and a default model under your bot in Settings. If no user service is available, run `~/.local/bin/raphie start` in a terminal and leave it running. If startup fails, use the log hint printed by the installer, fix the underlying issue, then re-enable the service as described below. `raphie status` checks the local runtime; `raphie auth recover` resets the password and signs out all sessions.
 
 Raphie stores provider credentials using the current user's OS credential store. On macOS, unlock the login Keychain and allow access if prompted. Linux needs libsecret and an unlocked Secret Service provider in the user's D-Bus session. For unattended hosts, explicitly select the file backend instead; see [credential storage](provider-credential-storage.md). The installer does not install system packages. For an explicitly opted-in headless setup, see below.
 
