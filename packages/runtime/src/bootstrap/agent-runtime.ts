@@ -193,7 +193,9 @@ export class Gateway {
           );
           const turn = state.turns.findLast(
             (t) =>
-              t.conversationId === conversationId && t.status === "pending",
+              t.conversationId === conversationId &&
+              t.status === "pending" &&
+              !t.queueMode,
           );
           return session && turn
             ? {
@@ -347,7 +349,9 @@ export class Gateway {
           },
         },
       );
-      for (const turn of chats.turns.filter((t) => t.status === "pending"))
+      for (const turn of chats.turns.filter(
+        (t) => t.status === "pending" && !t.queueMode,
+      ))
         record(journal, "run.recovered", "Unfinished run recovered", {
           conversationId: turn.conversationId,
           runId: turn.id,
@@ -381,7 +385,10 @@ export class Gateway {
       const selected = state.conversations.find((s) => s.id === conversationId);
       return selected &&
         state.turns.some(
-          (t) => t.conversationId === conversationId && t.status === "pending",
+          (t) =>
+            t.conversationId === conversationId &&
+            t.status === "pending" &&
+            !t.queueMode,
         )
         ? selected.sessionId
         : undefined;

@@ -541,3 +541,57 @@
     color: var(--faint);
   }
 }
+
+@layer components {
+  .message-user[data-queued] {
+    background: color-mix(in srgb, var(--accent) 16%, var(--card));
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  }
+  .message-queue-controls {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+  .message-queue-controls button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 9px;
+    color: var(--foreground);
+    background: var(--card);
+  }
+}
+
+@layer components {
+  .composer-task-menu {
+    margin-left: auto;
+    position: relative;
+  }
+  .composer-task-menu summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 4px 8px;
+  }
+  .composer-task-menu button {
+    color: var(--error);
+    position: absolute;
+    bottom: 32px;
+    right: 0;
+    white-space: nowrap;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 8px;
+  }
+}
+
+@layer components {
+  .composer-task-menu + button {
+    margin-left: 0;
+  }
+}

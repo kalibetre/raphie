@@ -34,7 +34,19 @@ The browser fixture uses a temporary database that is removed on normal shutdown
 
 ## Conversations and activity
 
-Conversations support streamed text, Markdown, saved drafts, history after refresh, and pending/error states. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
+Conversations support streamed text, Markdown, saved drafts, history after refresh, and pending/error states.
+
+You can send messages while Raphie works. Waiting messages appear as normal chat
+bubbles with a different tint and a Queued label. Choose Steer beneath a waiting
+message to apply it after the current tool round, or Keep queued to leave it for
+after the current reply. These controls disappear once Pi picks up the message.
+The composer shows Stop while working with an empty draft; entering text restores
+Send. Task actions (⋯) also offers Stop while you are typing, preserving the draft.
+Stopping withdraws queued input and marks interrupted replies as stopped. Completed
+external effects are not undone; uncertain tool outcomes keep their existing recovery
+rules. Steering joins the current reply at a tool boundary. If the current reply
+finishes first, Pi starts a new reply for the steering message. Shared answers
+appear once; distinct replies remain visible. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
 
 The bot settings Activity page records precise UTC timestamps, local display times, run and runtime-attempt IDs, tool operation IDs, model usage, approval decisions, results, and recovery. Events expand to show payloads and export to JSON. Known credential values and sensitive field names are redacted before journal persistence. Diagnostics is a separate trace-only view.
 

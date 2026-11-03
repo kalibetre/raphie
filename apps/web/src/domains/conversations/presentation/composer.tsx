@@ -1,5 +1,5 @@
 import type { ModelSelection } from "@raphie/contracts";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -24,6 +24,7 @@ export function Composer({
   busy,
   enabledPlugins,
   onSend,
+  onStop,
   onChooseModel,
   onModelSettings,
 }: {
@@ -35,6 +36,7 @@ export function Composer({
   disabled: boolean;
   busy: boolean;
   enabledPlugins: string[];
+  onStop: () => Promise<void>;
   onSend: (
     text: string,
     eventId: string,
@@ -73,8 +75,20 @@ export function Composer({
     writeLocal(key, text);
   }
 
+  async function stop() {
+    setSending(true);
+    setError(undefined);
+    try {
+      await onStop();
+    } catch {
+      setError("Could not stop this task. Please retry.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function send() {
-    if (!draft.trim() || sending || disabled || busy) return;
+    if (!draft.trim() || sending || disabled) return;
     setSending(true);
     setError(undefined);
     const modelKey = JSON.stringify(selectedForNewSession ?? null);
@@ -153,14 +167,36 @@ export function Composer({
             enabled={enabledPlugins}
             context={{ draft, model: activeModel?.modelId ?? null, usage }}
           />
+          {busy && draft.trim() && (
+            <details className="composer-task-menu">
+              <summary aria-label="Task actions">⋯</summary>
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => {
+                  void stop();
+                }}
+              >
+                Stop task
+              </button>
+            </details>
+          )}
           <Button
-            className="ml-auto size-8 rounded-full transition-[transform,opacity,background-color] duration-150 enabled:hover:scale-105 enabled:active:scale-95"
-            type="submit"
+            variant={busy && !draft.trim() ? "ghost" : "default"}
+            className={`ml-auto size-8 rounded-full transition-[transform,opacity,background-color] duration-150 enabled:hover:scale-105 enabled:active:scale-95 ${busy && !draft.trim() ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : ""}`}
+            type={busy && !draft.trim() ? "button" : "submit"}
+            onClick={
+              busy && !draft.trim()
+                ? () => {
+                    void stop();
+                  }
+                : undefined
+            }
             size="icon"
-            aria-label="Send message"
-            disabled={disabled || busy || sending || !draft.trim()}
+            aria-label={busy && !draft.trim() ? "Stop task" : "Send message"}
+            disabled={disabled || sending || (!busy && !draft.trim())}
           >
-            <ArrowUp />
+            {busy && !draft.trim() ? <Square /> : <ArrowUp />}
           </Button>
         </div>
       </form>

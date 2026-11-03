@@ -22,10 +22,35 @@ const message = z.object({
 });
 
 export function conversationRoutes(
-  conversations: Pick<Sessions, "submit" | "submitLegacy" | "chooseModel">,
+  conversations: Pick<
+    Sessions,
+    "submit" | "submitLegacy" | "chooseModel" | "control"
+  >,
   actor: ActorContext,
 ) {
   return new Hono()
+    .post(
+      "/sessions/:id/control",
+      limitBody(1024),
+      jsonInput(
+        z
+          .object({
+            action: z.enum(["stop", "steer", "queue"]),
+            turnId: z.string().optional(),
+          })
+          .strict(),
+      ),
+      async (c) => {
+        const input = c.req.valid("json");
+        await conversations.control(
+          actor,
+          c.req.param("id"),
+          input.action,
+          input.turnId,
+        );
+        return c.json({ ok: true });
+      },
+    )
     .post(
       "/sessions/:id/model",
       limitBody(1024),

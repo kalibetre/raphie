@@ -466,6 +466,13 @@ export function Workspace({
                       }
                       busy={busy}
                       enabledPlugins={enabled}
+                      onStop={async () => {
+                        if (!conversationId) return;
+                        await api(`/api/sessions/${conversationId}/control`, {
+                          action: "stop",
+                        });
+                        await refetch();
+                      }}
                       onSend={send}
                       onChooseModel={async (model) => {
                         if (!conversationId) return;

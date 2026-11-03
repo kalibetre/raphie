@@ -1,7 +1,12 @@
 import { useChat } from "@tanstack/ai-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CircleAlert } from "lucide-react";
-import { useMemo } from "react";
+import {
+  CalendarClock,
+  CircleAlert,
+  CornerUpRight,
+  ListEnd,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -37,6 +42,23 @@ export function Chat({
 }) {
   const query = useQueryClient();
   const { workspace } = useBackend();
+  const [controlError, setControlError] = useState<string>();
+
+  async function control(action: "steer" | "queue" | "stop", turnId?: string) {
+    setControlError(undefined);
+    try {
+      await workspace.api(`/api/sessions/${conversationId}/control`, {
+        action,
+        turnId,
+      });
+      await query.invalidateQueries({ queryKey: ["session", conversationId] });
+    } catch {
+      setControlError(
+        "This message could not be changed. It may already have been picked up.",
+      );
+    }
+  }
+
   const connection = useMemo(
     () =>
       chatAdapter(
@@ -83,6 +105,11 @@ export function Chat({
 
   return (
     <Conversation onRead={onRead}>
+      {controlError && (
+        <p className="error" role="alert">
+          {controlError}
+        </p>
+      )}
       {messages.map((message) => {
         const turnId = message.id.replace(/:reply$/, "");
         const turn = turns.find((t) => t.id === turnId);
@@ -103,7 +130,10 @@ export function Chat({
         if (message.role === "user")
           return (
             <div key={message.id} className="turn-user">
-              <article className="message message-user">
+              <article
+                className="message message-user"
+                data-queued={turn?.queueMode ? true : undefined}
+              >
                 <div className="markdown">
                   <ReactMarkdown
                     components={markdownComponents}
@@ -118,6 +148,31 @@ export function Chat({
                   </time>
                 )}
               </article>
+              {turn?.queueMode && (
+                <div className="message-queue-controls">
+                  <span>
+                    {turn.queueMode === "steer"
+                      ? "Steering after this step"
+                      : "Queued"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void control(
+                        turn.queueMode === "steer" ? "queue" : "steer",
+                        turn.id,
+                      );
+                    }}
+                  >
+                    {turn.queueMode === "steer" ? (
+                      <ListEnd size={14} aria-hidden="true" />
+                    ) : (
+                      <CornerUpRight size={14} aria-hidden="true" />
+                    )}
+                    {turn.queueMode === "steer" ? "Keep queued" : "Steer"}
+                  </button>
+                </div>
+              )}
               {turn && turnWork(turn, steps.get(turn.id) ?? [])}
             </div>
           );
@@ -159,7 +214,7 @@ export function Chat({
         );
       })}
       {turns
-        .filter((t) => t.status === "pending")
+        .filter((t) => t.status === "pending" && !t.queueMode)
         .map((turn) => (
           <ActiveRun
             key={turn.id}
@@ -180,7 +235,10 @@ export function Chat({
         {!working && steps.length > 0 && (
           <ToolSteps steps={steps} working={working} />
         )}
-        {turn.status === "error" && (
+        {turn.cancelled && (
+          <p className="message-meta">Stopped · message not completed</p>
+        )}
+        {turn.status === "error" && !turn.cancelled && (
           <p className="error turn-error" role="alert">
             <CircleAlert size={14} /> Raphie could not complete this reply.
             Check Diagnostics, then send a new message to retry.
