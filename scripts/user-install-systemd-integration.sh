@@ -29,7 +29,7 @@ hash = hashlib.sha256()
 with open(os.path.join(path, 'archive.tar.gz'), 'rb') as f:
     for chunk in iter(lambda: f.read(1024 * 1024), b''): hash.update(chunk)
 with open(os.path.join(path, 'SHA256SUMS'), 'w') as f: f.write(f'{hash.hexdigest()}  {asset}\n')
-with open(os.path.join(path, 'release.json'), 'w') as f: json.dump([{'tag_name':'v0.0.4-alpha.2', 'draft':False, 'prerelease':True, 'assets':[{'name':asset}, {'name':'SHA256SUMS'}]}], f)
+with open(os.path.join(path, 'release.json'), 'w') as f: json.dump([{'tag_name':'v0.0.4', 'draft':False, 'prerelease':False, 'assets':[{'name':asset}, {'name':'SHA256SUMS'}]}], f)
 PY
 cat > "$work/bin/curl" <<'SH'
 #!/bin/sh
@@ -46,7 +46,7 @@ SH
 chmod 755 "$work/bin/curl" "$work/bin/systemctl"
 export HOME="$work/home" PATH="$work/bin:/usr/bin:/bin" FIXTURE="$work/fixtures" XDG_DATA_HOME="$work/data"
 printf 'synthetic-only\n' | gnome-keyring-daemon --unlock >/dev/null
-cat "$root/scripts/install.sh" | bash -s -- v0.0.4-alpha.2
+cat "$root/scripts/install.sh" | bash
 /usr/bin/systemctl --user is-active --quiet raphie.service
 PORT=4316 RAPHIE_WEB_PORT=4320 "$HOME/.local/bin/raphie" health
 echo 'Real user systemd service started and passed health checks.'

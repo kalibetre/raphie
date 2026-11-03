@@ -136,18 +136,6 @@ test("binary download supports explicit public alphas and extracts only safe arc
     await writeFile(
       join(dir, "release.json"),
       JSON.stringify({
-        tag_name: "v1.2.3-beta.1",
-        draft: false,
-        prerelease: true,
-      }),
-    );
-    assert.notEqual(run("").exitCode, 0);
-    assert.equal(run("v1.2.3-beta.1").exitCode, 0);
-    await rm(out, { recursive: true, force: true });
-    await mkdir(out);
-    await writeFile(
-      join(dir, "release.json"),
-      JSON.stringify({
         tag_name: "v1.2.3-alpha.1",
         draft: false,
         prerelease: true,

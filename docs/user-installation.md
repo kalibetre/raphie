@@ -6,13 +6,13 @@ The user installer supports glibc Linux and macOS on x64 and ARM64. Alpine/musl 
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
 ```
 
-The script selects the latest stable GitHub release with an archive for your platform. If none is available, it stops; alpha and beta releases require an explicit version. For example, to opt into an alpha explicitly:
+The default channel is **stable**. If no stable release exists for your platform, the installer stops without choosing a nightly. To install nightly builds explicitly:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- v0.0.4-alpha.3
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --channel nightly
 ```
 
-Specify a beta tag in the same way. macOS binaries first become available with the release that includes the macOS build; earlier alpha releases only contain Linux binaries. macOS binaries are not signed or notarized, and Gatekeeper behavior has not yet been verified.
+Nightly builds are published from `main` after the automated build and validation pass. macOS binaries are not signed or notarized, and Gatekeeper behavior has not yet been verified. Native Windows is deferred.
 
 Piping a script runs downloaded code immediately. To inspect it first:
 
@@ -40,7 +40,9 @@ Data defaults to `~/.local/share/raphie` on Linux (or `$XDG_DATA_HOME/raphie` wh
 
 ## Updates and recovery
 
-Re-run the installer to update a recognized user installation. Without a version it selects stable releases only; specify an exact alpha or beta tag to opt into a prerelease. It refuses to replace a newer version with an older one, including when the latest stable is older than the installed prerelease. It stops its managed service, refuses to proceed if either Raphie port is still in use, and copies the stopped data directory to `~/.local/share/raphie-backups/` before replacing binaries. Previous binaries are retained in `~/.local/lib/.raphie-previous.*`. Stop a foreground `raphie start` yourself before updating. Keep the same `XDG_DATA_HOME` used at installation; the installer refuses to guess if it has changed.
+Re-run the installer to update a recognized user installation. It remembers the selected channel: stable updates follow stable releases; nightly updates follow nightly builds. Run `raphie channel` to see your channel and `raphie channel stable` or `raphie channel nightly` to change it. Alternatively, re-run the installer with `--channel stable` or `--channel nightly` to switch and check for an update in one step.
+
+A channel switch is saved immediately. If the selected release does not contain the currently installed commit, the installer leaves the running version unchanged and waits for a safe release. It checks release ancestry with the GitHub API before replacing binaries; if it cannot verify ancestry, it refuses the update. Existing installations without a saved channel default to stable. Historical alpha and beta releases remain accessible as existing installations but are not selected by either channel. It stops its managed service, refuses to proceed if either Raphie port is still in use, and copies the stopped data directory to `~/.local/share/raphie-backups/` before replacing binaries. Previous binaries are retained in `~/.local/lib/.raphie-previous.*`. Stop a foreground `raphie start` yourself before updating. Keep the same `XDG_DATA_HOME` used at installation; the installer refuses to guess if it has changed.
 
 A backup contains sensitive data. It does not include the matching OS credential-store key: preserve that separately as described in [credential storage and recovery](provider-credential-storage.md). Database migrations may be irreversible. If an update fails after startup, stop the service, preserve the current data, then restore the offline data backup and its matching previous binaries together; do not run old binaries against newly migrated data. The installer stops an unhealthy service and prints the relevant log location.
 

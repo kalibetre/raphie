@@ -3,11 +3,14 @@
 set -euo pipefail
 main() {
 
-version=${1:-}
-if [ "$#" -gt 1 ] || { [ -n "$version" ] && [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta)\.[0-9]+)?$ ]]; }; then
-  echo 'Usage: bash install.sh [vX.Y.Z[-alpha.N|-beta.N]]' >&2
-  exit 1
-fi
+requested_channel=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --channel) [ "$#" -ge 2 ] || { echo 'Usage: bash install.sh [--channel stable|nightly]' >&2; exit 1; }; [ -z "$requested_channel" ] || { echo 'Specify one channel.' >&2; exit 1; }; requested_channel=$2; shift 2 ;;
+    *) echo 'Usage: bash install.sh [--channel stable|nightly]' >&2; exit 1 ;;
+  esac
+done
+case "$requested_channel" in ''|stable|nightly) ;; *) echo 'Choose either stable or nightly.' >&2; exit 1;; esac
 for command in curl python3; do
   command -v "$command" >/dev/null || { echo "Raphie needs $command; install it and retry." >&2; exit 1; }
 done
@@ -61,44 +64,87 @@ stage=
 lock=
 claimed=false
 trap 'if [ "$claimed" = true ]; then rm -rf "$install_dir"; fi; [ -z "$lock" ] || rmdir "$lock" 2>/dev/null || true; [ -z "$stage" ] || rm -rf "$stage"; rm -rf "$work"' EXIT
-if [ -n "$version" ]; then
-  api="https://api.github.com/repos/kalibetre/raphie/releases/tags/$version"
-else
-  api='https://api.github.com/repos/kalibetre/raphie/releases?per_page=100'
+mkdir -p "$HOME/.local/lib" "$bin_dir"
+lock="$HOME/.local/lib/.raphie-install.lock"
+if ! mkdir "$lock"; then lock=; echo 'Another Raphie installation or update is in progress.' >&2; exit 1; fi
+channel=stable
+if [ "$updating" = true ] && [ -e "$install_dir/.channel" ]; then
+  channel=$(cat "$install_dir/.channel")
 fi
-if ! curl -fsSL "$api" -o "$work/releases.json"; then
+case "$channel" in stable|nightly) ;; *) echo 'Invalid saved release channel; choose stable or nightly with raphie channel.' >&2; exit 1;; esac
+if [ -n "$requested_channel" ]; then
+  channel=$requested_channel
+  if [ "$updating" = true ]; then
+    # Persist an intentional switch even when no safe update exists yet.
+    channel_tmp=$(mktemp "$install_dir/.channel.XXXXXXXX")
+    printf '%s\n' "$channel" > "$channel_tmp"
+    mv -f "$channel_tmp" "$install_dir/.channel"
+    echo "Release channel set to $channel."
+  fi
+fi
+api='https://api.github.com/repos/kalibetre/raphie/releases?per_page=100'
+if [ "$channel" = stable ]; then
+  # The latest stable may be older than 100 nightly releases.
+  curl -fsSL 'https://api.github.com/repos/kalibetre/raphie/releases/latest' -o "$work/releases.json" 2>/dev/null || {
+    if ! curl -fsSL "$api" -o "$work/releases.json"; then
+      echo 'Could not fetch GitHub release metadata. Check connectivity or API rate limits and retry.' >&2; exit 1
+    fi
+  }
+elif ! curl -fsSL "$api" -o "$work/releases.json"; then
   echo 'Could not fetch GitHub release metadata. Check connectivity or API rate limits and retry.' >&2; exit 1
 fi
 current_version=
 if [ "$updating" = true ]; then
   current_version=$(cat "$install_dir/.raphie-user-install")
-  [ -n "$current_version" ] || { echo 'Installed version is unknown; refusing to replace it automatically.' >&2; exit 1; }
+  case "$current_version" in *[!a-zA-Z0-9._-]*|'') echo 'Installed version is unknown; refusing to replace it automatically.' >&2; exit 1;; esac
 fi
-version=$(python3 - "$work/releases.json" "$version" "$asset" "$current_version" <<'PY'
+if version=$(python3 - "$work/releases.json" "$channel" "$asset" <<'PY_RELEASE'
 import json, re, sys
 with open(sys.argv[1], encoding='utf-8') as source: releases = json.load(source)
-if not isinstance(releases, list): releases = [releases]
-def usable(r):
+if isinstance(releases, dict): releases = [releases]
+if not isinstance(releases, list): raise SystemExit('Invalid release list.')
+def key(r):
+    if not isinstance(r, dict) or r.get('draft') is not False: return None
     tag = r.get('tag_name')
-    return (isinstance(tag, str) and re.fullmatch(r'v\d+\.\d+\.\d+(?:-(?:alpha|beta)\.\d+)?', tag)
-            and r.get('draft') is False and r.get('prerelease') is ('-alpha.' in tag or '-beta.' in tag))
-valid = [r for r in releases if isinstance(r, dict) and usable(r) and {sys.argv[3], 'SHA256SUMS'}.issubset({a.get('name') for a in r.get('assets', []) if isinstance(a, dict)})]
-if sys.argv[2]: valid = [r for r in valid if r['tag_name'] == sys.argv[2]]
-else:
-    valid = [r for r in valid if not r['prerelease']]
-    if not valid: raise SystemExit('No stable release is available for this platform. To install an alpha or beta, specify its exact version explicitly.')
-if not valid: raise SystemExit('No matching published Raphie release with this platform and checksums was found.')
-def order(tag):
-    match = re.fullmatch(r'v(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)\.(\d+))?', tag)
-    if not match: raise SystemExit('Installed version is unknown; refusing to replace it automatically.')
-    major, minor, patch, channel, number = match.groups()
-    return (int(major), int(minor), int(patch), {None: 2, 'beta': 1, 'alpha': 0}[channel], int(number or 0))
-selected = max(valid, key=lambda release: order(release['tag_name']))['tag_name']
-if sys.argv[4] and order(selected) < order(sys.argv[4]):
-    raise SystemExit(f'Refusing to downgrade from {sys.argv[4]} to {selected}; restore a matching backup instead.')
-print(selected)
-PY
-)
+    if not isinstance(tag, str): return None
+    if not {sys.argv[3], 'SHA256SUMS'}.issubset({a.get('name') for a in (r.get('assets') or []) if isinstance(a, dict)}): return None
+    if sys.argv[2] == 'stable':
+        match = re.fullmatch(r'v(\d+)\.(\d+)\.(\d+)', tag)
+        if not match or r.get('prerelease') is not False: return None
+    else:
+        match = re.fullmatch(r'nightly-(\d+)-(\d+)', tag)
+        if not match or r.get('prerelease') is not True: return None
+    return tuple(map(int, match.groups()))
+candidates = [(k, r['tag_name']) for r in releases if (k := key(r)) is not None]
+if not candidates: raise SystemExit(42)
+print(max(candidates)[1])
+PY_RELEASE
+); then :; else
+  status=$?
+  if [ "$status" = 42 ]; then
+    echo "No $channel release is available for this platform."
+    if [ "$updating" = true ]; then echo "The current installation remains unchanged; future updates will follow $channel."; exit 0; fi
+  fi
+  exit 1
+fi
+if [ -n "$current_version" ] && [ "$current_version" = "$version" ]; then
+  echo "Already on $version ($channel channel)."
+  exit 0
+fi
+if [ -n "$current_version" ]; then
+  if ! curl -fsSL "https://api.github.com/repos/kalibetre/raphie/compare/$current_version...$version" -o "$work/compare.json"; then
+    echo 'Could not verify update ancestry. The current installation remains unchanged.' >&2; exit 1
+  fi
+  if ! python3 - "$work/compare.json" <<'PY_COMPARE'
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as source: comparison = json.load(source)
+if comparison.get('status') not in ('ahead', 'identical'): sys.exit(1)
+PY_COMPARE
+  then
+    echo "No safe $channel update is available yet. The current installation remains unchanged; future updates will follow $channel."
+    exit 0
+  fi
+fi
 if ! curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$version/$asset" -o "$work/release.tar.gz"; then
   echo "Could not download $asset for $version." >&2; exit 1
 fi
@@ -131,9 +177,6 @@ with tarfile.open(sys.argv[1], 'r:gz') as archive:
             shutil.copyfileobj(source, target)
         os.chmod(os.path.join(sys.argv[2], member.name), 0o755)
 PY
-mkdir -p "$HOME/.local/lib" "$bin_dir"
-lock="$HOME/.local/lib/.raphie-install.lock"
-if ! mkdir "$lock"; then lock=; echo 'Another Raphie installation or update is in progress.' >&2; exit 1; fi
 if [ "$updating" = true ]; then
   if [ "$platform" = Linux ] && [ -f "$HOME/.config/systemd/user/raphie.service" ]; then
     systemctl --user stop raphie.service || { echo 'Could not stop the user service; no update was performed.' >&2; exit 1; }
@@ -165,6 +208,7 @@ stage=$(mktemp -d "$HOME/.local/lib/.raphie-stage.XXXXXXXX")
 cp "$work/bundle/raphie" "$work/bundle/raphie-runtime" "$work/bundle/raphie-web" "$stage/"
 printf '%s\n' "$version" > "$stage/.raphie-user-install"
 printf '%s\n' "$data_dir" > "$stage/.data-directory"
+printf '%s\n' "$channel" > "$stage/.channel"
 if [ "$updating" = true ]; then
   old=$(mktemp -d "$HOME/.local/lib/.raphie-previous.XXXXXXXX")
   rmdir "$old"
@@ -176,13 +220,13 @@ else
   mkdir -m 700 "$install_dir" || { echo 'Installation directory already exists.' >&2; exit 1; }
   claimed=true
   cp "$stage/"* "$install_dir/"
-  cp "$stage/.raphie-user-install" "$stage/.data-directory" "$install_dir/"
+  cp "$stage/.raphie-user-install" "$stage/.data-directory" "$stage/.channel" "$install_dir/"
   if ! ln -s "$install_dir/raphie" "$bin_dir/raphie"; then
     echo "Could not create $bin_dir/raphie; installation was not completed." >&2; exit 1
   fi
   claimed=false
 fi
-printf '\nInstalled Raphie %s.\n' "$version"
+printf '\nInstalled Raphie %s (%s channel).\n' "$version" "$channel"
 case ":$PATH:" in *":$bin_dir:"*) ;; *) printf 'Add %s to your PATH (for bash/zsh: export PATH="$HOME/.local/bin:$PATH").\n' "$bin_dir" ;; esac
 service_started=false
 service_attempted=false

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# Fetch public releases from GitHub. Prereleases must be selected explicitly;
+# Fetch public releases from GitHub. Alpha releases must be selected explicitly;
 # the default remains the latest stable release.
 destination=${1:?Destination directory required}
 requested=${2:-}
@@ -15,7 +15,7 @@ case "$(uname -m)" in
   *) echo 'Unsupported Linux architecture.' >&2; exit 1 ;;
 esac
 if [ -n "$requested" ]; then
-  printf '%s' "$requested" | python3 -c 'import re,sys; re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?", sys.stdin.read()) or sys.exit("Expected a version such as v1.2.3, v1.2.3-alpha.1, or v1.2.3-beta.1.")'
+  printf '%s' "$requested" | python3 -c 'import re,sys; re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.[0-9]+)?", sys.stdin.read()) or sys.exit("Expected a version such as v1.2.3 or v1.2.3-alpha.1.")'
   url="https://api.github.com/repos/kalibetre/raphie/releases/tags/$requested"
 else
   url=https://api.github.com/repos/kalibetre/raphie/releases/latest
@@ -28,10 +28,10 @@ tag=$(python3 - "$tmp/release.json" "$requested" <<'PY'
 import json, re, sys
 with open(sys.argv[1]) as f: release = json.load(f)
 tag = release.get('tag_name', '')
-if not isinstance(tag, str) or not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?', tag):
+if not isinstance(tag, str) or not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.[0-9]+)?', tag):
     raise SystemExit('No matching Raphie release is available.')
-prerelease = '-alpha.' in tag or '-beta.' in tag
-if release.get('draft') is not False or release.get('prerelease') is not prerelease or (sys.argv[2] and tag != sys.argv[2]) or (not sys.argv[2] and prerelease):
+alpha = '-alpha.' in tag
+if release.get('draft') is not False or release.get('prerelease') is not alpha or (sys.argv[2] and tag != sys.argv[2]) or (not sys.argv[2] and alpha):
     raise SystemExit('No matching Raphie release is available.')
 print(tag)
 PY
