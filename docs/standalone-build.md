@@ -206,4 +206,4 @@ Installation, administrator setup and sign-in, service restart, password
 recovery, update, backup restore, and recovery after a failed update passed.
 This does not establish release provenance.
 
-Nightly builds use the base version in the repository root `VERSION` file. Update that file when the intended next release version changes. Their tags include the UTC build date, workflow run ID, and attempt; release titles include the source commit.
+Nightly releases are created only by manually running the Prepare release workflow on `main`. Stable release preparation starts when a stable version tag is pushed. Nightly builds use the base version in the repository root `VERSION` file. Update that file when the intended next release version changes. Their tags include the UTC build date, workflow run ID, and attempt; release titles include the source commit.
