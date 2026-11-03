@@ -207,3 +207,5 @@ recovery, update, backup restore, and recovery after a failed update passed.
 This does not establish release provenance.
 
 Nightly releases are created only by manually running the Prepare release workflow on `main`. Stable release preparation starts when a stable version tag is pushed. Nightly builds use the base version in the repository root `VERSION` file. Update that file when the intended next release version changes. Their tags include the UTC build date, workflow run ID, and attempt; release titles include the source commit.
+
+To prepare a stable release, check out an up-to-date, clean `main` and run `./release patch`, `./release minor`, `./release major`, or an explicit version such as `./release v0.0.4`. The command requires GitHub CLI authentication and calculates increments from the highest stable tag or release, including drafts. It checks for existing versions and pushes an annotated tag, which starts the release workflow. Review and publish the resulting draft on GitHub; running the command does not publish it.
