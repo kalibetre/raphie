@@ -30,7 +30,7 @@ with open(os.path.join(path, 'archive.tar.gz'), 'rb') as f:
     for chunk in iter(lambda: f.read(1024 * 1024), b''): digest.update(chunk)
 digest = digest.hexdigest()
 with open(os.path.join(path, 'SHA256SUMS'), 'w') as f: f.write(f'{digest}  {asset}\n')
-with open(os.path.join(path, 'release.json'), 'w') as f: json.dump([{'tag_name':'v0.0.4-alpha.2', 'draft':False, 'prerelease':True, 'assets':[{'name':asset}, {'name':'SHA256SUMS'}]}], f)
+with open(os.path.join(path, 'release.json'), 'w') as f: json.dump([{'tag_name':'v0.0.4', 'draft':False, 'prerelease':False, 'assets':[{'name':asset}, {'name':'SHA256SUMS'}]}], f)
 PY
 cat > "$work/bin/curl" <<'SH'
 #!/bin/sh
@@ -43,6 +43,9 @@ export HOME="$work/home" PATH="$work/bin:/usr/bin:/bin:/usr/sbin:/sbin" FIXTURE=
 # must report the failed service setup, while leaving the binaries runnable.
 if cat "$root/scripts/install.sh" | bash; then echo 'Expected a service-setup failure.' >&2; exit 1; fi
 test -x "$HOME/.local/bin/raphie"
+"$HOME/.local/bin/raphie" channel nightly
+"$HOME/.local/bin/raphie" channel | grep -q nightly
+"$HOME/.local/bin/raphie" channel stable
 ports=$(python3 -c 'import socket; s=[socket.socket(),socket.socket()]; [x.bind(("127.0.0.1",0)) for x in s]; print(*[x.getsockname()[1] for x in s])')
 read -r PORT RAPHIE_WEB_PORT <<< "$ports"
 export PORT RAPHIE_WEB_PORT DATA_DIRECTORY="$work/data" RAPHIE_WEB_ORIGIN="http://127.0.0.1:$RAPHIE_WEB_PORT" RAPHIE_RUNTIME_URL="http://127.0.0.1:$PORT"

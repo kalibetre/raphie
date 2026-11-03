@@ -1,6 +1,6 @@
 # Installed service commands
 
-For the no-sudo user installation, use `~/.local/bin/raphie start`, `status`, `health`, `auth setup`, and `auth recover`. Re-run the [user installer](user-installation.md#updates-and-recovery) to update. The commands below apply only to the separate Linux system installation.
+For the no-sudo user installation, use `~/.local/bin/raphie start`, `status`, `health`, `auth setup`, and `auth recover`. Use `raphie channel` to inspect the selected channel and `raphie channel stable` or `raphie channel nightly` to change it. Re-run the [user installer](user-installation.md#updates-and-recovery) to update. The commands below apply only to the legacy Linux system installation and do not use the user-install channel setting.
 
 These commands apply to the Linux standalone installation. Run `raphie --help` for the installed version's help. Commands that change service configuration or data require `sudo`.
 
@@ -22,7 +22,7 @@ These commands apply to the Linux standalone installation. Run `raphie --help` f
 
 `set-origins` takes exact lowercase origins without paths or spaces; non-loopback origins require HTTPS and a separately configured TLS proxy. Use a non-default port in the origin when needed, and omit default ports. Each origin has its own browser sign-in session. These commands do not configure a proxy.
 
-A bare update chooses the latest **stable** release. Specify an alpha tag, for example `sudo raphie update v0.0.4-alpha.2`. Updates stop the service and create an offline backup before switching; long-running work can be interrupted. Restore supports `--recovery-key ENCRYPTED --identity AGE_IDENTITY` for cross-host recovery. Read [backup and recovery](standalone-build.md#cross-host-credential-recovery) before relying on it.
+The system updater does not compare the target version to the installed version. Check the version before updating: installing older binaries against newer data can be unsafe. A bare update chooses the latest **stable** release; historical explicit versions remain supported. Updates stop the service and create an offline backup before switching; long-running work can be interrupted. Restore supports `--recovery-key ENCRYPTED --identity AGE_IDENTITY` for cross-host recovery. Read [backup and recovery](standalone-build.md#cross-host-credential-recovery) before relying on it.
 
 Manage the installed service with `sudo systemctl start raphie`, `sudo systemctl stop raphie`, or `sudo systemctl restart raphie`. Read logs with `sudo journalctl -u raphie -e`. The installer starts and enables the service automatically.
 

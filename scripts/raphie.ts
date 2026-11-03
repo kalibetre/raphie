@@ -8,6 +8,7 @@ import {
   webOrigins,
 } from "../apps/web/src/infrastructure/auth/auth-storage.ts";
 import { installationHealthy } from "./linux-install/health-check.ts";
+import { userInstallChannel } from "./user-install-channel.ts";
 
 /** Reads one line from the terminal; hidden input never reaches arguments, logs or history. */
 function readLine(label: string, hidden: boolean) {
@@ -108,8 +109,8 @@ async function main() {
   }
   const [command, action] = args;
   if (
-    (command === "auth" && args.length > 2) ||
-    (command !== "auth" && args.length > 1)
+    ((command === "auth" || command === "channel") && args.length > 2) ||
+    (command !== "auth" && command !== "channel" && args.length > 1)
   )
     throw new Error("Unexpected argument. Run raphie --help.");
   if (command === "start")
@@ -119,6 +120,16 @@ async function main() {
       Bun.isStandaloneExecutable,
     );
   if (command === "auth") return authCommand(action);
+  if (command === "channel") {
+    if (!Bun.isStandaloneExecutable)
+      throw new Error(
+        "Release channels are available for a user installation only.",
+      );
+    const channel = userInstallChannel(dirname(process.execPath), action);
+    console.log(`Release channel: ${channel}`);
+    if (action) console.log("Run the installer again to check for an update.");
+    return;
+  }
   if (command === "health") {
     if (!(await installationHealthy(process.env))) process.exitCode = 1;
     return;
@@ -194,7 +205,7 @@ async function main() {
   }
   if (!command || command === "help" || command === "--help") {
     console.log(
-      "Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n\nUse --data-dir PATH to select the data directory for start or auth commands.",
+      "Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n\nUse --data-dir PATH to select the data directory for start or auth commands.",
     );
     return;
   }

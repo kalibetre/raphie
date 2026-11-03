@@ -7,7 +7,7 @@
 <p align="center"><strong>Your assistant. Your space.</strong><br>
 A personal AI assistant you run yourself, with a place for every conversation, bot, and idea.</p>
 
-<p align="center">Linux &amp; macOS · Experimental alpha · No Bun required</p>
+<p align="center">Linux &amp; macOS · Self-hosted · No Bun required</p>
 
 <p align="center"><a href="#get-raphie-running">Get started</a> · <a href="#a-little-more-room-to-think">What Raphie can do</a> · <a href="#need-a-hand">Documentation</a></p>
 
@@ -19,7 +19,13 @@ Install Raphie for your user on Linux or macOS. You need `curl`, `python3` and a
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
 ```
 
-The installer selects the latest stable release for your platform, or the latest compatible alpha if no stable release is available. To install a particular release, append `-s -- v0.0.4-alpha.2` to `bash`. The installer executes code downloaded from GitHub; [download and inspect it first](docs/user-installation.md) if you prefer.
+The default channel is **stable**. If no stable release is available, installation stops. To opt into nightly builds instead:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --channel nightly
+```
+
+The selected channel is remembered for updates. Use `raphie channel stable` or `raphie channel nightly` to switch. The installer executes code downloaded from GitHub; [download and inspect it first](docs/user-installation.md) if you prefer.
 
 Once installed, open a terminal and create your administrator:
 

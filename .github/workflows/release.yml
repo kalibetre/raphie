@@ -4,13 +4,38 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+-alpha.[0-9]+"
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref || 'nightly' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  metadata:
+    if: ${{ github.event_name == 'push' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      nightly: ${{ steps.release.outputs.nightly }}
+    steps:
+      - id: release
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo 'nightly=false' >> "$GITHUB_OUTPUT"
+          else
+            echo "version=nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+            echo 'nightly=true' >> "$GITHUB_OUTPUT"
+          fi
+
   validate:
+    needs: metadata
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +47,7 @@ jobs:
       - run: bun run validate
 
   build:
-    needs: validate
+    needs: [metadata, validate]
     permissions:
       contents: read
       id-token: write
@@ -44,10 +69,10 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - name: Validate release tag
-        run: '[[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]'
       - name: Build release binaries
-        run: sh scripts/build-standalone.sh '${{ matrix.target }}' "$GITHUB_REF_NAME" "$(git rev-parse HEAD)"
+        env:
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: sh scripts/build-standalone.sh '${{ matrix.target }}' "$RELEASE_VERSION" "$(git rev-parse HEAD)"
       - name: Install test dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus gnome-keyring libsecret-1-0 curl python3
       - name: Verify compiled service
@@ -79,7 +104,7 @@ jobs:
           path: "${{ matrix.asset }}"
 
   build-macos:
-    needs: validate
+    needs: [metadata, validate]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -102,7 +127,9 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: Build release binaries
-        run: sh scripts/build-standalone.sh '${{ matrix.target }}' "$GITHUB_REF_NAME" "$(git rev-parse HEAD)"
+        env:
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: sh scripts/build-standalone.sh '${{ matrix.target }}' "$RELEASE_VERSION" "$(git rev-parse HEAD)"
       - name: Verify compiled workspace worker
         run: dist/standalone/${{ matrix.target }}/raphie-smoke
       - name: Package release binaries
@@ -117,7 +144,7 @@ jobs:
           path: "${{ matrix.asset }}"
 
   draft:
-    needs: [build, build-macos]
+    needs: [metadata, build, build-macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -134,11 +161,16 @@ jobs:
         run: |
           cp scripts/install.sh artifacts/install.sh
           cd artifacts && sha256sum raphie-linux-x64.tar.gz raphie-linux-arm64.tar.gz raphie-darwin-x64.tar.gz raphie-darwin-arm64.tar.gz install.sh > SHA256SUMS
-      - name: Prepare draft release
+      - name: Prepare release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+          NIGHTLY: ${{ needs.metadata.outputs.nightly }}
         run: |
-          flags=()
-          if [[ "$GITHUB_REF_NAME" == *-alpha.* ]]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/raphie-darwin-x64.tar.gz artifacts/raphie-darwin-arm64.tar.gz artifacts/install.sh artifacts/SHA256SUMS --verify-tag --draft --generate-notes "${flags[@]}"
+          files=(artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/raphie-darwin-x64.tar.gz artifacts/raphie-darwin-arm64.tar.gz artifacts/install.sh artifacts/SHA256SUMS)
+          if [[ "$NIGHTLY" == true ]]; then
+            gh release create "$RELEASE_VERSION" "${files[@]}" --target "$GITHUB_SHA" --prerelease --title "Nightly ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" --notes "Automated build of commit $GITHUB_SHA."
+          else
+            gh release create "$RELEASE_VERSION" "${files[@]}" --verify-tag --draft --generate-notes
+          fi

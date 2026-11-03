@@ -29,7 +29,7 @@ hash = hashlib.sha256()
 with open(os.path.join(path, 'archive.tar.gz'), 'rb') as f:
     for chunk in iter(lambda: f.read(1024 * 1024), b''): hash.update(chunk)
 with open(os.path.join(path, 'SHA256SUMS'), 'w') as f: f.write(f'{hash.hexdigest()}  {asset}\n')
-with open(os.path.join(path, 'release.json'), 'w') as f: json.dump([{'tag_name':'v0.0.4-alpha.2', 'draft':False, 'prerelease':True, 'assets':[{'name':asset}, {'name':'SHA256SUMS'}]}], f)
+with open(os.path.join(path, 'release.json'), 'w') as f: json.dump([{'tag_name':'v0.0.4', 'draft':False, 'prerelease':False, 'assets':[{'name':asset}, {'name':'SHA256SUMS'}]}], f)
 PY
 cat > "$work/bin/curl" <<'SH'
 #!/bin/sh
