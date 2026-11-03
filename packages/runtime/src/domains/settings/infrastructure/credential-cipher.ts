@@ -9,6 +9,15 @@ export type { EncryptedCredential } from "../../../shared/application/encrypted-
 
 const service = "com.raphie.provider-credentials";
 
+export class CredentialStoreError extends InputError {
+  constructor() {
+    super(
+      "Provider credential store unavailable or key missing. Unlock the OS credential store and restart; restore the matching credential-store backup if the key was deleted. No plaintext fallback is available.",
+      503,
+    );
+  }
+}
+
 /** Injectable only at the persistence boundary; production always uses the OS store. */
 export type CredentialKeyStore = {
   get(name: string): Promise<string | null>;
@@ -44,10 +53,7 @@ export class CredentialCipher {
       return new CredentialCipher(keyId, Buffer.from(value, "base64"));
     } catch {
       // OS errors can contain secret material. Never propagate them or their causes.
-      throw new InputError(
-        "Provider credential store unavailable or key missing. Unlock the OS credential store and restart; restore the matching credential-store backup if the key was deleted. No plaintext fallback is available.",
-        503,
-      );
+      throw new CredentialStoreError();
     }
   }
 

@@ -4,10 +4,12 @@ set -euo pipefail
 main() {
 
 requested_channel=
+headless=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --channel) [ "$#" -ge 2 ] || { echo 'Usage: bash install.sh [--channel stable|nightly]' >&2; exit 1; }; [ -z "$requested_channel" ] || { echo 'Specify one channel.' >&2; exit 1; }; requested_channel=$2; shift 2 ;;
-    *) echo 'Usage: bash install.sh [--channel stable|nightly]' >&2; exit 1 ;;
+    --headless) headless=true; shift ;;
+    --channel) [ "$#" -ge 2 ] || { echo 'Usage: bash install.sh [--channel stable|nightly] [--headless]' >&2; exit 1; }; [ -z "$requested_channel" ] || { echo 'Specify one channel.' >&2; exit 1; }; requested_channel=$2; shift 2 ;;
+    *) echo 'Usage: bash install.sh [--channel stable|nightly] [--headless]' >&2; exit 1 ;;
   esac
 done
 case "$requested_channel" in ''|stable|nightly) ;; *) echo 'Choose either stable or nightly.' >&2; exit 1;; esac
@@ -27,6 +29,13 @@ case "$os:$arch" in
   Darwin:x86_64) platform=Darwin; asset=raphie-darwin-x64.tar.gz ;;
   *) echo 'This platform is not supported by the Raphie installer.' >&2; exit 1 ;;
 esac
+if [ "$headless" = true ]; then
+  [ "$platform" = Linux ] || { echo '--headless is supported on Linux only.' >&2; exit 1; }
+  for command in systemctl dbus-run-session gnome-keyring-daemon; do
+    command -v "$command" >/dev/null || { echo "Headless setup needs $command." >&2; exit 1; }
+  done
+  systemctl --user show-environment >/dev/null 2>&1 || { echo 'Headless setup requires a systemd user manager.' >&2; exit 1; }
+fi
 bin_dir="$HOME/.local/bin"
 install_dir="$HOME/.local/lib/raphie"
 updating=false
@@ -98,6 +107,86 @@ if [ "$updating" = true ]; then
   current_version=$(cat "$install_dir/.raphie-user-install")
   case "$current_version" in *[!a-zA-Z0-9._-]*|'') echo 'Installed version is unknown; refusing to replace it automatically.' >&2; exit 1;; esac
 fi
+# Opt-in headless keyring: the unlock key is deliberately user-readable.
+configure_headless() {
+  [ "$platform" = Linux ] || { echo '--headless is supported on Linux only.' >&2; return 1; }
+  for command in systemctl dbus-run-session gnome-keyring-daemon; do
+    command -v "$command" >/dev/null || { echo "Headless setup needs $command." >&2; return 1; }
+  done
+  systemctl --user show-environment >/dev/null 2>&1 || { echo 'Headless setup requires a systemd user manager.' >&2; return 1; }
+  [ -f "$HOME/.config/systemd/user/raphie.service" ] && [ ! -L "$HOME/.config/systemd/user/raphie.service" ] || { echo 'A Raphie user service is required for headless setup.' >&2; return 1; }
+  python3 - "$HOME" "$install_dir/raphie" "$data_dir" <<'PY_HEADLESS'
+import base64, json, os, shlex, sqlite3, stat, sys
+home, exe, data = sys.argv[1:]
+private = os.path.join(home, '.local', 'share', 'raphie-headless')
+key = os.path.join(private, 'unlock-key')
+marker = os.path.join(private, 'configured')
+launch = os.path.join(private, 'start')
+dropdir = os.path.join(home, '.config', 'systemd', 'user', 'raphie.service.d')
+dropin = os.path.join(dropdir, 'raphie-headless.conf')
+if any(os.path.islink(path) for path in (marker, launch, dropdir, dropin, os.path.join(private, 'store'))):
+    sys.exit('Headless setup found an unsafe symbolic link; no files were replaced.')
+if os.path.lexists(private):
+    if os.path.islink(private) or not os.path.isfile(marker) or not os.path.isfile(key) or os.path.islink(key):
+        sys.exit('Existing headless keyring directory is incomplete or unsafe; no key was replaced.')
+    info = os.stat(key)
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+        sys.exit('Headless unlock key must be owned by this user and have mode 0600.')
+else:
+    if os.path.lexists(dropin): sys.exit('An existing headless service override was found; refusing to replace it.')
+    dbpath = os.path.join(data, 'settings.sqlite')
+    if os.path.exists(dbpath):
+        try:
+            db = sqlite3.connect('file:' + dbpath.replace('?', '%3f').replace('#', '%23') + '?mode=ro', uri=True)
+            tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'").fetchone()
+            row = db.execute('SELECT value FROM settings WHERE id = 1').fetchone() if tables else None
+            db.close()
+            if row and json.loads(row[0]).get('keyId'):
+                sys.exit('Existing encrypted settings use another credential store. Headless setup cannot migrate them automatically.')
+        except (sqlite3.Error, ValueError, TypeError, AttributeError):
+            sys.exit('Could not verify existing settings safely; headless setup stopped.')
+    os.makedirs(os.path.dirname(private), mode=0o700, exist_ok=True)
+    os.mkdir(private, 0o700)
+    fd = os.open(key, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'wb') as f: f.write(base64.b64encode(os.urandom(32)) + b'\n')
+    with open(marker, 'x', encoding='utf-8') as f: f.write('raphie-headless-v1\n')
+store = os.path.join(private, 'store')
+os.makedirs(store, mode=0o700, exist_ok=True)
+# A private D-Bus session prevents conflicts with an already-running desktop keyring.
+inner = 'set -eu; gnome-keyring-daemon --unlock < "$1" >/dev/null; shift; exec "$@"'
+script = '#!/bin/sh\nset -eu\nexport XDG_DATA_HOME=' + shlex.quote(store) + '\nexec dbus-run-session -- sh -c ' + shlex.quote(inner) + ' sh ' + ' '.join(map(shlex.quote, [key, exe, 'start', '--data-dir', data])) + '\n'
+with open(launch, 'w', encoding='utf-8') as f: f.write(script)
+os.chmod(launch, 0o700)
+os.makedirs(dropdir, mode=0o700, exist_ok=True)
+def quote(value): return value.replace('%', '%%').replace('$', '$$').replace('\\', '\\\\').replace('"', '\\"')
+with open(dropin, 'w', encoding='utf-8') as f: f.write('[Service]\nExecStart=\nExecStart="' + quote(launch) + '"\n')
+PY_HEADLESS
+  echo 'Headless credential store configured. Protect and back up ~/.local/share/raphie-headless separately from Raphie data.'
+  systemctl --user daemon-reload
+  if command -v loginctl >/dev/null && loginctl --no-ask-password enable-linger "$(id -un)" >/dev/null 2>&1; then
+    echo 'User lingering enabled for automatic startup after reboot.'
+  else
+    echo 'Could not enable user lingering. Automatic startup after reboot requires host authorization; run loginctl enable-linger for this user.' >&2
+  fi
+}
+
+  if [ "$updating" = true ] && [ "$headless" = true ]; then
+    configure_headless
+    systemctl --user enable raphie.service
+    systemctl --user restart raphie.service
+    ready=false
+    for attempt in {1..15}; do
+      if PORT=4316 RAPHIE_WEB_PORT=4320 "$install_dir/raphie" health >/dev/null 2>&1; then echo "User service is healthy."; ready=true; break; fi
+      sleep 1
+    done
+    if [ "$ready" != true ]; then
+      systemctl --user disable --now raphie.service || true
+      echo "Service did not become healthy. Check: journalctl --user -u raphie -e" >&2
+      exit 1
+    fi
+    headless=false
+  fi
+
 if version=$(python3 - "$work/releases.json" "$channel" "$asset" <<'PY_RELEASE'
 import json, re, sys
 with open(sys.argv[1], encoding='utf-8') as source: releases = json.load(source)
@@ -246,9 +335,11 @@ with open(sys.argv[2], 'x', encoding='utf-8') as unit:
     unit.write('[Unit]\nDescription=Raphie assistant\n\n[Service]\nEnvironment=PORT=4316 RAPHIE_WEB_PORT=4320 RAPHIE_RUNTIME_URL=http://127.0.0.1:4316 RAPHIE_WEB_ORIGIN=http://127.0.0.1:4320\nExecStart="' + exe + '" start --data-dir "' + data + '"\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n')
 PY_SERVICE
       service_attempted=true
+      if [ "$headless" = true ]; then configure_headless; fi
       if systemctl --user daemon-reload && systemctl --user enable --now raphie.service; then service_started=true; fi
     elif [ "$updating" = true ] && [ -f "$unit" ]; then
       service_attempted=true
+      if [ "$headless" = true ]; then configure_headless; fi
       if systemctl --user enable --now raphie.service; then service_started=true; fi
     fi ;;
   Darwin)

@@ -28,7 +28,19 @@ The installer verifies release archives against the published SHA256SUMS. This d
 
 Run `~/.local/bin/raphie auth setup` in a terminal and create the administrator, then sign in at http://127.0.0.1:4320. Configure a model provider and a default model under your bot in Settings. If no user service is available, run `~/.local/bin/raphie start` in a terminal and leave it running. If startup fails, use the log hint printed by the installer, fix the underlying issue, then re-enable the service as described below. `raphie status` checks the local runtime; `raphie auth recover` resets the password and signs out all sessions.
 
-Raphie stores provider credentials using the current user's OS credential store. On macOS, unlock the login Keychain and allow access if prompted. Linux needs libsecret and an unlocked Secret Service provider in the user's D-Bus session. A headless machine without one cannot start the runtime; see [credential storage](provider-credential-storage.md). The installer does not install or unlock a credential service.
+Raphie stores provider credentials using the current user's OS credential store. On macOS, unlock the login Keychain and allow access if prompted. Linux needs libsecret and an unlocked Secret Service provider in the user's D-Bus session. A headless machine without one cannot start the runtime; see [credential storage](provider-credential-storage.md). The installer does not install system packages. For an explicitly opted-in headless setup, see below.
+
+## Headless Linux
+
+For a Linux host without an unlocked desktop Secret Service, opt into a dedicated keyring and an automatically readable unlock key:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --headless --channel nightly
+```
+
+Omit `--channel nightly` for a stable installation. On an existing user installation, rerun with `--headless` to configure its service. This requires `dbus-run-session`, `gnome-keyring-daemon`, libsecret and a systemd user manager. It refuses to switch an existing encrypted settings database from a different credential store; migration is not automatic.
+
+The randomly generated unlock key and private keyring live in `~/.local/share/raphie-headless`, separate from Raphie data. The unlock key is readable by your account (mode 0600); anyone who can read both the key and keyring can unlock the stored master key. Protect and back up that directory separately from the Raphie data backup. Losing either makes saved provider credentials unrecoverable. No sudo is required for setup. The installer tries to enable user lingering so the service can start at boot and stay running after logout. Some hosts require administrator authorization for `loginctl enable-linger "$USER"`; if that attempt fails, the installer prints a warning and boot-time startup is not enabled.
 
 ## Background service
 

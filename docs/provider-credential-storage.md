@@ -50,7 +50,7 @@ access and restart. An existing encrypted database's missing or malformed master
 key is never silently replaced. Restore the corresponding OS credential-store
 backup if it was deleted. If the key is irretrievably lost, encrypted credentials
 cannot be recovered; the database is retained without discarding connection IDs.
-There is no plaintext, environment or file-key fallback.
+There is no plaintext, environment or file-key fallback for the master key. An explicit headless user installation can instead unlock a private GNOME Keyring using a separate user-readable key file; see [headless Linux setup](user-installation.md#headless-linux) for its security and backup tradeoffs.
 
 The master and resolved credentials are cached for the running process lifetime.
 Locking the OS store later does not revoke those copies or stop an existing turn.

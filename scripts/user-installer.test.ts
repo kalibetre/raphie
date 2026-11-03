@@ -82,6 +82,11 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     await writeFile(join(bin, "systemctl"), "#!/bin/sh\nexit 0\n", {
       mode: 0o755,
     });
+    for (const command of ["dbus-run-session", "gnome-keyring-daemon"]) {
+      await writeFile(join(bin, command), "#!/bin/sh\nexit 0\n", {
+        mode: 0o755,
+      });
+    }
     const input = await readFile(resolve("scripts/install.sh"));
     const env = {
       ...process.env,
@@ -116,6 +121,17 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     assert.equal(sameVersion.exitCode, 0, sameVersion.stderr.toString());
     assert.match(sameVersion.stdout.toString(), /Already on nightly-10-1/);
     assert.equal(existsSync(join(home, ".local/share/raphie-backups")), false);
+    const headless = run(["--headless"]);
+    assert.equal(headless.exitCode, 0, headless.stderr.toString());
+    assert.match(
+      headless.stdout.toString(),
+      /Headless credential store configured/,
+    );
+    assert.equal(
+      existsSync(join(home, ".local/share/raphie-headless/unlock-key")),
+      true,
+    );
+
     const data = join(home, ".local/share/raphie");
     await mkdir(data, { recursive: true });
     await writeFile(join(data, "saved.txt"), "important data");
