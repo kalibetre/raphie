@@ -69,7 +69,12 @@ fi
 if ! curl -fsSL "$api" -o "$work/releases.json"; then
   echo 'Could not fetch GitHub release metadata. Check connectivity or API rate limits and retry.' >&2; exit 1
 fi
-version=$(python3 - "$work/releases.json" "$version" "$asset" <<'PY'
+current_version=
+if [ "$updating" = true ]; then
+  current_version=$(cat "$install_dir/.raphie-user-install")
+  [ -n "$current_version" ] || { echo 'Installed version is unknown; refusing to replace it automatically.' >&2; exit 1; }
+fi
+version=$(python3 - "$work/releases.json" "$version" "$asset" "$current_version" <<'PY'
 import json, re, sys
 with open(sys.argv[1], encoding='utf-8') as source: releases = json.load(source)
 if not isinstance(releases, list): releases = [releases]
@@ -83,7 +88,15 @@ else:
     valid = [r for r in valid if not r['prerelease']]
     if not valid: raise SystemExit('No stable release is available for this platform. To install an alpha or beta, specify its exact version explicitly.')
 if not valid: raise SystemExit('No matching published Raphie release with this platform and checksums was found.')
-print(valid[0]['tag_name'])
+def order(tag):
+    match = re.fullmatch(r'v(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)\.(\d+))?', tag)
+    if not match: raise SystemExit('Installed version is unknown; refusing to replace it automatically.')
+    major, minor, patch, channel, number = match.groups()
+    return (int(major), int(minor), int(patch), {None: 2, 'beta': 1, 'alpha': 0}[channel], int(number or 0))
+selected = max(valid, key=lambda release: order(release['tag_name']))['tag_name']
+if sys.argv[4] and order(selected) < order(sys.argv[4]):
+    raise SystemExit(f'Refusing to downgrade from {sys.argv[4]} to {selected}; restore a matching backup instead.')
+print(selected)
 PY
 )
 if ! curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$version/$asset" -o "$work/release.tar.gz"; then

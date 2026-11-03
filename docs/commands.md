@@ -22,7 +22,7 @@ These commands apply to the Linux standalone installation. Run `raphie --help` f
 
 `set-origins` takes exact lowercase origins without paths or spaces; non-loopback origins require HTTPS and a separately configured TLS proxy. Use a non-default port in the origin when needed, and omit default ports. Each origin has its own browser sign-in session. These commands do not configure a proxy.
 
-A bare update chooses the latest **stable** release. Specify an alpha or beta tag, for example `sudo raphie update v0.0.4-alpha.2`. Updates stop the service and create an offline backup before switching; long-running work can be interrupted. Restore supports `--recovery-key ENCRYPTED --identity AGE_IDENTITY` for cross-host recovery. Read [backup and recovery](standalone-build.md#cross-host-credential-recovery) before relying on it.
+The system updater does not compare the target version to the installed version. Check the version before updating: installing older binaries against newer data can be unsafe. A bare update chooses the latest **stable** release. Specify an alpha or beta tag, for example `sudo raphie update v0.0.4-alpha.2`. Updates stop the service and create an offline backup before switching; long-running work can be interrupted. Restore supports `--recovery-key ENCRYPTED --identity AGE_IDENTITY` for cross-host recovery. Read [backup and recovery](standalone-build.md#cross-host-credential-recovery) before relying on it.
 
 Manage the installed service with `sudo systemctl start raphie`, `sudo systemctl stop raphie`, or `sudo systemctl restart raphie`. Read logs with `sudo journalctl -u raphie -e`. The installer starts and enables the service automatically.
 

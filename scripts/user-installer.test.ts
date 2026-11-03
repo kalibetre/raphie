@@ -170,6 +170,20 @@ test("installer requires explicit prereleases and preserves data during updates"
     assert.notEqual(blockedUpdate.exitCode, 0);
     assert.match(blockedUpdate.stderr.toString(), /No stable release/);
     assert.equal(existsSync(join(home, ".local/share/raphie-backups")), false);
+    await writeFile(
+      join(temp, "release.json"),
+      JSON.stringify([
+        { tag_name: "v0.0.3", draft: false, prerelease: false, assets },
+      ]),
+    );
+    const downgrade = run("");
+    assert.notEqual(downgrade.exitCode, 0);
+    assert.match(downgrade.stderr.toString(), /Refusing to downgrade/);
+    assert.equal(
+      await readFile(join(data, "saved.txt"), "utf8"),
+      "important data",
+    );
+    await writeFile(join(temp, "release.json"), prereleaseMetadata);
     const update = run();
     assert.equal(update.exitCode, 0, update.stderr.toString());
     assert.equal(
@@ -190,6 +204,16 @@ test("installer requires explicit prereleases and preserves data during updates"
       ),
       "important data",
     );
+    await writeFile(
+      join(temp, "release.json"),
+      JSON.stringify([
+        { tag_name: "v0.0.4", draft: false, prerelease: false, assets },
+      ]),
+    );
+    const promotion = run("");
+    assert.equal(promotion.exitCode, 0, promotion.stderr.toString());
+    assert.match(promotion.stdout.toString(), /Installed Raphie v0\.0\.4/);
+    await writeFile(join(temp, "release.json"), prereleaseMetadata);
     const macHome = join(temp, "mac home");
     await mkdir(macHome);
     await writeFile(
