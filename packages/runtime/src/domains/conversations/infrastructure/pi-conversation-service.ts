@@ -89,6 +89,10 @@ export const chatWorkflow = defineTask<
       }, ctx);
       const settled = await submission.wait(ctx);
       await runtime.commit(async (tx) => {
+        const answerEntryId =
+          settled.type === "input" && settled.status === "done"
+            ? String(settled.answer)
+            : undefined;
         const entry =
           settled.type === "input" && settled.status === "done"
             ? await tx.entry(settled.answer)
@@ -108,7 +112,18 @@ export const chatWorkflow = defineTask<
         turn.cancelled =
           settled.status === "unanswered" && settled.reason === "aborted";
         turn.status = answer ? "done" : "error";
-        turn.answer = turn.steered ? null : answer;
+        // Steering may share a run's answer or start a distinct run. Only
+        // suppress replies whose actual answer entry is already represented.
+        const duplicate =
+          answerEntryId !== undefined &&
+          state.turns.some(
+            (other) =>
+              other.id !== turn.id &&
+              other.conversationId === turn.conversationId &&
+              other.answerEntryId === answerEntryId,
+          );
+        turn.answerEntryId = answerEntryId;
+        turn.answer = duplicate ? null : answer;
         if (turn.scheduled)
           await finishJobRun(
             tx,
@@ -302,7 +317,6 @@ export class ChatService implements ConversationCommands {
         )
           throw new InputError("This message has already been picked up.", 409);
         item.mode = action === "steer" ? "steer" : "followUp";
-        turn.steered = action === "steer";
       }, context);
     });
   }

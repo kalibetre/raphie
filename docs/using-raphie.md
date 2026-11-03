@@ -44,8 +44,9 @@ The composer shows Stop while working with an empty draft; entering text restore
 Send. Task actions (⋯) also offers Stop while you are typing, preserving the draft.
 Stopping withdraws queued input and marks interrupted replies as stopped. Completed
 external effects are not undone; uncertain tool outcomes keep their existing recovery
-rules. A steering message joins the current reply rather than creating a duplicate
-assistant answer. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
+rules. Steering joins the current reply at a tool boundary. If the current reply
+finishes first, Pi starts a new reply for the steering message. Shared answers
+appear once; distinct replies remain visible. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
 
 The bot settings Activity page records precise UTC timestamps, local display times, run and runtime-attempt IDs, tool operation IDs, model usage, approval decisions, results, and recovery. Events expand to show payloads and export to JSON. Known credential values and sensitive field names are redacted before journal persistence. Diagnostics is a separate trace-only view.
 

@@ -23,7 +23,7 @@ export type ChatTurn = {
   submissionId?: string;
   queueMode?: "followUp" | "steer";
   cancelled?: boolean;
-  steered?: boolean;
+  answerEntryId?: string;
   replyTo?: ReplyDestination | null;
   discordUserId?: string;
   /** Started by a scheduled job; its text is the saved instruction. */
