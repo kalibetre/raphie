@@ -11,9 +11,9 @@ import {
 import { InputError } from "../../../shared/application/input-error.ts";
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
 import {
+  configuredCredentialKeyStore,
   CredentialCipher,
   type CredentialKeyStore,
-  osCredentialKeyStore,
 } from "../../settings/infrastructure/credential-cipher.ts";
 
 type DiscordConfig = {
@@ -136,7 +136,7 @@ export class BotChannels {
         )
         .get();
       const cipher = await CredentialCipher.open(
-        keyStore ?? osCredentialKeyStore,
+        keyStore ?? configuredCredentialKeyStore(),
         row?.key_id,
       );
       service = new BotChannels(db, cipher, app, adapters, applications);

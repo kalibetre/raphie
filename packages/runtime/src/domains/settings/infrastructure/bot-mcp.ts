@@ -19,9 +19,9 @@ import type { ModelConnectionGate } from "../../../shared/infrastructure/model-c
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { McpTools } from "../../approvals/infrastructure/mcp-approval-gate.ts";
 import {
+  configuredCredentialKeyStore,
   CredentialCipher,
   type CredentialKeyStore,
-  osCredentialKeyStore,
 } from "./credential-cipher.ts";
 
 type Entry = {
@@ -78,7 +78,7 @@ export class BotMcp {
         )
         .get();
       const cipher = await CredentialCipher.open(
-        options.keyStore ?? osCredentialKeyStore,
+        options.keyStore ?? configuredCredentialKeyStore(),
         row?.key_id,
       );
       service = new BotMcp(db, cipher, options);
