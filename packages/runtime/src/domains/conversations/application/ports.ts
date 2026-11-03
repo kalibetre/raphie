@@ -16,6 +16,11 @@ export type SendMessage = {
 };
 
 export interface ConversationCommands {
+  control?(
+    sessionId: string,
+    action: "stop" | "steer" | "queue",
+    turnId?: string,
+  ): Promise<void>;
   chooseModel(sessionId: string, model: ModelSelection): Promise<void>;
   send(
     input: SendMessage,

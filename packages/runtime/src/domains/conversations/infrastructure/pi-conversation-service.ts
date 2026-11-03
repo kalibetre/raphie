@@ -5,7 +5,12 @@ import type {
   ModelRef,
   TaskId,
 } from "@earendil-works/pi-durable";
-import { configure, defineDoc, defineTask } from "@earendil-works/pi-durable";
+import {
+  configure,
+  defineDoc,
+  defineTask,
+  InboxDoc,
+} from "@earendil-works/pi-durable";
 import type {
   BotProfile,
   Channel as Source,
@@ -19,6 +24,7 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import { ToolApprovals } from "../../approvals/infrastructure/pi-tool-approvals.ts";
 import { sameDestination } from "../../channels/domain/binding.ts";
 import { ChannelBindings } from "../../channels/infrastructure/pi-bindings.ts";
 import type { MemoryService } from "../../memory/application/ports.ts";
@@ -75,6 +81,12 @@ export const chatWorkflow = defineTask<
         },
         ctx,
       );
+      await runtime.commit(async (tx) => {
+        const turn = (await tx.doc(Chats)).turns.find(
+          (t) => t.id === task.input.turnId,
+        )!;
+        turn.submissionId = String(submission.id);
+      }, ctx);
       const settled = await submission.wait(ctx);
       await runtime.commit(async (tx) => {
         const entry =
@@ -93,8 +105,10 @@ export const chatWorkflow = defineTask<
             .join("\n") || null;
         const state = await tx.doc(Chats);
         const turn = state.turns.find((t) => t.id === task.input.turnId)!;
+        turn.cancelled =
+          settled.status === "unanswered" && settled.reason === "aborted";
         turn.status = answer ? "done" : "error";
-        turn.answer = answer;
+        turn.answer = turn.steered ? null : answer;
         if (turn.scheduled)
           await finishJobRun(
             tx,
@@ -107,8 +121,16 @@ export const chatWorkflow = defineTask<
           );
         record(
           await tx.doc(Activity),
-          answer ? "run.completed" : "run.failed",
-          answer ? "Reply completed" : "Reply failed",
+          turn.cancelled
+            ? "run.cancelled"
+            : answer
+              ? "run.completed"
+              : "run.failed",
+          turn.cancelled
+            ? "Reply stopped"
+            : answer
+              ? "Reply completed"
+              : "Reply failed",
           { conversationId: turn.conversationId, runId: turn.id },
         );
         const destination = turn.replyTo?.conversation;
@@ -210,7 +232,79 @@ export class ChatService implements ConversationCommands {
   }
 
   async state() {
-    return (await this.app.harness.snapshot(Chats, context))!;
+    const state = structuredClone(
+      (await this.app.harness.snapshot(Chats, context))!,
+    );
+    const pending = state.turns.filter((t) => t.status === "pending");
+    const active = new Set(pending.map((t) => t.conversationId));
+    for (const conversation of state.conversations.filter((c) =>
+      active.has(c.id),
+    )) {
+      const inbox = await this.app.harness.snapshot(
+        InboxDoc,
+        conversation.id as ConversationId,
+        context,
+      );
+      for (const turn of pending.filter(
+        (t) => t.conversationId === conversation.id,
+      )) {
+        const item = inbox?.items.find(
+          (i) => String(i.id) === turn.submissionId,
+        );
+        turn.queueMode = item && item.mode !== "write" ? item.mode : undefined;
+      }
+    }
+    return state;
+  }
+
+  async control(
+    sessionId: string,
+    action: "stop" | "steer" | "queue",
+    turnId?: string,
+  ) {
+    return this.connectionGate.run(async () => {
+      const state = await this.state();
+      const session = state.conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!session) throw new InputError("Session not found.", 404);
+      if (action === "stop") {
+        const conversation = await this.app.harness.conversation(
+          session.id as ConversationId,
+          context,
+        );
+        await conversation!.abort(context);
+        await this.app.root.commit(async (tx) => {
+          for (const approval of (await tx.doc(ToolApprovals)).approvals) {
+            if (
+              approval.conversationId === session.id &&
+              approval.status === "pending"
+            )
+              approval.status = "expired";
+          }
+        }, context);
+        return;
+      }
+      await this.app.root.commit(async (tx) => {
+        const turn = (await tx.doc(Chats)).turns.find(
+          (t) => t.id === turnId && t.conversationId === session.id,
+        );
+        const inbox = await tx.doc(InboxDoc, session.id as ConversationId);
+        const item = inbox.items.find(
+          (i) => String(i.id) === turn?.submissionId,
+        );
+        if (
+          !turn ||
+          turn.source !== "web" ||
+          turn.scheduled ||
+          !item ||
+          item.mode === "write"
+        )
+          throw new InputError("This message has already been picked up.", 409);
+        item.mode = action === "steer" ? "steer" : "followUp";
+        turn.steered = action === "steer";
+      }, context);
+    });
   }
 
   async send(input: {

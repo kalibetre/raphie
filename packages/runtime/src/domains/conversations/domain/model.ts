@@ -20,6 +20,10 @@ export type ChatTurn = {
   createdAt: number;
   status: "pending" | "done" | "error";
   answer: string | null;
+  submissionId?: string;
+  queueMode?: "followUp" | "steer";
+  cancelled?: boolean;
+  steered?: boolean;
   replyTo?: ReplyDestination | null;
   discordUserId?: string;
   /** Started by a scheduled job; its text is the saved instruction. */

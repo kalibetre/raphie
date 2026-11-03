@@ -62,7 +62,19 @@ async function renderWorkspace({
   if (selected) {
     client.setQueryData<SessionObservation>(["session", selected.sessionId], {
       session: selected,
-      turns: [],
+      turns: selected.working
+        ? [
+            {
+              id: "working-turn",
+              conversationId: selected.sessionId,
+              source: "web",
+              text: "Working",
+              createdAt: 1,
+              status: "pending",
+              answer: null,
+            },
+          ]
+        : [],
       toolApprovals: [],
       live: null,
       activity: [],
@@ -165,4 +177,13 @@ test("an unavailable runtime retains its warning and disabled composer", async (
   assert.match(sendButton, /\sdisabled(?:="")?(?:\s|>)/);
   const empty = await renderWorkspace({ defaultModel: null });
   assert.ok(empty.includes('aria-label="Choose model: Choose model"'));
+});
+
+test("an empty composer exposes Stop while a task is working", async () => {
+  const html = await renderWorkspace({
+    selected: { ...session, working: true },
+    defaultModel: modelA,
+  });
+  const stop = html.match(/<button[^>]*aria-label="Stop task"[^>]*>/)?.[0];
+  assert.ok(stop, "The working composer offers Stop");
 });

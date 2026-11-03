@@ -36,6 +36,8 @@ export function traceSessions(sessions: Sessions, telemetry: Telemetry) {
           return receipt;
         },
       ),
+    control: (...args: Parameters<Sessions["control"]>) =>
+      sessions.control(...args),
     decide: (...args: Parameters<Sessions["decide"]>) =>
       telemetry.run(
         "approval.decide",

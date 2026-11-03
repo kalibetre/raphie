@@ -43,6 +43,8 @@ export type Turn = {
   createdAt: number;
   status: "pending" | "done" | "error";
   answer: string | null;
+  queueMode?: "followUp" | "steer";
+  cancelled?: boolean;
   /** Set when a scheduled job, not the owner, started this turn. */
   scheduled?: { name: string };
 };

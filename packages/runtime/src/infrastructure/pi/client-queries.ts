@@ -117,7 +117,7 @@ export class PiClientQueries implements ClientQueries {
           createdAt: c.createdAt,
           lastAt: latest?.createdAt ?? c.createdAt,
           working: turns.some((t) => t.status === "pending"),
-          failed: latest?.status === "error",
+          failed: latest?.status === "error" && !latest.cancelled,
           preview: (latest?.answer ?? latest?.text ?? "No messages yet").slice(
             0,
             280,
@@ -174,6 +174,8 @@ export class PiClientQueries implements ClientQueries {
       createdAt: t.createdAt,
       status: t.status,
       answer: t.answer,
+      queueMode: t.queueMode,
+      cancelled: t.cancelled,
       ...(t.scheduled ? { scheduled: t.scheduled } : {}),
     }));
     return { items, next: start > 0 ? items[0]!.id : null };
@@ -257,7 +259,7 @@ export class PiClientQueries implements ClientQueries {
         createdAt: session.createdAt,
         lastAt: last?.createdAt ?? session.createdAt,
         working: !!pending.length,
-        failed: last?.status === "error",
+        failed: last?.status === "error" && !last.cancelled,
         preview: (last?.answer ?? last?.text ?? "No messages yet").slice(
           0,
           280,
@@ -309,7 +311,7 @@ export class PiClientQueries implements ClientQueries {
       phase: waiting
         ? "approval"
         : !pending.length
-          ? last?.status === "error"
+          ? last?.status === "error" && !last.cancelled
             ? "failed"
             : "idle"
           : latest?.type === "tool.started"
@@ -320,7 +322,7 @@ export class PiClientQueries implements ClientQueries {
                 ? "model"
                 : "queued",
       error:
-        last?.status === "error"
+        last?.status === "error" && !last.cancelled
           ? {
               code: "reply_failed",
               message: "Raphie could not complete this reply.",

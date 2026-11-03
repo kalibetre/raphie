@@ -61,6 +61,20 @@ export class Sessions implements SessionOperations {
     this.files = files;
   }
 
+  async control(
+    actor: ActorContext,
+    sessionId: string,
+    action: "stop" | "steer" | "queue",
+    turnId?: string,
+  ) {
+    const verified = this.authority.require(actor);
+    if (verified.source !== "web")
+      throw new InputError("Task control requires a client interface.", 403);
+    if (!this.conversations.control)
+      throw new InputError("Task control unavailable.", 503);
+    await this.conversations.control(sessionId, action, turnId);
+  }
+
   async submit(
     actor: ActorContext,
     input: {

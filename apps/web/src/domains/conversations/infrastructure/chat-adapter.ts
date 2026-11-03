@@ -12,7 +12,7 @@ export function transcript(
   retained?: PartialReply,
 ): StreamChunk {
   const turns = state.turns.filter((t) => t.conversationId === conversationId);
-  const active = turns.find((t) => t.status === "pending");
+  const active = turns.find((t) => t.status === "pending" && !t.queueMode);
   const live = state.live[conversationId];
   const partialText =
     live?.generating && live.text
@@ -76,7 +76,8 @@ export function chatAdapter(
             const active = state.turns.find(
               (turn) =>
                 turn.conversationId === conversationId &&
-                turn.status === "pending",
+                turn.status === "pending" &&
+                !turn.queueMode,
             );
             if (partial?.turnId !== active?.id) partial = undefined;
             const live = state.live[conversationId];
