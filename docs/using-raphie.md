@@ -20,9 +20,10 @@ In a source checkout, the app stores conversations, messages, execution state, a
 Provider connection names, model defaults, telemetry preferences and encrypted
 provider keys are stored in **`.data/settings.sqlite`** (or
 `DATA_DIRECTORY/settings.sqlite`), restricted to the owner (`0600`). Keys use
-AES-256-GCM with a random master held in the OS credential store, never alongside
+AES-256-GCM with a random master held in the OS credential store by default, or
+an explicitly configured headless key file outside app data, never alongside
 the ciphertext. Startup migrates existing plaintext keys while preserving connection
-IDs and fails closed if the OS store is unavailable. Keys are never returned to
+IDs and fails closed if the selected key store is unavailable. Keys are never returned to
 the browser. See [credential storage and recovery](provider-credential-storage.md)
 for platform prerequisites, migration, backup handling and threat-model limits.
 

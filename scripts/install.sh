@@ -31,9 +31,7 @@ case "$os:$arch" in
 esac
 if [ "$headless" = true ]; then
   [ "$platform" = Linux ] || { echo '--headless is supported on Linux only.' >&2; exit 1; }
-  for command in systemctl dbus-run-session gnome-keyring-daemon; do
-    command -v "$command" >/dev/null || { echo "Headless setup needs $command." >&2; exit 1; }
-  done
+  command -v systemctl >/dev/null || { echo 'Headless setup needs systemctl.' >&2; exit 1; }
   systemctl --user show-environment >/dev/null 2>&1 || { echo 'Headless setup requires a systemd user manager.' >&2; exit 1; }
 fi
 bin_dir="$HOME/.local/bin"
@@ -107,31 +105,38 @@ if [ "$updating" = true ]; then
   current_version=$(cat "$install_dir/.raphie-user-install")
   case "$current_version" in *[!a-zA-Z0-9._-]*|'') echo 'Installed version is unknown; refusing to replace it automatically.' >&2; exit 1;; esac
 fi
-# Opt-in headless keyring: the unlock key is deliberately user-readable.
+# Explicit file-backed headless mode. Desktop installs keep the OS credential store.
 configure_headless() {
   [ "$platform" = Linux ] || { echo '--headless is supported on Linux only.' >&2; return 1; }
-  for command in systemctl dbus-run-session gnome-keyring-daemon; do
-    command -v "$command" >/dev/null || { echo "Headless setup needs $command." >&2; return 1; }
-  done
   systemctl --user show-environment >/dev/null 2>&1 || { echo 'Headless setup requires a systemd user manager.' >&2; return 1; }
   [ -f "$HOME/.config/systemd/user/raphie.service" ] && [ ! -L "$HOME/.config/systemd/user/raphie.service" ] || { echo 'A Raphie user service is required for headless setup.' >&2; return 1; }
-  python3 - "$HOME" "$install_dir/raphie" "$data_dir" <<'PY_HEADLESS'
-import base64, json, os, shlex, sqlite3, stat, sys
-home, exe, data = sys.argv[1:]
+  python3 - "$HOME" "$data_dir" <<'PY_HEADLESS'
+import base64, json, os, re, sqlite3, stat, sys
+home, data = sys.argv[1:]
 private = os.path.join(home, '.local', 'share', 'raphie-headless')
-key = os.path.join(private, 'unlock-key')
+key = os.path.join(private, 'master-key')
 marker = os.path.join(private, 'configured')
-launch = os.path.join(private, 'start')
 dropdir = os.path.join(home, '.config', 'systemd', 'user', 'raphie.service.d')
 dropin = os.path.join(dropdir, 'raphie-headless.conf')
-if any(os.path.islink(path) for path in (marker, launch, dropdir, dropin, os.path.join(private, 'store'))):
-    sys.exit('Headless setup found an unsafe symbolic link; no files were replaced.')
+if os.path.commonpath([os.path.realpath(private), os.path.realpath(data)]) == os.path.realpath(data):
+    sys.exit('Headless key directory must be outside Raphie data.')
+if any(os.path.islink(path) for path in (private, marker, key, dropdir, dropin)):
+    sys.exit('Headless setup found an unsafe symbolic link; no key was replaced.')
 if os.path.lexists(private):
-    if os.path.islink(private) or not os.path.isfile(marker) or not os.path.isfile(key) or os.path.islink(key):
-        sys.exit('Existing headless keyring directory is incomplete or unsafe; no key was replaced.')
+    info = os.stat(private)
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        sys.exit('Headless key directory must be owned by this user and have mode 0700.')
+    if not os.path.isfile(marker) or not os.path.isfile(key):
+        sys.exit('Existing headless directory is incomplete or uses the old keyring backend; no key was replaced. Migration requires a separate plan.')
+    with open(marker, encoding='utf-8') as f:
+        if f.read(64) != 'raphie-file-key-v1\n':
+            sys.exit('Existing headless backend cannot be switched automatically; no key was replaced.')
     info = os.stat(key)
-    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
-        sys.exit('Headless unlock key must be owned by this user and have mode 0600.')
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1 or info.st_size != 45:
+        sys.exit('Headless master key must be an owner-only regular file (0600).')
+    with open(key, 'rb') as f:
+        if not re.fullmatch(rb'[A-Za-z0-9+/]{43}=\n', f.read(46)):
+            sys.exit('Headless master key is malformed; restore its backup. No key was replaced.')
 else:
     if os.path.lexists(dropin): sys.exit('An existing headless service override was found; refusing to replace it.')
     dbpath = os.path.join(data, 'settings.sqlite')
@@ -148,18 +153,19 @@ else:
     os.makedirs(os.path.dirname(private), mode=0o700, exist_ok=True)
     os.mkdir(private, 0o700)
     fd = os.open(key, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'wb') as f: f.write(base64.b64encode(os.urandom(32)) + b'\n')
-    with open(marker, 'x', encoding='utf-8') as f: f.write('raphie-headless-v1\n')
-store = os.path.join(private, 'store')
-os.makedirs(store, mode=0o700, exist_ok=True)
-# A private D-Bus session prevents conflicts with an already-running desktop keyring.
-inner = 'set -eu; gnome-keyring-daemon --unlock < "$1" >/dev/null; shift; exec "$@"'
-script = '#!/bin/sh\nset -eu\nexport XDG_DATA_HOME=' + shlex.quote(store) + '\nexec dbus-run-session -- sh -c ' + shlex.quote(inner) + ' sh ' + ' '.join(map(shlex.quote, [key, exe, 'start', '--data-dir', data])) + '\n'
-with open(launch, 'w', encoding='utf-8') as f: f.write(script)
-os.chmod(launch, 0o700)
+    with os.fdopen(fd, 'wb') as f:
+        f.write(base64.b64encode(os.urandom(32)) + b'\n')
+        f.flush()
+        os.fsync(f.fileno())
+    with open(marker, 'x', encoding='utf-8') as f: f.write('raphie-file-key-v1\n')
+    for directory in (private, os.path.dirname(private)):
+        fd = os.open(directory, os.O_RDONLY)
+        try: os.fsync(fd)
+        finally: os.close(fd)
 os.makedirs(dropdir, mode=0o700, exist_ok=True)
-def quote(value): return value.replace('%', '%%').replace('$', '$$').replace('\\', '\\\\').replace('"', '\\"')
-with open(dropin, 'w', encoding='utf-8') as f: f.write('[Service]\nExecStart=\nExecStart="' + quote(launch) + '"\n')
+def quote(value): return value.replace('%', '%%').replace('\\', '\\\\').replace('"', '\\"')
+with open(dropin, 'w', encoding='utf-8') as f:
+    f.write('[Service]\nEnvironment="RAPHIE_CREDENTIAL_KEY_FILE=' + quote(key) + '"\n')
 PY_HEADLESS
   echo 'Headless credential store configured. Protect and back up ~/.local/share/raphie-headless separately from Raphie data.'
   systemctl --user daemon-reload
@@ -169,23 +175,6 @@ PY_HEADLESS
     echo 'Could not enable user lingering. Automatic startup after reboot requires host authorization; run loginctl enable-linger for this user.' >&2
   fi
 }
-
-  if [ "$updating" = true ] && [ "$headless" = true ]; then
-    configure_headless
-    systemctl --user enable raphie.service
-    systemctl --user restart raphie.service
-    ready=false
-    for attempt in {1..15}; do
-      if PORT=4316 RAPHIE_WEB_PORT=4320 "$install_dir/raphie" health >/dev/null 2>&1; then echo "User service is healthy."; ready=true; break; fi
-      sleep 1
-    done
-    if [ "$ready" != true ]; then
-      systemctl --user disable --now raphie.service || true
-      echo "Service did not become healthy. Check: journalctl --user -u raphie -e" >&2
-      exit 1
-    fi
-    headless=false
-  fi
 
 if version=$(python3 - "$work/releases.json" "$channel" "$asset" <<'PY_RELEASE'
 import json, re, sys
@@ -217,6 +206,23 @@ PY_RELEASE
   exit 1
 fi
 if [ -n "$current_version" ] && [ "$current_version" = "$version" ]; then
+  if [ "$headless" = true ]; then
+    systemctl --user stop raphie.service
+    configure_headless
+    systemctl --user enable raphie.service
+    systemctl --user restart raphie.service
+    ready=false
+    for attempt in {1..15}; do
+      if PORT=4316 RAPHIE_WEB_PORT=4320 "$install_dir/raphie" health >/dev/null 2>&1; then echo "User service is healthy."; ready=true; break; fi
+      sleep 1
+    done
+    if [ "$ready" != true ]; then
+      systemctl --user disable --now raphie.service || true
+      echo "Service did not become healthy. Check: journalctl --user -u raphie -e" >&2
+      exit 1
+    fi
+  fi
+
   echo "Already on $version ($channel channel)."
   exit 0
 fi
@@ -291,7 +297,7 @@ if [ "$updating" = true ] && [ -d "$data_dir" ]; then
   mkdir -p -m 700 "$backup_root"
   backup=$(mktemp -d "$backup_root/update.XXXXXXXX")
   cp -a "$data_dir" "$backup/data" || { echo "Backup failed at $backup; update stopped." >&2; exit 1; }
-  echo "Offline data backup: $backup/data (the OS credential-store key must be backed up separately)."
+  echo "Offline data backup: $backup/data (the credential key must be backed up separately)."
 fi
 stage=$(mktemp -d "$HOME/.local/lib/.raphie-stage.XXXXXXXX")
 cp "$work/bundle/raphie" "$work/bundle/raphie-runtime" "$work/bundle/raphie-web" "$stage/"
@@ -372,7 +378,7 @@ if [ "$service_started" = true ]; then
     if [ "$platform" = Linux ]; then systemctl --user disable --now raphie.service || true; printf 'Service did not become healthy. Check: journalctl --user -u raphie -e\n' >&2
     else launchctl bootout "gui/$(id -u)" "$agent" || true; launchctl disable "gui/$(id -u)/com.raphie.user" || true; printf 'Service did not become healthy. Check: %s\n' "$HOME/Library/Logs/Raphie/service-error.log" >&2; fi
     service_failed=true
-    echo 'The service was stopped. Unlock the OS credential store and check for port conflicts before starting it again.' >&2
+    echo 'The service was stopped. Check the credential store or configured headless key file, and check for port conflicts before starting it again.' >&2
     [ "$updating" = false ] || echo 'Do not start an older version against migrated data; restore the offline backup first.' >&2
   fi
 elif [ "$service_attempted" = true ]; then
@@ -383,7 +389,7 @@ else
   printf 'User service was not started. Run %s start in a terminal.\n' "$bin_dir/raphie"
 fi
 printf 'Run "%s" auth setup --data-dir "%s", then open http://127.0.0.1:4320.\n' "$bin_dir/raphie" "$data_dir"
-printf 'Raphie needs an available OS credential store.\n'
+printf 'Desktop mode needs an available OS credential store; headless mode needs its preserved master-key file.\n'
 [ "$service_failed" = false ] || return 1
 }
 main "$@"

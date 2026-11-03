@@ -13,6 +13,7 @@ test("runtime reports an actionable credential-store error without native error 
       {
         env: {
           ...process.env,
+          RAPHIE_CREDENTIAL_KEY_FILE: undefined,
           DATA_DIRECTORY: join(temp, "data"),
           DBUS_SESSION_BUS_ADDRESS: `unix:path=${temp}/missing`,
         },

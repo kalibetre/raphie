@@ -12,10 +12,71 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { CredentialCipher } from "../src/domains/settings/infrastructure/credential-cipher.ts";
 import { fileCredentialKeyStore } from "../src/domains/settings/infrastructure/file-credential-key-store.ts";
+
+test("production store selection restores provider, MCP, and Discord credentials for default and named bots in a fresh process", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-file-process-"));
+  const key = join(directory, "private", "master-key");
+  const data = join(directory, "data");
+  const run = (mode: string) =>
+    Bun.spawnSync(
+      [
+        process.execPath,
+        "--no-env-file",
+        resolve("packages/runtime/test/fixtures/credential-file/process.ts"),
+        data,
+        mode,
+      ],
+      {
+        env: {
+          PATH: process.env.PATH,
+          HOME: directory,
+          RAPHIE_CREDENTIAL_KEY_FILE: key,
+          DBUS_SESSION_BUS_ADDRESS: `unix:path=${directory}/missing`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 10000,
+      },
+    );
+  try {
+    for (const mode of ["write", "read"]) {
+      const result = run(mode);
+      assert.equal(result.exitCode, 0, result.stderr.toString());
+      assert.match(result.stdout.toString(), /reopened successfully/);
+    }
+    for (const bot of ["default", "named"]) {
+      for (const name of ["settings", "mcp", "channels"]) {
+        assert.equal(
+          (await readFile(join(data, bot, `${name}.sqlite`))).includes(
+            "SYNTHETIC",
+          ),
+          false,
+        );
+      }
+    }
+    const original = await readFile(key);
+    await rm(key);
+    const missing = run("read");
+    assert.notEqual(missing.exitCode, 0);
+    assert.match(missing.stderr.toString(), /key missing/);
+    await assert.rejects(stat(key), { code: "ENOENT" });
+    await writeFile(key, Buffer.alloc(32, 7).toString("base64") + "\n", {
+      mode: 0o600,
+    });
+    const wrong = run("read");
+    assert.notEqual(wrong.exitCode, 0);
+    assert.match(wrong.stderr.toString(), /could not be authenticated/);
+    await writeFile(key, original, { mode: 0o600 });
+    const restored = run("read");
+    assert.equal(restored.exitCode, 0, restored.stderr.toString());
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("file-backed credentials survive restart, share the installation key, and fail closed after key loss", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-file-key-"));

@@ -70,11 +70,15 @@ export function fileCredentialKeyStore(path: string): CredentialKeyStore {
       } finally {
         await file.close();
       }
-      const directory = await open(parent, constants.O_RDONLY);
-      try {
-        await directory.sync();
-      } finally {
-        await directory.close();
+      // Persist both the key entry and a newly created private directory before
+      // SQLite can commit credentials that depend on this master.
+      for (const path of [parent, dirname(parent)]) {
+        const directory = await open(path, constants.O_RDONLY);
+        try {
+          await directory.sync();
+        } finally {
+          await directory.close();
+        }
       }
     },
   };

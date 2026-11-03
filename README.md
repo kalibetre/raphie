@@ -13,7 +13,7 @@ A personal AI assistant you run yourself, with a place for every conversation, b
 
 ## Get Raphie running
 
-Install Raphie for your user on Linux or macOS. You need `curl`, `python3` and an available OS credential store. Linux requires a Secret Service provider such as an unlocked GNOME Keyring or KWallet.
+Install Raphie for your user on Linux or macOS. You need `curl` and `python3`, plus an available OS credential store for desktop mode. Linux desktop mode requires a Secret Service provider such as an unlocked GNOME Keyring or KWallet. On a headless Linux server, pass `--headless` to the installer to use an owner-only master-key file outside app data; see [headless setup](docs/user-installation.md#headless-linux).
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
