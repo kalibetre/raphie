@@ -15,7 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-test("piped user installer selects an alpha, installs without sudo and preserves an existing installation", async () => {
+test("installer requires explicit prereleases and preserves data during updates", async () => {
   const temp = await mkdtemp(join(tmpdir(), "raphie-user-install-"));
   const bin = join(temp, "bin");
   const home = join(temp, "home");
@@ -92,13 +92,67 @@ test("piped user installer selects an alpha, installs without sudo and preserves
       USER: "fixture",
       XDG_DATA_HOME: "",
     };
-    const run = () =>
-      Bun.spawnSync(["bash"], {
+    const run = (version = "v0.0.4-alpha.2") =>
+      Bun.spawnSync(["bash", "-s", "--", ...(version ? [version] : [])], {
         stdin: input,
         env,
         stdout: "pipe",
         stderr: "pipe",
       });
+    const noStable = run("");
+    assert.notEqual(noStable.exitCode, 0);
+    assert.match(noStable.stderr.toString(), /No stable release/);
+    assert.equal(existsSync(join(home, ".local/lib/raphie")), false);
+    const prereleaseMetadata = await readFile(join(temp, "release.json"));
+    const assets = [
+      { name: "raphie-linux-x64.tar.gz" },
+      { name: "raphie-darwin-arm64.tar.gz" },
+      { name: "SHA256SUMS" },
+    ];
+    await writeFile(
+      join(temp, "release.json"),
+      JSON.stringify([
+        { tag_name: "v0.0.4-alpha.2", draft: false, prerelease: true, assets },
+        { tag_name: "v0.0.3", draft: false, prerelease: false, assets },
+      ]),
+    );
+    const stableHome = join(temp, "stable-home");
+    await mkdir(stableHome);
+    const stable = Bun.spawnSync(["bash"], {
+      stdin: input,
+      env: { ...env, HOME: stableHome },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    assert.equal(stable.exitCode, 0, stable.stderr.toString());
+    assert.match(stable.stdout.toString(), /Installed Raphie v0\.0\.3/);
+    await writeFile(
+      join(temp, "release.json"),
+      JSON.stringify([
+        { tag_name: "v0.0.4-beta.1", draft: false, prerelease: true, assets },
+      ]),
+    );
+    const betaHome = join(temp, "beta-home");
+    await mkdir(betaHome);
+    const beta = Bun.spawnSync(["bash", "-s", "--", "v0.0.4-beta.1"], {
+      stdin: input,
+      env: { ...env, HOME: betaHome },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    assert.equal(beta.exitCode, 0, beta.stderr.toString());
+    assert.match(beta.stdout.toString(), /Installed Raphie v0\.0\.4-beta\.1/);
+    await writeFile(
+      join(temp, "release.json"),
+      JSON.stringify([
+        { tag_name: "v0.0.4-beta.1", draft: false, prerelease: false, assets },
+        { tag_name: "v0.0.3", draft: false, prerelease: true, assets },
+      ]),
+    );
+    const invalidFlags = run("");
+    assert.notEqual(invalidFlags.exitCode, 0);
+    assert.match(invalidFlags.stderr.toString(), /No stable release/);
+    await writeFile(join(temp, "release.json"), prereleaseMetadata);
     const first = run();
     assert.equal(first.exitCode, 0, first.stderr.toString());
     assert.equal(
@@ -112,6 +166,10 @@ test("piped user installer selects an alpha, installs without sudo and preserves
     const data = join(home, ".local/share/raphie");
     await mkdir(data, { recursive: true });
     await writeFile(join(data, "saved.txt"), "important data");
+    const blockedUpdate = run("");
+    assert.notEqual(blockedUpdate.exitCode, 0);
+    assert.match(blockedUpdate.stderr.toString(), /No stable release/);
+    assert.equal(existsSync(join(home, ".local/share/raphie-backups")), false);
     const update = run();
     assert.equal(update.exitCode, 0, update.stderr.toString());
     assert.equal(
@@ -146,7 +204,7 @@ test("piped user installer selects an alpha, installs without sudo and preserves
         mode: 0o755,
       },
     );
-    const mac = Bun.spawnSync(["bash"], {
+    const mac = Bun.spawnSync(["bash", "-s", "--", "v0.0.4-alpha.2"], {
       stdin: input,
       env: { ...env, HOME: macHome },
       stdout: "pipe",
@@ -164,7 +222,7 @@ test("piped user installer selects an alpha, installs without sudo and preserves
     await mkdir(join(existingHome, "Library/Application Support/Raphie"), {
       recursive: true,
     });
-    const existing = Bun.spawnSync(["bash"], {
+    const existing = Bun.spawnSync(["bash", "-s", "--", "v0.0.4-alpha.2"], {
       stdin: input,
       env: { ...env, HOME: existingHome },
       stdout: "pipe",
@@ -186,7 +244,7 @@ test("piped user installer selects an alpha, installs without sudo and preserves
         },
       ]),
     );
-    const noAsset = Bun.spawnSync(["bash"], {
+    const noAsset = Bun.spawnSync(["bash", "-s", "--", "v0.0.4-alpha.2"], {
       stdin: input,
       env: { ...env, HOME: noAssetHome },
       stdout: "pipe",
@@ -201,7 +259,7 @@ test("piped user installer selects an alpha, installs without sudo and preserves
       join(temp, "SHA256SUMS"),
       `${"0".repeat(64)}  raphie-darwin-arm64.tar.gz\n`,
     );
-    const corrupt = Bun.spawnSync(["bash"], {
+    const corrupt = Bun.spawnSync(["bash", "-s", "--", "v0.0.4-alpha.2"], {
       stdin: input,
       env: { ...env, HOME: checksumHome },
       stdout: "pipe",
@@ -213,7 +271,7 @@ test("piped user installer selects an alpha, installs without sudo and preserves
     await checksum();
     const truncatedHome = join(temp, "truncated-home");
     await mkdir(truncatedHome);
-    const truncated = Bun.spawnSync(["bash"], {
+    const truncated = Bun.spawnSync(["bash", "-s", "--", "v0.0.4-alpha.2"], {
       stdin: input.subarray(0, Math.floor(input.length / 2)),
       env: { ...env, HOME: truncatedHome },
       stdout: "pipe",
@@ -242,7 +300,7 @@ test("piped user installer selects an alpha, installs without sudo and preserves
       0,
     );
     await checksum();
-    const unhealthy = Bun.spawnSync(["bash"], {
+    const unhealthy = Bun.spawnSync(["bash", "-s", "--", "v0.0.4-alpha.2"], {
       stdin: input,
       env: { ...env, HOME: failureHome },
       stdout: "pipe",
@@ -275,7 +333,7 @@ test("piped user installer selects an alpha, installs without sudo and preserves
       0,
     );
     await checksum();
-    const rejected = Bun.spawnSync(["bash"], {
+    const rejected = Bun.spawnSync(["bash", "-s", "--", "v0.0.4-alpha.2"], {
       stdin: input,
       env: { ...env, HOME: badHome },
       stdout: "pipe",

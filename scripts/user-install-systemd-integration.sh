@@ -46,7 +46,7 @@ SH
 chmod 755 "$work/bin/curl" "$work/bin/systemctl"
 export HOME="$work/home" PATH="$work/bin:/usr/bin:/bin" FIXTURE="$work/fixtures" XDG_DATA_HOME="$work/data"
 printf 'synthetic-only\n' | gnome-keyring-daemon --unlock >/dev/null
-cat "$root/scripts/install.sh" | bash
+cat "$root/scripts/install.sh" | bash -s -- v0.0.4-alpha.2
 /usr/bin/systemctl --user is-active --quiet raphie.service
 PORT=4316 RAPHIE_WEB_PORT=4320 "$HOME/.local/bin/raphie" health
 echo 'Real user systemd service started and passed health checks.'

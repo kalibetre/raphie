@@ -5,6 +5,7 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-alpha.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+"
 
 permissions:
   contents: read
@@ -45,7 +46,7 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: Validate release tag
-        run: '[[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]'
+        run: '[[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta)\.[0-9]+)?$ ]]'
       - name: Build release binaries
         run: sh scripts/build-standalone.sh '${{ matrix.target }}' "$GITHUB_REF_NAME" "$(git rev-parse HEAD)"
       - name: Install test dependencies
@@ -140,5 +141,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           flags=()
-          if [[ "$GITHUB_REF_NAME" == *-alpha.* ]]; then flags+=(--prerelease); fi
+          if [[ "$GITHUB_REF_NAME" == *-alpha.* || "$GITHUB_REF_NAME" == *-beta.* ]]; then flags+=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/raphie-darwin-x64.tar.gz artifacts/raphie-darwin-arm64.tar.gz artifacts/install.sh artifacts/SHA256SUMS --verify-tag --draft --generate-notes "${flags[@]}"

@@ -21,7 +21,7 @@ chmod 755 /tmp/raphie-test-bin/*
 runuser -u fixture -- dbus-run-session -- sh -eu -c '
   export HOME=/home/fixture PATH=/tmp/raphie-test-bin:/usr/bin:/bin
   printf "synthetic-only\n" | gnome-keyring-daemon --unlock >/dev/null
-  cat /installer | bash
+  cat /installer | bash -s -- v0.0.4-alpha.2
   "$HOME/.local/bin/raphie" start >$HOME/service.log 2>&1 &
   pid=$!
   trap '\''kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true'\'' EXIT HUP INT TERM
@@ -32,7 +32,7 @@ runuser -u fixture -- dbus-run-session -- sh -eu -c '
   done
   printf "preserved\n" > "$HOME/.local/share/raphie/fixture.txt"
   kill "$pid"; wait "$pid" || true; pid=
-  cat /installer | bash
+  cat /installer | bash -s -- v0.0.4-alpha.2
   test "$(cat "$HOME/.local/share/raphie/fixture.txt")" = preserved
   backup=$(find "$HOME/.local/share/raphie-backups" -name fixture.txt -print -quit)
   test -n "$backup" && test "$(cat "$backup")" = preserved

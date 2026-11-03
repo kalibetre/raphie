@@ -4,8 +4,8 @@ set -euo pipefail
 main() {
 
 version=${1:-}
-if [ "$#" -gt 1 ] || { [ -n "$version" ] && [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]; }; then
-  echo 'Usage: bash install.sh [vX.Y.Z[-alpha.N]]' >&2
+if [ "$#" -gt 1 ] || { [ -n "$version" ] && [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta)\.[0-9]+)?$ ]]; }; then
+  echo 'Usage: bash install.sh [vX.Y.Z[-alpha.N|-beta.N]]' >&2
   exit 1
 fi
 for command in curl python3; do
@@ -75,11 +75,13 @@ with open(sys.argv[1], encoding='utf-8') as source: releases = json.load(source)
 if not isinstance(releases, list): releases = [releases]
 def usable(r):
     tag = r.get('tag_name')
-    return (isinstance(tag, str) and re.fullmatch(r'v\d+\.\d+\.\d+(?:-alpha\.\d+)?', tag)
-            and r.get('draft') is False and r.get('prerelease') is ('-alpha.' in tag))
+    return (isinstance(tag, str) and re.fullmatch(r'v\d+\.\d+\.\d+(?:-(?:alpha|beta)\.\d+)?', tag)
+            and r.get('draft') is False and r.get('prerelease') is ('-alpha.' in tag or '-beta.' in tag))
 valid = [r for r in releases if isinstance(r, dict) and usable(r) and {sys.argv[3], 'SHA256SUMS'}.issubset({a.get('name') for a in r.get('assets', []) if isinstance(a, dict)})]
 if sys.argv[2]: valid = [r for r in valid if r['tag_name'] == sys.argv[2]]
-else: valid = [r for r in valid if not r['prerelease']] or valid
+else:
+    valid = [r for r in valid if not r['prerelease']]
+    if not valid: raise SystemExit('No stable release is available for this platform. To install an alpha or beta, specify its exact version explicitly.')
 if not valid: raise SystemExit('No matching published Raphie release with this platform and checksums was found.')
 print(valid[0]['tag_name'])
 PY

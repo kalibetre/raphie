@@ -6,7 +6,13 @@ The user installer supports glibc Linux and macOS on x64 and ARM64. Alpine/musl 
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
 ```
 
-The script selects the latest stable GitHub release with an archive for your platform, or the latest compatible alpha when no stable release exists. Select a particular published release with `bash -s -- v0.0.4-alpha.2`. macOS binaries first become available with the release that includes the macOS build; earlier alpha releases only contain Linux binaries. macOS binaries are not signed or notarized, and Gatekeeper behavior has not yet been verified.
+The script selects the latest stable GitHub release with an archive for your platform. If none is available, it stops; alpha and beta releases require an explicit version. For example, to opt into an alpha explicitly:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- v0.0.4-alpha.3
+```
+
+Specify a beta tag in the same way. macOS binaries first become available with the release that includes the macOS build; earlier alpha releases only contain Linux binaries. macOS binaries are not signed or notarized, and Gatekeeper behavior has not yet been verified.
 
 Piping a script runs downloaded code immediately. To inspect it first:
 

@@ -41,7 +41,7 @@ chmod 755 "$work/bin/curl" "$work/bin/launchctl"
 export HOME="$work/home" PATH="$work/bin:/usr/bin:/bin:/usr/sbin:/sbin" FIXTURE="$work/fixtures"
 # launchctl is deliberately unavailable on this headless runner. The installer
 # must report the failed service setup, while leaving the binaries runnable.
-if cat "$root/scripts/install.sh" | bash; then echo 'Expected a service-setup failure.' >&2; exit 1; fi
+if cat "$root/scripts/install.sh" | bash -s -- v0.0.4-alpha.2; then echo 'Expected a service-setup failure.' >&2; exit 1; fi
 test -x "$HOME/.local/bin/raphie"
 ports=$(python3 -c 'import socket; s=[socket.socket(),socket.socket()]; [x.bind(("127.0.0.1",0)) for x in s]; print(*[x.getsockname()[1] for x in s])')
 read -r PORT RAPHIE_WEB_PORT <<< "$ports"
