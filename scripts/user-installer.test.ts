@@ -112,6 +112,23 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     assert.equal(nightly.exitCode, 0, nightly.stderr.toString());
     assert.equal((await readFile(channel, "utf8")).trim(), "nightly");
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-10-1");
+    await releases([
+      { tag_name: "nightly-10-1", prerelease: true },
+      { tag_name: "v0.0.4-nightly.20261103.20.1", prerelease: true },
+      { tag_name: "v0.0.4-nightly.20261103.21.1", prerelease: true },
+    ]);
+    const upgradedNightly = run();
+    assert.equal(
+      upgradedNightly.exitCode,
+      0,
+      upgradedNightly.stderr.toString(),
+    );
+    assert.equal(
+      (await readFile(marker, "utf8")).trim(),
+      "v0.0.4-nightly.20261103.21.1",
+    );
+    await releases([{ tag_name: "nightly-10-1", prerelease: true }]);
+    await writeFile(marker, "nightly-10-1\n");
     const sameVersion = run();
     assert.equal(sameVersion.exitCode, 0, sameVersion.stderr.toString());
     assert.match(sameVersion.stdout.toString(), /Already on nightly-10-1/);

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage='Usage: ./release patch|minor|major|vMAJOR.MINOR.PATCH'
+[[ $# == 1 ]] || { echo "$usage" >&2; exit 1; }
+case "$1" in patch|minor|major|v[0-9]*) ;; *) echo "$usage" >&2; exit 1;; esac
+for command in git gh python3; do
+  command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
+done
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+[[ $(git branch --show-current) == main ]] || { echo 'Check out main before preparing a release.' >&2; exit 1; }
+[[ -z $(git status --porcelain --untracked-files=no) ]] || { echo 'Commit or discard tracked changes before preparing a release.' >&2; exit 1; }
+repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+[[ "$repo" == kalibetre/raphie ]] || { echo "Unexpected GitHub repository: $repo" >&2; exit 1; }
+remote_refs=$(git ls-remote --heads --tags origin)
+remote_main=$(printf '%s\n' "$remote_refs" | awk '$2 == "refs/heads/main" { print $1 }')
+[[ -n "$remote_main" && $(git rev-parse HEAD) == "$remote_main" ]] || { echo 'Local main must match origin/main. Fetch and update it first.' >&2; exit 1; }
+release_tags=$(gh api --paginate "repos/$repo/releases?per_page=100" --jq '.[].tag_name')
+tag=$(python3 - "$1" "$remote_refs" "$release_tags" <<'PY'
+import re, sys
+request, refs, releases = sys.argv[1:]
+tags = [line.split()[-1].removeprefix('refs/tags/') for line in refs.splitlines() if 'refs/tags/' in line and not line.endswith('^{}')]
+tags += releases.splitlines()
+versions = [tuple(map(int, m.groups())) for t in tags if (m := re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', t))]
+if request in ('patch', 'minor', 'major'):
+    if not versions: raise SystemExit('No stable version exists. Specify the first version explicitly, for example ./release v0.1.0.')
+    major, minor, patch = max(versions)
+    version = {'patch': (major, minor, patch + 1), 'minor': (major, minor + 1, 0), 'major': (major + 1, 0, 0)}[request]
+else:
+    match = re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', request)
+    if not match: raise SystemExit('Version must look like v1.2.3, without leading zeroes.')
+    version = tuple(map(int, match.groups()))
+if version in versions: raise SystemExit('That stable tag or release already exists.')
+if versions and version <= max(versions): raise SystemExit('The requested version must be newer than all existing stable tags and releases.')
+print('v' + '.'.join(map(str, version)))
+PY
+)
+if git show-ref --verify --quiet "refs/tags/$tag"; then echo "Local tag $tag already exists." >&2; exit 1; fi
+printf 'Preparing %s from main commit %s.\n' "$tag" "$remote_main"
+git tag -a "$tag" "$remote_main" -m "Release $tag"
+if ! git push origin "refs/tags/$tag"; then
+  echo "Push failed. Local tag $tag remains; inspect it before retrying." >&2
+  exit 1
+fi
+printf 'Pushed %s. GitHub Actions will validate the build and create a draft release. Review and publish it on GitHub.\n' "$tag"

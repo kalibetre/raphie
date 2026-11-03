@@ -112,8 +112,12 @@ def key(r):
         match = re.fullmatch(r'v(\d+)\.(\d+)\.(\d+)', tag)
         if not match or r.get('prerelease') is not False: return None
     else:
+        if r.get('prerelease') is not True: return None
+        match = re.fullmatch(r'v(\d+)\.(\d+)\.(\d+)-nightly\.(\d{8})\.(\d+)\.(\d+)', tag)
+        if match: return (1, *map(int, match.groups()[3:]))
         match = re.fullmatch(r'nightly-(\d+)-(\d+)', tag)
-        if not match or r.get('prerelease') is not True: return None
+        if not match: return None
+        return (0, *map(int, match.groups()))
     return tuple(map(int, match.groups()))
 candidates = [(k, r['tag_name']) for r in releases if (k := key(r)) is not None]
 if not candidates: raise SystemExit(42)

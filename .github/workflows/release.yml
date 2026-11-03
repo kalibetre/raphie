@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
-  schedule:
-    - cron: "0 2 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -23,6 +21,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       nightly: ${{ steps.release.outputs.nightly }}
     steps:
+      - uses: actions/checkout@v4
       - id: release
         run: |
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
@@ -30,7 +29,9 @@ jobs:
             echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
             echo 'nightly=false' >> "$GITHUB_OUTPUT"
           else
-            echo "version=nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+            base_version=$(cat VERSION)
+            [[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            echo "version=v${base_version}-nightly.$(date -u +%Y%m%d).${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
             echo 'nightly=true' >> "$GITHUB_OUTPUT"
           fi
 
@@ -170,7 +171,7 @@ jobs:
         run: |
           files=(artifacts/raphie-linux-x64.tar.gz artifacts/raphie-linux-arm64.tar.gz artifacts/raphie-darwin-x64.tar.gz artifacts/raphie-darwin-arm64.tar.gz artifacts/install.sh artifacts/SHA256SUMS)
           if [[ "$NIGHTLY" == true ]]; then
-            gh release create "$RELEASE_VERSION" "${files[@]}" --target "$GITHUB_SHA" --prerelease --title "Nightly ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" --notes "Automated build of commit $GITHUB_SHA."
+            gh release create "$RELEASE_VERSION" "${files[@]}" --target "$GITHUB_SHA" --prerelease --title "Raphie ${RELEASE_VERSION} (${GITHUB_SHA:0:12})" --notes "Automated build of commit $GITHUB_SHA."
           else
             gh release create "$RELEASE_VERSION" "${files[@]}" --verify-tag --draft --generate-notes
           fi
