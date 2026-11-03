@@ -1,6 +1,11 @@
 import { useChat } from "@tanstack/ai-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CircleAlert } from "lucide-react";
+import {
+  CalendarClock,
+  CircleAlert,
+  CornerUpRight,
+  ListEnd,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -159,6 +164,11 @@ export function Chat({
                       );
                     }}
                   >
+                    {turn.queueMode === "steer" ? (
+                      <ListEnd size={14} aria-hidden="true" />
+                    ) : (
+                      <CornerUpRight size={14} aria-hidden="true" />
+                    )}
                     {turn.queueMode === "steer" ? "Keep queued" : "Steer"}
                   </button>
                 </div>

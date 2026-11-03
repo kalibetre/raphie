@@ -182,7 +182,8 @@ export function Composer({
             </details>
           )}
           <Button
-            className="ml-auto size-8 rounded-full transition-[transform,opacity,background-color] duration-150 enabled:hover:scale-105 enabled:active:scale-95"
+            variant={busy && !draft.trim() ? "ghost" : "default"}
+            className={`ml-auto size-8 rounded-full transition-[transform,opacity,background-color] duration-150 enabled:hover:scale-105 enabled:active:scale-95 ${busy && !draft.trim() ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : ""}`}
             type={busy && !draft.trim() ? "button" : "submit"}
             onClick={
               busy && !draft.trim()

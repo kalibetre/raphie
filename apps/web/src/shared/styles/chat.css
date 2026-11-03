@@ -556,6 +556,9 @@
     color: var(--muted-foreground);
   }
   .message-queue-controls button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 5px 9px;
@@ -575,6 +578,7 @@
     padding: 4px 8px;
   }
   .composer-task-menu button {
+    color: var(--error);
     position: absolute;
     bottom: 32px;
     right: 0;
