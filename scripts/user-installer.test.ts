@@ -93,6 +93,7 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       PATH: `${bin}:${process.env.PATH}`,
       USER: "fixture",
       XDG_DATA_HOME: "",
+      SHELL: "/bin/bash",
     };
     const run = (args: string[] = [], override = {}) =>
       Bun.spawnSync(["bash", "-s", "--", ...args], {
@@ -109,9 +110,12 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     ]);
     const headlessHome = join(temp, "fresh-headless-home");
     await mkdir(headlessHome);
-    const freshHeadless = run(["--headless", "--channel", "nightly"], {
-      HOME: headlessHome,
-    });
+    const freshHeadless = run(
+      ["--headless", "--channel", "nightly", "--no-modify-path"],
+      {
+        HOME: headlessHome,
+      },
+    );
     assert.equal(freshHeadless.exitCode, 0, freshHeadless.stderr.toString());
     assert.match(
       freshHeadless.stdout.toString(),
@@ -125,12 +129,17 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       existsSync(join(headlessHome, ".local/share/raphie-headless/start")),
       false,
     );
+    assert.equal(existsSync(join(headlessHome, ".bashrc")), false);
+    assert.equal(existsSync(join(headlessHome, ".profile")), false);
     const defaultInstall = run();
     assert.notEqual(defaultInstall.exitCode, 0);
     assert.match(defaultInstall.stdout.toString(), /No stable release/);
     assert.equal(existsSync(marker), false);
     const nightly = run(["--channel", "nightly"]);
     assert.equal(nightly.exitCode, 0, nightly.stderr.toString());
+    const bashrc = await readFile(join(home, ".bashrc"), "utf8");
+    assert.match(bashrc, /Raphie PATH/);
+    assert.match(await readFile(join(home, ".profile"), "utf8"), /Raphie PATH/);
     assert.equal((await readFile(channel, "utf8")).trim(), "nightly");
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-10-1");
     await releases([
@@ -153,6 +162,7 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     const sameVersion = run();
     assert.equal(sameVersion.exitCode, 0, sameVersion.stderr.toString());
     assert.match(sameVersion.stdout.toString(), /Already on nightly-10-1/);
+    assert.equal(await readFile(join(home, ".bashrc"), "utf8"), bashrc);
     assert.equal(existsSync(join(home, ".local/share/raphie-backups")), false);
     const headless = run(["--headless"]);
     assert.equal(headless.exitCode, 0, headless.stderr.toString());

@@ -5,14 +5,63 @@ main() {
 
 requested_channel=
 headless=false
+modify_path=true
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --headless) headless=true; shift ;;
-    --channel) [ "$#" -ge 2 ] || { echo 'Usage: bash install.sh [--channel stable|nightly] [--headless]' >&2; exit 1; }; [ -z "$requested_channel" ] || { echo 'Specify one channel.' >&2; exit 1; }; requested_channel=$2; shift 2 ;;
-    *) echo 'Usage: bash install.sh [--channel stable|nightly] [--headless]' >&2; exit 1 ;;
+    --no-modify-path) modify_path=false; shift ;;
+    --channel) [ "$#" -ge 2 ] || { echo 'Usage: bash install.sh [--channel stable|nightly] [--headless] [--no-modify-path]' >&2; exit 1; }; [ -z "$requested_channel" ] || { echo 'Specify one channel.' >&2; exit 1; }; requested_channel=$2; shift 2 ;;
+    *) echo 'Usage: bash install.sh [--channel stable|nightly] [--headless] [--no-modify-path]' >&2; exit 1 ;;
   esac
 done
 case "$requested_channel" in ''|stable|nightly) ;; *) echo 'Choose either stable or nightly.' >&2; exit 1;; esac
+configure_path() {
+  if [ "$modify_path" = true ]; then
+    python3 - "$HOME" "${SHELL:-}" "${ZDOTDIR:-$HOME}" <<'PY_PATH'
+import os, pathlib, pwd, stat, sys
+home = pathlib.Path(sys.argv[1]).resolve()
+shell = pathlib.Path(sys.argv[2] or pwd.getpwuid(os.getuid()).pw_shell).name
+begin, end = '# >>> Raphie PATH >>>', '# <<< Raphie PATH <<<'
+block = begin + '''
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+''' + end + '\n'
+if shell == 'bash':
+    login = next((home / name for name in ('.bash_profile', '.bash_login', '.profile') if (home / name).exists()), home / '.profile')
+    files = [home / '.bashrc', login]
+elif shell == 'zsh':
+    directory = pathlib.Path(sys.argv[3])
+    files = [directory / '.zshrc', directory / '.zprofile']
+else:
+    files = []
+    print('Shell PATH setup is automatic for Bash and Zsh; configure ~/.local/bin for your shell.')
+for path in files:
+    try:
+        target = path.resolve()
+        if home not in target.parents: raise ValueError()
+        if target.exists():
+            info = target.stat()
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid(): raise ValueError()
+        content = target.read_text() if target.exists() else ''
+        if begin in content:
+            if end not in content: raise ValueError()
+            continue
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(target, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'w') as out:
+            out.write(('\n' if content and not content.endswith('\n') else '') + '\n' + block)
+        print('Configured Raphie PATH in ' + str(path) + ' (applies to new terminals).')
+    except (OSError, ValueError, RuntimeError):
+        print('Could not safely configure ' + str(path) + '; add ~/.local/bin to PATH manually.', file=sys.stderr)
+PY_PATH
+  fi
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) printf 'For this Bash/Zsh session, run: export PATH="$HOME/.local/bin:$PATH"\n' ;;
+  esac
+}
 for command in curl python3; do
   command -v "$command" >/dev/null || { echo "Raphie needs $command; install it and retry." >&2; exit 1; }
 done
@@ -104,6 +153,7 @@ current_version=
 if [ "$updating" = true ]; then
   current_version=$(cat "$install_dir/.raphie-user-install")
   case "$current_version" in *[!a-zA-Z0-9._-]*|'') echo 'Installed version is unknown; refusing to replace it automatically.' >&2; exit 1;; esac
+  configure_path
 fi
 # Explicit file-backed headless mode. Desktop installs keep the OS credential store.
 configure_headless() {
@@ -326,7 +376,7 @@ else
   claimed=false
 fi
 printf '\nInstalled Raphie %s (%s channel).\n' "$version" "$channel"
-case ":$PATH:" in *":$bin_dir:"*) ;; *) printf 'Add %s to your PATH (for bash/zsh: export PATH="$HOME/.local/bin:$PATH").\n' "$bin_dir" ;; esac
+if [ "$updating" = false ]; then configure_path; fi
 service_started=false
 service_attempted=false
 case "$(uname -s)" in
