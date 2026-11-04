@@ -147,7 +147,7 @@ for (const images of [true, false])
           mimeType: "image/png",
           data: Buffer.from(png).toString("base64"),
         });
-      expect(JSON.stringify(content)).toContain("not extracted text");
+      expect(JSON.stringify(content)).toContain("not model document inputs");
       expect(JSON.stringify(content)).toContain(pdf.path!);
     } finally {
       await gateway.close();

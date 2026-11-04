@@ -53,6 +53,7 @@ import {
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
+import { createDocumentTools } from "../domains/workspaces/infrastructure/document-tools.ts";
 import { RuntimeWorkspace } from "../domains/workspaces/infrastructure/runtime-workspace.ts";
 import { createWorkspaceTools } from "../domains/workspaces/infrastructure/workspace-tools.ts";
 import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
@@ -408,6 +409,7 @@ export class Gateway {
           })
         : createWorkspaceTools(this.workspace, session),
     );
+    this.registry.install(createDocumentTools(this.workspace, session));
   }
 
   async saveSandboxSettings(input: SaveSandboxSettings) {

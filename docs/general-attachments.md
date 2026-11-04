@@ -36,13 +36,19 @@ not resized, converted or OCRed locally, and providers can reject individual
 formats, corrupt files or image-size limits. Accepted image bytes persist with the
 admitted task, so recovery does not substitute an edited working copy.
 
-PDFs are stored and referenced as files. This delivery does **not** extract text,
-render PDF pages, perform OCR, or send native PDF/document blocks to a provider.
-The default just-bash environment has no PDF parser. A Container image may supply
-suitable tools; the baseline fixture does not promise them. The same limits apply
-to Office documents and other binary formats: uploading a file does not imply the
-model can understand it. The model is instructed to inspect available tools and
-report capability limits accurately.
+The `read_document` tool reads workspace files in either execution provider. It
+uses local AnyDoc conversion for PDFs, Word, Excel, PowerPoint, CSV, OpenDocument,
+RTF and EPUB and returns Markdown in 16,000-character chunks with a continuation
+offset. Inputs are limited to 8 MiB. Conversion runs in a time-limited worker,
+without inherited credentials or hosted requests. Plain text files remain readable
+using the workspace's existing tools.
+
+AnyDoc rejects an entire PDF if any page appears to need OCR. Raphie falls back to
+local PDF text extraction, marks the result as potentially incomplete and identifies
+empty pages. The fallback processes at most 200 pages or roughly one million
+characters and reports if it stopped early. It does not perform OCR or render
+scans, so image-only content is unavailable. Encrypted, unsupported and malformed
+files return an error; extracted text can lose complex layout or embedded images.
 
 ## Persistence and limits
 

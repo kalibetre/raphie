@@ -13,11 +13,13 @@
     "@earendil-works/pi-durable": "1.5.0",
     "@earendil-works/pi-mcp": "1.5.0",
     "@earendil-works/pi-schema": "1.5.0",
+    "@firecrawl/anydoc-wasm": "0.2.4",
     "@raphie/contracts": "0.1.0",
     "chat": "4.44.0",
     "effect": "4.1.2",
     "hono": "4.13.16",
     "just-bash": "3.6.0",
+    "pdfjs-dist": "5.4.624",
     "zod": "4.6.7"
   }
 }

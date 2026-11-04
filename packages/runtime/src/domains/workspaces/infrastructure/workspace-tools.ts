@@ -6,11 +6,11 @@ import {
 import { obj, str } from "@earendil-works/pi-schema";
 
 import { InputError } from "../../../shared/application/input-error.ts";
-import type { BotWorkspace } from "./bot-workspace.ts";
+import type { RuntimeWorkspace } from "./runtime-workspace.ts";
 
 /** Capability is closed over the bot container; no model-selected IDs or paths. */
 export function createWorkspaceTools(
-  workspace: Pick<BotWorkspace, "execute">,
+  workspace: Pick<RuntimeWorkspace, "execute">,
   session: (conversationId: number) => Promise<string | undefined>,
 ) {
   return defineExtension({
