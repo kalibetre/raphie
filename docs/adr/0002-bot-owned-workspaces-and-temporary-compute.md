@@ -78,3 +78,27 @@ are bounded and never silently evicted. This supplies logical separation, not an
 OS/VM boundary or an OS memory quota. VM leases, native capability escalation,
 transfer and separate model-generation concurrency policy remain future work. See
 [delivered behavior and limits](../bot-workspaces.md).
+
+## Unified files and general attachments (2026-11-04)
+
+The workspace now presents one file namespace across just-bash and Container.
+Checkpoint serialization and native disk files are storage representations of
+that bot's workspace, not independently owned provider stores. Fenced transfers
+publish disk state before native selection and atomically commit a validated
+snapshot with lightweight selection. Oversized native trees block a lightweight
+switch; existing file/receipt limits are retained. Legacy conflicts preserve the
+whole lightweight tree in `.recovered-just-bash` alongside native files. A migration
+journal and recoverable disk publication preserve interrupted transitions.
+
+General composer uploads publish workspace working files and durable message
+references. Implementation choice: keep immutable content-addressed originals in
+the existing attachment archive so edits cannot change historical downloads,
+image inputs or pending approval deliveries. This is an archival version, not a
+second working-file owner. The original approval workflow remains compatible and
+continues to archive files without depending on workspace capacity. No garbage
+collection or bulk document extraction is introduced. Supported raster images are
+submitted as image inputs only for models advertising image support. PDFs remain
+files for suitable tools, with no implied native PDF understanding.
+
+See [workspace behavior](../bot-workspaces.md) and
+[general attachments](../general-attachments.md) for API, recovery and limits.
