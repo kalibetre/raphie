@@ -1,5 +1,4 @@
 import type { Context } from "@earendil-works/chord";
-import { Type } from "@earendil-works/pi-ai";
 import {
   defineDoc,
   defineExtension,
@@ -9,6 +8,15 @@ import {
   type ToolExecutionApi,
   type Tx,
 } from "@earendil-works/pi-durable";
+import {
+  bool,
+  int,
+  nul,
+  obj,
+  opt,
+  str,
+  union,
+} from "@earendil-works/pi-schema";
 import type { SaveScheduledJob } from "@raphie/contracts";
 
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
@@ -42,24 +50,24 @@ async function mutate(
   return { output: [{ type: "text" as const, text: result.text }] };
 }
 
-const name = Type.String({ minLength: 1, maxLength: 80 });
-const prompt = Type.String({
+const name = str({ minLength: 1, maxLength: 80 });
+const prompt = str({
   minLength: 1,
   maxLength: 4000,
   description:
     "Instructions for the future reply, including requested reminder content and tone.",
 });
-const delaySeconds = Type.Integer({
+const delaySeconds = int({
   minimum: 1,
   maximum: 31536000,
   description: "Seconds from now until the next run. Two minutes is 120.",
 });
-const everyMinutes = Type.Integer({
+const everyMinutes = int({
   minimum: 1,
   maximum: 525600,
   description: "Repeat interval in minutes.",
 });
-const id = Type.String({
+const id = str({
   minLength: 1,
   maxLength: 100,
   description:
@@ -97,15 +105,12 @@ export function createScheduleTools(jobs: BotJobs) {
         name: "schedule_create",
         description:
           "Create a NEW reminder or recurring prompt in this conversation directly on the owner's request, without approval or confirmation. To edit an existing reminder, use schedule_update instead; do not delete and recreate it. Omit everyMinutes for a one-time reminder. The runtime must be running; delivery is a conversation reply, not a device push notification. Only confirm success after saved:true. External actions performed by the job still require approval.",
-        parameters: Type.Object(
-          {
-            name,
-            prompt,
-            delaySeconds,
-            everyMinutes: Type.Optional(everyMinutes),
-          },
-          { additionalProperties: false },
-        ),
+        parameters: obj({
+          name,
+          prompt,
+          delaySeconds,
+          everyMinutes: opt(everyMinutes),
+        }),
         replay: "safe",
         execute: async (args, api, ctx) => {
           const firstRunAt = await api.memo(
@@ -151,19 +156,17 @@ export function createScheduleTools(jobs: BotJobs) {
         name: "schedule_update",
         description:
           "Update an existing reminder IN PLACE, keeping its ID. Use this when the owner changes their mind about its topic, wording, name or timing; never delete and recreate it. No approval or confirmation is needed. List schedules first to identify the right ID. Supply only changed fields. A topic or wording change needs only id and prompt; omit delaySeconds to keep the original due time. delaySeconds resets the next run relative to now and re-enables the job unless enabled:false. everyMinutes:null makes it one-time. enabled:false pauses it. This does not cancel an already submitted reply or approve external actions.",
-        parameters: Type.Object(
-          {
+        parameters: {
+          ...obj({
             id,
-            name: Type.Optional(name),
-            prompt: Type.Optional(prompt),
-            delaySeconds: Type.Optional(delaySeconds),
-            everyMinutes: Type.Optional(
-              Type.Union([everyMinutes, Type.Null()]),
-            ),
-            enabled: Type.Optional(Type.Boolean()),
-          },
-          { additionalProperties: false, minProperties: 2 },
-        ),
+            name: opt(name),
+            prompt: opt(prompt),
+            delaySeconds: opt(delaySeconds),
+            everyMinutes: opt(union([everyMinutes, nul()])),
+            enabled: opt(bool()),
+          }),
+          minProperties: 2,
+        },
         replay: "safe",
         execute: async (args, api, ctx) => {
           const patch: Partial<SaveScheduledJob> & { enabled?: boolean } = {};
@@ -211,7 +214,7 @@ export function createScheduleTools(jobs: BotJobs) {
         name: "schedule_delete",
         description:
           "Remove or cancel this bot's schedule directly when the owner asks, without approval or confirmation. Do not use this to edit a reminder or change its topic; use schedule_update for that. List schedules first to identify the right ID. Stops future scheduled prompts; keeps the conversation and does not cancel a reply already submitted.",
-        parameters: Type.Object({ id }, { additionalProperties: false }),
+        parameters: obj({ id }),
         replay: "safe",
         execute: (args, api, ctx) =>
           mutate(jobs, api, ctx, async (tx) => ({
@@ -223,7 +226,7 @@ export function createScheduleTools(jobs: BotJobs) {
         name: "schedule_list",
         description:
           "List this bot's scheduled prompts and reminders, including IDs, timing and enabled state. Use before modifying or deleting a schedule. Does not change schedules.",
-        parameters: Type.Object({}, { additionalProperties: false }),
+        parameters: obj({}),
         replay: "safe",
         outputLimits: { maxBytes: 64000, maxLines: 1000 },
         execute: async () => ({

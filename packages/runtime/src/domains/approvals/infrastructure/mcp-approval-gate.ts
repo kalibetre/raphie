@@ -1,6 +1,6 @@
-import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { toLlmContent } from "@earendil-works/pi-mcp";
+import type { Schema } from "@earendil-works/pi-schema";
 
 import type { McpClient } from "../../../infrastructure/mcp/client.ts";
 import type { Telemetry } from "../../../shared/application/telemetry.ts";
@@ -67,11 +67,11 @@ export function createMcpTools(
       name: toolName(namespace, tool.name),
       deferred: options.namespace ? true : undefined,
       description: `${tool.description ?? tool.name}\n${options.documentationTools?.includes(tool.name) ? "Documentation lookup." : "Requires the owner to approve the exact arguments before execution."}`,
-      parameters: Type.Unsafe<Record<string, unknown>>({
+      parameters: {
         ...tool.inputSchema,
         type: "object",
         properties: tool.inputSchema.properties ?? {},
-      }),
+      } as Schema<Record<string, unknown>>,
       replay: "safe", // Only this durable gate is replay-safe, not the remote action.
       outputLimits: { maxBytes: 32_000, maxLines: 1000 },
       execute: async (args, api, ctx) => {

@@ -75,7 +75,11 @@ export function Chat({
       ),
     [conversationId, query, workspace],
   );
-  const { messages } = useChat({ connection, live: true });
+  const { messages } = useChat({
+    connection,
+    live: true,
+    threadId: conversationId,
+  });
   const turns = state.turns.filter((t) => t.conversationId === conversationId);
   const steps = useMemo(() => {
     const approvals = state.toolApprovals.filter(
