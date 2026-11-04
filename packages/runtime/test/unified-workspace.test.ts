@@ -149,3 +149,98 @@ test("interrupted disk publication recovers the committed checkpoint and receipt
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("oversized legacy adoption keeps recovery settings available and preserves both sources", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-legacy-limit-"));
+  const root = join(directory, "workspace");
+  const legacy = await BotWorkspace.open(join(root, "checkpoint.sqlite"));
+  await legacy.execute("s", "old", "echo legacy > note");
+  await legacy.close();
+  await mkdir(join(root, "files"));
+  await writeFile(
+    join(root, "files", "large"),
+    new Uint8Array(8 * 1024 * 1024 + 1),
+  );
+  const cli = fenceOnly();
+  let workspace = await RuntimeWorkspace.open({
+    directory,
+    workspaceId: "fixture",
+  });
+  try {
+    expect(
+      (await workspace.info()).providers.find((p) => p.id === "just-bash")
+        ?.available,
+    ).toBe(false);
+    expect(() => workspace.list()).toThrow("8 MiB");
+    await workspace.close();
+    // The published recovery folder is recognized on retry rather than nested again.
+    workspace = await RuntimeWorkspace.open({
+      directory,
+      workspaceId: "fixture",
+    });
+    await workspace.saveSettings({
+      ...workspace.settings(),
+      provider: "container",
+      hostNetworkAcknowledged: true,
+    });
+    expect(
+      await readFile(
+        join(root, "files", ".recovered-just-bash", "note"),
+        "utf8",
+      ),
+    ).toBe("legacy\n");
+    await rm(join(root, "files", "large"));
+    await workspace.saveSettings({
+      ...workspace.settings(),
+      provider: "just-bash",
+    });
+    expect(
+      (
+        await workspace.execute(
+          "s",
+          "recovered",
+          "cat .recovered-just-bash/note",
+        )
+      ).stdout,
+    ).toBe("legacy\n");
+  } finally {
+    await workspace.close();
+    cli.mockRestore();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("repeated publication preserves restricted directory modes without stranding recovery backups", async () => {
+  const { removeWorkspaceTree } =
+    await import("../src/domains/workspaces/infrastructure/workspace-disk.ts");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-workspace-modes-"));
+  const options = { directory, workspaceId: "fixture" };
+  let workspace = await RuntimeWorkspace.open(options);
+  try {
+    expect(
+      (
+        await workspace.execute(
+          "s",
+          "restrict",
+          "mkdir restricted; echo kept > restricted/file; chmod 000 restricted",
+        )
+      ).committed,
+    ).toBe(true);
+    for (let n = 0; n < 2; n++) {
+      await workspace.close();
+      workspace = await RuntimeWorkspace.open(options);
+    }
+    expect(
+      (
+        await workspace.execute(
+          "s",
+          "restore",
+          "chmod 755 restricted; cat restricted/file",
+        )
+      ).stdout,
+    ).toBe("kept\n");
+  } finally {
+    await workspace.close();
+    await removeWorkspaceTree(directory);
+  }
+});

@@ -76,7 +76,11 @@ export async function diskCheckpoint(root: string): Promise<Checkpoint> {
 }
 
 export function validateCheckpoint(entries: Checkpoint) {
-  checkpointSchema.parse(entries);
+  if (!checkpointSchema.safeParse(entries).success)
+    throw new InputError(
+      "Workspace tree exceeds just-bash's supported path or entry limits. Keep Container selected and reduce it first.",
+      409,
+    );
   if (
     entries.reduce(
       (n, e) =>
@@ -129,7 +133,7 @@ export async function recoverDisk(directory: string) {
     (await lstat(root)).isSymbolicLink()
   )
     throw new InputError("Invalid workspace storage directory.", 409);
-  await rm(join(directory, "files.next"), { recursive: true, force: true });
+  await removeWorkspaceTree(join(directory, "files.next"));
 }
 
 async function exists(path: string) {
@@ -142,6 +146,22 @@ async function exists(path: string) {
   );
 }
 
+/** Private staging/backup trees can contain guest directories with mode 000.
+ * Only quiesced workspace representations are passed here; never follow links. */
+export async function removeWorkspaceTree(path: string): Promise<void> {
+  const stat = await lstat(path).catch((error) => {
+    if (error.code === "ENOENT") return undefined;
+    throw error;
+  });
+  if (!stat) return;
+  if (stat.isDirectory() && !stat.isSymbolicLink()) {
+    await chmod(path, 0o700);
+    for (const name of await readdir(path))
+      await removeWorkspaceTree(join(path, name));
+  }
+  await rm(path, { recursive: stat.isDirectory(), force: true });
+}
+
 /** SQLite remains the recovery journal while just-bash is selected. */
 export async function publishCheckpoint(
   directory: string,
@@ -151,7 +171,7 @@ export async function publishCheckpoint(
   const next = join(directory, "files.next");
   const root = join(directory, "files");
   const previous = join(directory, "files.previous");
-  await rm(next, { recursive: true, force: true });
+  await removeWorkspaceTree(next);
   await mkdir(next, { mode: 0o700 });
   for (const entry of [...entries].sort(
     (a, b) => a.path.length - b.path.length,
@@ -186,12 +206,12 @@ export async function publishCheckpoint(
       await chmod(path, entry.mode & 0o777);
       await utimes(path, new Date(entry.mtime), new Date(entry.mtime));
     }
-  await rm(previous, { recursive: true, force: true });
+  await removeWorkspaceTree(previous);
   await rename(root, previous);
   await syncDirectory(directory);
   await rename(next, root);
   await syncDirectory(directory);
-  await rm(previous, { recursive: true, force: true });
+  await removeWorkspaceTree(previous);
 }
 
 /** Preserve both legacy stores, relocating the checkpoint only when disk has data. */
@@ -230,11 +250,11 @@ export async function migrateCheckpoint(
     return;
   }
   const temporary = join(directory, "legacy.next");
-  await rm(temporary, { recursive: true, force: true });
+  await removeWorkspaceTree(temporary);
   await mkdir(temporary, { mode: 0o700 });
   await mkdir(join(temporary, "files"), { mode: 0o700 });
   await publishCheckpoint(temporary, entries);
   await rename(join(temporary, "files"), recovery);
   await syncDirectory(root);
-  await rm(temporary, { recursive: true, force: true });
+  await removeWorkspaceTree(temporary);
 }
