@@ -1,3 +1,4 @@
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { LiveState } from "@earendil-works/pi-durable";
 
 import type {
@@ -23,7 +24,12 @@ export class ExecutionTraces {
     this.session = session;
   }
 
-  accept(live: LiveState | undefined, turnId?: string, partial = false) {
+  accept(
+    live: LiveState | undefined,
+    turnId?: string,
+    partial = false,
+    completedMessage?: AssistantMessage,
+  ) {
     const running = live?.run !== undefined;
     if (running && !this.run) this.beginRun(turnId, partial);
     if (!running && live?.runFailure) this.failed = true;
@@ -54,6 +60,22 @@ export class ExecutionTraces {
           "model.id": message.model,
         });
     } else {
+      if (completedMessage) {
+        this.failed ||=
+          completedMessage.stopReason === "error" ||
+          completedMessage.stopReason === "aborted";
+        this.model?.annotate({
+          "model.provider": completedMessage.provider,
+          "model.id": completedMessage.model,
+          "model.stop_reason": completedMessage.stopReason,
+          "model.input_tokens": completedMessage.usage.input,
+          "model.output_tokens": completedMessage.usage.output,
+          "model.cache_read_tokens": completedMessage.usage.cacheRead,
+          "model.cache_write_tokens": completedMessage.usage.cacheWrite,
+        });
+      }
+      if (live?.runFailure?.reason === "model_error")
+        this.model?.annotate({ "model.stop_reason": "error" });
       this.model?.end(this.failed ? "error" : "ok");
       this.model = undefined;
       this.retry?.end(this.failed ? "error" : "interrupted");

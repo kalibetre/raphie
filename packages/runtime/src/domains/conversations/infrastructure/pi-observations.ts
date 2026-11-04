@@ -4,6 +4,7 @@ import type {
   ConversationId,
   ConversationView,
   ConversationWatch,
+  EntryId,
   LiveState,
   UsageState,
 } from "@earendil-works/pi-durable";
@@ -35,6 +36,7 @@ export class Observations {
   live = new Map<number, LiveConversation>();
   traces = new Map<number, ExecutionTraces>();
   private states = new Map<number, LiveState | undefined>();
+  private entryIds = new Map<number, EntryId>();
 
   constructor(app: DurableContext) {
     this.app = app;
@@ -68,7 +70,23 @@ export class Observations {
         const submission = await this.app.harness.submission(input, context);
         turnId = (await submission?.status(context))?.requestId;
       }
-      traces.accept(next, turnId, initial);
+      const previousEntryId = this.entryIds.get(id);
+      const completedMessage =
+        previous?.generation && !next?.generation
+          ? view.entries
+              .filter(
+                (entry) =>
+                  previousEntryId === undefined || entry.id > previousEntryId,
+              )
+              .flatMap((entry) => entry.model ?? [])
+              .findLast(
+                (message): message is AssistantMessage =>
+                  message.role === "assistant",
+              )
+          : undefined;
+      const lastEntryId = view.entries.at(-1)?.id;
+      if (lastEntryId !== undefined) this.entryIds.set(id, lastEntryId);
+      traces.accept(next, turnId, initial, completedMessage);
 
       const message = next?.generation?.message as AssistantMessage | undefined;
       const text =
@@ -82,7 +100,9 @@ export class Observations {
       });
       this.states.set(id, next);
 
-      const rows = initial ? [] : this.activityRows(previous, next);
+      const rows = initial
+        ? []
+        : this.activityRows(previous, next, completedMessage);
       if (rows.length)
         await this.app.root.commit(async (tx) => {
           const journal = await tx.doc(Activity);
@@ -110,13 +130,15 @@ export class Observations {
   private activityRows(
     previous: LiveState | undefined,
     next: LiveState | undefined,
+    completedMessage?: AssistantMessage,
   ): ActivityRow[] {
     const rows: ActivityRow[] = [];
     if (!previous?.generation && next?.generation)
       rows.push({ type: "model.started", summary: "Model response started" });
     if (previous?.generation && !next?.generation) {
-      const message = previous.generation.message as
-        AssistantMessage | undefined;
+      const message =
+        completedMessage ??
+        (previous.generation.message as AssistantMessage | undefined);
       rows.push({
         type: "model.completed",
         summary: "Model response received",
@@ -189,5 +211,6 @@ export class Observations {
     this.traces.clear();
     this.streams.clear();
     this.states.clear();
+    this.entryIds.clear();
   }
 }
