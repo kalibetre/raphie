@@ -130,7 +130,9 @@ export class Gateway {
     this.configurationGate =
       options.modelConnectionGate ?? new ModelConnectionGate();
     this.telemetry = options.telemetry ?? noTelemetry;
-    this.files = new Files(join(options.directory, "files"));
+    this.files = new Files(join(options.directory, "files"), {
+      putFile: (path, bytes) => this.workspace.putFile(path, bytes),
+    });
     this.workflow = deliveryWorkflow(
       this.files,
       options.discordThreadId ?? null,
@@ -144,6 +146,7 @@ export class Gateway {
       options.model,
       this.configurationGate,
       options.memory,
+      this.files,
     );
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);

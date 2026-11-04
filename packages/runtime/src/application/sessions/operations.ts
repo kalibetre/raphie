@@ -32,6 +32,7 @@ export interface SessionOperations {
     input: {
       eventId: string;
       text: string;
+      attachments?: string[];
       sessionId?: string;
       model?: ModelSelection;
     },
@@ -80,6 +81,7 @@ export class Sessions implements SessionOperations {
     input: {
       eventId: string;
       text: string;
+      attachments?: string[];
       sessionId?: string;
       model?: ModelSelection;
     },
@@ -88,6 +90,7 @@ export class Sessions implements SessionOperations {
     const receipt = await this.conversations.send({
       eventId: input.eventId,
       text: input.text,
+      attachments: input.attachments,
       sessionId: input.sessionId,
       model: input.model,
       source: verified.source,
@@ -105,6 +108,7 @@ export class Sessions implements SessionOperations {
     input: {
       eventId: string;
       text: string;
+      attachments?: string[];
       sessionId?: string;
       scheduled: { name: string };
     },

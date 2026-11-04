@@ -146,6 +146,43 @@ export function Chat({
                     {text}
                   </ReactMarkdown>
                 </div>
+                {turn?.attachments?.length ? (
+                  <ul
+                    className="message-attachments"
+                    aria-label="Message attachments"
+                  >
+                    {turn.attachments.map((file) => (
+                      <li key={file.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void workspace
+                              .download(`/api/files/${file.id}`)
+                              .then((blob) => {
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.href = url;
+                                link.download = file.name;
+                                link.click();
+                                setTimeout(
+                                  () => URL.revokeObjectURL(url),
+                                  1000,
+                                );
+                              })
+                              .catch(() =>
+                                setControlError(
+                                  "Could not download this attachment. Please retry.",
+                                ),
+                              );
+                          }}
+                        >
+                          {file.name}
+                        </button>
+                        <span>{file.path}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {turn && (
                   <time dateTime={new Date(turn.createdAt).toISOString()}>
                     {time(turn.createdAt)}

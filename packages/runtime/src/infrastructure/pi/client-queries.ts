@@ -171,6 +171,7 @@ export class PiClientQueries implements ClientQueries {
       conversationId: id,
       source: t.source,
       text: t.text,
+      ...(t.attachments?.length ? { attachments: t.attachments } : {}),
       createdAt: t.createdAt,
       status: t.status,
       answer: t.answer,

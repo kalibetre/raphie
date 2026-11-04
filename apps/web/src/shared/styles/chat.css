@@ -595,3 +595,47 @@
     margin-left: 0;
   }
 }
+
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
+  list-style: none;
+  padding: 0;
+}
+.composer-attachments li {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  max-width: 10rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.25rem;
+  font-size: 0.75rem;
+}
+.composer-attachments li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-attachments button {
+  flex-shrink: 0;
+  padding: 0.25rem;
+}
+.message-attachments {
+  list-style: none;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.message-attachments button {
+  text-decoration: underline;
+  text-align: left;
+}
+.message-attachments span {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}

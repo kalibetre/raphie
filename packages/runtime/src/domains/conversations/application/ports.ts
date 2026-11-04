@@ -5,6 +5,7 @@ export type SendMessage = {
   actor: string;
   eventId: string;
   text: string;
+  attachments?: string[];
   conversationId?: number;
   sessionId?: string;
   model?: ModelSelection;

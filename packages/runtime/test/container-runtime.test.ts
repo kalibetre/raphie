@@ -388,3 +388,64 @@ containerTest(
   },
   30_000,
 );
+
+containerTest(
+  "general uploads are atomic native workspace files and survive switching compute",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "raphie-native-upload-"));
+    const gateway = await Gateway.open({
+      directory,
+      containerNamePrefix: "raphie-test",
+      deferResume: true,
+    });
+    try {
+      await gateway.saveSandboxSettings({
+        ...gateway.workspace.settings(),
+        provider: "container",
+        hostNetworkAcknowledged: true,
+      });
+      const bytes = new Uint8Array([0, 255, 128, 1]);
+      const file = await gateway.files.upload("日本語.bin", bytes);
+      expect(
+        getOrThrow(
+          await gateway.workspace
+            .env("read-upload")
+            .readBinaryFile(file.path!, context),
+        ),
+      ).toEqual(bytes);
+      expect(await gateway.files.upload("日本語.bin", bytes)).toEqual(file);
+      const env = gateway.workspace.env("tamper");
+      getOrThrow(
+        await env.exec(
+          `rm '${file.path}'; ln -s /tmp/upload-target '${file.path}'`,
+          {},
+          context,
+        ),
+      );
+      await assert.rejects(
+        gateway.files.upload("日本語.bin", bytes),
+        /Could not write/,
+      );
+      expect(getOrThrow(await env.exists("/tmp/upload-target", context))).toBe(
+        false,
+      );
+      getOrThrow(await env.remove(file.path!, undefined, context));
+      await gateway.files.upload("日本語.bin", bytes);
+      await gateway.saveSandboxSettings({
+        ...gateway.workspace.settings(),
+        provider: "just-bash",
+      });
+      const listing = await gateway.workspace.list(
+        file.path!.slice(0, file.path!.lastIndexOf("/")),
+      );
+      expect(
+        (await gateway.workspace.download(file.path!, listing.revision)).bytes,
+      ).toEqual(Buffer.from(bytes));
+      expect(await gateway.files.read(file.id)).toEqual(Buffer.from(bytes));
+    } finally {
+      await gateway.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  30_000,
+);
