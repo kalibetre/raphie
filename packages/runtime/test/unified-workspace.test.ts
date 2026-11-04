@@ -244,3 +244,64 @@ test("repeated publication preserves restricted directory modes without strandin
     await removeWorkspaceTree(directory);
   }
 });
+
+test("legacy checkpoint adoption preserves files under restricted directories", async () => {
+  const { removeWorkspaceTree } =
+    await import("../src/domains/workspaces/infrastructure/workspace-disk.ts");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-legacy-mode-"));
+  const legacy = await BotWorkspace.open(
+    join(directory, "workspace", "checkpoint.sqlite"),
+  );
+  await legacy.execute(
+    "s",
+    "old",
+    "mkdir restricted; echo kept > restricted/file; chmod 000 restricted",
+  );
+  await legacy.close();
+  let workspace: RuntimeWorkspace | undefined;
+  try {
+    workspace = await RuntimeWorkspace.open({
+      directory,
+      workspaceId: "fixture",
+    });
+    expect(
+      (
+        await workspace.execute(
+          "s",
+          "read",
+          "chmod 755 restricted; cat restricted/file",
+        )
+      ).stdout,
+    ).toBe("kept\n");
+  } finally {
+    await workspace?.close();
+    await removeWorkspaceTree(directory);
+  }
+});
+
+test("interrupted legacy publication recovers when workspace root is restricted", async () => {
+  const { migrateCheckpoint, recoverDisk, removeWorkspaceTree } =
+    await import("../src/domains/workspaces/infrastructure/workspace-disk.ts");
+  const directory = await mkdtemp(join(tmpdir(), "raphie-legacy-root-"));
+  const root = join(directory, "workspace");
+  const legacy = await BotWorkspace.open(join(root, "checkpoint.sqlite"));
+  await legacy.execute("s", "old", "echo kept > file; chmod 000 /workspace");
+  await recoverDisk(root);
+  const target = legacy.migrationTarget(false);
+  await migrateCheckpoint(root, legacy.snapshot(), target);
+  await legacy.close();
+  let workspace: RuntimeWorkspace | undefined;
+  try {
+    workspace = await RuntimeWorkspace.open({
+      directory,
+      workspaceId: "fixture",
+    });
+    expect(
+      (await workspace.execute("s", "read", "chmod 755 /workspace; cat file"))
+        .stdout,
+    ).toBe("kept\n");
+  } finally {
+    await workspace?.close();
+    await removeWorkspaceTree(directory);
+  }
+});

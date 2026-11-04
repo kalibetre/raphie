@@ -38,7 +38,7 @@ actions. Existing text-draft keys remain unchanged; references use a companion
 key. Immutable originals reuse the archival store and preserve its old `put`
 behavior, avoiding a new capacity dependency in approval recovery. This immutable
 version policy is an implementation choice, not a user-selected requirement.
-No dependency or lockfile change was introduced.
+The subsequent document reader adds AnyDoc and PDF.js dependencies and updates the lockfile.
 
 ## Security
 

@@ -56,12 +56,16 @@ export class RuntimeWorkspace {
         }
       }
       if (!checkpoint.initialized()) {
-        await workspace.migrateFiles();
+        const target = await workspace.migrateFiles();
+        const legacy = checkpoint.snapshot();
         checkpoint.adoptFiles(
           checkpoint.settings().provider === "just-bash"
-            ? await diskCheckpoint(
-                join(options.directory, "workspace", "files"),
-              )
+            ? target === "root" &&
+              legacy.some((entry) => entry.path !== "/workspace")
+              ? legacy
+              : await diskCheckpoint(
+                  join(options.directory, "workspace", "files"),
+                )
             : undefined,
         );
       } else if (checkpoint.settings().provider === "just-bash") {
@@ -96,10 +100,27 @@ export class RuntimeWorkspace {
   private async migrateFiles() {
     const directory = join(this.options.directory, "workspace");
     await recoverDisk(directory);
-    const target = this.checkpoint.migrationTarget(
-      (await readdir(join(directory, "files"))).length > 0,
-    );
+    let target = this.checkpoint.savedMigrationTarget();
+    if (!target) {
+      try {
+        target = this.checkpoint.migrationTarget(
+          (await readdir(join(directory, "files"))).length > 0,
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          (error.code === "EACCES" || error.code === "EPERM")
+        )
+          throw new InputError(
+            "Workspace files cannot be read with their current permissions. Preserve the files and restore access before retrying.",
+            409,
+          );
+        throw error;
+      }
+    }
     await migrateCheckpoint(directory, this.checkpoint.snapshot(), target);
+    return target;
   }
 
   private requireFiles() {
@@ -146,13 +167,18 @@ export class RuntimeWorkspace {
         const directory = join(this.options.directory, "workspace");
         // openContainer fenced all native writers before either representation is read.
         const adopting = !this.checkpoint.initialized();
-        if (adopting) await this.migrateFiles();
-        else if (before.provider === "just-bash")
+        const target = adopting ? await this.migrateFiles() : undefined;
+        if (!adopting && before.provider === "just-bash")
           await publishCheckpoint(directory, this.checkpoint.snapshot());
         const entries =
           input.provider === "just-bash" &&
           (before.provider === "container" || adopting)
-            ? await diskCheckpoint(join(directory, "files"))
+            ? target === "root" &&
+              this.checkpoint
+                .snapshot()
+                .some((entry) => entry.path !== "/workspace")
+              ? this.checkpoint.snapshot()
+              : await diskCheckpoint(join(directory, "files"))
             : undefined;
         if (input.provider !== "container") await next?.close();
         const saved = adopting

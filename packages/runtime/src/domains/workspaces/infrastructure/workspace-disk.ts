@@ -71,7 +71,20 @@ export async function diskCheckpoint(root: string): Promise<Checkpoint> {
         await visit(relative ? `${relative}/${name}` : name);
   }
 
-  await visit("");
+  try {
+    await visit("");
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error.code === "EACCES" || error.code === "EPERM")
+    )
+      throw new InputError(
+        "Workspace files cannot be read with their current permissions. Preserve the files and restore access before retrying.",
+        409,
+      );
+    throw error;
+  }
   return validateCheckpoint(entries);
 }
 

@@ -186,14 +186,19 @@ export class BotWorkspace {
       .get();
   }
 
-  migrationTarget(hasNativeFiles: boolean): "root" | "recovery" {
+  savedMigrationTarget(): "root" | "recovery" | undefined {
     this.current();
     const row = this.db
       .query<{ value: string }, []>(
         "SELECT value FROM workspace_metadata WHERE key='migration'",
       )
       .get();
-    if (row) return row.value as "root" | "recovery";
+    return row?.value as "root" | "recovery" | undefined;
+  }
+
+  migrationTarget(hasNativeFiles: boolean): "root" | "recovery" {
+    const saved = this.savedMigrationTarget();
+    if (saved) return saved;
     const target = hasNativeFiles ? "recovery" : "root";
     this.db
       .query("INSERT INTO workspace_metadata VALUES('migration',?)")

@@ -68,6 +68,7 @@ export function Composer({
     uploading,
     upload,
     save: saveFiles,
+    removeSent,
   } = useComposerAttachments(key, setError);
   const hasContent = !!draft.trim() || files.length > 0;
   const locked = sending || uploading;
@@ -137,7 +138,7 @@ export function Composer({
         setDraft("");
         draftValue.current = "";
       }
-      saveFiles([], sentKey);
+      removeSent(sentFiles, sentKey);
       if (activeKey.current === sentKey) request.current = undefined;
     } catch (error) {
       if (activeKey.current === sentKey)
