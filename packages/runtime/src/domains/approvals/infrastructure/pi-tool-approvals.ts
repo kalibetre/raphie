@@ -158,7 +158,9 @@ export class ToolApprovalService {
         };
         ctx.abortSignal?.addEventListener("abort", abort, { once: true });
         timer = setTimeout(done, Math.max(0, item.expiresAt - Date.now()));
-        watch.start(async (state) => inspect(state));
+        watch.start(async (call) =>
+          inspect(call.kind === "value" ? call.value : null),
+        );
         inspect(watch.value);
         if (ctx.abortSignal?.aborted) abort();
       });

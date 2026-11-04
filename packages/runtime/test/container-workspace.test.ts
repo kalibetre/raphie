@@ -234,7 +234,7 @@ containerTest(
         expect(changes).toBeGreaterThan(0);
         expect((await view.writeFile("healthy", "yes", context)).ok).toBe(true);
       } finally {
-        await watcher.close(context);
+        await watcher.stop(context);
       }
     });
   },

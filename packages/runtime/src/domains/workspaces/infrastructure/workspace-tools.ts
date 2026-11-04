@@ -1,9 +1,9 @@
-import { Type } from "@earendil-works/pi-ai";
 import {
   defineExtension,
   defineTool,
   section,
 } from "@earendil-works/pi-durable";
+import { obj, str } from "@earendil-works/pi-schema";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import type { BotWorkspace } from "./bot-workspace.ts";
@@ -27,10 +27,7 @@ export function createWorkspaceTools(
         name: "workspace_exec",
         description:
           "Run a bounded shell command in this bot's persistent /workspace, shared across its conversations. Read/write files directly on the owner's request. No host filesystem or external actions. Successful exit commits the checkpoint; failure rolls back this execution's file changes.",
-        parameters: Type.Object(
-          { command: Type.String({ minLength: 1, maxLength: 16384 }) },
-          { additionalProperties: false },
-        ),
+        parameters: obj({ command: str({ minLength: 1, maxLength: 16384 }) }),
         replay: "safe", // Checkpoint and stable tool receipt commit in one SQLite transaction.
         outputLimits: { maxBytes: 80_000, maxLines: 2000 },
         execute: async (args, api, ctx) => {

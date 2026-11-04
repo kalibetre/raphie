@@ -68,7 +68,9 @@ async function waitForDecision(
         done,
         Math.max(0, (approval?.expiresAt ?? 0) - runtime.now()),
       );
-      watch.start(async (value) => inspect(value));
+      watch.start(async (call) =>
+        inspect(call.kind === "value" ? call.value : null),
+      );
       inspect(watch.value);
       if (runtime.signal.aborted) aborted();
     });

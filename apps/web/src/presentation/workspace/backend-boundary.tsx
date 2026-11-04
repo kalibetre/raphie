@@ -1,10 +1,4 @@
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api } from "../../infrastructure/http/api-client";
 import { BackendWorkspace } from "../../infrastructure/http/backend-workspace";
@@ -14,15 +8,12 @@ import { BotBoundary } from "./bot-boundary";
 export function BackendBoundary({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<BackendWorkspace>();
   const [error, setError] = useState("");
-  const active = useRef<BackendWorkspace | undefined>(undefined);
-
   const load = useCallback(async (isCurrent: () => boolean = () => true) => {
     setError("");
     try {
       const { url } = await api<{ url: string }>("/api/web/connection");
       if (!isCurrent()) return;
       const next = new BackendWorkspace(url);
-      active.current = next;
       setWorkspace(next);
     } catch (error) {
       if (!isCurrent()) return;
@@ -39,9 +30,13 @@ export function BackendBoundary({ children }: { children: ReactNode }) {
     void load(() => current);
     return () => {
       current = false;
-      active.current?.dispose();
     };
   }, [load]);
+
+  useEffect(() => {
+    if (!workspace) return;
+    return () => workspace.dispose();
+  }, [workspace]);
 
   return (
     <>

@@ -40,7 +40,7 @@ test("TanStack AI consumes authoritative partial and completed transcripts witho
       detached++;
     };
   });
-  const client = new ChatClient({ connection: adapter });
+  const client = new ChatClient({ connection: adapter, threadId: "session-1" });
   client.subscribe();
   publish(state);
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -95,6 +95,7 @@ test("a pending reply stays visible between model steps and yields to the final 
       publish = listener;
       return () => {};
     }),
+    threadId: "session-1",
   });
   client.subscribe();
   const show = async (snapshot: Snapshot) => {

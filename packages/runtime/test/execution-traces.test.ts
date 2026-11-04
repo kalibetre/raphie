@@ -1,6 +1,8 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 
+import type { LiveState, TaskId } from "@earendil-works/pi-durable";
+
 import { ExecutionTraces } from "../src/domains/conversations/infrastructure/pi-execution-traces.ts";
 import {
   noTelemetry,
@@ -31,17 +33,22 @@ test("retry wait is separate from model work and shutdown never reports incomple
     },
   };
   const traces = new ExecutionTraces(telemetry, { "session.id": "session" });
-  traces.accept({ type: "run_start", inputs: [] }, "turn");
-  traces.accept({ type: "turn_start" });
+  const run: NonNullable<LiveState["run"]> = {
+    taskId: 1 as TaskId,
+    inputs: [],
+    turns: 1,
+  };
+  traces.accept({ run, generation: { attempt: 1 } }, "turn");
   traces.accept({
-    type: "auto_retry_start",
-    attempt: 1,
-    at: Date.now(),
-    errorMessage: "PRIVATE_ERROR",
+    run,
+    generation: {
+      attempt: 1,
+      retry: { at: Date.now(), error: "PRIVATE_ERROR" },
+    },
   });
   assert.equal(ended[0]?.name, "model.generate");
   assert.equal(ended[0]?.outcome, "error");
-  traces.accept({ type: "auto_retry_end", attempt: 1 });
+  traces.accept({ run, generation: { attempt: 2 } });
   assert.equal(ended[1]?.name, "model.retry");
   assert.equal(ended[1]?.outcome, "ok");
   traces.close();

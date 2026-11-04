@@ -1,5 +1,5 @@
-import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import { obj, oneOf, type Schema, str } from "@earendil-works/pi-schema";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import type { MemoryService, TurnProvenance } from "../application/ports.ts";
@@ -9,22 +9,16 @@ export function createMemoryTools(
   memory: MemoryService,
   provenance: TurnProvenance,
 ) {
-  const query = Type.Object(
-    { query: Type.String({ minLength: 1, maxLength: 2000 }) },
-    { additionalProperties: false },
-  );
+  const query = obj({ query: str({ minLength: 1, maxLength: 2000 }) });
   const tools = [
     {
       name: "memory_retain",
       description:
         "Proactively retain concise, lasting owner-stated facts and standing preferences for future sessions. Do not ask for another confirmation for a clear preference such as 'whenever' or 'from now on' when memory is enabled. Recall first to avoid duplicates; revise existing evidence for corrections. Skip one-off tasks, secrets, sensitive details without explicit permission, guesses and unconfirmed outcomes. Only claim saved after success.",
-      parameters: Type.Object(
-        {
-          content: Type.String({ minLength: 1, maxLength: 8000 }),
-          kind: Type.Union([Type.Literal("fact"), Type.Literal("experience")]),
-        },
-        { additionalProperties: false },
-      ),
+      parameters: obj({
+        content: str({ minLength: 1, maxLength: 8000 }),
+        kind: oneOf(["fact", "experience"]),
+      }),
     },
     {
       name: "memory_recall",
@@ -42,27 +36,21 @@ export function createMemoryTools(
       name: "memory_revise",
       description:
         "Correct a built-in memory by its evidence ID when the user corrects a fact. Unsupported on external providers unless Settings says otherwise.",
-      parameters: Type.Object(
-        {
-          id: Type.String({ maxLength: 256 }),
-          content: Type.String({ minLength: 1, maxLength: 8000 }),
-        },
-        { additionalProperties: false },
-      ),
+      parameters: obj({
+        id: str({ maxLength: 256 }),
+        content: str({ minLength: 1, maxLength: 8000 }),
+      }),
     },
     {
       name: "memory_forget",
       description:
         "Forget a built-in memory by evidence ID when requested. This removes current evidence, not historical conversation transcripts. External deletions must currently be managed in the provider.",
-      parameters: Type.Object(
-        { id: Type.String({ maxLength: 256 }) },
-        { additionalProperties: false },
-      ),
+      parameters: obj({ id: str({ maxLength: 256 }) }),
     },
   ].map((tool) =>
     defineTool({
       ...tool,
-      parameters: Type.Unsafe<Record<string, unknown>>(tool.parameters),
+      parameters: tool.parameters as Schema<Record<string, unknown>>,
       // A crash must not reroute an external write or resurrect corrected/deleted memory.
       replay: "unsafe",
       outputLimits: { maxBytes: 80_000, maxLines: 2000 },
