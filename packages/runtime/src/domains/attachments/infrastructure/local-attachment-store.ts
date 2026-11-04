@@ -1,17 +1,32 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { attachmentName, MAX_ATTACHMENT_BYTES } from "../domain/policy.ts";
+import type { Attachment } from "@raphie/contracts";
+
+import { syncDirectory } from "../../../shared/infrastructure/sync-directory.ts";
+import {
+  attachmentName,
+  imageMime,
+  MAX_ATTACHMENT_BYTES,
+} from "../domain/policy.ts";
 
 export const MAX_FILE_BYTES = MAX_ATTACHMENT_BYTES;
 
-export type FileRef = { id: string; name: string; size: number };
+export type FileRef = Attachment;
 
 /** Content-addressed local files; original names never become paths. */
 export class Files {
   directory: string;
 
-  constructor(directory: string) {
+  private readonly workspace?: {
+    putFile(path: string, bytes: Uint8Array): Promise<void>;
+  };
+
+  constructor(
+    directory: string,
+    workspace?: { putFile(path: string, bytes: Uint8Array): Promise<void> },
+  ) {
+    this.workspace = workspace;
     this.directory = directory;
   }
 
@@ -28,7 +43,42 @@ export class Files {
     const temporary = join(this.directory, `.upload-${crypto.randomUUID()}`);
     await writeFile(temporary, bytes, { mode: 0o600, flush: true });
     await rename(temporary, join(this.directory, id));
+    await syncDirectory(this.directory);
     return { id, name, size: bytes.byteLength };
+  }
+
+  /** General uploads publish a working file; approval workflow blobs stay archival. */
+  async upload(name: string, bytes: Uint8Array): Promise<Attachment> {
+    if (!this.workspace) throw new Error("Workspace uploads are unavailable.");
+    const original = await this.put(name, bytes);
+    const characters = Array.from(original.name);
+    while (Buffer.byteLength(characters.join("")) > 200) characters.pop();
+    const path = `/workspace/uploads/${original.id}/${characters.join("")}`;
+    const ref: Attachment = {
+      ...original,
+      path,
+      mimeType:
+        imageMime(bytes) ??
+        (Buffer.from(bytes).subarray(0, 5).toString() === "%PDF-"
+          ? "application/pdf"
+          : "application/octet-stream"),
+    };
+    await this.workspace.putFile(path, bytes);
+    const manifest = join(this.directory, `.metadata-${crypto.randomUUID()}`);
+    await writeFile(manifest, JSON.stringify(ref), {
+      mode: 0o600,
+      flush: true,
+    });
+    await rename(manifest, join(this.directory, `${ref.id}.json`));
+    await syncDirectory(this.directory);
+    return ref;
+  }
+
+  async describe(id: string): Promise<Attachment> {
+    if (!/^[a-f0-9]{64}$/.test(id)) throw new Error("Invalid file reference.");
+    return (await Bun.file(
+      join(this.directory, `${id}.json`),
+    ).json()) as Attachment;
   }
 
   async read(id: string): Promise<Buffer> {

@@ -1,10 +1,11 @@
 # Bot workspaces and execution providers
 
-Each bot defaults to a virtual `/workspace`, shared by its sessions. An owner can
-opt into the native container provider described below; its files and failure
-semantics differ from the default lightweight provider.
+Each bot owns one persistent `/workspace`, shared by its sessions. just-bash and
+Container are replaceable execution environments over those same files. Switching
+environments transfers file state, never processes or RAM. Failure semantics still
+differ: just-bash rolls back failed commands; native writes can survive failure.
 
-For just-bash, each bot has one virtual `/workspace`. Ask the bot to
+For just-bash, `/workspace` is a bounded virtual filesystem. Ask the bot to
 write a note or process files with `workspace_exec`. The tool takes only a command;
 bot ownership and session identity come from the admitted turn. Other bots have
 separate stores and cannot select this workspace through tool arguments.
@@ -36,8 +37,8 @@ perform an external service action.
 **Sandbox** settings persist the bot’s provider, idle period, optional container
 disk quota and host/local-network acknowledgement. Existing and new bots default
 to `just-bash`, 10 idle minutes, no disk limit (`diskQuotaMiB: null`) and no
-acknowledgement (`hostNetworkAcknowledged: false`). No settings import or file
-migration is needed.
+acknowledgement (`hostNetworkAcknowledged: false`). Legacy workspace files are
+adopted automatically as described in [unified persistence](#unified-persistence-and-migration).
 Idle minutes must be an integer from 1 through 1440. A supplied quota must be a
 positive safe integer in MiB; an omitted or null quota means no limit.
 
@@ -143,14 +144,15 @@ capabilities, checkpoint policy, admitted execution count, file usage and resour
 limits. The owner can select just-bash or opt into Container as described above. Execution providers operate on the bot-owned
 workspace; replacing compute does not replace workspace ownership.
 
-**Settings → [bot] → Workspace** browses files for the selected provider. For just-bash, it shows the latest committed checkpoint. Open
+**Settings → [bot] → Workspace** browses the bot-owned files through the selected environment. For just-bash, it shows the latest committed checkpoint. Open
 folders with the keyboard or pointer, use the breadcrumbs or parent button to go
 back, and download individual regular files. Sizes are actual decoded byte sizes;
 modification times use the browser's local timezone. The view refreshes every five
 seconds and has a manual refresh. Downloads preserve binary content and Unicode
 filenames and are served as attachments with an octet-stream content type.
 In just-bash, symbolic links are identified and never traversed or downloaded. File previews,
-editing, uploads and folder archives are not included.
+editing and folder archives are not included. General uploads are available from the
+conversation composer; see [attachments](general-attachments.md).
 
 For just-bash, reads do not wait for in-progress execution and uncommitted files
 remain invisible. Container file visibility differs; see [native bot integration](#native-bot-integration-slice-3). For just-bash, downloads carry the revision shown in the listing; a changed checkpoint returns a conflict and asks for a refresh rather than returning unexpected bytes. Bot and backend switching retire pending download responses.
@@ -180,7 +182,8 @@ to another bot’s empty workspace were verified.
 Slice 2 delivered `ContainerWorkspace`, a Pi `ExecutionEnv`, covered by real-container
 tests and Pi's `registerEnvConformance()` suite. Slice 3 now connects it to opted-in
 bots, Pi coding tools and the existing file/settings pages. Existing bots continue
-using just-bash; checkpoint files are not migrated.
+using just-bash by default; the unified workspace delivery now adopts both legacy
+file representations without discarding either.
 
 The trusted caller supplies the bot's data directory, stable workspace id and saved
 `idleMinutes`/`diskQuotaMiB`. Default-bot storage is `<data>/workspace/`; named bots
@@ -350,9 +353,10 @@ Trusted call identities reach the journal for file mutations as well as commands
 interrupted native tools are never automatically replayed. Model-driven tests use
 fake models, not external model calls.
 
-Switching providers preserves **two separate file stores**. It does not copy or
-merge files. Switching to just-bash stops native writers before committing the
-selection; switching back reopens the same disk folder. Changed idle/quota settings
+Switching providers preserves **one bot-owned workspace**. Switching to just-bash
+stops native writers, validates a complete bounded snapshot and commits that
+snapshot with the settings selection. Switching to Container materializes the
+current committed files before saving the selection. Changed idle/quota settings
 replace the native lease and end its processes. To withdraw acknowledgement,
 select just-bash, turn off the acknowledgement switch and Save; Container cannot
 be saved without it. Existing Container selections from before this setting was
@@ -411,3 +415,51 @@ usage. The six focused settings tests passed, including the added blocked-state
 case; formatting, lint and types passed after that addition. Full validation also
 passed 214 tests with zero failures or skips, including real Docker/OrbStack;
 the additional blocked-state rendering case passed in the focused run.
+
+## Unified persistence and migration
+
+The bot workspace owns files independently of compute. During just-bash execution,
+`workspace/checkpoint.sqlite` is the durable file journal, with atomic command
+receipts as before. `workspace/files/` is its disk representation for native
+execution, materialized on startup and before selecting Container. It is not a
+second user workspace. Owner reads and tools address the same `/workspace` paths.
+Successful just-bash commands and uploads update the checkpoint; they do not rewrite
+the disk tree after every command. Restart rebuilds the disk representation from
+the committed journal. Native execution mutates the disk representation directly.
+
+Before either transfer, native writers are fenced through the existing container
+epoch acquisition. A just-bash → Container transfer writes and flushes a sibling
+staging tree, publishes it with recoverable renames, then commits settings. On a
+crash before the settings commit, just-bash remains selected and the checkpoint
+repairs any interrupted publication. Container → just-bash validates all files
+first and commits checkpoint plus settings in one SQLite transaction. Failure
+leaves Container selected and its files intact; a fresh fenced lease can resume
+work. The previous checkpoint and all retry receipts remain in the database.
+
+The complete tree must fit just-bash: 8 MiB decoded regular-file content, 1,024
+entries, 12 MiB serialized checkpoint, valid paths and supported regular files,
+directories and symlinks. Special files, overlong paths or names and larger trees
+block the switch explicitly. No partial snapshot, eviction or silent fallback is
+used. Hard links become independent file content, as with ordinary checkpoints.
+Symlinks are copied as links and never followed by the host snapshot reader.
+Container processes are stopped before this host-side transfer; ordinary native
+browsing and file operations still resolve paths inside the guest. A fixed 64 KiB
+interpreter allowance accommodates just-bash's virtual command stubs and scratch;
+retained workspace content still cannot exceed 8 MiB.
+
+On first adoption, an empty native tree receives the old just-bash checkpoint.
+If both legacy stores contain files, native paths stay in place and the complete
+old just-bash tree is preserved under `/workspace/.recovered-just-bash/`. This
+conservative policy avoids overwriting even apparently matching names. A durable
+migration target makes interrupted adoption retryable; completion commits with the
+new checkpoint/selection. An existing, different recovery folder is never
+overwritten. Rename it through the existing native tools and retry. If the merged
+legacy tree exceeds lightweight limits, the runtime keeps Sandbox settings
+accessible but blocks just-bash file operations until the owner selects Container
+or reduces the native files. Original stores are preserved on every failure.
+
+Back up `gateway.sqlite`, `files/` (immutable attachment originals and manifests),
+and the whole `workspace/` directory together. Do not modify the on-disk
+representation while the runtime owns it. Existing single-runtime ownership rules
+still apply; logical bot isolation is not permission to run concurrent Gateways
+over one bot store. No credentials or host settings enter either file tree.

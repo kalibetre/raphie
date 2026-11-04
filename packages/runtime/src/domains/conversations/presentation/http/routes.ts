@@ -16,7 +16,7 @@ const model = z
   .strict();
 
 const message = z.object({
-  text: z.string().min(1).max(4000),
+  text: z.string().max(4000),
   eventId: z.string().min(1).max(200),
   conversationId: z.number().int().positive().optional(),
 });
@@ -68,9 +68,14 @@ export function conversationRoutes(
       "/sessions/messages",
       limitBody(20_000),
       jsonInput(
-        message
-          .omit({ conversationId: true })
-          .extend({ sessionId: z.uuid().optional(), model: model.optional() }),
+        message.omit({ conversationId: true }).extend({
+          sessionId: z.uuid().optional(),
+          model: model.optional(),
+          attachments: z
+            .array(z.string().regex(/^[a-f0-9]{64}$/))
+            .max(4)
+            .optional(),
+        }),
       ),
       async (c) =>
         c.json(await conversations.submit(actor, c.req.valid("json")), 201),

@@ -33,8 +33,9 @@ host, not per-bot network authentication or OS-level security isolation.
 Each bot owns a workspace shared across its sessions. The default just-bash
 provider uses a virtual filesystem with durable checkpoints, serialized execution
 and bounded worker capacity. An opt-in container provider runs native processes
-against a separate bot-owned workspace. Containers can reach host and LAN services;
-they are not VM isolation. Provider switching does not copy files. See
+against the same bot-owned workspace. Provider switching transfers its files between
+the checkpoint and disk after fencing native writers. Containers can reach host and
+LAN services; they are not VM isolation. See
 [workspace providers and limits](bot-workspaces.md).
 
 Discord configuration, MCP connections and recurring prompts are per bot; named

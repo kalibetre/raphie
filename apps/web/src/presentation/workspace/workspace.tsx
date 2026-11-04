@@ -170,12 +170,18 @@ export function Workspace({
       writeLocal(lastSessionKey(workspace.botId), readSessionId);
   }, [workspace.botId, lastSessionKey, readSessionId]);
 
-  async function send(text: string, eventId: string, model?: ModelSelection) {
+  async function send(
+    text: string,
+    eventId: string,
+    model?: ModelSelection,
+    attachments?: string[],
+  ) {
     const sent = await api<{
       id: string;
       sessionId: string;
     }>("/api/sessions/messages", {
       text,
+      attachments,
       eventId,
       sessionId: conversationId,
       model,

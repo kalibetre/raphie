@@ -17,10 +17,12 @@ mkdir -p "$output"
 printf '%s\n%s\n' "$revision" "$version" > "$temp/.raphie-build"
 RAPHIE_BUILD_ID="$revision" RAPHIE_VERSION="$version" bun run build
 bun build packages/runtime/src/domains/workspaces/infrastructure/container-guest.ts --target=node --format=esm --minify --outfile "$temp/raphie-sandbox-guest.js"
-bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig --asset "$temp/raphie-sandbox-guest.js" packages/runtime/src/main.ts packages/runtime/src/domains/workspaces/infrastructure/workspace-worker.ts --outfile "$output/raphie-runtime"
+bun build packages/runtime/src/domains/workspaces/infrastructure/document-worker.ts --target=bun --format=esm --outfile "$temp/raphie-document-worker.js"
+cp node_modules/@firecrawl/anydoc-wasm/anydoc_wasm_bg.wasm "$temp/raphie-anydoc.wasm"
+bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig --asset "$temp/raphie-sandbox-guest.js" --asset "$temp/raphie-document-worker.js" --asset "$temp/raphie-anydoc.wasm" packages/runtime/src/main.ts packages/runtime/src/domains/workspaces/infrastructure/workspace-worker.ts --outfile "$output/raphie-runtime"
 bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig --asset apps/web/dist --asset "$temp/.raphie-build" apps/web/server.mjs --outfile "$output/raphie-web"
 bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig scripts/raphie.ts --outfile "$output/raphie"
-bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig --asset "$temp/raphie-sandbox-guest.js" scripts/standalone-smoke.ts packages/runtime/src/domains/workspaces/infrastructure/workspace-worker.ts --outfile "$output/raphie-smoke"
+bun build --compile --target="$target" --no-compile-autoload-dotenv --no-compile-autoload-bunfig --asset "$temp/raphie-sandbox-guest.js" --asset "$temp/raphie-document-worker.js" --asset "$temp/raphie-anydoc.wasm" scripts/standalone-smoke.ts packages/runtime/src/domains/workspaces/infrastructure/workspace-worker.ts --outfile "$output/raphie-smoke"
 case "$target" in bun-linux-*)
 cp scripts/linux-binary/install.sh scripts/linux-binary/raphie.service scripts/linux-binary/raphie-admin scripts/linux-binary/update.sh scripts/linux-binary/restore.sh scripts/linux-binary/uninstall.sh scripts/linux-binary/recovery-key.py scripts/linux-binary/bundle-id.sh scripts/linux-binary/download-release.sh scripts/linux-install/keyring-session.sh "$output/"
 ;; esac

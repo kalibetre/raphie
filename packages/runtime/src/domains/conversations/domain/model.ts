@@ -1,4 +1,8 @@
-import type { Channel as Source, ModelSelection } from "@raphie/contracts";
+import type {
+  Attachment,
+  Channel as Source,
+  ModelSelection,
+} from "@raphie/contracts";
 
 import type { ReplyDestination } from "../../channels/domain/binding.ts";
 
@@ -17,6 +21,7 @@ export type ChatTurn = {
   conversationId: number;
   source: Source;
   text: string;
+  attachments?: Attachment[];
   createdAt: number;
   status: "pending" | "done" | "error";
   answer: string | null;

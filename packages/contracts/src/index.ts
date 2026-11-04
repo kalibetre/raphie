@@ -19,7 +19,13 @@ export type Channel = "web" | "discord";
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";
 
-export type Attachment = { id: string; name: string; size: number };
+export type Attachment = {
+  id: string;
+  name: string;
+  size: number;
+  path?: string;
+  mimeType?: string;
+};
 
 /** `provider` identifies the Pi provider instance for a specific connection. */
 export type ModelSelection = { provider: string; modelId: string };
@@ -40,6 +46,7 @@ export type Turn = {
   conversationId: number;
   source: Channel;
   text: string;
+  attachments?: Attachment[];
   createdAt: number;
   status: "pending" | "done" | "error";
   answer: string | null;

@@ -48,3 +48,5 @@ provider differences and verification instructions aligned with the code. Descri
 model-dependent behavior as such; distinguish implemented capabilities from
 planned work. Preserve historical documents as records rather than using them as
 current product instructions.
+
+- [General attachments](general-attachments.md): composer uploads, workspace paths, original versions and model input limits.

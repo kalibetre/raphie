@@ -22,6 +22,7 @@ import {
 } from "../application/run-projection";
 import { chatAdapter } from "../infrastructure/chat-adapter";
 import { ActiveRun } from "./active-run";
+import { AttachmentCard } from "./attachment-card";
 import { Conversation } from "./conversation";
 import { markdownComponents } from "./markdown-components";
 
@@ -146,6 +147,26 @@ export function Chat({
                     {text}
                   </ReactMarkdown>
                 </div>
+                {turn?.attachments?.length ? (
+                  <ul
+                    className="message-attachments"
+                    aria-label="Message attachments"
+                  >
+                    {turn.attachments.map((file) => (
+                      <li key={file.id}>
+                        <AttachmentCard
+                          file={file}
+                          workspace={workspace}
+                          onError={() =>
+                            setControlError(
+                              "Could not download this attachment. Please retry.",
+                            )
+                          }
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {turn && (
                   <time dateTime={new Date(turn.createdAt).toISOString()}>
                     {time(turn.createdAt)}

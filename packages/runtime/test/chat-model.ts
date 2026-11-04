@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
 import type { Provider } from "@earendil-works/pi-ai/models";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
@@ -9,6 +9,8 @@ import type { JsonObject } from "@earendil-works/pi-durable";
 export function chatModel(
   options: {
     fail?: boolean;
+    images?: boolean;
+    userMessages?: (messages: UserMessage[]) => void;
     started?: () => void;
     requestedModel?: (id: string) => void;
     systemPrompt?: (text: string) => void;
@@ -23,8 +25,12 @@ export function chatModel(
     ...openrouterProvider().getModels()[0],
     id: "history",
     provider: "fixture",
+    input: options.images
+      ? (["text", "image"] as ("text" | "image")[])
+      : (["text"] as ("text" | "image")[]),
   };
   const reply: Provider["streamSimple"] = (_model, context, streamOptions) => {
+    options.userMessages?.(context.messages.filter((m) => m.role === "user"));
     options.requestedModel?.(_model.id);
     options.offeredTools?.(
       context.messages.flatMap((message) =>

@@ -12,7 +12,10 @@ import {
 // Trusted worker code interprets shell syntax. No host filesystem, env or network
 // capability is installed. Workers never receive checkpoint database paths.
 async function run({ checkpoint, command }: ComputeRequest) {
-  const fs = new InMemoryFs({}, { maxTotalBytes: limits.fileBytes });
+  // just-bash installs virtual command stubs outside /workspace. Reserve a small
+  // fixed allowance so a valid 8 MiB checkpoint remains executable at capacity.
+  const interpreterBytes = limits.fileBytes + 64 * 1024;
+  const fs = new InMemoryFs({}, { maxTotalBytes: interpreterBytes });
   await fs.mkdir("/workspace", { recursive: true });
   const entries = checkpointSchema.parse(checkpoint);
   for (const entry of entries
@@ -40,7 +43,7 @@ async function run({ checkpoint, command }: ComputeRequest) {
       maxExecutionTimeMs: limits.timeoutMs,
       maxSourceBytes: limits.sourceBytes,
       maxOutputSize: limits.outputBytes + 1,
-      maxFileSystemBytes: limits.fileBytes,
+      maxFileSystemBytes: interpreterBytes,
       maxLiveBytes: 32 * 1024 * 1024,
       maxStringLength: limits.fileBytes,
       maxCommandCount: 2000,
@@ -105,6 +108,17 @@ async function run({ checkpoint, command }: ComputeRequest) {
         mtime: stat.mtime.getTime(),
       });
     }
+    if (
+      saved.reduce(
+        (bytes, entry) =>
+          bytes +
+          (entry.kind === "file"
+            ? Buffer.byteLength(entry.content, "base64")
+            : 0),
+        0,
+      ) > limits.fileBytes
+    )
+      throw new Error("Workspace file content limit exceeded.");
     if (Buffer.byteLength(JSON.stringify(saved)) > limits.checkpointBytes)
       throw new Error("Workspace checkpoint limit exceeded.");
   }

@@ -41,6 +41,62 @@ const containerTest = available ? test : test.skip;
 const cleanupScopes = new Map<string, string>();
 
 containerTest(
+  "document reader sees the selected container workspace",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "raphie-test-document-"));
+    const bytes = await Bun.file(
+      join(import.meta.dir, "fixtures/documents/sample.docx"),
+    ).bytes();
+    const id = new Bun.CryptoHasher("sha256")
+      .update("sample.docx")
+      .update("\0")
+      .update(bytes)
+      .digest("hex");
+    const path = `/workspace/uploads/${id}/sample.docx`;
+    const gateway = await Gateway.open({
+      directory,
+      containerNamePrefix: "raphie-test",
+      ...chatModel({
+        tool: {
+          name: "read_document",
+          args: { path },
+        },
+      }),
+    });
+    try {
+      const settings = (await gateway.workspace.info()).settings;
+      await gateway.saveSandboxSettings({
+        ...settings,
+        provider: "container",
+        hostNetworkAcknowledged: true,
+        idleMinutes: 1,
+      });
+      await gateway.files.upload("sample.docx", bytes);
+      await gateway.sessions.submit(gateway.actors.establish("web"), {
+        eventId: "native-document",
+        text: "Read the document",
+      });
+      for (
+        let n = 0;
+        n < 400 &&
+        (await gateway.chats.state()).turns.some(
+          (turn) => turn.status === "pending",
+        );
+        n++
+      )
+        await Bun.sleep(20);
+      expect((await gateway.chats.state()).turns[0]?.answer).toContain(
+        "Distinctive Word document",
+      );
+    } finally {
+      await gateway.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  30000,
+);
+
+containerTest(
   "Pi coding tools execute through a bot-bound container with trusted operation ids",
   async () => {
     await fixture(async (provider, directory) => {

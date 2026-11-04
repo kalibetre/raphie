@@ -1,5 +1,4 @@
 import type { ModelSelection } from "@raphie/contracts";
-import { ArrowUp, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -7,11 +6,13 @@ import {
   readLocal,
   writeLocal,
 } from "../../../infrastructure/preferences/storage";
-import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Textarea } from "../../../shared/ui/textarea";
 import { ComposerPlugins } from "../../settings/infrastructure/plugins/index";
+import { ComposerActions } from "./composer-actions";
+import { AttachmentChips, ComposerAttachments } from "./composer-attachments";
 import { ModelPicker } from "./model-picker";
+import { useComposerAttachments } from "./use-composer-attachments";
 import { useComposerLayout } from "./use-composer-layout";
 
 export function Composer({
@@ -41,6 +42,7 @@ export function Composer({
     text: string,
     eventId: string,
     model?: ModelSelection,
+    attachments?: string[],
   ) => Promise<void>;
   onChooseModel: (model: ModelSelection) => Promise<void>;
   onModelSettings: () => void;
@@ -49,6 +51,7 @@ export function Composer({
   const selectedForNewSession = conversationId ? undefined : newModel;
   const activeModel = selectedForNewSession ?? model;
   const [draft, setDraft] = useState("");
+  const draftValue = useRef(draft);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
   const request = useRef<
@@ -56,14 +59,30 @@ export function Composer({
   >(undefined);
   const { workspace } = useBackend();
   const key = workspace.draftKey(conversationId);
+  const activeKey = useRef(key);
   useEffect(() => {
-    setDraft(readLocal(key) ?? "");
+    activeKey.current = key;
+  }, [key]);
+  const {
+    files,
+    uploading,
+    upload,
+    save: saveFiles,
+    removeSent,
+  } = useComposerAttachments(key, setError);
+  const hasContent = !!draft.trim() || files.length > 0;
+  const locked = sending || uploading;
+  useEffect(() => {
+    const saved = readLocal(key) ?? "";
+    setDraft(saved);
+    draftValue.current = saved;
     setError(undefined);
     request.current = undefined;
   }, [key]);
   useEffect(() => {
     if (suggestion) {
       setDraft(suggestion.text);
+      draftValue.current = suggestion.text;
       writeLocal(key, suggestion.text);
     }
   }, [suggestion, key]);
@@ -72,6 +91,7 @@ export function Composer({
 
   function update(text: string) {
     setDraft(text);
+    draftValue.current = text;
     writeLocal(key, text);
   }
 
@@ -88,25 +108,45 @@ export function Composer({
   }
 
   async function send() {
-    if (!draft.trim() || sending || disabled) return;
+    if (!hasContent || locked || disabled) return;
+    const sentKey = key;
+    const sentDraft = draft;
+    const sentFiles = files;
     setSending(true);
     setError(undefined);
-    const modelKey = JSON.stringify(selectedForNewSession ?? null);
+    const modelKey = JSON.stringify([
+      selectedForNewSession ?? null,
+      files.map((f) => f.id),
+    ]);
     if (
       request.current?.text !== draft ||
       request.current.modelKey !== modelKey
     )
       request.current = { text: draft, id: crypto.randomUUID(), modelKey };
     try {
-      await onSend(draft, request.current.id, selectedForNewSession);
-      update("");
-      request.current = undefined;
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Message could not be sent. Your draft is saved.",
+      await onSend(
+        sentDraft,
+        request.current.id,
+        selectedForNewSession,
+        sentFiles.map((f) => f.id),
       );
+      const sameDraft =
+        activeKey.current === sentKey && draftValue.current === sentDraft;
+      if (readLocal(sentKey) === sentDraft || sameDraft)
+        writeLocal(sentKey, "");
+      if (sameDraft) {
+        setDraft("");
+        draftValue.current = "";
+      }
+      removeSent(sentFiles, sentKey);
+      if (activeKey.current === sentKey) request.current = undefined;
+    } catch (error) {
+      if (activeKey.current === sentKey)
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Message could not be sent. Your draft is saved.",
+        );
     } finally {
       setSending(false);
     }
@@ -126,6 +166,12 @@ export function Composer({
           void send();
         }}
       >
+        <AttachmentChips
+          files={files}
+          workspace={workspace}
+          disabled={disabled || locked}
+          onRemove={(id) => saveFiles(files.filter((f) => f.id !== id))}
+        />
         <ScrollArea
           className="composer-input-scroll"
           viewportLabel="Message draft"
@@ -154,9 +200,16 @@ export function Composer({
           />
         </ScrollArea>
         <div className="composer-toolbar">
+          <ComposerAttachments
+            files={files}
+            disabled={disabled || locked}
+            onUpload={(selected) => {
+              void upload(selected);
+            }}
+          />
           <ModelPicker
             model={activeModel}
-            disabled={busy || sending}
+            disabled={busy || locked}
             onChoose={async (selected) => {
               if (conversationId) await onChooseModel(selected);
               else setNewModel(selected);
@@ -167,39 +220,23 @@ export function Composer({
             enabled={enabledPlugins}
             context={{ draft, model: activeModel?.modelId ?? null, usage }}
           />
-          {busy && draft.trim() && (
-            <details className="composer-task-menu">
-              <summary aria-label="Task actions">⋯</summary>
-              <button
-                type="button"
-                disabled={sending}
-                onClick={() => {
-                  void stop();
-                }}
-              >
-                Stop task
-              </button>
-            </details>
-          )}
-          <Button
-            variant={busy && !draft.trim() ? "ghost" : "default"}
-            className={`ml-auto size-8 rounded-full transition-[transform,opacity,background-color] duration-150 enabled:hover:scale-105 enabled:active:scale-95 ${busy && !draft.trim() ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : ""}`}
-            type={busy && !draft.trim() ? "button" : "submit"}
-            onClick={
-              busy && !draft.trim()
-                ? () => {
-                    void stop();
-                  }
-                : undefined
-            }
-            size="icon"
-            aria-label={busy && !draft.trim() ? "Stop task" : "Send message"}
-            disabled={disabled || sending || (!busy && !draft.trim())}
-          >
-            {busy && !draft.trim() ? <Square /> : <ArrowUp />}
-          </Button>
+          <ComposerActions
+            busy={busy}
+            hasContent={hasContent}
+            sending={sending}
+            uploading={uploading}
+            disabled={disabled}
+            onStop={() => {
+              void stop();
+            }}
+          />
         </div>
       </form>
+      {uploading && (
+        <p className="composer-hint" role="status">
+          Uploading to workspace…
+        </p>
+      )}
       {(needsModel || busy) && (
         <p
           className="composer-hint"

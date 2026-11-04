@@ -53,6 +53,7 @@ import {
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
+import { createDocumentTools } from "../domains/workspaces/infrastructure/document-tools.ts";
 import { RuntimeWorkspace } from "../domains/workspaces/infrastructure/runtime-workspace.ts";
 import { createWorkspaceTools } from "../domains/workspaces/infrastructure/workspace-tools.ts";
 import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
@@ -130,7 +131,9 @@ export class Gateway {
     this.configurationGate =
       options.modelConnectionGate ?? new ModelConnectionGate();
     this.telemetry = options.telemetry ?? noTelemetry;
-    this.files = new Files(join(options.directory, "files"));
+    this.files = new Files(join(options.directory, "files"), {
+      putFile: (path, bytes) => this.workspace.putFile(path, bytes),
+    });
     this.workflow = deliveryWorkflow(
       this.files,
       options.discordThreadId ?? null,
@@ -144,6 +147,7 @@ export class Gateway {
       options.model,
       this.configurationGate,
       options.memory,
+      this.files,
     );
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);
@@ -405,6 +409,7 @@ export class Gateway {
           })
         : createWorkspaceTools(this.workspace, session),
     );
+    this.registry.install(createDocumentTools(this.workspace, session));
   }
 
   async saveSandboxSettings(input: SaveSandboxSettings) {

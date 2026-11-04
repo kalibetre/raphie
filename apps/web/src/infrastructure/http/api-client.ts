@@ -37,10 +37,12 @@ export async function api<T>(
           method: "POST",
           headers: {
             ...headers,
-            "content-type": "application/json",
+            ...(data instanceof FormData
+              ? {}
+              : { "content-type": "application/json" }),
             "x-raphie-client": "web",
           },
-          body: JSON.stringify(data),
+          body: data instanceof FormData ? data : JSON.stringify(data),
         },
   );
   const result = await response.json();
