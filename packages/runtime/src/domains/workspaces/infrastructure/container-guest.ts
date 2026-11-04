@@ -4,9 +4,10 @@ import {
   BACKGROUND_CONTEXT,
   withAbortSignal,
 } from "@earendil-works/chord/context";
-import { err, FileError } from "@earendil-works/pi-durable/env";
+import { err, FileError, ok } from "@earendil-works/pi-durable/env";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 
+import { writeUpload } from "./container-upload.ts";
 import { decodeWire, encodeWire, envMethods } from "./container-wire.ts";
 
 // This entrypoint is bundled and sent as argv to `docker exec node`. It NEVER
@@ -48,7 +49,8 @@ input.on("line", (line) => {
         request.resource === undefined ? env : resources.get(request.resource);
       const allowed =
         request.resource === undefined
-          ? (envMethods as readonly string[]).includes(request.method)
+          ? request.method === "writeUpload" ||
+            (envMethods as readonly string[]).includes(request.method)
           : ["info", "read", "scanLines", "readLine", "next", "close"].includes(
               request.method,
             );
@@ -76,6 +78,12 @@ input.on("line", (line) => {
           onOutput: (text: string, _context: unknown, info: unknown) =>
             event("output", { text, info }),
         };
+      }
+      if (request.method === "writeUpload") {
+        const [path, bytes] = args as [string, Uint8Array];
+        await writeUpload(path, bytes);
+        send({ id: request.id, result: ok(undefined) });
+        return;
       }
       const method = (
         target as unknown as Record<string, (...args: unknown[]) => unknown>

@@ -10,6 +10,7 @@ import {
   saveSandboxSettingsSchema,
 } from "./sandbox-settings.ts";
 import { computeWorkspace } from "./workspace-compute.ts";
+import { validateCheckpoint } from "./workspace-disk.ts";
 import {
   checkpointSchema,
   type ExecutionResult,
@@ -65,6 +66,7 @@ export class BotWorkspace {
         CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, epoch INTEGER NOT NULL, revision INTEGER NOT NULL, checkpoint TEXT NOT NULL, receipt_bytes INTEGER NOT NULL);
         INSERT OR IGNORE INTO workspace VALUES(1,1,0,0,'[]',0);
         CREATE TABLE IF NOT EXISTS sandbox_settings (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS workspace_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS executions (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result TEXT NOT NULL);`);
       return new BotWorkspace(db);
     } catch (error) {
@@ -173,6 +175,114 @@ export class BotWorkspace {
     })();
   }
 
+  snapshot() {
+    return readCheckpoint(this.current().checkpoint);
+  }
+
+  initialized() {
+    this.current();
+    return !!this.db
+      .query("SELECT value FROM workspace_metadata WHERE key='unified'")
+      .get();
+  }
+
+  migrationTarget(hasNativeFiles: boolean): "root" | "recovery" {
+    this.current();
+    const row = this.db
+      .query<{ value: string }, []>(
+        "SELECT value FROM workspace_metadata WHERE key='migration'",
+      )
+      .get();
+    if (row) return row.value as "root" | "recovery";
+    const target = hasNativeFiles ? "recovery" : "root";
+    this.db
+      .query("INSERT INTO workspace_metadata VALUES('migration',?)")
+      .run(target);
+    return target;
+  }
+
+  adoptFiles(
+    entries?: ReturnType<BotWorkspace["snapshot"]>,
+    settings?: SaveSandboxSettings,
+  ) {
+    return this.db.transaction(() => {
+      this.current();
+      const saved = entries
+        ? this.replaceFiles(entries, settings)
+        : settings
+          ? this.saveSettings(settings)
+          : undefined;
+      this.db
+        .query(
+          "INSERT OR REPLACE INTO workspace_metadata VALUES('unified','1')",
+        )
+        .run();
+      return saved;
+    })();
+  }
+
+  replaceFiles(
+    entries: ReturnType<BotWorkspace["snapshot"]>,
+    settings?: SaveSandboxSettings,
+  ) {
+    validateCheckpoint(entries);
+    return this.db.transaction(() => {
+      const previous = this.current();
+      const saved = settings ? this.saveSettings(settings) : undefined;
+      const checkpoint = JSON.stringify(entries);
+      this.db
+        .query(
+          "UPDATE workspace SET checkpoint=?, revision=revision+? WHERE id=1",
+        )
+        .run(checkpoint, checkpoint === previous.checkpoint ? 0 : 1);
+      return saved;
+    })();
+  }
+
+  async putFile(path: string, bytes: Uint8Array) {
+    const run = this.tail.then(() => {
+      this.current();
+      const entries = this.snapshot();
+      const parts = path.split("/");
+      for (let i = 2; i < parts.length; i++) {
+        const parent = parts.slice(0, i).join("/");
+        const existing = entries.find((e) => e.path === parent);
+        if (existing && existing.kind !== "directory")
+          throw new InputError(
+            "Upload directory was replaced. Restore it before uploading.",
+            409,
+          );
+        if (!existing)
+          entries.push({
+            path: parent,
+            kind: "directory",
+            content: "",
+            mode: 0o755,
+            mtime: Date.now(),
+          });
+      }
+      const existing = entries.find((e) => e.path === path);
+      const content = Buffer.from(bytes).toString("base64");
+      if (existing) {
+        if (existing.kind === "file" && existing.content === content) return;
+        throw new InputError(
+          "Uploaded workspace path already exists with different content.",
+          409,
+        );
+      }
+      entries.push({
+        path,
+        kind: "file",
+        content,
+        mode: 0o644,
+        mtime: Date.now(),
+      });
+      this.replaceFiles(entries);
+    });
+    this.tail = run.catch(() => {});
+    return run;
+  }
+
   list(path = "/workspace") {
     const state = this.current();
     return listWorkspace(
@@ -251,6 +361,7 @@ export class BotWorkspace {
       }
       this.current();
       signal?.throwIfAborted();
+      if (response.result.committed) validateCheckpoint(response.checkpoint);
       const checkpoint = JSON.stringify(response.checkpoint);
       if (Buffer.byteLength(checkpoint) > limits.checkpointBytes)
         throw new Error("Workspace checkpoint exceeds storage budget.");

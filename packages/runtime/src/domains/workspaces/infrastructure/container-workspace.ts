@@ -318,6 +318,23 @@ export class ContainerWorkspace {
     }) as ExecutionEnv;
   }
 
+  putFile(
+    path: string,
+    bytes: Uint8Array,
+    context: Context,
+  ): Promise<Result<void, FileError>> {
+    return this.invoke(
+      crypto.randomUUID(),
+      "writeUpload",
+      [path, bytes],
+      "/workspace",
+      context,
+      undefined,
+      false,
+      false,
+    ) as Promise<Result<void, FileError>>;
+  }
+
   /** Stable host-issued ids permit receipt lookup; interrupted intents never replay. */
   execute(
     operationId: string,
@@ -375,6 +392,7 @@ export class ContainerWorkspace {
           [
             "writeFile",
             "appendFile",
+            "writeUpload",
             "truncateFile",
             "flushFile",
             "renameFile",
@@ -553,6 +571,7 @@ export class ContainerWorkspace {
             "exec",
             "writeFile",
             "appendFile",
+            "writeUpload",
             "truncateFile",
             "createDir",
             "createTempDir",

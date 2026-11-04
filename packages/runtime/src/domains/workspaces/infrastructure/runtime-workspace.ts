@@ -1,3 +1,4 @@
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
@@ -9,6 +10,12 @@ import { BotWorkspace } from "./bot-workspace.ts";
 import { containerLimits, ContainerRuntimeError } from "./container-cli.ts";
 import { ContainerFiles } from "./container-files.ts";
 import { ContainerWorkspace } from "./container-workspace.ts";
+import {
+  diskCheckpoint,
+  migrateCheckpoint,
+  publishCheckpoint,
+  recoverDisk,
+} from "./workspace-disk.ts";
 
 type Options = {
   directory: string;
@@ -16,12 +23,14 @@ type Options = {
   namePrefix?: string;
 };
 
-/** One bot's provider selection; provider stores retain separate files on switches. */
+/** One bot-owned workspace; compute providers use disk or a bounded checkpoint projection. */
 export class RuntimeWorkspace {
   private readonly checkpoint: BotWorkspace;
   private readonly options: Options;
   private container?: ContainerWorkspace;
   private containerUnavailable = false;
+  private filesUnavailable?: string;
+  private admitted = 0;
   private readonly views = new ModelConnectionGate();
 
   private constructor(checkpoint: BotWorkspace, options: Options) {
@@ -46,6 +55,22 @@ export class RuntimeWorkspace {
           workspace.container = undefined;
         }
       }
+      if (!checkpoint.initialized()) {
+        await workspace.migrateFiles();
+        checkpoint.adoptFiles(
+          checkpoint.settings().provider === "just-bash"
+            ? await diskCheckpoint(
+                join(options.directory, "workspace", "files"),
+              )
+            : undefined,
+        );
+      } else if (checkpoint.settings().provider === "just-bash") {
+        await recoverDisk(join(options.directory, "workspace"));
+        await publishCheckpoint(
+          join(options.directory, "workspace"),
+          checkpoint.snapshot(),
+        );
+      }
       return workspace;
     } catch (error) {
       // A daemon outage must not prevent owner recovery or unrelated bots from
@@ -55,9 +80,30 @@ export class RuntimeWorkspace {
         workspace.containerUnavailable = true;
         return workspace;
       }
+      if (
+        error instanceof InputError &&
+        error.status === 409 &&
+        checkpoint.settings().provider === "just-bash"
+      ) {
+        workspace.filesUnavailable = error.message;
+        return workspace;
+      }
       await workspace.close();
       throw error;
     }
+  }
+
+  private async migrateFiles() {
+    const directory = join(this.options.directory, "workspace");
+    await recoverDisk(directory);
+    const target = this.checkpoint.migrationTarget(
+      (await readdir(join(directory, "files"))).length > 0,
+    );
+    await migrateCheckpoint(directory, this.checkpoint.snapshot(), target);
+  }
+
+  private requireFiles() {
+    if (this.filesUnavailable) throw new InputError(this.filesUnavailable, 409);
   }
 
   private openContainer(settings: {
@@ -75,6 +121,7 @@ export class RuntimeWorkspace {
     return this.views.run(async () => {
       this.checkpoint.validateSettings(input);
       if (
+        this.admitted ||
         this.container?.admitted ||
         this.checkpoint.info().executions.admitted
       )
@@ -96,10 +143,26 @@ export class RuntimeWorkspace {
             )
           : undefined;
       try {
-        const saved = this.checkpoint.saveSettings(input);
+        const directory = join(this.options.directory, "workspace");
+        // openContainer fenced all native writers before either representation is read.
+        const adopting = !this.checkpoint.initialized();
+        if (adopting) await this.migrateFiles();
+        else if (before.provider === "just-bash")
+          await publishCheckpoint(directory, this.checkpoint.snapshot());
+        const entries =
+          input.provider === "just-bash" &&
+          (before.provider === "container" || adopting)
+            ? await diskCheckpoint(join(directory, "files"))
+            : undefined;
+        if (input.provider !== "container") await next?.close();
+        const saved = adopting
+          ? this.checkpoint.adoptFiles(entries, input)!
+          : entries
+            ? this.checkpoint.replaceFiles(entries, input)!
+            : this.checkpoint.saveSettings(input);
         this.container = input.provider === "container" ? next : undefined;
         this.containerUnavailable = false;
-        if (input.provider !== "container") await next?.close();
+        this.filesUnavailable = undefined;
         return saved;
       } catch (error) {
         await next?.close();
@@ -149,13 +212,58 @@ export class RuntimeWorkspace {
   execute(...args: Parameters<BotWorkspace["execute"]>) {
     if (this.settings().provider !== "just-bash")
       throw new InputError("Use the container coding tools for this bot.", 409);
-    return this.checkpoint.execute(...args);
+    this.requireFiles();
+    if (this.admitted >= 16)
+      throw new InputError("Workspace queue is full. Retry later.", 409);
+    this.admitted++;
+    return this.views
+      .run(async () => {
+        this.requireFiles();
+        const result = await this.checkpoint.execute(...args);
+        return result;
+      })
+      .finally(() => {
+        this.admitted--;
+      });
+  }
+
+  async putFile(path: string, bytes: Uint8Array) {
+    this.requireFiles();
+    if (this.admitted >= 16)
+      throw new InputError("Workspace queue is full. Retry later.", 409);
+    this.admitted++;
+    return this.views
+      .run(async () => {
+        const container = this.selectedContainer();
+        if (container) {
+          const result = await container.putFile(path, bytes, context);
+          if (!result.ok)
+            throw new InputError(
+              "Could not write workspace upload. Restore its upload folder and retry.",
+              409,
+            );
+        } else {
+          await this.checkpoint.putFile(path, bytes);
+        }
+      })
+      .finally(() => {
+        this.admitted--;
+      });
   }
 
   async info(): Promise<SandboxInfo> {
     return this.views.run(async () => {
       const base = this.checkpoint.info();
-      if (base.settings.provider !== "container") return base;
+      if (base.settings.provider !== "container")
+        return {
+          ...base,
+          executions: { ...base.executions, admitted: this.admitted },
+          providers: base.providers.map((provider) =>
+            provider.id === "just-bash" && this.filesUnavailable
+              ? { ...provider, available: false, reason: this.filesUnavailable }
+              : provider,
+          ),
+        };
       const container = this.container;
       let fileBytes: number | null = null;
       let reason: string | null = null;
@@ -210,6 +318,9 @@ export class RuntimeWorkspace {
   }
 
   list(path?: string) {
+    this.requireFiles();
+    if (this.settings().provider === "just-bash")
+      return Promise.resolve(this.checkpoint.list(path));
     return this.views.run(() => {
       const container = this.selectedContainer();
       return container
@@ -221,6 +332,9 @@ export class RuntimeWorkspace {
   }
 
   download(path: string, revision: number) {
+    this.requireFiles();
+    if (this.settings().provider === "just-bash")
+      return Promise.resolve(this.checkpoint.download(path, revision));
     return this.views.run(() => {
       const container = this.selectedContainer();
       return container

@@ -118,7 +118,7 @@ containerTest(
 );
 
 containerTest(
-  "owner opt-in wires Pi tools, shared sessions and live file routes; switching preserves both stores",
+  "owner opt-in wires Pi tools, shared sessions and live file routes; switching preserves the unified workspace",
   async () => {
     const directory = await mkdtemp(
       join(tmpdir(), "raphie-test-native-runtime-"),
@@ -211,7 +211,7 @@ containerTest(
       const listing = await get("/files").then((r) => r.json());
       expect(
         listing.items.map((entry: { name: string }) => entry.name).sort(),
-      ).toEqual(["binary", "note"]);
+      ).toEqual(["binary", "note", "virtual-file"]);
       const download = (path: string, revision = listing.revision) =>
         get(`/download?path=${encodeURIComponent(path)}&revision=${revision}`);
       expect(await download("/workspace/note").then((r) => r.text())).toBe(
@@ -249,8 +249,10 @@ containerTest(
       ).toBe(400);
       expect((await get("/files?path=/workspace/missing")).status).toBe(404);
       expect(
-        (await download("/workspace/virtual-file", changed.revision)).status,
-      ).toBe(404);
+        await download("/workspace/virtual-file", changed.revision).then((r) =>
+          r.text(),
+        ),
+      ).toBe("virtual\n");
       const calls: { name: string; args: JsonObject }[] = [
         { name: "write", args: { path: "coded", content: "original" } },
         {
@@ -319,7 +321,24 @@ containerTest(
       expect((await prior.writeFile("stale", "wrong", context)).ok).toBe(false);
       expect(
         (await gateway.workspace.list()).items.map((entry) => entry.name),
-      ).toEqual(["virtual-file"]);
+      ).toEqual([
+        "binary",
+        "coded",
+        "failed",
+        "folder-link",
+        "link",
+        "note",
+        "virtual-file",
+      ]);
+      expect(
+        (
+          await gateway.workspace.execute(
+            "s",
+            "shared-after-switch",
+            "cat note; cat coded",
+          )
+        ).stdout,
+      ).toBe("shared\nshared\nedited");
       const back = await save({
         ...(await switched.json()),
         provider: "container",
