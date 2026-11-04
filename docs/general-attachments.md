@@ -9,8 +9,10 @@ Unicode names may be shortened in the working path while retaining their display
 name. Each bot has a separate namespace and archive.
 
 Files and text can be queued during a running task. Steer, Keep queued and Stop
-retain their existing behavior. Attached-file chips have keyboard-accessible
-removal controls. Removing a chip detaches it from the draft; it does not delete
+retain their existing behavior. The composer shows attachments in a row above the
+draft, with image thumbnails and keyboard-accessible removal controls. Sent
+messages show attachment cards with download buttons and image previews. Removing
+a card detaches it from the draft; it does not delete
 the uploaded workspace file. Failed uploads and failed sends leave the text draft
 and successfully uploaded references available for retry. Draft references are
 saved separately from existing text drafts and scoped to backend, bot and session.

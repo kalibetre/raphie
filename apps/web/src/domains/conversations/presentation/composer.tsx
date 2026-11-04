@@ -165,6 +165,12 @@ export function Composer({
           void send();
         }}
       >
+        <AttachmentChips
+          files={files}
+          workspace={workspace}
+          disabled={disabled || locked}
+          onRemove={(id) => saveFiles(files.filter((f) => f.id !== id))}
+        />
         <ScrollArea
           className="composer-input-scroll"
           viewportLabel="Message draft"
@@ -192,11 +198,6 @@ export function Composer({
             }}
           />
         </ScrollArea>
-        <AttachmentChips
-          files={files}
-          disabled={disabled || locked}
-          onRemove={(id) => saveFiles(files.filter((f) => f.id !== id))}
-        />
         <div className="composer-toolbar">
           <ComposerAttachments
             files={files}
@@ -233,12 +234,6 @@ export function Composer({
       {uploading && (
         <p className="composer-hint" role="status">
           Uploading to workspace…
-        </p>
-      )}
-      {files.length > 0 && (
-        <p className="composer-hint">
-          Files are saved in the workspace. Images use model vision when
-          supported; PDFs require suitable tools.
         </p>
       )}
       {(needsModel || busy) && (

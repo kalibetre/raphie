@@ -1,8 +1,11 @@
 import type { Attachment } from "@raphie/contracts";
-import { Paperclip, X } from "lucide-react";
+import { Paperclip } from "lucide-react";
 import { useRef } from "react";
 
+import type { BackendWorkspace } from "../../../infrastructure/http/backend-workspace";
 import { Button } from "../../../shared/ui/button";
+import { ScrollArea } from "../../../shared/ui/scroll-area";
+import { AttachmentCard } from "./attachment-card";
 
 export function ComposerAttachments({
   files,
@@ -48,29 +51,34 @@ export function AttachmentChips({
   files,
   disabled,
   onRemove,
+  workspace,
 }: {
   files: Attachment[];
   disabled: boolean;
   onRemove: (id: string) => void;
+  workspace: BackendWorkspace;
 }) {
   return (
     <>
       {files.length > 0 && (
-        <ul className="composer-attachments" aria-label="Attached files">
-          {files.map((file) => (
-            <li key={file.id}>
-              <span title={file.name}>{file.name}</span>
-              <button
-                type="button"
-                aria-label={`Remove ${file.name}`}
-                disabled={disabled}
-                onClick={() => onRemove(file.id)}
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <ScrollArea
+          className="composer-attachment-scroll"
+          orientation="horizontal"
+          viewportLabel="Attached files"
+        >
+          <ul className="composer-attachments" aria-label="Attached files">
+            {files.map((file) => (
+              <li key={file.id}>
+                <AttachmentCard
+                  file={file}
+                  workspace={workspace}
+                  disabled={disabled}
+                  onRemove={() => onRemove(file.id)}
+                />
+              </li>
+            ))}
+          </ul>
+        </ScrollArea>
       )}
     </>
   );

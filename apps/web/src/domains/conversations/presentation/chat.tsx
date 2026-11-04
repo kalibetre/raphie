@@ -22,6 +22,7 @@ import {
 } from "../application/run-projection";
 import { chatAdapter } from "../infrastructure/chat-adapter";
 import { ActiveRun } from "./active-run";
+import { AttachmentCard } from "./attachment-card";
 import { Conversation } from "./conversation";
 import { markdownComponents } from "./markdown-components";
 
@@ -153,32 +154,15 @@ export function Chat({
                   >
                     {turn.attachments.map((file) => (
                       <li key={file.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void workspace
-                              .download(`/api/files/${file.id}`)
-                              .then((blob) => {
-                                const url = URL.createObjectURL(blob);
-                                const link = document.createElement("a");
-                                link.href = url;
-                                link.download = file.name;
-                                link.click();
-                                setTimeout(
-                                  () => URL.revokeObjectURL(url),
-                                  1000,
-                                );
-                              })
-                              .catch(() =>
-                                setControlError(
-                                  "Could not download this attachment. Please retry.",
-                                ),
-                              );
-                          }}
-                        >
-                          {file.name}
-                        </button>
-                        <span>{file.path}</span>
+                        <AttachmentCard
+                          file={file}
+                          workspace={workspace}
+                          onError={() =>
+                            setControlError(
+                              "Could not download this attachment. Please retry.",
+                            )
+                          }
+                        />
                       </li>
                     ))}
                   </ul>

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { AttachmentCard } from "../src/domains/conversations/presentation/attachment-card";
 import {
   AttachmentChips,
   ComposerAttachments,
@@ -20,7 +21,12 @@ test("attachment controls name the chooser and removable files without interpret
         disabled={false}
         onUpload={() => {}}
       />
-      <AttachmentChips files={[file]} disabled={false} onRemove={() => {}} />
+      <AttachmentChips
+        files={[file]}
+        workspace={new BackendWorkspace("")}
+        disabled={false}
+        onRemove={() => {}}
+      />
     </>,
   );
   assert.match(html, /aria-label="Attach files"/);
@@ -35,6 +41,27 @@ test("attachment controls name the chooser and removable files without interpret
     />,
   );
   assert.match(disabled, /<button[^>]+disabled/);
+});
+
+test("message attachments show a named download action and image card", () => {
+  const workspace = new BackendWorkspace("");
+  try {
+    const image = {
+      ...file,
+      name: "photo.png",
+      mimeType: "image/png",
+      size: 2048,
+    };
+    const html = renderToStaticMarkup(
+      <AttachmentCard file={image} workspace={workspace} />,
+    );
+    assert.match(html, /data-image="true"/);
+    assert.match(html, /aria-label="Download photo.png"/);
+    assert.match(html, /2.0 KB/);
+    assert.ok(!html.includes("/workspace/"));
+  } finally {
+    workspace.dispose();
+  }
 });
 
 test("saved attachment drafts remain scoped and tolerate invalid or unavailable storage", () => {
