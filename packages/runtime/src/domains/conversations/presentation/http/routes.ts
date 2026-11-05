@@ -71,6 +71,7 @@ export function conversationRoutes(
         message.omit({ conversationId: true }).extend({
           sessionId: z.uuid().optional(),
           model: model.optional(),
+          approvalMode: z.enum(["ask", "full-access"]).optional(),
           attachments: z
             .array(z.string().regex(/^[a-f0-9]{64}$/))
             .max(4)

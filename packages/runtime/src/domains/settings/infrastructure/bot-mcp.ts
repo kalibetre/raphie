@@ -205,6 +205,15 @@ export class BotMcp {
       await client.close();
       throw new Error("Ambiguous tool names.");
     }
+    const generation = entry.oauth?.authorizationGeneration;
+    const call = client.call.bind(client);
+    client.call = async (...args) => {
+      if (generation !== entry.oauth?.authorizationGeneration)
+        throw new Error(
+          "MCP authorization changed. Reconnect before calling tools.",
+        );
+      return call(...args);
+    };
     return client;
   }
 
@@ -223,8 +232,24 @@ export class BotMcp {
                   e.legacy && client.server?.name === "executor"
                     ? ["skills"]
                     : [],
+                legacyIdentity:
+                  this.entries.filter(
+                    (entry) =>
+                      JSON.stringify(entry.config) === JSON.stringify(e.config),
+                  ).length === 1
+                    ? new Bun.CryptoHasher("sha256")
+                        .update(JSON.stringify(e.config))
+                        .digest("hex")
+                    : undefined,
                 identity: new Bun.CryptoHasher("sha256")
-                  .update(JSON.stringify(e.config))
+                  .update(
+                    JSON.stringify([
+                      e.id,
+                      e.config,
+                      client.tools,
+                      e.oauth?.authorizationGeneration,
+                    ]),
+                  )
                   .digest("hex"),
               },
             ]

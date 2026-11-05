@@ -9,6 +9,7 @@ export type SendMessage = {
   conversationId?: number;
   sessionId?: string;
   model?: ModelSelection;
+  approvalMode?: "ask" | "full-access";
   discordThreadId?: string;
   connectionId?: string;
   discordUserId?: string;

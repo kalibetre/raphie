@@ -9,9 +9,12 @@ export function ToolDecision({ approval }: { approval: Approval }) {
   const { workspace } = useBackend();
   const api = workspace.api;
   const decision = useMutation({
-    mutationFn: (value: "approved" | "rejected") =>
+    mutationFn: (value: {
+      decision: "approved" | "rejected";
+      scope: "once" | "session";
+    }) =>
       api<{ status: string }>(`/api/tool-approvals/${approval.id}`, {
-        decision: value,
+        ...value,
       }),
   });
   const busy = decision.isPending || decision.isSuccess;
@@ -30,17 +33,32 @@ export function ToolDecision({ approval }: { approval: Approval }) {
         size="sm"
         variant="outline"
         disabled={busy}
-        onClick={() => decision.mutate("rejected")}
+        onClick={() => decision.mutate({ decision: "rejected", scope: "once" })}
       >
         <X /> Reject
       </Button>
       <Button
         size="sm"
         disabled={busy}
-        onClick={() => decision.mutate("approved")}
+        onClick={() => decision.mutate({ decision: "approved", scope: "once" })}
       >
-        <Check /> Approve
+        <Check /> Approve once
       </Button>
+      {approval.server === "workspace" &&
+        approval.connectionIdentity === "raphie.workspace.command" &&
+        (approval.tool === "bash" || approval.tool === "workspace_exec") && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            title={`Allow these exact arguments for ${approval.tool} in this bot conversation: ${approval.argumentsJson}`}
+            onClick={() =>
+              decision.mutate({ decision: "approved", scope: "session" })
+            }
+          >
+            Approve for session
+          </Button>
+        )}
       {decision.isError && (
         <p className="error" role="alert">
           {decision.error.message}

@@ -32,13 +32,18 @@ export class BackendWorkspace {
     return `/api/bots/${encodeURIComponent(this.botId)}${path.slice(4)}`;
   }
 
-  readonly api = async <T>(path: string, data?: unknown): Promise<T> => {
+  readonly api = async <T>(
+    path: string,
+    data?: unknown,
+    method?: string | AbortSignal,
+  ): Promise<T> => {
     this.assertActive();
     const result = await api<T>(
       this.scopedPath(path),
       data,
       this.lifetime.signal,
       this.url || undefined,
+      typeof method === "string" ? method : undefined,
     );
     // Even a response already queued before abort must not resume an old action.
     this.assertActive();

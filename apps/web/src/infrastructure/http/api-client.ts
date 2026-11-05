@@ -24,6 +24,7 @@ export async function api<T>(
   data?: unknown,
   signal?: AbortSignal,
   backend?: string,
+  method = "POST",
 ): Promise<T> {
   const headers: Record<string, string> = backend
     ? { "x-raphie-backend": backend }
@@ -34,7 +35,7 @@ export async function api<T>(
       ? { signal, headers }
       : {
           signal,
-          method: "POST",
+          method,
           headers: {
             ...headers,
             ...(data instanceof FormData
@@ -45,7 +46,7 @@ export async function api<T>(
           body: data instanceof FormData ? data : JSON.stringify(data),
         },
   );
-  const result = await response.json();
+  const result = response.status === 204 ? null : await response.json();
   if (response.status === 401 && result.code === "unauthenticated")
     redirectToSignIn();
   if (!response.ok)

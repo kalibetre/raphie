@@ -235,7 +235,10 @@ export class RuntimeWorkspace {
   }
 
   // Legacy just-bash capability, retained for the checkpoint tool and recovery.
-  execute(...args: Parameters<BotWorkspace["execute"]>) {
+  execute(
+    ...input: [...Parameters<BotWorkspace["execute"]>, (() => Promise<void>)?]
+  ) {
+    const [sessionId, operationId, command, signal, authorize] = input;
     if (this.settings().provider !== "just-bash")
       throw new InputError("Use the container coding tools for this bot.", 409);
     this.requireFiles();
@@ -245,7 +248,13 @@ export class RuntimeWorkspace {
     return this.views
       .run(async () => {
         this.requireFiles();
-        const result = await this.checkpoint.execute(...args);
+        await authorize?.();
+        const result = await this.checkpoint.execute(
+          sessionId,
+          operationId,
+          command,
+          signal,
+        );
         return result;
       })
       .finally(() => {

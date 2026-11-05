@@ -20,4 +20,15 @@ await gateway.sessions.submit(gateway.actors.establish("web"), {
   eventId: "tool-crash",
   text: "Append once",
 });
-await new Promise(() => {});
+while (true) {
+  for (const approval of (await gateway.toolApprovals.state()).approvals) {
+    if (approval.status === "pending")
+      await gateway.toolApprovals.decide(
+        approval.id,
+        "approved",
+        "owner",
+        "web",
+      );
+  }
+  await Bun.sleep(10);
+}

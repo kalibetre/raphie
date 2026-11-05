@@ -42,8 +42,9 @@ function fixture(call: McpClient["call"]) {
   return { client, identity: "fixture-account" };
 }
 
-const model = () =>
+const model = (repeatTool = false) =>
   chatModel({
+    repeatTool,
     tool: {
       name: "mcp_fixture_execute",
       args: { code: "perform_exactly_this()" },
@@ -402,3 +403,225 @@ test("restart after remote execution claim reports uncertainty without repeating
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("MCP once approval does not authorize changed arguments after restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "mcp-session-dispatch-"));
+  const calls: unknown[] = [];
+  let sequence = 0;
+  const mcp = fixture(async (name, args) => {
+    calls.push([name, args]);
+    return { content: [{ type: "text", text: "executed" }] };
+  });
+  mcp.client.tools.push({ ...mcp.client.tools[0], name: "other" });
+  const selection = { name: "mcp_fixture_execute", args: { code: "initial" } };
+  const open = () =>
+    Gateway.open({
+      directory,
+      ...chatModel({ tool: selection, repeatTool: true }),
+      mcp,
+    });
+  let app = await open();
+  const send = (sessionId?: string) =>
+    app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: `scope-${++sequence}`,
+      text: "Execute",
+      sessionId,
+    });
+  const pending = async () => {
+    await until(async () =>
+      (await app.toolApprovals.state()).approvals.some(
+        (a) => a.status === "pending",
+      ),
+    );
+    return (await app.toolApprovals.state()).approvals.find(
+      (a) => a.status === "pending",
+    )!;
+  };
+  const done = (id: string) =>
+    until(
+      async () =>
+        (await app.chats.state()).turns.find((t) => t.id === id)?.status ===
+        "done",
+    );
+  try {
+    const first = await send();
+    const approval = await pending();
+    assert.equal(calls.length, 0);
+    await app.toolApprovals.decide(
+      approval.id,
+      "approved",
+      "owner",
+      "web",
+      undefined,
+      undefined,
+      undefined,
+      "once",
+    );
+    await done(first.id);
+    assert.deepEqual(calls, [["execute", { code: "initial" }]]);
+    await app.close();
+    selection.args.code = "different";
+    app = await open();
+    const next = await send(first.sessionId);
+    const nextApproval = await pending();
+    assert.equal(calls.length, 1);
+    await app.toolApprovals.decide(nextApproval.id, "rejected", "owner", "web");
+    await done(next.id);
+    assert.equal(calls.length, 1);
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+for (const dispatched of [false, true]) {
+  test(`Stop preserves authorization boundary with ${dispatched ? "dispatched" : "pending"} MCP request`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "mcp-stop-boundary-"));
+    let calls = 0;
+    const entered = Promise.withResolvers<void>();
+    const app = await Gateway.open({
+      directory,
+      ...model(),
+      mcp: fixture(async (_name, _args, signal) => {
+        calls++;
+        entered.resolve();
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) resolve();
+          else
+            signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        throw new Error("interrupted after dispatch");
+      }),
+    });
+    try {
+      const turn = await app.chats.send(input);
+      await until(
+        async () => (await app.toolApprovals.state()).approvals.length === 1,
+      );
+      const proposal = (await app.toolApprovals.state()).approvals[0];
+      if (dispatched) {
+        await app.toolApprovals.decide(proposal.id, "approved", "owner", "web");
+        await entered.promise;
+      }
+      await app.sessions.control(
+        app.actors.establish("web"),
+        turn.sessionId,
+        "stop",
+      );
+      if (!dispatched) {
+        await app.toolApprovals
+          .decide(
+            proposal.id,
+            "approved",
+            "owner",
+            "web",
+            undefined,
+            undefined,
+            undefined,
+            "session",
+          )
+          .catch(() => {});
+        assert.deepEqual(
+          await app.toolApprovals.listGrants("owner", turn.sessionId),
+          [],
+        );
+      }
+      await app.close();
+      const reopened = await Gateway.open({
+        directory,
+        ...model(),
+        mcp: fixture(async () => {
+          calls++;
+          return { content: [] };
+        }),
+      });
+      try {
+        const item = (await reopened.toolApprovals.state()).approvals.find(
+          (a) => a.id === proposal.id,
+        )!;
+        if (dispatched)
+          assert.ok(["running", "uncertain", "done"].includes(item.execution));
+        else assert.notEqual(item.status, "approved");
+        assert.equal(calls, dispatched ? 1 : 0);
+      } finally {
+        await reopened.close();
+      }
+    } finally {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const mismatch of ["none", "config", "args"] as const)
+  test(`legacy pending approval recovery: ${mismatch}`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "raphie-mcp-legacy-"));
+    let calls = 0;
+    const legacyIdentity = new Bun.CryptoHasher("sha256")
+      .update(JSON.stringify({ url: "original" }))
+      .digest("hex");
+    const mcp = fixture(async () => {
+      calls++;
+      return { content: [{ type: "text", text: "done" }] };
+    });
+    let app = await Gateway.open({
+      directory,
+      ...model(),
+      mcp: { ...mcp, identity: legacyIdentity },
+    });
+    try {
+      await app.chats.send(input);
+      await until(
+        async () => (await app.toolApprovals.state()).approvals.length === 1,
+      );
+      const { ToolApprovals } =
+        await import("../src/domains/approvals/infrastructure/pi-tool-approvals.ts");
+      const { BACKGROUND_CONTEXT } =
+        await import("@earendil-works/chord/context");
+      await app.root.commit(async (tx) => {
+        const item = (await tx.doc(ToolApprovals)).approvals[0];
+        delete item.connectionIdentity;
+        if (mismatch === "args") item.argumentsJson = "{}";
+      }, BACKGROUND_CONTEXT);
+      await app.close();
+      app = await Gateway.open({
+        directory,
+        ...model(),
+        mcp: {
+          ...mcp,
+          identity: "new-connection-and-catalog-identity",
+          legacyIdentity:
+            mismatch === "config" ? "changed-config-hash" : legacyIdentity,
+        },
+      });
+      const item = (await app.toolApprovals.state()).approvals[0];
+      await app.toolApprovals.decide(item.id, "approved", "owner", "web");
+      if (mismatch === "none") {
+        await until(
+          async () =>
+            (await app.toolApprovals.state()).approvals[0].execution === "done",
+        );
+        assert.equal(calls, 1);
+        await app.close();
+        app = await Gateway.open({
+          directory,
+          ...model(),
+          mcp: {
+            ...mcp,
+            identity: "new-connection-and-catalog-identity",
+            legacyIdentity,
+          },
+        });
+        assert.equal(calls, 1);
+      } else {
+        await delay(150);
+        assert.equal(calls, 0);
+      }
+      assert.equal((await app.toolApprovals.state()).grants?.length ?? 0, 0);
+    } finally {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });

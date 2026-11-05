@@ -34,8 +34,11 @@ Pi's MCP client owns initialization, paginated discovery, cancellation and
 transport shutdown. Pi's deferred tool search loads tool definitions as needed.
 Discovering tools does not approve their execution: each model-proposed action
 uses Raphie's durable exact-argument approval gate, including tools advertising
-read-only hints. Interrupted remote actions retain the existing uncertain-outcome
-protection rather than being repeated automatically.
+read-only hints. The conversation's command permission mode and command session
+grants do not authorize MCP calls. This includes Executor: Raphie approves the
+MCP call, while Executor manages approvals for actions within its own service.
+Interrupted remote actions retain the existing uncertain-outcome protection
+rather than being repeated automatically.
 
 Use Pause, Enable/Reconnect and Remove to manage servers. Configuration changes
 are blocked while the bot has pending turns or approvals. Replace a configuration

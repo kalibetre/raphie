@@ -11,6 +11,7 @@ import { Textarea } from "../../../shared/ui/textarea";
 import { ComposerPlugins } from "../../settings/infrastructure/plugins/index";
 import { ComposerActions } from "./composer-actions";
 import { AttachmentChips, ComposerAttachments } from "./composer-attachments";
+import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
 import { useComposerAttachments } from "./use-composer-attachments";
 import { useComposerLayout } from "./use-composer-layout";
@@ -43,10 +44,15 @@ export function Composer({
     eventId: string,
     model?: ModelSelection,
     attachments?: string[],
+    approvalMode?: "ask" | "full-access",
   ) => Promise<void>;
   onChooseModel: (model: ModelSelection) => Promise<void>;
   onModelSettings: () => void;
 }) {
+  const [permission, setPermission] = useState<{
+    key: string;
+    mode: "ask" | "full-access";
+  }>();
   const [newModel, setNewModel] = useState<ModelSelection>();
   const selectedForNewSession = conversationId ? undefined : newModel;
   const activeModel = selectedForNewSession ?? model;
@@ -59,6 +65,7 @@ export function Composer({
   >(undefined);
   const { workspace } = useBackend();
   const key = workspace.draftKey(conversationId);
+  const draftMode = permission?.key === key ? permission.mode : "ask";
   const activeKey = useRef(key);
   useEffect(() => {
     activeKey.current = key;
@@ -116,6 +123,7 @@ export function Composer({
     setError(undefined);
     const modelKey = JSON.stringify([
       selectedForNewSession ?? null,
+      draftMode,
       files.map((f) => f.id),
     ]);
     if (
@@ -129,6 +137,7 @@ export function Composer({
         request.current.id,
         selectedForNewSession,
         sentFiles.map((f) => f.id),
+        conversationId ? undefined : draftMode,
       );
       const sameDraft =
         activeKey.current === sentKey && draftValue.current === sentDraft;
@@ -216,6 +225,14 @@ export function Composer({
             }}
             onSettings={onModelSettings}
           />
+          {
+            <McpPermissions
+              key={`${workspace.botId}:${conversationId}`}
+              sessionId={conversationId}
+              draftMode={draftMode}
+              onDraftMode={(mode) => setPermission({ key, mode })}
+            />
+          }
           <ComposerPlugins
             enabled={enabledPlugins}
             context={{ draft, model: activeModel?.modelId ?? null, usage }}

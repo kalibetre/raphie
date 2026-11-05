@@ -58,6 +58,12 @@ export function traceSessions(sessions: Sessions, telemetry: Telemetry) {
           return id;
         },
       ),
+    approvalMode: (...args: Parameters<Sessions["approvalMode"]>) =>
+      sessions.approvalMode(...args),
+    listGrants: (...args: Parameters<Sessions["listGrants"]>) =>
+      sessions.listGrants(...args),
+    revokeGrant: (...args: Parameters<Sessions["revokeGrant"]>) =>
+      sessions.revokeGrant(...args),
     decideFile: (...args: Parameters<Sessions["decideFile"]>) =>
       telemetry.run(
         "file.decide",

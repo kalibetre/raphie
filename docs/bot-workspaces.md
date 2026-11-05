@@ -29,8 +29,11 @@ sessions. Different bots can execute concurrently. A shell exit of zero commits
 the files; a nonzero exit, worker failure, interruption, limit breach or timeout
 discards that execution's changes. A command can handle a normal command error
 and exit zero, as in a shell. Inspect `exitCode` and `committed` before claiming
-success. Local workspace edits need no separate tool approval; they cannot
-perform an external service action.
+success. `workspace_exec` commands use the conversation's command permission
+mode: Ask requests approval, while Full access permits commands without a
+prompt. An exact-command session grant may also authorize a command in Ask mode.
+See [command permissions](using-raphie.md#command-permissions). Other workspace
+file tools do not become command-gated simply because they modify a file.
 
 ## Per-bot sandbox settings (native sandbox Slice 1)
 

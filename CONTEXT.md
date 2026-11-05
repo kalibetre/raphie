@@ -36,6 +36,13 @@ include several model responses and tool actions before it finishes.
 **Approval**: An owner decision about an exact proposed action and its arguments.
 Approval does not itself prove that the action executed successfully.
 
+**Command permission mode**: A conversation's Ask or Full access setting for
+workspace command tools. It does not authorize MCP calls or change sandbox limits.
+
+**Command session grant**: Permission to repeat a command tool's exact arguments
+within the same bot and conversation, until revoked. It persists across restart
+and does not authorize other commands or MCP calls.
+
 **Action**: A proposed or attempted effect in a connected service. An uncertain
 action may have executed and must not be repeated automatically.
 

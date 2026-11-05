@@ -41,12 +41,24 @@ All routes below are prefixed `/api`. The web host proxies them to the runtime.
 | GET    | `/sessions/<uuid>`                                   | Session observation: recent turns, approvals, live text, activity, phase/error |
 | GET    | `/sessions/<uuid>/history?before=<turn-id>&limit=50` | `{ items, next }`, ordered oldest-to-newest within each page                   |
 | GET    | `/sessions/<uuid>/approvals`                         | Latest 100 approval views, including pending decisions                         |
+| GET    | `/sessions/<uuid>/approval-mode`                     | Conversation command mode: `ask` or `full-access`                              |
+| PUT    | `/sessions/<uuid>/approval-mode`                     | Set the conversation command mode                                              |
+| GET    | `/sessions/<uuid>/grants`                            | List active session grants                                                     |
+| DELETE | `/sessions/<uuid>/grants/<id>`                       | Revoke a session grant                                                         |
 | GET    | `/sessions/<uuid>/events`                            | Authoritative selected-session observations over SSE                           |
 | POST   | `/tool-approvals/<id>`                               | Shared explicit approval decision                                              |
 | GET    | `/inspection/activity?before=<event-id>&limit=100`   | Optional bounded diagnostic page                                               |
 
-Submission JSON contains `text`, stable `eventId`, and optional `sessionId`.
-Decision JSON contains `decision: "approved" | "rejected"`. Mutations require
+Submission JSON contains `text`, stable `eventId`, optional `sessionId`, and an
+optional `approvalMode: "ask" | "full-access"` for a new web conversation.
+The mode is persisted with conversation creation before its first turn runs;
+omitting it defaults to Ask. Decision JSON contains
+`decision: "approved" | "rejected"` and optional `scope: "once" | "session"`
+(default `once`). Session scope is supported for command approvals only and
+matches the same bot, conversation, command tool and exact arguments. MCP
+approvals remain once-only. Revocation prevents subsequent authorized claims;
+it cannot undo an action already dispatched. Mode changes do not revoke grants.
+Mutations require
 `Content-Type: application/json` and `x-raphie-client: web`. Actor and destination
 fields in JSON are never trusted. A receipt is admission, not completion.
 

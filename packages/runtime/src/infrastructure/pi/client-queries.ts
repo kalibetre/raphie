@@ -193,6 +193,7 @@ export class PiClientQueries implements ClientQueries {
         server: a.server,
         tool: a.tool,
         argumentsJson: a.argumentsJson,
+        connectionIdentity: a.connectionIdentity,
         createdAt: a.createdAt,
         expiresAt: a.expiresAt,
         status: a.status,

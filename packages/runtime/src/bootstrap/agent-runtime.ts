@@ -406,8 +406,8 @@ export class Gateway {
                 409,
               );
             return this.workspace.env(operationId);
-          })
-        : createWorkspaceTools(this.workspace, session),
+          }, this.toolApprovals)
+        : createWorkspaceTools(this.workspace, session, this.toolApprovals),
     );
     this.registry.install(createDocumentTools(this.workspace, session));
   }

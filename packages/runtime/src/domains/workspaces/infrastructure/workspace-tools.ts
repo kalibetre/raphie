@@ -6,12 +6,18 @@ import {
 import { obj, str } from "@earendil-works/pi-schema";
 
 import { InputError } from "../../../shared/application/input-error.ts";
+import {
+  activeCommandGrant,
+  ToolApprovals,
+  type ToolApprovalService,
+} from "../../approvals/infrastructure/pi-tool-approvals.ts";
 import type { RuntimeWorkspace } from "./runtime-workspace.ts";
 
 /** Capability is closed over the bot container; no model-selected IDs or paths. */
 export function createWorkspaceTools(
   workspace: Pick<RuntimeWorkspace, "execute">,
   session: (conversationId: number) => Promise<string | undefined>,
+  approvals: ToolApprovalService,
 ) {
   return defineExtension({
     name: "raphie.workspace",
@@ -38,11 +44,60 @@ export function createWorkspaceTools(
                 "Workspace execution requires an active session turn.",
                 409,
               );
+            const argumentsJson = JSON.stringify({ command: args.command });
+            const fingerprint = new Bun.CryptoHasher("sha256")
+              .update(
+                JSON.stringify([
+                  "raphie.workspace.command",
+                  api.conversationId,
+                  api.callId,
+                  argumentsJson,
+                ]),
+              )
+              .digest("hex");
+            const created = await approvals.ensure(api, ctx, {
+              server: "workspace",
+              tool: "workspace_exec",
+              connectionIdentity: "raphie.workspace.command",
+              argumentsJson,
+              fingerprint,
+            });
+            const approved =
+              created.status === "pending"
+                ? await approvals.wait(api, ctx, created)
+                : created;
+            const authorize = async () => {
+              const authorized = await api.commit(async (tx) => {
+                const state = await tx.doc(ToolApprovals);
+                const item = state.approvals.find((a) => a.id === approved.id);
+                return (
+                  !!item &&
+                  item.status === "approved" &&
+                  item.conversationId === api.conversationId &&
+                  item.taskId === api.taskId &&
+                  item.fingerprint === fingerprint &&
+                  item.argumentsJson === argumentsJson &&
+                  item.connectionIdentity === "raphie.workspace.command" &&
+                  activeCommandGrant(state, item) &&
+                  (!item.fullAccess ||
+                    state.commandModes?.[String(api.conversationId)] ===
+                      "full-access") &&
+                  !ctx.abortSignal?.aborted
+                );
+              }, ctx);
+              if (!authorized)
+                throw new InputError(
+                  "Command authorization rejected, expired, or no longer valid. No command executed.",
+                  403,
+                );
+            };
+            await authorize();
             const result = await workspace.execute(
               sessionId,
               `${api.conversationId}:${api.taskId}:${api.callId}`,
               args.command,
               ctx.abortSignal,
+              authorize,
             );
             return {
               output: [{ type: "text" as const, text: JSON.stringify(result) }],

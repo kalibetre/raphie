@@ -37,7 +37,10 @@ const model = {
 };
 const reply: Provider["streamSimple"] = (_model, context, options) => {
   const stream = createAssistantMessageEventStream();
-  const toolResult = context.messages.findLast((m) => m.role === "toolResult");
+  const latestUser = context.messages.findLastIndex((m) => m.role === "user");
+  const toolResult = context.messages
+    .slice(latestUser + 1)
+    .findLast((m) => m.role === "toolResult");
   const user = context.messages.findLast((m) => m.role === "user");
   const input = user && typeof user.content === "string" ? user.content : "";
   const remember = /remember tea/i.test(input);

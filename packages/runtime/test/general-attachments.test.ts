@@ -17,8 +17,18 @@ async function settled(gateway: Gateway) {
     n < 200 &&
     (await gateway.chats.state()).turns.some((t) => t.status === "pending");
     n++
-  )
+  ) {
+    for (const approval of (await gateway.toolApprovals.state()).approvals) {
+      if (approval.status === "pending")
+        await gateway.toolApprovals.decide(
+          approval.id,
+          "approved",
+          "owner",
+          "web",
+        );
+    }
     await Bun.sleep(10);
+  }
   expect((await gateway.chats.state()).turns.at(-1)?.status).toBe("done");
 }
 

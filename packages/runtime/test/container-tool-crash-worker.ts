@@ -1,4 +1,7 @@
+import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
+
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
+import { authorizeContainerDispatch } from "../src/domains/workspaces/infrastructure/container-workspace.ts";
 import { chatModel } from "./chat-model.ts";
 
 const model = chatModel({
@@ -18,9 +21,17 @@ await gateway.saveSandboxSettings({
 const environment = gateway.workspace.env.bind(gateway.workspace);
 gateway.workspace.env = (operationId) => {
   const env = environment(operationId);
+  return wrap(env);
+};
+
+function wrap(env: ExecutionEnv): ExecutionEnv {
   const execute = env.exec.bind(env);
   return new Proxy(env, {
     get(target, key) {
+      if (key === authorizeContainerDispatch) {
+        const guard = Reflect.get(target, key);
+        return (claim: () => Promise<boolean>) => wrap(guard(claim));
+      }
       if (key !== "exec") return Reflect.get(target, key);
       return async (...args: Parameters<typeof execute>) => {
         await execute(...args);
@@ -30,9 +41,21 @@ gateway.workspace.env = (operationId) => {
       };
     },
   });
-};
+}
+
 await gateway.sessions.submit(gateway.actors.establish("web"), {
   eventId: "native-crash",
   text: "Append once",
 });
-await new Promise(() => {});
+while (true) {
+  for (const approval of (await gateway.toolApprovals.state()).approvals) {
+    if (approval.status === "pending")
+      await gateway.toolApprovals.decide(
+        approval.id,
+        "approved",
+        "owner",
+        "web",
+      );
+  }
+  await Bun.sleep(10);
+}

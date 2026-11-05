@@ -17,7 +17,24 @@ import { Chats } from "../../conversations/infrastructure/pi-conversation-servic
 import type { Source } from "./pi-file-approvals.ts";
 import { InputError } from "./pi-file-approvals.ts";
 
-type ApprovalState = { approvals: ToolApproval[]; deliveries: ToolDelivery[] };
+type Grant = {
+  id: string;
+  conversationId: number;
+  connectionIdentity: string;
+  tool: string;
+  argumentsJson?: string;
+  actor: string;
+  revoked: boolean;
+};
+
+type ApprovalState = {
+  // Legacy MCP policy is deliberately never used for command authorization.
+  modes?: Record<string, "ask" | "full-access">;
+  commandModes?: Record<string, "ask" | "full-access">;
+  grants?: Grant[];
+  approvals: ToolApproval[];
+  deliveries: ToolDelivery[];
+};
 
 export const ToolApprovals = defineDoc<ApprovalState>({
   kind: "raphie.tool-approvals",
@@ -26,6 +43,32 @@ export const ToolApprovals = defineDoc<ApprovalState>({
   checkpointWhen: () => false,
   initial: () => ({ approvals: [], deliveries: [] }),
 });
+
+export function supportsCommandGrant(
+  item: Pick<ToolApproval, "server" | "tool" | "connectionIdentity">,
+) {
+  return (
+    item.server === "workspace" &&
+    item.connectionIdentity === "raphie.workspace.command" &&
+    (item.tool === "bash" || item.tool === "workspace_exec")
+  );
+}
+
+export function activeCommandGrant(state: ApprovalState, item: ToolApproval) {
+  return (
+    !item.grantId ||
+    !!state.grants?.some(
+      (g) =>
+        g.id === item.grantId &&
+        !g.revoked &&
+        supportsCommandGrant(item) &&
+        g.conversationId === item.conversationId &&
+        g.connectionIdentity === item.connectionIdentity &&
+        g.tool === item.tool &&
+        g.argumentsJson === item.argumentsJson,
+    )
+  );
+}
 
 function notify(
   state: ApprovalState,
@@ -61,6 +104,8 @@ export class ToolApprovalService {
     ctx: Context,
     proposal: {
       fingerprint: string;
+      legacyFingerprint?: string;
+      connectionIdentity?: string;
       server: string;
       tool: string;
       argumentsJson: string;
@@ -71,6 +116,18 @@ export class ToolApprovalService {
       const chats = await tx.doc(Chats);
       const existing = state.approvals.find((a) => a.taskId === api.taskId);
       if (existing) {
+        if (
+          !existing.connectionIdentity &&
+          existing.conversationId === api.conversationId &&
+          existing.server === proposal.server &&
+          existing.tool === proposal.tool &&
+          existing.argumentsJson === proposal.argumentsJson &&
+          proposal.legacyFingerprint &&
+          existing.fingerprint === proposal.legacyFingerprint
+        ) {
+          existing.fingerprint = proposal.fingerprint;
+          // Keep legacy approvals ineligible for session grants.
+        }
         if (existing.fingerprint !== proposal.fingerprint)
           throw new Error(
             "MCP connection or arguments changed. Send a new request for fresh approval.",
@@ -86,8 +143,10 @@ export class ToolApprovalService {
       // assign authority from an ambiguous queue; the web owner can still decide.
       const initiator =
         pendingTurns.length === 1 ? turn?.discordUserId : undefined;
+      const { legacyFingerprint: _legacyFingerprint, ...currentProposal } =
+        proposal;
       const item: ToolApproval = {
-        ...proposal,
+        ...currentProposal,
         id: crypto.randomUUID(),
         taskId: api.taskId,
         conversationId: api.conversationId,
@@ -100,6 +159,31 @@ export class ToolApprovalService {
         execution: "waiting",
         result: null,
       };
+      if (
+        proposal.connectionIdentity === "raphie.workspace.command" &&
+        proposal.server === "workspace" &&
+        (proposal.tool === "workspace_exec" || proposal.tool === "bash") &&
+        state.commandModes?.[String(api.conversationId)] === "full-access"
+      ) {
+        item.status = "approved";
+        item.fullAccess = true;
+      }
+      if (supportsCommandGrant(item)) {
+        const grant = state.grants?.find(
+          (g) =>
+            !g.revoked &&
+            g.conversationId === item.conversationId &&
+            g.connectionIdentity === item.connectionIdentity &&
+            g.tool === item.tool &&
+            g.argumentsJson === item.argumentsJson,
+        );
+        if (grant) {
+          item.status = "approved";
+          item.grantId = grant.id;
+        }
+      }
+      // Command permissions never authorize external MCP service calls.
+      // Legacy MCP grants and modes remain readable for migration only.
       state.approvals.push(item);
       record(
         await tx.doc(Activity),
@@ -121,15 +205,23 @@ export class ToolApprovalService {
           },
         },
       );
-      notify(
-        state,
-        item,
-        "approval",
-        chats.turns.find(
-          (t) =>
-            t.conversationId === item.conversationId && t.status === "pending",
-        )?.replyTo?.conversation ?? null,
-      );
+      if (item.status === "pending") {
+        notify(state, item, "approval", turn?.replyTo?.conversation ?? null);
+      } else {
+        record(
+          await tx.doc(Activity),
+          "approval.approved",
+          "Tool request automatically authorized",
+          {
+            conversationId: item.conversationId,
+            operationId: item.id,
+            details: {
+              grantId: item.grantId ?? null,
+              fullAccess: !!item.fullAccess,
+            },
+          },
+        );
+      }
       return { ...item };
     }, ctx);
   }
@@ -198,6 +290,7 @@ export class ToolApprovalService {
     threadId?: string,
     connectionId = "legacy-discord",
     discordUserId?: string,
+    scope: "once" | "session" = "once",
   ) {
     this.app.authorize(actor);
     if (!isDecision(decision)) throw new InputError("Invalid decision.");
@@ -205,6 +298,8 @@ export class ToolApprovalService {
       const state = await tx.doc(ToolApprovals);
       const item = state.approvals.find((a) => a.id === id);
       if (!item) throw new InputError("Tool approval not found.", 404);
+      if (scope === "session" && !supportsCommandGrant(item))
+        throw new InputError("This tool requires approval of each call.", 403);
       const destination =
         state.deliveries.find((d) => d.approvalId === id)?.threadId ?? null;
       if (
@@ -236,6 +331,20 @@ export class ToolApprovalService {
         decision,
         Date.now(),
       );
+      if (item.status === "approved" && scope === "session") {
+        state.grants ??= [];
+        const grant = {
+          id: crypto.randomUUID(),
+          conversationId: item.conversationId,
+          connectionIdentity: item.connectionIdentity!,
+          tool: item.tool,
+          argumentsJson: item.argumentsJson,
+          actor,
+          revoked: false,
+        };
+        state.grants.push(grant);
+        item.grantId = grant.id;
+      }
       item.decidedVia = via;
       record(
         await tx.doc(Activity),
@@ -249,6 +358,79 @@ export class ToolApprovalService {
       );
       notify(state, item, "resolved", destination);
       return item.status;
+    }, context);
+  }
+
+  async approvalMode(
+    actor: string,
+    sessionId: string,
+    mode?: "ask" | "full-access",
+  ) {
+    this.app.authorize(actor);
+    return this.app.root.commit(async (tx) => {
+      const conversation = (await tx.doc(Chats)).conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!conversation) throw new InputError("Session not found.", 404);
+      const state = await tx.doc(ToolApprovals);
+      if (mode !== undefined) {
+        state.commandModes = {
+          ...state.commandModes,
+          [String(conversation.id)]: mode,
+        };
+        record(
+          await tx.doc(Activity),
+          "approval.mode_changed",
+          "Command permission mode changed",
+          {
+            conversationId: conversation.id,
+            details: { actor, mode },
+          },
+        );
+      }
+      return state.commandModes?.[String(conversation.id)] ?? "ask";
+    }, context);
+  }
+
+  async listGrants(actor: string, sessionId: string) {
+    this.app.authorize(actor);
+    return this.app.root.commit(async (tx) => {
+      const conversation = (await tx.doc(Chats)).conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!conversation) throw new InputError("Session not found.", 404);
+      return ((await tx.doc(ToolApprovals)).grants ?? [])
+        .filter((g) => !g.revoked && g.conversationId === conversation.id)
+        .map(({ id, tool, argumentsJson }) => ({
+          id,
+          tool: argumentsJson ? `${tool}: ${argumentsJson}` : tool,
+        }));
+    }, context);
+  }
+
+  async revokeGrant(actor: string, sessionId: string, id: string) {
+    this.app.authorize(actor);
+    await this.app.root.commit(async (tx) => {
+      const conversation = (await tx.doc(Chats)).conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      const grant = (await tx.doc(ToolApprovals)).grants?.find(
+        (g) => g.id === id && g.conversationId === conversation?.id,
+      );
+      if (!grant) throw new InputError("Grant not found.", 404);
+      if (!grant.revoked) {
+        grant.revoked = true;
+        record(
+          await tx.doc(Activity),
+          "grant.revoked",
+          "Session grant revoked",
+          {
+            conversationId: grant.conversationId,
+            operationId: grant.id,
+            details: { actor, tool: grant.tool },
+          },
+        );
+      }
     }, context);
   }
 
