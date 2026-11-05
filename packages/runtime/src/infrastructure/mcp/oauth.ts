@@ -8,7 +8,7 @@ import {
   OAuthCallbackServer,
 } from "@earendil-works/pi-mcp/oauth";
 
-export type SavedMcpOAuth = { redirectUrl: string; state?: McpOAuthState };
+export type SavedMcpOAuth = { redirectUrl: string; authorizationGeneration?: string; state?: McpOAuthState };
 
 /** One loopback callback and one grant, owned by an exact bot connection. */
 export class McpOAuth {
@@ -37,6 +37,11 @@ export class McpOAuth {
       store,
       onRedirect: async (url) => {
         if (this.closed) throw new Error("Connection closed.");
+        // Invalidate prior account grants before any new credentials can be installed.
+        if (!this.authorizationUrl) {
+          this.saved.authorizationGeneration = crypto.randomUUID();
+          await store.save(this.saved.state ?? { serverUrl });
+        }
         // The library validates discovered OAuth endpoints and supplies PKCE/state.
         if (this.authorizationUrl) return;
         this.callback ??= await OAuthCallbackServer.listen({
@@ -115,25 +120,30 @@ export class McpOAuth {
       await callback.close();
       save(saved);
     }
-    const value = saved;
+    const value = structuredClone(saved);
+    // Migrate existing connections without deriving identity from credentials.
+    value.authorizationGeneration ??= crypto.randomUUID();
     // A restarted connection must not accept a callback from an older attempt.
     delete value.state?.oauthState;
     delete value.state?.codeVerifier;
     save(value);
+    let owner: McpOAuth | undefined;
     const store: McpOAuthStateStore = {
       load: () => structuredClone(value.state),
       save: (state) => {
+        if (owner?.closed) throw new Error("Connection closed.");
         value.state = structuredClone(state);
         save(value);
       },
     };
-    return new McpOAuth(
+    owner = new McpOAuth(
       value,
       store,
       serverUrl,
       authorized,
       options.timeoutMs ?? 5 * 60_000,
     );
+    return owner;
   }
 
   async close() {

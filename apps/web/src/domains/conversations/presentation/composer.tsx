@@ -11,6 +11,7 @@ import { Textarea } from "../../../shared/ui/textarea";
 import { ComposerPlugins } from "../../settings/infrastructure/plugins/index";
 import { ComposerActions } from "./composer-actions";
 import { AttachmentChips, ComposerAttachments } from "./composer-attachments";
+import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
 import { useComposerAttachments } from "./use-composer-attachments";
 import { useComposerLayout } from "./use-composer-layout";
@@ -158,6 +159,12 @@ export function Composer({
         <p className="error" role="alert">
           {error}
         </p>
+      )}
+      {conversationId && (
+        <McpPermissions
+          key={`${workspace.botId}:${conversationId}`}
+          sessionId={conversationId}
+        />
       )}
       <form
         className="composer"

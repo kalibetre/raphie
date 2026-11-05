@@ -7,6 +7,9 @@ export const Route = createFileRoute("/api/$")({
     handlers: {
       GET: ({ request }) => proxyRuntime(request),
       POST: ({ request }) => proxyRuntime(request),
+      PUT: ({ request }) => proxyRuntime(request),
+      PATCH: ({ request }) => proxyRuntime(request),
+      DELETE: ({ request }) => proxyRuntime(request),
       OPTIONS: ({ request }) => proxyRuntime(request),
     },
   },

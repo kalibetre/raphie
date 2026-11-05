@@ -18,6 +18,7 @@ export function chatModel(
     pause?: Promise<void>;
     streamChunkPause?: Promise<void>;
     tool?: { name: string; args: JsonObject };
+    repeatTool?: boolean;
   } = {},
 ) {
   const models = createModels();
@@ -71,7 +72,12 @@ export function chatModel(
         cost: { input: 0, output: 0, total: 0, cacheRead: 0, cacheWrite: 0 },
       },
     };
-    const result = context.messages.findLast((m) => m.role === "toolResult");
+    const latestUser = options.repeatTool
+      ? context.messages.findLastIndex((m) => m.role === "user")
+      : -1;
+    const result = context.messages
+      .slice(latestUser + 1)
+      .findLast((m) => m.role === "toolResult");
     if (options.tool && !result) {
       message.content = [
         {

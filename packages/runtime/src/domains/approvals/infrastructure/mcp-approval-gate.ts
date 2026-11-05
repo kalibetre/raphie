@@ -16,6 +16,7 @@ export type McpTools = {
   namespace?: string;
   client: McpClient;
   identity: string;
+  legacyIdentity?: string;
   documentationTools?: string[];
 };
 
@@ -114,21 +115,62 @@ export function createMcpTools(
           tool: tool.name,
           argumentsJson,
           fingerprint,
+          connectionIdentity: options.identity,
+          legacyFingerprint:
+            !options.namespace && options.legacyIdentity
+              ? new Bun.CryptoHasher("sha256")
+                  .update(
+                    JSON.stringify([
+                      options.legacyIdentity,
+                      tool.name,
+                      argumentsJson,
+                    ]),
+                  )
+                  .digest("hex")
+              : undefined,
         });
-        const approved = await app.toolApprovals.wait(api, ctx, created);
+        const approved =
+          created.status === "pending"
+            ? await app.toolApprovals.wait(api, ctx, created)
+            : created;
         if (approved.status !== "approved")
           return output({
             text: `Tool request ${approved.status}. No call was sent. Do not retry unless the owner requests it.`,
             isError: true,
           });
         const claim = await api.commit(async (tx) => {
-          const item = (await tx.doc(ToolApprovals)).approvals.find(
-            (a) => a.id === approved.id,
-          )!;
+          const state = await tx.doc(ToolApprovals);
+          const item = state.approvals.find((a) => a.id === approved.id);
+          if (
+            !item ||
+            item.conversationId !== api.conversationId ||
+            item.taskId !== api.taskId ||
+            item.fingerprint !== fingerprint ||
+            item.status !== "approved"
+          )
+            return { kind: "unauthorized" as const };
           if (item.execution === "done")
             return { kind: "cached" as const, result: item.result! };
           if (item.execution !== "waiting")
             return { kind: "uncertain" as const };
+          if (
+            item.grantId &&
+            !state.grants?.some(
+              (g) =>
+                g.id === item.grantId &&
+                !g.revoked &&
+                g.conversationId === api.conversationId &&
+                g.connectionIdentity === options.identity &&
+                g.tool === tool.name,
+            )
+          )
+            return { kind: "unauthorized" as const };
+          if (
+            ctx.abortSignal?.aborted ||
+            (item.fullAccess &&
+              state.modes?.[String(api.conversationId)] !== "full-access")
+          )
+            return { kind: "unauthorized" as const };
           item.execution = "running";
           record(
             await tx.doc(Activity),
@@ -142,6 +184,11 @@ export function createMcpTools(
           );
           return { kind: "claimed" as const };
         }, ctx);
+        if (claim.kind === "unauthorized")
+          return output({
+            text: "Tool authorization is no longer valid. No call was sent.",
+            isError: true,
+          });
         if (claim.kind === "cached") return output(claim.result);
         if (claim.kind === "uncertain")
           return output({

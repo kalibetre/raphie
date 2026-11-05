@@ -11,6 +11,9 @@ export type ToolApproval = {
   replyTo?: ReplyDestination | null;
   discordUserId?: string;
   fingerprint: string;
+  connectionIdentity?: string;
+  grantId?: string;
+  fullAccess?: boolean;
   server: string;
   tool: string;
   argumentsJson: string;

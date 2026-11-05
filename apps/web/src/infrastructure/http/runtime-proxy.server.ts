@@ -62,7 +62,7 @@ export async function proxyRuntime(request: Request) {
       redirect: "error",
       headers,
       signal: request.signal,
-      ...(request.method === "POST"
+      ...(request.method !== "GET" && request.method !== "HEAD"
         ? { body: request.body, duplex: "half" }
         : {}),
     } as RequestInit);

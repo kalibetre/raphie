@@ -21,6 +21,20 @@ type CopyInput = Pick<
 >;
 
 export interface SessionOperations {
+  approvalMode(
+    actor: ActorContext,
+    sessionId: string,
+    mode?: "ask" | "full-access",
+  ): Promise<"ask" | "full-access">;
+  listGrants(
+    actor: ActorContext,
+    sessionId: string,
+  ): Promise<{ id: string; tool: string }[]>;
+  revokeGrant(
+    actor: ActorContext,
+    sessionId: string,
+    id: string,
+  ): Promise<void>;
   copy(actor: ActorContext, input: CopyInput): Promise<string>;
   decideFile(
     actor: ActorContext,
@@ -41,6 +55,7 @@ export interface SessionOperations {
     actor: ActorContext,
     id: string,
     decision: "approved" | "rejected",
+    scope?: "once" | "session",
   ): Promise<ApprovalStatus>;
 }
 
@@ -60,6 +75,37 @@ export class Sessions implements SessionOperations {
     this.conversations = conversations;
     this.approvals = approvals;
     this.files = files;
+  }
+
+  async approvalMode(
+    actor: ActorContext,
+    sessionId: string,
+    mode?: "ask" | "full-access",
+  ) {
+    const verified = this.authority.require(actor);
+    if (verified.source !== "web")
+      throw new InputError("Approval mode requires a client interface.", 403);
+    return this.approvals.approvalMode(verified.subject, sessionId, mode);
+  }
+
+  async listGrants(actor: ActorContext, sessionId: string) {
+    const verified = this.authority.require(actor);
+    if (verified.source !== "web")
+      throw new InputError(
+        "Grant management requires a client interface.",
+        403,
+      );
+    return this.approvals.listGrants(verified.subject, sessionId);
+  }
+
+  async revokeGrant(actor: ActorContext, sessionId: string, id: string) {
+    const verified = this.authority.require(actor);
+    if (verified.source !== "web")
+      throw new InputError(
+        "Grant management requires a client interface.",
+        403,
+      );
+    await this.approvals.revokeGrant(verified.subject, sessionId, id);
   }
 
   async control(
@@ -183,6 +229,7 @@ export class Sessions implements SessionOperations {
     actor: ActorContext,
     id: string,
     decision: "approved" | "rejected",
+    scope: "once" | "session" = "once",
   ) {
     const verified = this.authority.require(actor);
     return this.approvals.decide(
@@ -193,6 +240,7 @@ export class Sessions implements SessionOperations {
       verified.threadId,
       verified.connectionId,
       verified.discordUserId,
+      scope,
     );
   }
 }

@@ -16,6 +16,9 @@ import type {
 } from "../../application/ports.ts";
 
 const decision = z.object({ decision: z.enum(["approved", "rejected"]) });
+const toolDecision = decision.extend({
+  scope: z.enum(["once", "session"]).default("once"),
+});
 const idPattern = /^[a-f0-9-]{36}$/;
 
 export function approvalRoutes(
@@ -27,13 +30,44 @@ export function approvalRoutes(
   actor: ActorContext,
 ) {
   const routes = new Hono();
+  routes.get("/sessions/:sessionId/approval-mode", async (c) =>
+    c.json({
+      mode: await sessions.approvalMode(actor, c.req.param("sessionId")),
+    }),
+  );
+  routes.put(
+    "/sessions/:sessionId/approval-mode",
+    limitBody(1024),
+    jsonInput(z.object({ mode: z.enum(["ask", "full-access"]) })),
+    async (c) =>
+      c.json({
+        mode: await sessions.approvalMode(
+          actor,
+          c.req.param("sessionId"),
+          c.req.valid("json").mode,
+        ),
+      }),
+  );
+  routes.get("/sessions/:sessionId/grants", async (c) =>
+    c.json({
+      grants: await sessions.listGrants(actor, c.req.param("sessionId")),
+    }),
+  );
+  routes.delete("/sessions/:sessionId/grants/:id", async (c) => {
+    await sessions.revokeGrant(
+      actor,
+      c.req.param("sessionId"),
+      c.req.param("id"),
+    );
+    return c.body(null, 204);
+  });
   routes.get("/state", async (c) =>
     c.json({ ...(await files.state()), discordConfigured }),
   );
   routes.post(
     "/tool-approvals/:id",
     limitBody(1024),
-    jsonInput(decision),
+    jsonInput(toolDecision),
     async (c) => {
       if (!idPattern.test(c.req.param("id")))
         throw new InputError("Not found.", 404);
@@ -42,6 +76,7 @@ export function approvalRoutes(
           actor,
           c.req.param("id"),
           c.req.valid("json").decision,
+          c.req.valid("json").scope,
         ),
       });
     },

@@ -9,9 +9,12 @@ export function ToolDecision({ approval }: { approval: Approval }) {
   const { workspace } = useBackend();
   const api = workspace.api;
   const decision = useMutation({
-    mutationFn: (value: "approved" | "rejected") =>
+    mutationFn: (value: {
+      decision: "approved" | "rejected";
+      scope: "once" | "session";
+    }) =>
       api<{ status: string }>(`/api/tool-approvals/${approval.id}`, {
-        decision: value,
+        ...value,
       }),
   });
   const busy = decision.isPending || decision.isSuccess;
@@ -30,17 +33,30 @@ export function ToolDecision({ approval }: { approval: Approval }) {
         size="sm"
         variant="outline"
         disabled={busy}
-        onClick={() => decision.mutate("rejected")}
+        onClick={() => decision.mutate({ decision: "rejected", scope: "once" })}
       >
         <X /> Reject
       </Button>
       <Button
         size="sm"
         disabled={busy}
-        onClick={() => decision.mutate("approved")}
+        onClick={() => decision.mutate({ decision: "approved", scope: "once" })}
       >
-        <Check /> Approve
+        <Check /> Approve once
       </Button>
+      <Button
+        size="sm"
+        disabled={busy}
+        onClick={() =>
+          decision.mutate({ decision: "approved", scope: "session" })
+        }
+      >
+        Approve for session
+      </Button>
+      <small>
+        Session approval permits this MCP tool on this connection with any
+        arguments for this conversation.
+      </small>
       {decision.isError && (
         <p className="error" role="alert">
           {decision.error.message}

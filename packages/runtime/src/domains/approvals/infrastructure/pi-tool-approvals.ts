@@ -17,7 +17,21 @@ import { Chats } from "../../conversations/infrastructure/pi-conversation-servic
 import type { Source } from "./pi-file-approvals.ts";
 import { InputError } from "./pi-file-approvals.ts";
 
-type ApprovalState = { approvals: ToolApproval[]; deliveries: ToolDelivery[] };
+type Grant = {
+  id: string;
+  conversationId: number;
+  connectionIdentity: string;
+  tool: string;
+  actor: string;
+  revoked: boolean;
+};
+
+type ApprovalState = {
+  modes?: Record<string, "ask" | "full-access">;
+  grants?: Grant[];
+  approvals: ToolApproval[];
+  deliveries: ToolDelivery[];
+};
 
 export const ToolApprovals = defineDoc<ApprovalState>({
   kind: "raphie.tool-approvals",
@@ -61,6 +75,8 @@ export class ToolApprovalService {
     ctx: Context,
     proposal: {
       fingerprint: string;
+      legacyFingerprint?: string;
+      connectionIdentity?: string;
       server: string;
       tool: string;
       argumentsJson: string;
@@ -71,6 +87,18 @@ export class ToolApprovalService {
       const chats = await tx.doc(Chats);
       const existing = state.approvals.find((a) => a.taskId === api.taskId);
       if (existing) {
+        if (
+          !existing.connectionIdentity &&
+          existing.conversationId === api.conversationId &&
+          existing.server === proposal.server &&
+          existing.tool === proposal.tool &&
+          existing.argumentsJson === proposal.argumentsJson &&
+          proposal.legacyFingerprint &&
+          existing.fingerprint === proposal.legacyFingerprint
+        ) {
+          existing.fingerprint = proposal.fingerprint;
+          // Keep legacy approvals ineligible for session grants.
+        }
         if (existing.fingerprint !== proposal.fingerprint)
           throw new Error(
             "MCP connection or arguments changed. Send a new request for fresh approval.",
@@ -86,8 +114,10 @@ export class ToolApprovalService {
       // assign authority from an ambiguous queue; the web owner can still decide.
       const initiator =
         pendingTurns.length === 1 ? turn?.discordUserId : undefined;
+      const { legacyFingerprint: _legacyFingerprint, ...currentProposal } =
+        proposal;
       const item: ToolApproval = {
-        ...proposal,
+        ...currentProposal,
         id: crypto.randomUUID(),
         taskId: api.taskId,
         conversationId: api.conversationId,
@@ -100,6 +130,21 @@ export class ToolApprovalService {
         execution: "waiting",
         result: null,
       };
+      const grant = state.grants?.find(
+        (g) =>
+          !g.revoked &&
+          g.conversationId === item.conversationId &&
+          !!item.connectionIdentity &&
+          g.connectionIdentity === item.connectionIdentity &&
+          g.tool === item.tool,
+      );
+      if (grant) {
+        item.status = "approved";
+        item.grantId = grant.id;
+      } else if (state.modes?.[String(api.conversationId)] === "full-access") {
+        item.status = "approved";
+        item.fullAccess = true;
+      }
       state.approvals.push(item);
       record(
         await tx.doc(Activity),
@@ -121,15 +166,23 @@ export class ToolApprovalService {
           },
         },
       );
-      notify(
-        state,
-        item,
-        "approval",
-        chats.turns.find(
-          (t) =>
-            t.conversationId === item.conversationId && t.status === "pending",
-        )?.replyTo?.conversation ?? null,
-      );
+      if (item.status === "pending") {
+        notify(state, item, "approval", turn?.replyTo?.conversation ?? null);
+      } else {
+        record(
+          await tx.doc(Activity),
+          "approval.approved",
+          "Tool request automatically authorized",
+          {
+            conversationId: item.conversationId,
+            operationId: item.id,
+            details: {
+              grantId: item.grantId ?? null,
+              fullAccess: !!item.fullAccess,
+            },
+          },
+        );
+      }
       return { ...item };
     }, ctx);
   }
@@ -198,8 +251,11 @@ export class ToolApprovalService {
     threadId?: string,
     connectionId = "legacy-discord",
     discordUserId?: string,
+    scope: "once" | "session" = "once",
   ) {
     this.app.authorize(actor);
+    if (scope === "session" && via !== "web")
+      throw new InputError("Session grants require web approval.", 403);
     if (!isDecision(decision)) throw new InputError("Invalid decision.");
     return this.app.root.commit(async (tx) => {
       const state = await tx.doc(ToolApprovals);
@@ -236,6 +292,30 @@ export class ToolApprovalService {
         decision,
         Date.now(),
       );
+      if (scope === "session" && item.status === "approved") {
+        if (!item.connectionIdentity)
+          throw new InputError("Connection identity cannot be verified.");
+        state.grants ??= [];
+        const grantId = crypto.randomUUID();
+        state.grants.push({
+          id: grantId,
+          conversationId: item.conversationId,
+          connectionIdentity: item.connectionIdentity,
+          tool: item.tool,
+          actor,
+          revoked: false,
+        });
+        record(
+          await tx.doc(Activity),
+          "grant.created",
+          "Session grant created",
+          {
+            conversationId: item.conversationId,
+            operationId: grantId,
+            details: { actor, tool: item.tool, approvalId: item.id },
+          },
+        );
+      }
       item.decidedVia = via;
       record(
         await tx.doc(Activity),
@@ -249,6 +329,73 @@ export class ToolApprovalService {
       );
       notify(state, item, "resolved", destination);
       return item.status;
+    }, context);
+  }
+
+  async approvalMode(
+    actor: string,
+    sessionId: string,
+    mode?: "ask" | "full-access",
+  ) {
+    this.app.authorize(actor);
+    return this.app.root.commit(async (tx) => {
+      const conversation = (await tx.doc(Chats)).conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!conversation) throw new InputError("Session not found.", 404);
+      const state = await tx.doc(ToolApprovals);
+      if (mode !== undefined) {
+        state.modes = { ...state.modes, [String(conversation.id)]: mode };
+        record(
+          await tx.doc(Activity),
+          "approval.mode_changed",
+          "MCP approval mode changed",
+          {
+            conversationId: conversation.id,
+            details: { actor, mode },
+          },
+        );
+      }
+      return state.modes?.[String(conversation.id)] ?? "ask";
+    }, context);
+  }
+
+  async listGrants(actor: string, sessionId: string) {
+    this.app.authorize(actor);
+    return this.app.root.commit(async (tx) => {
+      const conversation = (await tx.doc(Chats)).conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!conversation) throw new InputError("Session not found.", 404);
+      return ((await tx.doc(ToolApprovals)).grants ?? [])
+        .filter((g) => !g.revoked && g.conversationId === conversation.id)
+        .map(({ id, tool }) => ({ id, tool }));
+    }, context);
+  }
+
+  async revokeGrant(actor: string, sessionId: string, id: string) {
+    this.app.authorize(actor);
+    await this.app.root.commit(async (tx) => {
+      const conversation = (await tx.doc(Chats)).conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      const grant = (await tx.doc(ToolApprovals)).grants?.find(
+        (g) => g.id === id && g.conversationId === conversation?.id,
+      );
+      if (!grant) throw new InputError("Grant not found.", 404);
+      if (!grant.revoked) {
+        grant.revoked = true;
+        record(
+          await tx.doc(Activity),
+          "grant.revoked",
+          "Session grant revoked",
+          {
+            conversationId: grant.conversationId,
+            operationId: grant.id,
+            details: { actor, tool: grant.tool },
+          },
+        );
+      }
     }, context);
   }
 
