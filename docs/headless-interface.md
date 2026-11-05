@@ -1,7 +1,7 @@
 # Delivered headless interface
 
 Implemented 2026-10-21, in four migration commits followed by an access/recovery
-review. The [HTML guide](architecture.html) shows the modules and request flows.
+review. The [HTML guide](architecture.html ":ignore") shows the modules and request flows.
 The [design](headless-runtime.md) records intent; this file records actual behavior.
 
 ## Run without the web application

@@ -1,0 +1,32 @@
+- **Start here**
+  - [Overview](README.md)
+  - [Run from source](source-setup.md)
+  - [User installation](user-installation.md)
+  - [Linux system install](linux-installation.md)
+  - [Service commands](commands.md)
+- **Using Raphie**
+  - [Using Raphie](using-raphie.md)
+  - [Bots & personality](bots.md)
+  - [Memory](memory.md)
+  - [Workspaces & sandboxes](bot-workspaces.md)
+  - [MCP tools & schedules](bot-automation.md)
+  - [Attachments](general-attachments.md)
+- **Security & operations**
+  - [Authentication](authentication.md)
+  - [Credential storage](provider-credential-storage.md)
+  - [Observability](observability.md)
+  - [Standalone builds](standalone-build.md)
+- **Architecture**
+  - [Architecture in diagrams ↗](architecture-overview.html ":ignore")
+  - [Visual architecture guide ↗](architecture.html ":ignore")
+  - [Current architecture](architecture.md)
+  - [HTTP interface](headless-interface.md)
+  - [ADR 0001 · Headless runtime](adr/0001-headless-runtime-and-capability-specific-adapters.md)
+  - [ADR 0002 · Bot workspaces](adr/0002-bot-owned-workspaces-and-temporary-compute.md)
+  - [ADR 0003 · Native sandbox](adr/0003-native-bot-sandbox.md)
+- **Project**
+  - [Roadmap](roadmap.md)
+  - [Headless runtime design](headless-runtime.md)
+  - [UI scrolling](ui-scrolling.md)
+  - [Domain language ↗](https://github.com/kalibetre/raphie/blob/main/CONTEXT.md)
+  - [Contributing ↗](https://github.com/kalibetre/raphie/blob/main/CONTRIBUTING.md)

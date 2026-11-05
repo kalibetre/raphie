@@ -1,7 +1,6 @@
 # Current architecture and target design
 
-The [HTML architecture field guide](architecture.html) is a historical snapshot;
-its execution and roadmap sections predate the current workspace providers.
+The [architecture reference](architecture.html ":ignore") is the diagram-rich engineering reference that expands on this file.
 
 This file describes the current implementation. The accepted headless direction
 and proposed application interfaces are documented in

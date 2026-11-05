@@ -45,6 +45,6 @@ Raphie can also connect bots to Discord and MCP tools, and run scheduled prompts
 
 ## Need a hand?
 
-[User installation](docs/user-installation.md) · [Linux system service](docs/linux-installation.md) · [Remote access](docs/standalone-build.md#tailnet-access) · [Commands](docs/commands.md) · [Bots & personality](docs/bots.md) · [Memory](docs/memory.md) · [All documentation](docs/README.md)
+[User installation](docs/user-installation.md) · [Linux system service](docs/linux-installation.md) · [Remote access](docs/standalone-build.md#tailnet-access) · [Commands](docs/commands.md) · [Bots & personality](docs/bots.md) · [Memory](docs/memory.md) · [All documentation](docs/README.md) · [Docs site](https://kalibetre.github.io/raphie/) · [How it works](https://kalibetre.github.io/raphie/architecture.html)
 
 Want to contribute or run from source? See [source setup](docs/source-setup.md) and [contributing](CONTRIBUTING.md).

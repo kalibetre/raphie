@@ -158,7 +158,7 @@ Direction recorded 2026-10-22. Durable lightweight execution and the first
 configurable-memory slice are delivered. VM escalation and the full learning-memory
 lifecycle remain planned.
 Explore the execution, memory, and budget simulations in the
-[HTML architecture guide](architecture.html#execution-memory).
+[HTML architecture guide](architecture.html#memory ":ignore").
 
 Memory slice 1 adds **Settings → Memory**, built-in memory enabled by default and a Hindsight
 connection. Built-in evidence uses SQLite FTS5, scoped provenance, event time,
