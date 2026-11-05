@@ -33,7 +33,7 @@ change that changes the behavior.
 - [UI scrolling and composer behavior](ui-scrolling.md)
 - [Headless runtime decision](adr/0001-headless-runtime-and-capability-specific-adapters.md)
 - [Accepted bot ownership and workspace decision](adr/0002-bot-owned-workspaces-and-temporary-compute.md)
-- [Proposed native bot sandbox decision](adr/0003-native-bot-sandbox.md)
+- [Native bot sandbox decision](adr/0003-native-bot-sandbox.md): container execution, delivered as opt-in.
 
 ## Planned work and history
 

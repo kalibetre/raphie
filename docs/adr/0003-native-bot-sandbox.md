@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Native bot sandbox for real repositories and CLIs
