@@ -2,7 +2,7 @@
 
 The earlier formatting and UI extraction pass was followed by the TypeScript 7,
 Hono, and domain-boundary migration. Current organization and tooling are
-specified in [architecture.md](architecture.md) and [CONTRIBUTING.md](../CONTRIBUTING.md).
+specified in [architecture.md](architecture.md) and [CONTRIBUTING.md](https://github.com/kalibetre/raphie/blob/main/CONTRIBUTING.md).
 
 Changes include pinned TypeScript 7.0.2, native Oxfmt/Oxlint tooling, shared wire
 contracts, explicit domain models/policies/application ports, domain-owned

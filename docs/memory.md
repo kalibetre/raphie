@@ -229,21 +229,21 @@ Live-deployment compatibility and quality/cost evaluation are still outstanding.
 
 ## Implementation and verification
 
-- [Wire contracts](../packages/contracts/src/memory/views.ts)
-- [Memory application ports](../packages/runtime/src/domains/memory/application/ports.ts)
-- [Runtime configuration and routing](../packages/runtime/src/domains/memory/infrastructure/runtime-memory.ts)
-- [Built-in evidence and FTS5 adapter](../packages/runtime/src/domains/memory/infrastructure/builtin-memory.ts)
-- [Agent tools and provenance](../packages/runtime/src/domains/memory/infrastructure/pi-memory-tools.ts)
-- [Hindsight adapter](../packages/runtime/src/domains/memory/infrastructure/hindsight-memory.ts)
-- [Settings UI](../apps/web/src/domains/settings/presentation/memory-settings.tsx)
-- [Memory regression tests](../packages/runtime/test/memory.test.ts)
-- [Settings browser check](../scripts/check-memory-settings.browser.js)
-- [Inventory browser check](../scripts/check-memory-browse.browser.js)
+- [Wire contracts](https://github.com/kalibetre/raphie/blob/main/packages/contracts/src/memory/views.ts)
+- [Memory application ports](https://github.com/kalibetre/raphie/blob/main/packages/runtime/src/domains/memory/application/ports.ts)
+- [Runtime configuration and routing](https://github.com/kalibetre/raphie/blob/main/packages/runtime/src/domains/memory/infrastructure/runtime-memory.ts)
+- [Built-in evidence and FTS5 adapter](https://github.com/kalibetre/raphie/blob/main/packages/runtime/src/domains/memory/infrastructure/builtin-memory.ts)
+- [Agent tools and provenance](https://github.com/kalibetre/raphie/blob/main/packages/runtime/src/domains/memory/infrastructure/pi-memory-tools.ts)
+- [Hindsight adapter](https://github.com/kalibetre/raphie/blob/main/packages/runtime/src/domains/memory/infrastructure/hindsight-memory.ts)
+- [Settings UI](https://github.com/kalibetre/raphie/blob/main/apps/web/src/domains/settings/presentation/memory-settings.tsx)
+- [Memory regression tests](https://github.com/kalibetre/raphie/blob/main/packages/runtime/test/memory.test.ts)
+- [Settings browser check](https://github.com/kalibetre/raphie/blob/main/scripts/check-memory-settings.browser.js)
+- [Inventory browser check](https://github.com/kalibetre/raphie/blob/main/scripts/check-memory-browse.browser.js)
 
 Run `bun test packages/runtime/test/memory.test.ts` for focused runtime checks, or
 `bun run validate` for repository validation. Tests use temporary databases and
 synthetic credentials. Browser acceptance uses `bun run dev:fixture` and
-`bun run dev:web:fixture`; see [contributing](../CONTRIBUTING.md#verification-and-data).
+`bun run dev:web:fixture`; see [contributing](https://github.com/kalibetre/raphie/blob/main/CONTRIBUTING.md#verification-and-data).
 
 Run `bun packages/runtime/eval/memory-evaluation.ts` for a repeatable synthetic
 retrieval baseline using a temporary database. It measures retention after restart,
@@ -261,7 +261,7 @@ Treat it as a regression baseline, not a general semantic quality score.
 The HTTP surface is under `/api/memory`: configuration read/write, saved-connection
 testing, paginated inventory, recall, correction and forgetting. Retention and reflection are agent
 operations in this slice; there are no HTTP retain/reflect routes. The
-[route adapter](../packages/runtime/src/domains/memory/presentation/http/routes.ts)
+[route adapter](https://github.com/kalibetre/raphie/blob/main/packages/runtime/src/domains/memory/presentation/http/routes.ts)
 is the reference for exact request schemas and paths. Browsing uses
 `GET /api/memory/evidence`, returning `{ evidence, total, next }`. Pass a non-null
 `next` value as the `after` query parameter to load another page of at most 25

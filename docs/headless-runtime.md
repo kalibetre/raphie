@@ -1,6 +1,6 @@
 # Headless Raphie: target architecture
 
-[Explore the interactive HTML field guide](architecture.html) for a visual summary
+[Explore the interactive HTML field guide](architecture.html ":ignore") for a visual summary
 of this design. Open the file directly; no server or external assets are needed.
 
 Design dated 2026-10-21. The principles in [ADR 0001](adr/0001-headless-runtime-and-capability-specific-adapters.md)

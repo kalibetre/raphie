@@ -1,6 +1,6 @@
 # Using Raphie
 
-This guide covers the web workspace, settings and data. For installation and first sign-in, start with the [README](../README.md).
+This guide covers the web workspace, settings and data. For installation and first sign-in, start with the [README](https://github.com/kalibetre/raphie/blob/main/README.md).
 
 ## Bots
 

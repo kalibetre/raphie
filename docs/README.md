@@ -6,7 +6,7 @@ change that changes the behavior.
 
 ## Use and operate Raphie
 
-- [Project overview and release setup](../README.md)
+- [Project overview and release setup](https://github.com/kalibetre/raphie/blob/main/README.md)
 - [Run from source](source-setup.md)
 - [User installation on Linux and macOS](user-installation.md): no-sudo setup and user services.
 - [Linux system installation](linux-installation.md): install, sign in, operate and recover.
@@ -25,11 +25,13 @@ change that changes the behavior.
 
 ## Understand and extend the system
 
-- [Interactive architecture field guide](architecture.html): historical visual
-  walkthrough; its workspace and roadmap sections are outdated.
+- [Architecture in diagrams](architecture-overview.html ":ignore"): presentation-ready visual tour,
+  one diagram per subsystem.
+- [Architecture reference](architecture.html ":ignore"): engineering reference with diagrams for
+  topology, durable execution, turns, approvals, bots, memory, sandboxes, extensions, channels and storage.
 - [Current architecture](architecture.md)
-- [Domain language](../CONTEXT.md)
-- [Contributing and verification](../CONTRIBUTING.md)
+- [Domain language](https://github.com/kalibetre/raphie/blob/main/CONTEXT.md)
+- [Contributing and verification](https://github.com/kalibetre/raphie/blob/main/CONTRIBUTING.md)
 - [UI scrolling and composer behavior](ui-scrolling.md)
 - [Headless runtime decision](adr/0001-headless-runtime-and-capability-specific-adapters.md)
 - [Accepted bot ownership and workspace decision](adr/0002-bot-owned-workspaces-and-temporary-compute.md)

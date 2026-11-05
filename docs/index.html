@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Raphie docs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Documentation for Raphie, a self-hosted personal AI assistant."
+    />
+    <link rel="icon" href="favicon.svg" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/docsify@4.13.1/lib/themes/vue.css"
+    />
+    <style>
+      :root {
+        --theme-color: #1d5a78;
+      }
+      .sidebar-nav .app-sub-sidebar {
+        display: none;
+      }
+      .markdown-section {
+        max-width: 52rem;
+      }
+      @media (prefers-color-scheme: dark) {
+        body,
+        .sidebar,
+        .markdown-section,
+        section.cover {
+          background: #121417;
+          color: #ece7dc;
+        }
+        .markdown-section h1,
+        .markdown-section h2,
+        .markdown-section h3,
+        .markdown-section strong,
+        .sidebar ul li a,
+        .sidebar-nav > ul > li > a {
+          color: #ece7dc;
+        }
+        .markdown-section code,
+        .markdown-section pre,
+        .markdown-section pre > code {
+          background: #1c1f24;
+          color: #ece7dc;
+        }
+        .markdown-section tr:nth-child(2n) {
+          background: #191c20;
+        }
+        .markdown-section table th,
+        .markdown-section table td,
+        .sidebar {
+          border-color: #2d3137;
+        }
+        .search input {
+          background: #1c1f24;
+          color: #ece7dc;
+        }
+        .markdown-section a,
+        .sidebar ul li.active > a {
+          color: #84bedb;
+        }
+        .markdown-section blockquote {
+          background: #191c20;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">Loading…</div>
+    <script>
+      window.$docsify = {
+        name: "Raphie",
+        repo: "kalibetre/raphie",
+        loadSidebar: true,
+        subMaxLevel: 2,
+        auto2top: true,
+        relativePath: true,
+        search: { placeholder: "Search docs", noData: "No results", depth: 3 },
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/docsify@4.13.1/lib/docsify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docsify@4.13.1/lib/plugins/search.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  </body>
+</html>
