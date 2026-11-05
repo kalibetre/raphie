@@ -14,9 +14,8 @@ settings, archived research, or conversation records were changed by these code
 moves. All tests use temporary databases and deterministic models. Existing
 integration assertions were preserved; domain and Hono boundary tests were added.
 
-Use `npm run validate` for reproducible validation. A self-hosted CI workflow runs
-the same command; it requires a registered runner. See `UI-VERIFICATION.md` for
-prior UI acceptance history. Vite's existing client chunk size warning is a
+Use `bun run validate` for reproducible validation; CI runs the same command.
+Prior UI acceptance history is in git history. Vite's existing client chunk size warning is a
 separate optimization concern.
 
 ## Verification completed on 2026-10-20

@@ -9,6 +9,9 @@ and the existing self-hosted deployment.
 
 ## Implementation progress
 
+This log covers slices 1–4 as first delivered (test counts are from then). Later
+work is recorded in its own guide: see the [documentation index](README.md).
+
 - Shared UUID message submission and tool approval decisions now run through
   `application/sessions`. HTTP and Discord establish runtime-issued actor contexts;
   fabricated/deserialized contexts are rejected. The compatibility numeric endpoint
@@ -141,8 +144,10 @@ Default model selection, OpenRouter key connections, local backend selection and
 trace collection controls are delivered in Settings. Authenticated remote backend
 connections and additional model providers remain future work.
 
-General chat attachments, cancellation, conversational model/tool configuration commands,
-automations, and other capabilities that the runtime does not currently expose
+General chat attachments ([guide](general-attachments.md)), Stop/queued-message
+steering ([Using Raphie](using-raphie.md)) and per-bot automations
+([guide](bot-automation.md)) are delivered. Conversational model/tool configuration
+commands and other capabilities that the runtime does not currently expose
 need their own contracts and acceptance criteria. This architecture does not
 make them available merely by adding another client. Private runtime configuration
 continues to be managed through Varlock, not conversational credential prompts.
@@ -268,7 +273,10 @@ Proposed slices:
    safe switching, failure visibility and concurrent vault edits. Evaluate
    relevance, unsupported inference, latency and cost per adapter.
 
-3. **On-demand VM execution:** capability request, policy check, exclusive lease,
+3. **On-demand VM execution — partly superseded:** opt-in per-bot container
+   execution is delivered through [ADR 0003](adr/0003-native-bot-sandbox.md) and
+   [workspace providers](bot-workspaces.md); it is not VM isolation. The VM lease
+   design below remains planned. Capability request, policy check, exclusive lease,
    fenced recovery, explicit input/output transfer, idle cleanup and a concurrency
    budget. Prove a real repository test and bulk downloads before choosing the VM
    backend. Unknown external effects remain uncertain rather than automatically
