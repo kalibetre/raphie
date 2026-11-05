@@ -404,7 +404,7 @@ test("restart after remote execution claim reports uncertainty without repeating
   }
 });
 
-test("session MCP grant dispatches changed arguments, isolates scope, and persists revocation", async () => {
+test("MCP once approval does not authorize changed arguments after restart", async () => {
   const directory = await mkdtemp(join(tmpdir(), "mcp-session-dispatch-"));
   const calls: unknown[] = [];
   let sequence = 0;
@@ -457,7 +457,7 @@ test("session MCP grant dispatches changed arguments, isolates scope, and persis
       undefined,
       undefined,
       undefined,
-      "session",
+      "once",
     );
     await done(first.id);
     assert.deepEqual(calls, [["execute", { code: "initial" }]]);
@@ -465,149 +465,16 @@ test("session MCP grant dispatches changed arguments, isolates scope, and persis
     selection.args.code = "different";
     app = await open();
     const next = await send(first.sessionId);
+    const nextApproval = await pending();
+    assert.equal(calls.length, 1);
+    await app.toolApprovals.decide(nextApproval.id, "rejected", "owner", "web");
     await done(next.id);
-    assert.deepEqual(calls[1], ["execute", { code: "different" }]);
-    assert.equal(
-      (await app.toolApprovals.state()).approvals.filter(
-        (a) => a.status === "pending",
-      ).length,
-      0,
-    );
-    const reject = async (turn: Awaited<ReturnType<typeof send>>) => {
-      const proposal = await pending();
-      assert.equal(calls.length, 2);
-      await app.toolApprovals.decide(proposal.id, "rejected", "owner", "web");
-      await done(turn.id);
-    };
-    await reject(await send());
-    selection.name = "mcp_fixture_other";
-    await app.close();
-    app = await open();
-    await reject(await send(first.sessionId));
-    selection.name = "mcp_fixture_execute";
-    mcp.identity = "another-account";
-    await app.close();
-    app = await open();
-    await reject(await send(first.sessionId));
-    mcp.identity = "fixture-account";
-    await app.close();
-    app = await open();
-    const grants = await app.toolApprovals.listGrants("owner", first.sessionId);
-    assert.equal(grants.length, 1);
-    await app.toolApprovals.revokeGrant("owner", first.sessionId, grants[0].id);
-    await reject(await send(first.sessionId));
-    await app.close();
-    app = await open();
-    assert.deepEqual(
-      await app.toolApprovals.listGrants("owner", first.sessionId),
-      [],
-    );
-    await reject(await send(first.sessionId));
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });
   }
 });
-
-// Pause after the durable authorization match, before the execution claim.
-for (const action of ["stop", "revoke", "mode"] as const) {
-  test(`${action} committed between authorization match and claim respects the grant`, async () => {
-    const directory = await mkdtemp(join(tmpdir(), "mcp-claim-race-"));
-    let calls = 0;
-    const app = await Gateway.open({
-      directory,
-      ...model(true),
-      mcp: fixture(async () => {
-        calls++;
-        return { content: [] };
-      }),
-    });
-    const matched = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const original = app.toolApprovals.ensure.bind(app.toolApprovals);
-    try {
-      const first = await app.chats.send(input);
-      await until(
-        async () => (await app.toolApprovals.state()).approvals.length === 1,
-      );
-      const proposal = (await app.toolApprovals.state()).approvals[0];
-      await app.toolApprovals.decide(
-        proposal.id,
-        "approved",
-        "owner",
-        "web",
-        undefined,
-        undefined,
-        undefined,
-        "session",
-      );
-      await until(
-        async () =>
-          (await app.chats.state()).turns.find((t) => t.id === first.id)
-            ?.status === "done",
-      );
-      app.toolApprovals.ensure = async (...args) => {
-        const result = await original(...args);
-        matched.resolve();
-        await Promise.race([
-          release.promise,
-          new Promise<void>((resolve) => {
-            const signal = args[1].abortSignal;
-            if (signal?.aborted) resolve();
-            else
-              signal?.addEventListener("abort", () => resolve(), {
-                once: true,
-              });
-          }),
-        ]);
-        return result;
-      };
-      if (action === "mode")
-        await app.toolApprovals.approvalMode(
-          "owner",
-          first.sessionId,
-          "full-access",
-        );
-      const raced = await app.chats.send({
-        source: "web",
-        actor: "owner",
-        eventId: "race",
-        text: "again",
-        sessionId: first.sessionId,
-      });
-      await matched.promise;
-      if (action === "stop") {
-        await app.sessions.control(
-          app.actors.establish("web"),
-          first.sessionId,
-          "stop",
-        );
-      } else if (action === "revoke") {
-        const [grant] = await app.toolApprovals.listGrants(
-          "owner",
-          first.sessionId,
-        );
-        await app.toolApprovals.revokeGrant("owner", first.sessionId, grant.id);
-      } else {
-        await app.toolApprovals.approvalMode("owner", first.sessionId, "ask");
-      }
-      release.resolve();
-      if (action !== "stop")
-        await until(
-          async () =>
-            (await app.chats.state()).turns.find((t) => t.id === raced.id)
-              ?.status === "done",
-        );
-      await app.close();
-      assert.equal(calls, action === "mode" ? 2 : 1);
-    } finally {
-      release.resolve();
-      await app.close();
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
-}
 
 for (const dispatched of [false, true]) {
   test(`Stop preserves authorization boundary with ${dispatched ? "dispatched" : "pending"} MCP request`, async () => {

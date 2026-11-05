@@ -19,7 +19,10 @@ import {
   containerLimits,
 } from "../src/domains/workspaces/infrastructure/container-cli.ts";
 import { createContainerTools } from "../src/domains/workspaces/infrastructure/container-tools.ts";
-import { ContainerWorkspace } from "../src/domains/workspaces/infrastructure/container-workspace.ts";
+import {
+  authorizeContainerDispatch,
+  ContainerWorkspace,
+} from "../src/domains/workspaces/infrastructure/container-workspace.ts";
 import { chatModel } from "./chat-model.ts";
 
 const cli = new ContainerCli();
@@ -125,10 +128,14 @@ containerTest(
             ).toBe(true);
             return provider.env("/workspace", operationId);
           },
+          gateway.toolApprovals,
         );
-        expect(tools.tools!.every((tool) => tool.replay === "unsafe")).toBe(
-          true,
-        );
+        expect(
+          tools.tools!.every(
+            (tool) =>
+              tool.replay === (tool.name === "bash" ? "safe" : "unsafe"),
+          ),
+        ).toBe(true);
         gateway.install(tools);
         await gateway.sessions.submit(gateway.actors.establish("web"), {
           eventId: "native-tool",
@@ -141,8 +148,23 @@ containerTest(
             (turn) => turn.status === "pending",
           );
           i++
-        )
+        ) {
+          const pending = (await gateway.toolApprovals.state()).approvals.find(
+            (a) => a.status === "pending",
+          );
+          if (pending) {
+            expect(JSON.parse(pending.argumentsJson).command).toBe(
+              "echo native > pi-file; cat pi-file",
+            );
+            await gateway.toolApprovals.decide(
+              pending.id,
+              "approved",
+              "owner",
+              "web",
+            );
+          }
           await Bun.sleep(20);
+        }
         const state = await gateway.chats.state();
         expect(state.turns[0].status).toBe("done");
         expect(state.turns[0].answer).toContain("native");
@@ -162,6 +184,129 @@ containerTest(
     });
   },
   30_000,
+);
+
+containerTest(
+  "queued dispatch rechecks authorization and Stop before effects",
+  async () => {
+    await fixture(async (provider) => {
+      for (const stopped of [false, true]) {
+        let release!: () => void;
+        let entered!: () => void;
+        const ready = new Promise<void>((resolve) => {
+          entered = resolve;
+        });
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const guarded = (claim: () => Promise<boolean>) =>
+          (
+            provider.env() as ExecutionEnv & {
+              [authorizeContainerDispatch]: (
+                claim: () => Promise<boolean>,
+              ) => ExecutionEnv;
+            }
+          )[authorizeContainerDispatch](claim);
+        const blocker = guarded(async () => {
+          entered();
+          await gate;
+          return true;
+        }).exec("true", {}, context);
+        await ready;
+        let fullAccess = true;
+        const abort = new AbortController();
+        const queued = guarded(async () => fullAccess).exec(
+          "echo forbidden > queued-effect",
+          {},
+          withAbortSignal(abort.signal, context),
+        );
+        if (stopped) abort.abort();
+        else fullAccess = false;
+        release();
+        await blocker;
+        expect((await queued).ok).toBe(false);
+        expect(
+          (await provider.env().readTextFile("queued-effect", context)).ok,
+        ).toBe(false);
+      }
+    });
+  },
+);
+
+containerTest(
+  "Full access bash queued before Ask cannot mutate files",
+  async () => {
+    await fixture(async (provider, directory) => {
+      const gateway = await Gateway.open({
+        directory: join(directory, "queue-gateway"),
+        deferResume: true,
+        ...chatModel(),
+      });
+      let release!: () => void;
+      try {
+        const turn = await gateway.chats.send({
+          source: "web",
+          actor: "owner",
+          eventId: "queue",
+          text: "hello",
+        });
+        await gateway.toolApprovals.approvalMode(
+          "owner",
+          turn.sessionId,
+          "full-access",
+        );
+        let entered!: () => void;
+        const ready = new Promise<void>((resolve) => {
+          entered = resolve;
+        });
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const env = provider.env() as ExecutionEnv & {
+          [authorizeContainerDispatch]: (
+            claim: () => Promise<boolean>,
+          ) => ExecutionEnv;
+        };
+        const blocker = env[authorizeContainerDispatch](async () => {
+          entered();
+          await gate;
+          return true;
+        }).exec("true", {}, context);
+        await ready;
+        const bash = createContainerTools(
+          async () => provider.env(),
+          gateway.toolApprovals,
+        ).tools!.find((tool) => tool.name === "bash")!;
+        const execution = bash.execute(
+          { command: "echo forbidden > revoked-effect" },
+          {
+            conversationId: turn.conversationId,
+            taskId: 999,
+            callId: "queued",
+            commit: gateway.root.commit.bind(gateway.root),
+          } as Parameters<typeof bash.execute>[1],
+          context,
+        );
+        for (let n = 0; provider.admitted < 2 && n < 200; n++)
+          await Bun.sleep(5);
+        expect(provider.admitted).toBe(2);
+        await gateway.toolApprovals.approvalMode(
+          "owner",
+          turn.sessionId,
+          "ask",
+        );
+        release();
+        await blocker;
+        expect((await execution).isError).toBe(true);
+        expect(
+          (await provider.env().readTextFile("revoked-effect", context)).ok,
+        ).toBe(false);
+      } finally {
+        release?.();
+        await gateway.close();
+      }
+    });
+  },
 );
 
 async function open(directory: string, workspaceId = "fixture", extra = {}) {

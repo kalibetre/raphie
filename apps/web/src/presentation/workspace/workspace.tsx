@@ -175,6 +175,7 @@ export function Workspace({
     eventId: string,
     model?: ModelSelection,
     attachments?: string[],
+    approvalMode?: "ask" | "full-access",
   ) {
     const sent = await api<{
       id: string;
@@ -184,6 +185,7 @@ export function Workspace({
       attachments,
       eventId,
       sessionId: conversationId,
+      approvalMode,
       model,
     });
     setSuggestion(undefined);

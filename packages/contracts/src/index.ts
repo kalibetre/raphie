@@ -65,6 +65,7 @@ export type ConversationDelivery = {
 };
 
 export type ToolApprovalView = {
+  connectionIdentity?: string;
   id: string;
   conversationId: number;
   server: string;

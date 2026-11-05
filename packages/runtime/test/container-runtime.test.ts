@@ -192,8 +192,19 @@ containerTest(
             (turn) => turn.status === "pending",
           );
           attempts++
-        )
+        ) {
+          for (const approval of (await gateway.toolApprovals.state())
+            .approvals) {
+            if (approval.status === "pending")
+              await gateway.toolApprovals.decide(
+                approval.id,
+                "approved",
+                "owner",
+                "web",
+              );
+          }
           await Bun.sleep(20);
+        }
       }
       expect(
         (await gateway.chats.state()).turns.every(
@@ -278,8 +289,19 @@ containerTest(
             (turn) => turn.status === "pending",
           );
           attempts++
-        )
+        ) {
+          for (const approval of (await gateway.toolApprovals.state())
+            .approvals) {
+            if (approval.status === "pending")
+              await gateway.toolApprovals.decide(
+                approval.id,
+                "approved",
+                "owner",
+                "web",
+              );
+          }
           await Bun.sleep(20);
+        }
         expect((await gateway.chats.state()).turns.at(-1)?.status).toBe("done");
       }
       expect((await gateway.chats.state()).turns.at(-1)?.answer).toContain(

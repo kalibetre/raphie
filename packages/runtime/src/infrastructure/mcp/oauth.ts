@@ -8,7 +8,11 @@ import {
   OAuthCallbackServer,
 } from "@earendil-works/pi-mcp/oauth";
 
-export type SavedMcpOAuth = { redirectUrl: string; authorizationGeneration?: string; state?: McpOAuthState };
+export type SavedMcpOAuth = {
+  redirectUrl: string;
+  authorizationGeneration?: string;
+  state?: McpOAuthState;
+};
 
 /** One loopback callback and one grant, owned by an exact bot connection. */
 export class McpOAuth {

@@ -9,105 +9,83 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { ToolApprovals } from "../src/domains/approvals/infrastructure/pi-tool-approvals.ts";
 import { chatModel } from "./chat-model.ts";
 
-test("session grants list safely, isolate sessions, persist revocation, and reject unauthorized actors", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "session-grants-"));
+test("command permissions persist independently of once-only MCP approval", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "command-permissions-"));
   let app = await Gateway.open({
     directory,
     deferResume: true,
     ...chatModel(),
   });
   try {
-    const first = await app.chats.send({
+    const turn = await app.chats.send({
       source: "web",
       actor: "owner",
       eventId: "first",
       text: "hello",
     });
-    const second = await app.chats.send({
-      source: "web",
-      actor: "owner",
-      eventId: "second",
-      text: "hello",
-    });
-    expect(await app.toolApprovals.approvalMode("owner", first.sessionId)).toBe(
-      "ask",
-    );
-    expect(
-      app.toolApprovals.approvalMode(
-        "intruder",
-        first.sessionId,
-        "full-access",
-      ),
-    ).rejects.toThrow();
-    expect(
-      app.toolApprovals.revokeGrant("intruder", first.sessionId, "grant"),
-    ).rejects.toThrow();
-    expect(
-      app.toolApprovals.approvalMode("owner", "missing", "full-access"),
-    ).rejects.toThrow();
-    expect(await app.toolApprovals.approvalMode("owner", first.sessionId)).toBe(
-      "ask",
-    );
     await app.toolApprovals.approvalMode(
       "owner",
-      first.sessionId,
+      turn.sessionId,
       "full-access",
     );
-    expect(second.sessionId).not.toBe(first.sessionId);
-    expect(
-      await app.toolApprovals.approvalMode("owner", second.sessionId),
-    ).toBe("ask");
-    await app.root.commit(async (tx) => {
-      (await tx.doc(ToolApprovals)).grants = [
+    const propose = (taskId: number, connectionIdentity: string) =>
+      app.toolApprovals.ensure(
         {
-          id: "grant",
-          conversationId: first.conversationId,
-          tool: "execute",
-          connectionIdentity: "secret-identity",
-          actor: "secret-actor",
-          revoked: false,
+          conversationId: turn.conversationId,
+          taskId,
+          commit: app.root.commit.bind(app.root),
+        } as Parameters<typeof app.toolApprovals.ensure>[0],
+        BACKGROUND_CONTEXT,
+        {
+          fingerprint: "same",
+          connectionIdentity,
+          server:
+            connectionIdentity === "raphie.workspace.command"
+              ? "workspace"
+              : "fixture",
+          tool:
+            connectionIdentity === "raphie.workspace.command"
+              ? "bash"
+              : "execute",
+          argumentsJson: "{}",
         },
-      ];
-    }, BACKGROUND_CONTEXT);
-    expect(
-      await app.toolApprovals.listGrants("owner", first.sessionId),
-    ).toEqual([{ id: "grant", tool: "execute" }]);
-    expect(
-      app.toolApprovals.listGrants("intruder", first.sessionId),
-    ).rejects.toThrow();
-    expect(
-      app.toolApprovals.revokeGrant("owner", "missing", "grant"),
-    ).rejects.toThrow();
-    if (second.sessionId !== first.sessionId) {
-      expect(
-        await app.toolApprovals.listGrants("owner", second.sessionId),
-      ).toEqual([]);
-      expect(
-        app.toolApprovals.revokeGrant("owner", second.sessionId, "grant"),
-      ).rejects.toThrow();
-    }
-    await app.close();
-    app = await Gateway.open({ directory, deferResume: true, ...chatModel() });
-    expect(await app.toolApprovals.approvalMode("owner", first.sessionId)).toBe(
+      );
+    expect((await propose(100, "raphie.workspace.command")).status).toBe(
+      "approved",
+    );
+    const first = await propose(101, "mcp-fixture");
+    expect(first.status).toBe("pending");
+    await app.toolApprovals.decide(
+      first.id,
+      "approved",
+      "owner",
+      "web",
+      undefined,
+      undefined,
+      undefined,
+      "once",
+    );
+    expect((await propose(102, "mcp-fixture")).status).toBe("pending");
+    expect(await app.toolApprovals.approvalMode("owner", turn.sessionId)).toBe(
       "full-access",
     );
-    await app.toolApprovals.approvalMode("owner", first.sessionId, "ask");
-    expect(
-      await app.toolApprovals.listGrants("owner", first.sessionId),
-    ).toHaveLength(1);
-    await app.toolApprovals.revokeGrant("owner", first.sessionId, "grant");
     await app.close();
     app = await Gateway.open({ directory, deferResume: true, ...chatModel() });
-    expect(
-      await app.toolApprovals.listGrants("owner", first.sessionId),
-    ).toEqual([]);
+    expect(await app.toolApprovals.approvalMode("owner", turn.sessionId)).toBe(
+      "full-access",
+    );
+    expect((await propose(103, "mcp-fixture")).status).toBe("pending");
+    await app.toolApprovals.approvalMode("owner", turn.sessionId, "ask");
+    expect((await propose(104, "raphie.workspace.command")).status).toBe(
+      "pending",
+    );
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });
   }
 });
 
-test("session grants leave preexisting requests pending and never cross bots", async () => {
+test("once approvals leave preexisting requests pending and never cross bots", async () => {
   const directories = await Promise.all(
     [0, 1].map(() => mkdtemp(join(tmpdir(), "grant-bot-"))),
   );
@@ -150,7 +128,7 @@ test("session grants leave preexisting requests pending and never cross bots", a
       undefined,
       undefined,
       undefined,
-      "session",
+      "once",
     );
     expect(
       (await apps[0]!.toolApprovals.state()).approvals.find(
@@ -165,5 +143,92 @@ test("session grants leave preexisting requests pending and never cross bots", a
         rm(directory, { recursive: true, force: true }),
       ),
     );
+  }
+});
+
+test("legacy MCP Full access must not authorize commands", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "legacy-command-mode-"));
+  const app = await Gateway.open({
+    directory,
+    deferResume: true,
+    ...chatModel(),
+  });
+  try {
+    const turn = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "legacy",
+      text: "hello",
+    });
+    await app.root.commit(async (tx) => {
+      (await tx.doc(ToolApprovals)).modes = {
+        [String(turn.conversationId)]: "full-access",
+      };
+    }, BACKGROUND_CONTEXT);
+    expect(await app.toolApprovals.approvalMode("owner", turn.sessionId)).toBe(
+      "ask",
+    );
+    const approval = await app.toolApprovals.ensure(
+      {
+        conversationId: turn.conversationId,
+        taskId: 100,
+        commit: app.root.commit.bind(app.root),
+      } as Parameters<typeof app.toolApprovals.ensure>[0],
+      BACKGROUND_CONTEXT,
+      {
+        fingerprint: "legacy-command",
+        connectionIdentity: "raphie.workspace.command",
+        server: "workspace",
+        tool: "bash",
+        argumentsJson: '{"command":"pwd"}',
+      },
+    );
+    expect(approval.status).toBe("pending");
+    await app.toolApprovals.approvalMode(
+      "owner",
+      turn.sessionId,
+      "full-access",
+    );
+    const propose = (fingerprint: string) =>
+      app.toolApprovals.ensure(
+        {
+          conversationId: turn.conversationId,
+          taskId: fingerprint === "full-command" ? 101 : 102,
+          commit: app.root.commit.bind(app.root),
+        } as Parameters<typeof app.toolApprovals.ensure>[0],
+        BACKGROUND_CONTEXT,
+        {
+          fingerprint,
+          connectionIdentity: "raphie.workspace.command",
+          server: "workspace",
+          tool: "bash",
+          argumentsJson: '{"command":"pwd"}',
+        },
+      );
+    expect((await propose("full-command")).status).toBe("approved");
+    expect(
+      (await app.toolApprovals.state()).approvals.find(
+        (a) => a.id === approval.id,
+      )?.status,
+    ).toBe("pending");
+    await app.toolApprovals.approvalMode("owner", turn.sessionId, "ask");
+    expect((await propose("ask-command")).status).toBe("pending");
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("first message persists its command mode and later conversations default to Ask", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "first-command-mode-"));
+  const app = await Gateway.open({ directory, deferResume: true, ...chatModel() });
+  try {
+    const first = await app.chats.send({ source: "web", actor: "owner", eventId: "full", text: "hello", approvalMode: "full-access" });
+    expect(await app.toolApprovals.approvalMode("owner", first.sessionId)).toBe("full-access");
+    const second = await app.chats.send({ source: "web", actor: "owner", eventId: "ask", text: "hello" });
+    expect(await app.toolApprovals.approvalMode("owner", second.sessionId)).toBe("ask");
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
   }
 });

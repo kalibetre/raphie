@@ -88,6 +88,7 @@ test("model tool executions derive the bot and session from the runtime, with sh
   const send = async (
     gateway: Awaited<ReturnType<typeof open>>,
     text: string,
+    decision: "approved" | "rejected" = "approved",
   ) => {
     const actor = gateway.actors.establish("web");
     const receipt = await gateway.sessions.submit(actor, {
@@ -97,6 +98,20 @@ test("model tool executions derive the bot and session from the runtime, with sh
     for (let i = 0; i < 200; i++) {
       const state = await gateway.chats.state();
       const turn = state.turns.find((t) => t.id === receipt.id);
+      const pending = (await gateway.toolApprovals.state()).approvals.find(
+        (a) => a.status === "pending",
+      );
+      if (pending) {
+        expect(pending.tool).toBe("workspace_exec");
+        expect(JSON.parse(pending.argumentsJson).command).toBeTruthy();
+        expect(pending.execution).toBe("waiting");
+        await gateway.toolApprovals.decide(
+          pending.id,
+          decision,
+          "owner",
+          "web",
+        );
+      }
       if (turn?.status !== "pending") return turn;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
@@ -104,6 +119,8 @@ test("model tool executions derive the bot and session from the runtime, with sh
   };
   let a = await open("echo remembered > note");
   try {
+    const rejected = await send(a, "Reject writing a file", "rejected");
+    expect(JSON.stringify(rejected)).toContain("authorization rejected");
     const first = await send(a, "Write a file");
     expect(JSON.stringify(first)).toContain('committed\\":true');
     await a.close();

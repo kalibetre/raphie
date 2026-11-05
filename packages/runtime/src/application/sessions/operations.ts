@@ -49,6 +49,7 @@ export interface SessionOperations {
       attachments?: string[];
       sessionId?: string;
       model?: ModelSelection;
+  approvalMode?: "ask" | "full-access";
     },
   ): Promise<MessageReceipt>;
   decide(
@@ -130,6 +131,7 @@ export class Sessions implements SessionOperations {
       attachments?: string[];
       sessionId?: string;
       model?: ModelSelection;
+  approvalMode?: "ask" | "full-access";
     },
   ) {
     const verified = this.authority.require(actor);
@@ -139,6 +141,7 @@ export class Sessions implements SessionOperations {
       attachments: input.attachments,
       sessionId: input.sessionId,
       model: input.model,
+      approvalMode: verified.source === "web" ? input.approvalMode : undefined,
       source: verified.source,
       actor: verified.subject,
       discordThreadId: verified.threadId,

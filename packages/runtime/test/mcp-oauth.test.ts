@@ -5,7 +5,10 @@ import { join } from "node:path";
 
 import { BotMcp } from "../src/domains/settings/infrastructure/bot-mcp.ts";
 import { connectMcp } from "../src/infrastructure/mcp/client.ts";
-import { McpOAuth } from "../src/infrastructure/mcp/oauth.ts";
+import {
+  McpOAuth,
+  type SavedMcpOAuth,
+} from "../src/infrastructure/mcp/oauth.ts";
 import { ModelConnectionGate } from "../src/shared/infrastructure/model-connection-gate.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 import { rpcResponse } from "./mcp-fixture.ts";
@@ -294,19 +297,39 @@ test("OAuth consent expires without publishing tools and closes its loopback lis
 });
 
 test("OAuth generations survive refresh and restart, and rotate before reauthorization", async () => {
-  let saved: import("../src/infrastructure/mcp/oauth.ts").SavedMcpOAuth = {
+  let saved: SavedMcpOAuth = {
     redirectUrl: "http://127.0.0.1:19457/callback",
   };
-  const save = (value: typeof saved) => { saved = structuredClone(value); };
-  let oauth = await McpOAuth.open("https://example.com/mcp", saved, save, async () => {});
+  const save = (value: typeof saved) => {
+    saved = structuredClone(value);
+  };
+  let oauth = await McpOAuth.open(
+    "https://example.com/mcp",
+    saved,
+    save,
+    async () => {},
+  );
   const generation = saved.authorizationGeneration;
   expect(generation).toBeString();
-  await oauth.provider.saveTokens({ access_token: "login", token_type: "Bearer" });
-  await oauth.provider.saveTokens({ access_token: "refresh", token_type: "Bearer" });
+  await oauth.provider.saveTokens({
+    access_token: "login",
+    token_type: "Bearer",
+  });
+  await oauth.provider.saveTokens({
+    access_token: "refresh",
+    token_type: "Bearer",
+  });
   expect(saved.authorizationGeneration).toBe(generation);
   await oauth.close();
-  oauth = await McpOAuth.open("https://example.com/mcp", saved, save, async () => {});
+  oauth = await McpOAuth.open(
+    "https://example.com/mcp",
+    saved,
+    save,
+    async () => {},
+  );
   expect(saved.authorizationGeneration).toBe(generation);
   await oauth.close();
-  await expect(oauth.provider.saveTokens({ access_token: "stale", token_type: "Bearer" })).rejects.toThrow("Connection closed");
+  expect(
+    oauth.provider.saveTokens({ access_token: "stale", token_type: "Bearer" }),
+  ).rejects.toThrow("Connection closed");
 });

@@ -22,12 +22,15 @@ type Grant = {
   conversationId: number;
   connectionIdentity: string;
   tool: string;
+  argumentsJson?: string;
   actor: string;
   revoked: boolean;
 };
 
 type ApprovalState = {
+  // Legacy MCP policy is deliberately never used for command authorization.
   modes?: Record<string, "ask" | "full-access">;
+  commandModes?: Record<string, "ask" | "full-access">;
   grants?: Grant[];
   approvals: ToolApproval[];
   deliveries: ToolDelivery[];
@@ -40,6 +43,14 @@ export const ToolApprovals = defineDoc<ApprovalState>({
   checkpointWhen: () => false,
   initial: () => ({ approvals: [], deliveries: [] }),
 });
+
+export function supportsCommandGrant(item: Pick<ToolApproval, "server" | "tool" | "connectionIdentity">) {
+  return item.server === "workspace" && item.connectionIdentity === "raphie.workspace.command" && (item.tool === "bash" || item.tool === "workspace_exec");
+}
+
+export function activeCommandGrant(state: ApprovalState, item: ToolApproval) {
+  return !item.grantId || !!state.grants?.some(g => g.id === item.grantId && !g.revoked && supportsCommandGrant(item) && g.conversationId === item.conversationId && g.connectionIdentity === item.connectionIdentity && g.tool === item.tool && g.argumentsJson === item.argumentsJson);
+}
 
 function notify(
   state: ApprovalState,
@@ -130,21 +141,21 @@ export class ToolApprovalService {
         execution: "waiting",
         result: null,
       };
-      const grant = state.grants?.find(
-        (g) =>
-          !g.revoked &&
-          g.conversationId === item.conversationId &&
-          !!item.connectionIdentity &&
-          g.connectionIdentity === item.connectionIdentity &&
-          g.tool === item.tool,
-      );
-      if (grant) {
-        item.status = "approved";
-        item.grantId = grant.id;
-      } else if (state.modes?.[String(api.conversationId)] === "full-access") {
+      if (
+        proposal.connectionIdentity === "raphie.workspace.command" &&
+        proposal.server === "workspace" &&
+        (proposal.tool === "workspace_exec" || proposal.tool === "bash") &&
+        state.commandModes?.[String(api.conversationId)] === "full-access"
+      ) {
         item.status = "approved";
         item.fullAccess = true;
       }
+      if (supportsCommandGrant(item)) {
+        const grant = state.grants?.find(g => !g.revoked && g.conversationId === item.conversationId && g.connectionIdentity === item.connectionIdentity && g.tool === item.tool && g.argumentsJson === item.argumentsJson);
+        if (grant) { item.status = "approved"; item.grantId = grant.id; }
+      }
+      // Command permissions never authorize external MCP service calls.
+      // Legacy MCP grants and modes remain readable for migration only.
       state.approvals.push(item);
       record(
         await tx.doc(Activity),
@@ -254,13 +265,12 @@ export class ToolApprovalService {
     scope: "once" | "session" = "once",
   ) {
     this.app.authorize(actor);
-    if (scope === "session" && via !== "web")
-      throw new InputError("Session grants require web approval.", 403);
     if (!isDecision(decision)) throw new InputError("Invalid decision.");
     return this.app.root.commit(async (tx) => {
       const state = await tx.doc(ToolApprovals);
       const item = state.approvals.find((a) => a.id === id);
       if (!item) throw new InputError("Tool approval not found.", 404);
+      if (scope === "session" && !supportsCommandGrant(item)) throw new InputError("This tool requires approval of each call.", 403);
       const destination =
         state.deliveries.find((d) => d.approvalId === id)?.threadId ?? null;
       if (
@@ -292,29 +302,11 @@ export class ToolApprovalService {
         decision,
         Date.now(),
       );
-      if (scope === "session" && item.status === "approved") {
-        if (!item.connectionIdentity)
-          throw new InputError("Connection identity cannot be verified.");
+      if (item.status === "approved" && scope === "session") {
         state.grants ??= [];
-        const grantId = crypto.randomUUID();
-        state.grants.push({
-          id: grantId,
-          conversationId: item.conversationId,
-          connectionIdentity: item.connectionIdentity,
-          tool: item.tool,
-          actor,
-          revoked: false,
-        });
-        record(
-          await tx.doc(Activity),
-          "grant.created",
-          "Session grant created",
-          {
-            conversationId: item.conversationId,
-            operationId: grantId,
-            details: { actor, tool: item.tool, approvalId: item.id },
-          },
-        );
+        const grant = { id: crypto.randomUUID(), conversationId: item.conversationId, connectionIdentity: item.connectionIdentity!, tool: item.tool, argumentsJson: item.argumentsJson, actor, revoked: false };
+        state.grants.push(grant);
+        item.grantId = grant.id;
       }
       item.decidedVia = via;
       record(
@@ -345,18 +337,21 @@ export class ToolApprovalService {
       if (!conversation) throw new InputError("Session not found.", 404);
       const state = await tx.doc(ToolApprovals);
       if (mode !== undefined) {
-        state.modes = { ...state.modes, [String(conversation.id)]: mode };
+        state.commandModes = {
+          ...state.commandModes,
+          [String(conversation.id)]: mode,
+        };
         record(
           await tx.doc(Activity),
           "approval.mode_changed",
-          "MCP approval mode changed",
+          "Command permission mode changed",
           {
             conversationId: conversation.id,
             details: { actor, mode },
           },
         );
       }
-      return state.modes?.[String(conversation.id)] ?? "ask";
+      return state.commandModes?.[String(conversation.id)] ?? "ask";
     }, context);
   }
 
@@ -369,7 +364,7 @@ export class ToolApprovalService {
       if (!conversation) throw new InputError("Session not found.", 404);
       return ((await tx.doc(ToolApprovals)).grants ?? [])
         .filter((g) => !g.revoked && g.conversationId === conversation.id)
-        .map(({ id, tool }) => ({ id, tool }));
+        .map(({ id, tool, argumentsJson }) => ({ id, tool: argumentsJson ? `${tool}: ${argumentsJson}` : tool }));
     }, context);
   }
 

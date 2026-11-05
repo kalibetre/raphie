@@ -19,6 +19,8 @@ import { ContainerCli, containerLimits as limits } from "./container-cli.ts";
 import { ContainerRpc } from "./container-rpc.ts";
 import { encodeWire, envMethods } from "./container-wire.ts";
 
+export const authorizeContainerDispatch = Symbol("authorizeContainerDispatch");
+
 type Options = {
   /** Trusted bot data directory: default <data>, named <data>/bots/<id>. */
   directory: string;
@@ -287,6 +289,7 @@ export class ContainerWorkspace {
     cwd = "/workspace",
     operationId?: string,
     observation = false,
+    authorize?: () => Promise<boolean>,
   ): ExecutionEnv {
     let sequence = 0;
     const nextId = () =>
@@ -294,6 +297,9 @@ export class ContainerWorkspace {
     const target = { id: this.options.workspaceId, cwd };
     return new Proxy(target, {
       get: (object, property) => {
+        if (property === authorizeContainerDispatch)
+          return (claim: () => Promise<boolean>) =>
+            this.env(cwd, operationId, observation, claim);
         // A view does not own the shared provider. Only bootstrap calls close().
         if (property === "cleanup") return async () => {};
         if (
@@ -311,6 +317,7 @@ export class ContainerWorkspace {
               undefined,
               observation,
               operationId !== undefined,
+              authorize,
             );
           };
         return Reflect.get(object, property);
@@ -360,6 +367,7 @@ export class ContainerWorkspace {
     resource?: { rpc: ContainerRpc; id: number },
     observation = false,
     retainReceipt = true,
+    authorize?: () => Promise<boolean>,
   ): Promise<unknown> {
     const failure = (error: unknown) =>
       err(
@@ -598,6 +606,11 @@ export class ContainerWorkspace {
               "Workspace disk quota exceeded. Remove files or increase diskQuotaMiB before running commands",
             );
         }
+        // Claim only after leaving the queue and completing asynchronous setup.
+        // Never hold a durable transaction while waiting for this queue.
+        if (method === "exec" && authorize && !(await authorize()))
+          throw new Error("Command authorization is no longer valid");
+        context.abortSignal?.throwIfAborted();
         // Persist intent BEFORE submitting anything that can mutate workspace files.
         this.db
           .transaction(() => {

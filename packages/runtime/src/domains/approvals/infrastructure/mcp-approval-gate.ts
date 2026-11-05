@@ -116,18 +116,17 @@ export function createMcpTools(
           argumentsJson,
           fingerprint,
           connectionIdentity: options.identity,
-          legacyFingerprint:
-            !options.namespace && options.legacyIdentity
-              ? new Bun.CryptoHasher("sha256")
-                  .update(
-                    JSON.stringify([
-                      options.legacyIdentity,
-                      tool.name,
-                      argumentsJson,
-                    ]),
-                  )
-                  .digest("hex")
-              : undefined,
+          legacyFingerprint: options.legacyIdentity
+            ? new Bun.CryptoHasher("sha256")
+                .update(
+                  JSON.stringify([
+                    options.legacyIdentity,
+                    tool.name,
+                    argumentsJson,
+                  ]),
+                )
+                .digest("hex")
+            : undefined,
         });
         const approved =
           created.status === "pending"
@@ -146,7 +145,9 @@ export function createMcpTools(
             item.conversationId !== api.conversationId ||
             item.taskId !== api.taskId ||
             item.fingerprint !== fingerprint ||
-            item.status !== "approved"
+            item.status !== "approved" ||
+            !!item.fullAccess ||
+            !!item.grantId
           )
             return { kind: "unauthorized" as const };
           if (item.execution === "done")
