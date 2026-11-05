@@ -49,7 +49,7 @@ export interface SessionOperations {
       attachments?: string[];
       sessionId?: string;
       model?: ModelSelection;
-  approvalMode?: "ask" | "full-access";
+      approvalMode?: "ask" | "full-access";
     },
   ): Promise<MessageReceipt>;
   decide(
@@ -131,7 +131,7 @@ export class Sessions implements SessionOperations {
       attachments?: string[];
       sessionId?: string;
       model?: ModelSelection;
-  approvalMode?: "ask" | "full-access";
+      approvalMode?: "ask" | "full-access";
     },
   ) {
     const verified = this.authority.require(actor);

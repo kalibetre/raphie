@@ -107,5 +107,4 @@ requires a run with Docker and the fixture image available, not skipped tests.
 
 Delivery validation on 2026-11-04: `bun run validate` passed 315 tests with no
 failures or skips, including real Docker, formatting, architecture, lint, type
-checks and the production build. See the [quality review](reviews/2026-11-04-general-attachments.md)
-for findings, corrections and validation limits.
+checks and the production build.

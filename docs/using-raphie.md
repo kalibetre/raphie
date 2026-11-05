@@ -48,6 +48,31 @@ rules. Steering joins the current reply at a tool boundary. If the current reply
 finishes first, Pi starts a new reply for the steering message. Shared answers
 appear once; distinct replies remain visible. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
 
+### Command permissions
+
+The composer has a **Command permissions** selector, including before the first
+message in a new conversation. **Ask** is the default: Raphie requests approval
+before running a proposed `workspace_exec` or container `bash` command. **Full
+access** lets those commands run without an approval prompt in that conversation.
+The selected mode is saved with the conversation and survives restart; changing
+it does not change another conversation or bot.
+
+A command approval offers **Reject**, **Approve once**, and **Approve for
+session**. Approve once applies to that invocation. Approve for session allows
+the same tool with the exact same arguments in that bot and conversation; a
+different command or execution tool needs its own approval. Session grants
+survive restart. They can be listed and revoked through the owner API described
+in [the headless interface](headless-interface.md); the composer does not yet
+offer grant management. Switching back to Ask does not revoke existing grants.
+
+Command permissions do not change sandbox limits or grant access to external
+services. MCP calls, including calls to Executor, follow their separate approval
+policy and do not gain session approval or Full access from this selector.
+Executor manages any approvals for actions inside its own service. These controls
+govern the two command tools, not every possible agent action or file edit.
+Stopping a turn expires its pending approvals and withdraws queued input; it
+does not undo an action that has already started.
+
 The bot settings Activity page records precise UTC timestamps, local display times, run and runtime-attempt IDs, tool operation IDs, model usage, approval decisions, results, and recovery. Events expand to show payloads and export to JSON. Known credential values and sensitive field names are redacted before journal persistence. Diagnostics is a separate trace-only view.
 
 This first journal keeps the latest **5,000 events**, truncates individual diagnostic payloads at **24,000 characters**, and does not persist individual text deltas. Timestamps describe when the host observed an event; “Model response started” is the first observed response, not the start of the provider's network request. Executor's nested calls and private model reasoning are not available here. Operation waterfalls and a backend plugin lifecycle are later work.

@@ -221,12 +221,31 @@ test("legacy MCP Full access must not authorize commands", async () => {
 
 test("first message persists its command mode and later conversations default to Ask", async () => {
   const directory = await mkdtemp(join(tmpdir(), "first-command-mode-"));
-  const app = await Gateway.open({ directory, deferResume: true, ...chatModel() });
+  const app = await Gateway.open({
+    directory,
+    deferResume: true,
+    ...chatModel(),
+  });
   try {
-    const first = await app.chats.send({ source: "web", actor: "owner", eventId: "full", text: "hello", approvalMode: "full-access" });
-    expect(await app.toolApprovals.approvalMode("owner", first.sessionId)).toBe("full-access");
-    const second = await app.chats.send({ source: "web", actor: "owner", eventId: "ask", text: "hello" });
-    expect(await app.toolApprovals.approvalMode("owner", second.sessionId)).toBe("ask");
+    const first = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "full",
+      text: "hello",
+      approvalMode: "full-access",
+    });
+    expect(await app.toolApprovals.approvalMode("owner", first.sessionId)).toBe(
+      "full-access",
+    );
+    const second = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "ask",
+      text: "hello",
+    });
+    expect(
+      await app.toolApprovals.approvalMode("owner", second.sessionId),
+    ).toBe("ask");
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });

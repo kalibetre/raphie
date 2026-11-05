@@ -44,12 +44,30 @@ export const ToolApprovals = defineDoc<ApprovalState>({
   initial: () => ({ approvals: [], deliveries: [] }),
 });
 
-export function supportsCommandGrant(item: Pick<ToolApproval, "server" | "tool" | "connectionIdentity">) {
-  return item.server === "workspace" && item.connectionIdentity === "raphie.workspace.command" && (item.tool === "bash" || item.tool === "workspace_exec");
+export function supportsCommandGrant(
+  item: Pick<ToolApproval, "server" | "tool" | "connectionIdentity">,
+) {
+  return (
+    item.server === "workspace" &&
+    item.connectionIdentity === "raphie.workspace.command" &&
+    (item.tool === "bash" || item.tool === "workspace_exec")
+  );
 }
 
 export function activeCommandGrant(state: ApprovalState, item: ToolApproval) {
-  return !item.grantId || !!state.grants?.some(g => g.id === item.grantId && !g.revoked && supportsCommandGrant(item) && g.conversationId === item.conversationId && g.connectionIdentity === item.connectionIdentity && g.tool === item.tool && g.argumentsJson === item.argumentsJson);
+  return (
+    !item.grantId ||
+    !!state.grants?.some(
+      (g) =>
+        g.id === item.grantId &&
+        !g.revoked &&
+        supportsCommandGrant(item) &&
+        g.conversationId === item.conversationId &&
+        g.connectionIdentity === item.connectionIdentity &&
+        g.tool === item.tool &&
+        g.argumentsJson === item.argumentsJson,
+    )
+  );
 }
 
 function notify(
@@ -151,8 +169,18 @@ export class ToolApprovalService {
         item.fullAccess = true;
       }
       if (supportsCommandGrant(item)) {
-        const grant = state.grants?.find(g => !g.revoked && g.conversationId === item.conversationId && g.connectionIdentity === item.connectionIdentity && g.tool === item.tool && g.argumentsJson === item.argumentsJson);
-        if (grant) { item.status = "approved"; item.grantId = grant.id; }
+        const grant = state.grants?.find(
+          (g) =>
+            !g.revoked &&
+            g.conversationId === item.conversationId &&
+            g.connectionIdentity === item.connectionIdentity &&
+            g.tool === item.tool &&
+            g.argumentsJson === item.argumentsJson,
+        );
+        if (grant) {
+          item.status = "approved";
+          item.grantId = grant.id;
+        }
       }
       // Command permissions never authorize external MCP service calls.
       // Legacy MCP grants and modes remain readable for migration only.
@@ -270,7 +298,8 @@ export class ToolApprovalService {
       const state = await tx.doc(ToolApprovals);
       const item = state.approvals.find((a) => a.id === id);
       if (!item) throw new InputError("Tool approval not found.", 404);
-      if (scope === "session" && !supportsCommandGrant(item)) throw new InputError("This tool requires approval of each call.", 403);
+      if (scope === "session" && !supportsCommandGrant(item))
+        throw new InputError("This tool requires approval of each call.", 403);
       const destination =
         state.deliveries.find((d) => d.approvalId === id)?.threadId ?? null;
       if (
@@ -304,7 +333,15 @@ export class ToolApprovalService {
       );
       if (item.status === "approved" && scope === "session") {
         state.grants ??= [];
-        const grant = { id: crypto.randomUUID(), conversationId: item.conversationId, connectionIdentity: item.connectionIdentity!, tool: item.tool, argumentsJson: item.argumentsJson, actor, revoked: false };
+        const grant = {
+          id: crypto.randomUUID(),
+          conversationId: item.conversationId,
+          connectionIdentity: item.connectionIdentity!,
+          tool: item.tool,
+          argumentsJson: item.argumentsJson,
+          actor,
+          revoked: false,
+        };
         state.grants.push(grant);
         item.grantId = grant.id;
       }
@@ -364,7 +401,10 @@ export class ToolApprovalService {
       if (!conversation) throw new InputError("Session not found.", 404);
       return ((await tx.doc(ToolApprovals)).grants ?? [])
         .filter((g) => !g.revoked && g.conversationId === conversation.id)
-        .map(({ id, tool, argumentsJson }) => ({ id, tool: argumentsJson ? `${tool}: ${argumentsJson}` : tool }));
+        .map(({ id, tool, argumentsJson }) => ({
+          id,
+          tool: argumentsJson ? `${tool}: ${argumentsJson}` : tool,
+        }));
     }, context);
   }
 

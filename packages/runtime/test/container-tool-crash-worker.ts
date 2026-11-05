@@ -23,6 +23,7 @@ gateway.workspace.env = (operationId) => {
   const env = environment(operationId);
   return wrap(env);
 };
+
 function wrap(env: ExecutionEnv): ExecutionEnv {
   const execute = env.exec.bind(env);
   return new Proxy(env, {
@@ -41,6 +42,7 @@ function wrap(env: ExecutionEnv): ExecutionEnv {
     },
   });
 }
+
 await gateway.sessions.submit(gateway.actors.establish("web"), {
   eventId: "native-crash",
   text: "Append once",

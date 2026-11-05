@@ -340,16 +340,45 @@ test("exact command session button displays scope and submits session approval",
   const { act, create } = await import("react-test-renderer");
   const calls: unknown[] = [];
   const workspace = new BackendWorkspace("http://127.0.0.1:4399", "scope-bot");
-  Object.defineProperty(workspace, "api", { value: async (_path: string, body: unknown) => { calls.push(body); return { status: "approved" }; } });
+  Object.defineProperty(workspace, "api", {
+    value: async (_path: string, body: unknown) => {
+      calls.push(body);
+      return { status: "approved" };
+    },
+  });
   let root!: ReturnType<typeof create>;
   try {
     await act(async () => {
-      root = create(<BackendContext.Provider value={{ workspace, backend: workspace, selectBot: async () => {} }}><QueryClientProvider client={workspace.queries}><ToolDecision approval={{ id: "exact", server: "workspace", connectionIdentity: "raphie.workspace.command", tool: "workspace_exec", argumentsJson: '{"command":"pwd"}', expiresAt: Date.now() + 60000 } as Approval} /></QueryClientProvider></BackendContext.Provider>);
+      root = create(
+        <BackendContext.Provider
+          value={{ workspace, backend: workspace, selectBot: async () => {} }}
+        >
+          <QueryClientProvider client={workspace.queries}>
+            <ToolDecision
+              approval={
+                {
+                  id: "exact",
+                  server: "workspace",
+                  connectionIdentity: "raphie.workspace.command",
+                  tool: "workspace_exec",
+                  argumentsJson: '{"command":"pwd"}',
+                  expiresAt: Date.now() + 60000,
+                } as Approval
+              }
+            />
+          </QueryClientProvider>
+        </BackendContext.Provider>,
+      );
     });
-    const button = root.root.findAllByType("button").find(b => b.props.title?.includes("exact arguments"))!;
+    const button = root.root
+      .findAllByType("button")
+      .find((b) => b.props.title?.includes("exact arguments"))!;
     expect(button.props.title).toContain("this bot conversation");
     expect(button.props.title).toContain('{"command":"pwd"}');
-    await act(async () => { button.props.onClick(); await new Promise(resolve => setTimeout(resolve, 20)); });
+    await act(async () => {
+      button.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
     expect(calls).toEqual([{ decision: "approved", scope: "session" }]);
     expect(button.props.disabled).toBe(true);
   } finally {
@@ -361,8 +390,12 @@ test("exact command session button displays scope and submits session approval",
 test("new conversations expose Ask by default and the selected draft mode", () => {
   const workspace = new BackendWorkspace("http://127.0.0.1:4317");
   try {
-    expect(render(workspace, <McpPermissions />)).toContain('aria-label="Command permissions: Ask"');
-    expect(render(workspace, <McpPermissions draftMode="full-access" />)).toContain('aria-label="Command permissions: Full access"');
+    expect(render(workspace, <McpPermissions />)).toContain(
+      'aria-label="Command permissions: Ask"',
+    );
+    expect(
+      render(workspace, <McpPermissions draftMode="full-access" />),
+    ).toContain('aria-label="Command permissions: Full access"');
   } finally {
     workspace.dispose();
   }
@@ -373,20 +406,41 @@ test("draft selector switches both modes locally without submitting a session up
   const { PopoverContent } = await import("../src/shared/ui/popover");
   const workspace = new BackendWorkspace("http://test");
   const selected: string[] = [];
-  Object.defineProperty(workspace, "api", { value: async () => { throw new Error("draft must not call API"); } });
+  Object.defineProperty(workspace, "api", {
+    value: async () => {
+      throw new Error("draft must not call API");
+    },
+  });
   let root!: ReturnType<typeof create>;
   let content!: ReturnType<typeof create>;
   try {
     await act(async () => {
-      root = create(<BackendContext.Provider value={{ workspace, backend: workspace, selectBot: async () => {} }}><QueryClientProvider client={workspace.queries}><McpPermissions onDraftMode={mode => selected.push(mode)} /></QueryClientProvider></BackendContext.Provider>);
-      });
-    await act(async () => { content = create(<>{root.root.findByType(PopoverContent).props.children}</>); });
+      root = create(
+        <BackendContext.Provider
+          value={{ workspace, backend: workspace, selectBot: async () => {} }}
+        >
+          <QueryClientProvider client={workspace.queries}>
+            <McpPermissions onDraftMode={(mode) => selected.push(mode)} />
+          </QueryClientProvider>
+        </BackendContext.Provider>,
+      );
+    });
+    await act(async () => {
+      content = create(
+        <>{root.root.findByType(PopoverContent).props.children}</>,
+      );
+    });
     for (const index of [1, 0]) {
-      await act(async () => { content.root.findAllByType("button")[index]!.props.onClick(); });
+      await act(async () => {
+        content.root.findAllByType("button")[index]!.props.onClick();
+      });
     }
     expect(selected).toEqual(["full-access", "ask"]);
   } finally {
-    await act(async () => { content?.unmount(); root?.unmount(); });
+    await act(async () => {
+      content?.unmount();
+      root?.unmount();
+    });
     workspace.dispose();
   }
 });

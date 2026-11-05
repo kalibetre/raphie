@@ -343,7 +343,7 @@ export class ChatService implements ConversationCommands {
     conversationId?: number;
     sessionId?: string;
     model?: ModelSelection;
-  approvalMode?: "ask" | "full-access";
+    approvalMode?: "ask" | "full-access";
     discordThreadId?: string;
     connectionId?: string;
     discordUserId?: string;
@@ -474,7 +474,10 @@ export class ChatService implements ConversationCommands {
           state.conversations.push(conversation);
           if (input.source === "web" && input.approvalMode) {
             const approvals = await tx.doc(ToolApprovals);
-            approvals.commandModes = { ...approvals.commandModes, [String(conversation.id)]: input.approvalMode };
+            approvals.commandModes = {
+              ...approvals.commandModes,
+              [String(conversation.id)]: input.approvalMode,
+            };
           }
         }
         if (

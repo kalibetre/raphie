@@ -49,7 +49,10 @@ export function Composer({
   onChooseModel: (model: ModelSelection) => Promise<void>;
   onModelSettings: () => void;
 }) {
-  const [permission, setPermission] = useState<{ key: string; mode: "ask" | "full-access" }>();
+  const [permission, setPermission] = useState<{
+    key: string;
+    mode: "ask" | "full-access";
+  }>();
   const [newModel, setNewModel] = useState<ModelSelection>();
   const selectedForNewSession = conversationId ? undefined : newModel;
   const activeModel = selectedForNewSession ?? model;
@@ -222,14 +225,14 @@ export function Composer({
             }}
             onSettings={onModelSettings}
           />
-          {(
+          {
             <McpPermissions
               key={`${workspace.botId}:${conversationId}`}
               sessionId={conversationId}
               draftMode={draftMode}
               onDraftMode={(mode) => setPermission({ key, mode })}
             />
-          )}
+          }
           <ComposerPlugins
             enabled={enabledPlugins}
             context={{ draft, model: activeModel?.modelId ?? null, usage }}

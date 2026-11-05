@@ -11,7 +11,15 @@ import {
 
 type Mode = "ask" | "full-access";
 
-export function McpPermissions({ sessionId, draftMode = "ask", onDraftMode }: { sessionId?: string; draftMode?: Mode; onDraftMode?: (mode: Mode) => void }) {
+export function McpPermissions({
+  sessionId,
+  draftMode = "ask",
+  onDraftMode,
+}: {
+  sessionId?: string;
+  draftMode?: Mode;
+  onDraftMode?: (mode: Mode) => void;
+}) {
   const { workspace } = useBackend();
   const path = `/api/sessions/${encodeURIComponent(sessionId ?? "")}`;
   const query = useQuery({
@@ -19,7 +27,14 @@ export function McpPermissions({ sessionId, draftMode = "ask", onDraftMode }: { 
     queryKey: ["mcp-mode", sessionId],
     queryFn: () => workspace.api<{ mode: Mode }>(`${path}/approval-mode`),
   });
-  const mode = sessionId ? query : { data: { mode: draftMode }, isError: false, isPending: false, refetch: query.refetch };
+  const mode = sessionId
+    ? query
+    : {
+        data: { mode: draftMode },
+        isError: false,
+        isPending: false,
+        refetch: query.refetch,
+      };
   const update = useMutation({
     mutationFn: (value: Mode) =>
       workspace.api(`${path}/approval-mode`, { mode: value }, "PUT"),
@@ -81,7 +96,9 @@ export function McpPermissions({ sessionId, draftMode = "ask", onDraftMode }: { 
               type="button"
               disabled={!mode.data || mode.isError || update.isPending}
               aria-pressed={mode.data?.mode === value}
-              onClick={() => sessionId ? update.mutate(value) : onDraftMode?.(value)}
+              onClick={() =>
+                sessionId ? update.mutate(value) : onDraftMode?.(value)
+              }
               className="flex w-full items-start gap-3 rounded-md px-2 py-2 text-left hover:bg-accent disabled:opacity-50"
             >
               <span className="min-w-0 flex-1">
