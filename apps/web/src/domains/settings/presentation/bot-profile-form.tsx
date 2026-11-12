@@ -7,6 +7,7 @@ import { Button } from "../../../shared/ui/button";
 import { botColors } from "../application/bot-tone";
 import { useBots } from "../infrastructure/use-bots";
 import { BotProfileFields } from "./bot-profile-fields";
+import { DeleteBot } from "./delete-bot";
 import { SaveBar } from "./save-bar";
 import { useSettingsGuard } from "./use-settings-guard";
 const starterSoul =
@@ -29,7 +30,8 @@ export function BotForm({
   const [soul, setSoul] = useState(profile?.soul ?? starterSoul);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const pending = bots.save.isPending || bots.create.isPending;
+  const pending =
+    bots.save.isPending || bots.create.isPending || bots.remove.isPending;
   const dirty = saved
     ? name !== saved.name ||
       description !== saved.description ||
@@ -170,6 +172,19 @@ export function BotForm({
           New bots start with their own memory and an empty workspace. Add a
           provider connection after creation.
         </p>
+      )}
+      {saved && saved.id !== "default" && (
+        <DeleteBot
+          profile={saved}
+          disabled={dirty || pending || changedElsewhere}
+          pending={bots.remove.isPending}
+          onDelete={async () => {
+            await bots.remove.mutateAsync(saved);
+            workspace.assertActive();
+            guard.allowNavigation();
+            await navigate({ to: "/", search: {} });
+          }}
+        />
       )}
       <SaveBar
         visible={

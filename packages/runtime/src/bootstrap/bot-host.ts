@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -19,6 +19,7 @@ import type { SettingsService } from "../domains/settings/application/ports.ts";
 import { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
 import type { CredentialKeyStore } from "../domains/settings/infrastructure/credential-cipher.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
+import { ContainerWorkspace } from "../domains/workspaces/infrastructure/container-workspace.ts";
 import type { McpConnection } from "../infrastructure/mcp/client.ts";
 import { InputError } from "../shared/application/input-error.ts";
 import { Gateway } from "./agent-runtime.ts";
@@ -66,6 +67,7 @@ export class BotHost implements BotProfiles {
   ) {
     const host = new BotHost(directory, openBot, automation);
     try {
+      for (const id of host.profiles.deletions()) await host.finishDeletion(id);
       host.runtimes.set(
         "default",
         await host.attach({ ...existing, close: async () => {} }, directory),
@@ -159,6 +161,66 @@ export class BotHost implements BotProfiles {
     if (failed?.status === "rejected") throw failed.reason;
   }
 
+  async delete(id: string, input: { name: string; revision: number }) {
+    if (id === "default")
+      throw new InputError("The default bot cannot be deleted.", 409);
+    const runtime = this.runtime(id);
+    await runtime.gateway.configurationGate.run(async () => {
+      const profile = this.read(id);
+      if (profile.revision !== input.revision || profile.name !== input.name)
+        throw new InputError(
+          "This bot changed. Reload its profile and confirm its current name.",
+          409,
+        );
+      const gateway = runtime.gateway;
+      const chats = await gateway.chats.state();
+      const files = await gateway.state();
+      const tools = await gateway.toolApprovals.state();
+      const workspace = await gateway.workspace.info();
+      if (
+        chats.turns.some((turn) => turn.status === "pending") ||
+        files.approvals.some(
+          (approval) =>
+            approval.status === "pending" ||
+            (approval.status === "approved" && approval.completedAt === null),
+        ) ||
+        tools.approvals.some(
+          (approval) =>
+            approval.status === "pending" || approval.execution === "running",
+        ) ||
+        workspace.executions.admitted > 0
+      )
+        throw new InputError(
+          "Finish or cancel this bot's active turns, workspace executions and pending approvals before deleting it.",
+          409,
+        );
+      this.profiles.markDeleting(id);
+      gateway.configurationGate.retire();
+    });
+    try {
+      await runtime.close();
+      this.runtimes.delete(id);
+      await this.finishDeletion(id);
+    } catch {
+      throw new InputError(
+        "Bot deletion is pending cleanup. Restart Raphie to retry; the bot will not resume work.",
+        503,
+      );
+    }
+  }
+
+  private async finishDeletion(id: string) {
+    // IDs are host-issued UUIDs. Never turn an untrusted tombstone into a path.
+    if (
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)
+    )
+      throw new Error("Invalid bot deletion identity");
+    const directory = join(this.directory, "bots", id);
+    await ContainerWorkspace.reapForDeletion(directory);
+    await rm(directory, { recursive: true, force: true });
+    this.profiles.finishDeletion(id);
+  }
+
   private async attach(
     runtime: BotRuntime,
     directory: string,
@@ -205,8 +267,11 @@ export class BotHost implements BotProfiles {
         channels,
         close: async () => {
           try {
-            await channels?.close();
-            await runtime.close();
+            try {
+              await channels?.close();
+            } finally {
+              await runtime.close();
+            }
           } finally {
             await connections.close();
           }

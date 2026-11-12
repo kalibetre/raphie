@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { chmod, mkdir } from "node:fs/promises";
+import { chmod, lstat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -167,6 +167,25 @@ export class ContainerWorkspace {
     } catch (error) {
       db.close();
       throw error;
+    }
+  }
+
+  /** Deletion recovery reaps persisted compute without opening a bot or starting work. */
+  static async reapForDeletion(directory: string) {
+    const path = join(directory, "workspace", "container.sqlite");
+    try {
+      await lstat(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    const db = new Database(path, { readonly: true, strict: true });
+    try {
+      const lease = db.query<Lease, []>("SELECT * FROM lease").get();
+      if (lease)
+        new ContainerCli().removeOwned(lease.workspace_id, lease.scope);
+    } finally {
+      db.close();
     }
   }
 

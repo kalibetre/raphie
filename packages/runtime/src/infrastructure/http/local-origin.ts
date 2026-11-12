@@ -28,6 +28,6 @@ export function browserCors(origins: string[] = []) {
   return cors({
     origin: (origin) => (origins.includes(origin) ? origin : ""),
     allowHeaders: ["content-type", "x-raphie-client"],
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
   });
 }

@@ -139,6 +139,20 @@ export class BackendWorkspace {
     return `raphie:draft:${encodeURIComponent(this.url)}:${bot}${sessionId ?? "new"}`;
   }
 
+  clearBotDrafts() {
+    const prefix = this.draftKey("");
+    try {
+      for (const key of Object.keys(localStorage))
+        if (key.startsWith(prefix)) localStorage.removeItem(key);
+      localStorage.removeItem(
+        `raphie:last-session:${encodeURIComponent(this.url)}:${this.botId}`,
+      );
+      localStorage.removeItem(`raphie:inspector-open:${this.botId}`);
+    } catch {
+      // Storage can be disabled; deletion still succeeds on the runtime.
+    }
+  }
+
   dispose() {
     this.lifetime.abort(
       new DOMException("The backend workspace changed.", "AbortError"),

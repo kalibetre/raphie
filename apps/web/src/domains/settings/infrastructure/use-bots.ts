@@ -41,5 +41,20 @@ export function useBots() {
       void client.invalidateQueries({ queryKey: ["bots"] });
     },
   });
-  return { ...query, save, create };
+  const remove = useMutation({
+    mutationFn: (profile: BotProfile) =>
+      workspace.api<void>(
+        `/api/bots/${encodeURIComponent(profile.id)}`,
+        { name: profile.name, revision: profile.revision },
+        "DELETE",
+      ),
+    onSuccess: (_, profile) => {
+      workspace.clearBotDrafts();
+      client.setQueryData<{ items: BotProfile[] }>(["bots"], (current) => ({
+        items: current?.items.filter((bot) => bot.id !== profile.id) ?? [],
+      }));
+      client.removeQueries({ queryKey: ["bot-inbox", profile.id] });
+    },
+  });
+  return { ...query, save, create, remove };
 }

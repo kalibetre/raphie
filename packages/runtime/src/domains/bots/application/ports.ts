@@ -10,4 +10,5 @@ export interface BotProfiles {
   history(id: string): BotProfile[];
   create(input: SaveBotProfile): Promise<BotProfile>;
   update(id: string, input: UpdateBotProfile): Promise<BotProfile>;
+  delete(id: string, input: { name: string; revision: number }): Promise<void>;
 }

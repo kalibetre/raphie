@@ -44,6 +44,41 @@ const containerTest = available ? test : test.skip;
 const cleanupScopes = new Map<string, string>();
 
 containerTest(
+  "bot deletion recovery reaps only the persisted container scope",
+  async () => {
+    await fixture(async (provider, directory) => {
+      await shell(provider.env(), "echo owned > marker");
+      const db = new Database(
+        join(directory, "workspace", "container.sqlite"),
+        { readonly: true },
+      );
+      const lease = db
+        .query<{ scope: string; workspace_id: string }, []>(
+          "SELECT scope, workspace_id FROM lease",
+        )
+        .get()!;
+      db.close();
+      expect(cli.owned(lease.workspace_id, lease.scope)).toHaveLength(1);
+      await fixture(async (other, otherDirectory) => {
+        await shell(other.env(), "echo preserved > marker");
+        const otherDb = new Database(
+          join(otherDirectory, "workspace", "container.sqlite"),
+          { readonly: true },
+        );
+        const otherScope = otherDb
+          .query<{ scope: string }, []>("SELECT scope FROM lease")
+          .get()!.scope;
+        otherDb.close();
+        await ContainerWorkspace.reapForDeletion(directory);
+        expect(cli.owned(lease.workspace_id, lease.scope)).toEqual([]);
+        expect(cli.owned(lease.workspace_id, otherScope)).toHaveLength(1);
+      });
+    });
+  },
+  30000,
+);
+
+containerTest(
   "document reader sees the selected container workspace",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "raphie-test-document-"));
