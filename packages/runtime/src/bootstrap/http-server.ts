@@ -108,17 +108,21 @@ export async function startServer(
   );
   if (options.bots) {
     app.route("/api/bots", botRoutes(options.bots));
-    const scoped = new Map<string, ReturnType<typeof runtimeRoutes>>();
+    // Cached routes must not keep a deleted bot's closed runtime alive.
+    const scoped = new WeakMap<
+      ReturnType<BotHost["runtime"]>,
+      ReturnType<typeof runtimeRoutes>
+    >();
     app.all("/api/bots/:botId/*", async (c) => {
       const id = c.req.param("botId");
       const bot = options.bots!.runtime(id);
-      let routes = scoped.get(id);
+      let routes = scoped.get(bot);
       if (!routes) {
         routes = runtimeRoutes(
           bot.gateway,
           id === "default" ? { ...options, ...bot } : bot,
         );
-        scoped.set(id, routes);
+        scoped.set(bot, routes);
       }
       const url = new URL(c.req.url);
       url.pathname = `/api/${c.req.path.split("/").slice(4).join("/")}`;

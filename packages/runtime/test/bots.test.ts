@@ -1,5 +1,6 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -37,6 +38,20 @@ test("bot deletion confirms identity, removes only owned data and remains delete
   try {
     const bot = await host.create(profile);
     const sibling = await host.create({ ...profile, name: "Keep" });
+    const privateDirectory = join(directory, "bots", bot.id);
+    const siblingDirectory = join(directory, "bots", sibling.id);
+    await mkdir(join(privateDirectory, "workspace", "files"), {
+      recursive: true,
+    });
+    await Bun.write(
+      join(privateDirectory, "workspace", "files", "artifact.txt"),
+      "owned workspace artifact",
+    );
+    await Bun.write(join(siblingDirectory, "preserved.txt"), "sibling data");
+    await symlink(
+      siblingDirectory,
+      join(privateDirectory, "workspace", "files", "sibling-link"),
+    );
     const file = await host
       .runtime(bot.id)
       .gateway.files.put("owned.txt", new TextEncoder().encode("owned"));
@@ -70,6 +85,28 @@ test("bot deletion confirms identity, removes only owned data and remains delete
         join(directory, "bots", bot.id, "gateway.sqlite"),
       ).exists(),
     ).toBe(false);
+    const removedDirectory = await lstat(privateDirectory).catch(
+      (error: NodeJS.ErrnoException) => error,
+    );
+    expect(removedDirectory).toMatchObject({ code: "ENOENT" });
+    expect(await Bun.file(join(siblingDirectory, "preserved.txt")).text()).toBe(
+      "sibling data",
+    );
+    const registry = new Database(join(directory, "bots.sqlite"), {
+      readonly: true,
+    });
+    try {
+      for (const table of ["bot_profiles", "bot_revisions", "bot_deletions"])
+        expect(
+          registry
+            .query<{ count: number }, [string]>(
+              `SELECT count(*) AS count FROM ${table} WHERE id=?`,
+            )
+            .get(bot.id)?.count,
+        ).toBe(0);
+    } finally {
+      registry.close();
+    }
     expect(
       (await fetch(`${server.url}/api/bots/${bot.id}/files/${file.id}`)).status,
     ).toBe(404);

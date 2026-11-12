@@ -4,6 +4,58 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { BackendWorkspace } from "../src/infrastructure/http/backend-workspace";
 
+test("deleting a bot clears its text and attachment drafts without touching other bots or backends", () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const workspace = new BackendWorkspace("http://one", "deleted-bot");
+  const sibling = new BackendWorkspace("http://one", "keep-bot");
+  const otherBackend = new BackendWorkspace("http://two", "deleted-bot");
+  const defaultBot = new BackendWorkspace("http://one");
+  const storage = {
+    removeItem: (key: string) => {
+      Reflect.deleteProperty(storage, key);
+    },
+  };
+  const removed = [
+    workspace.draftKey(),
+    workspace.draftKey("session"),
+    `${workspace.draftKey("session")}:attachments`,
+    `raphie:last-session:${encodeURIComponent(workspace.url)}:${workspace.botId}`,
+    `raphie:inspector-open:${workspace.botId}`,
+  ];
+  const preserved = [
+    sibling.draftKey(),
+    otherBackend.draftKey(),
+    defaultBot.draftKey(),
+    "raphie:theme",
+  ];
+  for (const key of [...removed, ...preserved])
+    Object.assign(storage, { [key]: "fixture data" });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: storage,
+  });
+  try {
+    workspace.clearBotDrafts();
+    for (const key of removed) assert.equal(Object.hasOwn(storage, key), false);
+    for (const key of preserved)
+      assert.equal(Object.hasOwn(storage, key), true);
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("Storage disabled");
+      },
+    });
+    assert.doesNotThrow(() => workspace.clearBotDrafts());
+  } finally {
+    workspace.dispose();
+    sibling.dispose();
+    otherBackend.dispose();
+    defaultBot.dispose();
+    if (original) Object.defineProperty(globalThis, "localStorage", original);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
+
 test("observations recover from a terminal EventSource failure without reloading or replaying commands", async () => {
   const original = globalThis.EventSource;
   const streams: MockEvents[] = [];
