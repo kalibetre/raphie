@@ -46,11 +46,19 @@ exists.
   a matching `Origin`; native API requests use a bearer session without browser
   cookies or an Origin header. Better Auth's sign-up, reset and unrelated routes
   are not served.
-- Sign-in is rate limited to 5 attempts per minute, other authentication calls
-  to 60. Because Raphie has one administrator and does not trust forwarded
-  address headers, the limit is **one shared bucket**: someone who can reach the
-  port can lock sign-in for a minute at a time. Existing sessions are unaffected
-  and `raphie auth recover` still works.
+- Password sign-in limits each email/password pair to five attempts per minute.
+  Keys are HMACs using the private authentication secret, never plaintext passwords
+  or unsalted password digests. Successful sign-in clears its allowance. Wrong
+  guesses cannot exhaust a valid credential's allowance, including after restart.
+  The table holds at most 4,096 active keys; eviction permits retries.
+  Other authentication calls retain a shared 60/minute limit, except passkey
+  sign-in ceremonies, which have no shared lockout.
+- This is duplicate-guess throttling, **not protection against distributed or
+  varied-password guessing or resource exhaustion**. Restrict remote reachability
+  with tailnet ACLs. Raphie ignores all forwarded client-address headers; there is
+  no configurable client-IP proxy trust in this release. The TLS proxy must
+  preserve the configured Host and prevent direct remote access to the listener.
+  Existing sessions and local recovery do not depend on sign-in allowances.
 - If the authentication store cannot be opened the host does not start; if a
   check fails at runtime the request is refused (`503`), never admitted.
 
@@ -111,6 +119,24 @@ configured HTTPS proxy; see [standalone builds](standalone-build.md#tailnet-acce
   protects the browser-facing web host, not the runtime.
 - In development the Vite hot-reload WebSocket is not gated; it carries no
   application data.
-- Multiple users and passwordless sign-in are not implemented.
+- Multiple users are not implemented.
 - For browser acceptance, create an administrator with `bun run raphie auth setup`
   first and sign in at the fixture URL; the fixture has no sign-in bypass.
+
+## Passkeys
+
+Settings → Account registers, lists and removes administrator passkeys using
+Better Auth's pinned passkey plugin and its WebAuthn verification. Registration
+requires a fresh signed-in browser session; sign in again if it has aged out.
+Password sign-in remains available. Local `raphie auth recover` resets the
+password, removes all passkeys and clears sign-in allowances as well as revoking
+sessions. This lets the owner recover from a compromised authenticator.
+
+Each configured origin has its own Better Auth instance, expected WebAuthn
+origin and RP ID (the hostname, without port). Browser sessions remain separate.
+Use `http://localhost:PORT` for local passkeys or a configured HTTPS DNS origin;
+numeric loopback addresses are not portable WebAuthn RP IDs. Register separately
+on unrelated hostnames, including Tailscale and custom domains. Credentials for
+one hostname cannot sign in to another. Ports share the RP ID but ceremonies
+still verify the exact origin. Only explicitly routed passkey endpoints are
+exposed; native bearer sessions cannot register or manage passkeys.

@@ -1,8 +1,9 @@
 import { Database } from "bun:sqlite";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { bearer, deviceAuthorization } from "better-auth/plugins";
@@ -48,6 +49,11 @@ export async function openAuthService(options: {
       telemetry: { enabled: false },
       plugins: [
         bearer(),
+        passkey({
+          rpID: primary.hostname,
+          origin: primary.origin,
+          rpName: "Raphie",
+        }),
         deviceAuthorization({
           verificationUri: "/device",
           expiresIn: "10m",
@@ -65,14 +71,18 @@ export async function openAuthService(options: {
         expiresIn: 60 * 60 * 24 * SESSION_DAYS,
         updateAge: 60 * 60 * 24,
       },
-      // One administrator: a single shared bucket is the right granularity, and
-      // forwarded-address headers from the network are not trusted (see gateway).
+      // Incorrect credentials must not exhaust the valid credential allowance.
+      // Forwarded-address headers are never trusted by the gateway.
       rateLimit: {
         enabled: true,
         storage: "database",
         window: 60,
         max: 60,
-        customRules: { "/sign-in/email": { window: 60, max: 5 } },
+        customRules: {
+          "/sign-in/email": false,
+          "/passkey/generate-authenticate-options": false,
+          "/passkey/verify-authentication": false,
+        },
       },
       emailAndPassword: {
         enabled: true,
@@ -128,6 +138,9 @@ export async function openAuthService(options: {
     database.run(
       'CREATE TRIGGER IF NOT EXISTS raphie_clear_device_codes AFTER UPDATE OF password ON "account" WHEN OLD.password IS NOT NEW.password BEGIN DELETE FROM "deviceCode"; END',
     );
+    database.run(
+      "CREATE TABLE IF NOT EXISTS raphie_sign_in_limit (key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL)",
+    );
     const auth = betterAuth(config);
     // Each origin needs its own base URL and HTTP/HTTPS cookie policy.
     // Instances share the database and signing secret, including revocation.
@@ -139,6 +152,14 @@ export async function openAuthService(options: {
           : betterAuth({
               ...config,
               baseURL: origin,
+              plugins: [
+                ...config.plugins.filter((plugin) => plugin.id !== "passkey"),
+                passkey({
+                  rpID: new URL(origin).hostname,
+                  origin,
+                  rpName: "Raphie",
+                }),
+              ],
               advanced: {
                 ...config.advanced,
                 cookiePrefix: `raphie_${new URL(origin).port || (new URL(origin).protocol === "https:" ? "443" : "80")}`,
@@ -162,8 +183,56 @@ export async function openAuthService(options: {
       /** True once an administrator exists; checked on demand so a running host notices setup. */
       configured: isConfigured,
       /** Handles Better Auth HTTP requests (sign-in and sign-out only are routed here). */
-      handle: (request: Request) =>
-        authFor(new URL(request.url).origin).handler(request),
+      async handle(request: Request) {
+        let key: string | undefined;
+        if (new URL(request.url).pathname === "/api/auth/sign-in/email") {
+          const body = (await request.clone().json()) as {
+            email?: unknown;
+            password?: unknown;
+          };
+          key = createHmac("sha256", secret)
+            .update(JSON.stringify([body.email, body.password]))
+            .digest("hex");
+          const allowed = database
+            .transaction(() => {
+              const now = Date.now();
+              // Bound storage under a flood of distinct guesses. Eviction weakens
+              // guess throttling, but never turns it into an administrator lockout.
+              database.run(
+                "DELETE FROM raphie_sign_in_limit WHERE key IN (SELECT key FROM raphie_sign_in_limit ORDER BY expires DESC LIMIT -1 OFFSET 4095)",
+              );
+              database
+                .query("DELETE FROM raphie_sign_in_limit WHERE expires <= ?")
+                .run(now);
+              const row = database
+                .query(
+                  "SELECT attempts FROM raphie_sign_in_limit WHERE key = ?",
+                )
+                .get(key!) as { attempts: number } | null;
+              if (row && row.attempts >= 5) return false;
+              database
+                .query(
+                  "INSERT INTO raphie_sign_in_limit VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts = attempts + 1",
+                )
+                .run(key!, now + 60000);
+              return true;
+            })
+            .immediate();
+          if (!allowed)
+            return Response.json(
+              { error: "Too many attempts." },
+              { status: 429 },
+            );
+        }
+        const response = await authFor(new URL(request.url).origin).handler(
+          request,
+        );
+        if (key && response.ok)
+          database
+            .query("DELETE FROM raphie_sign_in_limit WHERE key = ?")
+            .run(key);
+        return response;
+      },
       /** Record a device session before returning its token to the client. */
       async handleDevice(request: Request) {
         if (savedFingerprint() !== secretFingerprint)
@@ -289,6 +358,7 @@ export async function openAuthService(options: {
           body: { token: resetToken, newPassword: password },
         });
         resetToken = undefined;
+        database.run('DELETE FROM "passkey"; DELETE FROM raphie_sign_in_limit');
       },
       close: () => database.close(),
     };

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
+    "@better-auth/passkey": "1.7.15",
     "@hono/bun": "1.0.1",
     "@raphie/contracts": "0.1.0",
     "@tanstack/ai": "1.0.1",

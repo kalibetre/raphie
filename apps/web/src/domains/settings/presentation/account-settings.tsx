@@ -3,6 +3,7 @@ import { useState } from "react";
 import { signOut } from "../../../infrastructure/http/session";
 import { Button } from "../../../shared/ui/button";
 import { AuthorizedDevices } from "./authorized-devices";
+import { Passkeys } from "./passkeys";
 import { Group, Row } from "./settings-group";
 
 export function AccountSettings() {
@@ -24,6 +25,7 @@ export function AccountSettings() {
 
   return (
     <>
+      <Passkeys />
       <AuthorizedDevices />
       <Group
         title="Sign out"
@@ -31,7 +33,7 @@ export function AccountSettings() {
       >
         <Row
           title="This browser"
-          description="You will need your password to sign in again."
+          description="Use your password or a registered passkey to sign in again."
         >
           <Button
             variant="outline"
