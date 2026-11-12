@@ -8,7 +8,7 @@ curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/insta
 
 Nightly versions include the base version, UTC build date, workflow run, and attempt, for example `v0.0.4-nightly.20261103.41616363919.1`. The release title includes the source commit.
 
-The default channel is **stable**. If no stable release exists for your platform, the installer stops without choosing a nightly. To install nightly builds explicitly:
+The default channel is **stable**. Check the [published releases](https://github.com/kalibetre/raphie/releases) for a stable release with an archive for your operating system and architecture. If no stable release exists for your platform, the installer stops without choosing a nightly. To install nightly builds explicitly:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --channel nightly
@@ -30,9 +30,23 @@ The installer verifies release archives against the published SHA256SUMS. This d
 
 Open a new terminal after installation, or apply the printed `export PATH="$HOME/.local/bin:$PATH"` command in your current Bash/Zsh session. An installer subprocess cannot change its parent terminal’s environment.
 
-Run `raphie auth setup` in a terminal and create the administrator, then sign in at http://127.0.0.1:4320. Configure a model provider and a default model under your bot in Settings. If no user service is available, run `~/.local/bin/raphie start` in a terminal and leave it running. If startup fails, use the log hint printed by the installer, fix the underlying issue, then re-enable the service as described below. `raphie status` checks the local runtime; `raphie auth recover` resets the password and signs out all sessions.
+Check that the runtime and web service are available:
 
-Raphie stores provider credentials using the current user's OS credential store. On macOS, unlock the login Keychain and allow access if prompted. Linux needs libsecret and an unlocked Secret Service provider in the user's D-Bus session. For unattended hosts, explicitly select the file backend instead; see [credential storage](provider-credential-storage.md). The installer does not install system packages. For an explicitly opted-in headless setup, see below.
+```sh
+raphie health
+```
+
+If no user service is available, run `raphie start` in a terminal and leave it running. If startup fails, use the log hint printed by the installer, fix the underlying issue, then re-enable the service using the [background service instructions](#background-service).
+
+With Raphie running, create the administrator in a second terminal:
+
+```sh
+raphie auth setup
+```
+
+Sign in at http://127.0.0.1:4320. Configure a model provider and a default model under your bot in Settings. For later checks, `raphie status` checks the local runtime; `raphie auth recover` resets the password and signs out all sessions.
+
+By default, Raphie stores provider credentials using the current user's OS credential store. On macOS, unlock the login Keychain and allow access if prompted. Linux desktop mode needs libsecret and an unlocked Secret Service provider in the user's D-Bus session. For unattended Linux hosts, use the [headless setup](#headless-linux). See [credential storage](provider-credential-storage.md) for backend details. The installer does not install system packages.
 
 ## Headless Linux
 
@@ -48,7 +62,9 @@ The random master key lives in `~/.local/share/raphie-headless/master-key` (mode
 
 ## Background service
 
-On Linux, if a systemd user manager is available, installation creates and starts `~/.config/systemd/user/raphie.service`. Manage it with `systemctl --user status raphie`, `systemctl --user restart raphie`, and `journalctl --user -u raphie -e`. User services may stop when you log out; enabling lingering is a separate host-administrator operation. The user manager must have access to `DBUS_SESSION_BUS_ADDRESS` and an unlocked Secret Service. If the installer stopped an unhealthy unit, use `systemctl --user enable --now raphie` after fixing the cause. If no user manager is available, run `~/.local/bin/raphie start` in a terminal or configure your own supervisor.
+On Linux, if a systemd user manager is available, installation creates and starts `~/.config/systemd/user/raphie.service`. Manage it with `systemctl --user status raphie`, `systemctl --user restart raphie`, and `journalctl --user -u raphie -e`. User services may stop when you log out. Headless installation attempts to enable lingering; otherwise, ask your host administrator to enable it if the service must remain available after logout.
+
+For the desktop credential-store backend, the user manager must have access to `DBUS_SESSION_BUS_ADDRESS` and an unlocked Secret Service. The [headless file backend](#headless-linux) does not require a desktop D-Bus session or Secret Service. If the installer stopped an unhealthy unit, use `systemctl --user enable --now raphie` after fixing the cause. If no user manager is available, run `~/.local/bin/raphie start` in a terminal or configure your own supervisor.
 
 On macOS, installation creates a per-user LaunchAgent at `~/Library/LaunchAgents/com.raphie.user.plist` when a GUI launchd session is available. Logs are under `~/Library/Logs/Raphie`. A login Keychain may need to be unlocked before the service can use provider credentials. If the installer disabled an unhealthy agent, re-enable it with `launchctl enable "gui/$(id -u)/com.raphie.user"`, then run `launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.raphie.user.plist"`. If launchd is unavailable, run `~/.local/bin/raphie start` in a terminal.
 
