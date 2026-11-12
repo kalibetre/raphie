@@ -219,7 +219,14 @@ export function createGateway(options: {
           const session = configured
             ? await service.session(request.headers, publicOrigin)
             : null;
-          return json({ configured, authenticated: session !== null }, 200);
+          return json(
+            {
+              configured,
+              authenticated: session !== null,
+              ...(session ? { account: session.account } : {}),
+            },
+            200,
+          );
         }
         if (path === "/_raphie/health" && request.method === "GET")
           return json({ status: configured ? "ready" : "locked" }, 200);

@@ -323,7 +323,13 @@ export async function openAuthService(options: {
             .get(result.response.session.id)
         )
           return null;
-        return { cookies: result.headers.getSetCookie() };
+        return {
+          cookies: result.headers.getSetCookie(),
+          account: {
+            email: result.response.user.email,
+            name: result.response.user.name,
+          },
+        };
       },
       async setup(email: string, password: string) {
         const exists = () =>

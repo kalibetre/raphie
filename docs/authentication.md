@@ -124,7 +124,9 @@ configured HTTPS proxy; see [standalone builds](standalone-build.md#tailnet-acce
   first and sign in at the fixture URL; the fixture has no sign-in bypass.
 
 Use the account icon beside the sidebar connection status to open **Manage
-account** or **Sign out**. Manage account opens Settings → Account; sign-out
+account** or **Sign out**. The menu header shows the signed-in administrator’s name,
+initial avatar and email, read from the authenticated status response.
+Manage account opens Settings → Account; sign-out
 ends only the current browser session.
 
 ## Passkeys

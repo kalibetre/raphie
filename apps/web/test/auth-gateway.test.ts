@@ -160,6 +160,21 @@ test("sign-in grants a persistent session that logout and restarts treat correct
   expect(setCookie).toMatch(/HttpOnly/i);
   expect(setCookie).toMatch(/Max-Age=2592000/i);
   const cookie = cookieOf(login);
+  const accountStatus = (await first.check(
+    request("/auth/status", { headers: { cookie } }),
+  )) as Response;
+  expect(await accountStatus.json()).toEqual({
+    configured: true,
+    authenticated: true,
+    account: { email, name: "Admin" },
+  });
+  const anonymousStatus = (await first.check(
+    request("/auth/status"),
+  )) as Response;
+  expect(await anonymousStatus.json()).toEqual({
+    configured: true,
+    authenticated: false,
+  });
 
   const refused = (await first.check(request("/api/sessions"))) as Response;
   expect(refused.status).toBe(401);
