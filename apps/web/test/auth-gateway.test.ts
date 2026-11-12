@@ -160,6 +160,21 @@ test("sign-in grants a persistent session that logout and restarts treat correct
   expect(setCookie).toMatch(/HttpOnly/i);
   expect(setCookie).toMatch(/Max-Age=2592000/i);
   const cookie = cookieOf(login);
+  const accountStatus = (await first.check(
+    request("/auth/status", { headers: { cookie } }),
+  )) as Response;
+  expect(await accountStatus.json()).toEqual({
+    configured: true,
+    authenticated: true,
+    account: { email, name: "Admin" },
+  });
+  const anonymousStatus = (await first.check(
+    request("/auth/status"),
+  )) as Response;
+  expect(await anonymousStatus.json()).toEqual({
+    configured: true,
+    authenticated: false,
+  });
 
   const refused = (await first.check(request("/api/sessions"))) as Response;
   expect(refused.status).toBe(401);
@@ -338,8 +353,8 @@ test("repeated failed sign-ins are limited regardless of forwarded addresses", a
       ).status,
     );
   expect(statuses).toEqual([401, 401, 401, 401, 401, 429, 429]);
-  // The limit shields the password: even the right one waits.
-  expect(((await signIn(gateway)) as Response).status).toBe(429);
+  // Wrong credentials cannot exhaust the valid credential allowance.
+  expect(((await signIn(gateway)) as Response).status).toBe(200);
 });
 
 test("an open event stream ends when its session is revoked", async () => {
@@ -450,5 +465,71 @@ test("the production host serves nothing before the gateway admits it", async ()
     expect(foreign).toBe(403);
   } finally {
     await server.stop(true);
+  }
+});
+
+test("passkey registration requires a browser session and uses each origin's RP ID", async () => {
+  const remote = "https://raphie.example.test";
+  const allowed = [origin, remote];
+  const { open } = await fixture();
+  const admin = await open("admin", allowed);
+  await admin.setup(email, password);
+  const gateway = createGateway({
+    service: await open("server", allowed),
+    origins: allowed,
+  });
+  for (const host of allowed) {
+    const path = "/api/auth/passkey/generate-register-options";
+    expect(
+      ((await gateway.check(request(path, {}, host))) as Response).status,
+    ).toBe(401);
+    const login = (await gateway.check(
+      request(
+        "/api/auth/sign-in/email",
+        {
+          method: "POST",
+          headers: { origin: host, "content-type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        },
+        host,
+      ),
+    )) as Response;
+    const cookie = cookieOf(login);
+    const options = (await gateway.check(
+      request(path, { headers: { cookie } }, host),
+    )) as Response;
+    expect(options.status).toBe(200);
+    const body = (await options.json()) as { rp: { id: string } };
+    expect(body.rp.id).toBe(new URL(host).hostname);
+    expect(
+      (
+        (await gateway.check(
+          request(
+            path,
+            { headers: { cookie, origin: "https://evil.test" } },
+            host,
+          ),
+        )) as Response
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        (await gateway.check(
+          request(
+            "/api/auth/passkey/verify-registration",
+            {
+              method: "POST",
+              headers: {
+                cookie,
+                origin: host,
+                "content-type": "application/json",
+              },
+              body: "{}",
+            },
+            host,
+          ),
+        )) as Response
+      ).ok,
+    ).toBe(false);
   }
 });

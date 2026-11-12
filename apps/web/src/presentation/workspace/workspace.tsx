@@ -276,6 +276,7 @@ export function Workspace({
           });
         else void navigate({ to: "/", search: { bot: nextBot } });
       }}
+      onAccount={() => openSettings("account")}
       onSettings={() => {
         openSettings("bot");
       }}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
+import { authClient } from "../../infrastructure/auth/client";
 import { safeNext } from "../../infrastructure/http/session";
 import { Button } from "../../shared/ui/button";
 import { Input } from "../../shared/ui/input";
@@ -48,6 +49,23 @@ export function SignIn({ next }: { next?: string }) {
       );
     } catch {
       setMessage("Could not reach Raphie. Please retry.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function passkeySignIn() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await authClient.signIn.passkey();
+      if (result?.error)
+        setMessage(
+          "Could not sign in with a passkey. Try again or use your password.",
+        );
+      else window.location.assign(destination);
+    } catch {
+      setMessage("Could not sign in with a passkey. Use your password.");
     } finally {
       setBusy(false);
     }
@@ -149,6 +167,14 @@ export function SignIn({ next }: { next?: string }) {
                   className="h-11 rounded-lg"
                 >
                   {busy ? "Signing in…" : "Sign in"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void passkeySignIn()}
+                >
+                  Sign in with a passkey
                 </Button>
                 <p className="text-xs leading-5 text-muted-foreground">
                   Forgot your password? Contact your administrator for help.

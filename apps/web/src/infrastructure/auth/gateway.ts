@@ -100,7 +100,7 @@ export function createGateway(options: {
 
   /** Better Auth only sees what it needs; forwarded-address headers are never trusted. */
   async function signInOrOut(request: Request, url: URL) {
-    if (request.method !== "POST")
+    if (!["POST", "GET"].includes(request.method))
       return json({ error: "Method not allowed." }, 405);
     const text = await boundedBody(request);
     if (text === null) return json({ error: "Request too large." }, 413);
@@ -110,7 +110,11 @@ export function createGateway(options: {
       if (value) headers.set(name, value);
     }
     const response = await service.handle(
-      new Request(url, { method: "POST", headers, body: text }),
+      new Request(url, {
+        method: request.method,
+        headers,
+        ...(request.method === "POST" ? { body: text } : {}),
+      }),
     );
     const result = new Response(response.body, response);
     result.headers.set("cache-control", "no-store");
@@ -215,12 +219,23 @@ export function createGateway(options: {
           const session = configured
             ? await service.session(request.headers, publicOrigin)
             : null;
-          return json({ configured, authenticated: session !== null }, 200);
+          return json(
+            {
+              configured,
+              authenticated: session !== null,
+              ...(session ? { account: session.account } : {}),
+            },
+            200,
+          );
         }
         if (path === "/_raphie/health" && request.method === "GET")
           return json({ status: configured ? "ready" : "locked" }, 200);
         if (path.startsWith("/api/auth/") || path === "/api/auth") {
           if (
+            path === "/api/auth/passkey/generate-register-options" ||
+            path === "/api/auth/passkey/verify-registration" ||
+            path === "/api/auth/passkey/list-user-passkeys" ||
+            path === "/api/auth/passkey/delete-passkey" ||
             path === "/api/auth/authorized-devices" ||
             path === "/api/auth/authorized-devices/revoke" ||
             path === "/api/auth/device" ||
@@ -244,6 +259,8 @@ export function createGateway(options: {
             )
               return json({ error: "Sign in to continue." }, 401);
             if (!configured) return denyUnauthenticated(request, url, true);
+            if (path.startsWith("/api/auth/passkey/"))
+              return await signInOrOut(request, publicUrl);
             if (path === "/api/auth/authorized-devices")
               return request.method === "GET"
                 ? json(service.devices(), 200)
@@ -300,6 +317,8 @@ export function createGateway(options: {
             return json({ error: "Method not allowed." }, 405);
           }
           if (
+            path !== "/api/auth/passkey/generate-authenticate-options" &&
+            path !== "/api/auth/passkey/verify-authentication" &&
             path !== "/api/auth/sign-in/email" &&
             path !== "/api/auth/sign-out"
           )

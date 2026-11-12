@@ -131,8 +131,15 @@ There is no Discord/Telegram inspection-command requirement.
 - **Desktop:** connect to an existing runtime first. Local runtime packaging,
   discovery, authenticated access, and single-owner lifecycle can follow. Closing
   a view must not accidentally cancel execution.
-- **Remote clients:** add authenticated access before relaxing loopback binding;
-  retain browser origin protections and authorize subscriptions and reads too.
+- **Remote clients — delivered:** single-administrator authentication protects the
+  web workspace, API and event streams; native clients can obtain revocable device
+  sessions. The web host remains loopback-bound and supports configured HTTPS origins
+  behind a trusted TLS proxy. See [authentication](authentication.md) and
+  [tailnet access](standalone-build.md#tailnet-access).
+- **Remote hardening — delivered:** credential-keyed duplicate-guess throttling
+  and optional administrator passkeys, with password and local recovery fallback.
+- **Remote clients — planned verification:** real-tailnet acceptance remains
+  unverified until the owner runs the [checklist](standalone-build.md#real-tailnet-acceptance-checklist).
 - **Telegram:** add an adapter with its own address/identity verification and
   rendering once the Discord module proves the shared interface. Unsupported
   capabilities should be explicit rather than silently dropped.
