@@ -46,6 +46,9 @@ export type ScheduledJobRun = {
   jobId: string;
   name: string;
   scheduledFor: number;
+  late?: boolean;
+  waitingForBot?: boolean;
+  failureReason?: "unknown" | "no_model";
   startedAt: number;
   finishedAt: number | null;
   status: "queued" | "running" | "completed" | "failed" | "interrupted";

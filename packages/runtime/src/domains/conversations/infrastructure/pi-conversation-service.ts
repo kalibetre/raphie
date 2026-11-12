@@ -367,6 +367,7 @@ export class ChatService implements ConversationCommands {
         throw new InputError(
           "Connect a model provider in Settings before sending a message.",
           503,
+          "no_model",
         );
       const violation = messageViolation(input);
       if (violation) throw new InputError(violation);

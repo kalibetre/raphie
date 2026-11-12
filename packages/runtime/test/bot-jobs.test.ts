@@ -168,3 +168,161 @@ test("replacing a sleeping schedule runs the updated prompt once and retires its
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a transient submission failure retries the same one-time event", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-job-retry-"));
+  const gateway = await Gateway.open({ directory, ...chatModel() });
+  const events: string[] = [];
+  const jobs = BotJobs.open({
+    root: gateway.root,
+    harness: gateway.harness,
+    install: (extension) => gateway.install(extension),
+    busy: async () => false,
+    submit: async (input) => {
+      events.push(input.eventId);
+      if (events.length === 1) throw new Error("private transport detail");
+      return { sessionId: "retry-session" };
+    },
+  });
+  try {
+    await jobs.add({
+      name: "Retry",
+      prompt: "Remind me",
+      everyMinutes: null,
+      firstRunAt: Date.now(),
+    });
+    for (let n = 0; n < 800 && events.length < 2; n++) await delay(10);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toBe(events[1]);
+    await until(async () => (await jobs.read())[0].lastStatus === "submitted");
+    expect((await jobs.read())[0].enabled).toBe(false);
+  } finally {
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 10000);
+
+test("overdue work visibly waits for a busy bot and starts late once released", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-job-busy-"));
+  const gateway = await Gateway.open({ directory, ...chatModel() });
+  let busy = true;
+  let deliveries = 0;
+  const jobs = BotJobs.open({
+    root: gateway.root,
+    harness: gateway.harness,
+    install: (extension) => gateway.install(extension),
+    busy: async () => busy,
+    submit: async () => {
+      deliveries++;
+      return { sessionId: "late-session" };
+    },
+  });
+  try {
+    const [job] = await jobs.add({
+      name: "Late",
+      prompt: "Remind me",
+      everyMinutes: null,
+      firstRunAt: Date.now() - 120_000,
+    });
+    await until(
+      async () => (await jobs.read())[0].lastRun?.waitingForBot === true,
+    );
+    expect(deliveries).toBe(0);
+    expect((await jobs.read())[0].enabled).toBe(true);
+    busy = false;
+    for (let n = 0; n < 800 && deliveries === 0; n++) await delay(10);
+    expect(deliveries).toBe(1);
+    expect((await jobs.read())[0].lastRun?.late).toBe(true);
+    expect((await jobs.read())[0].lastRun?.waitingForBot).toBe(false);
+    await jobs.change(job.id, "remove");
+  } finally {
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 10000);
+
+test("replaced busy work settles even if the old task wakes before retire", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-job-replace-busy-"));
+  const gateway = await Gateway.open({ directory, ...chatModel() });
+  const jobs = BotJobs.open({
+    root: gateway.root,
+    harness: gateway.harness,
+    install: (extension) => gateway.install(extension),
+    busy: async () => true,
+    submit: async () => {
+      throw new Error("must not submit");
+    },
+  });
+  try {
+    const [job] = await jobs.add({
+      name: "Waiting",
+      prompt: "Wait",
+      everyMinutes: null,
+      firstRunAt: Date.now(),
+    });
+    await until(
+      async () => (await jobs.runs()).items[0]?.waitingForBot === true,
+    );
+    await gateway.root.commit(
+      (tx) => jobs.update(tx, job.id, { firstRunAt: Date.now() + 86400_000 }),
+      context,
+    );
+    for (
+      let n = 0;
+      n < 800 && (await jobs.runs()).items[0]?.status !== "interrupted";
+      n++
+    )
+      await delay(10);
+    expect((await jobs.runs()).items[0]?.status).toBe("interrupted");
+    expect((await jobs.runs()).items[0]?.waitingForBot).toBe(false);
+  } finally {
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 10000);
+
+for (const everyMinutes of [null, 60]) {
+  test(`unknown submission failures exhaust four attempts for ${everyMinutes === null ? "one-time" : "recurring"} work`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "raphie-job-exhaust-"));
+    const gateway = await Gateway.open({ directory, ...chatModel() });
+    const events: string[] = [];
+    const jobs = BotJobs.open({
+      root: gateway.root,
+      harness: gateway.harness,
+      install: (extension) => gateway.install(extension),
+      busy: async () => false,
+      submit: async (input) => {
+        events.push(input.eventId);
+        throw new Error("private transport payload");
+      },
+    });
+    try {
+      await jobs.add({
+        name: "Failure",
+        prompt: "Retry",
+        everyMinutes,
+        firstRunAt: Date.now(),
+      });
+      for (
+        let n = 0;
+        n < 1000 && (await jobs.read())[0]?.lastStatus !== "failed";
+        n++
+      )
+        await delay(10);
+      const [job] = await jobs.read();
+      const [run] = (await jobs.runs()).items;
+      expect(events).toHaveLength(4);
+      expect(new Set(events).size).toBe(1);
+      expect(job.lastStatus).toBe("failed");
+      expect(job.enabled).toBe(everyMinutes !== null);
+      if (everyMinutes !== null)
+        expect(job.nextRunAt).toBeGreaterThan(Date.now());
+      expect(run.failureReason).toBe("unknown");
+      expect(run.late).toBe(false);
+      expect(JSON.stringify(run)).not.toContain("private transport");
+    } finally {
+      await gateway.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 15000);
+}

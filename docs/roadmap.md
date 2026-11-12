@@ -139,16 +139,23 @@ There is no Discord/Telegram inspection-command requirement.
 
 ## Later client and channel work
 
-Delivered: Telegram (see below and the [guide](telegram.md)). Everything else in this
-list is still planned.
+Delivered capabilities and remaining work are labelled below. See the
+[Telegram guide](telegram.md) for channel setup and limits.
 
 - **CLI:** use the client interface for session selection, send/watch, approvals,
   and optional structured inspection output. No second executor or direct DB access.
 - **Desktop:** connect to an existing runtime first. Local runtime packaging,
   discovery, authenticated access, and single-owner lifecycle can follow. Closing
   a view must not accidentally cancel execution.
-- **Remote clients:** add authenticated access before relaxing loopback binding;
-  retain browser origin protections and authorize subscriptions and reads too.
+- **Remote clients — delivered:** single-administrator authentication protects the
+  web workspace, API and event streams; native clients can obtain revocable device
+  sessions. The web host remains loopback-bound and supports configured HTTPS origins
+  behind a trusted TLS proxy. See [authentication](authentication.md) and
+  [tailnet access](standalone-build.md#tailnet-access).
+- **Remote hardening — delivered:** credential-keyed duplicate-guess throttling
+  and optional administrator passkeys, with password and local recovery fallback.
+- **Remote clients — planned verification:** real-tailnet acceptance remains
+  unverified until the owner runs the [checklist](standalone-build.md#real-tailnet-acceptance-checklist).
 - **Telegram:** delivered as a long-polling adapter with pairing-code owner
   verification and its own renderer on the shared delivery worker; see the
   [Telegram guide](telegram.md). Planned and not yet built: attachments in either
@@ -302,10 +309,12 @@ Proposed slices:
    budget. Prove a real repository test and bulk downloads before choosing the VM
    backend. Unknown external effects remain uncertain rather than automatically
    replaying after a lost VM. Kubernetes deployment is a target, not implemented.
-4. **Durable follow-through:** commitments have assignee, deadline/timezone,
-   source and open/completed state. A scheduler owns reminder timing, deduplicated
-   admission and delivery; saving a memory alone does not schedule a reminder.
-   Prove restart during the wait and no duplicate notification after recovery.
+4. **Durable follow-through — scheduled-job failure hardening:** existing bot
+   schedules gain bounded durable submission retries, safe failure reasons, late
+   indicators and visible waiting for busy bots or pending approvals. Recovery
+   retains deduplicated admission and notification history. Commitments,
+   assignees, deadlines and timezone-aware recurrence are deferred; they are
+   not part of this slice. See [bot automation](bot-automation.md).
 5. **Mixed-workload measurement:** benchmark light tasks and concurrent heavy
    jobs on the target host. Record startup/queue latency, task success, process-tree
    memory, CPU, storage growth and model cost separately. Choose limits from the

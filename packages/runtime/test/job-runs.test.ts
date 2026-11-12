@@ -16,7 +16,7 @@ import { jobRoutes } from "../src/domains/schedules/presentation/http/routes.ts"
 import { chatModel } from "./chat-model.ts";
 
 async function until(check: () => Promise<boolean>) {
-  for (let i = 0; i < 500; i++) {
+  for (let i = 0; i < 1000; i++) {
     if (await check()) return;
     await delay(10);
   }
@@ -129,6 +129,7 @@ test("admission failure has a terminal run without inventing a conversation; bot
     await until(async () => (await jobs.runs()).items[0]?.status === "failed");
     const run = (await jobs.runs()).items[0];
     expect(run.turnId).toBeNull();
+    expect(run.failureReason).toBe("no_model");
     expect(run.sessionId).toBeNull();
     expect(run.jobId).toBe(job.id);
     expect((await other.runs()).items).toEqual([]);
@@ -231,7 +232,7 @@ test("run watcher records interrupted and faulted tasks without replaying effect
   }
 });
 
-for (const phase of ["queued", "admitted"]) {
+for (const phase of ["queued", "admitted", "retry"]) {
   test(`SIGKILL with a ${phase} run recovers one turn and one notification`, async () => {
     const { spawn } = await import("node:child_process");
     const directory = await mkdtemp(join(tmpdir(), "raphie-job-crash-"));
@@ -245,6 +246,7 @@ for (const phase of ["queued", "admitted"]) {
       { stdio: ["ignore", "pipe", "pipe"], env: {} },
     );
     let gateway: Gateway | undefined;
+    let checkpointEventId: string | undefined;
     try {
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(
@@ -255,6 +257,9 @@ for (const phase of ["queued", "admitted"]) {
         child.stdout.on("data", (chunk) => {
           output += chunk;
           if (output.includes("run-checkpoint-committed")) {
+            checkpointEventId = output.match(
+              /run-checkpoint-committed (job:[^\s]+)/,
+            )?.[1];
             clearTimeout(timer);
             resolve();
           }
@@ -286,6 +291,11 @@ for (const phase of ["queued", "admitted"]) {
       expect((await gateway.chats.state()).turns).toHaveLength(1);
       expect((await jobs.runs()).items).toHaveLength(1);
       const [notice] = (await jobs.runs({ unread: true })).items;
+      if (phase === "retry") {
+        if (!checkpointEventId)
+          throw new Error("Missing committed retry event ID");
+        expect(notice.id).toBe(checkpointEventId);
+      }
       expect(notice.turnId).toBe((await gateway.chats.state()).turns[0].id);
       await jobs.acknowledge(notice.id);
       gateway.harness.resume();

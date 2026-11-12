@@ -209,3 +209,60 @@ This does not establish release provenance.
 Nightly releases are created only by manually running the Prepare release workflow on `main`. Stable release preparation starts when a stable version tag is pushed. Nightly builds use the base version in the repository root `VERSION` file. Update that file when the intended next release version changes. Their tags include the UTC build date, workflow run ID, and attempt; release titles include the source commit.
 
 To prepare a stable release, check out an up-to-date, clean `main` and run `./release patch`, `./release minor`, `./release major`, or an explicit version such as `./release v0.0.4`. The command requires GitHub CLI authentication and calculates increments from the highest stable tag or release, including drafts. It checks for existing versions and pushes an annotated tag, which starts the release workflow. Review and publish the resulting draft on GitHub; running the command does not publish it.
+
+### Real-tailnet acceptance checklist
+
+**Unverified: the owner must run this against a real tailnet.** Automated tests
+and loopback fixture checks do not establish this deployment's security.
+Use a disposable installation and synthetic conversations.
+
+1. Enable MagicDNS, HTTPS certificates and restrictive tailnet ACLs. Install and
+   configure the actual lowercase name (replace the example values):
+   ```sh
+   sudo sh install.sh --web-origin https://machine.tailnet.ts.net
+   sudo tailscale serve --bg http://127.0.0.1:41837
+   sudo raphie auth setup
+   sudo tailscale serve status
+   sudo ss -ltnp | grep -E ':(4316|41837)\b'
+   ```
+   Both Raphie listeners must be loopback-only. Serve must target the web port,
+   never 4316. Do not enable Funnel.
+2. From another permitted tailnet device, visit the HTTPS origin. Confirm pages,
+   API requests and event streams refuse access before sign-in. Sign in with the
+   administrator password, restart the service, and confirm the browser remains
+   signed in.
+3. In Settings → Account, add a passkey, sign out, and sign in with it. Confirm
+   password fallback works. Remove the passkey and confirm it can no longer sign
+   in. Repeat on each configured custom HTTPS hostname; register separately.
+4. From a source checkout, request a synthetic device:
+   ```sh
+   bun scripts/device-auth-smoke.ts https://machine.tailnet.ts.net
+   ```
+   Compare its displayed code with the signed-in approval page. Approve it and
+   confirm access. Start another code and deny it; confirm it receives no token.
+   Never paste or log bearer tokens.
+5. Open an event stream using that approved test device's in-memory credential.
+   Disconnect the device in Account. Confirm the stream closes within two seconds
+   and subsequent requests return 401. Repeat with a browser stream and local
+   `sudo raphie auth recover`; confirm browser/device sessions and passkeys are
+   invalidated and the new password works.
+6. Check origin and Host rejection on the server:
+   ```sh
+   curl -i http://127.0.0.1:41837/auth/status -H 'Host: untrusted.example'
+   curl -i https://machine.tailnet.ts.net/api/auth/sign-in/email \
+     -H 'Origin: https://untrusted.example' -H 'Content-Type: application/json' \
+     --data '{}'
+   ```
+   Both must return 403. Confirm spoofed forwarded-address headers cannot change
+   this result.
+7. From another tailnet device, run:
+   ```sh
+   nc -vz machine.tailnet.ts.net 4316
+   nc -vz machine.tailnet.ts.net 41837
+   ```
+   Both direct ports must be unreachable; HTTPS through Serve must still work.
+   Repeat from an unapproved device and confirm ACLs deny HTTPS too.
+
+Port 4316 trusts local processes. Any local process or proxy capable of reaching
+it can bypass web authentication. This change does not add runtime authentication;
+never expose that port through a proxy, container publish rule or firewall.
