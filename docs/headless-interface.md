@@ -99,7 +99,13 @@ Startup runs recovery/backfill transactionally before resuming Pi. Existing
 session UUIDs, turns, request keys, approval identities, deadlines, completed
 effects and notification IDs are preserved. Legacy session-owned Discord fields
 become `raphie.channel-bindings` records scoped by owner/application/conversation.
-Turns freeze their own destination; web turns have none. Later binding/config
+Turns freeze their own destination; interactive web turns have none. Scheduled
+turns capture the bot’s optional home, without linking sessions. Channel turns
+include structured verified `origin` metadata in session-history DTOs. Home settings
+use `GET /api/channels/home` and `POST /api/channels/home` with `{ id }` selected
+from the returned destinations, or `{ id: null }` for web-only. IDs are scoped by
+platform, application, conversation and verified user. `/home` is handled only by
+the Discord and Telegram adapters, and duplicate commands keep their first effect. Later binding/config
 changes cannot redirect an admitted reply. Old Discord event IDs retain their
 source/event deduplication keys; returning a receipt also checks origin scope.
 

@@ -31,3 +31,28 @@ export type ChannelSettings = {
   discord: DiscordChannel | null;
   telegram: TelegramChannel | null;
 };
+
+/** Trusted adapter metadata captured with an admitted channel turn. */
+export type ChannelOrigin = {
+  platform: "discord" | "telegram";
+  connectionId: string;
+  conversationId: string;
+  channelId: string;
+  userId: string;
+  messageId?: string;
+  updateId?: number;
+  guildId?: string;
+  threadId?: string;
+};
+
+export type HomeDestination = {
+  id: string;
+  platform: "discord" | "telegram";
+  conversationId: string;
+  userId: string;
+};
+
+export type ChannelHomeSettings = {
+  selected: string | null;
+  destinations: HomeDestination[];
+};

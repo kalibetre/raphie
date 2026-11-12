@@ -152,7 +152,7 @@ export class ToolApprovalService {
         id: crypto.randomUUID(),
         taskId: api.taskId,
         conversationId: api.conversationId,
-        replyTo: turn?.replyTo ?? null,
+        replyTo: turn?.scheduled ? null : (turn?.replyTo ?? null),
         ...(initiator ? { discordUserId: initiator } : {}),
         createdAt: Date.now(),
         expiresAt: Date.now() + (this.app.options.approvalTtlMs ?? 600_000),
@@ -208,7 +208,17 @@ export class ToolApprovalService {
         },
       );
       if (item.status === "pending") {
-        notify(state, item, "approval", turn?.replyTo?.conversation ?? null);
+        if (turn?.scheduled && turn.replyTo) {
+          chats.deliveries.push({
+            id: `${item.id}:scheduled-approval`,
+            turnId: turn.id,
+            threadId: turn.replyTo.conversation,
+            connectionId: turn.replyTo.connectionId,
+            text: `Scheduled: ${turn.scheduled.name}\nApproval needed. Open this session in the web workspace to review the exact action.`,
+            status: "pending",
+          });
+        } else
+          notify(state, item, "approval", turn?.replyTo?.conversation ?? null);
       } else {
         record(
           await tx.doc(Activity),

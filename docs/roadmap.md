@@ -71,6 +71,16 @@ web process, and completes a message → approval → exact tool execution → r
 A web decision can still settle a Discord-origin approval; a subsequent stale
 Discord click cannot execute it again. This does not link or continue sessions.
 
+### Delivered: home channel for scheduled updates
+
+Each bot can select one known Discord or Telegram conversation in Settings or by
+sending `/home` there as a verified owner. Web chat has no `/home` command.
+Scheduled turns freeze home at admission regardless of where the job was created;
+missing/unavailable home stays web-only. Approval notices direct the owner to web.
+Channel turns persist structured origin metadata. Session linking, per-job
+routing overrides and natural-language routing tools remain planned.
+See [bot automation](bot-automation.md#home-channel-for-scheduled-updates).
+
 ## 2. Channel bindings and stable origin routing
 
 Move Discord associations out of the session model into channel bindings. Resolve

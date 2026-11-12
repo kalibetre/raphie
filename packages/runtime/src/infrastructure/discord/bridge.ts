@@ -125,6 +125,21 @@ export function createDiscordBridge(
       return;
     try {
       const text = message.text.replace(/^<@!?\d+>\s*/, "").trim();
+      if (text === "/home") {
+        await app.home.setCurrent(
+          app.actors.establish(
+            "discord",
+            thread.id,
+            config.applicationId,
+            message.author.userId,
+          ),
+          message.id,
+        );
+        await adapter.postMessage(thread.id, {
+          raw: "This conversation is now this bot’s home for scheduled updates.",
+        });
+        return;
+      }
       if (!/^\/copy(?:\s|$)/.test(text)) {
         if (message.attachments.length)
           throw new InputError(
@@ -136,6 +151,7 @@ export function createDiscordBridge(
             thread.id,
             config.applicationId,
             message.author.userId,
+            { messageId: message.id },
           ),
           {
             eventId: message.id,

@@ -269,6 +269,8 @@ export class BotHost implements BotProfiles {
         this.automation.telegram,
         this.telegramConnections,
       );
+      gateway.home.available = (address) =>
+        !!(channels?.acceptsHome(address) || telegram?.acceptsHome(address));
       const actor = gateway.actors.establish("web");
       const jobs = BotJobs.open({
         root: gateway.root,

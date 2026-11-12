@@ -1,6 +1,7 @@
 import type {
   Attachment,
   Channel as Source,
+  ChannelOrigin,
   ModelSelection,
 } from "@raphie/contracts";
 
@@ -21,6 +22,7 @@ export type ChatTurn = {
   conversationId: number;
   source: Source;
   text: string;
+  origin?: ChannelOrigin;
   attachments?: Attachment[];
   createdAt: number;
   status: "pending" | "done" | "error";
@@ -33,6 +35,7 @@ export type ChatTurn = {
   discordUserId?: string;
   /** Started by a scheduled job; its text is the saved instruction. */
   scheduled?: { name: string };
+  scheduledDelivery?: "home" | "web-only" | "home-unavailable";
 };
 
 export type ChatDelivery = {

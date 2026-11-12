@@ -23,6 +23,7 @@ import {
   CredentialCipher,
   type CredentialKeyStore,
 } from "../../settings/infrastructure/credential-cipher.ts";
+import type { ReplyDestination } from "../domain/binding.ts";
 
 type Stored = {
   botToken: string;
@@ -150,6 +151,22 @@ export class BotTelegram {
       else db.close();
       throw error;
     }
+  }
+
+  acceptsHome(
+    address: ReplyDestination & {
+      userId: string;
+    },
+  ) {
+    return (
+      !!this.config &&
+      this.config.enabled &&
+      this.read().telegram?.connected === true &&
+      address.provider === "telegram" &&
+      address.connectionId === `telegram:${this.config.botId}` &&
+      address.conversation === `telegram:${address.userId}` &&
+      this.config.owners.includes(address.userId)
+    );
   }
 
   read(): { telegram: TelegramChannel | null } {

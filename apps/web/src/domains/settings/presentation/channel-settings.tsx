@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
+import { HomeChannelSettings } from "./home-channel-settings";
 import { Group, Row } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
 import { TelegramSettings } from "./telegram-settings";
@@ -314,6 +315,7 @@ export function ChannelSettings() {
         </div>
       )}
       <TelegramSettings saved={query.data.telegram ?? null} />
+      <HomeChannelSettings />
     </Group>
   );
 }

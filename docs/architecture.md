@@ -152,7 +152,10 @@ issues and verifies process-local actor contexts. The HTTP middleware and Discor
 SDK adapter establish identity; a caller's JSON never grants owner access.
 
 `domains/channels` owns scoped bindings. `domains/conversations` persists a frozen
-reply destination per channel-origin turn; web-origin turns have none. Tool
+reply destination per channel-origin turn; interactive web-origin turns have none.
+Scheduled turns freeze the bot’s selected home destination from the additive
+`raphie.channel-home` document, after checking current connection/account access.
+Channel turns also retain structured verified origin metadata. Tool
 approval notifications follow that origin. There is no session-linking operation.
 
 `domains/delivery` owns persisted operation plans and pending/sending/sent/uncertain

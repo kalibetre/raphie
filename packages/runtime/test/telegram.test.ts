@@ -381,7 +381,7 @@ test("only the initiating verified user can decide; a second owner cannot", asyn
   }
 });
 
-test("scheduled turns never deliver to Telegram, even in a Telegram-bound session", async () => {
+test("without a home, scheduled turns stay web-only even in a Telegram-bound session", async () => {
   const t = await setup();
   try {
     await t.pair();
@@ -716,6 +716,105 @@ test("Telegram actors cannot use the file-copy experiment or inspection reads", 
       () => t.app.actors.establish("telegram"),
       /verified conversation/,
     );
+  } finally {
+    await t.close();
+  }
+});
+
+test("/home requires a paired owner, persists without a model turn, and sends scheduled replies", async () => {
+  const t = await setup();
+  try {
+    t.app.home.available = (address) => t.telegram.acceptsHome(address);
+    t.fake.text(7, "/home");
+    await until(() => toText(t.fake, 7).length === 1);
+    assert.equal((await t.app.home.read()).selected, null);
+    await t.pair();
+    t.fake.text(OWNER, "/home");
+    await until(async () => (await t.app.home.read()).selected !== null);
+    assert.equal((await t.app.chats.state()).turns.length, 0);
+    const updateId = t.fake.text(OWNER, "origin metadata");
+    await until(
+      async () => (await t.app.chats.state()).turns[0]?.status === "done",
+    );
+    const origin = (await t.app.chats.state()).turns[0]!.origin!;
+    assert.equal(origin.platform, "telegram");
+    assert.equal(origin.channelId, String(OWNER));
+    assert.equal(origin.updateId, updateId);
+    assert.ok(origin.messageId);
+    const run = await t.app.sessions.submitScheduled(
+      t.app.actors.establish("web"),
+      {
+        eventId: "home-schedule",
+        text: "scheduled hello",
+        scheduled: { name: "Home test" },
+      },
+    );
+    await until(() =>
+      toText(t.fake).some((text) => text.startsWith("Scheduled: Home test")),
+    );
+    assert.equal(
+      (await t.app.chats.state()).turns.find((turn) => turn.id === run.id)
+        ?.replyTo?.conversation,
+      `telegram:${OWNER}`,
+    );
+    await t.telegram.unpair(String(OWNER));
+    const unavailable = await t.app.sessions.submitScheduled(
+      t.app.actors.establish("web"),
+      {
+        eventId: "unpaired-schedule",
+        text: "private result",
+        scheduled: { name: "Unpaired" },
+      },
+    );
+    assert.equal(
+      (await t.app.chats.state()).turns.find(
+        (turn) => turn.id === unavailable.id,
+      )?.replyTo,
+      null,
+    );
+  } finally {
+    await t.close();
+  }
+});
+
+test("scheduled home approvals send a web-only notice and cannot be decided from Telegram", async () => {
+  const t = await setup({ tool: true });
+  try {
+    t.app.home.available = (address) => t.telegram.acceptsHome(address);
+    await t.pair();
+    t.fake.text(OWNER, "/home");
+    await until(async () => (await t.app.home.read()).selected !== null);
+    await t.app.sessions.submitScheduled(t.app.actors.establish("web"), {
+      eventId: "scheduled-tool",
+      text: "run a tool",
+      scheduled: { name: "Tool job" },
+    });
+    await until(() =>
+      toText(t.fake).some((text) => text.includes("Approval needed")),
+    );
+    const approval = (await t.app.toolApprovals.state()).approvals[0]!;
+    assert.equal(approval.replyTo, null);
+    assert.equal(approval.discordUserId, undefined);
+    assert.equal(
+      t.fake
+        .sent()
+        .some((call) => call.body.reply_markup?.inline_keyboard.length),
+      false,
+    );
+    t.fake.press(OWNER, `ta:${approval.id}`);
+    await until(() => t.fake.sent("answerCallbackQuery").length > 0);
+    assert.equal(t.calls.length, 0);
+    await t.app.sessions.decide(
+      t.app.actors.establish("web"),
+      approval.id,
+      "approved",
+    );
+    await until(() =>
+      toText(t.fake).some(
+        (text) => text.includes("Scheduled: Tool job") && text.includes("done"),
+      ),
+    );
+    assert.deepEqual(t.calls, [["execute", ARGS]]);
   } finally {
     await t.close();
   }

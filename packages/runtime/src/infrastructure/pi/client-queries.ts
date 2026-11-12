@@ -171,6 +171,7 @@ export class PiClientQueries implements ClientQueries {
       id: t.id,
       conversationId: id,
       source: t.source,
+      ...(t.origin ? { origin: t.origin } : {}),
       text: t.text,
       ...(t.attachments?.length ? { attachments: t.attachments } : {}),
       createdAt: t.createdAt,
@@ -178,7 +179,9 @@ export class PiClientQueries implements ClientQueries {
       answer: t.answer,
       queueMode: t.queueMode,
       cancelled: t.cancelled,
-      ...(t.scheduled ? { scheduled: t.scheduled } : {}),
+      ...(t.scheduled
+        ? { scheduled: t.scheduled, scheduledDelivery: t.scheduledDelivery }
+        : {}),
     }));
     return { items, next: start > 0 ? items[0]!.id : null };
   }

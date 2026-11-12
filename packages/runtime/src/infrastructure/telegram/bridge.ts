@@ -103,6 +103,13 @@ export function createTelegramBridge(
       refused.set(String(chatId), Date.now());
       return notify(chatId, STRANGER);
     }
+    if (command?.[1] === "home") {
+      await app.home.setCurrent(actor(chatId, from.id), String(updateId));
+      return notify(
+        chatId,
+        "This conversation is now this bot’s home for scheduled updates.",
+      );
+    }
     if (command?.[1] === "start" || command?.[1] === "help")
       return notify(chatId, HELP);
     if (command?.[1] === "copy")
@@ -116,10 +123,19 @@ export function createTelegramBridge(
         "I can only read text in Telegram. Photos, files, voice and other attachments are not supported.",
       );
     try {
-      await app.sessions.submit(actor(chatId, from.id), {
-        eventId: `${config.botId}:${updateId}`,
-        text: message.text,
-      });
+      await app.sessions.submit(
+        app.actors.establish(
+          "telegram",
+          `telegram:${chatId}`,
+          connectionId,
+          String(from.id),
+          { messageId: String(message.message_id), updateId },
+        ),
+        {
+          eventId: `${config.botId}:${updateId}`,
+          text: message.text,
+        },
+      );
     } catch (error) {
       await notify(
         chatId,

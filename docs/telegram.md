@@ -112,10 +112,15 @@ transcripts. A Telegram chat has its own session and cannot address another one.
 
 ## Scheduled jobs
 
-A scheduled job turn carries no reply destination, for every channel. Its answer is
-visible in the web workspace and is never sent to Telegram, even if the job's session
-began in a Telegram chat. Making a job answer where it was created would need the
-destination to be captured at creation, which does not exist yet.
+Send `/home` in your verified private Telegram conversation to make it this bot’s
+home for scheduled updates. Discord supports the same command; web chat does not.
+The command runs directly in the adapter without a model call or a typed chat ID.
+Settings → Channels lets you choose a known conversation or **Web only**.
+See [home-channel routing](bot-automation.md#home-channel-for-scheduled-updates).
+
+Channel turns retain verified origin metadata: platform, application, conversation,
+channel, user and message IDs; Telegram also records the update ID. These IDs are
+available in client session history and model instructions, and are not credentials.
 
 ## Security notes and trade-offs
 

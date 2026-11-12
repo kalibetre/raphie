@@ -68,6 +68,36 @@ configuration to Streamable HTTP or stdio. Stdio receives PATH only, not inherit
 host credentials; supply required environment values in a new encrypted connection.
 No credential or transport argument is returned through the owner API.
 
+## Home channel for scheduled updates
+
+Each bot has one optional home destination. Send `/home` in a verified Telegram
+private chat or an authorized Discord conversation to select that conversation.
+No chat ID is taken from message text and no model call is needed. Web chat does
+not interpret `/home`; use Settings → Channels to select a known destination or
+**Web only** (the default). Natural-language requests do not change routing;
+the owner must use the command or Settings. A channel message registers its
+conversation as a Settings candidate; `/home` also works before the first turn.
+
+Every scheduled turn, wherever its job was created, freezes the selected home
+at admission. Changing home affects future turns only. Replies are labelled
+“Scheduled: <job name>” and use the normal persisted delivery worker, including
+chunking, rate limits and uncertain-send recovery. No session is linked, no
+transcript is copied, and replying at home continues that channel’s own session.
+The original scheduled session remains available in the web workspace.
+
+If home is absent, disabled, disconnected or its selecting account was revoked,
+new scheduled turns stay web-only. Session history reports `scheduledDelivery`
+as `web-only`, `home-unavailable` or `home` (a destination was captured, not proof
+of delivery). There is no fallback to another channel and no automatic resend
+of missed notifications when a connection returns. Already admitted turns keep
+their destination; changing home or revoking an account does not cancel those
+turns or their queued deliveries. Check pending work before sharing/reusing a chat.
+
+Scheduled tool approvals are decided in the web workspace. Home receives an
+“Approval needed” notice without approval buttons; being the home destination
+does not grant authority over a job created elsewhere. One home per bot is
+supported; per-job overrides and natural-language routing tools remain planned.
+
 ## Scheduled jobs
 
 A job sends a one-time or recurring prompt to its bot and keeps the results in one conversation.
@@ -100,7 +130,7 @@ The `schedule_create` tool saves the prompt, run time and optional repeat interv
 directly, without an approval prompt or redundant confirmation. One-time reminders use
 `everyMinutes: null`, stop after one submission and show Sent or Failed in Settings.
 Reminders created in chat return to the originating conversation; jobs created in
-Settings create their own. Replies appear in the app, without device push
+Settings create their own. Replies appear in the app and at the configured home channel, without device push
 notifications. Delays are relative to the tool request; if the bot is busy when
 the reminder is due, delivery waits until it is free.
 
