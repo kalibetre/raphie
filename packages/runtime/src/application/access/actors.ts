@@ -28,7 +28,11 @@ export class ActorAuthority {
     threadId?: string,
     connectionId = "legacy-discord",
     discordUserId?: string,
-    message?: { messageId?: string; updateId?: number },
+    message?: {
+      messageId?: string;
+      updateId?: number;
+      chatType?: "private" | "group" | "supergroup";
+    },
   ): ActorContext {
     if (source !== "web" && !threadId)
       throw new InputError(

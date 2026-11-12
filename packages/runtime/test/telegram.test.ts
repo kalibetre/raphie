@@ -123,6 +123,11 @@ async function setup(options: { tool?: boolean } = {}) {
   return state;
 }
 
+const privateCommands = (fake: FakeTelegram) =>
+  fake
+    .sent("setMyCommands")
+    .filter((call) => call.body.scope?.type === "all_private_chats");
+
 const toText = (fake: FakeTelegram, chat = OWNER) =>
   fake
     .sent()
@@ -460,6 +465,9 @@ test("a crash between admission and the offset commit cannot admit the message t
     const bridge = createTelegramBridge(app, {
       token: fake.token,
       botId: "123456",
+      botUsername: "raphie_fixture_bot",
+      groupSeen: () => {},
+      groupRemoved: () => {},
       apiBase: fake.url,
       owners: () => [String(OWNER)],
       pair: () => false,
@@ -823,16 +831,23 @@ test("scheduled home approvals send a web-only notice and cannot be decided from
 test("Telegram registers its native commands for private chats on connect and restart", async () => {
   const t = await setup();
   try {
-    await until(() => t.fake.sent("setMyCommands").length === 1);
-    const registered = t.fake.sent("setMyCommands")[0]!.body;
+    await until(() => privateCommands(t.fake).length === 1);
+    const registered = privateCommands(t.fake)[0]!.body;
     assert.deepEqual(registered.scope, { type: "all_private_chats" });
     assert.deepEqual(
       registered.commands?.map((item) => item.command),
-      ["pair", "home", "help", "start"],
+      ["ask", "pair", "home", "help", "start"],
+    );
+    const groupCommands = t.fake
+      .sent("setMyCommands")
+      .find((call) => call.body.scope?.type === "all_group_chats");
+    assert.deepEqual(
+      groupCommands?.body.commands?.map((item) => item.command),
+      ["ask", "home", "help"],
     );
     await t.reopen();
-    await until(() => t.fake.sent("setMyCommands").length === 2);
-    assert.deepEqual(t.fake.sent("setMyCommands")[1]!.body, registered);
+    await until(() => privateCommands(t.fake).length === 2);
+    assert.deepEqual(privateCommands(t.fake)[1]!.body, registered);
   } finally {
     await t.close();
   }
@@ -860,7 +875,7 @@ test("choosing /pair from the native menu shows usage without consuming code att
 test("Telegram command registration retries a 429 before polling resumes", async () => {
   const t = await setup();
   try {
-    await until(() => t.fake.sent("setMyCommands").length === 1);
+    await until(() => privateCommands(t.fake).length === 1);
     await t.telegram.save({ enabled: false });
     let limited = false;
     t.fake.intercept = (call) => {
@@ -870,12 +885,325 @@ test("Telegram command registration retries a 429 before polling resumes", async
       }
     };
     await t.telegram.save({ enabled: true });
-    await until(() => t.fake.sent("setMyCommands").length === 3);
+    await until(() => privateCommands(t.fake).length === 3);
     t.fake.text(OWNER, "/pair");
     await until(() =>
       toText(t.fake).some((text) => text.includes("followed by that code")),
     );
     assert.equal(t.telegram.read().telegram?.problem, null);
+  } finally {
+    await t.close();
+  }
+});
+
+const BOT = "raphie_fixture_bot";
+const GROUP = -1001001;
+
+function groupText(
+  fake: FakeTelegram,
+  user: number,
+  text: string,
+  chat = GROUP,
+) {
+  return fake.text(user, text, {
+    chat,
+    type: "supergroup",
+    entities: [...text.matchAll(/@raphie_fixture_bot\b/gi)].map((match) => ({
+      type: "mention",
+      offset: match.index,
+      length: match[0].length,
+    })),
+  });
+}
+
+test("Telegram groups admit only verified owners explicitly addressing this bot and retain separate sessions", async () => {
+  const t = await setup();
+  try {
+    await t.pair();
+    groupText(t.fake, 7, `@${BOT} stranger`);
+    t.fake.text(OWNER, "not addressed", { chat: GROUP, type: "group" });
+    t.fake.text(OWNER, `@${BOT} quoted without mention entity`, {
+      chat: GROUP,
+      type: "group",
+    });
+    t.fake.text(OWNER, "/ask@other_bot wrong bot", {
+      chat: GROUP,
+      type: "supergroup",
+    });
+    t.fake.text(OWNER, `/ask@${BOT} anonymous`, {
+      chat: GROUP,
+      type: "supergroup",
+      senderChat: { id: GROUP, type: "supergroup" },
+    });
+    t.fake.text(OWNER, `/ask@${BOT} channel`, { chat: GROUP, type: "channel" });
+    t.fake.push({
+      message: {
+        message_id: 98,
+        from: { id: OWNER, is_bot: true },
+        chat: { id: GROUP, type: "supergroup" },
+        text: `/ask@${BOT} bot`,
+      },
+    });
+    // A harmless command is an ordering barrier: all earlier updates have been consumed.
+    t.fake.text(OWNER, "/help");
+    await until(() =>
+      toText(t.fake).some((text) => text.includes("Not supported")),
+    );
+    assert.equal((await t.app.chats.state()).turns.length, 0);
+    assert.equal(toText(t.fake, GROUP).length, 0);
+    const event = groupText(
+      t.fake,
+      OWNER,
+      `😀 @${BOT.toUpperCase()} group question`,
+    );
+    await until(() =>
+      toText(t.fake, GROUP).some((text) => text.includes("group question")),
+    );
+    const first = (await t.app.chats.state()).turns[0]!;
+    assert.equal(first.text, "😀  group question");
+    assert.equal(first.replyTo?.conversation, `telegram:${GROUP}`);
+    assert.equal(first.origin?.chatType, "supergroup");
+    assert.equal(first.origin?.userId, String(OWNER));
+    assert.equal(first.origin?.updateId, event);
+    t.fake.text(OWNER, "private question");
+    t.fake.text(OWNER, `/ask@${BOT} second group`, {
+      chat: -55,
+      type: "group",
+    });
+    await until(
+      async () =>
+        (await t.app.chats.state()).turns.length === 3 &&
+        (await t.app.chats.state()).turns.every(
+          (turn) => turn.status === "done",
+        ),
+    );
+    const before = await t.app.chats.state();
+    assert.equal(
+      new Set(before.turns.map((turn) => turn.conversationId)).size,
+      3,
+    );
+    assert.ok(
+      toText(t.fake, GROUP).every((text) => !text.includes("private question")),
+    );
+    await until(async () =>
+      (await t.app.chats.state()).deliveries.every(
+        (delivery) => delivery.status === "sent",
+      ),
+    );
+    await t.reopen();
+    t.fake.text(OWNER, `/ask@${BOT} after restart`, {
+      chat: GROUP,
+      type: "supergroup",
+    });
+    await until(
+      async () =>
+        (await t.app.chats.state()).turns.length === 4 &&
+        (await t.app.chats.state()).turns.every(
+          (turn) => turn.status === "done",
+        ) &&
+        (await t.app.chats.state()).deliveries.every(
+          (delivery) => delivery.status === "sent",
+        ),
+    );
+    assert.equal(
+      (await t.app.chats.state()).turns[3]!.conversationId,
+      first.conversationId,
+    );
+    await t.telegram.unpair(String(OWNER));
+    groupText(t.fake, OWNER, `@${BOT} revoked`);
+    t.fake.text(OWNER, "/help");
+    await until(() =>
+      toText(t.fake).some((text) => text.includes("This assistant is private")),
+    );
+    assert.equal((await t.app.chats.state()).turns.length, 4);
+  } finally {
+    await t.close();
+  }
+});
+
+test("pairing never consumes codes from a group; topics and edited group messages receive explicit limits", async () => {
+  const t = await setup();
+  try {
+    const { code } = t.telegram.pairingCode();
+    for (let i = 0; i < 6; i++)
+      t.fake.text(OWNER, `/pair@${BOT} ${code}`, {
+        chat: GROUP,
+        type: "group",
+      });
+    t.fake.text(OWNER, `/pair ${code}`);
+    await until(
+      () =>
+        !!t.telegram.read().telegram?.verifiedUserIds.includes(String(OWNER)),
+    );
+    assert.equal(toText(t.fake, GROUP).length, 0);
+    t.fake.text(OWNER, `/pair@${BOT} do-not-echo-this-code`, {
+      chat: GROUP,
+      type: "group",
+    });
+    t.fake.text(OWNER, `/home@${BOT}`, {
+      chat: GROUP,
+      type: "supergroup",
+      threadId: 10,
+    });
+    t.fake.push({
+      edited_message: {
+        message_id: 15,
+        from: { id: OWNER },
+        chat: { id: GROUP, type: "group" },
+        text: `/ask@${BOT} edited request`,
+      },
+    });
+    t.fake.push({
+      message: {
+        message_id: 16,
+        from: { id: OWNER },
+        chat: { id: GROUP, type: "supergroup" },
+        caption: `@${BOT} an attachment`,
+        caption_entities: [
+          { type: "mention", offset: 0, length: BOT.length + 1 },
+        ],
+      },
+    });
+    await until(() => toText(t.fake, GROUP).length === 4);
+    assert.match(toText(t.fake, GROUP).join(" "), /only read text/);
+    assert.match(toText(t.fake, GROUP).join(" "), /private chat/);
+    assert.match(
+      toText(t.fake, GROUP).join(" "),
+      /Forum topics are not supported/,
+    );
+    assert.match(toText(t.fake, GROUP).join(" "), /Edited messages/);
+    assert.ok(
+      !toText(t.fake, GROUP).join(" ").includes("do-not-echo-this-code"),
+    );
+    assert.equal(
+      t.fake.sent().find((call) => call.body.text.includes("Forum topics"))
+        ?.body.message_thread_id,
+      10,
+    );
+    assert.equal((await t.app.home.read()).selected, null);
+    assert.equal((await t.app.chats.state()).turns.length, 0);
+  } finally {
+    await t.close();
+  }
+});
+
+test("group-origin tool requests expose no arguments or buttons and execute only after a web decision", async () => {
+  const t = await setup({ tool: true });
+  try {
+    await t.pair();
+    groupText(t.fake, OWNER, `@${BOT} run the tool`);
+    await until(() =>
+      toText(t.fake, GROUP).some((text) => text.includes("Approval needed")),
+    );
+    const approval = (await t.app.toolApprovals.state()).approvals[0]!;
+    assert.equal(approval.replyTo, null);
+    assert.equal(approval.discordUserId, undefined);
+    assert.equal(t.fake.sent("sendDocument").length, 0);
+    assert.equal(
+      t.fake
+        .sent()
+        .some((call) => call.body.reply_markup?.inline_keyboard.length),
+      false,
+    );
+    assert.ok(!toText(t.fake, GROUP).join(" ").includes(ARGS.code));
+    t.fake.press(OWNER, `ta:${approval.id}`);
+    t.fake.push({
+      callback_query: {
+        id: "group-decision",
+        from: { id: OWNER },
+        data: `ta:${approval.id}`,
+        message: { message_id: 10, chat: { id: GROUP, type: "supergroup" } },
+      },
+    });
+    await until(() => t.fake.sent("answerCallbackQuery").length === 2);
+    assert.equal(t.calls.length, 0);
+    assert.equal(
+      (await t.app.toolApprovals.state()).approvals[0]!.status,
+      "pending",
+    );
+    await t.app.sessions.decide(
+      t.app.actors.establish("web"),
+      approval.id,
+      "approved",
+    );
+    await until(() => toText(t.fake, GROUP).some((text) => text === "done"));
+    assert.deepEqual(t.calls, [["execute", ARGS]]);
+    assert.equal(t.fake.sent("editMessageText").length, 0);
+  } finally {
+    await t.close();
+  }
+});
+
+test("a group can be home, survives restart, and bot removal prevents new scheduled deliveries", async () => {
+  const t = await setup();
+  try {
+    t.app.home.available = (address) => t.telegram.acceptsHome(address);
+    await t.pair();
+    t.fake.text(OWNER, `/home@${BOT}`, { chat: GROUP, type: "group" });
+    await until(async () => (await t.app.home.read()).selected !== null);
+    assert.match(toText(t.fake, GROUP).join(" "), /visible to everyone/);
+    await t.reopen();
+    t.app.home.available = (address) => t.telegram.acceptsHome(address);
+    const owner = t.app.actors.establish("web");
+    await t.app.sessions.submitScheduled(owner, {
+      eventId: "group-home-job",
+      text: "group reminder",
+      scheduled: { name: "Group reminder" },
+    });
+    await until(() =>
+      toText(t.fake, GROUP).some((text) =>
+        text.startsWith("Scheduled: Group reminder"),
+      ),
+    );
+    t.fake.push({
+      my_chat_member: {
+        chat: { id: GROUP, type: "supergroup" },
+        new_chat_member: {
+          user: { id: 123456, is_bot: true },
+          status: "kicked",
+        },
+      },
+    });
+    t.fake.text(OWNER, "/help");
+    await until(() =>
+      toText(t.fake).some((text) => text.includes("Not supported")),
+    );
+    const missing = await t.app.sessions.submitScheduled(owner, {
+      eventId: "removed-group",
+      text: "must stay private",
+      scheduled: { name: "Removed" },
+    });
+    const turn = (await t.app.chats.state()).turns.find(
+      (item) => item.id === missing.id,
+    )!;
+    assert.equal(turn.replyTo, null);
+    assert.equal(turn.scheduledDelivery, "home-unavailable");
+    // Telegram saying it rejoined does not implicitly restore scheduled sharing.
+    t.fake.push({
+      my_chat_member: {
+        chat: { id: GROUP, type: "supergroup" },
+        new_chat_member: {
+          user: { id: 123456, is_bot: true },
+          status: "member",
+        },
+      },
+    });
+    await t.reopen();
+    t.app.home.available = (address) => t.telegram.acceptsHome(address);
+    const stillMissing = await t.app.sessions.submitScheduled(
+      t.app.actors.establish("web"),
+      {
+        eventId: "rejoined-group",
+        text: "still private",
+        scheduled: { name: "Rejoined" },
+      },
+    );
+    assert.equal(
+      (await t.app.chats.state()).turns.find(
+        (item) => item.id === stillMissing.id,
+      )?.replyTo,
+      null,
+    );
   } finally {
     await t.close();
   }

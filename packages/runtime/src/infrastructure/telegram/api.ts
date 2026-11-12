@@ -13,12 +13,21 @@ export type TelegramMessage = {
   from?: TelegramUser;
   chat: TelegramChat;
   text?: string;
+  caption?: string;
+  caption_entities?: { type: string; offset: number; length: number }[];
+  entities?: { type: string; offset: number; length: number }[];
+  sender_chat?: TelegramChat;
+  message_thread_id?: number;
 };
 
 export type TelegramUpdate = {
   update_id: number;
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
+  my_chat_member?: {
+    chat: TelegramChat;
+    new_chat_member: { user: TelegramUser; status: string };
+  };
   callback_query?: {
     id: string;
     from: TelegramUser;
@@ -58,6 +67,7 @@ export type OutgoingMessage = {
   chat_id: string;
   text: string;
   parse_mode?: "HTML";
+  message_thread_id?: number;
   reply_markup?: {
     inline_keyboard: { text: string; callback_data: string }[][];
   };
@@ -109,12 +119,9 @@ export function createTelegramApi(
     setMyCommands: (
       commands: { command: string; description: string }[],
       signal?: AbortSignal,
+      scope: "all_private_chats" | "all_group_chats" = "all_private_chats",
     ) =>
-      call<true>(
-        "setMyCommands",
-        { commands, scope: { type: "all_private_chats" } },
-        signal,
-      ),
+      call<true>("setMyCommands", { commands, scope: { type: scope } }, signal),
     getMe: () =>
       call<{ id: number; username?: string }>("getMe", {}, undefined, 15_000),
     getUpdates: (offset: number, seconds: number, signal: AbortSignal) =>
@@ -123,7 +130,12 @@ export function createTelegramApi(
         {
           offset,
           timeout: seconds,
-          allowed_updates: ["message", "edited_message", "callback_query"],
+          allowed_updates: [
+            "message",
+            "edited_message",
+            "callback_query",
+            "my_chat_member",
+          ],
         },
         signal,
         (seconds + 15) * 1000,
