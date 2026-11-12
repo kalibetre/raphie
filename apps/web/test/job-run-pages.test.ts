@@ -22,3 +22,22 @@ test("live head updates retained runs without duplicates or losing displaced his
     "e",
   ]);
 });
+
+test("failed reply descriptions keep conversation guidance with a safe unknown reason", async () => {
+  const { jobRunDescription } =
+    await import("../src/domains/settings/application/job-run-status");
+  expect(
+    jobRunDescription({
+      ...run("reply", "failed"),
+      turnId: "turn",
+      failureReason: "unknown",
+    }),
+  ).toContain("Open the conversation");
+  expect(
+    jobRunDescription({
+      ...run("admission", "failed"),
+      turnId: null,
+      failureReason: "no_model",
+    }),
+  ).toContain("No model configured");
+});

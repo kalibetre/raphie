@@ -2,10 +2,11 @@ export class InputError extends Error {
   status: number;
   code: string;
 
-  constructor(message: string, status = 400) {
+  constructor(message: string, status = 400, code?: string) {
     super(message);
     this.status = status;
     this.code =
+      code ??
       (
         {
           403: "forbidden",
@@ -14,6 +15,7 @@ export class InputError extends Error {
           413: "too_large",
           503: "unavailable",
         } as Record<number, string>
-      )[status] ?? "invalid_request";
+      )[status] ??
+      "invalid_request";
   }
 }

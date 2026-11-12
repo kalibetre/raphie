@@ -281,10 +281,12 @@ Proposed slices:
    budget. Prove a real repository test and bulk downloads before choosing the VM
    backend. Unknown external effects remain uncertain rather than automatically
    replaying after a lost VM. Kubernetes deployment is a target, not implemented.
-4. **Durable follow-through:** commitments have assignee, deadline/timezone,
-   source and open/completed state. A scheduler owns reminder timing, deduplicated
-   admission and delivery; saving a memory alone does not schedule a reminder.
-   Prove restart during the wait and no duplicate notification after recovery.
+4. **Durable follow-through — scheduled-job failure hardening:** existing bot
+   schedules gain bounded durable submission retries, safe failure reasons, late
+   indicators and visible waiting for busy bots or pending approvals. Recovery
+   retains deduplicated admission and notification history. Commitments,
+   assignees, deadlines and timezone-aware recurrence are deferred; they are
+   not part of this slice. See [bot automation](bot-automation.md).
 5. **Mixed-workload measurement:** benchmark light tasks and concurrent heavy
    jobs on the target host. Record startup/queue latency, task success, process-tree
    memory, CPU, storage growth and model cost separately. Choose limits from the

@@ -128,6 +128,7 @@ export function JobRunHistory({
                 </span>
                 <span className="job-history-status">
                   {jobRunStatus[run.status]}
+                  {run.late ? " · Late" : ""}
                 </span>
                 <span className="job-history-description">
                   {jobRunDescription(run)}
