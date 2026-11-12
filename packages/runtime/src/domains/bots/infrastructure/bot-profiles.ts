@@ -28,6 +28,9 @@ export class BotProfileStore {
     this.db.exec(
       "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS bot_profiles (id TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS bot_revisions (id TEXT NOT NULL, revision INTEGER NOT NULL, value TEXT NOT NULL, PRIMARY KEY(id,revision))",
     );
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS bot_deletions (id TEXT PRIMARY KEY)",
+    );
     if (
       !this.db.query("SELECT id FROM bot_profiles WHERE id='default'").get()
     ) {
@@ -39,7 +42,7 @@ export class BotProfileStore {
   list(): BotProfile[] {
     return this.db
       .query<{ value: string }, []>(
-        "SELECT value FROM bot_profiles ORDER BY CASE WHEN id='default' THEN 0 ELSE 1 END, rowid",
+        "SELECT value FROM bot_profiles WHERE id NOT IN (SELECT id FROM bot_deletions) ORDER BY CASE WHEN id='default' THEN 0 ELSE 1 END, rowid",
       )
       .all()
       .map((row) => JSON.parse(row.value) as BotProfile);
@@ -48,7 +51,7 @@ export class BotProfileStore {
   read(id: string): BotProfile {
     const row = this.db
       .query<{ value: string }, [string]>(
-        "SELECT value FROM bot_profiles WHERE id=?",
+        "SELECT value FROM bot_profiles WHERE id=? AND id NOT IN (SELECT id FROM bot_deletions)",
       )
       .get(id);
     if (!row) throw new InputError("Bot not found.", 404);
@@ -116,5 +119,24 @@ export class BotProfileStore {
 
   close() {
     this.db.close();
+  }
+
+  deletions(): string[] {
+    return this.db
+      .query<{ id: string }, []>("SELECT id FROM bot_deletions")
+      .all()
+      .map((row) => row.id);
+  }
+
+  markDeleting(id: string) {
+    this.db.query("INSERT INTO bot_deletions(id) VALUES(?)").run(id);
+  }
+
+  finishDeletion(id: string) {
+    this.db.transaction(() => {
+      this.db.query("DELETE FROM bot_revisions WHERE id=?").run(id);
+      this.db.query("DELETE FROM bot_profiles WHERE id=?").run(id);
+      this.db.query("DELETE FROM bot_deletions WHERE id=?").run(id);
+    })();
   }
 }

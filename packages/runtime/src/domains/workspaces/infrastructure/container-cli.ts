@@ -59,25 +59,27 @@ export class ContainerCli {
   }
 
   /** Filtering happens at the daemon BEFORE inspect, stop or removal. */
-  owned(workspaceId: string, scope: string) {
+  owned(workspaceId: string, scope?: string) {
     const ids = this.run([
       "ps",
       "-aq",
       "--no-trunc",
       "--filter",
       `label=raphie.workspace=${workspaceId}`,
-      "--filter",
-      `label=raphie.scope=${scope}`,
+      ...(scope === undefined
+        ? []
+        : ["--filter", `label=raphie.scope=${scope}`]),
     ]);
     return ids ? ids.split(/\s+/) : [];
   }
 
-  inspect(workspaceId: string, scope: string) {
+  inspect(workspaceId: string, scope?: string) {
     return this.owned(workspaceId, scope).map(
       (id) =>
         JSON.parse(this.run(["inspect", id]))[0] as {
           Id: string;
           Config: { Labels: Record<string, string> };
+          Mounts: { Type: string; Source: string; Destination: string }[];
         },
     );
   }

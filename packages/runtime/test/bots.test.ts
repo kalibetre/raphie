@@ -1,5 +1,6 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -7,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost, type BotRuntime } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
+import { BotProfileStore } from "../src/domains/bots/infrastructure/bot-profiles.ts";
 import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memory.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { chatModel } from "./chat-model.ts";
@@ -18,6 +20,348 @@ const profile = {
   soul: "Explain evidence and uncertainty. Speak precisely.",
   color: "#83bcb4",
 };
+
+test("bot deletion confirms identity, removes only owned data and remains deleted after restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-delete-bot-"));
+  const open = async (botId: string, path: string) => {
+    const gateway = await Gateway.open({
+      directory: path,
+      botId,
+      deferResume: true,
+      ...chatModel(),
+    });
+    return { gateway, close: () => gateway.close() };
+  };
+  const original = await open("default", directory);
+  let host = await BotHost.open(directory, original, open);
+  const server = await startServer(original.gateway, { port: 0, bots: host });
+  try {
+    const bot = await host.create(profile);
+    const sibling = await host.create({ ...profile, name: "Keep" });
+    const privateDirectory = join(directory, "bots", bot.id);
+    const siblingDirectory = join(directory, "bots", sibling.id);
+    await mkdir(join(privateDirectory, "workspace", "files"), {
+      recursive: true,
+    });
+    await Bun.write(
+      join(privateDirectory, "workspace", "files", "artifact.txt"),
+      "owned workspace artifact",
+    );
+    await Bun.write(join(siblingDirectory, "preserved.txt"), "sibling data");
+    await symlink(
+      siblingDirectory,
+      join(privateDirectory, "workspace", "files", "sibling-link"),
+    );
+    const file = await host
+      .runtime(bot.id)
+      .gateway.files.put("owned.txt", new TextEncoder().encode("owned"));
+    const keep = await original.gateway.files.put(
+      "keep.txt",
+      new TextEncoder().encode("keep"),
+    );
+    const remove = (id: string, input: unknown) =>
+      fetch(`${server.url}/api/bots/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Raphie-Client": "web",
+        },
+        body: JSON.stringify(input),
+      });
+    expect(
+      (await remove("default", { name: "Raphie", revision: 1 })).status,
+    ).toBe(409);
+    expect((await remove(bot.id, { name: "wrong", revision: 1 })).status).toBe(
+      409,
+    );
+    expect((await remove(bot.id, { name: bot.name, revision: 2 })).status).toBe(
+      409,
+    );
+    expect((await remove(bot.id, { name: bot.name, revision: 1 })).status).toBe(
+      204,
+    );
+    expect(
+      await Bun.file(
+        join(directory, "bots", bot.id, "gateway.sqlite"),
+      ).exists(),
+    ).toBe(false);
+    const removedDirectory = await lstat(privateDirectory).catch(
+      (error: NodeJS.ErrnoException) => error,
+    );
+    expect(removedDirectory).toMatchObject({ code: "ENOENT" });
+    expect(await Bun.file(join(siblingDirectory, "preserved.txt")).text()).toBe(
+      "sibling data",
+    );
+    const registry = new Database(join(directory, "bots.sqlite"), {
+      readonly: true,
+    });
+    try {
+      for (const table of ["bot_profiles", "bot_revisions", "bot_deletions"])
+        expect(
+          registry
+            .query<{ count: number }, [string]>(
+              `SELECT count(*) AS count FROM ${table} WHERE id=?`,
+            )
+            .get(bot.id)?.count,
+        ).toBe(0);
+    } finally {
+      registry.close();
+    }
+    expect(
+      (await fetch(`${server.url}/api/bots/${bot.id}/files/${file.id}`)).status,
+    ).toBe(404);
+    expect(
+      (await fetch(`${server.url}/api/bots/${bot.id}/history`)).status,
+    ).toBe(404);
+    expect((await remove(bot.id, { name: bot.name, revision: 1 })).status).toBe(
+      404,
+    );
+    expect(
+      new TextDecoder().decode(await original.gateway.files.read(keep.id)),
+    ).toBe("keep");
+    expect(host.read(sibling.id).name).toBe("Keep");
+    await host.close();
+    host = await BotHost.open(directory, original, open);
+    expect(host.list().map((item) => item.id)).toEqual(["default", sibling.id]);
+  } finally {
+    await server.close();
+    await host.close();
+    await original.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("deletion recovery never reopens a marked bot", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-delete-recovery-"));
+  const opened: string[] = [];
+  const open = async (botId: string, path: string) => {
+    opened.push(botId);
+    const gateway = await Gateway.open({
+      directory: path,
+      botId,
+      deferResume: true,
+      ...chatModel(),
+    });
+    return { gateway, close: () => gateway.close() };
+  };
+  const original = await open("default", directory);
+  let host = await BotHost.open(directory, original, open);
+  try {
+    const bot = await host.create(profile);
+    await host.close();
+    const store = new BotProfileStore(join(directory, "bots.sqlite"));
+    store.markDeleting(bot.id);
+    store.close();
+    opened.length = 0;
+    host = await BotHost.open(directory, original, open);
+    expect(opened).toEqual([]);
+    expect(host.list().map((item) => item.id)).toEqual(["default"]);
+    expect(
+      await Bun.file(
+        join(directory, "bots", bot.id, "gateway.sqlite"),
+      ).exists(),
+    ).toBe(false);
+    expect(() => host.history(bot.id)).toThrow("not found");
+  } finally {
+    await host.close();
+    await original.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("deletion waits for the entire upload and rejects late writes through retained references", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-delete-upload-"));
+  const uploading = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const original = await Gateway.open({ directory, ...chatModel() });
+  const open = async (botId: string, path: string) => {
+    const gateway = await Gateway.open({
+      directory: path,
+      botId,
+      deferResume: true,
+      ...chatModel(),
+    });
+    return { gateway, close: () => gateway.close() };
+  };
+  const host = await BotHost.open(directory, { gateway: original }, open);
+  try {
+    const bot = await host.create(profile);
+    const gateway = host.runtime(bot.id).gateway;
+    const publish = gateway.workspace.putFile.bind(gateway.workspace);
+    gateway.workspace.putFile = async (...args) => {
+      uploading.resolve();
+      await release.promise;
+      return publish(...args);
+    };
+    const upload = gateway.files.upload(
+      "paused.txt",
+      new TextEncoder().encode("fixture"),
+    );
+    await uploading.promise;
+    // Archival bytes exist, but workspace admission has not started yet.
+    expect((await gateway.workspace.info()).executions.admitted).toBe(0);
+    const deletion = host.delete(bot.id, { name: bot.name, revision: 1 });
+    await delay(0);
+    expect(host.read(bot.id).id).toBe(bot.id);
+    release.resolve();
+    const file = await upload;
+    await deletion;
+    expect(gateway.files.upload("late.txt", new Uint8Array())).rejects.toThrow(
+      "being deleted",
+    );
+    expect(gateway.files.put("late.txt", new Uint8Array())).rejects.toThrow(
+      "being deleted",
+    );
+    expect(
+      await Bun.file(
+        join(directory, "bots", bot.id, "files", file.id),
+      ).exists(),
+    ).toBe(false);
+  } finally {
+    release.resolve();
+    await host.close();
+    await original.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("failed shutdown preserves the deletion marker and retries cleanup on restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-delete-failure-"));
+  let failClose = true;
+  const original = await Gateway.open({ directory, ...chatModel() });
+  const open = async (botId: string, path: string) => {
+    const gateway = await Gateway.open({
+      directory: path,
+      botId,
+      deferResume: true,
+      ...chatModel(),
+    });
+    return {
+      gateway,
+      close: async () => {
+        if (failClose) {
+          failClose = false;
+          throw new Error("fixture shutdown failure");
+        }
+        await gateway.close();
+      },
+    };
+  };
+  let host = await BotHost.open(directory, { gateway: original }, open);
+  try {
+    const bot = await host.create(profile);
+    const gateway = host.runtime(bot.id).gateway;
+    const failure = await host
+      .delete(bot.id, { name: bot.name, revision: 1 })
+      .catch((error: Error) => error);
+    expect(failure).toMatchObject({
+      message: expect.stringContaining("pending cleanup"),
+    });
+    expect(gateway.configurationGate.run(async () => {})).rejects.toThrow(
+      "being deleted",
+    );
+    expect(() => host.runtime(bot.id)).toThrow("not found");
+    expect(
+      await Bun.file(
+        join(directory, "bots", bot.id, "workspace", "checkpoint.sqlite"),
+      ).exists(),
+    ).toBe(true);
+    await host.close();
+    host = await BotHost.open(directory, { gateway: original }, open);
+    expect(host.list()).toHaveLength(1);
+    expect(
+      await Bun.file(
+        join(directory, "bots", bot.id, "workspace", "checkpoint.sqlite"),
+      ).exists(),
+    ).toBe(false);
+  } finally {
+    failClose = false;
+    await host.close();
+    await original.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("deletion rejects pending turns and approvals and fences queued admission", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-delete-busy-"));
+  const generation = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>();
+  const original = await Gateway.open({ directory, ...chatModel() });
+  const open = async (botId: string, path: string) => {
+    const gateway = await Gateway.open({
+      directory: path,
+      botId,
+      deferResume: true,
+      ...chatModel({
+        pause: generation.promise,
+        started: () => started.resolve(),
+      }),
+    });
+    return { gateway, close: () => gateway.close() };
+  };
+  const host = await BotHost.open(directory, { gateway: original }, open);
+  try {
+    const bot = await host.create(profile);
+    const gateway = host.runtime(bot.id).gateway;
+    const input = { name: bot.name, revision: bot.revision };
+    const file = await gateway.files.put(
+      "approval.txt",
+      new TextEncoder().encode("fixture"),
+    );
+    const approval = await gateway.sessions.copy(
+      gateway.actors.establish("web"),
+      { eventId: "copy", text: "copy", files: [file] },
+    );
+    expect(host.delete(bot.id, input)).rejects.toThrow("pending approvals");
+    await gateway.sessions.decideFile(
+      gateway.actors.establish("web"),
+      approval,
+      "rejected",
+    );
+    await gateway.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "busy",
+      text: "wait",
+    });
+    await started.promise;
+    expect(host.delete(bot.id, input)).rejects.toThrow("active turns");
+    generation.resolve();
+    for (
+      let n = 0;
+      n < 200 &&
+      (await gateway.chats.state()).turns.some(
+        (turn) => turn.status === "pending",
+      );
+      n++
+    )
+      await delay(10);
+    const deletion = host.delete(bot.id, input);
+    // This admission arrives behind the delete operation on the shared gate.
+    expect(
+      gateway.chats.send({
+        source: "web",
+        actor: "owner",
+        eventId: "late",
+        text: "too late",
+      }),
+    ).rejects.toThrow("Bot is being deleted");
+    await deletion;
+    expect(
+      gateway.sessions.copy(gateway.actors.establish("web"), {
+        eventId: "late-copy",
+        text: "too late",
+        files: [],
+      }),
+    ).rejects.toThrow("Bot is being deleted");
+    expect(host.list()).toHaveLength(1);
+  } finally {
+    generation.resolve();
+    await host.close();
+    await original.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("bot containers preserve default data and isolate APIs, actors, credentials, memory and personality across restart", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-bots-"));

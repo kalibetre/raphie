@@ -77,6 +77,39 @@ Providers, models and memory are scoped to the current bot. Theme, panel
 layout and UI-plugin preferences remain browser preferences shared across bots;
 they do not grant runtime tool capabilities.
 
+## Deleting a bot
+
+Open the bot’s **Profile**, save or discard any edits, then choose **Delete bot…**.
+The confirmation requires its current name and lists what will be removed. The
+default bot cannot be deleted.
+
+Deletion requires the bot to have no pending turns, active workspace executions,
+or pending approvals. Finish or cancel active turns and resolve approvals first.
+The runtime also checks the profile revision so a stale confirmation cannot delete
+a bot changed in another browser.
+Uploads already writing local data finish before deletion can begin. Requests
+still reading an upload body cannot publish files after deletion starts.
+
+Deletion stops channels, scheduled work, MCP connections and owned containers,
+then removes profile history and the bot’s private directory: sessions,
+attachments, built-in memory, encrypted connection settings and workspace files.
+The web client returns to the default bot and clears the deleted bot’s drafts and
+cached views. Other bots retain their data.
+
+External memory, external messages and backups are preserved. Provider keys are
+not revoked, and OS credential-store master keys are retained for backup recovery;
+deleting a bot does not erase data held by external services.
+
+The runtime durably marks deletion before cleanup and blocks new work. A cleanup
+failure returns an error asking for a restart. Startup retries marked deletions
+before opening any named bot, without reconnecting that bot’s channels or jobs.
+If container cleanup fails, restore the container runtime and restart; cleanup
+must succeed before startup proceeds. Partial deletion cannot resume a bot.
+Container cleanup verifies the separate bot workspace identity and Docker’s
+recorded workspace bind before removing compute. Mismatched ownership stops
+cleanup and retains the deletion marker; restore matching control-state backups
+rather than resetting identities.
+
 ## The default bot and existing installations
 
 The first startup creates the stable `default` identity, initially named Raphie.
@@ -134,7 +167,7 @@ The host reopens persisted bots at startup so their durable work can recover.
 Each harness owns its store; do not run another process against the same data
 directory. A failure opening a persisted bot fails startup rather than silently
 hiding it. Failed creation can leave an unused private directory or OS key; it
-does not publish a partially initialized bot. No delete operation is provided.
+does not publish a partially initialized bot. Named bots can be permanently deleted as described above.
 
 ## HTTP interface
 
@@ -144,6 +177,9 @@ Bot management is an owner/client operation, not an agent tool.
 - `GET /api/bots`: profiles for owner management.
 - `POST /api/bots`: create from `{ name, description, soul }`; the runtime issues
   the ID. No caller-selected ID or filesystem path is accepted.
+- `DELETE /api/bots/:id`: permanently delete a named bot with `{ name, revision }`;
+  returns 204 after cleanup, 409 for the default bot, stale confirmation or busy
+  work, 404 for an unknown/deleting bot, and 503 if cleanup needs a restart.
 - `GET /api/bots/:id/profile`: current profile.
 - `POST /api/bots/:id/profile`: save `{ name, description, soul, revision }`.
 - `GET /api/bots/:id/history`: latest 50 profile revisions, newest first.
@@ -179,7 +215,7 @@ an empty trace read model rather than another bot's traces.
 
 Workspace shell interpretation, checkpointing, executor fencing and lightweight
 resource/concurrency bounds are delivered. VM leases, model-generation concurrency
-policy, bot deletion, cross-bot sharing, and independently managed arbitrary
+policy, cross-bot sharing, and independently managed arbitrary
 background tasks remain planned. Resident bot harnesses are opened at
 startup; this change does not establish capacity for 100 active agents or VMs.
 

@@ -29,6 +29,22 @@ export function botRoutes(bots: BotProfiles) {
       c.json(await bots.create(c.req.valid("json")), 201),
     )
     .get("/:id/profile", (c) => c.json(bots.read(c.req.param("id"))))
+    .delete(
+      "/:id",
+      limitBody(1024),
+      jsonInput(
+        z
+          .object({
+            name: z.string().min(1).max(80),
+            revision: z.number().int().positive(),
+          })
+          .strict(),
+      ),
+      async (c) => {
+        await bots.delete(c.req.param("id"), c.req.valid("json"));
+        return c.body(null, 204);
+      },
+    )
     .post(
       "/:id/profile",
       limitBody(100_000),

@@ -1,6 +1,7 @@
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
+import type { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import type { FileRef } from "../../attachments/infrastructure/local-attachment-store.ts";
 import { decideApproval, isDecision } from "../domain/decision.ts";
 import type { Approval, Source } from "../domain/file-approval.ts";
@@ -9,6 +10,7 @@ import { enqueue } from "./pi-delivery-workflow.ts";
 import { InputError, State } from "./pi-file-approvals.ts";
 
 type ApprovalContext = DurableContext & {
+  configurationGate: ModelConnectionGate;
   options: DurableContext["options"] & {
     discordThreadId?: string;
     discordConnectionId?: string;
@@ -51,77 +53,84 @@ export class FileApprovalService {
     const fingerprint = new Bun.CryptoHasher("sha256")
       .update(JSON.stringify([input.text, input.files]))
       .digest("hex");
-    const id = await this.context.root.commit(async (tx) => {
-      const state = await tx.doc(State);
-      const existing = state.approvals.find((a) => a.requestKey === requestKey);
-      if (existing) {
-        const destination = state.deliveries.find(
-          (d) => d.approvalId === existing.id,
+    const id = await this.context.configurationGate.run(() =>
+      this.context.root.commit(async (tx) => {
+        const state = await tx.doc(State);
+        const existing = state.approvals.find(
+          (a) => a.requestKey === requestKey,
         );
-        if (
-          input.source === "discord" &&
-          (destination?.threadId !== input.discordThreadId ||
-            (existing.connectionId ?? "legacy-discord") !==
-              (input.connectionId ?? "legacy-discord"))
-        )
-          throw new InputError(
-            "Request belongs to another Discord connection or thread.",
-            403,
+        if (existing) {
+          const destination = state.deliveries.find(
+            (d) => d.approvalId === existing.id,
           );
-        if (
-          input.source === "discord" &&
-          existing.discordUserId &&
-          existing.discordUserId !== input.discordUserId
-        )
-          throw new InputError("Request belongs to another Discord user.", 403);
-        if (existing.fingerprint !== fingerprint)
-          throw new InputError(
-            "Event ID already used for different content.",
-            409,
-          );
-        return existing.id;
-      }
-      const now = Date.now();
-      const approval: Approval = {
-        id: crypto.randomUUID(),
-        requestKey,
-        fingerprint,
-        text: input.text,
-        files: input.files,
-        source: input.source,
-        connectionId:
-          input.connectionId ??
-          this.context.options.discordConnectionId ??
-          "legacy-discord",
-        ...(input.source === "discord" && input.discordUserId
-          ? { discordUserId: input.discordUserId }
-          : {}),
-        createdAt: now,
-        expiresAt: now + (this.context.options.approvalTtlMs ?? 600_000),
-        status: "pending",
-        decidedVia: null,
-        completedAt: null,
-        results: [],
-        effectCount: 0,
-      };
-      await tx.createTask(
-        this.context.workflow,
-        { approvalId: approval.id },
-        { ownership: { kind: "conversation" } },
-      );
-      state.approvals.push(approval);
-      enqueue(
-        state,
-        approval,
-        "approval",
-        input.source === "discord"
-          ? (input.discordThreadId ??
-              this.context.options.discordThreadId ??
-              null)
-          : (this.context.options.discordThreadId ?? null),
-      );
-      return approval.id;
-    }, context);
+          if (
+            input.source === "discord" &&
+            (destination?.threadId !== input.discordThreadId ||
+              (existing.connectionId ?? "legacy-discord") !==
+                (input.connectionId ?? "legacy-discord"))
+          )
+            throw new InputError(
+              "Request belongs to another Discord connection or thread.",
+              403,
+            );
+          if (
+            input.source === "discord" &&
+            existing.discordUserId &&
+            existing.discordUserId !== input.discordUserId
+          )
+            throw new InputError(
+              "Request belongs to another Discord user.",
+              403,
+            );
+          if (existing.fingerprint !== fingerprint)
+            throw new InputError(
+              "Event ID already used for different content.",
+              409,
+            );
+          return existing.id;
+        }
+        const now = Date.now();
+        const approval: Approval = {
+          id: crypto.randomUUID(),
+          requestKey,
+          fingerprint,
+          text: input.text,
+          files: input.files,
+          source: input.source,
+          connectionId:
+            input.connectionId ??
+            this.context.options.discordConnectionId ??
+            "legacy-discord",
+          ...(input.source === "discord" && input.discordUserId
+            ? { discordUserId: input.discordUserId }
+            : {}),
+          createdAt: now,
+          expiresAt: now + (this.context.options.approvalTtlMs ?? 600_000),
+          status: "pending",
+          decidedVia: null,
+          completedAt: null,
+          results: [],
+          effectCount: 0,
+        };
+        await tx.createTask(
+          this.context.workflow,
+          { approvalId: approval.id },
+          { ownership: { kind: "conversation" } },
+        );
+        state.approvals.push(approval);
+        enqueue(
+          state,
+          approval,
+          "approval",
+          input.source === "discord"
+            ? (input.discordThreadId ??
+                this.context.options.discordThreadId ??
+                null)
+            : (this.context.options.discordThreadId ?? null),
+        );
+        return approval.id;
+      }, context),
+    );
     this.context.harness.resume();
     return id;
   }

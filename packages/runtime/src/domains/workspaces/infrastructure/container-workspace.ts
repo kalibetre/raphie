@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
-import { chmod, mkdir } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { chmod, lstat, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -167,6 +168,63 @@ export class ContainerWorkspace {
     } catch (error) {
       db.close();
       throw error;
+    }
+  }
+
+  /** Deletion recovery reaps persisted compute without opening a bot or starting work. */
+  static async reapForDeletion(directory: string) {
+    const path = join(directory, "workspace", "container.sqlite");
+    try {
+      await lstat(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    const db = new Database(path, { readonly: true, strict: true });
+    try {
+      const lease = db.query<Lease, []>("SELECT * FROM lease").get();
+      if (!lease)
+        throw new Error(
+          "Container lease is missing; deletion remains pending.",
+        );
+      const identity: unknown = JSON.parse(
+        await readFile(join(directory, "workspace-identity.json"), "utf8"),
+      );
+      if (
+        !identity ||
+        typeof identity !== "object" ||
+        !("id" in identity) ||
+        identity.id !== lease.workspace_id
+      )
+        throw new Error(
+          "Container installation identity does not match the bot; deletion remains pending.",
+        );
+      const cli = new ContainerCli();
+      // Discover independently of the possibly corrupted lease scope. The
+      // separate identity and Docker's persisted bind identify this bot.
+      const containers = cli
+        .inspect(lease.workspace_id)
+        .filter((container) =>
+          container.Mounts.some(
+            (mount) =>
+              mount.Type === "bind" &&
+              mount.Destination === "/workspace" &&
+              realpathSync(mount.Source) ===
+                realpathSync(join(directory, "workspace", "files")),
+          ),
+        );
+      if (
+        containers.some(
+          (container) =>
+            container.Config.Labels["raphie.scope"] !== lease.scope,
+        )
+      )
+        throw new Error(
+          "Container ownership does not match the bot directory; deletion remains pending.",
+        );
+      for (const container of containers) cli.run(["rm", "-f", container.Id]);
+    } finally {
+      db.close();
     }
   }
 
