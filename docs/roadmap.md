@@ -74,7 +74,9 @@ Discord click cannot execute it again. This does not link or continue sessions.
 ### Delivered: home channel for scheduled updates
 
 Each bot can select one known Discord or Telegram conversation in Settings or by
-sending `/home` there as a verified owner. Web chat has no `/home` command.
+sending `/home` there as a verified owner. Native commands are registered on
+connection/restart: Telegram `/pair`, `/home`, `/help`, `/start`; Discord `/home`.
+Web chat has no `/home` command.
 Scheduled turns freeze home at admission regardless of where the job was created;
 missing/unavailable home stays web-only. Approval notices direct the owner to web.
 Channel turns persist structured origin metadata. Session linking, per-job

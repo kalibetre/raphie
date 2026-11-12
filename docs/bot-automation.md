@@ -72,7 +72,19 @@ No credential or transport argument is returned through the owner API.
 
 Each bot has one optional home destination. Send `/home` in a verified Telegram
 private chat or an authorized Discord conversation to select that conversation.
-No chat ID is taken from message text and no model call is needed. Web chat does
+No chat ID is taken from message text and no model call is needed. Telegram
+registers `/pair`, `/home`, `/help` and `/start` in its private-chat command menu.
+Discord registers `/home` as a global native slash command on connect/restart,
+for servers and bot DMs, using an individual command upsert that preserves other
+application commands. Native Discord confirmations/refusals are private to the
+invoking user. Discord continues to use the allowed-user list in Settings rather
+than a `/pair` flow. Text `/home` remains supported for compatibility.
+
+Discord installations need the `applications.commands` scope (included with the
+standard bot installation). Reauthorize the app if commands are missing; allow
+Discord’s command propagation and refresh the client. Registration failures fail
+connection rather than silently claiming success; save the connection again after
+fixing permissions/network access. See [Discord’s command documentation](https://docs.discord.com/developers/docs/interactions/slash-commands). Web chat does
 not interpret `/home`; use Settings → Channels to select a known destination or
 **Web only** (the default). Natural-language requests do not change routing;
 the owner must use the command or Settings. A channel message registers its

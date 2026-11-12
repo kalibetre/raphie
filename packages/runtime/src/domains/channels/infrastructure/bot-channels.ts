@@ -223,6 +223,7 @@ export class BotChannels {
       threadId,
       respondToChannelIds: config.channelId ? [config.channelId] : [],
     });
+    await bridge.registerCommands();
     await bridge.chat.initialize();
     const abort = new AbortController();
     this.bridge = bridge;

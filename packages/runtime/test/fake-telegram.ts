@@ -9,6 +9,8 @@ export type FakeBody = {
   parse_mode?: string;
   message_id?: number;
   offset?: number;
+  commands?: { command: string; description: string }[];
+  scope?: { type: string };
   reply_markup?: {
     inline_keyboard: { text: string; callback_data: string }[][];
   };

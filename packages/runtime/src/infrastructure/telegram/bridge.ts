@@ -38,8 +38,21 @@ export type TelegramBridgeConfig = {
   onProblem?(problem: TelegramProblem | null): void;
 };
 
+const COMMANDS = [
+  {
+    command: "pair",
+    description: "Verify your account with a code from Raphie Settings",
+  },
+  {
+    command: "home",
+    description: "Use this conversation for scheduled updates",
+  },
+  { command: "help", description: "Show help and supported capabilities" },
+  { command: "start", description: "Start using this private assistant" },
+];
+
 const HELP =
-  "I am a private assistant. Send me a message to start a conversation. Tool actions will arrive with Approve and Decline buttons.\n\nNot supported in Telegram: photos, files and other attachments, group chats, edited messages, Markdown formatting and the /copy command.";
+  "I am a private assistant. Send me a message to start a conversation. Tool actions will arrive with Approve and Decline buttons. Use /home to send scheduled updates here.\n\nNot supported in Telegram: photos, files and other attachments, group chats, edited messages, Markdown formatting and the /copy command.";
 const STRANGER =
   "This assistant is private. If you are its owner, open Raphie Settings → Channels → Telegram, create a pairing code, then send /pair followed by the code here.";
 const REFUSAL_INTERVAL_MS = 10 * 60 * 1000;
@@ -90,9 +103,14 @@ export function createTelegramBridge(
     if (command?.[1] === "pair") {
       if (config.owners().includes(String(from.id)))
         return notify(chatId, "This Telegram account is already verified.");
+      if (!command[2]?.trim())
+        return notify(
+          chatId,
+          "Open Raphie Settings → Channels → Telegram, create a pairing code, then send /pair followed by that code here.",
+        );
       return notify(
         chatId,
-        config.pair(String(from.id), command[2] ?? "")
+        config.pair(String(from.id), command[2])
           ? "Verified. You can now chat with this assistant here."
           : "That pairing code is not valid or has expired. Create a new one in Raphie Settings.",
       );
@@ -218,8 +236,13 @@ export function createTelegramBridge(
   /** Long polling: each update is handled, then its offset is committed. */
   async function poll(signal: AbortSignal) {
     let backoff = 1000;
+    let commandsRegistered = false;
     while (!signal.aborted) {
       try {
+        if (!commandsRegistered) {
+          await api.setMyCommands(COMMANDS, signal);
+          commandsRegistered = true;
+        }
         const updates = await api.getUpdates(
           config.cursor.next(),
           config.pollSeconds ?? 30,

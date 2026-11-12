@@ -17,7 +17,7 @@ import { channelRoutes } from "../src/domains/channels/presentation/http/routes.
 import type { McpClient } from "../src/infrastructure/mcp/client.ts";
 import { createTelegramBridge } from "../src/infrastructure/telegram/bridge.ts";
 import { chatModel } from "./chat-model.ts";
-import { FakeTelegram } from "./fake-telegram.ts";
+import { FakeTelegram, rateLimited } from "./fake-telegram.ts";
 
 const OWNER = 42;
 const ARGS = { code: '<b>run</b> & "exactly" this' };
@@ -815,6 +815,67 @@ test("scheduled home approvals send a web-only notice and cannot be decided from
       ),
     );
     assert.deepEqual(t.calls, [["execute", ARGS]]);
+  } finally {
+    await t.close();
+  }
+});
+
+test("Telegram registers its native commands for private chats on connect and restart", async () => {
+  const t = await setup();
+  try {
+    await until(() => t.fake.sent("setMyCommands").length === 1);
+    const registered = t.fake.sent("setMyCommands")[0]!.body;
+    assert.deepEqual(registered.scope, { type: "all_private_chats" });
+    assert.deepEqual(
+      registered.commands?.map((item) => item.command),
+      ["pair", "home", "help", "start"],
+    );
+    await t.reopen();
+    await until(() => t.fake.sent("setMyCommands").length === 2);
+    assert.deepEqual(t.fake.sent("setMyCommands")[1]!.body, registered);
+  } finally {
+    await t.close();
+  }
+});
+
+test("choosing /pair from the native menu shows usage without consuming code attempts", async () => {
+  const t = await setup();
+  try {
+    const { code } = t.telegram.pairingCode();
+    for (let i = 0; i < 6; i++) t.fake.text(OWNER, "/pair");
+    await until(() => toText(t.fake).length === 6);
+    assert.ok(
+      toText(t.fake).every((text) => text.includes("followed by that code")),
+    );
+    t.fake.text(OWNER, `/pair ${code}`);
+    await until(
+      () =>
+        !!t.telegram.read().telegram?.verifiedUserIds.includes(String(OWNER)),
+    );
+  } finally {
+    await t.close();
+  }
+});
+
+test("Telegram command registration retries a 429 before polling resumes", async () => {
+  const t = await setup();
+  try {
+    await until(() => t.fake.sent("setMyCommands").length === 1);
+    await t.telegram.save({ enabled: false });
+    let limited = false;
+    t.fake.intercept = (call) => {
+      if (call.method === "setMyCommands" && !limited) {
+        limited = true;
+        return rateLimited(1);
+      }
+    };
+    await t.telegram.save({ enabled: true });
+    await until(() => t.fake.sent("setMyCommands").length === 3);
+    t.fake.text(OWNER, "/pair");
+    await until(() =>
+      toText(t.fake).some((text) => text.includes("followed by that code")),
+    );
+    assert.equal(t.telegram.read().telegram?.problem, null);
   } finally {
     await t.close();
   }

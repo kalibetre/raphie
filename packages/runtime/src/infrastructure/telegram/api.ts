@@ -106,6 +106,15 @@ export function createTelegramApi(
   }
 
   return {
+    setMyCommands: (
+      commands: { command: string; description: string }[],
+      signal?: AbortSignal,
+    ) =>
+      call<true>(
+        "setMyCommands",
+        { commands, scope: { type: "all_private_chats" } },
+        signal,
+      ),
     getMe: () =>
       call<{ id: number; username?: string }>("getMe", {}, undefined, 15_000),
     getUpdates: (offset: number, seconds: number, signal: AbortSignal) =>

@@ -18,7 +18,8 @@ for how the token is protected.
    the bot token. Keep it secret: anyone with it can act as that bot.
 2. In Raphie open **Settings → Channels → Telegram → Connect**, paste the token and
    choose **Save and connect**. Raphie checks it with `getMe`, encrypts it with the
-   same credential store as Discord, and starts long polling. The token is never
+   same credential store as Discord, registers `/pair`, `/home`, `/help` and `/start`
+   in Telegram’s private-chat command menu, and starts long polling. The token is never
    returned by the API, shown again, logged or placed in an error message.
 3. **Create pairing code**, then open a **private** chat with your Telegram bot and
    send `/pair ABCDE-FGHJK`. The chat replies when your account is verified, and
@@ -33,6 +34,14 @@ the token, verified accounts and saved polling offset for that bot.
 One Telegram bot can be connected to one Raphie bot at a time. A second Raphie bot
 trying to use it gets a conflict; on startup the first bot in profile order wins and
 the others report "connected to another Raphie bot".
+
+The command list is registered on every enabled connection/restart using
+[`setMyCommands`](https://core.telegram.org/bots/api#setmycommands), scoped to
+private chats. Registration failures appear as a connection problem and retry
+with backoff (including Telegram’s `retry_after`). Selecting `/pair` without a
+code shows instructions and does not consume pairing attempts. The menu does
+not grant access: the normal private-chat and verified-account checks still apply.
+Commands set manually by BotFather for the same scope are replaced by this list.
 
 ## How owner verification works
 
