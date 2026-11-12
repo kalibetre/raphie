@@ -13,6 +13,7 @@ change that changes the behavior.
 - [Installed service commands](commands.md): status, ports, origins, updates and recovery.
 - [Standalone builds and operations](standalone-build.md): detailed deployment and recovery notes.
 - [Using Raphie](using-raphie.md): conversations, settings, storage and features.
+- [General attachments](general-attachments.md): composer uploads, workspace paths, original versions and model input limits.
 - [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
 - [Bot workspaces and execution providers](bot-workspaces.md): files, just-bash, containers and their limits.
 - [Bot automation](bot-automation.md): per-bot MCP servers, encrypted configuration and recurring prompts.
@@ -50,5 +51,3 @@ provider differences and verification instructions aligned with the code. Descri
 model-dependent behavior as such; distinguish implemented capabilities from
 planned work. Preserve historical documents as records rather than using them as
 current product instructions.
-
-- [General attachments](general-attachments.md): composer uploads, workspace paths, original versions and model input limits.

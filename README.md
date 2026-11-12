@@ -19,7 +19,7 @@ Install Raphie for your user on Linux or macOS. You need `curl` and `python3`, p
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
 ```
 
-The default channel is **stable**. If no stable release is available, installation stops. To opt into nightly builds instead:
+The default channel is **stable**. Check the [published releases](https://github.com/kalibetre/raphie/releases) for a stable release with an archive for your operating system and architecture. If no matching stable release is available, installation stops. To opt into nightly builds instead:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --channel nightly
@@ -27,13 +27,15 @@ curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/insta
 
 The selected channel is remembered for updates. Use `raphie channel stable` or `raphie channel nightly` to switch. The installer executes code downloaded from GitHub; [download and inspect it first](docs/user-installation.md) if you prefer.
 
-The installer configures PATH for new Bash/Zsh terminals. Once installed, open a new terminal and create your administrator:
+The installer configures PATH for new Bash/Zsh terminals and attempts to start a user service. Open a new terminal and run `raphie health` to check that the runtime and web service are available. If no user service is available, run `raphie start` and leave that terminal open. If the service failed to start, follow the installer's log hint and the [service recovery instructions](docs/user-installation.md#background-service).
+
+With Raphie running, create your administrator in a second terminal:
 
 ```sh
 raphie auth setup
 ```
 
-Open **http://127.0.0.1:4320**, sign in, and connect a model provider in Settings. The installer attempts to start a user service; if it cannot, run `raphie start` in a terminal first. See [installation and service setup](docs/user-installation.md) for background service requirements, remote access and troubleshooting.
+Open **http://127.0.0.1:4320**, sign in, and connect a model provider in Settings. See [installation and service setup](docs/user-installation.md) for background service requirements, remote access and troubleshooting.
 
 ## A little more room to think
 
