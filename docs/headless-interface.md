@@ -91,7 +91,7 @@ summaries and earlier diagnostics. Reusable run/tool/usage projections live at
 `@raphie/contracts/projections`, independent of React. Old `/chat`, `/chats`,
 `/events`, numeric-link resolution and file experiment routes remain compatibility
 interfaces. There is no new session-link, broadcast, cancellation or general chat
-attachment operation. Desktop, CLI and Telegram applications remain unbuilt.
+attachment operation. Desktop and CLI applications remain unbuilt. Telegram is delivered as a channel; see [Telegram](telegram.md).
 
 ## Durable state and migration
 

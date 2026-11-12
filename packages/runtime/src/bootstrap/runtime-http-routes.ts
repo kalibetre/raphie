@@ -4,6 +4,7 @@ import { streamSnapshots } from "../domains/activity/presentation/http/events.ts
 import { approvalRoutes } from "../domains/approvals/presentation/http/routes.ts";
 import { attachmentRoutes } from "../domains/attachments/presentation/http/routes.ts";
 import type { BotChannels } from "../domains/channels/infrastructure/bot-channels.ts";
+import type { BotTelegram } from "../domains/channels/infrastructure/bot-telegram.ts";
 import { channelRoutes } from "../domains/channels/presentation/http/routes.ts";
 import { conversationRoutes } from "../domains/conversations/presentation/http/routes.ts";
 import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
@@ -25,6 +26,7 @@ import type { Gateway } from "./agent-runtime.ts";
 
 export type RuntimeHttpOptions = {
   channels?: BotChannels;
+  telegram?: BotTelegram;
   mcp?: BotMcp;
   jobs?: BotJobs;
   discordConfigured?: boolean;
@@ -57,7 +59,10 @@ export function runtimeRoutes(
     ),
   );
   if (options.channels)
-    app.route("/api/channels", channelRoutes(options.channels));
+    app.route(
+      "/api/channels",
+      channelRoutes(options.channels, options.telegram),
+    );
   if (options.mcp) app.route("/api/mcp", mcpRoutes(options.mcp));
   if (options.jobs) app.route("/api/jobs", jobRoutes(options.jobs));
   // The outer host owns sanitized transport error responses.

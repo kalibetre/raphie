@@ -27,6 +27,7 @@ import { createTelemetry } from "../src/infrastructure/observability/effect-tele
 import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
 import { appDataIdentity } from "../src/infrastructure/workspace/app-data.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
+import { FakeTelegram } from "./fake-telegram.ts";
 const directory = await mkdtemp(join(tmpdir(), "raphie-browser-"));
 const nativeWorkspace = process.env.RAPHIE_FIXTURE_CONTAINER === "true";
 const models = createModels();
@@ -291,6 +292,7 @@ settings.onChange = () => {
 };
 memory.isBusy = settings.isBusy = async () =>
   (await app.chats.state()).turns.some((turn) => turn.status === "pending");
+const telegram = new FakeTelegram();
 const bots = await BotHost.open(
   directory,
   { gateway: app, settings, memory },
@@ -340,7 +342,11 @@ const bots = await BotHost.open(
       },
     };
   },
-  { keyStore: memoryCredentialKeyStore() },
+  {
+    keyStore: memoryCredentialKeyStore(),
+    // Telegram traffic goes to a local fake; the fixture never contacts Telegram.
+    telegram: { apiBase: telegram.url, pollSeconds: 1 },
+  },
 );
 // Override the ports to run beside a real runtime.
 const server = await startServer(app, {
@@ -352,12 +358,16 @@ const server = await startServer(app, {
   webOrigin: process.env.RAPHIE_FIXTURE_WEB_ORIGIN ?? "http://127.0.0.1:4321",
 });
 console.log(`Browser fixture: ${server.url}`);
+console.log(
+  `Fake Telegram API: ${telegram.url} (token ${telegram.token}; POST /__text {"user":1,"text":"/pair CODE"})`,
+);
 await new Promise<void>((done) => {
   process.once("SIGINT", done);
   process.once("SIGTERM", done);
 });
 await server.close();
 await bots.close();
+await telegram.stop();
 await app.close();
 await exporter.close();
 await collector.close();

@@ -46,7 +46,7 @@ Stopping withdraws queued input and marks interrupted replies as stopped. Comple
 external effects are not undone; uncertain tool outcomes keep their existing recovery
 rules. Steering joins the current reply at a tool boundary. If the current reply
 finishes first, Pi starts a new reply for the steering message. Shared answers
-appear once; distinct replies remain visible. MCP requests show the exact arguments before approval. Web and Discord decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
+appear once; distinct replies remain visible. MCP requests show the exact arguments before approval. Web, Discord and Telegram decisions update the same persisted record. Pending approvals recover with their original deadline; an interrupted external action is marked uncertain and is not automatically repeated.
 
 ### Command permissions
 

@@ -8,6 +8,15 @@ export type {
 } from "./bots/automation.ts";
 
 export type {
+  ChannelSettings,
+  DiscordChannel,
+  SaveTelegramChannel,
+  TelegramChannel,
+  TelegramPairingCode,
+  TelegramProblem,
+} from "./bots/channels.ts";
+
+export type {
   BotProfile,
   SaveBotProfile,
   UpdateBotProfile,
@@ -15,7 +24,7 @@ export type {
 
 export type { DiagnosticSpan, TraceDiagnostics } from "./diagnostics/views.ts";
 
-export type Channel = "web" | "discord";
+export type Channel = "web" | "discord" | "telegram";
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";
 

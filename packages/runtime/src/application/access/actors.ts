@@ -8,6 +8,7 @@ export type ActorContext = Readonly<{
   source: Channel;
   threadId?: string;
   connectionId?: string;
+  /** Legacy-named: the verified external user ID for any channel. */
   discordUserId?: string;
 }>;
 
@@ -27,9 +28,9 @@ export class ActorAuthority {
     connectionId = "legacy-discord",
     discordUserId?: string,
   ): ActorContext {
-    if (source === "discord" && !threadId)
+    if (source !== "web" && !threadId)
       throw new InputError(
-        "Discord context requires a verified conversation.",
+        "A channel context requires a verified conversation.",
         403,
       );
     const actor: ActorContext = Object.freeze({
@@ -38,7 +39,7 @@ export class ActorAuthority {
       source,
       threadId,
       connectionId,
-      discordUserId: source === "discord" ? discordUserId : undefined,
+      discordUserId: source !== "web" ? discordUserId : undefined,
     });
     this.issued.add(actor);
     return actor;

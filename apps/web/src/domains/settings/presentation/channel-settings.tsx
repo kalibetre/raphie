@@ -1,3 +1,4 @@
+import type { ChannelSettings, DiscordChannel } from "@raphie/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
@@ -7,17 +8,12 @@ import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
 import { Group, Row } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
+import { TelegramSettings } from "./telegram-settings";
 import { useSettingsGuard } from "./use-settings-guard";
 
-type Discord = {
-  allowedUserIds: string[];
-  channelId: string;
-  connected: boolean;
-  tokenConfigured: boolean;
-  conflict: boolean;
-};
+type Discord = DiscordChannel;
 
-type Channels = { discord: Discord | null };
+type Channels = ChannelSettings;
 
 function ChannelAlert({ title, message }: { title: string; message: string }) {
   return (
@@ -39,6 +35,9 @@ export function ChannelSettings() {
   const query = useQuery({
     queryKey: ["channels"],
     queryFn: () => workspace.api<Channels>("/api/channels"),
+    // While a pairing code is live, notice the owner's account verifying.
+    refetchInterval: (current) =>
+      current.state.data?.telegram?.pairingExpiresAt ? 2000 : false,
   });
   const mutation = useMutation({
     mutationFn: ({ path, input }: { path: string; input: unknown }) =>
@@ -314,6 +313,7 @@ export function ChannelSettings() {
           </form>
         </div>
       )}
+      <TelegramSettings saved={query.data.telegram ?? null} />
     </Group>
   );
 }

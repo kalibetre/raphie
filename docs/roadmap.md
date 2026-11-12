@@ -126,6 +126,9 @@ There is no Discord/Telegram inspection-command requirement.
 
 ## Later client and channel work
 
+Delivered: Telegram (see below and the [guide](telegram.md)). Everything else in this
+list is still planned.
+
 - **CLI:** use the client interface for session selection, send/watch, approvals,
   and optional structured inspection output. No second executor or direct DB access.
 - **Desktop:** connect to an existing runtime first. Local runtime packaging,
@@ -133,9 +136,12 @@ There is no Discord/Telegram inspection-command requirement.
   a view must not accidentally cancel execution.
 - **Remote clients:** add authenticated access before relaxing loopback binding;
   retain browser origin protections and authorize subscriptions and reads too.
-- **Telegram:** add an adapter with its own address/identity verification and
-  rendering once the Discord module proves the shared interface. Unsupported
-  capabilities should be explicit rather than silently dropped.
+- **Telegram:** delivered as a long-polling adapter with pairing-code owner
+  verification and its own renderer on the shared delivery worker; see the
+  [Telegram guide](telegram.md). Planned and not yet built: attachments in either
+  direction, group chats, Markdown rendering, webhooks, and a verified run against a
+  real Telegram bot (the adapter has only been tested against a local fake).
+  Unsupported capabilities answer explicitly rather than being dropped.
 - **Cross-channel continuation:** explicit ownership-checked link/unlink and
   destination selection, with history-disclosure policy. No implicit broadcasting,
   automatic identity matching, or copying transcripts into a new session.

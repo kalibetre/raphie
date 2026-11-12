@@ -1,5 +1,6 @@
 import type {
   ActivityEvent,
+  Channel,
   LiveConversation,
   Session,
   ToolApprovalView,
@@ -9,7 +10,7 @@ import type {
 
 export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   id: string;
-  origin: "web" | "discord";
+  origin: Channel;
   lastAt: number;
   working: boolean;
   failed: boolean;

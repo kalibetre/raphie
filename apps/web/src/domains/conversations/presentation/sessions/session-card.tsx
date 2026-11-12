@@ -33,10 +33,10 @@ export function SessionCard({
           <span className="conversation-dot" aria-hidden="true" />
         )}
         <span className="conversation-title">{session.title}</span>
-        {session.origin === "discord" && (
+        {session.origin !== "web" && (
           <MessageCircle
             size={11}
-            aria-label="Discord session"
+            aria-label={`${session.origin === "telegram" ? "Telegram" : "Discord"} session`}
             className="conversation-origin"
           />
         )}

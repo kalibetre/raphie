@@ -1,3 +1,5 @@
+import type { Channel as Source } from "@raphie/contracts";
+
 import { decideApproval, isDecision } from "../domain/decision.ts";
 import type { ToolApproval, ToolDelivery } from "../domain/tool-approval.ts";
 
@@ -13,8 +15,8 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import { channelNames } from "../../channels/domain/binding.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
-import type { Source } from "./pi-file-approvals.ts";
 import { InputError } from "./pi-file-approvals.ts";
 
 type Grant = {
@@ -302,26 +304,27 @@ export class ToolApprovalService {
         throw new InputError("This tool requires approval of each call.", 403);
       const destination =
         state.deliveries.find((d) => d.approvalId === id)?.threadId ?? null;
+      const names = channelNames(via === "telegram" ? "telegram" : "discord");
       if (
-        via === "discord" &&
+        via !== "web" &&
         item.replyTo &&
         item.replyTo.connectionId !== connectionId
       )
         throw new InputError(
-          "Approval belongs to another Discord connection.",
+          `Approval belongs to another ${names.name} connection.`,
           403,
         );
-      if (via === "discord" && destination !== threadId)
+      if (via !== "web" && destination !== threadId)
         throw new InputError(
-          "Approval belongs to another Discord thread.",
+          `Approval belongs to another ${names.name} ${names.place}.`,
           403,
         );
       if (
-        via === "discord" &&
+        via !== "web" &&
         (!item.discordUserId || item.discordUserId !== discordUserId)
       )
         throw new InputError(
-          "Only the Discord user who initiated this request can decide it. Use the web UI if the initiator cannot be verified.",
+          `Only the ${names.name} user who initiated this request can decide it. Use the web UI if the initiator cannot be verified.`,
           403,
         );
       if (item.status !== "pending") return item.status;

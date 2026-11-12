@@ -28,7 +28,10 @@ import {
 import { ToolApprovals } from "../../approvals/infrastructure/pi-tool-approvals.ts";
 import type { AttachmentStore } from "../../attachments/application/ports.ts";
 import { imageMime } from "../../attachments/domain/policy.ts";
-import { sameDestination } from "../../channels/domain/binding.ts";
+import {
+  channelNames,
+  sameDestination,
+} from "../../channels/domain/binding.ts";
 import { ChannelBindings } from "../../channels/infrastructure/pi-bindings.ts";
 import type { MemoryService } from "../../memory/application/ports.ts";
 import { memoryInstructions } from "../../memory/infrastructure/memory-instructions.ts";
@@ -377,9 +380,9 @@ export class ChatService implements ConversationCommands {
         const state = await tx.doc(Chats);
         const bindings = (await tx.doc(ChannelBindings)).bindings;
         const replyTo =
-          input.source === "discord" && input.discordThreadId
+          input.source !== "web" && input.discordThreadId
             ? {
-                provider: "discord" as const,
+                provider: input.source,
                 owner: "owner" as const,
                 connectionId: input.connectionId ?? "legacy-discord",
                 conversation: input.discordThreadId,
@@ -395,11 +398,11 @@ export class ChatService implements ConversationCommands {
           throw new InputError("Session not found.", 404);
         if (
           addressed &&
-          input.source === "discord" &&
+          input.source !== "web" &&
           binding?.sessionId !== addressed.sessionId
         )
           throw new InputError(
-            "Session belongs to another Discord thread.",
+            `Session belongs to another ${channelNames(input.source).name} ${channelNames(input.source).place}.`,
             403,
           );
         const conversationId = addressed?.id ?? input.conversationId;
@@ -420,21 +423,24 @@ export class ChatService implements ConversationCommands {
         const existing = state.turns.find((t) => t.requestKey === requestKey);
         if (existing) {
           if (
-            input.source === "discord" &&
+            input.source !== "web" &&
             (!replyTo ||
               !existing.replyTo ||
               !sameDestination(replyTo, existing.replyTo))
           )
             throw new InputError(
-              "Event belongs to another Discord connection or thread.",
+              `Event belongs to another ${channelNames(input.source).name} connection or ${channelNames(input.source).place}.`,
               403,
             );
           if (
-            input.source === "discord" &&
+            input.source !== "web" &&
             existing.discordUserId &&
             existing.discordUserId !== input.discordUserId
           )
-            throw new InputError("Event belongs to another Discord user.", 403);
+            throw new InputError(
+              `Event belongs to another ${channelNames(input.source).name} user.`,
+              403,
+            );
           if (existing.fingerprint !== fingerprint)
             throw new InputError(
               "Event ID already used for different content.",
@@ -539,7 +545,7 @@ export class ChatService implements ConversationCommands {
           status: "pending",
           answer: null,
           replyTo,
-          ...(input.source === "discord" && input.discordUserId
+          ...(input.source !== "web" && input.discordUserId
             ? { discordUserId: input.discordUserId }
             : {}),
           ...(input.scheduled ? { scheduled: input.scheduled } : {}),

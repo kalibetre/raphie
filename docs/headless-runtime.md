@@ -4,7 +4,7 @@
 of this design. Open the file directly; no server or external assets are needed.
 
 Design dated 2026-10-21. The principles in [ADR 0001](adr/0001-headless-runtime-and-capability-specific-adapters.md)
-are accepted. All four migration slices now have working implementations and acceptance coverage. This document records the design; [headless-interface.md](headless-interface.md) describes the delivered names, routes, limits and migration behavior. Desktop, CLI, Telegram and session linking remain future work.
+are accepted. All four migration slices now have working implementations and acceptance coverage. This document records the design; [headless-interface.md](headless-interface.md) describes the delivered names, routes, limits and migration behavior. Desktop, CLI and session linking remain future work; the Telegram channel is delivered (see [telegram.md](telegram.md)).
 
 ## Product scope
 
@@ -213,7 +213,7 @@ shared without React dependencies. Web uses focused queries and observations.
 The legacy source enum still names web and Discord for stored-event compatibility;
 channel identity is a separate structured reply destination. Local HTTP access
 remains single-owner and loopback-only. No remote authentication, full CLI/desktop
-application, Telegram integration or session-link command has been added. Retained
+application or session-link command has been added. Telegram is a second channel on the same interfaces. Retained
 Pi documents are still scanned internally; response pagination is not an indexed
 storage optimization. See the implementation record for measured limits.
 
