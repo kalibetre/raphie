@@ -432,6 +432,7 @@ test("updates are deduplicated and polling resumes from the persisted offset aft
       "reply",
     );
     await until(() => t.fake.offsets.at(-1) === id + 1, "offset commit");
+    const pollsBeforeRestart = t.fake.offsets.length;
     await t.reopen();
     // Telegram redelivers an unconfirmed update; neither layer reprocesses it.
     t.fake.text(OWNER, "only once", { id: 500 });
@@ -440,11 +441,16 @@ test("updates are deduplicated and polling resumes from the persisted offset aft
       () => toText(t.fake).some((text) => /next one/.test(text)),
       "next reply",
     );
-    assert.ok(
-      t.fake.offsets.includes(501),
-      "Polling resumed from the saved offset",
+    const resumedOffsets = t.fake.offsets.slice(pollsBeforeRestart);
+    assert.equal(
+      resumedOffsets[0],
+      id + 1,
+      "The first resumed poll uses the saved offset",
     );
-    assert.ok(!t.fake.offsets.slice(-5).includes(0), "No restart from zero");
+    assert.ok(
+      resumedOffsets.every((offset) => offset >= id + 1),
+      "Polling never moves behind the saved offset after restart",
+    );
     const turns = (await t.app.chats.state()).turns;
     assert.deepEqual(
       turns.map((turn) => turn.text),
