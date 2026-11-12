@@ -1,3 +1,4 @@
+import type { ChannelOrigin } from "../bots/channels.ts";
 import type {
   ActivityEvent,
   Channel,
@@ -27,7 +28,11 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
 export type SessionTurn = Omit<
   Turn,
   "conversationId" | "requestKey" | "fingerprint"
-> & { conversationId: string };
+> & {
+  conversationId: string;
+  origin?: ChannelOrigin;
+  scheduledDelivery?: "home" | "web-only" | "home-unavailable";
+};
 
 export type SessionApproval = Omit<ToolApprovalView, "conversationId"> & {
   conversationId: string;

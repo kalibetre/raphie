@@ -219,7 +219,9 @@ export function TelegramSettings({ saved }: { saved: TelegramChannel | null }) {
               <p className="automation-note">
                 Only these Telegram accounts can message this bot or decide tool
                 approvals. Identity is the account&apos;s numeric ID, not its
-                username. Groups and unknown chats are ignored.
+                username. In groups, only verified owners can trigger replies by
+                mentioning this bot or using /ask@BotName. Pair privately; group
+                tool approvals are decided in the web workspace.
               </p>
               {saved.verifiedUserIds.length === 0 ? (
                 <p className="automation-note">

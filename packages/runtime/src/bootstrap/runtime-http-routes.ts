@@ -5,6 +5,7 @@ import { approvalRoutes } from "../domains/approvals/presentation/http/routes.ts
 import { attachmentRoutes } from "../domains/attachments/presentation/http/routes.ts";
 import type { BotChannels } from "../domains/channels/infrastructure/bot-channels.ts";
 import type { BotTelegram } from "../domains/channels/infrastructure/bot-telegram.ts";
+import { homeRoutes } from "../domains/channels/presentation/http/home-routes.ts";
 import { channelRoutes } from "../domains/channels/presentation/http/routes.ts";
 import { conversationRoutes } from "../domains/conversations/presentation/http/routes.ts";
 import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
@@ -41,6 +42,7 @@ export function runtimeRoutes(
   options: RuntimeHttpOptions = {},
 ) {
   const app = new Hono();
+  app.route("/api/channels/home", homeRoutes(runtime.home));
   app.route(
     "/api/workspace",
     workspaceRoutes(runtime.workspace, (input) =>

@@ -317,3 +317,20 @@ test("a Telegram worker cannot claim Discord intents, nor another Telegram bot's
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("the Telegram renderer never exposes tool cards, arguments or documents to groups", async () => {
+  const parts = await render({
+    id: "group-approval",
+    threadId: "telegram:-1001",
+    source: "tool",
+    kind: "approval",
+    approval: approval(JSON.stringify({ secretAction: "private-arguments" })),
+    originalMessageId: null,
+  });
+  assert.equal(parts.length, 1);
+  assert.equal(parts[0]!.chatId, "-1001");
+  assert.match(parts[0]!.text, /web workspace/);
+  assert.ok(!JSON.stringify(parts).includes("private-arguments"));
+  assert.equal(parts[0]!.buttons, undefined);
+  assert.equal(parts[0]!.document, undefined);
+});

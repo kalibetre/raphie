@@ -368,3 +368,72 @@ test("real Chat SDK parses incoming files, renders buttons, handles actions and 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("Discord /home selects the verified current conversation without submitting a turn", async () => {
+  const api = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () =>
+      Response.json({
+        id: "notice",
+        channel_id: "channel",
+        content: "Home selected",
+        author: { id: "bot", username: "raphie", bot: true },
+        timestamp: new Date().toISOString(),
+        attachments: [],
+      }),
+  });
+  const directory = await mkdtemp(join(tmpdir(), "raphie-discord-home-"));
+  const app = await Gateway.open({ directory, ...chatModel() });
+  const bridge = createDiscordBridge(app, {
+    botToken: "fixture-token",
+    applicationId: "app",
+    ownerId: "owner",
+    publicKey: "0".repeat(64),
+    apiUrl: `http://127.0.0.1:${api.port}`,
+  });
+  try {
+    await bridge.chat.initialize();
+    const message = (userId: string, id: string) =>
+      bridge.adapter.parseMessage({
+        id,
+        guild_id: "guild",
+        channel_id: "channel",
+        content: "/home",
+        author: { id: userId, username: userId, bot: false },
+        timestamp: new Date().toISOString(),
+        attachments: [],
+      });
+    await bridge.chat.processMessage(
+      bridge.adapter,
+      "discord:guild:channel",
+      message("stranger", "denied-home"),
+    );
+    assert.equal((await app.home.read()).selected, null);
+    await bridge.chat.processMessage(
+      bridge.adapter,
+      "discord:guild:channel",
+      message("owner", "home"),
+    );
+    for (let i = 0; i < 100 && !(await app.home.read()).selected; i++)
+      await delay(10);
+    assert.equal(
+      (await app.home.read()).destinations[0]?.conversationId,
+      "discord:guild:channel",
+    );
+    assert.equal((await app.chats.state()).turns.length, 0);
+    await app.home.select(null);
+    await bridge.chat.processMessage(
+      bridge.adapter,
+      "discord:guild:channel",
+      message("owner", "home"),
+    );
+    await delay(50);
+    assert.equal((await app.home.read()).selected, null);
+  } finally {
+    await bridge.chat.shutdown();
+    await app.close();
+    await api.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+});

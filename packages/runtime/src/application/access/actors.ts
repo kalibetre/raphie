@@ -1,4 +1,4 @@
-import type { Channel } from "@raphie/contracts";
+import type { Channel, ChannelOrigin } from "@raphie/contracts";
 
 import { InputError } from "../../shared/application/input-error.ts";
 
@@ -6,6 +6,7 @@ export type ActorContext = Readonly<{
   botId: string;
   subject: "owner";
   source: Channel;
+  origin?: ChannelOrigin;
   threadId?: string;
   connectionId?: string;
   /** Legacy-named: the verified external user ID for any channel. */
@@ -27,6 +28,11 @@ export class ActorAuthority {
     threadId?: string,
     connectionId = "legacy-discord",
     discordUserId?: string,
+    message?: {
+      messageId?: string;
+      updateId?: number;
+      chatType?: "private" | "group" | "supergroup";
+    },
   ): ActorContext {
     if (source !== "web" && !threadId)
       throw new InputError(
@@ -34,6 +40,29 @@ export class ActorAuthority {
         403,
       );
     const actor: ActorContext = Object.freeze({
+      ...(source !== "web" && threadId && discordUserId
+        ? {
+            origin: Object.freeze({
+              platform: source,
+              connectionId,
+              conversationId: threadId,
+              channelId:
+                source === "discord"
+                  ? threadId.split(":")[2]!
+                  : threadId.split(":")[1]!,
+              userId: discordUserId,
+              ...(source === "discord"
+                ? {
+                    guildId: threadId.split(":")[1],
+                    ...(threadId.split(":")[3]
+                      ? { threadId: threadId.split(":")[3] }
+                      : {}),
+                  }
+                : {}),
+              ...message,
+            }),
+          }
+        : {}),
       botId: this.botId,
       subject: "owner",
       source,

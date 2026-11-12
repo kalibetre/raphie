@@ -23,6 +23,7 @@ import {
   CredentialCipher,
   type CredentialKeyStore,
 } from "../../settings/infrastructure/credential-cipher.ts";
+import type { ReplyDestination } from "../domain/binding.ts";
 
 type Stored = {
   botToken: string;
@@ -31,6 +32,8 @@ type Stored = {
   enabled: boolean;
   /** Verified Telegram user IDs, never usernames. */
   owners: string[];
+  /** Group IDs explicitly addressed by a verified owner; removal invalidates home. */
+  groups?: string[];
 };
 
 export type TelegramOptions = {
@@ -152,6 +155,25 @@ export class BotTelegram {
     }
   }
 
+  acceptsHome(
+    address: ReplyDestination & {
+      userId: string;
+    },
+  ) {
+    return (
+      !!this.config &&
+      this.config.enabled &&
+      this.read().telegram?.connected === true &&
+      address.provider === "telegram" &&
+      address.connectionId === `telegram:${this.config.botId}` &&
+      (address.conversation === `telegram:${address.userId}` ||
+        !!this.config.groups?.includes(
+          address.conversation.replace(/^telegram:/, ""),
+        )) &&
+      this.config.owners.includes(address.userId)
+    );
+  }
+
   read(): { telegram: TelegramChannel | null } {
     const config = this.config;
     return {
@@ -195,6 +217,23 @@ export class BotTelegram {
     const bridge = createTelegramBridge(this.app, {
       token: config.botToken,
       botId: config.botId,
+      botUsername: config.botUsername,
+      groupSeen: (chatId) => {
+        const current = this.config;
+        if (current && !current.groups?.includes(chatId))
+          this.persist({
+            ...current,
+            groups: [...(current.groups ?? []), chatId],
+          });
+      },
+      groupRemoved: (chatId) => {
+        const current = this.config;
+        if (current?.groups?.includes(chatId))
+          this.persist({
+            ...current,
+            groups: current.groups.filter((id) => id !== chatId),
+          });
+      },
       apiBase: this.options.apiBase,
       fetch: this.options.fetch,
       sleep: this.options.sleep,
@@ -283,6 +322,7 @@ export class BotTelegram {
       botUsername: identity.username,
       enabled,
       owners: this.config?.owners ?? [],
+      groups: this.config?.groups ?? [],
     });
     this.start();
     return this.read();

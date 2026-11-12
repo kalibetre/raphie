@@ -149,6 +149,7 @@ export class Sessions implements SessionOperations {
       sessionId: input.sessionId,
       model: input.model,
       approvalMode: verified.source === "web" ? input.approvalMode : undefined,
+      origin: verified.origin,
       source: verified.source,
       actor: verified.subject,
       discordThreadId: verified.threadId,
@@ -172,6 +173,7 @@ export class Sessions implements SessionOperations {
     const verified = this.authority.require(actor);
     const receipt = await this.conversations.send({
       ...input,
+      origin: verified.origin,
       source: verified.source,
       actor: verified.subject,
     });
@@ -197,6 +199,7 @@ export class Sessions implements SessionOperations {
     const verified = this.authority.require(actor);
     return this.conversations.send({
       ...input,
+      origin: verified.origin,
       source: verified.source,
       actor: verified.subject,
       discordThreadId: verified.threadId,

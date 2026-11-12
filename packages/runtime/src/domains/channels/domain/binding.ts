@@ -22,3 +22,14 @@ export function sameDestination(a: ReplyDestination, b: ReplyDestination) {
     a.conversation === b.conversation
   );
 }
+
+/** Telegram group/supergroup IDs are negative; private-user IDs are positive. */
+export function isSharedTelegramDestination(
+  destination:
+    Pick<ReplyDestination, "provider" | "conversation"> | null | undefined,
+) {
+  return (
+    destination?.provider === "telegram" &&
+    /^telegram:-[1-9]\d*$/.test(destination.conversation)
+  );
+}

@@ -163,3 +163,9 @@ export type {
   WorkspaceEntry,
   WorkspaceListing,
 } from "./workspaces/views.ts";
+
+export type {
+  ChannelOrigin,
+  HomeDestination,
+  ChannelHomeSettings,
+} from "./bots/channels.ts";

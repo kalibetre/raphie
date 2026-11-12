@@ -1,6 +1,9 @@
 import { setTimeout as delay } from "node:timers/promises";
 
-import type { TelegramUpdate } from "../src/infrastructure/telegram/api.ts";
+import type {
+  TelegramMessage,
+  TelegramUpdate,
+} from "../src/infrastructure/telegram/api.ts";
 
 export type FakeBody = {
   chat_id?: string;
@@ -8,7 +11,10 @@ export type FakeBody = {
   text: string;
   parse_mode?: string;
   message_id?: number;
+  message_thread_id?: number;
   offset?: number;
+  commands?: { command: string; description: string }[];
+  scope?: { type: string };
   reply_markup?: {
     inline_keyboard: { text: string; callback_data: string }[][];
   };
@@ -57,7 +63,14 @@ export class FakeTelegram {
   text(
     userId: number,
     text: string,
-    options: { chat?: number; type?: string; id?: number } = {},
+    options: {
+      chat?: number;
+      type?: string;
+      id?: number;
+      entities?: TelegramMessage["entities"];
+      senderChat?: TelegramMessage["sender_chat"];
+      threadId?: number;
+    } = {},
   ) {
     return this.push(
       {
@@ -66,6 +79,9 @@ export class FakeTelegram {
           from: { id: userId, is_bot: false },
           chat: { id: options.chat ?? userId, type: options.type ?? "private" },
           text,
+          entities: options.entities,
+          sender_chat: options.senderChat,
+          message_thread_id: options.threadId,
         },
       },
       options.id,

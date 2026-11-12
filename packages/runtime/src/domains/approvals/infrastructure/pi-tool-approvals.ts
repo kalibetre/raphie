@@ -15,7 +15,10 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
-import { channelNames } from "../../channels/domain/binding.ts";
+import {
+  channelNames,
+  isSharedTelegramDestination,
+} from "../../channels/domain/binding.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import { InputError } from "./pi-file-approvals.ts";
 
@@ -143,8 +146,12 @@ export class ToolApprovalService {
       const turn = pendingTurns[0];
       // The tool API identifies a conversation, not its originating turn. Never
       // assign authority from an ambiguous queue; the web owner can still decide.
+      const webOnlyApproval =
+        !!turn?.scheduled || isSharedTelegramDestination(turn?.replyTo);
       const initiator =
-        pendingTurns.length === 1 ? turn?.discordUserId : undefined;
+        !webOnlyApproval && pendingTurns.length === 1
+          ? turn?.discordUserId
+          : undefined;
       const { legacyFingerprint: _legacyFingerprint, ...currentProposal } =
         proposal;
       const item: ToolApproval = {
@@ -152,7 +159,7 @@ export class ToolApprovalService {
         id: crypto.randomUUID(),
         taskId: api.taskId,
         conversationId: api.conversationId,
-        replyTo: turn?.replyTo ?? null,
+        replyTo: webOnlyApproval ? null : (turn?.replyTo ?? null),
         ...(initiator ? { discordUserId: initiator } : {}),
         createdAt: Date.now(),
         expiresAt: Date.now() + (this.app.options.approvalTtlMs ?? 600_000),
@@ -208,7 +215,17 @@ export class ToolApprovalService {
         },
       );
       if (item.status === "pending") {
-        notify(state, item, "approval", turn?.replyTo?.conversation ?? null);
+        if (webOnlyApproval && turn?.replyTo) {
+          chats.deliveries.push({
+            id: `${item.id}:scheduled-approval`,
+            turnId: turn.id,
+            threadId: turn.replyTo.conversation,
+            connectionId: turn.replyTo.connectionId,
+            text: `${turn.scheduled ? `Scheduled: ${turn.scheduled.name}\n` : ""}Approval needed. Open the web workspace to review the exact action. Approval details are not posted to this conversation.`,
+            status: "pending",
+          });
+        } else
+          notify(state, item, "approval", turn?.replyTo?.conversation ?? null);
       } else {
         record(
           await tx.doc(Activity),

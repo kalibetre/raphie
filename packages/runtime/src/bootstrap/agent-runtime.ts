@@ -38,6 +38,7 @@ import {
 } from "../domains/approvals/infrastructure/pi-tool-approvals.ts";
 import { Files } from "../domains/attachments/infrastructure/local-attachment-store.ts";
 import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.ts";
+import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
 import {
   Chats,
   ChatService,
@@ -109,6 +110,7 @@ export class Gateway {
 
   readonly configurationGate: ModelConnectionGate;
   readonly actors: ActorAuthority;
+  readonly home: PiChannelHome;
   readonly sessions: ReturnType<typeof traceSessions>;
   readonly telemetry: Telemetry;
   readonly models: Models;
@@ -128,6 +130,7 @@ export class Gateway {
   private constructor(options: Options) {
     this.options = options;
     this.actors = new ActorAuthority(options.botId ?? "default");
+    this.home = new PiChannelHome(this, this.actors);
     this.configurationGate =
       options.modelConnectionGate ?? new ModelConnectionGate();
     this.telemetry = options.telemetry ?? noTelemetry;
@@ -153,6 +156,7 @@ export class Gateway {
       options.memory,
       this.files,
     );
+    this.chats.homeAvailable = (address) => this.home.available(address);
     this.toolApprovals = new ToolApprovalService(this);
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);

@@ -1,16 +1,16 @@
 # Telegram channel
 
-A bot can be reached through Telegram in a private chat with its own Telegram bot.
+A bot can be reached through Telegram in a private chat or an owner-addressed
+group/supergroup using its own Telegram bot.
 It uses the same shared operations as Discord and the web workspace: runtime-issued
 actor contexts, durable [channel bindings](../CONTEXT.md), a per-turn frozen reply
 destination and the scoped delivery worker. See [HTTP interface](headless-interface.md)
 for the shared design and [credential storage](provider-credential-storage.md)
 for how the token is protected.
 
-> **Live behaviour is unverified.** The adapter was built and tested against a local
-> fake of the Telegram Bot API (`packages/runtime/test/fake-telegram.ts`). No real
-> Telegram bot or token was used. Treat the first real conversation as acceptance
-> testing, starting with a throwaway bot and a harmless tool.
+> **Group behaviour still needs live acceptance.** Automated tests use a local
+> fake of the Telegram Bot API (`packages/runtime/test/fake-telegram.ts`), temporary
+> databases and deterministic models. Start group acceptance with a harmless question.
 
 ## Set up
 
@@ -18,7 +18,8 @@ for how the token is protected.
    the bot token. Keep it secret: anyone with it can act as that bot.
 2. In Raphie open **Settings → Channels → Telegram → Connect**, paste the token and
    choose **Save and connect**. Raphie checks it with `getMe`, encrypts it with the
-   same credential store as Discord, and starts long polling. The token is never
+   same credential store as Discord, registers `/ask`, `/pair`, `/home`, `/help` and `/start`
+   in Telegram’s private-chat command menu, and starts long polling. The token is never
    returned by the API, shown again, logged or placed in an error message.
 3. **Create pairing code**, then open a **private** chat with your Telegram bot and
    send `/pair ABCDE-FGHJK`. The chat replies when your account is verified, and
@@ -34,6 +35,59 @@ One Telegram bot can be connected to one Raphie bot at a time. A second Raphie b
 trying to use it gets a conflict; on startup the first bot in profile order wins and
 the others report "connected to another Raphie bot".
 
+The command list is registered on every enabled connection/restart using
+[`setMyCommands`](https://core.telegram.org/bots/api#setmycommands), scoped to
+private chats, with `/ask`, `/home` and `/help` also registered for groups. Registration failures appear as a connection problem and retry
+with backoff (including Telegram’s `retry_after`). Selecting `/pair` without a
+code shows instructions and does not consume pairing attempts. The menu does
+not grant access: the normal identity, verified-account and addressing checks still apply.
+Commands set manually by BotFather for the same scope are replaced by this list.
+
+## Groups and supergroups
+
+1. Pair your personal account in a **private** chat first. Never post a pairing
+   code in a group; group messages cannot consume or redeem codes.
+2. Add the Telegram bot to a regular group or supergroup. A verified owner can
+   send `/ask@BotName Summarize this question` or mention `@BotName` in a text
+   message. Only a matching Telegram mention entity or explicitly addressed
+   command triggers a turn. Unaddressed messages and unverified members are ignored,
+   even if the bot is an administrator or receives the full group feed.
+3. Use `/home@BotName` to explicitly share future scheduled outputs with that
+   group, regardless of where the jobs were created. The confirmation explains
+   that everyone in the group can read them. Settings can select a known group or
+   switch back to Web only.
+
+With Telegram privacy mode enabled, use the explicitly addressed `/ask@BotName`
+command: Telegram documents delivery of these commands, while ordinary messages
+may not reach the bot. Raphie does not change BotFather privacy settings or request
+administrator rights. See [Telegram’s privacy-mode rules](https://core.telegram.org/bots/faq#what-messages-will-my-bot-get).
+
+Each group has its own binding and session, separate from private chats and other
+groups. All verified owners using that group participate in the same group session.
+Only admitted owner prompts are stored; Raphie does not ingest surrounding chat,
+reply chains or other members’ messages. Origin metadata includes `chatType`.
+
+Group tool requests send only a generic “Approval needed” notice. The exact
+arguments, argument documents and decision buttons stay in the web workspace.
+A group button or a button pressed in the owner’s private Telegram chat cannot
+approve a group-origin request. After a web decision, the ordinary answer returns
+to the group; approved tool results may therefore appear in that answer.
+
+Bot removal/kicking invalidates the saved group for future scheduled admission.
+A rejoin alone does not restore it: a verified owner must address the bot in that
+group again. Existing frozen deliveries retain their destination. Group migration
+is not automatically linked: address the new group and set home again. Raphie does
+not continuously check owner membership; revoke an account in Settings or change
+home if that owner leaves. Bot membership updates missed while the connection is
+disabled cannot be reconstructed automatically.
+
+**Limits:** broadcast channels, anonymous administrator/channel-identity posts,
+and forum topics are not supported. A verified owner addressing the bot in a forum
+topic gets an explicit notice in that topic; no turn or home selection is created.
+Groups share the bot’s tools and memory configuration. Separate sessions do not
+isolate bot-wide memory: treat answers and scheduled output as public to the group,
+and choose the destination accordingly.
+
 ## How owner verification works
 
 Telegram usernames can be changed and claimed, so they are never trusted. Identity is
@@ -46,7 +100,8 @@ the immutable numeric user ID Telegram reports for a private chat.
 - Five wrong guesses invalidate the live code. Strangers can therefore only waste a
   code, not guess it; create another one.
 - Only a private chat where the sender is the chat (`from.id == chat.id`) can pair or
-  submit. Group, supergroup and channel messages are ignored without a reply.
+  submit privately. Verified owners can also address the bot in groups, as described above.
+  Broadcast channel posts and anonymous `sender_chat` posts are ignored.
 - An unverified private chat that writes to the bot receives one refusal explaining
   how to pair (at most once per ten minutes per chat, counted in memory) and nothing else. Its messages
   never reach a model, memory or the workspace.
@@ -54,13 +109,14 @@ the immutable numeric user ID Telegram reports for a private chat.
   effect for the next update, including pending button presses.
 
 Several accounts can be verified; each has its own private chat, binding and session.
-As with Discord, only the **initiating** verified account can decide a tool approval
-from Telegram; the owner can always decide in the web workspace.
+For private Telegram turns, only the **initiating** verified account can decide
+an approval in Telegram. Group-origin approvals are web-only. The owner can always
+decide in the web workspace.
 
 ## What happens to a message
 
 1. The adapter long-polls `getUpdates` for `message`, `edited_message` and
-   `callback_query` updates, one at a time and in order.
+   `callback_query` and bot-membership updates, one at a time and in order.
 2. A verified owner's text is admitted through `application/sessions` with the event
    ID `<telegram bot id>:<update id>`. The chat is bound to a session in
    `ChannelBindings`, scoped by owner, the connection `telegram:<bot id>` and the
@@ -98,12 +154,14 @@ require exposing the runtime to the internet.
 
 Each of these gets an explicit message in Telegram rather than being ignored:
 
-- photos, files, voice, stickers and other attachments (text only);
+- photos, files, voice, stickers and other attachments (text only; group notices
+  require an addressed caption);
 - the `/copy` file-approval experiment;
 - edited messages (an edit is not re-submitted; send a new message);
 - Markdown rendering of replies.
 
-Not handled and silently ignored by design: group, supergroup and channel chats, and
+Not handled and silently ignored by design: broadcast channel posts, unaddressed
+group messages, unverified group members, anonymous sender identities, and
 anything from an unverified account other than the one-time refusal.
 
 Also out of scope, as in the [roadmap](roadmap.md): linking a Telegram chat to an
@@ -112,10 +170,15 @@ transcripts. A Telegram chat has its own session and cannot address another one.
 
 ## Scheduled jobs
 
-A scheduled job turn carries no reply destination, for every channel. Its answer is
-visible in the web workspace and is never sent to Telegram, even if the job's session
-began in a Telegram chat. Making a job answer where it was created would need the
-destination to be captured at creation, which does not exist yet.
+Send `/home` in your verified private Telegram conversation (or `/home@BotName` in a group) to make it this bot’s
+home for scheduled updates. Discord supports the same command; web chat does not.
+The command runs directly in the adapter without a model call or a typed chat ID.
+Settings → Channels lets you choose a known conversation or **Web only**.
+See [home-channel routing](bot-automation.md#home-channel-for-scheduled-updates).
+
+Channel turns retain verified origin metadata: platform, application, conversation,
+channel, user and message IDs; Telegram also records the update ID. These IDs are
+available in client session history and model instructions, and are not credentials.
 
 ## Security notes and trade-offs
 
@@ -142,14 +205,15 @@ destination to be captured at creation, which does not exist yet.
 ## Storage and tests
 
 `bots/<id>/telegram.sqlite` (the default bot's is under the data directory) holds one
-encrypted row (token, bot ID and username, enabled flag, verified user IDs) and the
+encrypted row (token, bot ID and username, enabled flag, verified user IDs and known group IDs) and the
 polling offset. Channel bindings and delivery plans live in the existing durable
 documents.
 
 `packages/runtime/test/telegram.test.ts` and `telegram-delivery.test.ts` use temporary
-databases, the real Gateway with the mock model and a fake Bot API; none makes a model
-or network call. They cover verification and stranger refusal, offset recovery and
+databases, the real Gateway with the mock model and a fake Bot API; none makes a real model
+or external network call. They cover verification and stranger refusal, offset recovery and
 duplicate updates, message → approval → exact execution → reply without a web process,
 stale and repeated buttons, a web decision settling a Telegram approval, chunking, 429
-handling, uncertain sends, SIGKILL recovery and the settings API. Run
+handling, uncertain sends, SIGKILL recovery, native command registration, owner-only
+group mentions, group-home restart/removal and web-only group approvals. Run
 `bun test packages/runtime/test/telegram`.
