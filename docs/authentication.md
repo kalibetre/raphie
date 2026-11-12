@@ -123,6 +123,10 @@ configured HTTPS proxy; see [standalone builds](standalone-build.md#tailnet-acce
 - For browser acceptance, create an administrator with `bun run raphie auth setup`
   first and sign in at the fixture URL; the fixture has no sign-in bypass.
 
+Use the account icon beside the sidebar connection status to open **Manage
+account** or **Sign out**. Manage account opens Settings → Account; sign-out
+ends only the current browser session.
+
 ## Passkeys
 
 Settings → Account registers, lists and removes administrator passkeys using

@@ -3,6 +3,7 @@ import { Plus, Settings } from "lucide-react";
 
 import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
+import { AccountMenu } from "./account-menu";
 import { BotAvatar } from "./bot-avatar";
 import { useBotStyle } from "./bot-tones";
 
@@ -13,6 +14,7 @@ export function BotSidebar({
   unread,
   onSelect,
   onSettings,
+  onAccount,
   onCreate,
   connected,
   error,
@@ -24,6 +26,7 @@ export function BotSidebar({
   unread: (botId: string, session: SessionSummary) => number;
   onSelect: (id: string) => void;
   onSettings: () => void;
+  onAccount: () => void;
   onCreate: () => void;
   connected: boolean;
   error: boolean;
@@ -116,6 +119,7 @@ export function BotSidebar({
           {connected ? "Connected" : "Reconnecting…"}
         </span>
         <div className="flex items-center gap-1">
+          <AccountMenu onManage={onAccount} />
           <Button
             variant="ghost"
             size="icon-sm"
