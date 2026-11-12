@@ -85,6 +85,15 @@ containerTest(
         });
         expect(cli.owned(lease.workspace_id, otherScope)).toHaveLength(1);
         expect(cli.owned(lease.workspace_id, lease.scope)).toHaveLength(1);
+        substituted.query("UPDATE lease SET scope=?").run("nonexistent-scope");
+        const missingScope = await ContainerWorkspace.reapForDeletion(
+          directory,
+        ).catch((error: Error) => error);
+        expect(missingScope).toMatchObject({
+          message: expect.stringContaining("ownership does not match"),
+        });
+        expect(cli.owned(lease.workspace_id, lease.scope)).toHaveLength(1);
+        expect(cli.owned(lease.workspace_id, otherScope)).toHaveLength(1);
         substituted
           .query("UPDATE lease SET scope=?, workspace_id=?")
           .run(lease.scope, "substituted-installation");

@@ -183,40 +183,46 @@ export class ContainerWorkspace {
     const db = new Database(path, { readonly: true, strict: true });
     try {
       const lease = db.query<Lease, []>("SELECT * FROM lease").get();
-      if (lease) {
-        const identity: unknown = JSON.parse(
-          await readFile(join(directory, "workspace-identity.json"), "utf8"),
+      if (!lease)
+        throw new Error(
+          "Container lease is missing; deletion remains pending.",
         );
-        if (
-          !identity ||
-          typeof identity !== "object" ||
-          !("id" in identity) ||
-          identity.id !== lease.workspace_id
+      const identity: unknown = JSON.parse(
+        await readFile(join(directory, "workspace-identity.json"), "utf8"),
+      );
+      if (
+        !identity ||
+        typeof identity !== "object" ||
+        !("id" in identity) ||
+        identity.id !== lease.workspace_id
+      )
+        throw new Error(
+          "Container installation identity does not match the bot; deletion remains pending.",
+        );
+      const cli = new ContainerCli();
+      // Discover independently of the possibly corrupted lease scope. The
+      // separate identity and Docker's persisted bind identify this bot.
+      const containers = cli
+        .inspect(lease.workspace_id)
+        .filter((container) =>
+          container.Mounts.some(
+            (mount) =>
+              mount.Type === "bind" &&
+              mount.Destination === "/workspace" &&
+              realpathSync(mount.Source) ===
+                realpathSync(join(directory, "workspace", "files")),
+          ),
+        );
+      if (
+        containers.some(
+          (container) =>
+            container.Config.Labels["raphie.scope"] !== lease.scope,
         )
-          throw new Error(
-            "Container installation identity does not match the bot; deletion remains pending.",
-          );
-        const cli = new ContainerCli();
-        const containers = cli.inspect(lease.workspace_id, lease.scope);
-        // Labels from the lease only select candidates. Docker's persisted bind
-        // must independently identify the registry-derived bot directory.
-        if (
-          containers.some(
-            (container) =>
-              !container.Mounts.some(
-                (mount) =>
-                  mount.Type === "bind" &&
-                  mount.Destination === "/workspace" &&
-                  realpathSync(mount.Source) ===
-                    realpathSync(join(directory, "workspace", "files")),
-              ),
-          )
-        )
-          throw new Error(
-            "Container ownership does not match the bot directory; deletion remains pending.",
-          );
-        for (const container of containers) cli.run(["rm", "-f", container.Id]);
-      }
+      )
+        throw new Error(
+          "Container ownership does not match the bot directory; deletion remains pending.",
+        );
+      for (const container of containers) cli.run(["rm", "-f", container.Id]);
     } finally {
       db.close();
     }
