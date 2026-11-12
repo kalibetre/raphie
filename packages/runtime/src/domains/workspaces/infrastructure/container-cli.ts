@@ -78,6 +78,7 @@ export class ContainerCli {
         JSON.parse(this.run(["inspect", id]))[0] as {
           Id: string;
           Config: { Labels: Record<string, string> };
+          Mounts: { Type: string; Source: string; Destination: string }[];
         },
     );
   }

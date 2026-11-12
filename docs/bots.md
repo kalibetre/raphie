@@ -87,6 +87,8 @@ Deletion requires the bot to have no pending turns, active workspace executions,
 or pending approvals. Finish or cancel active turns and resolve approvals first.
 The runtime also checks the profile revision so a stale confirmation cannot delete
 a bot changed in another browser.
+Uploads already writing local data finish before deletion can begin. Requests
+still reading an upload body cannot publish files after deletion starts.
 
 Deletion stops channels, scheduled work, MCP connections and owned containers,
 then removes profile history and the bot’s private directory: sessions,
@@ -103,6 +105,10 @@ failure returns an error asking for a restart. Startup retries marked deletions
 before opening any named bot, without reconnecting that bot’s channels or jobs.
 If container cleanup fails, restore the container runtime and restart; cleanup
 must succeed before startup proceeds. Partial deletion cannot resume a bot.
+Container cleanup verifies the separate bot workspace identity and Docker’s
+recorded workspace bind before removing compute. Mismatched ownership stops
+cleanup and retains the deletion marker; restore matching control-state backups
+rather than resetting identities.
 
 ## The default bot and existing installations
 

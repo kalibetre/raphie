@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
-import { chmod, lstat, mkdir } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { chmod, lstat, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -182,8 +183,40 @@ export class ContainerWorkspace {
     const db = new Database(path, { readonly: true, strict: true });
     try {
       const lease = db.query<Lease, []>("SELECT * FROM lease").get();
-      if (lease)
-        new ContainerCli().removeOwned(lease.workspace_id, lease.scope);
+      if (lease) {
+        const identity: unknown = JSON.parse(
+          await readFile(join(directory, "workspace-identity.json"), "utf8"),
+        );
+        if (
+          !identity ||
+          typeof identity !== "object" ||
+          !("id" in identity) ||
+          identity.id !== lease.workspace_id
+        )
+          throw new Error(
+            "Container installation identity does not match the bot; deletion remains pending.",
+          );
+        const cli = new ContainerCli();
+        const containers = cli.inspect(lease.workspace_id, lease.scope);
+        // Labels from the lease only select candidates. Docker's persisted bind
+        // must independently identify the registry-derived bot directory.
+        if (
+          containers.some(
+            (container) =>
+              !container.Mounts.some(
+                (mount) =>
+                  mount.Type === "bind" &&
+                  mount.Destination === "/workspace" &&
+                  realpathSync(mount.Source) ===
+                    realpathSync(join(directory, "workspace", "files")),
+              ),
+          )
+        )
+          throw new Error(
+            "Container ownership does not match the bot directory; deletion remains pending.",
+          );
+        for (const container of containers) cli.run(["rm", "-f", container.Id]);
+      }
     } finally {
       db.close();
     }

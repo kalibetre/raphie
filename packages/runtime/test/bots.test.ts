@@ -132,6 +132,62 @@ test("deletion recovery never reopens a marked bot", async () => {
   }
 });
 
+test("deletion waits for the entire upload and rejects late writes through retained references", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-delete-upload-"));
+  const uploading = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const original = await Gateway.open({ directory, ...chatModel() });
+  const open = async (botId: string, path: string) => {
+    const gateway = await Gateway.open({
+      directory: path,
+      botId,
+      deferResume: true,
+      ...chatModel(),
+    });
+    return { gateway, close: () => gateway.close() };
+  };
+  const host = await BotHost.open(directory, { gateway: original }, open);
+  try {
+    const bot = await host.create(profile);
+    const gateway = host.runtime(bot.id).gateway;
+    const publish = gateway.workspace.putFile.bind(gateway.workspace);
+    gateway.workspace.putFile = async (...args) => {
+      uploading.resolve();
+      await release.promise;
+      return publish(...args);
+    };
+    const upload = gateway.files.upload(
+      "paused.txt",
+      new TextEncoder().encode("fixture"),
+    );
+    await uploading.promise;
+    // Archival bytes exist, but workspace admission has not started yet.
+    expect((await gateway.workspace.info()).executions.admitted).toBe(0);
+    const deletion = host.delete(bot.id, { name: bot.name, revision: 1 });
+    await delay(0);
+    expect(host.read(bot.id).id).toBe(bot.id);
+    release.resolve();
+    const file = await upload;
+    await deletion;
+    expect(gateway.files.upload("late.txt", new Uint8Array())).rejects.toThrow(
+      "being deleted",
+    );
+    expect(gateway.files.put("late.txt", new Uint8Array())).rejects.toThrow(
+      "being deleted",
+    );
+    expect(
+      await Bun.file(
+        join(directory, "bots", bot.id, "files", file.id),
+      ).exists(),
+    ).toBe(false);
+  } finally {
+    release.resolve();
+    await host.close();
+    await original.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("failed shutdown preserves the deletion marker and retries cleanup on restart", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-delete-failure-"));
   let failClose = true;

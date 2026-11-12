@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import type { Attachment } from "@raphie/contracts";
 
+import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import { syncDirectory } from "../../../shared/infrastructure/sync-directory.ts";
 import {
   attachmentName,
@@ -17,6 +18,7 @@ export type FileRef = Attachment;
 /** Content-addressed local files; original names never become paths. */
 export class Files {
   directory: string;
+  private readonly gate: ModelConnectionGate;
 
   private readonly workspace?: {
     putFile(path: string, bytes: Uint8Array): Promise<void>;
@@ -25,12 +27,18 @@ export class Files {
   constructor(
     directory: string,
     workspace?: { putFile(path: string, bytes: Uint8Array): Promise<void> },
+    gate = new ModelConnectionGate(),
   ) {
+    this.gate = gate;
     this.workspace = workspace;
     this.directory = directory;
   }
 
-  async put(name: string, bytes: Uint8Array): Promise<FileRef> {
+  put(name: string, bytes: Uint8Array): Promise<FileRef> {
+    return this.gate.run(() => this.write(name, bytes));
+  }
+
+  private async write(name: string, bytes: Uint8Array): Promise<FileRef> {
     if (bytes.byteLength > MAX_FILE_BYTES)
       throw new Error("Files must be 8 MiB or smaller.");
     name = attachmentName(name);
@@ -48,9 +56,16 @@ export class Files {
   }
 
   /** General uploads publish a working file; approval workflow blobs stay archival. */
-  async upload(name: string, bytes: Uint8Array): Promise<Attachment> {
+  upload(name: string, bytes: Uint8Array): Promise<Attachment> {
+    return this.gate.run(() => this.publishUpload(name, bytes));
+  }
+
+  private async publishUpload(
+    name: string,
+    bytes: Uint8Array,
+  ): Promise<Attachment> {
     if (!this.workspace) throw new Error("Workspace uploads are unavailable.");
-    const original = await this.put(name, bytes);
+    const original = await this.write(name, bytes);
     const characters = Array.from(original.name);
     while (Buffer.byteLength(characters.join("")) > 200) characters.pop();
     const path = `/workspace/uploads/${original.id}/${characters.join("")}`;

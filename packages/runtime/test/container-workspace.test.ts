@@ -58,6 +58,10 @@ containerTest(
         )
         .get()!;
       db.close();
+      await Bun.write(
+        join(directory, "workspace-identity.json"),
+        JSON.stringify({ id: lease.workspace_id }),
+      );
       expect(cli.owned(lease.workspace_id, lease.scope)).toHaveLength(1);
       await fixture(async (other, otherDirectory) => {
         await shell(other.env(), "echo preserved > marker");
@@ -69,6 +73,31 @@ containerTest(
           .query<{ scope: string }, []>("SELECT scope FROM lease")
           .get()!.scope;
         otherDb.close();
+        const substituted = new Database(
+          join(directory, "workspace", "container.sqlite"),
+        );
+        substituted.query("UPDATE lease SET scope=?").run(otherScope);
+        const mismatch = await ContainerWorkspace.reapForDeletion(
+          directory,
+        ).catch((error: Error) => error);
+        expect(mismatch).toMatchObject({
+          message: expect.stringContaining("ownership does not match"),
+        });
+        expect(cli.owned(lease.workspace_id, otherScope)).toHaveLength(1);
+        expect(cli.owned(lease.workspace_id, lease.scope)).toHaveLength(1);
+        substituted
+          .query("UPDATE lease SET scope=?, workspace_id=?")
+          .run(lease.scope, "substituted-installation");
+        const wrongInstallation = await ContainerWorkspace.reapForDeletion(
+          directory,
+        ).catch((error: Error) => error);
+        expect(wrongInstallation).toMatchObject({
+          message: expect.stringContaining("installation identity"),
+        });
+        substituted
+          .query("UPDATE lease SET workspace_id=?")
+          .run(lease.workspace_id);
+        substituted.close();
         await ContainerWorkspace.reapForDeletion(directory);
         expect(cli.owned(lease.workspace_id, lease.scope)).toEqual([]);
         expect(cli.owned(lease.workspace_id, otherScope)).toHaveLength(1);
