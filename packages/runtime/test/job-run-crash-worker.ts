@@ -13,6 +13,10 @@ const jobs = BotJobs.open({
   install: (e) => gateway.install(e),
   busy: async () => false,
   submit: async (input) => {
+    if (process.argv[3] === "retry") {
+      setTimeout(() => console.log("run-checkpoint-committed"), 100);
+      throw new Error("synthetic private transport detail");
+    }
     if (process.argv[3] === "admitted")
       await gateway.sessions.submitScheduled(actor, input);
     console.log("run-checkpoint-committed");

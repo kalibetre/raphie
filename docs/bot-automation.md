@@ -91,8 +91,20 @@ to their conversations where available. It loads 20 runs at a time as you scroll
 the latest page stays live while older pages remain loaded. Refresh returns to the latest page. Finished runs appear on the Notifications page
 until opened or dismissed; acknowledgement persists across restarts. Active and unread
 runs are retained, along with the newest 500 acknowledged runs per bot. Earlier runs
-created before tracking was added have no completion history. A failed admission is
-recorded without raw transport error details, and the next interval still runs.
+created before tracking was added have no completion history. Submission is attempted at most four times, with durable waits of 1, 2 and 4
+seconds. Retries preserve the event ID and admission fingerprint across restart;
+a one-time reminder remains enabled until submission succeeds or attempts are
+exhausted. Exhaustion records a failed run with the safe reason `no_model` for a missing model connection or `unknown` otherwise, never
+raw transport text. Recurring jobs then schedule their next interval; one-time
+reminders stop and retain the failure in Notifications. Reply failures also use
+the safe reason `unknown`.
+
+A run starting more than 60 seconds after its scheduled time is marked Late in
+run history and Notifications. Busy bots and pending approvals remain queued,
+with Waiting for bot shown on the job card and an explanation in run history.
+There is no expiry: both one-time and recurring work wait until the bot is free,
+so reminders are not discarded and approvals are never bypassed. Pause or Remove
+interrupts an unadmitted waiting run.
 Configure the bot's model in Settings before running jobs.
 
 Ask the agent, for example, "In two minutes, tell me the time and a funny saying."

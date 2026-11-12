@@ -51,7 +51,7 @@ type Options = {
 type Checkpoint =
   | { phase: "wait"; at: number }
   | { phase: "submit"; at: number }
-  | { phase: "deliver"; at: number; input: Submission };
+  | { phase: "deliver"; at: number; input: Submission; attempts?: number };
 
 /** Pi owns timers, checkpoints, sleeping-task recovery and replay. */
 export class BotJobs {
@@ -275,6 +275,25 @@ export class BotJobs {
             return;
           }
           if (await this.options.busy()) {
+            await runtime.commit(async (tx) => {
+              const runs = await tx.doc(JobRuns);
+              const id = `job:${task.id}:${task.state.checkpoint.at}`;
+              if (!runs.items.some((run) => run.id === id))
+                runs.items.push({
+                  id,
+                  jobId: job.id,
+                  name: job.name,
+                  scheduledFor: task.state.checkpoint.at,
+                  startedAt: Date.now(),
+                  finishedAt: null,
+                  status: "queued",
+                  sessionId: job.sessionId,
+                  turnId: null,
+                  acknowledgedAt: null,
+                  waitingForBot: true,
+                });
+              return { status: "running", checkpoint: task.state.checkpoint };
+            }, ctx);
             await runtime.sleepUntil(
               runtime.now() + 5000,
               task.state.checkpoint,
@@ -350,6 +369,7 @@ export class BotJobs {
               return;
             }
             let status: "submitted" | "failed" = "failed";
+            let failureReason: "unknown" | "no_model" = "unknown";
             const runId = task.state.checkpoint.input.eventId;
             await runtime.commit(async (tx) => {
               const runs = await tx.doc(JobRuns);
@@ -360,12 +380,19 @@ export class BotJobs {
                   name: job.name,
                   scheduledFor: task.state.checkpoint.at,
                   startedAt: Date.now(),
+                  late: Date.now() - task.state.checkpoint.at > 60_000,
                   finishedAt: null,
                   status: "queued",
                   sessionId: sessionId ?? null,
                   turnId: null,
                   acknowledgedAt: null,
                 });
+              const run = runs.items.find((item) => item.id === runId);
+              if (run && !run.turnId) {
+                run.waitingForBot = false;
+                run.startedAt = Date.now();
+                run.late = run.startedAt - run.scheduledFor > 60_000;
+              }
               return { status: "running", checkpoint: task.state.checkpoint };
             }, ctx);
             try {
@@ -376,8 +403,23 @@ export class BotJobs {
                 })
               ).sessionId;
               status = "submitted";
-            } catch {
-              /* No transport error payload is persisted or exposed. */
+            } catch (error) {
+              if (
+                error instanceof InputError &&
+                error.message ===
+                  "Connect a model provider in Settings before sending a message."
+              )
+                failureReason = "no_model";
+              // Preserve the admission fingerprint across durable retries.
+              const attempts = (task.state.checkpoint.attempts ?? 0) + 1;
+              if (attempts < 4) {
+                await runtime.sleepUntil(
+                  runtime.now() + 1000 * 2 ** (attempts - 1),
+                  { ...task.state.checkpoint, attempts },
+                  ctx,
+                );
+                return;
+              }
             }
             const once = job.everyMinutes === null;
             const next = runtime.now() + (job.everyMinutes ?? 0) * 60_000;
@@ -392,6 +434,7 @@ export class BotJobs {
                 !isFinished(run)
               ) {
                 run.status = "failed";
+                run.failureReason = failureReason;
                 run.finishedAt = Date.now();
               }
               const runHistory = await tx.doc(JobRuns);
@@ -423,11 +466,12 @@ export class BotJobs {
       },
       abort: (task, runtime, ctx) =>
         runtime.commit(async (tx) => {
-          if (task.state.checkpoint.phase === "deliver")
-            await interruptUnadmittedJobRun(
-              tx,
-              task.state.checkpoint.input.eventId,
-            );
+          await interruptUnadmittedJobRun(
+            tx,
+            task.state.checkpoint.phase === "deliver"
+              ? task.state.checkpoint.input.eventId
+              : `job:${task.id}:${task.state.checkpoint.at}`,
+          );
           return { status: "terminal", outcome: { status: "aborted" } };
         }, ctx),
     });

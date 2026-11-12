@@ -4,7 +4,10 @@ import { X } from "lucide-react";
 import { useState } from "react";
 
 import { sessionPreview } from "../../domains/conversations/application/session-summaries";
-import { jobRunStatus } from "../../domains/settings/application/job-run-status";
+import {
+  jobRunDescription,
+  jobRunStatus,
+} from "../../domains/settings/application/job-run-status";
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { useBackend } from "../../infrastructure/http/backend-context";
 import { Button } from "../../shared/ui/button";
@@ -187,6 +190,7 @@ export function Notifications({
                       </span>
                       <span className="notifications-title">
                         {title}
+                        {item.run?.late ? " · Late" : ""}
                         {item.kind !== "reply" && (
                           <span className="notifications-tag">
                             {item.kind === "approval"
@@ -195,6 +199,11 @@ export function Notifications({
                           </span>
                         )}
                       </span>
+                      {item.run?.status === "failed" && (
+                        <span className="notifications-preview">
+                          {jobRunDescription(item.run)}
+                        </span>
+                      )}
                       {preview && (
                         <span className="notifications-preview">{preview}</span>
                       )}

@@ -23,6 +23,7 @@ export async function finishJobRun(
   const run = runs.items.find((item) => item.turnId === turnId);
   if (run && !isFinished(run)) {
     run.status = status;
+    if (status === "failed") run.failureReason = "unknown";
     run.finishedAt = Date.now();
   }
   runs.items = retainJobRuns(runs.items);
@@ -47,6 +48,7 @@ export async function interruptUnadmittedJobRun(tx: Tx, runId: string) {
   const runs = await tx.doc(JobRuns);
   const run = runs.items.find((item) => item.id === runId);
   if (run && !run.turnId && !isFinished(run)) {
+    run.waitingForBot = false;
     run.status = "interrupted";
     run.finishedAt = Date.now();
   }

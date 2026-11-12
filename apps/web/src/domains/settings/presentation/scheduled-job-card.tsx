@@ -26,15 +26,17 @@ export function ScheduledJobCard({
       <div className="automation-job-heading">
         <h3>{job.name}</h3>
         <span className="session-status">
-          {job.enabled
-            ? "Active"
-            : finished
-              ? job.lastRun
-                ? jobRunStatus[job.lastRun.status]
-                : job.lastStatus === "submitted"
-                  ? "Sent"
-                  : "Failed"
-              : "Paused"}
+          {job.lastRun?.waitingForBot
+            ? "Waiting for bot"
+            : job.enabled
+              ? "Active"
+              : finished
+                ? job.lastRun
+                  ? jobRunStatus[job.lastRun.status]
+                  : job.lastStatus === "submitted"
+                    ? "Sent"
+                    : "Failed"
+                : "Paused"}
         </span>
       </div>
       <p className="automation-prompt">{job.prompt}</p>
