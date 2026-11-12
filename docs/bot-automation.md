@@ -71,9 +71,11 @@ No credential or transport argument is returned through the owner API.
 ## Home channel for scheduled updates
 
 Each bot has one optional home destination. Send `/home` in a verified Telegram
-private chat or an authorized Discord conversation to select that conversation.
+private chat, explicitly addressed Telegram group, or authorized Discord conversation to select that conversation.
 No chat ID is taken from message text and no model call is needed. Telegram
-registers `/pair`, `/home`, `/help` and `/start` in its private-chat command menu.
+registers `/ask`, `/pair`, `/home`, `/help` and `/start` in its private-chat menu,
+and `/ask`, `/home`, `/help` for groups. In a group use `/home@BotName`; only verified
+owners can select it, and all group members can read the scheduled output.
 Discord registers `/home` as a global native slash command on connect/restart,
 for servers and bot DMs, using an individual command upsert that preserves other
 application commands. Native Discord confirmations/refusals are private to the
@@ -105,7 +107,8 @@ of missed notifications when a connection returns. Already admitted turns keep
 their destination; changing home or revoking an account does not cancel those
 turns or their queued deliveries. Check pending work before sharing/reusing a chat.
 
-Scheduled tool approvals are decided in the web workspace. Home receives an
+Scheduled tool approvals and Telegram group-origin tool approvals are decided in
+the web workspace. Home receives an
 “Approval needed” notice without approval buttons; being the home destination
 does not grant authority over a job created elsewhere. One home per bot is
 supported; per-job overrides and natural-language routing tools remain planned.

@@ -1,4 +1,5 @@
 import type { ToolApproval } from "../../domains/approvals/domain/tool-approval.ts";
+import { isSharedTelegramDestination } from "../../domains/channels/domain/binding.ts";
 import type { RenderDelivery } from "../../domains/delivery/application/worker.ts";
 import { retryRateLimited, type TelegramApi, TelegramApiError } from "./api.ts";
 
@@ -123,6 +124,20 @@ function toolOperation(
 export function telegramRenderer(): RenderDelivery {
   return async (intent) => {
     const chatId = intent.threadId.replace(/^telegram:/, "");
+    // Defense in depth: no card, argument document or decision buttons may go to a group.
+    if (
+      intent.source === "tool" &&
+      isSharedTelegramDestination({
+        provider: "telegram",
+        conversation: intent.threadId,
+      })
+    )
+      return [
+        JSON.stringify({
+          chatId,
+          text: "Open the web workspace to review this tool request. Approval details are not posted to groups.",
+        }),
+      ];
     const operations: TelegramOperation[] =
       intent.source === "chat"
         ? chunkText(intent.text || "(empty reply)").map((text) => ({

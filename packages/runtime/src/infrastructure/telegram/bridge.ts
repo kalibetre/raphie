@@ -5,6 +5,7 @@ import type { TelegramProblem } from "@raphie/contracts";
 import type { ChannelServices } from "../../application/channels/ports.ts";
 import { createDeliveryWorker } from "../../domains/delivery/application/worker.ts";
 import { InputError } from "../../shared/application/input-error.ts";
+import { groupMessageText } from "./addressing.ts";
 import {
   createTelegramApi,
   type FetchRequest,
@@ -24,6 +25,9 @@ import {
 export type TelegramBridgeConfig = {
   token: string;
   botId: string;
+  botUsername: string;
+  groupSeen(chatId: string): void;
+  groupRemoved(chatId: string): void;
   /** Tests only; production always talks to api.telegram.org. */
   apiBase?: string;
   fetch?: FetchRequest;
@@ -39,6 +43,7 @@ export type TelegramBridgeConfig = {
 };
 
 const COMMANDS = [
+  { command: "ask", description: "Ask this assistant a question" },
   {
     command: "pair",
     description: "Verify your account with a code from Raphie Settings",
@@ -52,7 +57,7 @@ const COMMANDS = [
 ];
 
 const HELP =
-  "I am a private assistant. Send me a message to start a conversation. Tool actions will arrive with Approve and Decline buttons. Use /home to send scheduled updates here.\n\nNot supported in Telegram: photos, files and other attachments, group chats, edited messages, Markdown formatting and the /copy command.";
+  "I am a private assistant. Send me a message to start a conversation. Tool actions will arrive with Approve and Decline buttons. Use /home to send scheduled updates here. In groups, verified owners must @mention me or use /ask@BotName. Group tool approvals are web-only.\n\nNot supported in Telegram: photos, files and other attachments, broadcast channels, forum topics, edited messages, Markdown formatting and the /copy command.";
 const STRANGER =
   "This assistant is private. If you are its owner, open Raphie Settings → Channels → Telegram, create a pairing code, then send /pair followed by the code here.";
 const REFUSAL_INTERVAL_MS = 10 * 60 * 1000;
@@ -71,9 +76,18 @@ export function createTelegramBridge(
   const refused = new Map<string, number>();
 
   /** Best-effort notices never throw: they are not durable deliveries. */
-  async function notify(chatId: number | string, text: string) {
+  async function notify(
+    chatId: number | string,
+    text: string,
+    threadId?: number,
+  ) {
     await retryRateLimited(
-      () => api.sendMessage({ chat_id: String(chatId), text }),
+      () =>
+        api.sendMessage({
+          chat_id: String(chatId),
+          text,
+          ...(threadId ? { message_thread_id: threadId } : {}),
+        }),
       sleep,
     ).catch(() => console.error("Telegram notice failed."));
   }
@@ -86,59 +100,103 @@ export function createTelegramBridge(
       String(userId),
     );
 
-  async function handleMessage(updateId: number, message: TelegramMessage) {
-    // Only a verified owner's private chat can ever reach the agent.
+  async function handleMessage(
+    updateId: number,
+    message: TelegramMessage,
+    edited = false,
+  ) {
     const from = message.from;
+    const privateChat = message.chat.type === "private";
+    const group =
+      message.chat.type === "group" || message.chat.type === "supergroup";
     if (
-      message.chat.type !== "private" ||
       !from ||
       from.is_bot ||
-      from.id !== message.chat.id
+      message.sender_chat ||
+      !Number.isSafeInteger(from.id) ||
+      from.id <= 0 ||
+      !Number.isSafeInteger(message.chat.id)
+    )
+      return;
+    if (
+      privateChat ? from.id !== message.chat.id : !group || message.chat.id >= 0
     )
       return;
     const chatId = message.chat.id;
-    const command = /^\/(\w+)(?:@\w+)?(?:\s+([\s\S]*))?$/.exec(
-      message.text?.trim() ?? "",
+    const verified = config.owners().includes(String(from.id));
+    // Groups never enroll accounts or consume pairing codes. No unverified group text reaches the model.
+    if (group && !verified) return;
+    const text = group
+      ? groupMessageText(message, config.botUsername)
+      : message.text;
+    if (group && text === null) return;
+    const notifyHere = (reply: string) =>
+      notify(chatId, reply, message.message_thread_id);
+    if (group && message.message_thread_id !== undefined)
+      return notifyHere(
+        "Forum topics are not supported yet. Use a regular group or a private chat.",
+      );
+    if (group && message.text === undefined)
+      return notifyHere(
+        "I can only read text in Telegram. Photos, files, voice and other attachments are not supported.",
+      );
+    const command = /^\/(\w+)(?:@([A-Za-z0-9_]+))?(?:\s+([\s\S]*))?$/.exec(
+      text?.trim() ?? "",
     );
+    if (
+      command?.[2] &&
+      command[2].toLowerCase() !== config.botUsername.toLowerCase()
+    )
+      return;
+    if (edited) {
+      if (verified)
+        await notifyHere(
+          "Edited messages are not applied. Send a new message instead.",
+        );
+      return;
+    }
     if (command?.[1] === "pair") {
-      if (config.owners().includes(String(from.id)))
-        return notify(chatId, "This Telegram account is already verified.");
-      if (!command[2]?.trim())
-        return notify(
-          chatId,
+      if (group)
+        return notifyHere(
+          "Pair your account in a private chat with this bot. Never post pairing codes in a group.",
+        );
+      if (verified)
+        return notifyHere("This Telegram account is already verified.");
+      if (!command[3]?.trim())
+        return notifyHere(
           "Open Raphie Settings → Channels → Telegram, create a pairing code, then send /pair followed by that code here.",
         );
-      return notify(
-        chatId,
-        config.pair(String(from.id), command[2])
+      return notifyHere(
+        config.pair(String(from.id), command[3])
           ? "Verified. You can now chat with this assistant here."
           : "That pairing code is not valid or has expired. Create a new one in Raphie Settings.",
       );
     }
-    if (!config.owners().includes(String(from.id))) {
+    if (!verified) {
       const last = refused.get(String(chatId)) ?? 0;
       if (Date.now() - last < REFUSAL_INTERVAL_MS) return;
       refused.set(String(chatId), Date.now());
-      return notify(chatId, STRANGER);
+      return notifyHere(STRANGER);
     }
+    if (group) config.groupSeen(String(chatId));
     if (command?.[1] === "home") {
       await app.home.setCurrent(actor(chatId, from.id), String(updateId));
-      return notify(
-        chatId,
-        "This conversation is now this bot’s home for scheduled updates.",
+      return notifyHere(
+        group
+          ? "This group is now this bot’s home. Scheduled updates from every job will be visible to everyone here. Tool approvals stay in the web workspace."
+          : "This conversation is now this bot’s home for scheduled updates.",
       );
     }
     if (command?.[1] === "start" || command?.[1] === "help")
-      return notify(chatId, HELP);
+      return notifyHere(HELP);
     if (command?.[1] === "copy")
-      return notify(
-        chatId,
+      return notifyHere(
         "File approvals (/copy) are not supported in Telegram. Use the web workspace.",
       );
-    if (message.text === undefined)
-      return notify(
-        chatId,
-        "I can only read text in Telegram. Photos, files, voice and other attachments are not supported.",
+    const prompt = command?.[1] === "ask" ? command[3]?.trim() : text;
+    if (!prompt)
+      return notifyHere(
+        "I can only read text in Telegram. Use /ask@BotName followed by your question. Photos, files, voice and other attachments are not supported.",
       );
     try {
       await app.sessions.submit(
@@ -147,16 +205,21 @@ export function createTelegramBridge(
           `telegram:${chatId}`,
           connectionId,
           String(from.id),
-          { messageId: String(message.message_id), updateId },
+          {
+            messageId: String(message.message_id),
+            updateId,
+            chatType: privateChat
+              ? "private"
+              : (message.chat.type as "group" | "supergroup"),
+          },
         ),
         {
           eventId: `${config.botId}:${updateId}`,
-          text: message.text,
+          text: prompt,
         },
       );
     } catch (error) {
-      await notify(
-        chatId,
+      await notifyHere(
         error instanceof InputError
           ? error.message
           : "I could not accept that message. Please try again.",
@@ -209,16 +272,17 @@ export function createTelegramBridge(
       if (update.callback_query) await handleCallback(update.callback_query);
       else if (update.message)
         await handleMessage(update.update_id, update.message);
-      else if (update.edited_message) {
-        const edited = update.edited_message;
+      else if (update.edited_message)
+        await handleMessage(update.update_id, update.edited_message, true);
+      else if (update.my_chat_member) {
+        const membership = update.my_chat_member;
         if (
-          edited.chat.type === "private" &&
-          config.owners().includes(String(edited.from?.id))
+          (membership.chat.type === "group" ||
+            membership.chat.type === "supergroup") &&
+          String(membership.new_chat_member.user.id) === config.botId &&
+          ["left", "kicked"].includes(membership.new_chat_member.status)
         )
-          await notify(
-            edited.chat.id,
-            "Edited messages are not applied. Send a new message instead.",
-          );
+          config.groupRemoved(String(membership.chat.id));
       }
     } catch {
       console.error("Telegram update failed.");
@@ -241,6 +305,13 @@ export function createTelegramBridge(
       try {
         if (!commandsRegistered) {
           await api.setMyCommands(COMMANDS, signal);
+          await api.setMyCommands(
+            COMMANDS.filter((item) =>
+              ["ask", "home", "help"].includes(item.command),
+            ),
+            signal,
+            "all_group_chats",
+          );
           commandsRegistered = true;
         }
         const updates = await api.getUpdates(

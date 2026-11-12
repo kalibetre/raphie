@@ -75,7 +75,8 @@ Discord click cannot execute it again. This does not link or continue sessions.
 
 Each bot can select one known Discord or Telegram conversation in Settings or by
 sending `/home` there as a verified owner. Native commands are registered on
-connection/restart: Telegram `/pair`, `/home`, `/help`, `/start`; Discord `/home`.
+connection/restart: Telegram `/ask`, `/pair`, `/home`, `/help`, `/start` privately and `/ask`, `/home`,
+`/help` in groups; Discord `/home`.
 Web chat has no `/home` command.
 Scheduled turns freeze home at admission regardless of where the job was created;
 missing/unavailable home stays web-only. Approval notices direct the owner to web.
@@ -151,8 +152,10 @@ list is still planned.
 - **Telegram:** delivered as a long-polling adapter with pairing-code owner
   verification and its own renderer on the shared delivery worker; see the
   [Telegram guide](telegram.md). Planned and not yet built: attachments in either
-  direction, group chats, Markdown rendering, webhooks, and a verified run against a
-  real Telegram bot (the adapter has only been tested against a local fake).
+  direction, broadcast channels, forum topics, Markdown rendering and webhooks.
+  Owner-only group mentions/commands, group home and web-only group approvals are
+  delivered; group-specific live acceptance remains unverified (automated tests
+  use a local fake).
   Unsupported capabilities answer explicitly rather than being dropped.
 - **Cross-channel continuation:** explicit ownership-checked link/unlink and
   destination selection, with history-disclosure policy. No implicit broadcasting,

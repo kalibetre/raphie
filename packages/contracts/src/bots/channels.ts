@@ -43,6 +43,7 @@ export type ChannelOrigin = {
   updateId?: number;
   guildId?: string;
   threadId?: string;
+  chatType?: "private" | "group" | "supergroup";
 };
 
 export type HomeDestination = {
