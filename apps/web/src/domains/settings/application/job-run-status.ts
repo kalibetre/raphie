@@ -13,6 +13,8 @@ export function jobRunDescription(run: ScheduledJobRun) {
     return "No model configured. Connect a model provider in Settings.";
   if (run.waitingForBot)
     return "Waiting for the bot’s active turn or approval.";
+  if (run.status === "failed" && run.turnId)
+    return "The reply failed. Open the conversation to inspect it.";
   if (run.status === "failed" && run.failureReason === "unknown")
     return "The run failed for an unknown reason.";
   if (run.status === "failed")

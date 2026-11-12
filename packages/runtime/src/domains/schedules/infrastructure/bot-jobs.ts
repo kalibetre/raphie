@@ -25,6 +25,8 @@ import {
   retainJobRuns,
 } from "./job-runs.ts";
 
+const LATE_AFTER_MS = 60_000;
+
 type Submission = { eventId: string; text: string; sessionId?: string };
 
 type StoredJob = ScheduledJob & { taskId: TaskId };
@@ -241,6 +243,38 @@ export class BotJobs {
     return this.read();
   }
 
+  private async markWaiting(job: ScheduledJob, id: string, at: number) {
+    const current = (
+      await this.options.harness.snapshot(JobRuns, context)
+    )?.items.find((run) => run.id === id);
+    if (
+      current?.waitingForBot ||
+      current?.turnId ||
+      (current && isFinished(current))
+    )
+      return;
+    await this.options.root.commit(async (tx) => {
+      const runs = await tx.doc(JobRuns);
+      const run = runs.items.find((item) => item.id === id);
+      if (run) {
+        if (!run.turnId && !isFinished(run)) run.waitingForBot = true;
+      } else
+        runs.items.push({
+          id,
+          jobId: job.id,
+          name: job.name,
+          scheduledFor: at,
+          startedAt: Date.now(),
+          finishedAt: null,
+          status: "queued",
+          sessionId: job.sessionId,
+          turnId: null,
+          acknowledgedAt: null,
+          waitingForBot: true,
+        });
+    }, context);
+  }
+
   private createTask() {
     return defineTask<
       { id: string; at: number; manual: boolean },
@@ -265,35 +299,24 @@ export class BotJobs {
             !job ||
             (!task.input.manual && (!job.enabled || job.taskId !== task.id))
           ) {
-            await runtime.commit(
-              () => ({
+            await runtime.commit(async (tx) => {
+              await interruptUnadmittedJobRun(
+                tx,
+                `job:${task.id}:${task.state.checkpoint.at}`,
+              );
+              return {
                 status: "terminal",
                 outcome: { status: "completed", result: null },
-              }),
-              ctx,
-            );
+              };
+            }, ctx);
             return;
           }
           if (await this.options.busy()) {
-            await runtime.commit(async (tx) => {
-              const runs = await tx.doc(JobRuns);
-              const id = `job:${task.id}:${task.state.checkpoint.at}`;
-              if (!runs.items.some((run) => run.id === id))
-                runs.items.push({
-                  id,
-                  jobId: job.id,
-                  name: job.name,
-                  scheduledFor: task.state.checkpoint.at,
-                  startedAt: Date.now(),
-                  finishedAt: null,
-                  status: "queued",
-                  sessionId: job.sessionId,
-                  turnId: null,
-                  acknowledgedAt: null,
-                  waitingForBot: true,
-                });
-              return { status: "running", checkpoint: task.state.checkpoint };
-            }, ctx);
+            await this.markWaiting(
+              job,
+              `job:${task.id}:${task.state.checkpoint.at}`,
+              task.state.checkpoint.at,
+            );
             await runtime.sleepUntil(
               runtime.now() + 5000,
               task.state.checkpoint,
@@ -340,6 +363,11 @@ export class BotJobs {
               return;
             }
             if (await this.options.busy()) {
+              await this.markWaiting(
+                job,
+                task.state.checkpoint.input.eventId,
+                task.state.checkpoint.at,
+              );
               await runtime.sleepUntil(
                 runtime.now() + 5000,
                 task.state.checkpoint,
@@ -380,7 +408,6 @@ export class BotJobs {
                   name: job.name,
                   scheduledFor: task.state.checkpoint.at,
                   startedAt: Date.now(),
-                  late: Date.now() - task.state.checkpoint.at > 60_000,
                   finishedAt: null,
                   status: "queued",
                   sessionId: sessionId ?? null,
@@ -391,7 +418,7 @@ export class BotJobs {
               if (run && !run.turnId) {
                 run.waitingForBot = false;
                 run.startedAt = Date.now();
-                run.late = run.startedAt - run.scheduledFor > 60_000;
+                run.late = run.startedAt - run.scheduledFor > LATE_AFTER_MS;
               }
               return { status: "running", checkpoint: task.state.checkpoint };
             }, ctx);
@@ -404,11 +431,7 @@ export class BotJobs {
               ).sessionId;
               status = "submitted";
             } catch (error) {
-              if (
-                error instanceof InputError &&
-                error.message ===
-                  "Connect a model provider in Settings before sending a message."
-              )
+              if (error instanceof InputError && error.code === "no_model")
                 failureReason = "no_model";
               // Preserve the admission fingerprint across durable retries.
               const attempts = (task.state.checkpoint.attempts ?? 0) + 1;

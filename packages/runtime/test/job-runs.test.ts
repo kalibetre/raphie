@@ -246,6 +246,7 @@ for (const phase of ["queued", "admitted", "retry"]) {
       { stdio: ["ignore", "pipe", "pipe"], env: {} },
     );
     let gateway: Gateway | undefined;
+    let checkpointEventId: string | undefined;
     try {
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(
@@ -256,6 +257,9 @@ for (const phase of ["queued", "admitted", "retry"]) {
         child.stdout.on("data", (chunk) => {
           output += chunk;
           if (output.includes("run-checkpoint-committed")) {
+            checkpointEventId = output.match(
+              /run-checkpoint-committed (job:[^\s]+)/,
+            )?.[1];
             clearTimeout(timer);
             resolve();
           }
@@ -287,6 +291,11 @@ for (const phase of ["queued", "admitted", "retry"]) {
       expect((await gateway.chats.state()).turns).toHaveLength(1);
       expect((await jobs.runs()).items).toHaveLength(1);
       const [notice] = (await jobs.runs({ unread: true })).items;
+      if (phase === "retry") {
+        if (!checkpointEventId)
+          throw new Error("Missing committed retry event ID");
+        expect(notice.id).toBe(checkpointEventId);
+      }
       expect(notice.turnId).toBe((await gateway.chats.state()).turns[0].id);
       await jobs.acknowledge(notice.id);
       gateway.harness.resume();

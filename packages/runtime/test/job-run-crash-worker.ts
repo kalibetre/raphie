@@ -1,3 +1,8 @@
+import { setTimeout as delay } from "node:timers/promises";
+
+import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+import type { TaskId } from "@earendil-works/pi-durable";
+
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotJobs } from "../src/domains/schedules/infrastructure/bot-jobs.ts";
 import { chatModel } from "./chat-model.ts";
@@ -14,7 +19,6 @@ const jobs = BotJobs.open({
   busy: async () => false,
   submit: async (input) => {
     if (process.argv[3] === "retry") {
-      setTimeout(() => console.log("run-checkpoint-committed"), 100);
       throw new Error("synthetic private transport detail");
     }
     if (process.argv[3] === "admitted")
@@ -29,4 +33,26 @@ await jobs.add({
   everyMinutes: null,
   firstRunAt: Date.now(),
 });
+if (process.argv[3] === "retry") {
+  for (;;) {
+    const [run] = (await jobs.runs()).items;
+    if (run) {
+      const taskId = Number(run.id.slice(4, run.id.lastIndexOf(":"))) as TaskId;
+      const task = await gateway.harness.getTask(taskId, context);
+      if (task?.state.status === "sleeping") {
+        const checkpoint = task.state.checkpoint;
+        if (
+          checkpoint &&
+          typeof checkpoint === "object" &&
+          !Array.isArray(checkpoint) &&
+          checkpoint.attempts === 1
+        ) {
+          console.log(`run-checkpoint-committed ${run.id}`);
+          break;
+        }
+      }
+    }
+    await delay(10);
+  }
+}
 await new Promise(() => {});
