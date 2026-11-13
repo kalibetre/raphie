@@ -149,9 +149,20 @@ pub fn setup(ui: &mut Ui, waker: Waker) {
         waker,
     );
     ui.client = Some(client);
-    if let Ok(origin) = Origin::parse(&ui.origin_field.text) {
+    // `raphie-desktop --origin https://…` signs in to that origin at once;
+    // otherwise reuse the last origin's stored token, if there is one.
+    if let Some(origin) = origin_argument(rune::extra_args()) {
+        ui.origin_field = TextEdit::new(origin);
+        ui.connect();
+    } else if let Ok(origin) = Origin::parse(&ui.origin_field.text) {
         ui.command(Command::Restore { origin });
     }
+}
+
+/// The value after `--origin` among the arguments Rune did not recognise.
+fn origin_argument(args: &[String]) -> Option<&str> {
+    let flag = args.iter().position(|a| a == "--origin")?;
+    args.get(flag + 1).map(String::as_str)
 }
 
 /// `AppSpec::poll`: runs before each frame. Applies whatever the engine

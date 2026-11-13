@@ -284,7 +284,7 @@ fn approvals_handle_fresh_stale_and_unknown_decisions() {
             .notice
             .as_deref()
             .unwrap()
-            .contains("already approved")
+            .contains("already been approved")
     );
     assert_eq!(
         decide(&mut driver, "a-2", Decision::Approved),

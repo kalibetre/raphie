@@ -144,9 +144,19 @@ Delivered capabilities and remaining work are labelled below. See the
 
 - **CLI:** use the client interface for session selection, send/watch, approvals,
   and optional structured inspection output. No second executor or direct DB access.
-- **Desktop:** connect to an existing runtime first. Local runtime packaging,
-  discovery, authenticated access, and single-owner lifecycle can follow. Closing
-  a view must not accidentally cancel execution.
+- **Desktop — delivered (first slice):** a native Rust app built with Rune
+  (`apps/desktop`) connects to an existing web host over its authenticated API,
+  locally or over a tailnet HTTPS origin. Device-code sign-in with the token in
+  the OS credential store, revocation back to sign-in, bot and session lists,
+  conversations with history paging and streamed replies, sending, and
+  approve/reject with stale decisions reported. Light and dark follow the OS.
+  Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
+- **Desktop — planned:** attachments, Stop/Steer, model and command-permission
+  controls, session grants, packaging/signing and updates, Windows and Linux
+  verification, generated contract types, and local runtime packaging,
+  discovery and single-owner lifecycle. Later, a _desktop host_ role that offers
+  this machine's capabilities to the runtime: local speech-to-text, computer use
+  and the owner's real browser. None of these are built.
 - **Remote clients — delivered:** single-administrator authentication protects the
   web workspace, API and event streams; native clients can obtain revocable device
   sessions. The web host remains loopback-bound and supports configured HTTPS origins

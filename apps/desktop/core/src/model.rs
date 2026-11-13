@@ -442,8 +442,8 @@ impl Model {
 
 fn settled_notice(status: ApprovalStatus) -> String {
     match status {
-        ApprovalStatus::Approved => "That action was already approved elsewhere.".into(),
-        ApprovalStatus::Rejected => "That action was already rejected elsewhere.".into(),
+        ApprovalStatus::Approved => "That action had already been approved.".into(),
+        ApprovalStatus::Rejected => "That action had already been rejected.".into(),
         ApprovalStatus::Expired => "That approval expired before your decision arrived.".into(),
         ApprovalStatus::Pending | ApprovalStatus::Unknown => {
             "The approval is still waiting; try again.".into()

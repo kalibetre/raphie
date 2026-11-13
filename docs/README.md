@@ -13,6 +13,7 @@ change that changes the behavior.
 - [Installed service commands](commands.md): status, ports, origins, updates and recovery.
 - [Standalone builds and operations](standalone-build.md): detailed deployment and recovery notes.
 - [Using Raphie](using-raphie.md): conversations, settings, storage and features.
+- [Desktop client](desktop.md): the native Rust app, device sign-in, fixture and tailnet connections, limits and Rune notes.
 - [General attachments](general-attachments.md): composer uploads, workspace paths, original versions and model input limits.
 - [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
 - [Bot workspaces and execution providers](bot-workspaces.md): files, just-bash, containers and their limits.
@@ -35,6 +36,7 @@ change that changes the behavior.
 - [Domain language](https://github.com/kalibetre/raphie/blob/main/CONTEXT.md)
 - [Contributing and verification](https://github.com/kalibetre/raphie/blob/main/CONTRIBUTING.md)
 - [UI scrolling and composer behavior](ui-scrolling.md)
+- [Learning Rust with the desktop client](learning-rust.md): the desktop codebase as a guided Rust lesson, with exercises.
 - [Headless runtime decision](adr/0001-headless-runtime-and-capability-specific-adapters.md)
 - [Accepted bot ownership and workspace decision](adr/0002-bot-owned-workspaces-and-temporary-compute.md)
 - [Native bot sandbox decision](adr/0003-native-bot-sandbox.md): container execution, delivered as opt-in.

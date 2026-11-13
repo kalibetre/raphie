@@ -1,0 +1,255 @@
+# Desktop client
+
+Raphie Desktop is a native app for the daily loop: sign in, pick a bot and a
+conversation, read and send messages with replies streaming in, and approve or
+reject tool actions. It is written in Rust with [Rune](https://github.com/anomalyco/rune),
+a GPU-rendered UI framework, and lives in `apps/desktop`.
+
+It is a **client of the web host's authenticated API**, the same API the web
+workspace uses. It never talks to the runtime's port 4316, so it works the same
+whether Raphie runs on this machine or on a server reached over a tailnet.
+
+![Conversation, light](images/desktop/conversation-light.png)
+
+## What works
+
+Delivered in this first version (macOS first; see [Limits](#limits)):
+
+- **Device sign-in** against any configured origin, using the flow in
+  [Connect a native device](authentication.md#connect-a-native-device). The app
+  shows the code and the approval link, polls at the host's interval (never
+  faster than every 5 seconds, slower when asked), and refuses an approval link
+  that points at a different origin.
+- **Token storage** in the OS credential store: the login Keychain on macOS
+  (service `dev.raphie.desktop`, one entry per origin). The token is never
+  written to a file or a log. At launch the app reuses a stored token for the
+  last origin; if the host answers 401 (the device was disconnected in
+  Settings → Account, or the password was recovered), the token is deleted and
+  the app returns to sign-in with an explanation.
+- **Bots and conversations** from the focused client queries: the bot list
+  (`GET /api/bots`), each bot's live session list (`/api/sessions/events`, plus
+  "Show more" pages), and bot-prefixed routes for named bots.
+- **Conversations** from the session event stream (`/api/sessions/<id>/events`):
+  history with "Show earlier messages" paging, the reply streaming in as it is
+  written, Markdown with syntax-coloured code blocks, selectable text, run
+  phase while waiting, and failed or stopped replies. A dropped stream
+  reconnects with backoff (1 s up to 15 s) and the toolbar says so.
+- **Sending** with Return (Shift-Return for a new line). Each message has one
+  stable event id; a network failure is retried with the same id, so the runtime
+  admits it once. A first message creates the session and opens it.
+- **Approvals**: pending actions show their server, tool and exact arguments,
+  with Approve and Reject (once). A decision that arrives after the approval was
+  settled elsewhere or expired is reported ("already approved elsewhere",
+  "expired before your decision arrived") instead of failing.
+- **Light and dark** follow the OS appearance, live.
+
+## Run it
+
+Prerequisites: a Rust toolchain via [rustup](https://rustup.rs). The pinned
+toolchain in `apps/desktop/rust-toolchain.toml` installs itself on first use.
+
+```sh
+cd apps/desktop
+cargo run --release -p raphie-desktop
+```
+
+The first build compiles Rune and its GPU stack and takes several minutes.
+`--origin URL` signs in to that origin at launch, for example
+`cargo run --release -p raphie-desktop -- --origin http://127.0.0.1:4321`;
+otherwise the app reuses the last origin's stored token, or shows sign-in.
+
+### Connect to the test fixture
+
+Use the isolated fixture, never the real app on 4316/4320 or `.data/`:
+
+```sh
+bun run dev:fixture          # runtime on 4317, temporary data
+bun run dev:web:fixture      # web host on 4321
+bun run raphie auth setup    # once, if the fixture's web host is locked
+```
+
+Start the app, enter `http://127.0.0.1:4321`, choose **Connect**, then **Open
+approval page**. Sign in in the browser, check the code matches, and approve.
+The fixture's `acceptance` model streams a canned reply; a message containing
+"tool" or "approval" proposes a calendar action that needs your approval. No
+paid model is called.
+
+When you are done, disconnect the test device in Settings → Account.
+
+Without the UI, the core has its own live check (like
+`scripts/device-auth-smoke.ts`; the token stays in memory):
+
+```sh
+cargo run -p raphie-desktop-core --example live -- http://127.0.0.1:4321
+cargo run -p raphie-desktop-core --example live -- http://127.0.0.1:4321 --exercise
+```
+
+`--exercise` sends two messages, waits for the streamed reply, approves the
+fixture's tool action and checks that a second decision is reported as stale.
+It makes model calls, so use it only with the fixture.
+
+`bun run raphie auth setup` writes to the web host's data directory, which in a
+checkout defaults to the main checkout's `.data/`. To keep the fixture's
+administrator separate, give both commands the same throwaway
+`DATA_DIRECTORY`.
+
+### Connect over a tailnet
+
+Configure the web host's HTTPS origin first ([tailnet
+access](standalone-build.md#tailnet-access)), then enter that origin, for
+example `https://raphie.your-tailnet.ts.net`. Plain `http://` is accepted only
+for `127.0.0.1`, `localhost` and `[::1]`, so a token never crosses a network
+unencrypted. The app follows no redirects.
+
+**Sign out** forgets this device's token. The device stays listed in Settings →
+Account until you disconnect it there; a native bearer session cannot revoke
+itself through the web host today.
+
+## Layout
+
+```text
+apps/desktop/
+  rust-toolchain.toml     pinned toolchain (matches Rune's)
+  Cargo.toml              workspace; Rune pinned to one `dev` rev, plus its patches
+  core/                   raphie-desktop-core: no UI framework
+    src/contracts.rs      Rust mirrors of the @raphie/contracts types used
+    src/origin.rs         origin validation
+    src/api.rs            HTTP client for the web host's API
+    src/sse.rs            event-stream parser
+    src/auth.rs           device sign-in rules, Keychain and in-memory token stores
+    src/model.rs          client state and how events change it (pure)
+    src/engine.rs         Tokio runtime: sign-in, streams, commands → events
+    src/settings.rs       last origin (non-secret)
+    tests/                fake web host (axum) and engine/model tests
+    examples/live.rs      live check against a running web host
+  app/                    raphie-desktop: the Rune UI
+    src/state.rs          UI state, engine bridge (setup/poll)
+    src/view.rs           every screen
+    src/scenes.rs         synthetic states for snapshots and tests
+    tests/screens.rs      headless element-tree checks, light and dark
+  scripts/snapshots.sh    renders the PNGs in docs/images/desktop
+```
+
+The crate split is the boundary for later work: the core owns the API client,
+auth, event streams and state; the app only presents them. When the desktop app
+becomes a _desktop host_ that offers this machine's capabilities to the runtime
+(local speech-to-text, computer use, the owner's browser), those capabilities
+belong in the core (or crates beside it), not in the UI. See
+[learning Rust with this codebase](learning-rust.md) for a guided tour.
+
+## Check your changes
+
+```sh
+cd apps/desktop
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+```
+
+CI runs the same three commands in a separate `desktop` job beside `validate`.
+On Linux, Rune needs `libxkbcommon-dev` and `libwayland-dev`, and the credential
+store needs `libdbus-1-dev`.
+
+Tests make no network calls beyond loopback and no model calls. The core's
+tests run the real engine against a fake web host on a random loopback port; the
+app's tests drive Rune's headless `Runtime` (same layout and input code as a
+window, no GPU) through each screen in light and dark.
+
+### Headless snapshots
+
+Rune apps render without a window. Debug builds always accept the flags:
+
+```sh
+cargo build -p raphie-desktop
+B=target/debug/raphie-desktop
+$B --list-scenes
+$B --snap out.png --scene approval --theme dark --size 1080x720 --scale 2
+$B --tree tree.json --scene conversation      # element tree as JSON
+scripts/snapshots.sh                           # every scene, both themes, into docs/images/desktop
+```
+
+Scenes are synthetic data from `app/src/scenes.rs`. Headless runs never start
+the engine, touch the Keychain or open a connection.
+
+## Keeping contracts in sync
+
+`core/src/contracts.rs` mirrors only the fields this client reads from
+`packages/contracts` (and the request bodies from the runtime's route handlers).
+Unknown fields are ignored, and enums that may grow decode unknown values to
+`Unknown`, so additive runtime changes do not break the app. Renaming or
+removing a field the app reads must update that file in the same change.
+
+Proposed follow-up (not built): generate these types from the TypeScript
+definitions, for example by emitting JSON Schema from `@raphie/contracts` and
+generating serde types with `typify`, with a CI check that the generated file is
+current.
+
+## Limits
+
+- Built and checked on macOS (Apple silicon). The code builds for Windows and
+  Linux (Rune supports both; the token store uses Credential Manager and the
+  Secret Service), but they have not been run by hand.
+- No attachments, Stop/Steer controls, model picker, command-permission mode,
+  session-scoped ("Approve for session") grants, activity inspector or settings.
+  Use the web workspace for those.
+- No packaging, signing or auto-update: run it from a checkout. Without an app
+  bundle, macOS may ask to allow Keychain access the first time.
+- No local runtime management: the app connects to a host that is already
+  running.
+- One message in flight at a time from the composer.
+- Live acceptance against a real tailnet HTTPS origin has not been run; the
+  live checks used the loopback fixture.
+
+## Rune notes
+
+Observations from building this app, recorded so the choice of Rune can be
+judged on evidence. Rune rev `09ab92a5c83b906adb6fbf92637323b49e86d7ac` (`dev`,
+"Declare the wasm32 target in rust-toolchain.toml (r420)").
+
+What worked well:
+
+- **Headless tooling is the real thing.** `--snap`, `--tree` and scenes rendered
+  every screen without a window from the first build, and `rune::Runtime` let
+  the UI tests click, paste and read the element tree with no GPU, so they run
+  in CI. The PNGs in this guide come from `scripts/snapshots.sh`.
+- **rune-kit covered the whole first slice:** `SplitView`/`Sidebar`, `TextArea`
+  with Return-to-submit, `Button`, `Spinner` and a streaming-aware `Markdown`
+  with syntax-coloured code. No custom widget was needed.
+- **Background work fits cleanly.** `AppSpec::setup` hands over a `Waker`
+  (`Arc<dyn Fn() + Send + Sync>`), which the UI-free core accepts as a plain
+  callback, and `poll` drains its events. The core never depends on Rune.
+- **The theme follows the OS** with `cx.system_dark()` and a neutral `Kit`;
+  colours spring across on a live appearance change.
+- Rune at this rev compiled and passed these tests on Rust 1.96 as well as the
+  pinned 1.99.1.
+
+Gaps and surprises:
+
+1. **Toolchain pin.** Rune pins Rust 1.99.1 in its own `rust-toolchain.toml`,
+   so this app pins the same. On a slow connection the first `rustup` download
+   took over 30 minutes; the code itself also built on 1.96.
+2. **Patches must be copied by hand.** A dependency's `[patch.crates-io]`
+   does not apply to the app, so `apps/desktop/Cargo.toml` repeats Rune's four
+   patches (winit, parley_engine, wgpu-hal, accesskit_windows) at the same rev.
+   Forgetting one builds silently against stock crates. Recheck them on every
+   Rune bump.
+3. **Kit text fields default to a fixed 280 pt width** (Storybook parity).
+   `TextInput`/`TextArea` need `.width(None)` to fill their container; the
+   first snapshots showed a short composer.
+4. **One key namespace.** rune-kit keys the parts of its components (`label`,
+   `value`, `icon`, ...), so app keys share a namespace with them. This app
+   prefixes its own with `rd-`.
+5. **`AppSpec` takes `fn` pointers**, not closures, for `init`, `view`,
+   `setup`, `poll` and `on_key`; configuration reaches them through
+   `App::init`, `rune::extra_args()` or state, not captures.
+6. **A covered window does not redraw** (documented). A `screencapture` of a
+   covered window shows its last frame, which briefly looked like the app had
+   ignored a revocation; the state had in fact changed.
+7. **Debug-build launch warning:** "first frame took 2946 ms (setup 1895 ms)".
+   The engine's start (Tokio runtime and TLS client) runs in `setup` before the
+   first frame. Moving it later (Rune suggests `on_ready`) is a follow-up.
+8. **Accessibility from scripts:** AppleScript/System Events saw only the
+   window buttons, not the content tree, because AccessKit builds the tree only
+   for an active assistive client. VoiceOver itself was not tried.
+9. **No Rune bugs** were hit in this slice: every problem above was a default,
+   a documented behaviour or a toolchain cost.
