@@ -50,7 +50,7 @@ export class PiClientQueries implements ClientQueries {
   private async visible(actor: ActorContext) {
     this.app.actors.require(actor);
     const chats = await this.app.chats.state();
-    if (actor.source !== "discord") return chats;
+    if (actor.source === "web") return chats;
     const bindings = (await this.app.harness.snapshot(
       ChannelBindings,
       context,
@@ -59,6 +59,7 @@ export class PiClientQueries implements ClientQueries {
       bindings
         .filter(
           (b) =>
+            b.provider === actor.source &&
             b.connectionId === actor.connectionId &&
             b.conversation === actor.threadId &&
             b.owner === actor.subject,
@@ -75,7 +76,7 @@ export class PiClientQueries implements ClientQueries {
 
   async info(actor: ActorContext) {
     this.app.actors.require(actor);
-    if (actor.source === "discord")
+    if (actor.source !== "web")
       throw new InputError("Inspection requires a client interface.", 403);
     const tools = await this.app.toolApprovals.state();
     const connections =
@@ -170,6 +171,7 @@ export class PiClientQueries implements ClientQueries {
       id: t.id,
       conversationId: id,
       source: t.source,
+      ...(t.origin ? { origin: t.origin } : {}),
       text: t.text,
       ...(t.attachments?.length ? { attachments: t.attachments } : {}),
       createdAt: t.createdAt,
@@ -177,7 +179,9 @@ export class PiClientQueries implements ClientQueries {
       answer: t.answer,
       queueMode: t.queueMode,
       cancelled: t.cancelled,
-      ...(t.scheduled ? { scheduled: t.scheduled } : {}),
+      ...(t.scheduled
+        ? { scheduled: t.scheduled, scheduledDelivery: t.scheduledDelivery }
+        : {}),
     }));
     return { items, next: start > 0 ? items[0]!.id : null };
   }
@@ -205,7 +209,7 @@ export class PiClientQueries implements ClientQueries {
   async activity(actor: ActorContext, before?: string, limit = 100) {
     const size = pageSize(limit);
     this.app.actors.require(actor);
-    if (actor.source === "discord")
+    if (actor.source !== "web")
       throw new InputError("Inspection requires a client interface.", 403);
     const chats = await this.app.chats.state();
     const ids = new Map(chats.conversations.map((c) => [c.id, c.sessionId]));

@@ -71,6 +71,19 @@ web process, and completes a message → approval → exact tool execution → r
 A web decision can still settle a Discord-origin approval; a subsequent stale
 Discord click cannot execute it again. This does not link or continue sessions.
 
+### Delivered: home channel for scheduled updates
+
+Each bot can select one known Discord or Telegram conversation in Settings or by
+sending `/home` there as a verified owner. Native commands are registered on
+connection/restart: Telegram `/ask`, `/pair`, `/home`, `/help`, `/start` privately and `/ask`, `/home`,
+`/help` in groups; Discord `/home`.
+Web chat has no `/home` command.
+Scheduled turns freeze home at admission regardless of where the job was created;
+missing/unavailable home stays web-only. Approval notices direct the owner to web.
+Channel turns persist structured origin metadata. Session linking, per-job
+routing overrides and natural-language routing tools remain planned.
+See [bot automation](bot-automation.md#home-channel-for-scheduled-updates).
+
 ## 2. Channel bindings and stable origin routing
 
 Move Discord associations out of the session model into channel bindings. Resolve
@@ -126,6 +139,9 @@ There is no Discord/Telegram inspection-command requirement.
 
 ## Later client and channel work
 
+Delivered capabilities and remaining work are labelled below. See the
+[Telegram guide](telegram.md) for channel setup and limits.
+
 - **CLI:** use the client interface for session selection, send/watch, approvals,
   and optional structured inspection output. No second executor or direct DB access.
 - **Desktop:** connect to an existing runtime first. Local runtime packaging,
@@ -140,9 +156,14 @@ There is no Discord/Telegram inspection-command requirement.
   and optional administrator passkeys, with password and local recovery fallback.
 - **Remote clients — planned verification:** real-tailnet acceptance remains
   unverified until the owner runs the [checklist](standalone-build.md#real-tailnet-acceptance-checklist).
-- **Telegram:** add an adapter with its own address/identity verification and
-  rendering once the Discord module proves the shared interface. Unsupported
-  capabilities should be explicit rather than silently dropped.
+- **Telegram:** delivered as a long-polling adapter with pairing-code owner
+  verification and its own renderer on the shared delivery worker; see the
+  [Telegram guide](telegram.md). Planned and not yet built: attachments in either
+  direction, broadcast channels, forum topics, Markdown rendering and webhooks.
+  Owner-only group mentions/commands, group home and web-only group approvals are
+  delivered; group-specific live acceptance remains unverified (automated tests
+  use a local fake).
+  Unsupported capabilities answer explicitly rather than being dropped.
 - **Cross-channel continuation:** explicit ownership-checked link/unlink and
   destination selection, with history-disclosure policy. No implicit broadcasting,
   automatic identity matching, or copying transcripts into a new session.

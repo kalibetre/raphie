@@ -15,6 +15,7 @@ import {
   CredentialCipher,
   type CredentialKeyStore,
 } from "../../settings/infrastructure/credential-cipher.ts";
+import type { ReplyDestination } from "../domain/binding.ts";
 
 type DiscordConfig = {
   botToken: string;
@@ -176,6 +177,26 @@ export class BotChannels {
     }
   }
 
+  acceptsHome(
+    address: ReplyDestination & {
+      userId: string;
+    },
+  ) {
+    if (
+      !this.config ||
+      !this.bridge ||
+      address.provider !== "discord" ||
+      address.connectionId !== this.config.applicationId ||
+      !this.config.allowedUserIds.includes(address.userId)
+    )
+      return false;
+    const parts = address.conversation.split(":");
+    return (
+      (!this.config.guildId || parts[1] === this.config.guildId) &&
+      (!this.config.channelId || parts[2] === this.config.channelId)
+    );
+  }
+
   read() {
     return {
       discord: this.config
@@ -202,6 +223,7 @@ export class BotChannels {
       threadId,
       respondToChannelIds: config.channelId ? [config.channelId] : [],
     });
+    await bridge.registerCommands();
     await bridge.chat.initialize();
     const abort = new AbortController();
     this.bridge = bridge;

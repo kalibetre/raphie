@@ -1,6 +1,6 @@
 import type { Attachment, Channel } from "@raphie/contracts";
 
-import type { GatewayState } from "../domain/file-approval.ts";
+import type { GatewayState, Source } from "../domain/file-approval.ts";
 import type { ToolApproval, ToolDelivery } from "../domain/tool-approval.ts";
 
 export interface ToolApprovalCommands {
@@ -30,7 +30,7 @@ export interface ToolApprovalCommands {
 export interface FileApprovalCommands {
   state(): Promise<GatewayState>;
   accept(input: {
-    source: Channel;
+    source: Source;
     actor: string;
     eventId: string;
     text: string;
@@ -43,7 +43,7 @@ export interface FileApprovalCommands {
     id: string,
     decision: "approved" | "rejected",
     actor: string,
-    via: Channel,
+    via: Source,
     threadId?: string,
     connectionId?: string,
     discordUserId?: string,

@@ -11,6 +11,7 @@
   - [Workspaces & sandboxes](bot-workspaces.md)
   - [MCP tools & schedules](bot-automation.md)
   - [Attachments](general-attachments.md)
+  - [Telegram channel](telegram.md)
 - **Security & operations**
   - [Authentication](authentication.md)
   - [Credential storage](provider-credential-storage.md)

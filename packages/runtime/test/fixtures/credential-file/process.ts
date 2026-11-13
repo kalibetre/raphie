@@ -79,6 +79,7 @@ for (const bot of ["default", "named"]) {
         assert.equal(config.botToken, `SYNTHETIC_DISCORD_${bot}`);
         return {
           chat: { initialize: async () => {}, shutdown: async () => {} },
+          registerCommands: async () => {},
           listen: async () => {},
           flush: async () => {},
         } as unknown as ReturnType<typeof createDiscordBridge>;

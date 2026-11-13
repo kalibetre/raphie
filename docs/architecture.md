@@ -92,7 +92,7 @@ are pure application functions; React lifecycle and browser synchronization
 belong to presentation/infrastructure.
 
 Composition roots wire adapters. Neither channel adapters nor domain handlers
-import the process host. Discord receives an explicit channel-services port.
+import the process host. Discord and Telegram receive an explicit channel-services port.
 Focused queries assemble public UUID summaries, transcript pages, approvals, phases and inspection data through a Pi adapter. Framework-free DTOs and reusable run/tool/usage projections live in `@raphie/contracts`; the old workspace snapshot remains a compatibility read. No
 browser module imports the runtime package.
 
@@ -152,13 +152,17 @@ issues and verifies process-local actor contexts. The HTTP middleware and Discor
 SDK adapter establish identity; a caller's JSON never grants owner access.
 
 `domains/channels` owns scoped bindings. `domains/conversations` persists a frozen
-reply destination per channel-origin turn; web-origin turns have none. Tool
+reply destination per channel-origin turn; interactive web-origin turns have none.
+Scheduled turns freeze the bot’s selected home destination from the additive
+`raphie.channel-home` document, after checking current connection/account access.
+Channel turns also retain structured verified origin metadata. Tool
 approval notifications follow that origin. There is no session-linking operation.
 
 `domains/delivery` owns persisted operation plans and pending/sending/sent/uncertain
-transitions. Discord renders whole reply intents into chunks and serializes card,
-file and edit payloads before network I/O. Its worker claims only the configured
-Discord connection's intents and operations. Original IDs remain intact during
+transitions. Discord and Telegram each render whole reply intents into chunks and
+serialize card, file and edit payloads before network I/O. Each worker claims only
+its configured connection's intents and operations. Telegram is a plain-`fetch`
+Bot API adapter using long polling; see [Telegram](telegram.md). Original IDs remain intact during
 migration. A lost send is uncertain, never automatically repeated.
 
 `application/queries` exposes client reads implemented by `infrastructure/pi`.

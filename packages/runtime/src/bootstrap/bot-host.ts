@@ -11,6 +11,11 @@ import {
   BotChannels,
   DiscordApplications,
 } from "../domains/channels/infrastructure/bot-channels.ts";
+import {
+  BotTelegram,
+  TelegramConnections,
+  type TelegramOptions,
+} from "../domains/channels/infrastructure/bot-telegram.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { BotJobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
@@ -31,18 +36,24 @@ export type BotRuntime = {
   mcp?: BotMcp;
   jobs?: BotJobs;
   channels?: BotChannels;
+  telegram?: BotTelegram;
   close(): Promise<void>;
 };
 
 type OpenBot = (id: string, directory: string) => Promise<BotRuntime>;
 
-type Automation = { keyStore?: CredentialKeyStore; legacyMcp?: McpConnection };
+type Automation = {
+  keyStore?: CredentialKeyStore;
+  legacyMcp?: McpConnection;
+  telegram?: TelegramOptions;
+};
 
 /** One process, separate storage and authorities. Only bootstrap holds every bot. */
 export class BotHost implements BotProfiles {
   private readonly profiles: BotProfileStore;
   private readonly runtimes = new Map<string, BotRuntime>();
   private readonly discordApplications = new DiscordApplications();
+  private readonly telegramConnections = new TelegramConnections();
 
   private readonly directory: string;
   private readonly openBot: OpenBot;
@@ -232,6 +243,7 @@ export class BotHost implements BotProfiles {
     if (!this.automation) return runtime;
     let mcp: BotMcp | undefined;
     let channels: BotChannels | undefined;
+    let telegram: BotTelegram | undefined;
     try {
       const busy = async () =>
         (await gateway.chats.state()).turns.some((t) => t.status === "pending");
@@ -250,6 +262,15 @@ export class BotHost implements BotProfiles {
         undefined,
         this.discordApplications,
       );
+      telegram = await BotTelegram.open(
+        join(directory, "telegram.sqlite"),
+        gateway,
+        this.automation.keyStore,
+        this.automation.telegram,
+        this.telegramConnections,
+      );
+      gateway.home.available = (address) =>
+        !!(channels?.acceptsHome(address) || telegram?.acceptsHome(address));
       const actor = gateway.actors.establish("web");
       const jobs = BotJobs.open({
         root: gateway.root,
@@ -265,10 +286,15 @@ export class BotHost implements BotProfiles {
         mcp,
         jobs,
         channels,
+        telegram,
         close: async () => {
           try {
             try {
-              await channels?.close();
+              try {
+                await telegram?.close();
+              } finally {
+                await channels?.close();
+              }
             } finally {
               await runtime.close();
             }
@@ -278,6 +304,7 @@ export class BotHost implements BotProfiles {
         },
       };
     } catch (error) {
+      await telegram?.close();
       await channels?.close();
       await mcp?.close();
       await runtime.close();

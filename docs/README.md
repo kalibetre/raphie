@@ -17,6 +17,7 @@ change that changes the behavior.
 - [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
 - [Bot workspaces and execution providers](bot-workspaces.md): files, just-bash, containers and their limits.
 - [Bot automation](bot-automation.md): per-bot MCP servers, encrypted configuration and recurring prompts.
+- [Telegram channel](telegram.md): BotFather setup, owner pairing, delivery limits, security notes and what is unsupported.
 - [Memory](memory.md): built-in behavior, agent tools, storage, correction,
   forgetting, provider support and recovery.
 - [Administrator authentication](authentication.md): sign-in, setup and recovery commands, protection and limits.

@@ -15,6 +15,13 @@ export type MessageReceipt = { id: string; sessionId: string };
 
 type FileCommands = Pick<FileApprovalCommands, "accept" | "decide">;
 
+/** The file-copy experiment predates Telegram; fail closed rather than skip its Discord checks. */
+function fileSource(actor: ActorContext) {
+  if (actor.source === "telegram")
+    throw new InputError("File approvals are not available in Telegram.", 403);
+  return actor.source;
+}
+
 type CopyInput = Pick<
   Parameters<FileApprovalCommands["accept"]>[0],
   "text" | "eventId" | "files"
@@ -142,6 +149,7 @@ export class Sessions implements SessionOperations {
       sessionId: input.sessionId,
       model: input.model,
       approvalMode: verified.source === "web" ? input.approvalMode : undefined,
+      origin: verified.origin,
       source: verified.source,
       actor: verified.subject,
       discordThreadId: verified.threadId,
@@ -165,6 +173,7 @@ export class Sessions implements SessionOperations {
     const verified = this.authority.require(actor);
     const receipt = await this.conversations.send({
       ...input,
+      origin: verified.origin,
       source: verified.source,
       actor: verified.subject,
     });
@@ -190,6 +199,7 @@ export class Sessions implements SessionOperations {
     const verified = this.authority.require(actor);
     return this.conversations.send({
       ...input,
+      origin: verified.origin,
       source: verified.source,
       actor: verified.subject,
       discordThreadId: verified.threadId,
@@ -202,7 +212,7 @@ export class Sessions implements SessionOperations {
     const verified = this.authority.require(actor);
     return this.files.accept({
       ...input,
-      source: verified.source,
+      source: fileSource(verified),
       actor: verified.subject,
       discordThreadId: verified.threadId,
       connectionId:
@@ -221,7 +231,7 @@ export class Sessions implements SessionOperations {
       id,
       decision,
       verified.subject,
-      verified.source,
+      fileSource(verified),
       verified.threadId,
       verified.connectionId,
       verified.discordUserId,

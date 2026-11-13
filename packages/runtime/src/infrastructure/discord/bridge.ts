@@ -1,7 +1,10 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import type { DiscordAdapterConfig } from "@chat-adapter/discord";
-import { createDiscordAdapter } from "@chat-adapter/discord";
+import {
+  createDiscordAdapter,
+  DiscordInteractionResponseFlag,
+} from "@chat-adapter/discord";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import type { Message, Thread } from "chat";
 import { Chat, ConsoleLogger } from "chat";
@@ -10,6 +13,7 @@ import type { ChannelServices } from "../../application/channels/ports.ts";
 import { InputError } from "../../domains/approvals/infrastructure/pi-file-approvals.ts";
 import { MAX_FILE_BYTES } from "../../domains/attachments/infrastructure/local-attachment-store.ts";
 import { createDeliveryWorker } from "../../domains/delivery/application/worker.ts";
+import { registerDiscordCommands } from "./commands.ts";
 import { decodeDiscordOperation, discordRenderer } from "./delivery.ts";
 
 type FetchRequest = (
@@ -101,6 +105,10 @@ export function createDiscordBridge(
     mentionRoleIds: config.mentionRoleIds ?? [],
     respondToChannelIds: config.respondToChannelIds ?? [],
     logger,
+    interactionFlags: (context) =>
+      context.command === "/home"
+        ? DiscordInteractionResponseFlag.Ephemeral
+        : config.interactionFlags?.(context),
   });
   const chat = new Chat({
     userName: "raphie",
@@ -120,11 +128,54 @@ export function createDiscordBridge(
       target,
     );
 
+  const setHome = (threadId: string, userId: string, eventId: string) =>
+    app.home.setCurrent(
+      app.actors.establish("discord", threadId, config.applicationId, userId),
+      eventId,
+    );
+
+  chat.onSlashCommand("/home", async (event) => {
+    let reply: string;
+    try {
+      if (event.user.isBot || !authorized(event.user.userId, event.channel.id))
+        throw new InputError(
+          "You are not authorized to set home in this conversation.",
+          403,
+        );
+      const raw = event.raw;
+      if (
+        !raw ||
+        typeof raw !== "object" ||
+        !("id" in raw) ||
+        typeof raw.id !== "string"
+      )
+        throw new InputError(
+          "This command has no verified interaction identity.",
+          403,
+        );
+      await setHome(event.channel.id, event.user.userId, raw.id);
+      reply = "This conversation is now this bot’s home for scheduled updates.";
+    } catch (error) {
+      reply =
+        error instanceof InputError
+          ? error.message
+          : "I could not set the home channel. Please try again.";
+    }
+    await event.channel.post({ raw: reply });
+  });
+
   async function receive(thread: Thread, message: Message) {
     if (!authorized(message.author.userId, thread.id) || message.author.isBot)
       return;
     try {
       const text = message.text.replace(/^<@!?\d+>\s*/, "").trim();
+      if (text === "/home") {
+        await setHome(thread.id, message.author.userId, message.id);
+        await adapter.postMessage(thread.id, {
+          raw: "This conversation is now this bot’s home for scheduled updates.",
+        });
+        return;
+      }
       if (!/^\/copy(?:\s|$)/.test(text)) {
         if (message.attachments.length)
           throw new InputError(
@@ -136,6 +187,7 @@ export function createDiscordBridge(
             thread.id,
             config.applicationId,
             message.author.userId,
+            { messageId: message.id },
           ),
           {
             eventId: message.id,
@@ -277,5 +329,19 @@ export function createDiscordBridge(
     }
   }
 
-  return { adapter, chat, flush, listen };
+  async function registerCommands() {
+    const botToken =
+      typeof config.botToken === "function"
+        ? await config.botToken()
+        : config.botToken;
+    if (!botToken)
+      throw new Error("Discord command registration requires a bot token.");
+    await registerDiscordCommands({
+      applicationId: config.applicationId,
+      botToken,
+      apiUrl: config.apiUrl,
+    });
+  }
+
+  return { adapter, chat, flush, listen, registerCommands };
 }

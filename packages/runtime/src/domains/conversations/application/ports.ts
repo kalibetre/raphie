@@ -1,10 +1,11 @@
-import type { Channel, ModelSelection } from "@raphie/contracts";
+import type { Channel, ChannelOrigin, ModelSelection } from "@raphie/contracts";
 
 export type SendMessage = {
   source: Channel;
   actor: string;
   eventId: string;
   text: string;
+  origin?: ChannelOrigin;
   attachments?: string[];
   conversationId?: number;
   sessionId?: string;

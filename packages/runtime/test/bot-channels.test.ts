@@ -44,6 +44,7 @@ describe("bot channels", () => {
               stopped++;
             },
           },
+          registerCommands: async () => {},
           listen: async () => {},
           flush: async () => {},
         } as unknown as ReturnType<typeof createDiscordBridge>;
@@ -117,6 +118,7 @@ test("concurrent saves reserve an application and release it on removal or faile
           active--;
         },
       },
+      registerCommands: async () => {},
       listen: async () => {},
       flush: async () => {},
     })) as unknown as typeof createDiscordBridge,
@@ -185,6 +187,7 @@ test("existing duplicate configurations stay encrypted and only the first reconn
           active--;
         },
       },
+      registerCommands: async () => {},
       listen: async () => {},
       flush: async () => {},
     })) as unknown as typeof createDiscordBridge,
@@ -305,6 +308,7 @@ test("legacy owner and channel settings are retained on reopen", async () => {
     }) as typeof resolveDiscordThread,
     create: (() => ({
       chat: { initialize: async () => {}, shutdown: async () => {} },
+      registerCommands: async () => {},
       listen: async () => {},
       flush: async () => {},
     })) as unknown as typeof createDiscordBridge,

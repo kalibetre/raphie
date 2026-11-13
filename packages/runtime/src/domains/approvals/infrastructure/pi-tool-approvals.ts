@@ -1,3 +1,5 @@
+import type { Channel as Source } from "@raphie/contracts";
+
 import { decideApproval, isDecision } from "../domain/decision.ts";
 import type { ToolApproval, ToolDelivery } from "../domain/tool-approval.ts";
 
@@ -13,8 +15,11 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import {
+  channelNames,
+  isSharedTelegramDestination,
+} from "../../channels/domain/binding.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
-import type { Source } from "./pi-file-approvals.ts";
 import { InputError } from "./pi-file-approvals.ts";
 
 type Grant = {
@@ -141,8 +146,12 @@ export class ToolApprovalService {
       const turn = pendingTurns[0];
       // The tool API identifies a conversation, not its originating turn. Never
       // assign authority from an ambiguous queue; the web owner can still decide.
+      const webOnlyApproval =
+        !!turn?.scheduled || isSharedTelegramDestination(turn?.replyTo);
       const initiator =
-        pendingTurns.length === 1 ? turn?.discordUserId : undefined;
+        !webOnlyApproval && pendingTurns.length === 1
+          ? turn?.discordUserId
+          : undefined;
       const { legacyFingerprint: _legacyFingerprint, ...currentProposal } =
         proposal;
       const item: ToolApproval = {
@@ -150,7 +159,7 @@ export class ToolApprovalService {
         id: crypto.randomUUID(),
         taskId: api.taskId,
         conversationId: api.conversationId,
-        replyTo: turn?.replyTo ?? null,
+        replyTo: webOnlyApproval ? null : (turn?.replyTo ?? null),
         ...(initiator ? { discordUserId: initiator } : {}),
         createdAt: Date.now(),
         expiresAt: Date.now() + (this.app.options.approvalTtlMs ?? 600_000),
@@ -206,7 +215,17 @@ export class ToolApprovalService {
         },
       );
       if (item.status === "pending") {
-        notify(state, item, "approval", turn?.replyTo?.conversation ?? null);
+        if (webOnlyApproval && turn?.replyTo) {
+          chats.deliveries.push({
+            id: `${item.id}:scheduled-approval`,
+            turnId: turn.id,
+            threadId: turn.replyTo.conversation,
+            connectionId: turn.replyTo.connectionId,
+            text: `${turn.scheduled ? `Scheduled: ${turn.scheduled.name}\n` : ""}Approval needed. Open the web workspace to review the exact action. Approval details are not posted to this conversation.`,
+            status: "pending",
+          });
+        } else
+          notify(state, item, "approval", turn?.replyTo?.conversation ?? null);
       } else {
         record(
           await tx.doc(Activity),
@@ -302,26 +321,27 @@ export class ToolApprovalService {
         throw new InputError("This tool requires approval of each call.", 403);
       const destination =
         state.deliveries.find((d) => d.approvalId === id)?.threadId ?? null;
+      const names = channelNames(via === "telegram" ? "telegram" : "discord");
       if (
-        via === "discord" &&
+        via !== "web" &&
         item.replyTo &&
         item.replyTo.connectionId !== connectionId
       )
         throw new InputError(
-          "Approval belongs to another Discord connection.",
+          `Approval belongs to another ${names.name} connection.`,
           403,
         );
-      if (via === "discord" && destination !== threadId)
+      if (via !== "web" && destination !== threadId)
         throw new InputError(
-          "Approval belongs to another Discord thread.",
+          `Approval belongs to another ${names.name} ${names.place}.`,
           403,
         );
       if (
-        via === "discord" &&
+        via !== "web" &&
         (!item.discordUserId || item.discordUserId !== discordUserId)
       )
         throw new InputError(
-          "Only the Discord user who initiated this request can decide it. Use the web UI if the initiator cannot be verified.",
+          `Only the ${names.name} user who initiated this request can decide it. Use the web UI if the initiator cannot be verified.`,
           403,
         );
       if (item.status !== "pending") return item.status;
