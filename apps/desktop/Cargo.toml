@@ -1,0 +1,49 @@
+# Raphie's native desktop client. Two crates:
+#
+# - `core` (raphie-desktop-core): talks to the web host's authenticated API,
+#   signs in, stores the token, follows event streams and holds the client
+#   state. It does not depend on any UI framework.
+# - `app` (raphie-desktop): the Rune user interface on top of `core`.
+#
+# The split is enforced by Cargo: `core` cannot import Rune because it does not
+# list it as a dependency.
+[workspace]
+resolver = "3"
+members = ["core", "app"]
+
+[workspace.package]
+edition = "2024"
+license = "UNLICENSED"
+publish = false
+
+# Rune is pre-release: pin an exact rev of its `dev` branch (never rewritten),
+# and patch the same crates Rune patches, from the same rev. A dependency's
+# [patch] does not reach this workspace, so without these the app would build
+# against stock winit/parley/wgpu-hal/accesskit. When bumping, copy the list
+# from the [patch.crates-io] table in Rune's root Cargo.toml at the new rev.
+[workspace.dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac", features = ["markdown"] }
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# Plain, readable Rust is a goal of this crate; keep the default lint set and
+# deny warnings in CI (`cargo clippy -- -D warnings`).
+
+[profile.dev]
+# Rune's own workspace trims debug info: full debug info for a GUI stack this
+# size makes test builds slow and memory hungry.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+# Dependencies (Rune, wgpu, Parley) run far faster optimised; our own crates
+# stay quick to rebuild.
+opt-level = 2

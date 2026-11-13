@@ -10,3 +10,5 @@ node_modules/
 dist/
 .tanstack/
 .env.schema.cache.json
+# Rust build output of the desktop client
+apps/desktop/target/

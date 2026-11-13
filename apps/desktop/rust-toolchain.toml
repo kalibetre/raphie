@@ -1,0 +1,5 @@
+# Rune is built and tested on this toolchain (see its own rust-toolchain.toml at
+# the pinned rev). Keep the two in step when bumping the Rune rev.
+[toolchain]
+channel = "1.99.1"
+components = ["clippy", "rustfmt"]

@@ -1,0 +1,32 @@
+[package]
+name = "raphie-desktop-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Raphie's desktop client core: API client, sign-in, event streams and state. No UI framework."
+
+[lib]
+name = "raphie_core"
+
+[dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls"] }
+tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+# The OS credential store: Keychain on macOS, Credential Manager on Windows,
+# the Secret Service (over D-Bus) on Linux.
+keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+dirs = "7"
+
+[dev-dependencies]
+axum = "0.8"
+tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+[lints]
+workspace = true
