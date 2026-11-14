@@ -78,7 +78,7 @@ A new feature is placed by asking these questions in order.
 | Personality revision history               | Yes | Planned | No      |                                               |
 | Create a bot, delete a bot                 | Yes | Planned | No      | Rare, and deleting cannot be undone.          |
 | Providers (model connections and keys)     | Yes | Planned | No      | Setup.                                        |
-| Models (compare, pick the default)         | Yes | Planned | Planned |                                               |
+| Models (compare, pick the default)         | Yes | Yes     | Planned |                                               |
 | Memory settings                            | Yes | Planned | No      | Setup.                                        |
 | Browse, correct or forget memory           | Yes | Planned | Planned |                                               |
 | MCP tools                                  | Yes | Planned | No      | Setup. OAuth authorization opens the browser. |

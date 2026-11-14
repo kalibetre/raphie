@@ -8,6 +8,7 @@
 mod account;
 mod appearance;
 mod bot;
+mod models;
 mod nav;
 mod parts;
 mod profile;
@@ -22,7 +23,7 @@ use crate::state::Ui;
 use crate::theme::font;
 use crate::widgets::{icon_button, one_line, pressable};
 
-pub fn settings(s: &Ui, page: &Page, look: &Look) -> El {
+pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
     let content = match page {
         Page::Account => account::account(s, look),
@@ -31,6 +32,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look) -> El {
             bot_id,
             section: BotSection::Profile,
         } => profile::profile(s, bot_id, look),
+        Page::Bot {
+            bot_id,
+            section: BotSection::Models,
+        } => models::models(s, bot_id, look, overlays),
         Page::Bot { bot_id, section } => bot::bot_page(s, bot_id, *section, look),
     };
     // The Profile page docks a save bar under the scrolling page.

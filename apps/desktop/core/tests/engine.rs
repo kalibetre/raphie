@@ -366,6 +366,42 @@ fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
 }
 
 #[test]
+fn a_bots_models_load_and_the_default_can_be_changed() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::LoadSettings {
+        bot_id: "b-research".into(),
+    });
+    driver.until("the models", |m, _| m.settings.contains_key("b-research"));
+    let settings = &driver.model.settings["b-research"];
+    assert_eq!(
+        (settings.model_id.as_str(), settings.models.len()),
+        ("fast", 2)
+    );
+    assert_eq!(settings.models[0].pricing.unwrap().output, 15.0);
+    // A named bot's settings live under its own route.
+    assert_eq!(host.requests("/api/bots/b-research/settings").len(), 1);
+
+    assert!(driver.model.begin_set_model());
+    driver.send(Command::SetDefaultModel {
+        bot_id: "b-research".into(),
+        model_id: "deep".into(),
+        connection_id: "c-main".into(),
+    });
+    driver.until("the new default", |m, _| !m.setting_model);
+    assert_eq!(driver.model.settings["b-research"].model_id, "deep");
+    assert_eq!(
+        driver.model.model_message.as_deref(),
+        Some("Anthropic: Deep is now the default for new sessions.")
+    );
+    let changes = host.requests("/api/bots/b-research/settings");
+    assert_eq!(
+        changes.last().unwrap().client_marker.as_deref(),
+        Some("web")
+    );
+}
+
+#[test]
 fn a_session_scoped_approval_carries_its_scope() {
     let host = FakeHost::start();
     host.with(|h| {

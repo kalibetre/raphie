@@ -28,6 +28,7 @@ icons and layout, in light and dark.
 | Settings: Account              | ![](images/desktop/settings-account-light.png)    | ![](images/desktop/settings-account-dark.png)        |
 | Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png)     |
 | Settings: Profile              | ![](images/desktop/settings-profile-light.png)    | ![](images/desktop/settings-profile-edited-dark.png) |
+| Settings: Models               | ![](images/desktop/settings-models-light.png)     | ![](images/desktop/settings-models-filter-dark.png)  |
 
 ## What works
 
@@ -81,7 +82,11 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     else meanwhile, the draft is kept and saving is blocked until you
     discard it, so nobody's edits are overwritten silently. Unsaved edits
     survive a look at another page.
-  - **A bot's other pages** (Providers, Models, ...) are not built yet: each
+  - **Models** shows the default model for new sessions and the catalogue the
+    bot's connections offer, with search and Provider, Model source and
+    Connection filters. "Set as default" changes where new sessions start;
+    existing sessions keep their model.
+  - **A bot's other pages** (Providers, Memory, ...) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
@@ -162,6 +167,7 @@ apps/desktop/
     src/auth.rs           device sign-in rules, Keychain and in-memory token stores
     src/model.rs          client state and how events change it (pure)
     src/projections.rs    tool steps, usage and run labels from the journal
+    src/model_library.rs  grouping, filtering and labelling models
     src/engine.rs         Tokio runtime: sign-in, streams, commands → events
     src/settings.rs       last origin (non-secret)
     tests/                fake web host (axum) and engine/model tests
@@ -237,21 +243,23 @@ traffic lights where macOS puts them.
 The desktop app copies the web workspace's design by value, so a change to the
 web design must be made here too. Each file names its web source at the top:
 
-| Desktop                   | Web source                                                                                   |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| `app/src/theme.rs`        | `apps/web/src/shared/styles/tokens.css` (colours, shadows)                                   |
-| `app/src/avatar.rs`       | `domains/settings/application/bot-glance.ts` and `bot-tone.ts`                               |
-| `app/src/icons.rs`        | the Lucide icons the web components import                                                   |
-| `app/src/sections.rs`     | `domains/settings/presentation/settings-sections.ts`, `settings-nav.tsx`                     |
-| `app/src/profile.rs`      | the form state in `bot-profile-form.tsx`                                                     |
-| `app/src/widgets.rs`      | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                                |
-| `core/src/projections.rs` | `packages/contracts/src/sessions/projections.ts` (tool steps, usage, labels, number formats) |
-| `app/src/view/*.rs`       | the matching component and its rules in `chat.css`, `sessions.css` and `bot-workspace.css`   |
+| Desktop                     | Web source                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| `app/src/theme.rs`          | `apps/web/src/shared/styles/tokens.css` (colours, shadows)                                   |
+| `app/src/avatar.rs`         | `domains/settings/application/bot-glance.ts` and `bot-tone.ts`                               |
+| `app/src/icons.rs`          | the Lucide icons the web components import                                                   |
+| `app/src/sections.rs`       | `domains/settings/presentation/settings-sections.ts`, `settings-nav.tsx`                     |
+| `app/src/profile.rs`        | the form state in `bot-profile-form.tsx`                                                     |
+| `app/src/widgets.rs`        | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                                |
+| `core/src/projections.rs`   | `packages/contracts/src/sessions/projections.ts` (tool steps, usage, labels, number formats) |
+| `core/src/model_library.rs` | `domains/settings/application/model-library.ts`, number formats in `model-card.tsx`          |
+| `app/src/view/*.rs`         | the matching component and its rules in `chat.css`, `sessions.css` and `bot-workspace.css`   |
 
 The web's root font size is 14 px, so its Tailwind sizes (in rem) are 14/16 of
 their usual pixels: an `h-8` button is 28 pt here, `text-sm` is 12.25 pt.
 
-Tests pin what can drift silently: `avatar.rs` and `projections.rs` check their
+Tests pin what can drift silently: `avatar.rs`, `projections.rs` and
+`model_library.rs` check their
 results against values printed by the web's TypeScript, and `tests/screens.rs` checks the page
 and sidebar colours against the tokens in both appearances. To compare by eye,
 render with `scripts/snapshots.sh` and put the PNGs beside the web workspace at
@@ -401,6 +409,11 @@ Since the redesign: `Tx::wake_after` from `poll` gave the once-a-second tick
 for "12s elapsed" with no timer thread, and `icon_rotation` turns the unfold
 chevron. Text filled with a moving gradient (the web's shimmer on a working
 label) was not found and not ported.
+
+For Settings → Models the kit's `Select` came back in: restyling was not
+needed, since a `Kit` built from the web's colours already draws a drop-down
+that sits well beside the app's own controls. Its list floats above the page
+through `rune_kit::root`, which the view root now wraps everything in.
 
 Not used yet: `Cx::layout_with` reads an element's size from the last layout
 and re-runs the view only when a breakpoint is crossed. It is the way to narrow
