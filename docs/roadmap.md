@@ -149,7 +149,8 @@ Delivered capabilities and remaining work are labelled below. See the
   locally or over a tailnet HTTPS origin. Device-code sign-in with the token in
   the OS credential store, revocation back to sign-in, bot and session lists,
   conversations with history paging and streamed replies, sending, and
-  approve/reject with stale decisions reported. Light and dark follow the OS.
+  approve/reject with stale decisions reported. It follows the web workspace's
+  design, and light and dark follow the OS.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
 - **Desktop — planned:** attachments, Stop/Steer, model and command-permission
   controls, session grants, packaging/signing and updates, Windows and Linux

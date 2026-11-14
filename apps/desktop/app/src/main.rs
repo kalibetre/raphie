@@ -9,10 +9,11 @@ fn main() {
     // "Launching fast").
     rune::prewarm_gpu();
     // Our own title bar: content runs under the traffic lights, and only the
-    // marked bands drag the window.
+    // marked bands drag the window. The lights sit level with the "raphie"
+    // brand, which starts to their right.
     let chrome = Chrome {
         full_size_content: true,
-        traffic_lights: Some((16.0, 25.0)),
+        traffic_lights: Some((20.0, 31.0)),
         drag_regions: true,
     };
     rune::App::new(raphie_desktop::spec())

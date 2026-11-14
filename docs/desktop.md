@@ -9,7 +9,17 @@ It is a **client of the web host's authenticated API**, the same API the web
 workspace uses. It never talks to the runtime's port 4316, so it works the same
 whether Raphie runs on this machine or on a server reached over a tailnet.
 
-![Conversation, light](images/desktop/conversation-light.png)
+It looks like the web workspace on purpose: the same colours, type, bot faces,
+icons and layout, in light and dark.
+
+![Approval, light](images/desktop/approval-light.png)
+
+|                              | Light                                       | Dark                                       |
+| ---------------------------- | ------------------------------------------- | ------------------------------------------ |
+| Sign in                      | ![](images/desktop/sign-in-light.png)       | ![](images/desktop/device-code-dark.png)   |
+| New conversation, panel open | ![](images/desktop/conversations-light.png) | ![](images/desktop/conversations-dark.png) |
+| Conversation                 | ![](images/desktop/conversation-light.png)  | ![](images/desktop/conversation-dark.png)  |
+| Reply streaming in           | ![](images/desktop/streaming-light.png)     | ![](images/desktop/streaming-dark.png)     |
 
 ## What works
 
@@ -26,21 +36,24 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   last origin; if the host answers 401 (the device was disconnected in
   Settings → Account, or the password was recovered), the token is deleted and
   the app returns to sign-in with an explanation.
-- **Bots and conversations** from the focused client queries: the bot list
+- **Bots and conversations** from the focused client queries: the bot roster
   (`GET /api/bots`), each bot's live session list (`/api/sessions/events`, plus
-  "Show more" pages), and bot-prefixed routes for named bots.
+  "Load more conversations" pages), and bot-prefixed routes for named bots. The
+  conversations panel (the button at the top right) searches titles and
+  filters to conversations that need an approval. ⌘B hides the roster.
 - **Conversations** from the session event stream (`/api/sessions/<id>/events`):
   history with "Show earlier messages" paging, the reply streaming in as it is
   written, Markdown with syntax-coloured code blocks, selectable text, run
   phase while waiting, and failed or stopped replies. A dropped stream
-  reconnects with backoff (1 s up to 15 s) and the toolbar says so.
+  reconnects with backoff (1 s up to 15 s) and the roster's status line says
+  "Reconnecting…".
 - **Sending** with Return (Shift-Return for a new line). Each message has one
   stable event id; a network failure is retried with the same id, so the runtime
   admits it once. A first message creates the session and opens it.
 - **Approvals**: pending actions show their server, tool and exact arguments,
-  with Approve and Reject (once). A decision that arrives after the approval was
-  settled elsewhere or expired is reported ("already approved elsewhere",
-  "expired before your decision arrived") instead of failing.
+  when they expire, and **Reject** and **Approve once**. A decision that
+  arrives after the approval was settled or expired is reported ("had already
+  been approved", "expired before your decision arrived") instead of failing.
 - **Light and dark** follow the OS appearance, live.
 
 ## Run it
@@ -101,7 +114,7 @@ example `https://raphie.your-tailnet.ts.net`. Plain `http://` is accepted only
 for `127.0.0.1`, `localhost` and `[::1]`, so a token never crosses a network
 unencrypted. The app follows no redirects.
 
-**Sign out** forgets this device's token. The device stays listed in Settings →
+**Sign out** (the icon at the bottom of the roster) forgets this device's token. The device stays listed in Settings →
 Account until you disconnect it there; a native bearer session cannot revoke
 itself through the web host today.
 
@@ -124,7 +137,18 @@ apps/desktop/
     examples/live.rs      live check against a running web host
   app/                    raphie-desktop: the Rune UI
     src/state.rs          UI state, engine bridge (setup/poll)
-    src/view.rs           every screen
+    src/theme.rs          the web workspace's colours and type
+    src/widgets.rs        buttons and fields, drawn like the web's
+    src/avatar.rs         a bot's face and colour, computed as the web does
+    src/icons.rs          the web workspace's icons (Lucide)
+    src/view/             the screens, one module per region:
+      sign_in.rs            address form and device code
+      roster.rs             bots down the left edge
+      header.rs             bot, conversation title, actions
+      panel.rs              conversations: search, filter, rows
+      conversation.rs       messages, replies, approvals
+      composer.rs           the message box
+      welcome.rs            a new conversation
     src/scenes.rs         synthetic states for snapshots and tests
     tests/screens.rs      headless element-tree checks, light and dark
   scripts/snapshots.sh    renders the PNGs in docs/images/desktop
@@ -163,13 +187,50 @@ Rune apps render without a window. Debug builds always accept the flags:
 cargo build -p raphie-desktop
 B=target/debug/raphie-desktop
 $B --list-scenes
-$B --snap out.png --scene approval --theme dark --size 1080x720 --scale 2
+$B --snap out.png --scene approval --theme dark --size 1280x800 --scale 2 --chrome
 $B --tree tree.json --scene conversation      # element tree as JSON
 scripts/snapshots.sh                           # every scene, both themes, into docs/images/desktop
 ```
 
 Scenes are synthetic data from `app/src/scenes.rs`. Headless runs never start
-the engine, touch the Keychain or open a connection.
+the engine, touch the Keychain or open a connection. `--chrome` draws the
+traffic lights where macOS puts them.
+
+## Keeping the look in sync with the web
+
+The desktop app copies the web workspace's design by value, so a change to the
+web design must be made here too. Each file names its web source at the top:
+
+| Desktop              | Web source                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `app/src/theme.rs`   | `apps/web/src/shared/styles/tokens.css` (colours, shadows)                                 |
+| `app/src/avatar.rs`  | `domains/settings/application/bot-glance.ts` and `bot-tone.ts`                             |
+| `app/src/icons.rs`   | the Lucide icons the web components import                                                 |
+| `app/src/widgets.rs` | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                              |
+| `app/src/view/*.rs`  | the matching component and its rules in `chat.css`, `sessions.css` and `bot-workspace.css` |
+
+The web's root font size is 14 px, so its Tailwind sizes (in rem) are 14/16 of
+their usual pixels: an `h-8` button is 28 pt here, `text-sm` is 12.25 pt.
+
+Tests pin what can drift silently: `avatar.rs` checks faces and colours against
+values printed by the web's TypeScript, and `tests/screens.rs` checks the page
+and sidebar colours against the tokens in both appearances. To compare by eye,
+render with `scripts/snapshots.sh` and put the PNGs beside the web workspace at
+1280×800.
+
+Where the two differ on purpose:
+
+- Controls for features this app lacks are left out rather than shown dead:
+  attachments, the model picker, command-permission mode, usage, notifications,
+  settings, New bot, and the "New replies" filter (there is no read tracking).
+- The roster shows "N conversations need you" and the last message only for
+  the selected bot, because the app follows one bot's sessions at a time.
+- Sign-in asks for a Raphie address and shows a device code instead of a
+  password form; it reuses the web sign-in card.
+- Replies show no time or token line, and a run shows no elapsed time: the
+  session stream this client reads does not carry activity events.
+- Numbered lists show their numbers.
+- The "raphie" brand starts to the right of the macOS traffic lights.
 
 ## Keeping contracts in sync
 
@@ -190,8 +251,11 @@ current.
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
 - No attachments, Stop/Steer controls, model picker, command-permission mode,
-  session-scoped ("Approve for session") grants, activity inspector or settings.
-  Use the web workspace for those.
+  session-scoped ("Approve for session") grants, settled tool steps, activity
+  inspector, notifications, unread markers or settings. Use the web workspace
+  for those.
+- The roster and panel have fixed widths (264 and 340 pt) and their open state
+  is not remembered between launches. The window is at least 960×560.
 - No packaging, signing or auto-update: run it from a checkout. Without an app
   bundle, macOS may ask to allow Keychain access the first time.
 - No local runtime management: the app connects to a host that is already
@@ -212,14 +276,24 @@ What worked well:
   every screen without a window from the first build, and `rune::Runtime` let
   the UI tests click, paste and read the element tree with no GPU, so they run
   in CI. The PNGs in this guide come from `scripts/snapshots.sh`.
-- **rune-kit covered the whole first slice:** `SplitView`/`Sidebar`, `TextArea`
-  with Return-to-submit, `Button`, `Spinner` and a streaming-aware `Markdown`
-  with syntax-coloured code. No custom widget was needed.
+- **rune-kit got a first version on screen in hours:** `SplitView`/`Sidebar`,
+  `TextArea` with Return-to-submit, `Button`, `Spinner` and a streaming-aware
+  `Markdown` with syntax-coloured code, with no custom widget.
+- **Porting the web design was direct.** Rune's element builders cover the CSS
+  the web workspace uses: per-corner radii, layered box shadows, linear and
+  radial gradients, hover and press overlays, keyboard-only focus rings, dashed
+  borders, letter spacing and `text_case`. Its built-in sans is Inter, the
+  web's font. Icons take SVG bodies, so Lucide's pasted in unchanged, and
+  `Shape`/`Path` drew the bot faces from the same curves as the web's SVG. The
+  redesign needed no workaround inside Rune.
+- **`MarkdownStyle` has a setter for everything the web's `.markdown` rules
+  set** (fonts, code block fill and border, link and inline-code colours, list
+  indent), so the kit's `Markdown` stayed.
 - **Background work fits cleanly.** `AppSpec::setup` hands over a `Waker`
   (`Arc<dyn Fn() + Send + Sync>`), which the UI-free core accepts as a plain
   callback, and `poll` drains its events. The core never depends on Rune.
-- **The theme follows the OS** with `cx.system_dark()` and a neutral `Kit`;
-  colours spring across on a live appearance change.
+- **The theme follows the OS** with `cx.system_dark()`; colours spring across
+  on a live appearance change.
 - Rune at this rev compiled and passed these tests on Rust 1.96 as well as the
   pinned 1.99.1.
 
@@ -251,5 +325,28 @@ Gaps and surprises:
 8. **Accessibility from scripts:** AppleScript/System Events saw only the
    window buttons, not the content tree, because AccessKit builds the tree only
    for an active assistive client. VoiceOver itself was not tried.
-9. **No Rune bugs** were hit in this slice: every problem above was a default,
-   a documented behaviour or a toolchain cost.
+9. **The kit's look is its own design system.** Matching another design meant
+   replacing the kit's shell, buttons and fields with about 250 lines of plain
+   functions over Rune's elements (`app/src/widgets.rs`), and keeping only
+   `Markdown` and `Loader`. `TextInput` has a borderless `plain()` mode for
+   this; `TextArea` does not, so the composer uses `rune::text_input` with
+   `auto_grow` directly.
+10. **A border takes no layout room by default**, so a child with its own fill
+    draws over its parent's border (the sign-in card's tinted top hid the card
+    edge). `border_layout()` makes it behave like a CSS border.
+11. **`clip_rounded` clips the element's own drop shadow too.** Clipping the
+    card to round its children's corners removed the card's shadow; clipping
+    the inner section instead kept it.
+12. **Text defaults to a 1.25 line height**, the web to 1.5. Rows only came out
+    the web's height after setting line heights explicitly (`theme::font`).
+13. **`Cx::titlebar_inset` is horizontal** (how far the traffic lights reach in
+    from the left), and headless runs report it too, so `--chrome` snapshots
+    lay out exactly like a window.
+14. **A large, faint radial gradient showed slight rings** in a 1x window
+    capture of the sign-in page. Not investigated.
+15. **No Rune bugs** were hit: every problem above was a default, a documented
+    behaviour or a toolchain cost.
+
+Not used yet: `Cx::layout_with` reads an element's size from the last layout
+and re-runs the view only when a breakpoint is crossed. It is the way to narrow
+the side panels with the window, as the web workspace does.

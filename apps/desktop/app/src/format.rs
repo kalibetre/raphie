@@ -3,6 +3,8 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use chrono::Timelike;
+
 /// Milliseconds since the Unix epoch, the unit the runtime uses.
 pub fn now_ms() -> i64 {
     SystemTime::now()
@@ -21,14 +23,27 @@ pub fn ago(at: i64, now: i64) -> String {
     }
 }
 
-/// "Expires in 4 min", or "Expired" once the deadline passed.
-pub fn expires_in(deadline: i64, now: i64) -> String {
-    let seconds = (deadline - now) / 1000;
-    match seconds {
-        ..=0 => "Expired".to_owned(),
-        1..=59 => format!("Expires in {seconds} s"),
-        _ => format!("Expires in {} min", (seconds + 59) / 60),
+/// The local time of day of `at` (milliseconds since the Unix epoch) as the
+/// web workspace writes it: "08:55 PM".
+pub fn clock(at: i64) -> String {
+    // `chrono` knows this machine's time zone; the standard library does not.
+    match chrono::DateTime::from_timestamp_millis(at) {
+        Some(utc) => {
+            let local = utc.with_timezone(&chrono::Local);
+            twelve_hour(local.hour(), local.minute())
+        }
+        None => String::new(),
     }
+}
+
+/// "08:55 PM" for 20:55. Midnight and noon are 12, not 0.
+fn twelve_hour(hour: u32, minute: u32) -> String {
+    let half = if hour < 12 { "AM" } else { "PM" };
+    let hour = match hour % 12 {
+        0 => 12,
+        other => other,
+    };
+    format!("{hour:02}:{minute:02} {half}")
 }
 
 #[cfg(test)]
@@ -46,9 +61,10 @@ mod tests {
     }
 
     #[test]
-    fn expiry_counts_down() {
-        assert_eq!(expires_in(1000 + 240_000, 1000), "Expires in 4 min");
-        assert_eq!(expires_in(1000 + 30_000, 1000), "Expires in 30 s");
-        assert_eq!(expires_in(1000, 1000), "Expired");
+    fn times_read_like_the_web_workspace() {
+        assert_eq!(twelve_hour(20, 55), "08:55 PM");
+        assert_eq!(twelve_hour(0, 5), "12:05 AM");
+        assert_eq!(twelve_hour(12, 0), "12:00 PM");
+        assert_eq!(twelve_hour(9, 30), "09:30 AM");
     }
 }

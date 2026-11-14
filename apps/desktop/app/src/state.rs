@@ -1,5 +1,5 @@
 //! The UI's state: the core [`Model`] plus what only the window needs (text
-//! being typed, the sidebar's width), and the bridge to the engine.
+//! being typed, which side panels are open), and the bridge to the engine.
 
 use std::sync::Arc;
 
@@ -9,10 +9,17 @@ use raphie_core::model::{AuthState, Effect, Model};
 use raphie_core::origin::Origin;
 use raphie_core::settings::Settings;
 use rune::{TextEdit, Tx, Waker};
-use rune_kit::shell::PaneState;
 
 /// The fixture's web host: the default for a first launch from a checkout.
 pub const DEFAULT_ORIGIN: &str = "http://127.0.0.1:4321";
+
+/// Which conversations the panel lists (the web's filter chips).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Filter {
+    All,
+    /// Only conversations with an action waiting for approval.
+    Approvals,
+}
 
 pub struct Ui {
     /// Everything the core knows. The view only reads it.
@@ -26,7 +33,13 @@ pub struct Ui {
     pub origin_field: TextEdit,
     /// What the owner is typing to Raphie.
     pub composer: TextEdit,
-    pub sidebar: PaneState,
+    /// Whether the bot roster on the left shows (⌘B).
+    pub roster_open: bool,
+    /// Whether the conversations panel on the right shows.
+    pub panel_open: bool,
+    /// The conversations panel's search box.
+    pub search: TextEdit,
+    pub filter: Filter,
 }
 
 impl Ui {
@@ -47,7 +60,11 @@ impl Ui {
             sent: Vec::new(),
             origin_field: TextEdit::new(origin),
             composer: TextEdit::new(""),
-            sidebar: PaneState::new(272.0).range(200.0, 420.0),
+            roster_open: true,
+            // Closed until asked for, like the web workspace's panel.
+            panel_open: false,
+            search: TextEdit::new(""),
+            filter: Filter::All,
         }
     }
 
@@ -87,6 +104,11 @@ impl Ui {
         self.command(Command::SelectSession {
             session_id: session_id.map(str::to_owned),
         });
+    }
+
+    /// Puts a suggested message in the composer for the owner to send or edit.
+    pub fn suggest(&mut self, text: &str) {
+        self.composer = TextEdit::new(text);
     }
 
     pub fn load_older(&mut self) {

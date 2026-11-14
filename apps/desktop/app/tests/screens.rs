@@ -6,10 +6,11 @@
 use raphie_core::contracts::Decision;
 use raphie_core::engine::Command;
 use raphie_core::model::AuthState;
+use raphie_desktop::state::Filter;
 use raphie_desktop::{Ui, scenes, view::view};
 use rune::{ElementInfo, Env, Runtime};
 
-const SIZE: (f32, f32) = (1080.0, 720.0);
+const SIZE: (f32, f32) = (1280.0, 800.0);
 
 /// Renders a scene and lets every spring settle.
 fn render(scene: fn(&mut Ui), dark: bool) -> Runtime<Ui> {
@@ -65,15 +66,24 @@ fn every_scene_renders_in_light_and_dark() {
     }
 }
 
+/// The page colour is the web workspace's `--background` token in each
+/// appearance (`apps/web/src/shared/styles/tokens.css`).
 #[test]
-fn the_theme_follows_the_system_appearance() {
-    let light = element(&render(scenes::sign_in, false), "rd-sign-in").fill;
-    let dark = element(&render(scenes::sign_in, true), "rd-sign-in").fill;
-    let luminance = |c: rune::Color| c.r + c.g + c.b;
-    assert!(
-        luminance(light) > luminance(dark) + 1.0,
-        "light {light:?} vs dark {dark:?}"
-    );
+fn the_theme_follows_the_system_appearance_in_the_web_colours() {
+    for (dark, background, sidebar) in [(false, "#f7f5ef", "#ebe8de"), (true, "#1c1b18", "#161512")]
+    {
+        let sign_in = render(scenes::sign_in, dark);
+        assert_eq!(color(&sign_in, "rd-sign-in"), background);
+        let workspace = render(scenes::new_conversation, dark);
+        assert_eq!(color(&workspace, "rd-workspace"), background);
+        assert_eq!(color(&workspace, "rd-roster"), sidebar);
+    }
+}
+
+/// An element's fill as `#rrggbb`.
+fn color(rt: &Runtime<Ui>, key: &str) -> String {
+    // `Color::hex` gives `#rrggbbaa`; the first seven characters are the colour.
+    element(rt, key).fill.hex()[..7].to_owned()
 }
 
 #[test]
@@ -121,22 +131,14 @@ fn the_device_code_screen_shows_the_code_and_can_cancel() {
 }
 
 #[test]
-fn the_sidebar_lists_bots_and_sessions() {
+fn the_roster_lists_bots_and_says_which_need_the_owner() {
     for dark in [false, true] {
         let mut rt = render(scenes::new_conversation, dark);
         assert!(rt.find("rd-bot-default").is_some() && rt.find("rd-bot-b-research").is_some());
-        for id in ["s-1", "s-2", "s-3"] {
-            assert!(rt.find(&format!("rd-session-{id}")).is_some(), "row {id}");
-        }
-        assert!(screen_text(&rt).contains("New conversation with Raphie"));
+        let text = screen_text(&rt);
+        assert!(text.contains("1 conversation needs you"), "{text}");
+        assert!(text.contains("What’s on your mind?"), "the welcome screen");
 
-        click(&mut rt, "rd-session-s-2");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::SelectSession {
-                session_id: Some("s-2".into())
-            })
-        );
         click(&mut rt, "rd-bot-b-research");
         assert_eq!(
             rt.state.sent.last(),
@@ -145,6 +147,75 @@ fn the_sidebar_lists_bots_and_sessions() {
             })
         );
     }
+}
+
+#[test]
+fn the_roster_and_the_panel_open_and_close() {
+    let mut rt = render(scenes::new_conversation, false);
+    assert!(rt.find("rd-panel").is_none(), "the panel starts closed");
+    click(&mut rt, "rd-toggle-panel");
+    assert!(rt.find("rd-panel").is_some());
+    click(&mut rt, "rd-toggle-roster");
+    assert!(rt.find("rd-roster").is_none());
+    click(&mut rt, "rd-toggle-roster");
+    assert!(rt.find("rd-roster").is_some());
+}
+
+#[test]
+fn the_panel_lists_searches_and_filters_sessions() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::conversations, dark);
+        for id in ["s-1", "s-2", "s-3"] {
+            assert!(rt.find(&format!("rd-session-{id}")).is_some(), "row {id}");
+        }
+        assert!(screen_text(&rt).contains("3 conversations · Most recent first"));
+
+        // The Approvals chip keeps only the session waiting for the owner.
+        click(&mut rt, "rd-filter-approvals");
+        assert_eq!(rt.state.filter, Filter::Approvals);
+        assert!(rt.find("rd-session-s-2").is_some() && rt.find("rd-session-s-1").is_none());
+        click(&mut rt, "rd-filter-all");
+
+        // Search matches titles, whatever the case.
+        click(&mut rt, "rd-search");
+        rt.paste("TEA");
+        settle(&mut rt);
+        assert!(rt.find("rd-session-s-3").is_some() && rt.find("rd-session-s-1").is_none());
+        assert!(screen_text(&rt).contains("1 conversation matching “TEA”"));
+        click(&mut rt, "rd-search-clear");
+        assert!(rt.find("rd-session-s-1").is_some());
+
+        click(&mut rt, "rd-session-s-2");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SelectSession {
+                session_id: Some("s-2".into())
+            })
+        );
+        click(&mut rt, "rd-new");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SelectSession { session_id: None })
+        );
+    }
+}
+
+#[test]
+fn a_suggestion_fills_the_composer_without_sending() {
+    let mut rt = render(scenes::new_conversation, false);
+    let key = element_with_label(&rt, "Help me plan my day");
+    click(&mut rt, &key);
+    assert_eq!(rt.state.composer.text, "Help me plan my day");
+    assert!(rt.state.sent.is_empty(), "the owner still chooses to send");
+}
+
+/// The key of the element whose accessible label is `label`.
+fn element_with_label(rt: &Runtime<Ui>, label: &str) -> String {
+    rt.elements()
+        .into_iter()
+        .find(|e| e.label.as_deref() == Some(label))
+        .and_then(|e| e.key)
+        .unwrap_or_else(|| panic!("no element labelled {label}"))
 }
 
 #[test]
@@ -184,7 +255,9 @@ fn approvals_show_exact_arguments_and_send_one_decision() {
         let mut rt = render(scenes::approval, dark);
         let id = "6f1d7f8e-2a7b-4f1e-9c4e-1b2a3c4d5e6f";
         let text = screen_text(&rt);
-        assert!(text.contains("calendar · execute"));
+        assert!(text.contains("Waiting for your approval"));
+        assert!(text.contains("calendar") && text.contains("execute"));
+        assert!(text.contains("Expires "), "when the approval lapses");
         assert!(
             text.contains("calendar.events.list"),
             "exact arguments shown"

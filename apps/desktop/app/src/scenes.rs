@@ -22,6 +22,7 @@ pub const SCENES: &[Scene] = &[
     ("sign-in-error", sign_in_error),
     ("device-code", device_code),
     ("new-conversation", new_conversation),
+    ("conversations", conversations),
     ("conversation", conversation),
     ("streaming", streaming),
     ("approval", approval),
@@ -55,8 +56,8 @@ pub fn new_conversation(ui: &mut Ui) {
     let origin = Origin::parse(ORIGIN).expect("a valid origin");
     ui.model.apply(Event::SignedIn { origin });
     ui.model.apply(Event::Bots(vec![
-        bot("default", "Raphie", None),
-        bot("b-research", "Research", Some("#7c5cff")),
+        bot("default", "Raphie", "Your personal assistant.", None),
+        bot("b-research", "Research", "Reads and summarises.", None),
     ]));
     ui.model.apply(Event::BotSelected {
         bot_id: "default".into(),
@@ -74,7 +75,7 @@ pub fn new_conversation(ui: &mut Ui) {
         summary(
             "s-2",
             "Check the calendar",
-            "Waiting for approval",
+            "What's on my calendar on 21 October?",
             now - 3_600_000,
             true,
             true,
@@ -96,6 +97,12 @@ pub fn new_conversation(ui: &mut Ui) {
         },
         more: false,
     });
+}
+
+/// The same, with the conversations panel open.
+pub fn conversations(ui: &mut Ui) {
+    new_conversation(ui);
+    ui.panel_open = true;
 }
 
 pub fn conversation(ui: &mut Ui) {
@@ -192,11 +199,11 @@ fn open(ui: &mut Ui, session_id: &str, observation: SessionObservation) {
     });
 }
 
-fn bot(id: &str, name: &str, color: Option<&str>) -> BotProfile {
+fn bot(id: &str, name: &str, description: &str, color: Option<&str>) -> BotProfile {
     BotProfile {
         id: id.into(),
         name: name.into(),
-        description: String::new(),
+        description: description.into(),
         color: color.map(str::to_owned),
     }
 }

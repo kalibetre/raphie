@@ -121,7 +121,7 @@ Places to look:
   moves the old value out and leaves `None`, so it can be consumed (its turns
   moved into `older`) while `self` is still borrowed mutably.
   `std::mem::take(&mut self.data)` in `sse.rs` does the same for a `String`.
-- **Cloning on purpose**: in `view.rs`, a button's closure needs its own copy of
+- **Cloning on purpose**: in `view/conversation.rs`, a button's closure needs its own copy of
   the approval id (`let approve_id = approval.id.clone();` then `move |s| ...`)
   because the closure must outlive the `view` call, while `approval` is only
   borrowed for that call. `clone()` is explicit in Rust, so you can see every
@@ -247,8 +247,10 @@ Rune works like React without hooks, and closer to Elm:
 
 1. **State** is one plain struct, `Ui` in `app/src/state.rs`, owned by Rune.
 2. **View** is a pure function, `view(s: &Ui, cx: &mut Cx<Ui>) -> El`, in
-   `app/src/view.rs`. It builds a tree of elements with builder methods:
-   `col().gap(8.0).child(text("Hi"))`. It only _reads_ state (`&Ui`).
+   `app/src/view/mod.rs`. It builds a tree of elements with builder methods:
+   `col().gap(8.0).child(text("Hi"))`. It only _reads_ state (`&Ui`). Each
+   region of the window is its own function in its own module (`roster.rs`,
+   `header.rs`, `conversation.rs`, ...), and they all return `El`.
 3. **Updates** happen in handlers. `.on_press(|s: &mut Ui| ...)` gives a
    closure exclusive access to the state between frames. After handlers run,
    Rune calls `view` again, diffs the new tree against the old one by **key**,
@@ -263,10 +265,17 @@ Other things to notice:
   closures, for `init`, `view`, `setup`, `poll` and `on_key`.
 - **Keys** identify elements across rebuilds and for tests. rune-kit uses short
   keys for the parts of its components, so this app prefixes its own with `rd-`.
-- **rune-kit** provides themed components (`Button`, `TextArea`, `Markdown`,
-  `SplitView`, `Sidebar`) that read colours from a `Kit`.
-  `Kit::neutral(cx.system_dark())` follows the OS appearance, and Rune animates
-  the colours when it changes.
+- **The look is the web workspace's.** `app/src/theme.rs` holds its colours as
+  a plain struct, built for light or dark from `cx.system_dark()`; Rune
+  animates the colours when the OS appearance changes. `app/src/widgets.rs`
+  has the buttons and fields as plain functions that return `El`. Read
+  `widgets::button` first: it shows `match` on an enum, a builder chain, and
+  why a function can return a half-finished element.
+- **rune-kit** provides ready-made components that read colours from a `Kit`.
+  This app uses two, `Markdown` and `Loader`, with a `Kit` made from the theme.
+- **`avatar.rs` is a good first read for plain Rust**: integer arithmetic that
+  must match JavaScript bit for bit (`wrapping_mul`), a small struct with one
+  method, arrays, iterators, and tests that pin values from the web's code.
 - **Headless mode**: the same binary renders PNGs (`--snap`), dumps the element
   tree (`--tree`) and replays scripted input (`--script`), all on a virtual
   clock. Tests use `rune::Runtime` directly: `Runtime::new(state, view, size,
@@ -292,11 +301,13 @@ Run one test by name: `cargo test -p raphie-desktop-core revocation`.
 Small, self-contained changes, roughly in order of difficulty:
 
 1. **Character counter.** Show "1,234 / 4,000" under the composer when the
-   draft is over 3,500 characters. (View only: `composer()` in `view.rs`.)
+   draft is over 3,500 characters. (View only: `composer()` in
+   `view/composer.rs`.)
 2. **Copy code.** Use `Markdown::code_frame` in rune-kit to add a Copy button to
    code blocks (`tx.copy(...)` from a handler).
 3. **Unread dots.** Mark a session row when its `lastAt` changes while it is
-   not open. Where should "last seen" live: the core model or the UI state?
+   not open, as the web's conversations panel does (a 6 pt accent dot and a
+   bolder title), and add its "New replies" filter chip. Where should "last seen" live: the core model or the UI state?
    (Hint: it is presentation state, but you may want it to survive a restart.)
 4. **Approve for session.** The runtime accepts `scope: "session"` for command
    approvals (see [Using Raphie](using-raphie.md#command-permissions)). Add a
