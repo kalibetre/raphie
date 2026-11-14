@@ -230,7 +230,8 @@ Where the two differ on purpose:
 - Replies show no time or token line, and a run shows no elapsed time: the
   session stream this client reads does not carry activity events.
 - Numbered lists show their numbers.
-- The "raphie" brand starts to the right of the macOS traffic lights.
+- The "raphie" brand sits level with the macOS traffic lights, to their right,
+  with less space above and below it than on the web, like a compact title bar.
 
 ## Keeping contracts in sync
 

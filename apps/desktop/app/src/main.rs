@@ -13,7 +13,9 @@ fn main() {
     // brand, which starts to their right.
     let chrome = Chrome {
         full_size_content: true,
-        traffic_lights: Some((20.0, 31.0)),
+        // Close to the corner, as a compact macOS title bar has them: the
+        // lights are 14 pt tall, so their centre is 22 pt down.
+        traffic_lights: Some((13.0, 15.0)),
         drag_regions: true,
     };
     rune::App::new(raphie_desktop::spec())

@@ -44,7 +44,9 @@ pub fn sign_in(s: &Ui, look: &Look) -> El {
                 .w_full()
                 .pl(brand_inset)
                 .pr(35.0)
-                .py(21.0)
+                // Level with the window's buttons, like a title bar.
+                .pt(6.0)
+                .pb(21.0)
                 .gap(8.75)
                 .center_y()
                 .window_drag()

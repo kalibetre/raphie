@@ -37,13 +37,15 @@ pub fn roster(s: &Ui, look: &Look) -> El {
         // Only a right edge: `[top, right, bottom, left]` widths.
         .border_sides([0.0, 1.0, 0.0, 0.0], t.border)
         .child(
-            // The brand band also moves the window.
+            // The brand band also moves the window. It is tighter than the
+            // web's (24 above and below) so the brand sits level with the
+            // window's buttons, like a title bar.
             row()
                 .w_full()
-                .pt(24.0)
+                .pt(7.0)
                 .pl(brand_inset)
                 .pr(20.0)
-                .pb(24.0)
+                .pb(16.0)
                 .gap(9.0)
                 .center_y()
                 .window_drag()
