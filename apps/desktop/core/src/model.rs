@@ -10,8 +10,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::auth::DeviceCode;
 use crate::contracts::{
-    Account, ApprovalStatus, BotProfile, Page, Receipt, RuntimeSettings, SessionApproval,
-    SessionObservation, SessionSummary, SessionTurn,
+    Account, ApprovalStatus, BotProfile, MemoryStatus, Page, Receipt, RuntimeSettings,
+    SessionApproval, SessionObservation, SessionSummary, SessionTurn,
 };
 use crate::origin::Origin;
 
@@ -58,6 +58,27 @@ pub enum Event {
         message: String,
     },
     ConnectionFailed {
+        message: String,
+    },
+    /// A bot's memory settings.
+    Memory {
+        bot_id: String,
+        status: MemoryStatus,
+    },
+    MemoryFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// Memory settings were saved; this is what the runtime now has.
+    MemorySaved {
+        bot_id: String,
+        status: MemoryStatus,
+    },
+    MemorySaveFailed {
+        message: String,
+    },
+    /// A test of the saved memory back end ended; `message` says how.
+    MemoryTested {
         message: String,
     },
     /// A bot's profile was saved; this is it at its new revision.
@@ -154,6 +175,9 @@ pub enum Effect {
     CloseConnectionForm,
     /// A profile was saved: the form should show the saved values.
     ProfileSaved(BotProfile),
+    /// This bot's memory settings were saved: its form should show them and
+    /// forget any typed key.
+    MemorySaved(String),
 }
 
 /// The open conversation.
@@ -280,6 +304,18 @@ pub struct Model {
     pub changing_connection: bool,
     /// What the last connection change or test said.
     pub connection_message: Option<String>,
+    /// Each bot's memory settings, once loaded.
+    pub memory: HashMap<String, MemoryStatus>,
+    /// The bot whose memory settings could not be loaded, and why.
+    pub memory_error: Option<(String, String)>,
+    /// A save of memory settings is on its way.
+    pub saving_memory: bool,
+    /// Why the last save of memory settings failed, until the next attempt.
+    pub memory_save_error: Option<String>,
+    /// A test of the memory back end is on its way.
+    pub testing_memory: bool,
+    /// What the last memory test or save said.
+    pub memory_message: Option<String>,
     /// A profile save is on its way.
     pub saving_profile: bool,
     /// Why the last profile save failed, until the next attempt.
@@ -312,6 +348,12 @@ impl Default for Model {
             model_message: None,
             changing_connection: false,
             connection_message: None,
+            memory: HashMap::new(),
+            memory_error: None,
+            saving_memory: false,
+            memory_save_error: None,
+            testing_memory: false,
+            memory_message: None,
             saving_profile: false,
             profile_error: None,
             bots: Vec::new(),
@@ -396,6 +438,28 @@ impl Model {
             Event::DefaultModelFailed { message } => {
                 self.setting_model = false;
                 self.model_message = Some(message);
+            }
+            Event::Memory { bot_id, status } => {
+                self.memory_error = None;
+                self.memory.insert(bot_id, status);
+            }
+            Event::MemoryFailed { bot_id, message } => {
+                self.memory_error = Some((bot_id, message));
+            }
+            Event::MemorySaved { bot_id, status } => {
+                self.saving_memory = false;
+                self.memory_save_error = None;
+                self.memory_message = Some("Memory settings saved.".to_owned());
+                self.memory.insert(bot_id.clone(), status);
+                return vec![Effect::MemorySaved(bot_id)];
+            }
+            Event::MemorySaveFailed { message } => {
+                self.saving_memory = false;
+                self.memory_save_error = Some(message);
+            }
+            Event::MemoryTested { message } => {
+                self.testing_memory = false;
+                self.memory_message = Some(message);
             }
             Event::ProfileSaved(profile) => {
                 self.saving_profile = false;
@@ -517,6 +581,29 @@ impl Model {
         }
         self.sending = true;
         self.notice = None;
+        true
+    }
+
+    /// The owner saved memory settings. Returns false while a save or a
+    /// test is on its way.
+    pub fn begin_save_memory(&mut self) -> bool {
+        if self.saving_memory || self.testing_memory {
+            return false;
+        }
+        self.saving_memory = true;
+        self.memory_save_error = None;
+        self.memory_message = None;
+        true
+    }
+
+    /// The owner asked for a test of the memory back end. Returns false
+    /// while a save or a test is on its way.
+    pub fn begin_test_memory(&mut self) -> bool {
+        if self.saving_memory || self.testing_memory {
+            return false;
+        }
+        self.testing_memory = true;
+        self.memory_message = None;
         true
     }
 

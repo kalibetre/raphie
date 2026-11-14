@@ -59,6 +59,12 @@ pub struct Host {
     pub connection_requests: Vec<(String, Value)>,
     /// Answer connection tests with a failure, as a wrong key would.
     pub reject_key: bool,
+    /// The memory settings, once a test saved some.
+    pub memory: Option<Value>,
+    /// Memory saves, as received.
+    pub memory_saves: Vec<Value>,
+    /// Answer memory tests with a failure, as an unreachable server would.
+    pub memory_unreachable: bool,
     /// Every request: method, path, and the headers that matter.
     pub requests: Vec<Seen>,
 }
@@ -155,7 +161,102 @@ fn router(fake: Fake) -> Router {
             "/api/bots/{bot}/settings",
             get(settings).post(set_default_model),
         )
+        .route("/api/memory", get(memory).post(save_memory))
+        .route("/api/memory/test", post(test_memory))
         .with_state(fake)
+}
+
+/// The memory settings as the runtime answers them: built-in until a test
+/// saves something else. The key never comes back, only whether one is held.
+fn memory_json(fake: &Fake) -> Value {
+    let saved = fake.host.lock().unwrap().memory.clone();
+    let configuration = saved.unwrap_or_else(|| {
+        json!({
+            "enabled": true, "provider": "builtin", "scope": "owner",
+            "endpoint": "", "bankId": "", "hasCredential": false,
+        })
+    });
+    let hindsight = configuration["provider"] == "hindsight";
+    json!({
+        "configuration": configuration,
+        "capabilities": {
+            "browse": !hindsight, "retain": true, "recall": true,
+            "reflect": if hindsight { "provider" } else { "model-assisted" },
+            "revise": !hindsight, "forget": !hindsight,
+            "consolidation": if hindsight { "provider" } else { "none" },
+        },
+        "error": null,
+    })
+}
+
+async fn memory(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    Json(memory_json(&fake)).into_response()
+}
+
+async fn save_memory(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    {
+        let mut host = fake.host.lock().unwrap();
+        host.memory_saves.push(body.clone());
+        if body["provider"] == "hindsight"
+            && !body["endpoint"].as_str().unwrap_or("").starts_with("http")
+        {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Enter a valid Hindsight endpoint." })),
+            )
+                .into_response();
+        }
+        // As the runtime does: a string saves a key, null clears it, and a
+        // missing field keeps whatever was there.
+        let had = host
+            .memory
+            .as_ref()
+            .is_some_and(|m| m["hasCredential"] == true);
+        let has = match body.get("apiKey") {
+            Some(Value::String(_)) => true,
+            Some(Value::Null) => false,
+            _ => had,
+        };
+        host.memory = Some(json!({
+            "enabled": body["enabled"], "provider": body["provider"], "scope": body["scope"],
+            "endpoint": body["endpoint"].as_str().unwrap_or("").trim_end_matches('/'),
+            "bankId": body["bankId"], "hasCredential": has,
+        }));
+    }
+    Json(memory_json(&fake)).into_response()
+}
+
+async fn test_memory(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(_): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    if fake.host.lock().unwrap().memory_unreachable {
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": "Hindsight did not answer." })),
+        )
+            .into_response();
+    }
+    Json(json!({ "connected": true })).into_response()
 }
 
 fn record(fake: &Fake, method: &'static str, path: String, headers: &HeaderMap) {
