@@ -16,9 +16,9 @@ use serde::de::DeserializeOwned;
 
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll};
 use crate::contracts::{
-    ApprovalStatus, BotList, BotProfile, ControlAction, ControlBody, Decision, DecisionBody,
-    DecisionResult, DeviceCodeResponse, DeviceTokenResponse, ErrorBody, Page, Receipt, Scope,
-    SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
+    Account, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction, ControlBody, Decision,
+    DecisionBody, DecisionResult, DeviceCodeResponse, DeviceTokenResponse, ErrorBody, Page,
+    Receipt, Scope, SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
 };
 use crate::origin::Origin;
 
@@ -189,6 +189,12 @@ impl ApiClient {
     }
 
     // ----- Reads -----
+
+    /// The signed-in administrator, if the host says who it is.
+    pub async fn account(&self) -> Result<Option<Account>, ApiError> {
+        let status: AuthStatus = self.get_json("/auth/status").await?;
+        Ok(status.account)
+    }
 
     pub async fn bots(&self) -> Result<Vec<BotProfile>, ApiError> {
         let list: BotList = self.get_json("/api/bots").await?;

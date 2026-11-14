@@ -10,8 +10,10 @@ use raphie_core::contracts::{ControlAction, Decision, Scope, TurnStatus};
 use raphie_core::engine::{Client, Command, EngineConfig};
 use raphie_core::model::{AuthState, Effect, Model};
 use raphie_core::origin::Origin;
-use raphie_core::settings::Settings;
+use raphie_core::settings::{Settings, ThemeChoice};
 use rune::{TextEdit, Tx, Waker};
+
+use crate::sections::{BotSection, Page};
 
 /// The fixture's web host: the default for a first launch from a checkout.
 pub const DEFAULT_ORIGIN: &str = "http://127.0.0.1:4321";
@@ -24,14 +26,13 @@ pub enum Filter {
     Approvals,
 }
 
-/// A page of the web workspace that this app opens in the browser because
-/// it has no screen of its own for it yet.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WebPage {
-    /// The selected bot's settings.
-    Settings,
-    /// Account settings: password, passkeys, connected devices.
-    Account,
+/// What fills the window once signed in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Screen {
+    /// Bots and conversations.
+    Workspace,
+    /// Settings, on one of its pages.
+    Settings(Page),
 }
 
 pub struct Ui {
@@ -55,6 +56,11 @@ pub struct Ui {
     /// The conversations panel's search box.
     pub search: TextEdit,
     pub filter: Filter,
+    pub screen: Screen,
+    /// Bots whose pages are unfolded in the Settings navigation.
+    pub expanded_bots: HashSet<String>,
+    /// Light, dark or following the system (Settings → Appearance).
+    pub theme: ThemeChoice,
     /// Turns whose list of tool steps is unfolded.
     pub open_runs: HashSet<String>,
     /// Tool steps whose arguments and result are unfolded.
@@ -71,7 +77,9 @@ impl Ui {
         let saved = Settings::default_path()
             .map(|path| Settings::load(&path))
             .unwrap_or_default();
-        Ui::with_origin(saved.origin.as_deref().unwrap_or(DEFAULT_ORIGIN))
+        let mut ui = Ui::with_origin(saved.origin.as_deref().unwrap_or(DEFAULT_ORIGIN));
+        ui.theme = saved.theme;
+        ui
     }
 
     /// A UI offering `origin` on the sign-in screen.
@@ -88,6 +96,9 @@ impl Ui {
             panel_open: false,
             search: TextEdit::new(""),
             filter: Filter::All,
+            screen: Screen::Workspace,
+            expanded_bots: HashSet::new(),
+            theme: ThemeChoice::System,
             open_runs: HashSet::new(),
             open_steps: HashSet::new(),
             ticked_at: 0.0,
@@ -211,25 +222,51 @@ impl Ui {
         }
     }
 
-    /// The address of a web workspace page on the signed-in host.
-    pub fn web_url(&self, page: WebPage) -> Option<String> {
-        let origin = self.model.origin.as_ref()?;
-        let query = match page {
-            WebPage::Account => "view=settings&section=account".to_owned(),
-            WebPage::Settings => match &self.model.bot_id {
-                // Bot ids are letters, digits and dashes, so they need no
-                // escaping; anything else is left out rather than guessed at.
-                Some(id) if id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') => {
-                    format!("view=settings&bot={id}")
-                }
-                _ => "view=settings".to_owned(),
-            },
-        };
-        Some(origin.url(&format!("/?{query}")))
+    /// Opens Settings on `page`, or on the selected bot's Profile.
+    pub fn open_settings(&mut self, page: Option<Page>) {
+        let page = page.unwrap_or_else(|| Page::Bot {
+            bot_id: self
+                .model
+                .bot_id
+                .clone()
+                .unwrap_or_else(|| "default".into()),
+            section: BotSection::Profile,
+        });
+        // The bot whose page this is starts unfolded in the navigation.
+        if let Page::Bot { bot_id, .. } = &page {
+            self.expanded_bots.insert(bot_id.clone());
+        }
+        self.screen = Screen::Settings(page);
     }
 
-    /// Opens a web workspace page in the owner's browser.
-    pub fn open_web(&mut self, page: WebPage, tx: &mut Tx) {
+    pub fn close_settings(&mut self) {
+        self.screen = Screen::Workspace;
+    }
+
+    /// Chooses light, dark or the system's appearance, and remembers it.
+    pub fn set_theme(&mut self, theme: ThemeChoice) {
+        self.theme = theme;
+        // Tests and headless runs have no engine and must not write files.
+        if self.client.is_none() {
+            return;
+        }
+        if let Some(path) = Settings::default_path() {
+            let mut saved = Settings::load(&path);
+            saved.theme = theme;
+            // Forgetting the choice is harmless; it stays for this launch.
+            let _ = saved.save(&path);
+        }
+    }
+
+    /// The address of a Settings page in the web workspace on this host.
+    pub fn web_url(&self, page: &Page) -> Option<String> {
+        let origin = self.model.origin.as_ref()?;
+        Some(origin.url(&format!("/?{}", page.web_query())))
+    }
+
+    /// Opens a Settings page of the web workspace in the owner's browser,
+    /// for what this app cannot do itself.
+    pub fn open_web(&mut self, page: &Page, tx: &mut Tx) {
         let Some(url) = self.web_url(page) else {
             return;
         };

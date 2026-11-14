@@ -298,6 +298,23 @@ fn approvals_handle_fresh_stale_and_unknown_decisions() {
 }
 
 #[test]
+fn signing_in_learns_who_the_administrator_is() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.until("the account", |m, _| m.account.is_some());
+    let account = driver.model.account.clone().unwrap();
+    assert_eq!(
+        (account.email.as_str(), account.name.as_str()),
+        ("owner@example.com", "Owner")
+    );
+    let seen = host.requests("/auth/status");
+    assert_eq!(
+        seen[0].authorization.as_deref(),
+        Some("Bearer device-token-1")
+    );
+}
+
+#[test]
 fn a_session_scoped_approval_carries_its_scope() {
     let host = FakeHost::start();
     host.with(|h| {

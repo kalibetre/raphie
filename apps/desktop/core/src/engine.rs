@@ -336,9 +336,9 @@ impl Engine {
     fn authorized(&mut self, api: ApiClient) {
         self.sign_in = None;
         if let Some(path) = &self.config.settings_path {
-            let settings = Settings {
-                origin: Some(api.origin().as_str().to_owned()),
-            };
+            // Change only the origin: the file also holds the appearance.
+            let mut settings = Settings::load(path);
+            settings.origin = Some(api.origin().as_str().to_owned());
             // Remembering the origin is a convenience; failing to is harmless.
             let _ = settings.save(path);
         }
@@ -348,6 +348,15 @@ impl Engine {
         self.api = Some(api.clone());
         self.bot_id = None;
         self.session_id = None;
+        // Who is signed in, for Settings → Account. Nothing depends on it, so
+        // a failure only leaves the name out.
+        let emit = self.emit.clone();
+        let account_api = api.clone();
+        tokio::spawn(async move {
+            if let Ok(account) = account_api.account().await {
+                emit.emit(Event::Account(account));
+            }
+        });
         let emit = self.emit.clone();
         let inbox = self.inbox.clone();
         // Load the bots, then select the default one through the inbox so the

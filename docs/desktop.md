@@ -14,14 +14,16 @@ icons and layout, in light and dark.
 
 ![Approval, light](images/desktop/approval-light.png)
 
-|                                | Light                                       | Dark                                       |
-| ------------------------------ | ------------------------------------------- | ------------------------------------------ |
-| Sign in                        | ![](images/desktop/sign-in-light.png)       | ![](images/desktop/device-code-dark.png)   |
-| New conversation, panel open   | ![](images/desktop/conversations-light.png) | ![](images/desktop/conversations-dark.png) |
-| Conversation                   | ![](images/desktop/conversation-light.png)  | ![](images/desktop/conversation-dark.png)  |
-| Reply streaming in             | ![](images/desktop/streaming-light.png)     | ![](images/desktop/streaming-dark.png)     |
-| Tools a run used               | ![](images/desktop/tools-light.png)         | ![](images/desktop/tools-dark.png)         |
-| Working, with a queued message | ![](images/desktop/working-light.png)       | ![](images/desktop/working-dark.png)       |
+|                                | Light                                             | Dark                                             |
+| ------------------------------ | ------------------------------------------------- | ------------------------------------------------ |
+| Sign in                        | ![](images/desktop/sign-in-light.png)             | ![](images/desktop/device-code-dark.png)         |
+| New conversation, panel open   | ![](images/desktop/conversations-light.png)       | ![](images/desktop/conversations-dark.png)       |
+| Conversation                   | ![](images/desktop/conversation-light.png)        | ![](images/desktop/conversation-dark.png)        |
+| Reply streaming in             | ![](images/desktop/streaming-light.png)           | ![](images/desktop/streaming-dark.png)           |
+| Tools a run used               | ![](images/desktop/tools-light.png)               | ![](images/desktop/tools-dark.png)               |
+| Working, with a queued message | ![](images/desktop/working-light.png)             | ![](images/desktop/working-dark.png)             |
+| Settings: Account              | ![](images/desktop/settings-account-light.png)    | ![](images/desktop/settings-account-dark.png)    |
+| Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png) |
 
 ## What works
 
@@ -64,10 +66,16 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   also offer **Approve for session**. A decision that arrives after the
   approval was settled or expired is reported ("had already been approved",
   "expired before your decision arrived") instead of failing.
-- **Settings and account** open the web workspace's pages in your browser
-  (the two icons at the bottom of the roster); this app has no settings
-  screens of its own yet.
-- **Light and dark** follow the OS appearance, live.
+- **Settings** (the gear at the bottom of the roster, or ⌘,) open in the app,
+  laid out like the web's: every bot's pages, then Account and Appearance.
+  - **Account** shows who this device is signed in as and the Raphie address,
+    and signs out.
+  - **Appearance** pins light or dark, or follows the system. The choice is
+    saved on this computer.
+  - **A bot's pages** (Profile, Providers, Models, ...) are not built yet:
+    each offers the same page of the web workspace in your browser.
+- **Light and dark** follow the OS appearance, live, unless Appearance pins
+  one.
 
 ## Run it
 
@@ -164,6 +172,9 @@ apps/desktop/
       steps.rs              a run's tool steps and the approval bar
       composer.rs           the message box
       welcome.rs            a new conversation
+      settings/             Settings: shell, navigation, page parts,
+                            Account, Appearance, bot pages
+    src/sections.rs       the pages of Settings, named as the web names them
     src/scenes.rs         synthetic states for snapshots and tests
     tests/screens.rs      headless element-tree checks, light and dark
   scripts/snapshots.sh    renders the PNGs in docs/images/desktop
@@ -221,6 +232,7 @@ web design must be made here too. Each file names its web source at the top:
 | `app/src/theme.rs`        | `apps/web/src/shared/styles/tokens.css` (colours, shadows)                                   |
 | `app/src/avatar.rs`       | `domains/settings/application/bot-glance.ts` and `bot-tone.ts`                               |
 | `app/src/icons.rs`        | the Lucide icons the web components import                                                   |
+| `app/src/sections.rs`     | `domains/settings/presentation/settings-sections.ts`, `settings-nav.tsx`                     |
 | `app/src/widgets.rs`      | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                                |
 | `core/src/projections.rs` | `packages/contracts/src/sessions/projections.ts` (tool steps, usage, labels, number formats) |
 | `app/src/view/*.rs`       | the matching component and its rules in `chat.css`, `sessions.css` and `bot-workspace.css`   |
@@ -239,8 +251,13 @@ Where the two differ on purpose:
 - Controls for features this app lacks are left out rather than shown dead:
   attachments, the model picker, command-permission mode, usage, notifications,
   New bot, and the "New replies" filter (there is no read tracking).
-- Settings and Account are buttons that open the web workspace in the
-  browser, where the web shows those screens in place.
+- Account has no device list or passkeys. The web host answers those
+  requests only for a signed-in browser, never for a device token
+  ([Authentication](authentication.md#connect-a-native-device)), so the page
+  links to the browser for them. Changing that is a decision about the web
+  host's security, not about this app.
+- Settings has no "UI plugins" page (this app has no plugins) and no "Create a
+  bot" yet.
 - The roster shows "N conversations need you" and the last message only for
   the selected bot, because the app follows one bot's sessions at a time.
 - Sign-in asks for a Raphie address and shows a device code instead of a
@@ -269,9 +286,9 @@ current.
 - Built and checked on macOS (Apple silicon). The code builds for Windows and
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
-- No attachments, model picker, command-permission mode, grant list, activity
-  inspector, notifications, unread markers or native settings screens. Use the
-  web workspace for those (Settings and Account open it).
+- No attachments, model picker, command-permission mode, grant list,
+  notifications or unread markers, and a bot's settings pages are not native
+  yet. Use the web workspace for those (each bot page links to it).
 - Tool steps come from the session's latest 200 journal entries, as on the
   web: turns older than that show their reply without steps or usage.
 - The roster and panel have fixed widths (264 and 340 pt) and their open state

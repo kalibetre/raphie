@@ -5,13 +5,16 @@
 //! paste real conversations here.
 
 use raphie_core::auth::DeviceCode;
-use raphie_core::contracts::{BotProfile, Page, SessionObservation, SessionSummary};
+use raphie_core::contracts::{
+    Account, BotProfile, Page as Paged, SessionObservation, SessionSummary,
+};
 use raphie_core::model::{AuthState, Event};
 use raphie_core::origin::Origin;
 use rune::TextEdit;
 use serde_json::{Value, json};
 
 use crate::format::now_ms;
+use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 
 /// A named change to a fresh [`Ui`], as `AppSpec::scenes` takes them.
@@ -29,6 +32,9 @@ pub const SCENES: &[Scene] = &[
     ("working", working),
     ("approval", approval),
     ("command-approval", command_approval),
+    ("settings-account", settings_account),
+    ("settings-appearance", settings_appearance),
+    ("settings-bot", settings_bot),
 ];
 
 const ORIGIN: &str = "https://raphie.example.ts.net";
@@ -94,12 +100,38 @@ pub fn new_conversation(ui: &mut Ui) {
     ];
     ui.model.apply(Event::Sessions {
         bot_id: "default".into(),
-        page: Page {
+        page: Paged {
             items: sessions,
             next: None,
         },
         more: false,
     });
+}
+
+/// Settings → Account.
+pub fn settings_account(ui: &mut Ui) {
+    new_conversation(ui);
+    ui.model.apply(Event::Account(Some(Account {
+        email: "owner@example.com".into(),
+        name: "Owner".into(),
+    })));
+    ui.open_settings(Some(Page::Account));
+    ui.expanded_bots.insert("default".into());
+}
+
+/// Settings → Appearance.
+pub fn settings_appearance(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Appearance));
+}
+
+/// A bot's settings page (Research → Models).
+pub fn settings_bot(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "b-research".into(),
+        section: BotSection::Models,
+    }));
 }
 
 /// The same, with the conversations panel open.

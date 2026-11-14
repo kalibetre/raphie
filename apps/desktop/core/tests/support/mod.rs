@@ -123,6 +123,7 @@ fn router(fake: Fake) -> Router {
     Router::new()
         .route("/api/auth/device/code", post(device_code))
         .route("/api/auth/device/token", post(device_token))
+        .route("/auth/status", get(auth_status))
         .route("/api/bots", get(bots))
         .route("/api/sessions/events", get(session_list_events))
         .route("/api/bots/{bot}/sessions/events", get(session_list_events))
@@ -204,6 +205,17 @@ async fn device_token(State(fake): State<Fake>, headers: HeaderMap) -> Response 
     }
     Json(json!({ "access_token": TOKEN, "token_type": "Bearer", "expires_in": 2592000 }))
         .into_response()
+}
+
+/// Like the real gateway: says who is signed in when the token is good.
+async fn auth_status(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(&fake, "GET", "/auth/status".into(), &headers);
+    let signed_in = refuse(&fake, &headers).is_none();
+    let mut status = json!({ "configured": true, "authenticated": signed_in });
+    if signed_in {
+        status["account"] = json!({ "email": "owner@example.com", "name": "Owner" });
+    }
+    Json(status).into_response()
 }
 
 async fn bots(State(fake): State<Fake>, headers: HeaderMap) -> Response {

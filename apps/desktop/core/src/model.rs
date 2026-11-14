@@ -10,8 +10,8 @@ use std::collections::HashSet;
 
 use crate::auth::DeviceCode;
 use crate::contracts::{
-    ApprovalStatus, BotProfile, Page, Receipt, SessionApproval, SessionObservation, SessionSummary,
-    SessionTurn,
+    Account, ApprovalStatus, BotProfile, Page, Receipt, SessionApproval, SessionObservation,
+    SessionSummary, SessionTurn,
 };
 use crate::origin::Origin;
 
@@ -32,6 +32,8 @@ pub enum Event {
     SignedOut {
         notice: Option<String>,
     },
+    /// Who is signed in, when the host says.
+    Account(Option<Account>),
     Bots(Vec<BotProfile>),
     BotSelected {
         bot_id: String,
@@ -226,6 +228,8 @@ impl Conversation {
 pub struct Model {
     pub origin: Option<Origin>,
     pub auth: AuthState,
+    /// The signed-in administrator, once the host has said who it is.
+    pub account: Option<Account>,
     pub bots: Vec<BotProfile>,
     pub bot_id: Option<String>,
     /// The live first page of sessions, newest first.
@@ -247,6 +251,7 @@ impl Default for Model {
         Model {
             origin: None,
             auth: AuthState::SignedOut { notice: None },
+            account: None,
             bots: Vec::new(),
             bot_id: None,
             sessions: Vec::new(),
@@ -288,6 +293,7 @@ impl Model {
                     ..Model::default()
                 };
             }
+            Event::Account(account) => self.account = account,
             Event::Bots(bots) => self.bots = bots,
             Event::BotSelected { bot_id } => self.select_bot(bot_id),
             Event::Sessions { bot_id, page, more } => {

@@ -42,6 +42,21 @@ pub struct BotProfile {
     pub color: Option<String>,
 }
 
+/// The administrator signed in to the host, from `GET /auth/status`
+/// (`apps/web/src/infrastructure/auth/gateway.ts`).
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct Account {
+    pub email: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct AuthStatus {
+    #[serde(default)]
+    pub account: Option<Account>,
+}
+
 /// The body of `GET /api/bots`.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct BotList {

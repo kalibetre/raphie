@@ -11,7 +11,8 @@ bin=target/debug/raphie-desktop
 # 1280x800 at 2x is the size of the web workspace's reference screenshots, so
 # the two can be compared side by side. --chrome draws the traffic lights
 # where macOS puts them.
-for scene in sign-in device-code new-conversation conversations conversation tools streaming working approval; do
+for scene in sign-in device-code new-conversation conversations conversation tools streaming working approval \
+  settings-account settings-appearance settings-bot; do
   for theme in light dark; do
     "$bin" --snap "$out/$scene-$theme.png" --scene "$scene" --theme "$theme" \
       --size 1280x800 --scale 2 --at 1.5 --chrome

@@ -6,7 +6,9 @@
 use raphie_core::contracts::{ControlAction, Decision, Scope};
 use raphie_core::engine::Command;
 use raphie_core::model::AuthState;
-use raphie_desktop::state::{Filter, WebPage};
+use raphie_core::settings::ThemeChoice;
+use raphie_desktop::sections::{BotSection, Page};
+use raphie_desktop::state::{Filter, Screen};
 use raphie_desktop::{Ui, scenes, view::view};
 use rune::{ElementInfo, Env, Runtime};
 
@@ -367,20 +369,100 @@ fn a_running_task_can_be_stopped_and_a_queued_message_steered() {
 }
 
 #[test]
-fn settings_and_account_open_the_web_workspace() {
-    let mut rt = render(scenes::new_conversation, false);
-    click(&mut rt, "rd-settings");
-    click(&mut rt, "rd-account-settings");
+fn settings_open_in_the_app_and_close_back_to_conversations() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::new_conversation, dark);
+        click(&mut rt, "rd-settings");
+        // The selected bot's Profile, with that bot unfolded in the navigation.
+        assert_eq!(
+            rt.state.screen,
+            Screen::Settings(Page::Bot {
+                bot_id: "default".into(),
+                section: BotSection::Profile,
+            })
+        );
+        assert!(rt.find("rd-nav-default-models").is_some());
+        assert!(
+            rt.find("rd-roster").is_none(),
+            "settings replace the workspace"
+        );
+        assert!(rt.state.opened.is_empty(), "nothing opens a browser");
+
+        click(&mut rt, "rd-nav-default-models");
+        assert_eq!(
+            element(&rt, "rd-settings-page-name").text.as_deref(),
+            Some("Models")
+        );
+        click(&mut rt, "rd-nav-appearance");
+        assert_eq!(rt.state.screen, Screen::Settings(Page::Appearance));
+        click(&mut rt, "rd-close-settings");
+        assert_eq!(rt.state.screen, Screen::Workspace);
+
+        click(&mut rt, "rd-account-settings");
+        assert_eq!(rt.state.screen, Screen::Settings(Page::Account));
+        click(&mut rt, "rd-back-to-conversations");
+        assert!(rt.find("rd-roster").is_some());
+    }
+}
+
+#[test]
+fn the_account_page_says_who_is_signed_in_and_signs_out() {
+    let mut rt = render(scenes::settings_account, false);
+    let text = screen_text(&rt);
+    assert!(
+        text.contains("Owner") && text.contains("owner@example.com"),
+        "{text}"
+    );
+    assert!(
+        text.contains("https://raphie.example.ts.net"),
+        "the address"
+    );
+
+    // Devices and passkeys are the browser's: the host refuses device tokens.
+    click(&mut rt, "rd-account-web");
     assert_eq!(
         rt.state.opened,
-        [
-            "https://raphie.example.ts.net/?view=settings&bot=default",
-            "https://raphie.example.ts.net/?view=settings&section=account",
-        ]
+        ["https://raphie.example.ts.net/?view=settings&section=account"]
     );
+    click(&mut rt, "rd-account-sign-out");
+    assert_eq!(rt.state.sent.last(), Some(&Command::SignOut));
+    assert_eq!(rt.state.screen, Screen::Workspace);
+}
+
+#[test]
+fn appearance_pins_the_theme_whatever_the_system_uses() {
+    // The system is light throughout; the choice decides.
+    let mut rt = render(scenes::settings_appearance, false);
+    assert_eq!(color(&rt, "rd-settings"), "#f7f5ef");
+    click(&mut rt, "rd-theme-dark");
+    assert_eq!(rt.state.theme, ThemeChoice::Dark);
+    assert_eq!(color(&rt, "rd-settings"), "#1c1b18");
+    click(&mut rt, "rd-theme-system");
+    assert_eq!(color(&rt, "rd-settings"), "#f7f5ef");
+
+    // And the other way round: a dark system, pinned light.
+    let mut rt = render(scenes::settings_appearance, true);
+    click(&mut rt, "rd-theme-light");
+    assert_eq!(color(&rt, "rd-settings"), "#f7f5ef");
+}
+
+#[test]
+fn a_bots_page_names_the_bot_and_offers_the_web_page() {
+    let mut rt = render(scenes::settings_bot, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Research only"), "{text}");
+    assert!(text.contains("Compare what Research can run"), "{text}");
+    click(&mut rt, "rd-bot-page-web");
     assert_eq!(
-        rt.state.web_url(WebPage::Settings).as_deref(),
-        Some("https://raphie.example.ts.net/?view=settings&bot=default")
+        rt.state.opened,
+        ["https://raphie.example.ts.net/?view=settings&section=models&bot=b-research"]
+    );
+    // Folding a bot hides its pages without leaving the page.
+    click(&mut rt, "rd-nav-bot-b-research");
+    assert!(rt.find("rd-nav-b-research-models").is_none());
+    assert_eq!(
+        element(&rt, "rd-settings-page-name").text.as_deref(),
+        Some("Models")
     );
 }
 

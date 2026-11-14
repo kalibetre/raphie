@@ -10,6 +10,7 @@
 //! - [`widgets`]: buttons and fields shared by the screens.
 //! - [`avatar`]: a bot's face and colour, computed as the web computes them.
 //! - [`icons`]: the web workspace's icons.
+//! - [`sections`]: the pages of Settings, named as the web names them.
 //! - [`scenes`]: fixture states for headless snapshots and tests.
 //! - [`format`]: small text helpers.
 
@@ -17,6 +18,7 @@ pub mod avatar;
 pub mod format;
 pub mod icons;
 pub mod scenes;
+pub mod sections;
 pub mod state;
 pub mod theme;
 pub mod view;
@@ -38,11 +40,18 @@ pub fn spec() -> AppSpec<Ui> {
     }
 }
 
-/// Window-wide keys: ⌘B shows and hides the bot roster, as in the web
-/// workspace (Ctrl+B off macOS).
+/// Window-wide keys, as in the web workspace: ⌘B shows and hides the
+/// sidebar, and ⌘, opens Settings as Mac apps do (Ctrl off macOS).
 fn on_key(ui: &mut Ui, ev: &KeyEvent, _: &mut Tx) -> bool {
-    if ev.is_command('b') && !ev.mods.shift && !ev.mods.alt {
+    if ev.mods.shift || ev.mods.alt {
+        return false;
+    }
+    if ev.is_command('b') {
         ui.roster_open = !ui.roster_open;
+        return true;
+    }
+    if ev.is_command(',') && ui.model.auth == raphie_core::model::AuthState::SignedIn {
+        ui.open_settings(None);
         return true;
     }
     false
