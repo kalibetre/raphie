@@ -1,0 +1,313 @@
+//! Headless checks of the main screens, in light and dark, through Rune's
+//! `Runtime`: the same layout and input code as a window, on a virtual clock,
+//! with no GPU and no network. Pixel snapshots are rendered separately with
+//! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
+
+use raphie_core::contracts::Decision;
+use raphie_core::engine::Command;
+use raphie_core::model::AuthState;
+use raphie_desktop::state::Filter;
+use raphie_desktop::{Ui, scenes, view::view};
+use rune::{ElementInfo, Env, Runtime};
+
+const SIZE: (f32, f32) = (1280.0, 800.0);
+
+/// Renders a scene and lets every spring settle.
+fn render(scene: fn(&mut Ui), dark: bool) -> Runtime<Ui> {
+    let mut ui = Ui::with_origin("http://127.0.0.1:4321");
+    scene(&mut ui);
+    let mut rt = Runtime::new(ui, view, SIZE, Env::new(dark, 2.0));
+    rt.frame(0.0);
+    settle(&mut rt);
+    rt
+}
+
+fn settle(rt: &mut Runtime<Ui>) {
+    for _ in 0..90 {
+        rt.frame(1.0 / 60.0);
+    }
+}
+
+fn element(rt: &Runtime<Ui>, key: &str) -> ElementInfo {
+    rt.elements()
+        .into_iter()
+        .find(|e| e.key.as_deref() == Some(key))
+        .unwrap_or_else(|| panic!("no element keyed {key}"))
+}
+
+/// All text on screen, joined, for "does it say X" checks.
+fn screen_text(rt: &Runtime<Ui>) -> String {
+    rt.elements()
+        .into_iter()
+        .filter_map(|e| e.text)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn click(rt: &mut Runtime<Ui>, key: &str) {
+    let (x, y) = rt
+        .find(key)
+        .unwrap_or_else(|| panic!("no element keyed {key}"));
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    settle(rt);
+}
+
+#[test]
+fn every_scene_renders_in_light_and_dark() {
+    for (name, scene) in scenes::SCENES {
+        for dark in [false, true] {
+            let rt = render(*scene, dark);
+            assert!(
+                rt.elements().len() > 5,
+                "scene {name} (dark: {dark}) draws something"
+            );
+        }
+    }
+}
+
+/// The page colour is the web workspace's `--background` token in each
+/// appearance (`apps/web/src/shared/styles/tokens.css`).
+#[test]
+fn the_theme_follows_the_system_appearance_in_the_web_colours() {
+    for (dark, background, sidebar) in [(false, "#f7f5ef", "#ebe8de"), (true, "#1c1b18", "#161512")]
+    {
+        let sign_in = render(scenes::sign_in, dark);
+        assert_eq!(color(&sign_in, "rd-sign-in"), background);
+        let workspace = render(scenes::new_conversation, dark);
+        assert_eq!(color(&workspace, "rd-workspace"), background);
+        assert_eq!(color(&workspace, "rd-roster"), sidebar);
+    }
+}
+
+/// An element's fill as `#rrggbb`.
+fn color(rt: &Runtime<Ui>, key: &str) -> String {
+    // `Color::hex` gives `#rrggbbaa`; the first seven characters are the colour.
+    element(rt, key).fill.hex()[..7].to_owned()
+}
+
+#[test]
+fn sign_in_connects_to_a_valid_origin() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::sign_in, dark);
+        assert!(screen_text(&rt).contains("Connect this device"));
+        click(&mut rt, "rd-connect");
+        assert!(matches!(
+            rt.state.sent.last(),
+            Some(Command::Connect { origin }) if origin.as_str() == "https://raphie.example.ts.net"
+        ));
+    }
+}
+
+#[test]
+fn sign_in_refuses_plain_http_off_loopback() {
+    let mut rt = render(scenes::sign_in_error, false);
+    click(&mut rt, "rd-connect");
+    assert!(rt.state.sent.is_empty());
+    assert!(
+        matches!(&rt.state.model.auth, AuthState::SignedOut { notice: Some(n) } if n.contains("https"))
+    );
+    assert!(rt.find("rd-sign-in-notice").is_some());
+}
+
+#[test]
+fn the_device_code_screen_shows_the_code_and_can_cancel() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::device_code, dark);
+        assert_eq!(
+            element(&rt, "rd-user-code").text.as_deref(),
+            Some("WXYZ-1234")
+        );
+        assert!(
+            element(&rt, "rd-approval-link")
+                .text
+                .unwrap()
+                .ends_with("/device?user_code=WXYZ-1234")
+        );
+        assert!(rt.find("rd-open-approval").is_some());
+        click(&mut rt, "rd-cancel-sign-in");
+        assert_eq!(rt.state.sent.last(), Some(&Command::CancelSignIn));
+    }
+}
+
+#[test]
+fn the_roster_lists_bots_and_says_which_need_the_owner() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::new_conversation, dark);
+        assert!(rt.find("rd-bot-default").is_some() && rt.find("rd-bot-b-research").is_some());
+        let text = screen_text(&rt);
+        assert!(text.contains("1 conversation needs you"), "{text}");
+        assert!(text.contains("What’s on your mind?"), "the welcome screen");
+
+        click(&mut rt, "rd-bot-b-research");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SelectBot {
+                bot_id: "b-research".into()
+            })
+        );
+    }
+}
+
+#[test]
+fn the_roster_and_the_panel_open_and_close() {
+    let mut rt = render(scenes::new_conversation, false);
+    assert!(rt.find("rd-panel").is_none(), "the panel starts closed");
+    click(&mut rt, "rd-toggle-panel");
+    assert!(rt.find("rd-panel").is_some());
+    click(&mut rt, "rd-toggle-roster");
+    assert!(rt.find("rd-roster").is_none());
+    click(&mut rt, "rd-toggle-roster");
+    assert!(rt.find("rd-roster").is_some());
+}
+
+#[test]
+fn the_panel_lists_searches_and_filters_sessions() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::conversations, dark);
+        for id in ["s-1", "s-2", "s-3"] {
+            assert!(rt.find(&format!("rd-session-{id}")).is_some(), "row {id}");
+        }
+        assert!(screen_text(&rt).contains("3 conversations · Most recent first"));
+
+        // The Approvals chip keeps only the session waiting for the owner.
+        click(&mut rt, "rd-filter-approvals");
+        assert_eq!(rt.state.filter, Filter::Approvals);
+        assert!(rt.find("rd-session-s-2").is_some() && rt.find("rd-session-s-1").is_none());
+        click(&mut rt, "rd-filter-all");
+
+        // Search matches titles, whatever the case.
+        click(&mut rt, "rd-search");
+        rt.paste("TEA");
+        settle(&mut rt);
+        assert!(rt.find("rd-session-s-3").is_some() && rt.find("rd-session-s-1").is_none());
+        assert!(screen_text(&rt).contains("1 conversation matching “TEA”"));
+        click(&mut rt, "rd-search-clear");
+        assert!(rt.find("rd-session-s-1").is_some());
+
+        click(&mut rt, "rd-session-s-2");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SelectSession {
+                session_id: Some("s-2".into())
+            })
+        );
+        click(&mut rt, "rd-new");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SelectSession { session_id: None })
+        );
+    }
+}
+
+#[test]
+fn a_suggestion_fills_the_composer_without_sending() {
+    let mut rt = render(scenes::new_conversation, false);
+    let key = element_with_label(&rt, "Help me plan my day");
+    click(&mut rt, &key);
+    assert_eq!(rt.state.composer.text, "Help me plan my day");
+    assert!(rt.state.sent.is_empty(), "the owner still chooses to send");
+}
+
+/// The key of the element whose accessible label is `label`.
+fn element_with_label(rt: &Runtime<Ui>, label: &str) -> String {
+    rt.elements()
+        .into_iter()
+        .find(|e| e.label.as_deref() == Some(label))
+        .and_then(|e| e.key)
+        .unwrap_or_else(|| panic!("no element labelled {label}"))
+}
+
+#[test]
+fn a_conversation_renders_messages_markdown_and_code() {
+    for dark in [false, true] {
+        let rt = render(scenes::conversation, dark);
+        for key in [
+            "rd-turn-t1",
+            "rd-reply-t1",
+            "rd-turn-t2",
+            "rd-reply-t2",
+            "rd-composer",
+        ] {
+            assert!(rt.find(key).is_some(), "{key} (dark: {dark})");
+        }
+        let text = screen_text(&rt);
+        assert!(text.contains("Choose one priority."), "markdown list item");
+        assert!(text.contains("fs::read_dir"), "code block");
+        assert!(
+            !text.contains("**"),
+            "markdown markers are rendered, not shown"
+        );
+    }
+}
+
+#[test]
+fn a_streaming_reply_shows_the_text_so_far() {
+    let rt = render(scenes::streaming, true);
+    let text = screen_text(&rt);
+    assert!(text.contains("Tomorrow, start with the"), "{text}");
+    assert!(text.contains("review"));
+}
+
+#[test]
+fn approvals_show_exact_arguments_and_send_one_decision() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::approval, dark);
+        let id = "6f1d7f8e-2a7b-4f1e-9c4e-1b2a3c4d5e6f";
+        let text = screen_text(&rt);
+        assert!(text.contains("Waiting for your approval"));
+        assert!(text.contains("calendar") && text.contains("execute"));
+        assert!(text.contains("Expires "), "when the approval lapses");
+        assert!(
+            text.contains("calendar.events.list"),
+            "exact arguments shown"
+        );
+
+        click(&mut rt, &format!("rd-approve-{id}"));
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::Decide {
+                approval_id: id.into(),
+                decision: Decision::Approved
+            })
+        );
+        // While the decision is on its way, a second click sends nothing.
+        click(&mut rt, &format!("rd-reject-{id}"));
+        let decisions = rt
+            .state
+            .sent
+            .iter()
+            .filter(|c| matches!(c, Command::Decide { .. }))
+            .count();
+        assert_eq!(decisions, 1);
+    }
+}
+
+#[test]
+fn the_composer_sends_what_was_typed() {
+    let mut rt = render(scenes::conversation, false);
+    click(&mut rt, "rd-composer");
+    rt.paste("Thanks!");
+    settle(&mut rt);
+    assert_eq!(rt.state.composer.text, "Thanks!");
+    click(&mut rt, "rd-send");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Send {
+            text: "Thanks!".into()
+        })
+    );
+    assert!(rt.state.model.sending, "the button waits for the receipt");
+}
+
+#[test]
+fn notices_can_be_dismissed() {
+    fn with_notice(ui: &mut Ui) {
+        scenes::conversation(ui);
+        ui.model.notice = Some("That approval expired before your decision arrived.".into());
+    }
+    let mut rt = render(with_notice, false);
+    assert!(rt.find("rd-notice").is_some());
+    click(&mut rt, "rd-dismiss");
+    assert_eq!(rt.state.model.notice, None);
+}

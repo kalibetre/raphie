@@ -11,6 +11,7 @@
   "ignorePatterns": [
     ".data/**",
     "**/dist/**",
+    "apps/desktop/target/**",
     "**/.tanstack/**",
     "**/*routeTree.gen.ts",
     "**/node_modules/**"

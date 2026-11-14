@@ -12,6 +12,7 @@
   - [MCP tools & schedules](bot-automation.md)
   - [Attachments](general-attachments.md)
   - [Telegram channel](telegram.md)
+  - [Desktop client](desktop.md)
 - **Security & operations**
   - [Authentication](authentication.md)
   - [Credential storage](provider-credential-storage.md)
@@ -29,5 +30,6 @@
   - [Roadmap](roadmap.md)
   - [Headless runtime design](headless-runtime.md)
   - [UI scrolling](ui-scrolling.md)
+  - [Learning Rust (desktop)](learning-rust.md)
   - [Domain language ↗](https://github.com/kalibetre/raphie/blob/main/CONTEXT.md)
   - [Contributing ↗](https://github.com/kalibetre/raphie/blob/main/CONTRIBUTING.md)
