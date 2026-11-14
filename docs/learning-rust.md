@@ -282,6 +282,11 @@ Other things to notice:
 Env::new(dark, 2.0))`, then `rt.find(key)`, `rt.pointer_down/up`,
   `rt.paste(..)` and `rt.elements()`. See `app/tests/screens.rs`.
 
+Read `core/src/projections.rs` after `model.rs`: it is a set of pure functions
+over slices (`&[SessionActivity]`), with `match` on tuples, iterators that
+borrow, and a hand-written number formatter whose tests explain why Rust's
+`{:.2}` was not enough.
+
 ## 8. Testing
 
 - **Unit tests** live next to the code in `#[cfg(test)] mod tests` blocks and
@@ -309,13 +314,14 @@ Small, self-contained changes, roughly in order of difficulty:
    not open, as the web's conversations panel does (a 6 pt accent dot and a
    bolder title), and add its "New replies" filter chip. Where should "last seen" live: the core model or the UI state?
    (Hint: it is presentation state, but you may want it to survive a restart.)
-4. **Approve for session.** The runtime accepts `scope: "session"` for command
-   approvals (see [Using Raphie](using-raphie.md#command-permissions)). Add a
-   third button for command approvals only. You will touch `DecisionBody`,
-   `Command::Decide`, the view and a fake-host test.
-5. **Stop.** Add a Stop button while a reply is generating, using `POST
-/api/sessions/<id>/control` with `{ "action": "stop" }`. Add the route to
-   the fake host first and write the failing test.
+4. **Command mode.** The runtime has a per-conversation command mode, `ask` or
+   `full-access` (`GET` and `PUT /api/sessions/<id>/approval-mode`, see
+   [Using Raphie](using-raphie.md#command-permissions)). Add the web's "Ask"
+   chip to the composer. Follow how Stop was added: a contract type, an
+   `ApiClient` method, a `Command`, the fake host route with a failing test
+   first, then the view.
+5. **Granted commands.** List a conversation's session grants (`GET
+/api/sessions/<id>/grants`) and let the owner revoke one (`DELETE`).
 6. **Reconnect indicator test.** Write an engine test where the fake host drops
    the conversation stream and assert the model goes `Reconnecting` then
    `Live`.

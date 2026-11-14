@@ -24,16 +24,19 @@ mod conversation;
 mod header;
 mod panel;
 mod roster;
+mod settings;
 mod sign_in;
+mod steps;
 mod welcome;
 
 use raphie_core::model::AuthState;
+use raphie_core::settings::ThemeChoice;
 use rune::{Cx, El, LiveRegion, col, row, text};
 use rune_kit::Kit;
 
 use crate::avatar::Tones;
 use crate::icons;
-use crate::state::Ui;
+use crate::state::{Screen, Ui};
 use crate::theme::{Theme, font};
 use crate::widgets::{icon_button, pressable};
 
@@ -52,17 +55,31 @@ pub struct Look {
 pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
     // The theme follows the OS: `system_dark` changes when the owner switches
     // appearance, and Rune re-runs the view and springs the colours across.
-    let theme = Theme::new(cx.system_dark());
+    // Settings → Appearance can pin it to light or dark instead.
+    let dark = match s.theme {
+        ThemeChoice::System => cx.system_dark(),
+        ThemeChoice::Light => false,
+        ThemeChoice::Dark => true,
+    };
+    let theme = Theme::new(dark);
     let look = Look {
         kit: theme.kit(),
         tones: Tones::assign(&s.model.bots),
         lights: cx.titlebar_inset(),
         theme,
     };
-    match &s.model.auth {
-        AuthState::SignedIn => workspace(s, &look),
+    // Drop-down lists float over the page. A view that has one puts it in
+    // `overlays`, and `rune_kit::root` draws them above everything else.
+    // `&mut` lends the list to the views so they can add to it.
+    let mut overlays: Vec<El> = Vec::new();
+    let base = match &s.model.auth {
+        AuthState::SignedIn => match &s.screen {
+            Screen::Workspace => workspace(s, &look),
+            Screen::Settings(page) => settings::settings(s, page, &look, &mut overlays),
+        },
         _ => sign_in::sign_in(s, &look),
-    }
+    };
+    rune_kit::root(base, overlays)
 }
 
 fn workspace(s: &Ui, look: &Look) -> El {

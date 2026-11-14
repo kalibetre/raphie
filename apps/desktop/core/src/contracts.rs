@@ -30,7 +30,7 @@ pub struct Page<T> {
 
 /// `BotProfile` in `packages/contracts/src/bots/views.ts`, as listed by
 /// `GET /api/bots` (`{ items: BotProfile[] }`).
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BotProfile {
     pub id: String,
@@ -40,6 +40,103 @@ pub struct BotProfile {
     /// Six-digit hex colour chosen by the owner, if any.
     #[serde(default)]
     pub color: Option<String>,
+    /// The bot's personality (its SOUL.md): tone, values, working style.
+    #[serde(default)]
+    pub soul: String,
+    /// Counts saves. A save names the revision it was edited from, so two
+    /// clients cannot silently overwrite each other.
+    #[serde(default)]
+    pub revision: u32,
+}
+
+/// Body of `POST /api/bots/<id>/profile`
+/// (`packages/runtime/src/domains/bots/presentation/http/routes.ts`).
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct UpdateBotProfile {
+    pub name: String,
+    pub description: String,
+    pub soul: String,
+    /// `None` is sent as `null`: let Raphie pick a colour.
+    pub color: Option<String>,
+    /// The revision these edits started from.
+    pub revision: u32,
+}
+
+/// `RuntimeSettings` in `packages/contracts/src/settings/views.ts`: one bot's
+/// model connections and the models they offer. Only what the Models page
+/// reads is mirrored.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSettings {
+    /// The connection the default model runs through.
+    pub provider: String,
+    /// The default model for new sessions.
+    pub model_id: String,
+    #[serde(default)]
+    pub providers: Vec<Named>,
+    #[serde(default)]
+    pub connections: Vec<Named>,
+    #[serde(default)]
+    pub models: Vec<LibraryModel>,
+}
+
+/// Something with an id and a display name (a provider, a connection).
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct Named {
+    pub id: String,
+    pub name: String,
+}
+
+/// One model a bot can run, through one connection.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryModel {
+    pub id: String,
+    pub name: String,
+    /// The provider service, such as OpenRouter.
+    pub provider: String,
+    /// Which of the bot's connections supplies the credentials.
+    pub connection_id: String,
+    pub connection_name: String,
+    pub context_window: u64,
+    pub max_output_tokens: u64,
+    #[serde(default)]
+    pub reasoning: bool,
+    #[serde(default)]
+    pub input_modalities: Vec<String>,
+    /// US dollars per million tokens, when the catalogue knows.
+    #[serde(default)]
+    pub pricing: Option<Pricing>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+pub struct Pricing {
+    pub input: f64,
+    pub output: f64,
+}
+
+/// Body of `POST /api/settings` that picks the default model
+/// (`UpdateRuntimeSettings` in the same file).
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DefaultModelBody<'a> {
+    pub model_id: &'a str,
+    pub connection_id: &'a str,
+}
+
+/// The administrator signed in to the host, from `GET /auth/status`
+/// (`apps/web/src/infrastructure/auth/gateway.ts`).
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct Account {
+    pub email: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct AuthStatus {
+    #[serde(default)]
+    pub account: Option<Account>,
 }
 
 /// The body of `GET /api/bots`.
@@ -112,6 +209,21 @@ pub struct SessionTurn {
     pub cancelled: Option<bool>,
     #[serde(default)]
     pub scheduled: Option<ScheduledBy>,
+    /// Set while the message waits behind the run in progress.
+    #[serde(default)]
+    pub queue_mode: Option<QueueMode>,
+}
+
+/// `Turn["queueMode"]`: how a message sent during a run joins it.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum QueueMode {
+    /// Answered after the current run finishes.
+    FollowUp,
+    /// Handed to the current run after its next step.
+    Steer,
+    #[serde(other)]
+    Unknown,
 }
 
 /// `ApprovalStatus` in `packages/contracts/src/index.ts`.
@@ -139,16 +251,39 @@ pub struct SessionApproval {
     pub created_at: i64,
     pub expires_at: i64,
     pub status: ApprovalStatus,
+    /// The channel the decision came from, once there is one.
+    #[serde(default)]
+    pub decided_via: Option<Channel>,
+    /// How far the approved action got.
+    #[serde(default)]
+    pub execution: Execution,
+    /// Which connection proposed the action. Command approvals carry
+    /// `raphie.workspace.command`.
+    #[serde(default)]
+    pub connection_identity: Option<String>,
+}
+
+/// `ToolApprovalView["execution"]` in `packages/contracts/src/index.ts`.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Execution {
+    #[default]
+    Waiting,
+    Running,
+    Done,
+    /// The action may or may not have run (the runtime lost track of it).
+    Uncertain,
+    #[serde(other)]
+    Unknown,
 }
 
 impl SessionApproval {
-    /// The arguments as indented JSON for reading, or as sent if they are not
-    /// valid JSON (the owner must always see exactly what will run).
-    pub fn arguments_pretty(&self) -> String {
-        serde_json::from_str::<serde_json::Value>(&self.arguments_json)
-            .ok()
-            .and_then(|value| serde_json::to_string_pretty(&value).ok())
-            .unwrap_or_else(|| self.arguments_json.clone())
+    /// Whether "Approve for session" applies: the runtime grants session
+    /// scope for command approvals only (the web's `ToolDecision`).
+    pub fn allows_session_scope(&self) -> bool {
+        self.server == "workspace"
+            && self.connection_identity.as_deref() == Some("raphie.workspace.command")
+            && (self.tool == "bash" || self.tool == "workspace_exec")
     }
 }
 
@@ -158,6 +293,28 @@ impl SessionApproval {
 pub struct LiveConversation {
     pub text: String,
     pub generating: bool,
+}
+
+/// `SessionActivity` in `packages/contracts/src/sessions/views.ts`: one
+/// entry of the runtime's journal (a model call, a tool call, an approval).
+/// `projections.rs` turns these into tool steps and usage.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionActivity {
+    pub id: i64,
+    /// Milliseconds since the Unix epoch.
+    pub at: i64,
+    /// The turn this happened in, when known.
+    pub run_id: Option<String>,
+    /// A tool call id or an approval id, tying related events together.
+    pub operation_id: Option<String>,
+    /// `model.completed`, `tool.started`, `approval.requested`, ... `type` is
+    /// a Rust keyword, so the field is `kind` here.
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub summary: String,
+    /// Extra data as JSON text; `{}` when there is none.
+    pub details_json: String,
 }
 
 /// `RunPhase` in `packages/contracts/src/sessions/views.ts`.
@@ -193,6 +350,9 @@ pub struct SessionObservation {
     pub turns: Vec<SessionTurn>,
     pub tool_approvals: Vec<SessionApproval>,
     pub live: Option<LiveConversation>,
+    /// The session's latest journal entries (at most 200), oldest first.
+    #[serde(default)]
+    pub activity: Vec<SessionActivity>,
     /// History cursor for turns older than `turns`, or `None` at the start.
     pub next_before: Option<String>,
     pub phase: RunPhase,
@@ -229,12 +389,44 @@ pub enum Decision {
     Rejected,
 }
 
+/// How far an approval reaches.
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Scope {
+    /// This one invocation.
+    Once,
+    /// The same command with the same arguments for the rest of this
+    /// conversation. Command approvals only.
+    Session,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct DecisionBody {
     pub decision: Decision,
-    /// `once`: this invocation only. Session-scoped grants are not offered by
-    /// the desktop app yet.
-    pub scope: &'static str,
+    pub scope: Scope,
+}
+
+/// What to do with a run or a queued message, as sent to
+/// `POST /api/sessions/<id>/control`
+/// (`packages/runtime/src/domains/conversations/presentation/http/routes.ts`).
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ControlAction {
+    /// Stop the run in progress.
+    Stop,
+    /// Hand a queued message to the run after its next step.
+    Steer,
+    /// Keep a message queued until the run finishes.
+    Queue,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ControlBody<'a> {
+    pub action: ControlAction,
+    /// The queued message that `steer` or `queue` is about.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<&'a str>,
 }
 
 /// The runtime answers a decision with the approval's status *after* it.

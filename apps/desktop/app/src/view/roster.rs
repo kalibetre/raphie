@@ -12,6 +12,7 @@ use rune::{El, LiveRegion, ScrollSpec, TextCase, col, row, text};
 use super::Look;
 use crate::avatar::bot_avatar;
 use crate::icons;
+use crate::sections::Page;
 use crate::state::Ui;
 use crate::theme::font;
 use crate::widgets::{count_badge, icon_button, one_line, pressable, status_dot};
@@ -181,7 +182,8 @@ pub fn plain(preview: &str) -> String {
         .join(" ")
 }
 
-/// Connection status on the left, sign-out on the right.
+/// Connection status on the left; account, settings and sign-out on the
+/// right.
 fn footer(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     // "Reconnecting…" while the open conversation's stream is down.
@@ -223,9 +225,24 @@ fn footer(s: &Ui, look: &Look) -> El {
                     .live_region(LiveRegion::Polite),
                 ),
         )
-        .child(pressable(
-            icon_button(t, &icons::LOG_OUT, 15.0, "Sign out").key("rd-sign-out"),
-            true,
-            |s: &mut Ui| s.command(Command::SignOut),
-        ))
+        .child(
+            row()
+                .gap(4.0)
+                .center_y()
+                .child(
+                    icon_button(t, &icons::USER_ROUND, 15.0, "Account")
+                        .key("rd-account-settings")
+                        .on_press(|s: &mut Ui| s.open_settings(Some(Page::Account))),
+                )
+                .child(
+                    icon_button(t, &icons::SETTINGS, 15.0, "Settings (⌘,)")
+                        .key("rd-settings")
+                        .on_press(|s: &mut Ui| s.open_settings(None)),
+                )
+                .child(pressable(
+                    icon_button(t, &icons::LOG_OUT, 15.0, "Sign out").key("rd-sign-out"),
+                    true,
+                    |s: &mut Ui| s.command(Command::SignOut),
+                )),
+        )
 }

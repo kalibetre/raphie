@@ -148,12 +148,18 @@ Delivered capabilities and remaining work are labelled below. See the
   (`apps/desktop`) connects to an existing web host over its authenticated API,
   locally or over a tailnet HTTPS origin. Device-code sign-in with the token in
   the OS credential store, revocation back to sign-in, bot and session lists,
-  conversations with history paging and streamed replies, sending, and
-  approve/reject with stale decisions reported. It follows the web workspace's
-  design, and light and dark follow the OS.
+  conversations with history paging and streamed replies, each run's tool
+  steps, time and usage, sending, Stop and steer, and approve/reject (once, or
+  for the session for commands) with stale decisions reported. It follows the
+  web workspace's design, and light and dark follow the OS or the
+  choice in Settings. Settings open in the app with native Account,
+  Appearance, bot Profile and Models pages; a bot's other settings pages still link to
+  the web workspace.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
-- **Desktop — planned:** attachments, Stop/Steer, model and command-permission
-  controls, session grants, packaging/signing and updates, Windows and Linux
+- **Desktop — planned:** attachments, model and command-permission controls,
+  unread markers and notifications, the remaining native bot settings pages
+  (Providers, Memory and the rest), packaging/signing
+  and updates, Windows and Linux
   verification, generated contract types, and local runtime packaging,
   discovery and single-owner lifecycle. Later, a _desktop host_ role that offers
   this machine's capabilities to the runtime: local speech-to-text, computer use

@@ -23,7 +23,9 @@ tokio = { version = "1.54", features = [
 ] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order` keeps object keys in the order the runtime sent them, so
+# tool arguments read as they were written.
+serde_json = { version = "1", features = ["preserve_order"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"

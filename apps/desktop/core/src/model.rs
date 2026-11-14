@@ -6,12 +6,12 @@
 //! reads the model and calls the small `select_*`/`begin_*` methods when the
 //! owner acts, then sends the matching [`Command`](crate::engine::Command).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::auth::DeviceCode;
 use crate::contracts::{
-    ApprovalStatus, BotProfile, Page, Receipt, SessionApproval, SessionObservation, SessionSummary,
-    SessionTurn,
+    Account, ApprovalStatus, BotProfile, Page, Receipt, RuntimeSettings, SessionApproval,
+    SessionObservation, SessionSummary, SessionTurn,
 };
 use crate::origin::Origin;
 
@@ -32,6 +32,32 @@ pub enum Event {
     SignedOut {
         notice: Option<String>,
     },
+    /// A bot's model connections and models.
+    BotSettings {
+        bot_id: String,
+        /// Boxed for the same reason as an observation: it is large.
+        settings: Box<RuntimeSettings>,
+    },
+    BotSettingsFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// The default model was changed; these are the settings afterwards.
+    DefaultModelSet {
+        bot_id: String,
+        settings: Box<RuntimeSettings>,
+    },
+    DefaultModelFailed {
+        message: String,
+    },
+    /// A bot's profile was saved; this is it at its new revision.
+    ProfileSaved(BotProfile),
+    ProfileFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// Who is signed in, when the host says.
+    Account(Option<Account>),
     Bots(Vec<BotProfile>),
     BotSelected {
         bot_id: String,
@@ -114,6 +140,8 @@ pub enum AuthState {
 pub enum Effect {
     /// The message was admitted: empty the composer.
     ClearComposer,
+    /// A profile was saved: the form should show the saved values.
+    ProfileSaved(BotProfile),
 }
 
 /// The open conversation.
@@ -226,6 +254,20 @@ impl Conversation {
 pub struct Model {
     pub origin: Option<Origin>,
     pub auth: AuthState,
+    /// The signed-in administrator, once the host has said who it is.
+    pub account: Option<Account>,
+    /// Each bot's model connections and models, once loaded.
+    pub settings: HashMap<String, RuntimeSettings>,
+    /// The bot whose settings could not be loaded, and why.
+    pub settings_error: Option<(String, String)>,
+    /// A change of default model is on its way.
+    pub setting_model: bool,
+    /// What the last change of default model said.
+    pub model_message: Option<String>,
+    /// A profile save is on its way.
+    pub saving_profile: bool,
+    /// Why the last profile save failed, until the next attempt.
+    pub profile_error: Option<String>,
     pub bots: Vec<BotProfile>,
     pub bot_id: Option<String>,
     /// The live first page of sessions, newest first.
@@ -247,6 +289,13 @@ impl Default for Model {
         Model {
             origin: None,
             auth: AuthState::SignedOut { notice: None },
+            account: None,
+            settings: HashMap::new(),
+            settings_error: None,
+            setting_model: false,
+            model_message: None,
+            saving_profile: false,
+            profile_error: None,
             bots: Vec::new(),
             bot_id: None,
             sessions: Vec::new(),
@@ -287,6 +336,44 @@ impl Model {
                     auth: AuthState::SignedOut { notice },
                     ..Model::default()
                 };
+            }
+            Event::Account(account) => self.account = account,
+            Event::BotSettings { bot_id, settings } => {
+                self.settings_error = None;
+                self.settings.insert(bot_id, *settings);
+            }
+            Event::BotSettingsFailed { bot_id, message } => {
+                self.settings_error = Some((bot_id, message));
+            }
+            Event::DefaultModelSet { bot_id, settings } => {
+                self.setting_model = false;
+                // Say which model it is now, by its name in the new settings.
+                let name = settings
+                    .models
+                    .iter()
+                    .find(|model| {
+                        model.id == settings.model_id && model.connection_id == settings.provider
+                    })
+                    .map_or(settings.model_id.clone(), |model| model.name.clone());
+                self.model_message = Some(format!("{name} is now the default for new sessions."));
+                self.settings.insert(bot_id, *settings);
+            }
+            Event::DefaultModelFailed { message } => {
+                self.setting_model = false;
+                self.model_message = Some(message);
+            }
+            Event::ProfileSaved(profile) => {
+                self.saving_profile = false;
+                self.profile_error = None;
+                // Replace the bot in the list with what the host now has.
+                if let Some(bot) = self.bots.iter_mut().find(|bot| bot.id == profile.id) {
+                    *bot = profile.clone();
+                }
+                return vec![Effect::ProfileSaved(profile)];
+            }
+            Event::ProfileFailed { message, .. } => {
+                self.saving_profile = false;
+                self.profile_error = Some(message);
             }
             Event::Bots(bots) => self.bots = bots,
             Event::BotSelected { bot_id } => self.select_bot(bot_id),
@@ -395,6 +482,28 @@ impl Model {
         }
         self.sending = true;
         self.notice = None;
+        true
+    }
+
+    /// The owner picked a default model. Returns false when a change is
+    /// already on its way.
+    pub fn begin_set_model(&mut self) -> bool {
+        if self.setting_model {
+            return false;
+        }
+        self.setting_model = true;
+        self.model_message = None;
+        true
+    }
+
+    /// The owner saved a profile. Returns false when a save is already on
+    /// its way.
+    pub fn begin_save_profile(&mut self) -> bool {
+        if self.saving_profile {
+            return false;
+        }
+        self.saving_profile = true;
+        self.profile_error = None;
         true
     }
 

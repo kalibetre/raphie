@@ -16,9 +16,10 @@ use serde::de::DeserializeOwned;
 
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll};
 use crate::contracts::{
-    ApprovalStatus, BotList, BotProfile, Decision, DecisionBody, DecisionResult,
-    DeviceCodeResponse, DeviceTokenResponse, ErrorBody, Page, Receipt, SessionObservation,
-    SessionSummary, SessionTurn, SubmitMessage,
+    Account, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction, ControlBody, Decision,
+    DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse, DeviceTokenResponse,
+    ErrorBody, Page, Receipt, RuntimeSettings, Scope, SessionObservation, SessionSummary,
+    SessionTurn, SubmitMessage, UpdateBotProfile,
 };
 use crate::origin::Origin;
 
@@ -190,9 +191,47 @@ impl ApiClient {
 
     // ----- Reads -----
 
+    /// The signed-in administrator, if the host says who it is.
+    pub async fn account(&self) -> Result<Option<Account>, ApiError> {
+        let status: AuthStatus = self.get_json("/auth/status").await?;
+        Ok(status.account)
+    }
+
     pub async fn bots(&self) -> Result<Vec<BotProfile>, ApiError> {
         let list: BotList = self.get_json("/api/bots").await?;
         Ok(list.items)
+    }
+
+    /// Saves a bot's profile and returns it at its new revision. Fails with
+    /// [`ApiError::Conflict`] when the bot changed since `update.revision`.
+    pub async fn save_profile(
+        &self,
+        bot_id: &str,
+        update: &UpdateBotProfile,
+    ) -> Result<BotProfile, ApiError> {
+        self.post_json(&format!("/api/bots/{}/profile", encode(bot_id)), update)
+            .await
+    }
+
+    /// One bot's model connections and models.
+    pub async fn settings(&self, bot_id: &str) -> Result<RuntimeSettings, ApiError> {
+        self.get_json(&bot_path(bot_id, "/api/settings")).await
+    }
+
+    /// Makes a model the default for the bot's new sessions and returns the
+    /// settings afterwards.
+    pub async fn set_default_model(
+        &self,
+        bot_id: &str,
+        model_id: &str,
+        connection_id: &str,
+    ) -> Result<RuntimeSettings, ApiError> {
+        let body = DefaultModelBody {
+            model_id,
+            connection_id,
+        };
+        self.post_json(&bot_path(bot_id, "/api/settings"), &body)
+            .await
     }
 
     pub async fn sessions(
@@ -261,17 +300,35 @@ impl ApiClient {
         bot_id: &str,
         approval_id: &str,
         decision: Decision,
+        scope: Scope,
     ) -> Result<ApprovalStatus, ApiError> {
         let path = bot_path(
             bot_id,
             &format!("/api/tool-approvals/{}", encode(approval_id)),
         );
-        let body = DecisionBody {
-            decision,
-            scope: "once",
-        };
+        let body = DecisionBody { decision, scope };
         let result: DecisionResult = self.post_json(&path, &body).await?;
         Ok(result.status)
+    }
+
+    /// Stops the session's run, or changes how a queued message joins it.
+    pub async fn control(
+        &self,
+        bot_id: &str,
+        session_id: &str,
+        action: ControlAction,
+        turn_id: Option<&str>,
+    ) -> Result<(), ApiError> {
+        let path = bot_path(
+            bot_id,
+            &format!("/api/sessions/{}/control", encode(session_id)),
+        );
+        // The answer is `{ "ok": true }`; only success or failure matters,
+        // so read it as any JSON value and drop it.
+        let _: serde_json::Value = self
+            .post_json(&path, &ControlBody { action, turn_id })
+            .await?;
+        Ok(())
     }
 
     // ----- Plumbing -----

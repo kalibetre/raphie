@@ -9,17 +9,26 @@ It is a **client of the web host's authenticated API**, the same API the web
 workspace uses. It never talks to the runtime's port 4316, so it works the same
 whether Raphie runs on this machine or on a server reached over a tailnet.
 
+What belongs in this app and what stays in the browser is set out in
+[Clients: what each one can do](clients.md).
+
 It looks like the web workspace on purpose: the same colours, type, bot faces,
 icons and layout, in light and dark.
 
 ![Approval, light](images/desktop/approval-light.png)
 
-|                              | Light                                       | Dark                                       |
-| ---------------------------- | ------------------------------------------- | ------------------------------------------ |
-| Sign in                      | ![](images/desktop/sign-in-light.png)       | ![](images/desktop/device-code-dark.png)   |
-| New conversation, panel open | ![](images/desktop/conversations-light.png) | ![](images/desktop/conversations-dark.png) |
-| Conversation                 | ![](images/desktop/conversation-light.png)  | ![](images/desktop/conversation-dark.png)  |
-| Reply streaming in           | ![](images/desktop/streaming-light.png)     | ![](images/desktop/streaming-dark.png)     |
+|                                | Light                                             | Dark                                                 |
+| ------------------------------ | ------------------------------------------------- | ---------------------------------------------------- |
+| Sign in                        | ![](images/desktop/sign-in-light.png)             | ![](images/desktop/device-code-dark.png)             |
+| New conversation, panel open   | ![](images/desktop/conversations-light.png)       | ![](images/desktop/conversations-dark.png)           |
+| Conversation                   | ![](images/desktop/conversation-light.png)        | ![](images/desktop/conversation-dark.png)            |
+| Reply streaming in             | ![](images/desktop/streaming-light.png)           | ![](images/desktop/streaming-dark.png)               |
+| Tools a run used               | ![](images/desktop/tools-light.png)               | ![](images/desktop/tools-dark.png)                   |
+| Working, with a queued message | ![](images/desktop/working-light.png)             | ![](images/desktop/working-dark.png)                 |
+| Settings: Account              | ![](images/desktop/settings-account-light.png)    | ![](images/desktop/settings-account-dark.png)        |
+| Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png)     |
+| Settings: Profile              | ![](images/desktop/settings-profile-light.png)    | ![](images/desktop/settings-profile-edited-dark.png) |
+| Settings: Models               | ![](images/desktop/settings-models-light.png)     | ![](images/desktop/settings-models-filter-dark.png)  |
 
 ## What works
 
@@ -50,11 +59,37 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
 - **Sending** with Return (Shift-Return for a new line). Each message has one
   stable event id; a network failure is retried with the same id, so the runtime
   admits it once. A first message creates the session and opens it.
+- **What a run did**: under each message, the tools the run used ("Used 2
+  tools · 4s"), unfolding to each step's state, arguments and result; under
+  each reply, when it finished and its tokens and cost. While Raphie works,
+  the same list shows what it is doing and for how long.
+- **Stop and steer**: the send button becomes **Stop** while Raphie works. A
+  message sent meanwhile is queued, and can be switched between "Queued" and
+  "Steering after this step".
 - **Approvals**: pending actions show their server, tool and exact arguments,
-  when they expire, and **Reject** and **Approve once**. A decision that
-  arrives after the approval was settled or expired is reported ("had already
-  been approved", "expired before your decision arrived") instead of failing.
-- **Light and dark** follow the OS appearance, live.
+  when they expire, and **Reject** and **Approve once**; command approvals
+  also offer **Approve for session**. A decision that arrives after the
+  approval was settled or expired is reported ("had already been approved",
+  "expired before your decision arrived") instead of failing.
+- **Settings** (the gear at the bottom of the roster, or ⌘,) open in the app,
+  laid out like the web's: every bot's pages, then Account and Appearance.
+  - **Account** shows who this device is signed in as and the Raphie address,
+    and signs out.
+  - **Appearance** pins light or dark, or follows the system. The choice is
+    saved on this computer.
+  - **Profile** edits a bot's name, description, colour and personality. A
+    save bar appears once something changed. If the bot was saved somewhere
+    else meanwhile, the draft is kept and saving is blocked until you
+    discard it, so nobody's edits are overwritten silently. Unsaved edits
+    survive a look at another page.
+  - **Models** shows the default model for new sessions and the catalogue the
+    bot's connections offer, with search and Provider, Model source and
+    Connection filters. "Set as default" changes where new sessions start;
+    existing sessions keep their model.
+  - **A bot's other pages** (Providers, Memory, ...) are not built yet: each
+    offers the same page of the web workspace in your browser.
+- **Light and dark** follow the OS appearance, live, unless Appearance pins
+  one.
 
 ## Run it
 
@@ -131,6 +166,8 @@ apps/desktop/
     src/sse.rs            event-stream parser
     src/auth.rs           device sign-in rules, Keychain and in-memory token stores
     src/model.rs          client state and how events change it (pure)
+    src/projections.rs    tool steps, usage and run labels from the journal
+    src/model_library.rs  grouping, filtering and labelling models
     src/engine.rs         Tokio runtime: sign-in, streams, commands → events
     src/settings.rs       last origin (non-secret)
     tests/                fake web host (axum) and engine/model tests
@@ -146,9 +183,14 @@ apps/desktop/
       roster.rs             bots down the left edge
       header.rs             bot, conversation title, actions
       panel.rs              conversations: search, filter, rows
-      conversation.rs       messages, replies, approvals
+      conversation.rs       messages, replies, run status
+      steps.rs              a run's tool steps and the approval bar
       composer.rs           the message box
       welcome.rs            a new conversation
+      settings/             Settings: shell, navigation, page parts,
+                            Account, Appearance, bot pages
+    src/sections.rs       the pages of Settings, named as the web names them
+    src/profile.rs        the Profile form's edits and saving rules
     src/scenes.rs         synthetic states for snapshots and tests
     tests/screens.rs      headless element-tree checks, light and dark
   scripts/snapshots.sh    renders the PNGs in docs/images/desktop
@@ -201,19 +243,24 @@ traffic lights where macOS puts them.
 The desktop app copies the web workspace's design by value, so a change to the
 web design must be made here too. Each file names its web source at the top:
 
-| Desktop              | Web source                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------ |
-| `app/src/theme.rs`   | `apps/web/src/shared/styles/tokens.css` (colours, shadows)                                 |
-| `app/src/avatar.rs`  | `domains/settings/application/bot-glance.ts` and `bot-tone.ts`                             |
-| `app/src/icons.rs`   | the Lucide icons the web components import                                                 |
-| `app/src/widgets.rs` | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                              |
-| `app/src/view/*.rs`  | the matching component and its rules in `chat.css`, `sessions.css` and `bot-workspace.css` |
+| Desktop                     | Web source                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| `app/src/theme.rs`          | `apps/web/src/shared/styles/tokens.css` (colours, shadows)                                   |
+| `app/src/avatar.rs`         | `domains/settings/application/bot-glance.ts` and `bot-tone.ts`                               |
+| `app/src/icons.rs`          | the Lucide icons the web components import                                                   |
+| `app/src/sections.rs`       | `domains/settings/presentation/settings-sections.ts`, `settings-nav.tsx`                     |
+| `app/src/profile.rs`        | the form state in `bot-profile-form.tsx`                                                     |
+| `app/src/widgets.rs`        | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                                |
+| `core/src/projections.rs`   | `packages/contracts/src/sessions/projections.ts` (tool steps, usage, labels, number formats) |
+| `core/src/model_library.rs` | `domains/settings/application/model-library.ts`, number formats in `model-card.tsx`          |
+| `app/src/view/*.rs`         | the matching component and its rules in `chat.css`, `sessions.css` and `bot-workspace.css`   |
 
 The web's root font size is 14 px, so its Tailwind sizes (in rem) are 14/16 of
 their usual pixels: an `h-8` button is 28 pt here, `text-sm` is 12.25 pt.
 
-Tests pin what can drift silently: `avatar.rs` checks faces and colours against
-values printed by the web's TypeScript, and `tests/screens.rs` checks the page
+Tests pin what can drift silently: `avatar.rs`, `projections.rs` and
+`model_library.rs` check their
+results against values printed by the web's TypeScript, and `tests/screens.rs` checks the page
 and sidebar colours against the tokens in both appearances. To compare by eye,
 render with `scripts/snapshots.sh` and put the PNGs beside the web workspace at
 1280×800.
@@ -222,13 +269,22 @@ Where the two differ on purpose:
 
 - Controls for features this app lacks are left out rather than shown dead:
   attachments, the model picker, command-permission mode, usage, notifications,
-  settings, New bot, and the "New replies" filter (there is no read tracking).
+  New bot, and the "New replies" filter (there is no read tracking).
+- Account has no device list or passkeys. The web host answers those
+  requests only for a signed-in browser, never for a device token
+  ([Authentication](authentication.md#connect-a-native-device)), so the page
+  links to the browser for them. Changing that is a decision about the web
+  host's security, not about this app.
+- Profile takes a custom colour as typed hex digits; the web opens the
+  browser's colour picker. It has no revision history or Delete yet.
+- Settings has no "UI plugins" page (this app has no plugins) and no "Create a
+  bot" yet.
 - The roster shows "N conversations need you" and the last message only for
   the selected bot, because the app follows one bot's sessions at a time.
 - Sign-in asks for a Raphie address and shows a device code instead of a
   password form; it reuses the web sign-in card.
-- Replies show no time or token line, and a run shows no elapsed time: the
-  session stream this client reads does not carry activity events.
+- A working run's label is plain text; the web's moves a shimmer across it.
+- A message's sent time is its tooltip; the web fades it in beside the bubble.
 - Numbered lists show their numbers.
 - The "raphie" brand sits level with the macOS traffic lights, to their right,
   with less space above and below it than on the web, like a compact title bar.
@@ -251,10 +307,11 @@ current.
 - Built and checked on macOS (Apple silicon). The code builds for Windows and
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
-- No attachments, Stop/Steer controls, model picker, command-permission mode,
-  session-scoped ("Approve for session") grants, settled tool steps, activity
-  inspector, notifications, unread markers or settings. Use the web workspace
-  for those.
+- No attachments, model picker, command-permission mode, grant list,
+  notifications or unread markers, and a bot's settings pages are not native
+  yet. Use the web workspace for those (each bot page links to it).
+- Tool steps come from the session's latest 200 journal entries, as on the
+  web: turns older than that show their reply without steps or usage.
 - The roster and panel have fixed widths (264 and 340 pt) and their open state
   is not remembered between launches. The window is at least 960×560.
 - No packaging, signing or auto-update: run it from a checkout. Without an app
@@ -347,6 +404,16 @@ Gaps and surprises:
     capture of the sign-in page. Not investigated.
 15. **No Rune bugs** were hit: every problem above was a default, a documented
     behaviour or a toolchain cost.
+
+Since the redesign: `Tx::wake_after` from `poll` gave the once-a-second tick
+for "12s elapsed" with no timer thread, and `icon_rotation` turns the unfold
+chevron. Text filled with a moving gradient (the web's shimmer on a working
+label) was not found and not ported.
+
+For Settings → Models the kit's `Select` came back in: restyling was not
+needed, since a `Kit` built from the web's colours already draws a drop-down
+that sits well beside the app's own controls. Its list floats above the page
+through `rune_kit::root`, which the view root now wraps everything in.
 
 Not used yet: `Cx::layout_with` reads an element's size from the last layout
 and re-runs the view only when a breakpoint is crossed. It is the way to narrow

@@ -13,6 +13,7 @@
   - [Attachments](general-attachments.md)
   - [Telegram channel](telegram.md)
   - [Desktop client](desktop.md)
+  - [Clients: who can do what](clients.md)
 - **Security & operations**
   - [Authentication](authentication.md)
   - [Credential storage](provider-credential-storage.md)

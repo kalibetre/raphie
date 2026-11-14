@@ -6,7 +6,7 @@ mod support;
 use std::sync::Arc;
 
 use raphie_core::auth::{AccessToken, MemoryStore, TokenStore};
-use raphie_core::contracts::{ApprovalStatus, Decision};
+use raphie_core::contracts::{ApprovalStatus, ControlAction, Decision, Scope, UpdateBotProfile};
 use raphie_core::engine::Command;
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
 use support::{Driver, FakeHost, TOKEN, observation_json, sessions_json, turn_json};
@@ -261,6 +261,7 @@ fn approvals_handle_fresh_stale_and_unknown_decisions() {
         driver.send(Command::Decide {
             approval_id: id.into(),
             decision,
+            scope: Scope::Once,
         });
         let id = id.to_owned();
         driver.until("the decision", move |m, _| !m.deciding.contains(&id));
@@ -294,6 +295,182 @@ fn approvals_handle_fresh_stale_and_unknown_decisions() {
         decide(&mut driver, "a-404", Decision::Approved),
         Some(DecisionOutcome::Gone)
     );
+}
+
+#[test]
+fn signing_in_learns_who_the_administrator_is() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.until("the account", |m, _| m.account.is_some());
+    let account = driver.model.account.clone().unwrap();
+    assert_eq!(
+        (account.email.as_str(), account.name.as_str()),
+        ("owner@example.com", "Owner")
+    );
+    let seen = host.requests("/auth/status");
+    assert_eq!(
+        seen[0].authorization.as_deref(),
+        Some("Bearer device-token-1")
+    );
+}
+
+#[test]
+fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    let update = |revision| UpdateBotProfile {
+        name: "Research".into(),
+        description: "Reads and summarises".into(),
+        soul: "Be brief.".into(),
+        color: None,
+        revision,
+    };
+    assert!(driver.model.begin_save_profile());
+    assert!(!driver.model.begin_save_profile(), "one save at a time");
+    driver.send(Command::SaveProfile {
+        bot_id: "b-research".into(),
+        update: update(1),
+    });
+    driver.until("the save", |m, _| !m.saving_profile);
+    let saved = driver
+        .model
+        .bots
+        .iter()
+        .find(|b| b.id == "b-research")
+        .unwrap();
+    assert_eq!(
+        (saved.revision, saved.description.as_str()),
+        (2, "Reads and summarises")
+    );
+    // An automatic colour is sent as an explicit null, not left out.
+    let sent = host.with(|h| h.profile_saves[0].clone());
+    assert!(sent["color"].is_null() && sent.get("color").is_some());
+
+    // Another client saved meanwhile: this save started from revision 2.
+    host.with(|h| h.profile_revision = 5);
+    assert!(driver.model.begin_save_profile());
+    driver.send(Command::SaveProfile {
+        bot_id: "b-research".into(),
+        update: update(2),
+    });
+    driver.until("the conflict", |m, _| m.profile_error.is_some());
+    assert!(!driver.model.saving_profile);
+    // The list was refreshed, so the page can see the newer revision.
+    let latest = driver
+        .model
+        .bots
+        .iter()
+        .find(|b| b.id == "b-research")
+        .unwrap();
+    assert_eq!(latest.revision, 5);
+}
+
+#[test]
+fn a_bots_models_load_and_the_default_can_be_changed() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::LoadSettings {
+        bot_id: "b-research".into(),
+    });
+    driver.until("the models", |m, _| m.settings.contains_key("b-research"));
+    let settings = &driver.model.settings["b-research"];
+    assert_eq!(
+        (settings.model_id.as_str(), settings.models.len()),
+        ("fast", 2)
+    );
+    assert_eq!(settings.models[0].pricing.unwrap().output, 15.0);
+    // A named bot's settings live under its own route.
+    assert_eq!(host.requests("/api/bots/b-research/settings").len(), 1);
+
+    assert!(driver.model.begin_set_model());
+    driver.send(Command::SetDefaultModel {
+        bot_id: "b-research".into(),
+        model_id: "deep".into(),
+        connection_id: "c-main".into(),
+    });
+    driver.until("the new default", |m, _| !m.setting_model);
+    assert_eq!(driver.model.settings["b-research"].model_id, "deep");
+    assert_eq!(
+        driver.model.model_message.as_deref(),
+        Some("Anthropic: Deep is now the default for new sessions.")
+    );
+    let changes = host.requests("/api/bots/b-research/settings");
+    assert_eq!(
+        changes.last().unwrap().client_marker.as_deref(),
+        Some("web")
+    );
+}
+
+#[test]
+fn a_session_scoped_approval_carries_its_scope() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.approvals.insert("a-1".into(), "pending");
+    });
+    let (mut driver, _) = signed_in(&host);
+    assert!(driver.model.begin_decide("a-1"));
+    driver.send(Command::Decide {
+        approval_id: "a-1".into(),
+        decision: Decision::Approved,
+        scope: Scope::Session,
+    });
+    driver.until("the decision", |m, _| m.deciding.is_empty());
+    let decisions = host.with(|h| h.decisions.clone());
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0]["decision"], "approved");
+    assert_eq!(decisions[0]["scope"], "session");
+}
+
+#[test]
+fn stop_and_steer_reach_the_sessions_control_route() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::Control {
+        session_id: "s-1".into(),
+        action: ControlAction::Stop,
+        turn_id: None,
+    });
+    driver.send(Command::Control {
+        session_id: "s-1".into(),
+        action: ControlAction::Steer,
+        turn_id: Some("t-9".into()),
+    });
+    // Each command is sent on its own task, so wait for both to arrive
+    // before making the host refuse the next one.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while host.with(|h| h.controls.len()) < 2 {
+        assert!(std::time::Instant::now() < deadline, "two control requests");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(driver.model.notice, None, "success is silent");
+
+    // A stop that arrives after the run ended is reported, not ignored.
+    host.with(|h| h.control_conflict = true);
+    driver.send(Command::Control {
+        session_id: "s-1".into(),
+        action: ControlAction::Stop,
+        turn_id: None,
+    });
+    driver.until("the failed stop", |m, _| {
+        m.notice
+            .as_deref()
+            .is_some_and(|n| n.contains("Could not stop"))
+    });
+    let controls = host.with(|h| h.controls.clone());
+    let sent = |action: &str| {
+        controls
+            .iter()
+            .find(|(_, body)| body["action"] == action)
+            .cloned()
+            .unwrap_or_else(|| panic!("no {action} request"))
+    };
+    let (session, stop) = sent("stop");
+    assert_eq!(session, "s-1");
+    assert!(stop.get("turnId").is_none(), "stop names no message");
+    assert_eq!(sent("steer").1["turnId"], "t-9");
+    for seen in host.requests("/api/sessions/s-1/control") {
+        assert_eq!(seen.client_marker.as_deref(), Some("web"));
+    }
 }
 
 #[test]

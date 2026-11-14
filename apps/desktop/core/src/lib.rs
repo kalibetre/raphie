@@ -6,6 +6,8 @@
 //! - [`sse`]: the event-stream parser.
 //! - [`auth`]: device sign-in rules and token storage.
 //! - [`model`]: client state and how each event changes it (pure, no I/O).
+//! - [`projections`]: tool steps, usage and labels worked out from activity.
+//! - [`model_library`]: filtering and labelling the models a bot can run.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
 //! - [`settings`]: non-secret preferences.
 //!
@@ -20,6 +22,8 @@ pub mod auth;
 pub mod contracts;
 pub mod engine;
 pub mod model;
+pub mod model_library;
 pub mod origin;
+pub mod projections;
 pub mod settings;
 pub mod sse;

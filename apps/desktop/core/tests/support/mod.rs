@@ -40,7 +40,19 @@ pub struct Host {
     pub failing_submits: u32,
     pub submits: Vec<Value>,
     pub approvals: HashMap<String, &'static str>,
+    /// Decision bodies, as received.
+    pub decisions: Vec<Value>,
+    /// Control requests: the session id and the body.
+    pub controls: Vec<(String, Value)>,
+    /// Answer control requests with 409, as when the run already ended.
+    pub control_conflict: bool,
     pub history: Vec<Value>,
+    /// The research bot's current revision; saves from an older one conflict.
+    pub profile_revision: u32,
+    /// Profile saves, as received.
+    pub profile_saves: Vec<Value>,
+    /// The default model, once one was chosen: `(model id, connection id)`.
+    pub default_model: Option<(String, String)>,
     /// Every request: method, path, and the headers that matter.
     pub requests: Vec<Seen>,
 }
@@ -117,6 +129,7 @@ fn router(fake: Fake) -> Router {
     Router::new()
         .route("/api/auth/device/code", post(device_code))
         .route("/api/auth/device/token", post(device_token))
+        .route("/auth/status", get(auth_status))
         .route("/api/bots", get(bots))
         .route("/api/sessions/events", get(session_list_events))
         .route("/api/bots/{bot}/sessions/events", get(session_list_events))
@@ -125,6 +138,13 @@ fn router(fake: Fake) -> Router {
         .route("/api/sessions/{id}/events", get(session_events))
         .route("/api/sessions/{id}/history", get(history))
         .route("/api/tool-approvals/{id}", post(decide))
+        .route("/api/sessions/{id}/control", post(control))
+        .route("/api/bots/{id}/profile", post(save_profile))
+        .route("/api/settings", get(settings).post(set_default_model))
+        .route(
+            "/api/bots/{bot}/settings",
+            get(settings).post(set_default_model),
+        )
         .with_state(fake)
 }
 
@@ -199,17 +219,118 @@ async fn device_token(State(fake): State<Fake>, headers: HeaderMap) -> Response 
         .into_response()
 }
 
+/// Like the real gateway: says who is signed in when the token is good.
+async fn auth_status(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(&fake, "GET", "/auth/status".into(), &headers);
+    let signed_in = refuse(&fake, &headers).is_none();
+    let mut status = json!({ "configured": true, "authenticated": signed_in });
+    if signed_in {
+        status["account"] = json!({ "email": "owner@example.com", "name": "Owner" });
+    }
+    Json(status).into_response()
+}
+
 async fn bots(State(fake): State<Fake>, headers: HeaderMap) -> Response {
     record(&fake, "GET", "/api/bots".into(), &headers);
     if let Some(denied) = refuse(&fake, &headers) {
         return denied;
     }
+    let revision = fake.host.lock().unwrap().profile_revision.max(1);
     Json(json!({ "items": [
         { "id": "default", "name": "Raphie", "description": "", "soul": "", "color": null,
           "revision": 1, "createdAt": 1, "updatedAt": 1 },
-        { "id": "b-research", "name": "Research", "description": "Reads papers", "soul": "",
-          "revision": 1, "createdAt": 2, "updatedAt": 2 }
+        { "id": "b-research", "name": "Research", "description": "Reads papers", "soul": "Be brief.",
+          "revision": revision, "createdAt": 2, "updatedAt": 2 }
     ]}))
+    .into_response()
+}
+
+/// Two models through one connection; the default is the first until the
+/// test (or a POST) picks another.
+fn settings_json(fake: &Fake) -> Value {
+    let (model, connection) = fake
+        .host
+        .lock()
+        .unwrap()
+        .default_model
+        .clone()
+        .unwrap_or(("fast".into(), "c-main".into()));
+    let entry = |id: &str, name: &str| {
+        json!({
+            "id": id, "name": name, "provider": "openrouter", "connectionId": "c-main",
+            "connectionName": "Main", "contextWindow": 200000, "maxOutputTokens": 8192,
+            "reasoning": false, "inputModalities": ["text"],
+            "pricing": { "input": 3, "output": 15 }
+        })
+    };
+    json!({
+        "telemetryEnabled": true, "provider": connection, "providerEnabled": true,
+        "credentialSource": "saved", "modelId": model,
+        "providers": [{ "id": "openrouter", "name": "OpenRouter" }],
+        "connections": [{ "id": "c-main", "provider": "openrouter", "name": "Main",
+                          "credentialSource": "saved" }],
+        "models": [entry("fast", "Anthropic: Fast"), entry("deep", "Anthropic: Deep")]
+    })
+}
+
+async fn settings(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    Json(settings_json(&fake)).into_response()
+}
+
+async fn set_default_model(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let (Some(model), Some(connection)) = (body["modelId"].as_str(), body["connectionId"].as_str())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Choose a model." })),
+        )
+            .into_response();
+    };
+    fake.host.lock().unwrap().default_model = Some((model.to_owned(), connection.to_owned()));
+    Json(settings_json(&fake)).into_response()
+}
+
+/// Saves the research bot's profile if the save started from its current
+/// revision, as the runtime does; otherwise answers 409.
+async fn save_profile(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", format!("/api/bots/{id}/profile"), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    host.profile_saves.push(body.clone());
+    let current = host.profile_revision.max(1);
+    if body["revision"] != current {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "This bot changed. Reload and try again." })),
+        )
+            .into_response();
+    }
+    host.profile_revision = current + 1;
+    Json(json!({
+        "id": id, "name": body["name"], "description": body["description"],
+        "soul": body["soul"], "color": body["color"],
+        "revision": current + 1, "createdAt": 2, "updatedAt": 3
+    }))
     .into_response()
 }
 
@@ -335,6 +456,7 @@ async fn decide(
         return denied;
     }
     let mut host = fake.host.lock().unwrap();
+    host.decisions.push(body.clone());
     let Some(status) = host.approvals.get_mut(&id) else {
         return (
             StatusCode::NOT_FOUND,
@@ -351,6 +473,33 @@ async fn decide(
         };
     }
     Json(json!({ "status": *status })).into_response()
+}
+
+async fn control(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(
+        &fake,
+        "POST",
+        format!("/api/sessions/{id}/control"),
+        &headers,
+    );
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    host.controls.push((id, body));
+    if host.control_conflict {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Nothing is running." })),
+        )
+            .into_response();
+    }
+    Json(json!({ "ok": true })).into_response()
 }
 
 // ----- JSON in the runtime's shapes -----

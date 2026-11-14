@@ -194,6 +194,7 @@ fn choose_origin(origin: &TextEdit, connecting: bool, notice: Option<&str>, t: &
             placeholder: "https://raphie.your-tailnet.ts.net",
             edit: origin,
             disabled: connecting,
+            compact: false,
         },
         |s: &mut Ui| &mut s.origin_field,
         |s: &mut Ui, _: &mut Tx| s.connect(),
