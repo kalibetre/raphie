@@ -38,6 +38,29 @@ impl fmt::Debug for AccessToken {
     }
 }
 
+/// A secret the owner typed, such as a provider's API key, on its way to the
+/// host. Like [`AccessToken`] it never appears in `Debug` output, so a
+/// command that carries one can be logged or compared in a test safely.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Secret(String);
+
+impl Secret {
+    pub fn new(value: impl Into<String>) -> Secret {
+        Secret(value.into())
+    }
+
+    /// The raw value, for the request body only.
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Secret(<redacted>)")
+    }
+}
+
 /// What the owner needs to approve this device.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeviceCode {
@@ -209,6 +232,9 @@ mod tests {
         let token = AccessToken::new("secret-value".into());
         assert_eq!(format!("{token:?}"), "AccessToken(<redacted>)");
         assert!(!format!("{:?}", Some(token)).contains("secret"));
+        let key = Secret::new("sk-secret-value");
+        assert_eq!(format!("{key:?}"), "Secret(<redacted>)");
+        assert_eq!(key.expose(), "sk-secret-value");
     }
 
     #[test]

@@ -6,20 +6,19 @@
 //! formats come from the core's `model_library`.
 
 use raphie_core::contracts::{LibraryModel, Named, RuntimeSettings};
-use raphie_core::engine::Command;
 use raphie_core::model_library::{
     compact_tokens, filter_models, model_source, price, short_name, sources,
 };
 use rune::{El, Icon, Tx, col, el, icon, row, text, text_input};
 use rune_kit::{Select, SelectAppearance};
 
-use super::parts::{Scope, page};
+use super::parts::{Scope, page, settings_loading, status};
 use crate::icons;
 use crate::sections::{BotSection, Page};
 use crate::state::{Dropdown, MODELS_PAGE, ModelsView, Ui};
 use crate::theme::{Theme, font};
 use crate::view::Look;
-use crate::widgets::{Kind, Size, button, centered, one_line, pressable};
+use crate::widgets::{Kind, Size, button, one_line, pressable};
 
 pub fn models(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
@@ -32,7 +31,7 @@ pub fn models(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
     let body = match s.model.settings.get(bot_id) {
         Some(settings) if settings.connections.is_empty() => vec![no_connection(bot_id, t)],
         Some(settings) => catalogue(s, bot_id, settings, look, overlays),
-        None => vec![loading(s, bot_id, t)],
+        None => vec![settings_loading(s, bot_id, "Models", "models", t)],
     };
     page(
         "rd-page-models",
@@ -41,55 +40,6 @@ pub fn models(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
         Scope::Bot { id: bot_id, name },
         body,
         look,
-    )
-}
-
-/// A card that says what is happening instead of the catalogue.
-fn status(t: &Theme, title: &str, message: &str, action: Option<El>) -> El {
-    let mut card = col()
-        .key("rd-models-status")
-        .w_full()
-        .padding(24.0)
-        .gap(8.0)
-        .items_center()
-        .radius(12.0)
-        .fill(t.card)
-        .border(1.0, t.border)
-        .child(text(title).font(font(14.0, 600.0)).color(t.foreground))
-        .child(centered(message, font(12.5, 400.0), t.muted_foreground));
-    if let Some(action) = action {
-        card = card.child(action.mt(6.0));
-    }
-    card
-}
-
-/// Still loading, or the load failed and can be tried again.
-fn loading(s: &Ui, bot_id: &str, t: &Theme) -> El {
-    // The error names the bot it was for, so an old failure for another bot
-    // is not shown here.
-    let failed = s
-        .model
-        .settings_error
-        .as_ref()
-        .is_some_and(|(bot, _)| bot == bot_id);
-    if !failed {
-        return status(t, "Models", "Loading models…", None);
-    }
-    let bot_id = bot_id.to_owned();
-    status(
-        t,
-        "Models",
-        "Could not load models. Check your connection to Raphie.",
-        Some(pressable(
-            button(t, Kind::Outline, Size::Regular, None, "Retry").key("rd-models-retry"),
-            true,
-            move |s: &mut Ui| {
-                s.model.settings_error = None;
-                s.command(Command::LoadSettings {
-                    bot_id: bot_id.clone(),
-                });
-            },
-        )),
     )
 }
 
@@ -393,10 +343,18 @@ fn filters(
         )));
     // With one connection there is nothing to choose between.
     if settings.connections.len() > 1 {
+        let connection_names: Vec<Named> = settings
+            .connections
+            .iter()
+            .map(|connection| Named {
+                id: connection.id.clone(),
+                name: connection.name.clone(),
+            })
+            .collect();
         line = line.child(col().child(caption("Connection")).child(dropdown(
             Dropdown::Connection,
             "All connections",
-            &settings.connections,
+            &connection_names,
             view.connection.as_deref(),
             view.open,
             look,

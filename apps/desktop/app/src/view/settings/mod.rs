@@ -12,6 +12,7 @@ mod models;
 mod nav;
 mod parts;
 mod profile;
+mod providers;
 
 use rune::{El, Icon, ScrollSpec, col, icon, row, text};
 
@@ -36,6 +37,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::Models,
         } => models::models(s, bot_id, look, overlays),
+        Page::Bot {
+            bot_id,
+            section: BotSection::Providers,
+        } => providers::providers(s, bot_id, look, overlays),
         Page::Bot { bot_id, section } => bot::bot_page(s, bot_id, *section, look),
     };
     // The Profile page docks a save bar under the scrolling page.

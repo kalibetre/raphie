@@ -50,6 +50,16 @@ pub enum Event {
     DefaultModelFailed {
         message: String,
     },
+    /// A provider connection was added, saved, removed or tested. `settings`
+    /// is the bot's settings afterwards (a test changes none).
+    ConnectionChanged {
+        bot_id: String,
+        settings: Option<Box<RuntimeSettings>>,
+        message: String,
+    },
+    ConnectionFailed {
+        message: String,
+    },
     /// A bot's profile was saved; this is it at its new revision.
     ProfileSaved(BotProfile),
     ProfileFailed {
@@ -140,6 +150,8 @@ pub enum AuthState {
 pub enum Effect {
     /// The message was admitted: empty the composer.
     ClearComposer,
+    /// A connection was added or saved: close its form and forget the key.
+    CloseConnectionForm,
     /// A profile was saved: the form should show the saved values.
     ProfileSaved(BotProfile),
 }
@@ -264,6 +276,10 @@ pub struct Model {
     pub setting_model: bool,
     /// What the last change of default model said.
     pub model_message: Option<String>,
+    /// A provider connection change or test is on its way.
+    pub changing_connection: bool,
+    /// What the last connection change or test said.
+    pub connection_message: Option<String>,
     /// A profile save is on its way.
     pub saving_profile: bool,
     /// Why the last profile save failed, until the next attempt.
@@ -294,6 +310,8 @@ impl Default for Model {
             settings_error: None,
             setting_model: false,
             model_message: None,
+            changing_connection: false,
+            connection_message: None,
             saving_profile: false,
             profile_error: None,
             bots: Vec::new(),
@@ -338,6 +356,23 @@ impl Model {
                 };
             }
             Event::Account(account) => self.account = account,
+            Event::ConnectionChanged {
+                bot_id,
+                settings,
+                message,
+            } => {
+                self.changing_connection = false;
+                self.connection_message = Some(message);
+                // A change (not a test) closes the form it came from.
+                if let Some(settings) = settings {
+                    self.settings.insert(bot_id, *settings);
+                    return vec![Effect::CloseConnectionForm];
+                }
+            }
+            Event::ConnectionFailed { message } => {
+                self.changing_connection = false;
+                self.connection_message = Some(message);
+            }
             Event::BotSettings { bot_id, settings } => {
                 self.settings_error = None;
                 self.settings.insert(bot_id, *settings);
@@ -493,6 +528,17 @@ impl Model {
         }
         self.setting_model = true;
         self.model_message = None;
+        true
+    }
+
+    /// The owner changed or tested a connection. Returns false when one is
+    /// already on its way.
+    pub fn begin_change_connection(&mut self) -> bool {
+        if self.changing_connection {
+            return false;
+        }
+        self.changing_connection = true;
+        self.connection_message = None;
         true
     }
 

@@ -14,12 +14,13 @@ use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll};
+use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::contracts::{
-    Account, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction, ControlBody, Decision,
-    DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse, DeviceTokenResponse,
-    ErrorBody, Page, Receipt, RuntimeSettings, Scope, SessionObservation, SessionSummary,
-    SessionTurn, SubmitMessage, UpdateBotProfile,
+    Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction,
+    ControlBody, Decision, DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse,
+    DeviceTokenResponse, EditConnectionBody, ErrorBody, Page, Receipt, RuntimeSettings, Scope,
+    SessionObservation, SessionSummary, SessionTurn, SubmitMessage, TestConnectionBody,
+    UpdateBotProfile,
 };
 use crate::origin::Origin;
 
@@ -69,6 +70,17 @@ pub fn bot_path(bot_id: &str, path: &str) -> String {
     } else {
         format!("/api/bots/{}/{}", encode(bot_id), &path["/api/".len()..])
     }
+}
+
+/// The path of one connection's route: `suffix` is "", "/remove" or "/test".
+fn connection_path(bot_id: &str, connection_id: &str, suffix: &str) -> String {
+    bot_path(
+        bot_id,
+        &format!(
+            "/api/settings/connections/{}{suffix}",
+            encode(connection_id)
+        ),
+    )
 }
 
 /// Percent-encodes one path segment or query value: everything except
@@ -232,6 +244,72 @@ impl ApiClient {
         };
         self.post_json(&bot_path(bot_id, "/api/settings"), &body)
             .await
+    }
+
+    /// Adds a provider connection and returns the settings afterwards.
+    pub async fn add_connection(
+        &self,
+        bot_id: &str,
+        provider: &str,
+        name: &str,
+        key: &Secret,
+    ) -> Result<RuntimeSettings, ApiError> {
+        let body = AddConnectionBody {
+            provider,
+            name,
+            api_key: key.expose(),
+        };
+        self.post_json(&bot_path(bot_id, "/api/settings/connections"), &body)
+            .await
+    }
+
+    /// Renames a connection, replacing its key when one is given.
+    pub async fn edit_connection(
+        &self,
+        bot_id: &str,
+        connection_id: &str,
+        name: &str,
+        key: Option<&Secret>,
+    ) -> Result<RuntimeSettings, ApiError> {
+        let body = EditConnectionBody {
+            name,
+            api_key: key.map(Secret::expose),
+        };
+        self.post_json(&connection_path(bot_id, connection_id, ""), &body)
+            .await
+    }
+
+    pub async fn remove_connection(
+        &self,
+        bot_id: &str,
+        connection_id: &str,
+    ) -> Result<RuntimeSettings, ApiError> {
+        // The route takes an empty JSON object.
+        self.post_json(
+            &connection_path(bot_id, connection_id, "/remove"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Asks the host to try a connection: a saved one (`connection_id`),
+    /// optionally with a new key, or a key for a connection not added yet.
+    pub async fn test_connection(
+        &self,
+        bot_id: &str,
+        connection_id: Option<&str>,
+        key: Option<&Secret>,
+    ) -> Result<(), ApiError> {
+        let path = match connection_id {
+            Some(id) => connection_path(bot_id, id, "/test"),
+            None => bot_path(bot_id, "/api/settings/provider/test"),
+        };
+        let body = TestConnectionBody {
+            api_key: key.map(Secret::expose),
+        };
+        // The answer is `{ "connected": true }`; a failure is an error.
+        let _: serde_json::Value = self.post_json(&path, &body).await?;
+        Ok(())
     }
 
     pub async fn sessions(
