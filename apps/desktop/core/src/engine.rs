@@ -90,6 +90,16 @@ pub enum Command {
         bot_id: String,
         update: UpdateBotProfile,
     },
+    /// Load a bot's model connections and models.
+    LoadSettings {
+        bot_id: String,
+    },
+    /// Make a model the default for a bot's new sessions.
+    SetDefaultModel {
+        bot_id: String,
+        model_id: String,
+        connection_id: String,
+    },
     /// Stop a session's run, or steer or re-queue one of its queued messages.
     Control {
         session_id: String,
@@ -302,6 +312,12 @@ impl Engine {
                 turn_id,
             } => self.control(session_id, action, turn_id),
             Command::RefreshBots => self.refresh_bots(),
+            Command::LoadSettings { bot_id } => self.load_settings(bot_id),
+            Command::SetDefaultModel {
+                bot_id,
+                model_id,
+                connection_id,
+            } => self.set_default_model(bot_id, model_id, connection_id),
             Command::SaveProfile { bot_id, update } => self.save_profile(bot_id, update),
         }
     }
@@ -564,6 +580,54 @@ impl Engine {
                 approval_id,
                 outcome,
             });
+        });
+    }
+
+    fn load_settings(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.settings(&bot_id).await {
+                Ok(settings) => emit.emit(Event::BotSettings {
+                    bot_id,
+                    settings: Box::new(settings),
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::BotSettingsFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn set_default_model(&mut self, bot_id: String, model_id: String, connection_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api
+                .set_default_model(&bot_id, &model_id, &connection_id)
+                .await
+            {
+                Ok(settings) => emit.emit(Event::DefaultModelSet {
+                    bot_id,
+                    settings: Box::new(settings),
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::DefaultModelFailed {
+                    message: error.to_string(),
+                }),
+            }
         });
     }
 

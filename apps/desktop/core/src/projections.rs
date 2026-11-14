@@ -373,7 +373,7 @@ pub fn format_duration(ms: i64) -> String {
 ///
 /// Rust's `{:.2}` rounds ties to the even digit ("0.12" for 0.125), where
 /// JavaScript gives "0.13", so the last digit is rounded by hand here.
-fn to_fixed(value: f64, digits: usize) -> String {
+pub(crate) fn to_fixed(value: f64, digits: usize) -> String {
     // 30 decimals is far more than a token count or a price needs to be
     // written exactly, so a 5 in the next place means "half or more".
     let exact = format!("{value:.30}");

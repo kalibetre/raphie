@@ -17,9 +17,9 @@ use serde::de::DeserializeOwned;
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll};
 use crate::contracts::{
     Account, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction, ControlBody, Decision,
-    DecisionBody, DecisionResult, DeviceCodeResponse, DeviceTokenResponse, ErrorBody, Page,
-    Receipt, Scope, SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
-    UpdateBotProfile,
+    DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse, DeviceTokenResponse,
+    ErrorBody, Page, Receipt, RuntimeSettings, Scope, SessionObservation, SessionSummary,
+    SessionTurn, SubmitMessage, UpdateBotProfile,
 };
 use crate::origin::Origin;
 
@@ -210,6 +210,27 @@ impl ApiClient {
         update: &UpdateBotProfile,
     ) -> Result<BotProfile, ApiError> {
         self.post_json(&format!("/api/bots/{}/profile", encode(bot_id)), update)
+            .await
+    }
+
+    /// One bot's model connections and models.
+    pub async fn settings(&self, bot_id: &str) -> Result<RuntimeSettings, ApiError> {
+        self.get_json(&bot_path(bot_id, "/api/settings")).await
+    }
+
+    /// Makes a model the default for the bot's new sessions and returns the
+    /// settings afterwards.
+    pub async fn set_default_model(
+        &self,
+        bot_id: &str,
+        model_id: &str,
+        connection_id: &str,
+    ) -> Result<RuntimeSettings, ApiError> {
+        let body = DefaultModelBody {
+            model_id,
+            connection_id,
+        };
+        self.post_json(&bot_path(bot_id, "/api/settings"), &body)
             .await
     }
 

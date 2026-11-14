@@ -51,6 +51,8 @@ pub struct Host {
     pub profile_revision: u32,
     /// Profile saves, as received.
     pub profile_saves: Vec<Value>,
+    /// The default model, once one was chosen: `(model id, connection id)`.
+    pub default_model: Option<(String, String)>,
     /// Every request: method, path, and the headers that matter.
     pub requests: Vec<Seen>,
 }
@@ -138,6 +140,11 @@ fn router(fake: Fake) -> Router {
         .route("/api/tool-approvals/{id}", post(decide))
         .route("/api/sessions/{id}/control", post(control))
         .route("/api/bots/{id}/profile", post(save_profile))
+        .route("/api/settings", get(settings).post(set_default_model))
+        .route(
+            "/api/bots/{bot}/settings",
+            get(settings).post(set_default_model),
+        )
         .with_state(fake)
 }
 
@@ -236,6 +243,64 @@ async fn bots(State(fake): State<Fake>, headers: HeaderMap) -> Response {
           "revision": revision, "createdAt": 2, "updatedAt": 2 }
     ]}))
     .into_response()
+}
+
+/// Two models through one connection; the default is the first until the
+/// test (or a POST) picks another.
+fn settings_json(fake: &Fake) -> Value {
+    let (model, connection) = fake
+        .host
+        .lock()
+        .unwrap()
+        .default_model
+        .clone()
+        .unwrap_or(("fast".into(), "c-main".into()));
+    let entry = |id: &str, name: &str| {
+        json!({
+            "id": id, "name": name, "provider": "openrouter", "connectionId": "c-main",
+            "connectionName": "Main", "contextWindow": 200000, "maxOutputTokens": 8192,
+            "reasoning": false, "inputModalities": ["text"],
+            "pricing": { "input": 3, "output": 15 }
+        })
+    };
+    json!({
+        "telemetryEnabled": true, "provider": connection, "providerEnabled": true,
+        "credentialSource": "saved", "modelId": model,
+        "providers": [{ "id": "openrouter", "name": "OpenRouter" }],
+        "connections": [{ "id": "c-main", "provider": "openrouter", "name": "Main",
+                          "credentialSource": "saved" }],
+        "models": [entry("fast", "Anthropic: Fast"), entry("deep", "Anthropic: Deep")]
+    })
+}
+
+async fn settings(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    Json(settings_json(&fake)).into_response()
+}
+
+async fn set_default_model(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let (Some(model), Some(connection)) = (body["modelId"].as_str(), body["connectionId"].as_str())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Choose a model." })),
+        )
+            .into_response();
+    };
+    fake.host.lock().unwrap().default_model = Some((model.to_owned(), connection.to_owned()));
+    Json(settings_json(&fake)).into_response()
 }
 
 /// Saves the research bot's profile if the save started from its current

@@ -68,13 +68,18 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
         lights: cx.titlebar_inset(),
         theme,
     };
-    match &s.model.auth {
+    // Drop-down lists float over the page. A view that has one puts it in
+    // `overlays`, and `rune_kit::root` draws them above everything else.
+    // `&mut` lends the list to the views so they can add to it.
+    let mut overlays: Vec<El> = Vec::new();
+    let base = match &s.model.auth {
         AuthState::SignedIn => match &s.screen {
             Screen::Workspace => workspace(s, &look),
-            Screen::Settings(page) => settings::settings(s, page, &look),
+            Screen::Settings(page) => settings::settings(s, page, &look, &mut overlays),
         },
         _ => sign_in::sign_in(s, &look),
-    }
+    };
+    rune_kit::root(base, overlays)
 }
 
 fn workspace(s: &Ui, look: &Look) -> El {

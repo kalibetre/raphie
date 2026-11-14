@@ -6,7 +6,7 @@
 
 use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::{
-    Account, BotProfile, Page as Paged, SessionObservation, SessionSummary,
+    Account, BotProfile, Page as Paged, RuntimeSettings, SessionObservation, SessionSummary,
 };
 use raphie_core::model::{AuthState, Event};
 use raphie_core::origin::Origin;
@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 
 use crate::format::now_ms;
 use crate::sections::{BotSection, Page};
-use crate::state::Ui;
+use crate::state::{Dropdown, Ui};
 
 /// A named change to a fresh [`Ui`], as `AppSpec::scenes` takes them.
 pub type Scene = (&'static str, fn(&mut Ui));
@@ -36,6 +36,8 @@ pub const SCENES: &[Scene] = &[
     ("settings-appearance", settings_appearance),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
+    ("settings-models", settings_models),
+    ("settings-models-filter", settings_models_filter),
     ("settings-bot", settings_bot),
 ];
 
@@ -143,13 +145,63 @@ pub fn settings_profile_edited(ui: &mut Ui) {
     ui.profile.color = Some("#83bcb4".into());
 }
 
-/// A bot's settings page (Research → Models).
+/// A bot's settings page that is not native yet (Research → Providers).
 pub fn settings_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Bot {
         bot_id: "b-research".into(),
+        section: BotSection::Providers,
+    }));
+}
+
+/// Settings → Models, with a catalogue loaded.
+pub fn settings_models(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
         section: BotSection::Models,
     }));
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(model_settings()),
+    });
+}
+
+/// Settings → Models with the "Model source" list open.
+pub fn settings_models_filter(ui: &mut Ui) {
+    settings_models(ui);
+    ui.models.open = Some(Dropdown::Source);
+}
+
+/// A made-up catalogue: two connections, five models from three makers.
+pub fn model_settings() -> RuntimeSettings {
+    let model = |id: &str,
+                 name: &str,
+                 connection: (&str, &str),
+                 vision: bool,
+                 price: Option<(f64, f64)>| {
+        json!({
+            "id": id, "name": name, "provider": if connection.0 == "c-router" { "openrouter" } else { "anthropic" },
+            "connectionId": connection.0, "connectionName": connection.1,
+            "contextWindow": 1_000_000, "maxOutputTokens": 128_000, "reasoning": true,
+            "inputModalities": if vision { json!(["text", "image"]) } else { json!(["text"]) },
+            "pricing": price.map(|(input, output)| json!({ "input": input, "output": output }))
+        })
+    };
+    let (router, direct) = (("c-router", "Work"), ("c-direct", "Personal"));
+    from_json(json!({
+        "telemetryEnabled": true, "provider": "c-direct", "providerEnabled": true,
+        "credentialSource": "saved", "modelId": "claude-fable",
+        "providers": [{ "id": "anthropic", "name": "Anthropic" }, { "id": "openrouter", "name": "OpenRouter" }],
+        "connections": [{ "id": "c-direct", "name": "Personal" }, { "id": "c-router", "name": "Work" }],
+        "models": [
+            model("claude-fable", "Claude Fable Latest", direct, true, Some((10.0, 50.0))),
+            model("claude-haiku", "Claude Haiku Latest", direct, true, Some((1.0, 5.0))),
+            model("anthropic/claude-opus", "Anthropic: Claude Opus", router, true, Some((5.0, 25.0))),
+            model("openai/gpt-next", "OpenAI: GPT Next", router, false, Some((2.5, 0.075))),
+            model("~meta-llama/llama-next", "Llama Next", router, false, None),
+        ]
+    }))
 }
 
 /// The same, with the conversations panel open.

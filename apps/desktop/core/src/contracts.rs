@@ -62,6 +62,68 @@ pub struct UpdateBotProfile {
     pub revision: u32,
 }
 
+/// `RuntimeSettings` in `packages/contracts/src/settings/views.ts`: one bot's
+/// model connections and the models they offer. Only what the Models page
+/// reads is mirrored.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSettings {
+    /// The connection the default model runs through.
+    pub provider: String,
+    /// The default model for new sessions.
+    pub model_id: String,
+    #[serde(default)]
+    pub providers: Vec<Named>,
+    #[serde(default)]
+    pub connections: Vec<Named>,
+    #[serde(default)]
+    pub models: Vec<LibraryModel>,
+}
+
+/// Something with an id and a display name (a provider, a connection).
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct Named {
+    pub id: String,
+    pub name: String,
+}
+
+/// One model a bot can run, through one connection.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryModel {
+    pub id: String,
+    pub name: String,
+    /// The provider service, such as OpenRouter.
+    pub provider: String,
+    /// Which of the bot's connections supplies the credentials.
+    pub connection_id: String,
+    pub connection_name: String,
+    pub context_window: u64,
+    pub max_output_tokens: u64,
+    #[serde(default)]
+    pub reasoning: bool,
+    #[serde(default)]
+    pub input_modalities: Vec<String>,
+    /// US dollars per million tokens, when the catalogue knows.
+    #[serde(default)]
+    pub pricing: Option<Pricing>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+pub struct Pricing {
+    pub input: f64,
+    pub output: f64,
+}
+
+/// Body of `POST /api/settings` that picks the default model
+/// (`UpdateRuntimeSettings` in the same file).
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DefaultModelBody<'a> {
+    pub model_id: &'a str,
+    pub connection_id: &'a str,
+}
+
 /// The administrator signed in to the host, from `GET /auth/status`
 /// (`apps/web/src/infrastructure/auth/gateway.ts`).
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]

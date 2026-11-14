@@ -16,9 +16,14 @@ const SIZE: (f32, f32) = (1280.0, 800.0);
 
 /// Renders a scene and lets every spring settle.
 fn render(scene: fn(&mut Ui), dark: bool) -> Runtime<Ui> {
+    render_sized(scene, dark, SIZE)
+}
+
+/// `render` in a window of another size, for pages taller than the default.
+fn render_sized(scene: fn(&mut Ui), dark: bool, size: (f32, f32)) -> Runtime<Ui> {
     let mut ui = Ui::with_origin("http://127.0.0.1:4321");
     scene(&mut ui);
-    let mut rt = Runtime::new(ui, view, SIZE, Env::new(dark, 2.0));
+    let mut rt = Runtime::new(ui, view, size, Env::new(dark, 2.0));
     rt.frame(0.0);
     settle(&mut rt);
     rt
@@ -626,19 +631,144 @@ fn a_bots_page_names_the_bot_and_offers_the_web_page() {
     let mut rt = render(scenes::settings_bot, false);
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
-    assert!(text.contains("Compare what Research can run"), "{text}");
+    assert!(
+        text.contains("Model connections only Research can use"),
+        "{text}"
+    );
     click(&mut rt, "rd-bot-page-web");
     assert_eq!(
         rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=models&bot=b-research"]
+        ["https://raphie.example.ts.net/?view=settings&section=providers&bot=b-research"]
     );
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-models").is_none());
+    assert!(rt.find("rd-nav-b-research-providers").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("Models")
+        Some("Providers")
     );
+}
+
+#[test]
+fn the_models_page_loads_shows_and_filters_the_catalogue() {
+    for dark in [false, true] {
+        // Opening the page asks for the bot's settings and waits for them.
+        let mut rt = render(scenes::settings_account, dark);
+        click(&mut rt, "rd-nav-default-models");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::LoadSettings {
+                bot_id: "default".into()
+            })
+        );
+        assert!(screen_text(&rt).contains("Loading models…"));
+        deliver(
+            &mut rt,
+            Event::BotSettings {
+                bot_id: "default".into(),
+                settings: Box::new(scenes::model_settings()),
+            },
+        );
+
+        let text = screen_text(&rt);
+        assert!(text.contains("Default for new sessions"), "{text}");
+        assert!(
+            text.contains("Personal · Existing sessions keep their model."),
+            "{text}"
+        );
+        assert_eq!(
+            element(&rt, "rd-models-count").text.as_deref(),
+            Some("5 models available")
+        );
+        // Numbers as the web writes them; no price shows a dash.
+        for expected in [
+            "1M context",
+            "128K output",
+            "$10.00",
+            "$0.075",
+            "—",
+            "Vision",
+        ] {
+            assert!(text.contains(expected), "{expected} in {text}");
+        }
+        // A name's maker moves to the small label above it.
+        assert!(text.contains("GPT Next") && !text.contains("OpenAI: GPT Next"));
+
+        click(&mut rt, "rd-models-search");
+        rt.paste("claude");
+        settle(&mut rt);
+        assert_eq!(
+            element(&rt, "rd-models-count").text.as_deref(),
+            Some("3 models match your filters")
+        );
+        assert!(rt.find("rd-model-c-router-openai/gpt-next").is_none());
+        click(&mut rt, "rd-models-clear");
+        assert_eq!(
+            element(&rt, "rd-models-count").text.as_deref(),
+            Some("5 models available")
+        );
+    }
+}
+
+#[test]
+fn a_model_becomes_the_default_once() {
+    // Tall enough to show every card, so each press lands on its button.
+    let mut rt = render_sized(scenes::settings_models, false, (1280.0, 1200.0));
+    click(&mut rt, "rd-model-default-c-router-openai/gpt-next");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::SetDefaultModel {
+            bot_id: "default".into(),
+            model_id: "openai/gpt-next".into(),
+            connection_id: "c-router".into(),
+        })
+    );
+    // While the change is on its way another press sends nothing.
+    click(&mut rt, "rd-model-default-c-direct-claude-haiku");
+    let changes = rt
+        .state
+        .sent
+        .iter()
+        .filter(|c| matches!(c, Command::SetDefaultModel { .. }))
+        .count();
+    assert_eq!(changes, 1);
+
+    let mut settings = scenes::model_settings();
+    settings.model_id = "openai/gpt-next".into();
+    settings.provider = "c-router".into();
+    deliver(
+        &mut rt,
+        Event::DefaultModelSet {
+            bot_id: "default".into(),
+            settings: Box::new(settings),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-models-message").text.as_deref(),
+        Some("OpenAI: GPT Next is now the default for new sessions.")
+    );
+    assert!(screen_text(&rt).contains("Work · Existing sessions keep their model."));
+}
+
+#[test]
+fn models_that_cannot_load_offer_a_retry() {
+    let mut rt = render(scenes::settings_account, false);
+    click(&mut rt, "rd-nav-default-models");
+    deliver(
+        &mut rt,
+        Event::BotSettingsFailed {
+            bot_id: "default".into(),
+            message: "Could not reach Raphie".into(),
+        },
+    );
+    assert!(screen_text(&rt).contains("Could not load models."));
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-models-retry");
+    assert_eq!(rt.state.sent.len(), before + 1);
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::LoadSettings { .. })
+    ));
 }
 
 #[test]

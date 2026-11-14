@@ -6,12 +6,12 @@
 //! reads the model and calls the small `select_*`/`begin_*` methods when the
 //! owner acts, then sends the matching [`Command`](crate::engine::Command).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::auth::DeviceCode;
 use crate::contracts::{
-    Account, ApprovalStatus, BotProfile, Page, Receipt, SessionApproval, SessionObservation,
-    SessionSummary, SessionTurn,
+    Account, ApprovalStatus, BotProfile, Page, Receipt, RuntimeSettings, SessionApproval,
+    SessionObservation, SessionSummary, SessionTurn,
 };
 use crate::origin::Origin;
 
@@ -31,6 +31,24 @@ pub enum Event {
     /// Back to the sign-in screen, with the reason when there is one.
     SignedOut {
         notice: Option<String>,
+    },
+    /// A bot's model connections and models.
+    BotSettings {
+        bot_id: String,
+        /// Boxed for the same reason as an observation: it is large.
+        settings: Box<RuntimeSettings>,
+    },
+    BotSettingsFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// The default model was changed; these are the settings afterwards.
+    DefaultModelSet {
+        bot_id: String,
+        settings: Box<RuntimeSettings>,
+    },
+    DefaultModelFailed {
+        message: String,
     },
     /// A bot's profile was saved; this is it at its new revision.
     ProfileSaved(BotProfile),
@@ -238,6 +256,14 @@ pub struct Model {
     pub auth: AuthState,
     /// The signed-in administrator, once the host has said who it is.
     pub account: Option<Account>,
+    /// Each bot's model connections and models, once loaded.
+    pub settings: HashMap<String, RuntimeSettings>,
+    /// The bot whose settings could not be loaded, and why.
+    pub settings_error: Option<(String, String)>,
+    /// A change of default model is on its way.
+    pub setting_model: bool,
+    /// What the last change of default model said.
+    pub model_message: Option<String>,
     /// A profile save is on its way.
     pub saving_profile: bool,
     /// Why the last profile save failed, until the next attempt.
@@ -264,6 +290,10 @@ impl Default for Model {
             origin: None,
             auth: AuthState::SignedOut { notice: None },
             account: None,
+            settings: HashMap::new(),
+            settings_error: None,
+            setting_model: false,
+            model_message: None,
             saving_profile: false,
             profile_error: None,
             bots: Vec::new(),
@@ -308,6 +338,30 @@ impl Model {
                 };
             }
             Event::Account(account) => self.account = account,
+            Event::BotSettings { bot_id, settings } => {
+                self.settings_error = None;
+                self.settings.insert(bot_id, *settings);
+            }
+            Event::BotSettingsFailed { bot_id, message } => {
+                self.settings_error = Some((bot_id, message));
+            }
+            Event::DefaultModelSet { bot_id, settings } => {
+                self.setting_model = false;
+                // Say which model it is now, by its name in the new settings.
+                let name = settings
+                    .models
+                    .iter()
+                    .find(|model| {
+                        model.id == settings.model_id && model.connection_id == settings.provider
+                    })
+                    .map_or(settings.model_id.clone(), |model| model.name.clone());
+                self.model_message = Some(format!("{name} is now the default for new sessions."));
+                self.settings.insert(bot_id, *settings);
+            }
+            Event::DefaultModelFailed { message } => {
+                self.setting_model = false;
+                self.model_message = Some(message);
+            }
             Event::ProfileSaved(profile) => {
                 self.saving_profile = false;
                 self.profile_error = None;
@@ -428,6 +482,17 @@ impl Model {
         }
         self.sending = true;
         self.notice = None;
+        true
+    }
+
+    /// The owner picked a default model. Returns false when a change is
+    /// already on its way.
+    pub fn begin_set_model(&mut self) -> bool {
+        if self.setting_model {
+            return false;
+        }
+        self.setting_model = true;
+        self.model_message = None;
         true
     }
 

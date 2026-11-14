@@ -29,6 +29,8 @@ pub enum Kind {
 /// A button's height and padding (the web's `size`).
 #[derive(Clone, Copy, PartialEq)]
 pub enum Size {
+    /// 21 pt: inside a card (`size="xs"`).
+    Tiny,
     /// 28 pt: beside other controls (`size="sm"`).
     Small,
     /// 31.5 pt (the default).
@@ -41,6 +43,7 @@ pub enum Size {
 /// a button until the caller gives it a handler with [`pressable`].
 pub fn button(t: &Theme, kind: Kind, size: Size, glyph: Option<&'static Icon>, label: &str) -> El {
     let (height, pad, gap, radius) = match size {
+        Size::Tiny => (21.0, 7.0, 3.5, 7.0),
         // A small button with an icon has a little less padding.
         Size::Small if glyph.is_some() => (28.0, 8.75, 5.25, 7.0),
         Size::Small => (28.0, 10.5, 5.25, 7.0),
@@ -60,10 +63,16 @@ pub fn button(t: &Theme, kind: Kind, size: Size, glyph: Option<&'static Icon>, l
         .center()
         .radius(radius);
     e = paint(t, e, kind);
+    // The tiny size uses Tailwind's `text-xs` and a smaller icon.
+    let (style, glyph_size) = if size == Size::Tiny {
+        (font(10.5, 500.0), 10.5)
+    } else {
+        (BUTTON_FONT, 14.0)
+    };
     if let Some(glyph) = glyph {
-        e = e.child(icon(glyph, 14.0).color(ink).a11y_hidden());
+        e = e.child(icon(glyph, glyph_size).color(ink).a11y_hidden());
     }
-    e.child(text(label).font(BUTTON_FONT).color(ink).a11y_hidden())
+    e.child(text(label).font(style).color(ink).a11y_hidden())
 }
 
 /// Tailwind's `text-sm font-medium` at the web's root size.

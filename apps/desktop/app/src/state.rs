@@ -9,6 +9,7 @@ use raphie_core::auth::KeychainStore;
 use raphie_core::contracts::{ControlAction, Decision, Scope, TurnStatus};
 use raphie_core::engine::{Client, Command, EngineConfig};
 use raphie_core::model::{AuthState, Effect, Event, Model};
+use raphie_core::model_library::ModelFilter;
 use raphie_core::origin::Origin;
 use raphie_core::settings::{Settings, ThemeChoice};
 use rune::{TextEdit, Tx, Waker};
@@ -25,6 +26,60 @@ pub enum Filter {
     All,
     /// Only conversations with an action waiting for approval.
     Approvals,
+}
+
+/// A drop-down list on Settings → Models.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dropdown {
+    Provider,
+    Source,
+    Connection,
+}
+
+/// How many models the Models page shows before "Show more models".
+pub const MODELS_PAGE: usize = 24;
+
+/// What Settings → Models is showing: its filters and which list is open.
+pub struct ModelsView {
+    /// The search box.
+    pub search: TextEdit,
+    /// The chosen provider, model source and connection ids. `None` is "all".
+    pub provider: Option<String>,
+    pub source: Option<String>,
+    pub connection: Option<String>,
+    /// How many models to show.
+    pub limit: usize,
+    /// The drop-down that is open, if any.
+    pub open: Option<Dropdown>,
+}
+
+impl ModelsView {
+    pub fn new() -> ModelsView {
+        ModelsView {
+            search: TextEdit::new(""),
+            provider: None,
+            source: None,
+            connection: None,
+            limit: MODELS_PAGE,
+            open: None,
+        }
+    }
+
+    /// The filters as the core's model library takes them.
+    pub fn filter(&self) -> ModelFilter {
+        ModelFilter {
+            search: self.search.text.clone(),
+            provider: self.provider.clone(),
+            source: self.source.clone(),
+            connection: self.connection.clone(),
+        }
+    }
+}
+
+impl Default for ModelsView {
+    fn default() -> ModelsView {
+        ModelsView::new()
+    }
 }
 
 /// What fills the window once signed in.
@@ -62,6 +117,8 @@ pub struct Ui {
     pub expanded_bots: HashSet<String>,
     /// Light, dark or following the system (Settings → Appearance).
     pub theme: ThemeChoice,
+    /// Settings → Models: its filters.
+    pub models: ModelsView,
     /// The Profile form on screen.
     pub profile: ProfileDraft,
     /// Unsaved Profile edits for other bots, kept while the owner looks at
@@ -105,6 +162,7 @@ impl Ui {
             screen: Screen::Workspace,
             expanded_bots: HashSet::new(),
             theme: ThemeChoice::System,
+            models: ModelsView::new(),
             profile: ProfileDraft::empty(),
             parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
@@ -248,6 +306,14 @@ impl Ui {
                 // Notice a save made in another client before editing.
                 self.command(Command::RefreshBots);
             }
+            if *section == BotSection::Models {
+                // A fresh look at the catalogue each time the page opens.
+                self.models = ModelsView::new();
+                self.model.model_message = None;
+                self.command(Command::LoadSettings {
+                    bot_id: bot_id.clone(),
+                });
+            }
         }
         self.screen = Screen::Settings(page);
     }
@@ -304,6 +370,17 @@ impl Ui {
         if self.model.begin_save_profile() {
             self.profile.message = None;
             self.command(Command::SaveProfile { bot_id, update });
+        }
+    }
+
+    /// Makes a model the default for `bot_id`'s new sessions.
+    pub fn set_default_model(&mut self, bot_id: &str, model_id: &str, connection_id: &str) {
+        if self.model.begin_set_model() {
+            self.command(Command::SetDefaultModel {
+                bot_id: bot_id.to_owned(),
+                model_id: model_id.to_owned(),
+                connection_id: connection_id.to_owned(),
+            });
         }
     }
 
