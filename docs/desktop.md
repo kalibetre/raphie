@@ -9,6 +9,9 @@ It is a **client of the web host's authenticated API**, the same API the web
 workspace uses. It never talks to the runtime's port 4316, so it works the same
 whether Raphie runs on this machine or on a server reached over a tailnet.
 
+What belongs in this app and what stays in the browser is set out in
+[Clients: what each one can do](clients.md).
+
 It looks like the web workspace on purpose: the same colours, type, bot faces,
 icons and layout, in light and dark.
 
