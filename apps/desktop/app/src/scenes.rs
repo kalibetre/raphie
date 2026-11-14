@@ -40,6 +40,8 @@ pub const SCENES: &[Scene] = &[
     ("settings-models-filter", settings_models_filter),
     ("settings-providers", settings_providers),
     ("settings-providers-add", settings_providers_add),
+    ("settings-providers-empty", settings_providers_empty),
+    ("settings-providers-edit", settings_providers_edit),
     ("settings-bot", settings_bot),
 ];
 
@@ -166,6 +168,33 @@ pub fn settings_providers(ui: &mut Ui) {
     ui.model.apply(Event::BotSettings {
         bot_id: "default".into(),
         settings: Box::new(model_settings()),
+    });
+}
+
+/// Settings → Providers for a bot with no connection yet.
+pub fn settings_providers_empty(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "b-research".into(),
+        section: BotSection::Providers,
+    }));
+    let mut settings = model_settings();
+    settings.connections.clear();
+    settings.models.clear();
+    ui.model.apply(Event::BotSettings {
+        bot_id: "b-research".into(),
+        settings: Box::new(settings),
+    });
+}
+
+/// Settings → Providers while editing a connection, after a test of a new
+/// key failed.
+pub fn settings_providers_edit(ui: &mut Ui) {
+    settings_providers(ui);
+    ui.edit_connection("c-router", "Work");
+    ui.providers.key = TextEdit::new("sk-not-a-real-key").secure();
+    ui.model.apply(Event::ConnectionFailed {
+        message: "The provider rejected this API key.".into(),
     });
 }
 
