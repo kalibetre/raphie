@@ -168,6 +168,9 @@ pub struct Field<'a> {
     /// The text and caret, read from `Ui`.
     pub edit: &'a TextEdit,
     pub disabled: bool,
+    /// The settings forms' shorter field (the web's default `Input`);
+    /// otherwise the sign-in form's taller one.
+    pub compact: bool,
 }
 
 /// A one-line text field in a bordered box, like the sign-in form's inputs.
@@ -188,7 +191,9 @@ pub fn text_field(
         placeholder,
         edit,
         disabled,
+        compact,
     } = field;
+    let (height, radius) = if compact { (31.5, 7.0) } else { (38.5, 10.5) };
     let input_key = format!("{key}-input");
     let mut input = text_input(edit, font(12.25, 400.0))
         .single_line()
@@ -207,10 +212,10 @@ pub fn text_field(
     let mut field = row()
         .key(key)
         .w_full()
-        .h(38.5)
+        .h(height)
         .px(10.5)
         .center_y()
-        .radius(10.5)
+        .radius(radius)
         .fill(t.background.alpha(0.5))
         .border(1.0, if focused { t.accent } else { t.border })
         .child(input);

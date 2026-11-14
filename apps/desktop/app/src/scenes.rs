@@ -34,6 +34,8 @@ pub const SCENES: &[Scene] = &[
     ("command-approval", command_approval),
     ("settings-account", settings_account),
     ("settings-appearance", settings_appearance),
+    ("settings-profile", settings_profile),
+    ("settings-profile-edited", settings_profile_edited),
     ("settings-bot", settings_bot),
 ];
 
@@ -123,6 +125,22 @@ pub fn settings_account(ui: &mut Ui) {
 pub fn settings_appearance(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Appearance));
+}
+
+/// Settings → Profile, as opened.
+pub fn settings_profile(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Profile,
+    }));
+}
+
+/// Settings → Profile with unsaved changes, so the save bar shows.
+pub fn settings_profile_edited(ui: &mut Ui) {
+    settings_profile(ui);
+    ui.profile.description = TextEdit::new("Plans my week and keeps notes.");
+    ui.profile.color = Some("#83bcb4".into());
 }
 
 /// A bot's settings page (Research → Models).
@@ -352,6 +370,9 @@ pub const COMMAND_APPROVAL_ID: &str = "0b7c1a52-93de-4c1f-8a44-5d6e7f809a1b";
 
 // ───────────────────────── builders ─────────────────────────
 
+/// A bot's personality, as Settings → Profile shows it.
+const SOUL: &str = "Be thoughtful and candid. Explain uncertainty.\n\nNever claim an action succeeded without confirmation.";
+
 const PLAN: &str = "Let’s make some room for the day.\n\n1. **Choose one priority.** Start with the work that matters most.\n2. **Leave a little breathing room.** Keep a gap between meetings.\n3. **Close the loop.** Write down your next step before you finish.\n\nWhat would you like to focus on first?";
 
 const CODE: &str = "Use `std::fs::read_dir`; each entry can fail on its own, so handle both levels:\n\n```rust\nuse std::fs;\n\nfn main() -> std::io::Result<()> {\n    for entry in fs::read_dir(\".\")? {\n        let entry = entry?;\n        println!(\"{}\", entry.path().display());\n    }\n    Ok(())\n}\n```\n\nThe `?` returns the error to the caller instead of panicking.";
@@ -371,6 +392,8 @@ fn bot(id: &str, name: &str, description: &str, color: Option<&str>) -> BotProfi
         name: name.into(),
         description: description.into(),
         color: color.map(str::to_owned),
+        soul: SOUL.into(),
+        revision: 3,
     }
 }
 

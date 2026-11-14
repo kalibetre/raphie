@@ -10,6 +10,7 @@ mod appearance;
 mod bot;
 mod nav;
 mod parts;
+mod profile;
 
 use rune::{El, Icon, ScrollSpec, col, icon, row, text};
 
@@ -26,9 +27,21 @@ pub fn settings(s: &Ui, page: &Page, look: &Look) -> El {
     let content = match page {
         Page::Account => account::account(s, look),
         Page::Appearance => appearance::appearance(s, look),
+        Page::Bot {
+            bot_id,
+            section: BotSection::Profile,
+        } => profile::profile(s, bot_id, look),
         Page::Bot { bot_id, section } => bot::bot_page(s, bot_id, *section, look),
     };
-    let main = col()
+    // The Profile page docks a save bar under the scrolling page.
+    let footer = match page {
+        Page::Bot {
+            section: BotSection::Profile,
+            ..
+        } => profile::save_bar(s, look),
+        _ => None,
+    };
+    let mut main = col()
         .key("rd-settings-main")
         .grow(1.0)
         .h_full()
@@ -44,9 +57,12 @@ pub fn settings(s: &Ui, page: &Page, look: &Look) -> El {
                 .scroll(ScrollSpec {
                     stick_bottom: false,
                 })
-                // The page column: at most 776 pt wide, centred.
+                // The page column is centred in the pane.
                 .child(col().w_full().items_center().child(content)),
         );
+    if let Some(footer) = footer {
+        main = main.child(footer);
+    }
     let mut shell = row()
         .key("rd-settings")
         .w_full()

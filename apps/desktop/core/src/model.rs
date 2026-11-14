@@ -32,6 +32,12 @@ pub enum Event {
     SignedOut {
         notice: Option<String>,
     },
+    /// A bot's profile was saved; this is it at its new revision.
+    ProfileSaved(BotProfile),
+    ProfileFailed {
+        bot_id: String,
+        message: String,
+    },
     /// Who is signed in, when the host says.
     Account(Option<Account>),
     Bots(Vec<BotProfile>),
@@ -116,6 +122,8 @@ pub enum AuthState {
 pub enum Effect {
     /// The message was admitted: empty the composer.
     ClearComposer,
+    /// A profile was saved: the form should show the saved values.
+    ProfileSaved(BotProfile),
 }
 
 /// The open conversation.
@@ -230,6 +238,10 @@ pub struct Model {
     pub auth: AuthState,
     /// The signed-in administrator, once the host has said who it is.
     pub account: Option<Account>,
+    /// A profile save is on its way.
+    pub saving_profile: bool,
+    /// Why the last profile save failed, until the next attempt.
+    pub profile_error: Option<String>,
     pub bots: Vec<BotProfile>,
     pub bot_id: Option<String>,
     /// The live first page of sessions, newest first.
@@ -252,6 +264,8 @@ impl Default for Model {
             origin: None,
             auth: AuthState::SignedOut { notice: None },
             account: None,
+            saving_profile: false,
+            profile_error: None,
             bots: Vec::new(),
             bot_id: None,
             sessions: Vec::new(),
@@ -294,6 +308,19 @@ impl Model {
                 };
             }
             Event::Account(account) => self.account = account,
+            Event::ProfileSaved(profile) => {
+                self.saving_profile = false;
+                self.profile_error = None;
+                // Replace the bot in the list with what the host now has.
+                if let Some(bot) = self.bots.iter_mut().find(|bot| bot.id == profile.id) {
+                    *bot = profile.clone();
+                }
+                return vec![Effect::ProfileSaved(profile)];
+            }
+            Event::ProfileFailed { message, .. } => {
+                self.saving_profile = false;
+                self.profile_error = Some(message);
+            }
             Event::Bots(bots) => self.bots = bots,
             Event::BotSelected { bot_id } => self.select_bot(bot_id),
             Event::Sessions { bot_id, page, more } => {
@@ -401,6 +428,17 @@ impl Model {
         }
         self.sending = true;
         self.notice = None;
+        true
+    }
+
+    /// The owner saved a profile. Returns false when a save is already on
+    /// its way.
+    pub fn begin_save_profile(&mut self) -> bool {
+        if self.saving_profile {
+            return false;
+        }
+        self.saving_profile = true;
+        self.profile_error = None;
         true
     }
 

@@ -30,7 +30,7 @@ pub struct Page<T> {
 
 /// `BotProfile` in `packages/contracts/src/bots/views.ts`, as listed by
 /// `GET /api/bots` (`{ items: BotProfile[] }`).
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BotProfile {
     pub id: String,
@@ -40,6 +40,26 @@ pub struct BotProfile {
     /// Six-digit hex colour chosen by the owner, if any.
     #[serde(default)]
     pub color: Option<String>,
+    /// The bot's personality (its SOUL.md): tone, values, working style.
+    #[serde(default)]
+    pub soul: String,
+    /// Counts saves. A save names the revision it was edited from, so two
+    /// clients cannot silently overwrite each other.
+    #[serde(default)]
+    pub revision: u32,
+}
+
+/// Body of `POST /api/bots/<id>/profile`
+/// (`packages/runtime/src/domains/bots/presentation/http/routes.ts`).
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct UpdateBotProfile {
+    pub name: String,
+    pub description: String,
+    pub soul: String,
+    /// `None` is sent as `null`: let Raphie pick a colour.
+    pub color: Option<String>,
+    /// The revision these edits started from.
+    pub revision: u32,
 }
 
 /// The administrator signed in to the host, from `GET /auth/status`

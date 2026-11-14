@@ -11,12 +11,14 @@
 //! - [`avatar`]: a bot's face and colour, computed as the web computes them.
 //! - [`icons`]: the web workspace's icons.
 //! - [`sections`]: the pages of Settings, named as the web names them.
+//! - [`profile`]: the edits in progress on a bot's Profile page.
 //! - [`scenes`]: fixture states for headless snapshots and tests.
 //! - [`format`]: small text helpers.
 
 pub mod avatar;
 pub mod format;
 pub mod icons;
+pub mod profile;
 pub mod scenes;
 pub mod sections;
 pub mod state;

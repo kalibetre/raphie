@@ -4,9 +4,8 @@ Raphie has one owner and several clients: the web workspace in a browser, the
 [desktop client](desktop.md), and later a mobile client. This page says which
 client offers what, and why some things stay in the browser.
 
-> **Status: proposed on 2026-11-14, awaiting the owner's agreement.** Until it
-> is agreed, treat the Desktop and Mobile columns as a plan, not a promise. No
-> mobile client exists and none is on the [roadmap](roadmap.md) yet.
+Agreed with the owner on 2026-11-14. No mobile client exists and none is on
+the [roadmap](roadmap.md) yet, so the Mobile column records intent only.
 
 ## The rules
 
@@ -74,8 +73,9 @@ A new feature is placed by asking these questions in order.
 
 | Page                                       | Web | Desktop | Mobile  | Notes                                         |
 | ------------------------------------------ | --- | ------- | ------- | --------------------------------------------- |
-| Profile: name, description, colour         | Yes | Planned | Planned | Next on desktop.                              |
-| Personality and its revision history       | Yes | Planned | No      | Long-form editing.                            |
+| Profile: name, description, colour         | Yes | Yes     | Planned |                                               |
+| Personality (SOUL.md)                      | Yes | Yes     | No      | Long-form editing. Saved with the profile.    |
+| Personality revision history               | Yes | Planned | No      |                                               |
 | Create a bot, delete a bot                 | Yes | Planned | No      | Rare, and deleting cannot be undone.          |
 | Providers (model connections and keys)     | Yes | Planned | No      | Setup.                                        |
 | Models (compare, pick the default)         | Yes | Planned | Planned |                                               |

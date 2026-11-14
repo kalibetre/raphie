@@ -1,18 +1,19 @@
 //! The UI's state: the core [`Model`] plus what only the window needs (text
 //! being typed, which side panels are open), and the bridge to the engine.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
 use raphie_core::auth::KeychainStore;
 use raphie_core::contracts::{ControlAction, Decision, Scope, TurnStatus};
 use raphie_core::engine::{Client, Command, EngineConfig};
-use raphie_core::model::{AuthState, Effect, Model};
+use raphie_core::model::{AuthState, Effect, Event, Model};
 use raphie_core::origin::Origin;
 use raphie_core::settings::{Settings, ThemeChoice};
 use rune::{TextEdit, Tx, Waker};
 
+use crate::profile::ProfileDraft;
 use crate::sections::{BotSection, Page};
 
 /// The fixture's web host: the default for a first launch from a checkout.
@@ -61,6 +62,11 @@ pub struct Ui {
     pub expanded_bots: HashSet<String>,
     /// Light, dark or following the system (Settings → Appearance).
     pub theme: ThemeChoice,
+    /// The Profile form on screen.
+    pub profile: ProfileDraft,
+    /// Unsaved Profile edits for other bots, kept while the owner looks at
+    /// another page, so moving around Settings never loses work.
+    parked_profiles: HashMap<String, ProfileDraft>,
     /// Turns whose list of tool steps is unfolded.
     pub open_runs: HashSet<String>,
     /// Tool steps whose arguments and result are unfolded.
@@ -99,6 +105,8 @@ impl Ui {
             screen: Screen::Workspace,
             expanded_bots: HashSet::new(),
             theme: ThemeChoice::System,
+            profile: ProfileDraft::empty(),
+            parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
             open_steps: HashSet::new(),
             ticked_at: 0.0,
@@ -233,10 +241,91 @@ impl Ui {
             section: BotSection::Profile,
         });
         // The bot whose page this is starts unfolded in the navigation.
-        if let Page::Bot { bot_id, .. } = &page {
+        if let Page::Bot { bot_id, section } = &page {
             self.expanded_bots.insert(bot_id.clone());
+            if *section == BotSection::Profile {
+                self.show_profile(bot_id);
+                // Notice a save made in another client before editing.
+                self.command(Command::RefreshBots);
+            }
         }
         self.screen = Screen::Settings(page);
+    }
+
+    /// Puts `bot_id`'s profile in the form: its unsaved edits if there are
+    /// any, else the profile as the host has it.
+    fn show_profile(&mut self, bot_id: &str) {
+        if self.profile.bot_id() == Some(bot_id) {
+            return;
+        }
+        let next = match self.parked_profiles.remove(bot_id) {
+            Some(parked) => parked,
+            None => match self.model.bots.iter().find(|bot| bot.id == bot_id) {
+                Some(bot) => ProfileDraft::of(bot),
+                None => ProfileDraft::empty(),
+            },
+        };
+        // `mem::replace` swaps the new form in and hands back the old one.
+        let previous = std::mem::replace(&mut self.profile, next);
+        if previous.is_dirty()
+            && let Some(id) = previous.bot_id()
+        {
+            self.parked_profiles.insert(id.to_owned(), previous);
+        }
+    }
+
+    /// The bot the Profile form edits, as the host has it now.
+    pub fn profile_bot(&self) -> Option<&raphie_core::contracts::BotProfile> {
+        let id = self.profile.bot_id()?;
+        self.model.bots.iter().find(|bot| bot.id == id)
+    }
+
+    /// Whether the Profile form may be saved now.
+    pub fn can_save_profile(&self) -> bool {
+        let unchanged_elsewhere = self
+            .profile_bot()
+            .is_some_and(|latest| !self.profile.changed_elsewhere(latest));
+        unchanged_elsewhere
+            && self.profile.is_dirty()
+            && self.profile.problem().is_none()
+            && !self.model.saving_profile
+    }
+
+    pub fn save_profile(&mut self) {
+        if !self.can_save_profile() {
+            return;
+        }
+        let (Some(bot_id), Some(update)) = (
+            self.profile.bot_id().map(str::to_owned),
+            self.profile.update(),
+        ) else {
+            return;
+        };
+        if self.model.begin_save_profile() {
+            self.profile.message = None;
+            self.command(Command::SaveProfile { bot_id, update });
+        }
+    }
+
+    /// Throws the edits away and shows the bot as the host has it now.
+    pub fn discard_profile(&mut self) {
+        if let Some(latest) = self.profile_bot() {
+            self.profile = ProfileDraft::of(latest);
+        }
+        self.model.profile_error = None;
+    }
+
+    /// After news from the host: a form with no edits follows the bot when
+    /// it was saved elsewhere; a form with edits keeps them.
+    fn follow_profile(&mut self) {
+        let stale = self
+            .profile_bot()
+            .is_some_and(|latest| self.profile.changed_elsewhere(latest));
+        if stale && !self.profile.is_dirty() && !self.model.saving_profile {
+            let message = self.profile.message.take();
+            self.discard_profile();
+            self.profile.message = message;
+        }
     }
 
     pub fn close_settings(&mut self) {
@@ -335,8 +424,15 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     if ticked {
         ui.ticked_at = clock;
     }
+    // `|` rather than `||`: the events are applied even after a tick.
+    receive(ui, events, tx) | ticked
+}
+
+/// Applies what the engine reported; returns true when anything arrived.
+/// Separate from `poll` so tests can deliver events without an engine.
+pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     if events.is_empty() {
-        return ticked;
+        return false;
     }
     for event in events {
         for effect in ui.model.apply(event) {
@@ -345,8 +441,16 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
                     ui.composer.clear();
                     tx.scroll_to_bottom("rd-transcript");
                 }
+                Effect::ProfileSaved(profile) => {
+                    // Show what was saved, at its new revision.
+                    if ui.profile.bot_id() == Some(profile.id.as_str()) {
+                        ui.profile = ProfileDraft::of(&profile);
+                        ui.profile.message = Some(format!("Saved revision {}.", profile.revision));
+                    }
+                }
             }
         }
     }
+    ui.follow_profile();
     true
 }

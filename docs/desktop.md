@@ -17,16 +17,17 @@ icons and layout, in light and dark.
 
 ![Approval, light](images/desktop/approval-light.png)
 
-|                                | Light                                             | Dark                                             |
-| ------------------------------ | ------------------------------------------------- | ------------------------------------------------ |
-| Sign in                        | ![](images/desktop/sign-in-light.png)             | ![](images/desktop/device-code-dark.png)         |
-| New conversation, panel open   | ![](images/desktop/conversations-light.png)       | ![](images/desktop/conversations-dark.png)       |
-| Conversation                   | ![](images/desktop/conversation-light.png)        | ![](images/desktop/conversation-dark.png)        |
-| Reply streaming in             | ![](images/desktop/streaming-light.png)           | ![](images/desktop/streaming-dark.png)           |
-| Tools a run used               | ![](images/desktop/tools-light.png)               | ![](images/desktop/tools-dark.png)               |
-| Working, with a queued message | ![](images/desktop/working-light.png)             | ![](images/desktop/working-dark.png)             |
-| Settings: Account              | ![](images/desktop/settings-account-light.png)    | ![](images/desktop/settings-account-dark.png)    |
-| Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png) |
+|                                | Light                                             | Dark                                                 |
+| ------------------------------ | ------------------------------------------------- | ---------------------------------------------------- |
+| Sign in                        | ![](images/desktop/sign-in-light.png)             | ![](images/desktop/device-code-dark.png)             |
+| New conversation, panel open   | ![](images/desktop/conversations-light.png)       | ![](images/desktop/conversations-dark.png)           |
+| Conversation                   | ![](images/desktop/conversation-light.png)        | ![](images/desktop/conversation-dark.png)            |
+| Reply streaming in             | ![](images/desktop/streaming-light.png)           | ![](images/desktop/streaming-dark.png)               |
+| Tools a run used               | ![](images/desktop/tools-light.png)               | ![](images/desktop/tools-dark.png)                   |
+| Working, with a queued message | ![](images/desktop/working-light.png)             | ![](images/desktop/working-dark.png)                 |
+| Settings: Account              | ![](images/desktop/settings-account-light.png)    | ![](images/desktop/settings-account-dark.png)        |
+| Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png)     |
+| Settings: Profile              | ![](images/desktop/settings-profile-light.png)    | ![](images/desktop/settings-profile-edited-dark.png) |
 
 ## What works
 
@@ -75,8 +76,13 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     and signs out.
   - **Appearance** pins light or dark, or follows the system. The choice is
     saved on this computer.
-  - **A bot's pages** (Profile, Providers, Models, ...) are not built yet:
-    each offers the same page of the web workspace in your browser.
+  - **Profile** edits a bot's name, description, colour and personality. A
+    save bar appears once something changed. If the bot was saved somewhere
+    else meanwhile, the draft is kept and saving is blocked until you
+    discard it, so nobody's edits are overwritten silently. Unsaved edits
+    survive a look at another page.
+  - **A bot's other pages** (Providers, Models, ...) are not built yet: each
+    offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
 
@@ -178,6 +184,7 @@ apps/desktop/
       settings/             Settings: shell, navigation, page parts,
                             Account, Appearance, bot pages
     src/sections.rs       the pages of Settings, named as the web names them
+    src/profile.rs        the Profile form's edits and saving rules
     src/scenes.rs         synthetic states for snapshots and tests
     tests/screens.rs      headless element-tree checks, light and dark
   scripts/snapshots.sh    renders the PNGs in docs/images/desktop
@@ -236,6 +243,7 @@ web design must be made here too. Each file names its web source at the top:
 | `app/src/avatar.rs`       | `domains/settings/application/bot-glance.ts` and `bot-tone.ts`                               |
 | `app/src/icons.rs`        | the Lucide icons the web components import                                                   |
 | `app/src/sections.rs`     | `domains/settings/presentation/settings-sections.ts`, `settings-nav.tsx`                     |
+| `app/src/profile.rs`      | the form state in `bot-profile-form.tsx`                                                     |
 | `app/src/widgets.rs`      | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                                |
 | `core/src/projections.rs` | `packages/contracts/src/sessions/projections.ts` (tool steps, usage, labels, number formats) |
 | `app/src/view/*.rs`       | the matching component and its rules in `chat.css`, `sessions.css` and `bot-workspace.css`   |
@@ -259,6 +267,8 @@ Where the two differ on purpose:
   ([Authentication](authentication.md#connect-a-native-device)), so the page
   links to the browser for them. Changing that is a decision about the web
   host's security, not about this app.
+- Profile takes a custom colour as typed hex digits; the web opens the
+  browser's colour picker. It has no revision history or Delete yet.
 - Settings has no "UI plugins" page (this app has no plugins) and no "Create a
   bot" yet.
 - The roster shows "N conversations need you" and the last message only for

@@ -170,6 +170,27 @@ impl Tones {
     }
 }
 
+/// The tone for a colour written as `#rrggbb`, or `None` if it is not one.
+pub fn tone_of(color: &str) -> Option<Tone> {
+    let body = hex(color)?;
+    Some(Tone {
+        body,
+        eye: eye_color(body),
+    })
+}
+
+/// The web's avatar colours with their names, for the colour picker.
+pub const PALETTE_NAMES: [(&str, &str); 8] = [
+    ("Sage", PALETTE[0]),
+    ("Lavender", PALETTE[1]),
+    ("Amber", PALETTE[2]),
+    ("Teal", PALETTE[3]),
+    ("Rose", PALETTE[4]),
+    ("Sky", PALETTE[5]),
+    ("Sand", PALETTE[6]),
+    ("Clay", PALETTE[7]),
+];
+
 /// The original four colour families, picked by the id's characters.
 fn preferred_tone(id: &str) -> usize {
     if id == "default" {
@@ -269,6 +290,8 @@ mod tests {
             name: id.into(),
             description: String::new(),
             color: color.map(str::to_owned),
+            soul: String::new(),
+            revision: 1,
         }
     }
 

@@ -3,12 +3,12 @@
 //! with no GPU and no network. Pixel snapshots are rendered separately with
 //! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
 
-use raphie_core::contracts::{ControlAction, Decision, Scope};
+use raphie_core::contracts::{BotProfile, ControlAction, Decision, Scope};
 use raphie_core::engine::Command;
-use raphie_core::model::AuthState;
+use raphie_core::model::{AuthState, Event};
 use raphie_core::settings::ThemeChoice;
 use raphie_desktop::sections::{BotSection, Page};
-use raphie_desktop::state::{Filter, Screen};
+use raphie_desktop::state::{self, Filter, Screen};
 use raphie_desktop::{Ui, scenes, view::view};
 use rune::{ElementInfo, Env, Runtime};
 
@@ -444,6 +444,181 @@ fn appearance_pins_the_theme_whatever_the_system_uses() {
     let mut rt = render(scenes::settings_appearance, true);
     click(&mut rt, "rd-theme-light");
     assert_eq!(color(&rt, "rd-settings"), "#f7f5ef");
+}
+
+/// Delivers an engine event, as `poll` would in a window.
+fn deliver(rt: &mut Runtime<Ui>, event: Event) {
+    rt.update(|ui, tx| {
+        state::receive(ui, vec![event], tx);
+    });
+    settle(rt);
+}
+
+fn research(description: &str, revision: u32) -> BotProfile {
+    BotProfile {
+        id: "b-research".into(),
+        name: "Research".into(),
+        description: description.into(),
+        color: None,
+        soul: "Be brief.".into(),
+        revision,
+    }
+}
+
+/// The Research bot's Profile page, at revision 3.
+fn research_profile(ui: &mut Ui) {
+    scenes::settings_account(ui);
+    let mut bots = ui.model.bots.clone();
+    bots[1] = research("Reads and summarises.", 3);
+    ui.model.apply(Event::Bots(bots));
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "b-research".into(),
+        section: BotSection::Profile,
+    }));
+}
+
+#[test]
+fn a_profile_is_edited_saved_and_shown_at_its_new_revision() {
+    for dark in [false, true] {
+        let mut rt = render(research_profile, dark);
+        // Opening the page asks the host for the latest bots.
+        assert_eq!(rt.state.sent.last(), Some(&Command::RefreshBots));
+        assert!(rt.find("rd-save-bar").is_none(), "a clean page is quiet");
+        assert_eq!(
+            element(&rt, "rd-profile-revision").text.as_deref(),
+            Some("Revision 3")
+        );
+
+        click(&mut rt, "rd-profile-color-teal");
+        assert_eq!(
+            element(&rt, "rd-profile-color-name").text.as_deref(),
+            Some("#83BCB4")
+        );
+        assert_eq!(
+            element(&rt, "rd-profile-status").text.as_deref(),
+            Some("Unsaved changes")
+        );
+
+        click(&mut rt, "rd-profile-save");
+        let Some(Command::SaveProfile { bot_id, update }) = rt.state.sent.last().cloned() else {
+            panic!("no save was sent");
+        };
+        assert_eq!(bot_id, "b-research");
+        assert_eq!(
+            (update.revision, update.color.as_deref()),
+            (3, Some("#83bcb4"))
+        );
+        assert_eq!(update.soul, "Be brief.");
+        // A second press while saving sends nothing more.
+        click(&mut rt, "rd-profile-save");
+        let saves = rt
+            .state
+            .sent
+            .iter()
+            .filter(|c| matches!(c, Command::SaveProfile { .. }))
+            .count();
+        assert_eq!(saves, 1);
+
+        let mut saved = research("Reads and summarises.", 4);
+        saved.color = Some("#83bcb4".into());
+        deliver(&mut rt, Event::ProfileSaved(saved));
+        assert_eq!(
+            element(&rt, "rd-profile-status").text.as_deref(),
+            Some("Saved revision 4.")
+        );
+        assert_eq!(
+            element(&rt, "rd-profile-revision").text.as_deref(),
+            Some("Revision 4")
+        );
+        assert!(!rt.state.profile.is_dirty());
+    }
+}
+
+#[test]
+fn a_profile_changed_elsewhere_keeps_the_draft_and_blocks_saving() {
+    let mut rt = render(research_profile, false);
+    click(&mut rt, "rd-profile-color-automatic");
+    click(&mut rt, "rd-profile-color-rose");
+    // Another client saves the bot while this draft is open.
+    let mut bots = rt.state.model.bots.clone();
+    bots[1] = research("Changed in the browser.", 4);
+    deliver(&mut rt, Event::Bots(bots.clone()));
+    assert!(
+        element(&rt, "rd-profile-error")
+            .text
+            .unwrap()
+            .contains("changed elsewhere")
+    );
+    assert_eq!(
+        rt.state.profile.color.as_deref(),
+        Some("#dda6b5"),
+        "the draft stays"
+    );
+    click(&mut rt, "rd-profile-save");
+    assert!(
+        !rt.state
+            .sent
+            .iter()
+            .any(|c| matches!(c, Command::SaveProfile { .. })),
+        "a stale draft is not sent"
+    );
+
+    // Discard loads the latest revision.
+    click(&mut rt, "rd-profile-discard");
+    assert_eq!(rt.state.profile.description.text, "Changed in the browser.");
+    assert!(rt.find("rd-save-bar").is_none());
+
+    // With no edits, the form simply follows the bot.
+    bots[1] = research("Changed again.", 5);
+    deliver(&mut rt, Event::Bots(bots));
+    assert_eq!(rt.state.profile.description.text, "Changed again.");
+}
+
+#[test]
+fn unsaved_profile_edits_survive_a_look_at_another_page() {
+    let mut rt = render(research_profile, false);
+    click(&mut rt, "rd-profile-color-sky");
+    click(&mut rt, "rd-nav-appearance");
+    click(&mut rt, "rd-nav-default-bot");
+    assert_eq!(rt.state.profile.bot_id(), Some("default"));
+    assert!(
+        !rt.state.profile.is_dirty(),
+        "the other bot's form is clean"
+    );
+    click(&mut rt, "rd-nav-b-research-bot");
+    assert_eq!(rt.state.profile.color.as_deref(), Some("#91b7df"));
+    assert!(rt.find("rd-save-bar").is_some());
+}
+
+#[test]
+fn a_failed_save_says_why_and_a_bad_custom_colour_is_refused() {
+    let mut rt = render(research_profile, false);
+    click(&mut rt, "rd-profile-custom-color");
+    rt.paste("teal");
+    settle(&mut rt);
+    click(&mut rt, "rd-profile-custom-use");
+    assert_eq!(rt.state.profile.color, None, "not a colour");
+    assert!(
+        element(&rt, "rd-profile-error")
+            .text
+            .unwrap()
+            .contains("six hex digits")
+    );
+
+    click(&mut rt, "rd-profile-color-sand");
+    click(&mut rt, "rd-profile-save");
+    deliver(
+        &mut rt,
+        Event::ProfileFailed {
+            bot_id: "b-research".into(),
+            message: "Could not reach Raphie".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-profile-error").text.as_deref(),
+        Some("Could not reach Raphie")
+    );
+    assert!(rt.state.profile.is_dirty(), "nothing typed is lost");
 }
 
 #[test]

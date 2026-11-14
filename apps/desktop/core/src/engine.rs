@@ -33,7 +33,7 @@ use crate::api::{ApiClient, ApiError, bot_path};
 use crate::auth::{AccessToken, DevicePolicy, DevicePoll, TokenStore};
 use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
-    SessionSummary, SubmitMessage,
+    SessionSummary, SubmitMessage, UpdateBotProfile,
 };
 use crate::model::{DecisionOutcome, Event, StreamStatus};
 use crate::origin::Origin;
@@ -82,6 +82,13 @@ pub enum Command {
         approval_id: String,
         decision: Decision,
         scope: Scope,
+    },
+    /// Fetch the bot list again, to notice changes made in another client.
+    RefreshBots,
+    /// Save a bot's name, description, colour and personality.
+    SaveProfile {
+        bot_id: String,
+        update: UpdateBotProfile,
     },
     /// Stop a session's run, or steer or re-queue one of its queued messages.
     Control {
@@ -294,6 +301,8 @@ impl Engine {
                 action,
                 turn_id,
             } => self.control(session_id, action, turn_id),
+            Command::RefreshBots => self.refresh_bots(),
+            Command::SaveProfile { bot_id, update } => self.save_profile(bot_id, update),
         }
     }
 
@@ -558,6 +567,51 @@ impl Engine {
         });
     }
 
+    fn refresh_bots(&mut self) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.bots().await {
+                Ok(bots) => emit.emit(Event::Bots(bots)),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                // A refresh is a convenience; the list on screen stays.
+                Err(_) => {}
+            }
+        });
+    }
+
+    fn save_profile(&mut self, bot_id: String, update: UpdateBotProfile) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.save_profile(&bot_id, &update).await {
+                Ok(profile) => emit.emit(Event::ProfileSaved(profile)),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => {
+                    // The save may have lost to another client's: fetch the
+                    // list so the page can say the bot changed elsewhere.
+                    if let Ok(bots) = api.bots().await {
+                        emit.emit(Event::Bots(bots));
+                    }
+                    emit.emit(Event::ProfileFailed {
+                        bot_id,
+                        message: error.to_string(),
+                    });
+                }
+            }
+        });
+    }
+
     fn control(&mut self, session_id: String, action: ControlAction, turn_id: Option<String>) {
         let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
             return;
@@ -800,6 +854,8 @@ mod tests {
             name: id.into(),
             description: String::new(),
             color: None,
+            soul: String::new(),
+            revision: 1,
         };
         assert_eq!(
             default_bot(&[bot("a"), bot("default")]).as_deref(),

@@ -6,7 +6,7 @@ mod support;
 use std::sync::Arc;
 
 use raphie_core::auth::{AccessToken, MemoryStore, TokenStore};
-use raphie_core::contracts::{ApprovalStatus, ControlAction, Decision, Scope};
+use raphie_core::contracts::{ApprovalStatus, ControlAction, Decision, Scope, UpdateBotProfile};
 use raphie_core::engine::Command;
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
 use support::{Driver, FakeHost, TOKEN, observation_json, sessions_json, turn_json};
@@ -312,6 +312,57 @@ fn signing_in_learns_who_the_administrator_is() {
         seen[0].authorization.as_deref(),
         Some("Bearer device-token-1")
     );
+}
+
+#[test]
+fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    let update = |revision| UpdateBotProfile {
+        name: "Research".into(),
+        description: "Reads and summarises".into(),
+        soul: "Be brief.".into(),
+        color: None,
+        revision,
+    };
+    assert!(driver.model.begin_save_profile());
+    assert!(!driver.model.begin_save_profile(), "one save at a time");
+    driver.send(Command::SaveProfile {
+        bot_id: "b-research".into(),
+        update: update(1),
+    });
+    driver.until("the save", |m, _| !m.saving_profile);
+    let saved = driver
+        .model
+        .bots
+        .iter()
+        .find(|b| b.id == "b-research")
+        .unwrap();
+    assert_eq!(
+        (saved.revision, saved.description.as_str()),
+        (2, "Reads and summarises")
+    );
+    // An automatic colour is sent as an explicit null, not left out.
+    let sent = host.with(|h| h.profile_saves[0].clone());
+    assert!(sent["color"].is_null() && sent.get("color").is_some());
+
+    // Another client saved meanwhile: this save started from revision 2.
+    host.with(|h| h.profile_revision = 5);
+    assert!(driver.model.begin_save_profile());
+    driver.send(Command::SaveProfile {
+        bot_id: "b-research".into(),
+        update: update(2),
+    });
+    driver.until("the conflict", |m, _| m.profile_error.is_some());
+    assert!(!driver.model.saving_profile);
+    // The list was refreshed, so the page can see the newer revision.
+    let latest = driver
+        .model
+        .bots
+        .iter()
+        .find(|b| b.id == "b-research")
+        .unwrap();
+    assert_eq!(latest.revision, 5);
 }
 
 #[test]

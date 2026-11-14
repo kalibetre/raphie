@@ -11,7 +11,7 @@ use crate::theme::{Theme, font};
 use crate::view::Look;
 
 /// The widest a Settings page gets, padding included.
-const PAGE_WIDTH: f32 = 776.0;
+const PAGE_WIDTH: f32 = 808.0;
 
 /// Whose settings a page changes: one bot's, or the whole app's.
 pub enum Scope<'a> {
@@ -25,9 +25,9 @@ pub fn page(key: &str, title: &str, lede: &str, scope: Scope, groups: Vec<El>, l
         .key(key)
         .w_full()
         .max_w(PAGE_WIDTH)
-        .px(28.0)
-        .pt(28.0)
-        .pb(48.0)
+        .px(44.0)
+        .pt(36.0)
+        .pb(32.0)
         .gap(28.0)
         .child(hero(title, lede, scope, look))
         .children(groups)

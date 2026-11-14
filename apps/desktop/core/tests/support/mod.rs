@@ -47,6 +47,10 @@ pub struct Host {
     /// Answer control requests with 409, as when the run already ended.
     pub control_conflict: bool,
     pub history: Vec<Value>,
+    /// The research bot's current revision; saves from an older one conflict.
+    pub profile_revision: u32,
+    /// Profile saves, as received.
+    pub profile_saves: Vec<Value>,
     /// Every request: method, path, and the headers that matter.
     pub requests: Vec<Seen>,
 }
@@ -133,6 +137,7 @@ fn router(fake: Fake) -> Router {
         .route("/api/sessions/{id}/history", get(history))
         .route("/api/tool-approvals/{id}", post(decide))
         .route("/api/sessions/{id}/control", post(control))
+        .route("/api/bots/{id}/profile", post(save_profile))
         .with_state(fake)
 }
 
@@ -223,12 +228,44 @@ async fn bots(State(fake): State<Fake>, headers: HeaderMap) -> Response {
     if let Some(denied) = refuse(&fake, &headers) {
         return denied;
     }
+    let revision = fake.host.lock().unwrap().profile_revision.max(1);
     Json(json!({ "items": [
         { "id": "default", "name": "Raphie", "description": "", "soul": "", "color": null,
           "revision": 1, "createdAt": 1, "updatedAt": 1 },
-        { "id": "b-research", "name": "Research", "description": "Reads papers", "soul": "",
-          "revision": 1, "createdAt": 2, "updatedAt": 2 }
+        { "id": "b-research", "name": "Research", "description": "Reads papers", "soul": "Be brief.",
+          "revision": revision, "createdAt": 2, "updatedAt": 2 }
     ]}))
+    .into_response()
+}
+
+/// Saves the research bot's profile if the save started from its current
+/// revision, as the runtime does; otherwise answers 409.
+async fn save_profile(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", format!("/api/bots/{id}/profile"), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    host.profile_saves.push(body.clone());
+    let current = host.profile_revision.max(1);
+    if body["revision"] != current {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "This bot changed. Reload and try again." })),
+        )
+            .into_response();
+    }
+    host.profile_revision = current + 1;
+    Json(json!({
+        "id": id, "name": body["name"], "description": body["description"],
+        "soul": body["soul"], "color": body["color"],
+        "revision": current + 1, "createdAt": 2, "updatedAt": 3
+    }))
     .into_response()
 }
 

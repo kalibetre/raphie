@@ -19,6 +19,7 @@ use crate::contracts::{
     Account, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction, ControlBody, Decision,
     DecisionBody, DecisionResult, DeviceCodeResponse, DeviceTokenResponse, ErrorBody, Page,
     Receipt, Scope, SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
+    UpdateBotProfile,
 };
 use crate::origin::Origin;
 
@@ -199,6 +200,17 @@ impl ApiClient {
     pub async fn bots(&self) -> Result<Vec<BotProfile>, ApiError> {
         let list: BotList = self.get_json("/api/bots").await?;
         Ok(list.items)
+    }
+
+    /// Saves a bot's profile and returns it at its new revision. Fails with
+    /// [`ApiError::Conflict`] when the bot changed since `update.revision`.
+    pub async fn save_profile(
+        &self,
+        bot_id: &str,
+        update: &UpdateBotProfile,
+    ) -> Result<BotProfile, ApiError> {
+        self.post_json(&format!("/api/bots/{}/profile", encode(bot_id)), update)
+            .await
     }
 
     pub async fn sessions(
