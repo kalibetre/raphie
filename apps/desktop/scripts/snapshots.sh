@@ -13,7 +13,8 @@ bin=target/debug/raphie-desktop
 # where macOS puts them.
 for scene in sign-in device-code new-conversation conversations conversation tools streaming working approval \
   settings-account settings-appearance settings-profile settings-profile-edited \
-  settings-models settings-models-filter settings-bot; do
+  settings-models settings-models-filter settings-providers settings-providers-add \
+  settings-bot; do
   for theme in light dark; do
     "$bin" --snap "$out/$scene-$theme.png" --scene "$scene" --theme "$theme" \
       --size 1280x800 --scale 2 --at 1.5 --chrome

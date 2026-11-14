@@ -38,6 +38,10 @@ pub const SCENES: &[Scene] = &[
     ("settings-profile-edited", settings_profile_edited),
     ("settings-models", settings_models),
     ("settings-models-filter", settings_models_filter),
+    ("settings-providers", settings_providers),
+    ("settings-providers-add", settings_providers_add),
+    ("settings-providers-empty", settings_providers_empty),
+    ("settings-providers-edit", settings_providers_edit),
     ("settings-bot", settings_bot),
 ];
 
@@ -145,13 +149,62 @@ pub fn settings_profile_edited(ui: &mut Ui) {
     ui.profile.color = Some("#83bcb4".into());
 }
 
-/// A bot's settings page that is not native yet (Research → Providers).
+/// A bot's settings page that is not native yet (Research → Memory).
 pub fn settings_bot(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "b-research".into(),
+        section: BotSection::Memory,
+    }));
+}
+
+/// Settings → Providers, with two connections.
+pub fn settings_providers(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Providers,
+    }));
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(model_settings()),
+    });
+}
+
+/// Settings → Providers for a bot with no connection yet.
+pub fn settings_providers_empty(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Bot {
         bot_id: "b-research".into(),
         section: BotSection::Providers,
     }));
+    let mut settings = model_settings();
+    settings.connections.clear();
+    settings.models.clear();
+    ui.model.apply(Event::BotSettings {
+        bot_id: "b-research".into(),
+        settings: Box::new(settings),
+    });
+}
+
+/// Settings → Providers while editing a connection, after a test of a new
+/// key failed.
+pub fn settings_providers_edit(ui: &mut Ui) {
+    settings_providers(ui);
+    ui.edit_connection("c-router", "Work");
+    ui.providers.key = TextEdit::new("sk-not-a-real-key").secure();
+    ui.model.apply(Event::ConnectionFailed {
+        message: "The provider rejected this API key.".into(),
+    });
+}
+
+/// Settings → Providers while adding a connection, with a key typed.
+pub fn settings_providers_add(ui: &mut Ui) {
+    settings_providers(ui);
+    ui.add_connection("default");
+    ui.providers.name = TextEdit::new("Side project");
+    // A made-up key. The field is secure, so the snapshot shows dots.
+    ui.providers.key = TextEdit::new("sk-not-a-real-key").secure();
 }
 
 /// Settings → Models, with a catalogue loaded.
@@ -193,7 +246,10 @@ pub fn model_settings() -> RuntimeSettings {
         "telemetryEnabled": true, "provider": "c-direct", "providerEnabled": true,
         "credentialSource": "saved", "modelId": "claude-fable",
         "providers": [{ "id": "anthropic", "name": "Anthropic" }, { "id": "openrouter", "name": "OpenRouter" }],
-        "connections": [{ "id": "c-direct", "name": "Personal" }, { "id": "c-router", "name": "Work" }],
+        "connections": [
+            { "id": "c-direct", "provider": "anthropic", "name": "Personal" },
+            { "id": "c-router", "provider": "openrouter", "name": "Work" }
+        ],
         "models": [
             model("claude-fable", "Claude Fable Latest", direct, true, Some((10.0, 50.0))),
             model("claude-haiku", "Claude Haiku Latest", direct, true, Some((1.0, 5.0))),

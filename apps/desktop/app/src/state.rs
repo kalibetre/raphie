@@ -6,8 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use raphie_core::auth::KeychainStore;
+use raphie_core::auth::Secret;
 use raphie_core::contracts::{ControlAction, Decision, Scope, TurnStatus};
-use raphie_core::engine::{Client, Command, EngineConfig};
+use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::model::{AuthState, Effect, Event, Model};
 use raphie_core::model_library::ModelFilter;
 use raphie_core::origin::Origin;
@@ -26,6 +27,47 @@ pub enum Filter {
     All,
     /// Only conversations with an action waiting for approval.
     Approvals,
+}
+
+/// Which connection the form on Settings → Providers is for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConnectionTarget {
+    /// A connection that does not exist yet.
+    New,
+    /// The saved connection with this id.
+    Edit(String),
+}
+
+/// Settings → Providers: the one form that can be open, and what is typed
+/// in it. The key field is secure: it shows dots, and Rune wipes it from
+/// memory when it is cleared or dropped.
+pub struct ProvidersView {
+    /// The form that is open, if any.
+    pub open: Option<ConnectionTarget>,
+    /// The provider chosen for a new connection.
+    pub provider: String,
+    /// Whether the provider list is open.
+    pub choosing_provider: bool,
+    pub name: TextEdit,
+    pub key: TextEdit,
+}
+
+impl ProvidersView {
+    pub fn new() -> ProvidersView {
+        ProvidersView {
+            open: None,
+            provider: String::new(),
+            choosing_provider: false,
+            name: TextEdit::new(""),
+            key: TextEdit::new("").secure(),
+        }
+    }
+}
+
+impl Default for ProvidersView {
+    fn default() -> ProvidersView {
+        ProvidersView::new()
+    }
 }
 
 /// A drop-down list on Settings → Models.
@@ -119,6 +161,8 @@ pub struct Ui {
     pub theme: ThemeChoice,
     /// Settings → Models: its filters.
     pub models: ModelsView,
+    /// Settings → Providers: its form.
+    pub providers: ProvidersView,
     /// The Profile form on screen.
     pub profile: ProfileDraft,
     /// Unsaved Profile edits for other bots, kept while the owner looks at
@@ -163,6 +207,7 @@ impl Ui {
             expanded_bots: HashSet::new(),
             theme: ThemeChoice::System,
             models: ModelsView::new(),
+            providers: ProvidersView::new(),
             profile: ProfileDraft::empty(),
             parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
@@ -306,6 +351,14 @@ impl Ui {
                 // Notice a save made in another client before editing.
                 self.command(Command::RefreshBots);
             }
+            if *section == BotSection::Providers {
+                // Any half-typed key is dropped when the page is reopened.
+                self.providers = ProvidersView::new();
+                self.model.connection_message = None;
+                self.command(Command::LoadSettings {
+                    bot_id: bot_id.clone(),
+                });
+            }
             if *section == BotSection::Models {
                 // A fresh look at the catalogue each time the page opens.
                 self.models = ModelsView::new();
@@ -370,6 +423,109 @@ impl Ui {
         if self.model.begin_save_profile() {
             self.profile.message = None;
             self.command(Command::SaveProfile { bot_id, update });
+        }
+    }
+
+    /// Opens the form for a new connection to `bot_id`'s first provider,
+    /// with a name suggested as the web suggests it ("OpenRouter 2").
+    pub fn add_connection(&mut self, bot_id: &str) {
+        let Some(settings) = self.model.settings.get(bot_id) else {
+            return;
+        };
+        let Some(provider) = settings.providers.first() else {
+            return;
+        };
+        let count = settings
+            .connections
+            .iter()
+            .filter(|connection| connection.provider == provider.id)
+            .count();
+        self.providers = ProvidersView {
+            open: Some(ConnectionTarget::New),
+            provider: provider.id.clone(),
+            name: TextEdit::new(format!("{} {}", provider.name, count + 1)),
+            ..ProvidersView::new()
+        };
+        self.model.connection_message = None;
+    }
+
+    /// Opens the form for a saved connection, with no key typed.
+    pub fn edit_connection(&mut self, connection_id: &str, name: &str) {
+        self.providers = ProvidersView {
+            open: Some(ConnectionTarget::Edit(connection_id.to_owned())),
+            name: TextEdit::new(name),
+            ..ProvidersView::new()
+        };
+        self.model.connection_message = None;
+    }
+
+    /// Whether the open connection form can be submitted: a name, and for a
+    /// new connection a key.
+    pub fn can_save_connection(&self) -> bool {
+        let named = !self.providers.name.text.trim().is_empty();
+        let keyed = !self.providers.key.text.is_empty();
+        match &self.providers.open {
+            Some(ConnectionTarget::New) => named && keyed,
+            Some(ConnectionTarget::Edit(_)) => named,
+            None => false,
+        }
+    }
+
+    /// The typed key as a secret, or `None` when the field is empty.
+    fn typed_key(&self) -> Option<Secret> {
+        let key = &self.providers.key.text;
+        (!key.is_empty()).then(|| Secret::new(key.as_str()))
+    }
+
+    /// Adds the new connection, or saves the edited one.
+    pub fn save_connection(&mut self, bot_id: &str) {
+        if !self.can_save_connection() {
+            return;
+        }
+        let name = self.providers.name.text.trim().to_owned();
+        let change = match (&self.providers.open, self.typed_key()) {
+            (Some(ConnectionTarget::New), Some(key)) => ConnectionChange::Add {
+                provider: self.providers.provider.clone(),
+                name,
+                key,
+            },
+            (Some(ConnectionTarget::Edit(id)), key) => ConnectionChange::Edit {
+                id: id.clone(),
+                name,
+                key,
+            },
+            _ => return,
+        };
+        self.change_connection(bot_id, change);
+    }
+
+    /// Asks the host to try the connection in the form.
+    pub fn test_connection(&mut self, bot_id: &str) {
+        let id = match &self.providers.open {
+            Some(ConnectionTarget::Edit(id)) => Some(id.clone()),
+            Some(ConnectionTarget::New) => None,
+            None => return,
+        };
+        let key = self.typed_key();
+        self.change_connection(bot_id, ConnectionChange::Test { id, key });
+    }
+
+    pub fn remove_connection(&mut self, bot_id: &str, connection_id: &str, name: &str) {
+        self.change_connection(
+            bot_id,
+            ConnectionChange::Remove {
+                id: connection_id.to_owned(),
+                name: name.to_owned(),
+            },
+        );
+    }
+
+    fn change_connection(&mut self, bot_id: &str, change: ConnectionChange) {
+        if self.model.begin_change_connection() {
+            self.command(Command::ChangeConnection {
+                bot_id: bot_id.to_owned(),
+                change,
+            });
         }
     }
 
@@ -517,6 +673,10 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                 Effect::ClearComposer => {
                     ui.composer.clear();
                     tx.scroll_to_bottom("rd-transcript");
+                }
+                Effect::CloseConnectionForm => {
+                    // Replacing the form drops the typed key, which wipes it.
+                    ui.providers = ProvidersView::new();
                 }
                 Effect::ProfileSaved(profile) => {
                     // Show what was saved, at its new revision.

@@ -3,8 +3,9 @@
 //! with no GPU and no network. Pixel snapshots are rendered separately with
 //! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
 
+use raphie_core::auth::Secret;
 use raphie_core::contracts::{BotProfile, ControlAction, Decision, Scope};
-use raphie_core::engine::Command;
+use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::model::{AuthState, Event};
 use raphie_core::settings::ThemeChoice;
 use raphie_desktop::sections::{BotSection, Page};
@@ -632,20 +633,20 @@ fn a_bots_page_names_the_bot_and_offers_the_web_page() {
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
     assert!(
-        text.contains("Model connections only Research can use"),
+        text.contains("What Research keeps between conversations"),
         "{text}"
     );
     click(&mut rt, "rd-bot-page-web");
     assert_eq!(
         rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=providers&bot=b-research"]
+        ["https://raphie.example.ts.net/?view=settings&section=memory&bot=b-research"]
     );
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-providers").is_none());
+    assert!(rt.find("rd-nav-b-research-memory").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("Providers")
+        Some("Memory")
     );
 }
 
@@ -751,6 +752,178 @@ fn a_model_becomes_the_default_once() {
 }
 
 #[test]
+fn providers_list_connections_and_remove_one() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::settings_account, dark);
+        click(&mut rt, "rd-nav-default-providers");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::LoadSettings {
+                bot_id: "default".into()
+            })
+        );
+        deliver(
+            &mut rt,
+            Event::BotSettings {
+                bot_id: "default".into(),
+                settings: Box::new(scenes::model_settings()),
+            },
+        );
+        let text = screen_text(&rt);
+        assert!(text.contains("2 connections · name each one"), "{text}");
+        // Each card names its provider and counts its models.
+        for expected in [
+            "Personal",
+            "Anthropic",
+            "2 models",
+            "Work",
+            "OpenRouter",
+            "3 models",
+        ] {
+            assert!(text.contains(expected), "{expected} in {text}");
+        }
+
+        click(&mut rt, "rd-connection-remove-c-router");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::ChangeConnection {
+                bot_id: "default".into(),
+                change: ConnectionChange::Remove {
+                    id: "c-router".into(),
+                    name: "Work".into(),
+                },
+            })
+        );
+        let mut settings = scenes::model_settings();
+        settings.connections.retain(|c| c.id != "c-router");
+        deliver(
+            &mut rt,
+            Event::ConnectionChanged {
+                bot_id: "default".into(),
+                settings: Some(Box::new(settings)),
+                message: "Work removed. Other connections are unchanged.".into(),
+            },
+        );
+        assert!(rt.find("rd-connection-c-router").is_none());
+        assert_eq!(
+            element(&rt, "rd-providers-message").text.as_deref(),
+            Some("Work removed. Other connections are unchanged.")
+        );
+    }
+}
+
+#[test]
+fn a_connection_is_added_with_a_key_that_is_never_shown() {
+    let mut rt = render_sized(scenes::settings_providers, false, (1280.0, 1300.0));
+    click(&mut rt, "rd-providers-add");
+    // The web's suggestion: the provider's name and the next number.
+    assert_eq!(rt.state.providers.name.text, "Anthropic 2");
+
+    // Without a key there is nothing to add or to try.
+    click(&mut rt, "rd-connection-save");
+    click(&mut rt, "rd-connection-test");
+    assert!(
+        !rt.state
+            .sent
+            .iter()
+            .any(|c| matches!(c, Command::ChangeConnection { .. })),
+        "no key yet"
+    );
+
+    click(&mut rt, "rd-connection-key");
+    rt.paste("sk-pasted-key");
+    settle(&mut rt);
+    assert!(
+        !screen_text(&rt).contains("sk-pasted-key"),
+        "the key is drawn as dots"
+    );
+    click(&mut rt, "rd-connection-save");
+    let sent = rt.state.sent.last().cloned().unwrap();
+    assert_eq!(
+        sent,
+        Command::ChangeConnection {
+            bot_id: "default".into(),
+            change: ConnectionChange::Add {
+                provider: "anthropic".into(),
+                name: "Anthropic 2".into(),
+                key: Secret::new("sk-pasted-key"),
+            },
+        }
+    );
+    assert!(
+        !format!("{sent:?}").contains("sk-pasted-key"),
+        "redacted when printed"
+    );
+
+    // Once the host has it, the form closes and the key is forgotten.
+    deliver(
+        &mut rt,
+        Event::ConnectionChanged {
+            bot_id: "default".into(),
+            settings: Some(Box::new(scenes::model_settings())),
+            message: "Connection added.".into(),
+        },
+    );
+    assert!(rt.find("rd-connection-form").is_none());
+    assert_eq!(rt.state.providers.key.text, "");
+}
+
+#[test]
+fn editing_a_connection_keeps_its_key_unless_one_is_typed() {
+    let mut rt = render_sized(scenes::settings_providers, false, (1280.0, 1300.0));
+    click(&mut rt, "rd-connection-edit-c-direct");
+    assert_eq!(rt.state.providers.name.text, "Personal");
+    let text = screen_text(&rt);
+    assert!(text.contains("Edit Personal"), "{text}");
+    assert!(text.contains("Replace API key"), "{text}");
+
+    // A saved connection can be tried with the key it already has.
+    click(&mut rt, "rd-connection-test");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ChangeConnection {
+            bot_id: "default".into(),
+            change: ConnectionChange::Test {
+                id: Some("c-direct".into()),
+                key: None,
+            },
+        })
+    );
+    // A failed test says why and leaves the form open.
+    deliver(
+        &mut rt,
+        Event::ConnectionFailed {
+            message: "The provider rejected this API key.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-connection-message").text.as_deref(),
+        Some("The provider rejected this API key.")
+    );
+
+    // Cancel closes the form; nothing was changed.
+    click(&mut rt, "rd-connection-cancel");
+    assert!(rt.find("rd-connection-form").is_none());
+
+    click(&mut rt, "rd-connection-edit-c-direct");
+    click(&mut rt, "rd-connection-save");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ChangeConnection {
+            bot_id: "default".into(),
+            change: ConnectionChange::Edit {
+                id: "c-direct".into(),
+                name: "Personal".into(),
+                key: None,
+            },
+        })
+    );
+    // While the save is on its way the form cannot be cancelled.
+    click(&mut rt, "rd-connection-cancel");
+    assert!(rt.find("rd-connection-form").is_some());
+}
+
+#[test]
 fn models_that_cannot_load_offer_a_retry() {
     let mut rt = render(scenes::settings_account, false);
     click(&mut rt, "rd-nav-default-models");
@@ -763,7 +936,7 @@ fn models_that_cannot_load_offer_a_retry() {
     );
     assert!(screen_text(&rt).contains("Could not load models."));
     let before = rt.state.sent.len();
-    click(&mut rt, "rd-models-retry");
+    click(&mut rt, "rd-settings-retry");
     assert_eq!(rt.state.sent.len(), before + 1);
     assert!(matches!(
         rt.state.sent.last(),

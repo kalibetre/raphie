@@ -75,9 +75,46 @@ pub struct RuntimeSettings {
     #[serde(default)]
     pub providers: Vec<Named>,
     #[serde(default)]
-    pub connections: Vec<Named>,
+    pub connections: Vec<ProviderConnection>,
     #[serde(default)]
     pub models: Vec<LibraryModel>,
+}
+
+/// `ProviderConnection` in the same file: a named set of credentials for
+/// one provider. A bot can connect the same provider more than once.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct ProviderConnection {
+    pub id: String,
+    /// The provider service this connects to.
+    pub provider: String,
+    pub name: String,
+}
+
+/// Bodies of the connection routes under `/api/settings/connections`
+/// (`packages/runtime/src/domains/settings/presentation/http/routes.ts`).
+/// The key is borrowed from a `Secret` only while the request is built.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AddConnectionBody<'a> {
+    pub provider: &'a str,
+    pub name: &'a str,
+    pub api_key: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditConnectionBody<'a> {
+    pub name: &'a str,
+    /// Left out to keep the saved key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TestConnectionBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<&'a str>,
 }
 
 /// Something with an id and a display name (a provider, a connection).

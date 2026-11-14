@@ -30,7 +30,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep};
 
 use crate::api::{ApiClient, ApiError, bot_path};
-use crate::auth::{AccessToken, DevicePolicy, DevicePoll, TokenStore};
+use crate::auth::{AccessToken, DevicePolicy, DevicePoll, Secret, TokenStore};
 use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
@@ -100,11 +100,41 @@ pub enum Command {
         model_id: String,
         connection_id: String,
     },
+    /// Add, rename, re-key, remove or try a provider connection.
+    ChangeConnection {
+        bot_id: String,
+        change: ConnectionChange,
+    },
     /// Stop a session's run, or steer or re-queue one of its queued messages.
     Control {
         session_id: String,
         action: ControlAction,
         turn_id: Option<String>,
+    },
+}
+
+/// What to do to a bot's provider connections.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ConnectionChange {
+    Add {
+        provider: String,
+        name: String,
+        key: Secret,
+    },
+    Edit {
+        id: String,
+        name: String,
+        /// `None` keeps the saved key.
+        key: Option<Secret>,
+    },
+    Remove {
+        id: String,
+        name: String,
+    },
+    /// Try a saved connection (`id`), or a key not saved yet.
+    Test {
+        id: Option<String>,
+        key: Option<Secret>,
     },
 }
 
@@ -312,6 +342,7 @@ impl Engine {
                 turn_id,
             } => self.control(session_id, action, turn_id),
             Command::RefreshBots => self.refresh_bots(),
+            Command::ChangeConnection { bot_id, change } => self.change_connection(bot_id, change),
             Command::LoadSettings { bot_id } => self.load_settings(bot_id),
             Command::SetDefaultModel {
                 bot_id,
@@ -625,6 +656,56 @@ impl Engine {
                     let _ = inbox.send(Input::Expired);
                 }
                 Err(error) => emit.emit(Event::DefaultModelFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn change_connection(&mut self, bot_id: String, change: ConnectionChange) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            // Every change but a test answers with the settings afterwards.
+            let outcome = match &change {
+                ConnectionChange::Add {
+                    provider,
+                    name,
+                    key,
+                } => api
+                    .add_connection(&bot_id, provider, name, key)
+                    .await
+                    .map(|settings| (Some(settings), "Connection added.".to_owned())),
+                ConnectionChange::Edit { id, name, key } => api
+                    .edit_connection(&bot_id, id, name, key.as_ref())
+                    .await
+                    .map(|settings| (Some(settings), "Connection saved.".to_owned())),
+                ConnectionChange::Remove { id, name } => {
+                    api.remove_connection(&bot_id, id).await.map(|settings| {
+                        (
+                            Some(settings),
+                            format!("{name} removed. Other connections are unchanged."),
+                        )
+                    })
+                }
+                ConnectionChange::Test { id, key } => api
+                    .test_connection(&bot_id, id.as_deref(), key.as_ref())
+                    .await
+                    .map(|()| (None, "Connection successful.".to_owned())),
+            };
+            match outcome {
+                Ok((settings, message)) => emit.emit(Event::ConnectionChanged {
+                    bot_id,
+                    settings: settings.map(Box::new),
+                    message,
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::ConnectionFailed {
                     message: error.to_string(),
                 }),
             }

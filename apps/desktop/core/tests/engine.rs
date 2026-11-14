@@ -5,9 +5,9 @@ mod support;
 
 use std::sync::Arc;
 
-use raphie_core::auth::{AccessToken, MemoryStore, TokenStore};
+use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::contracts::{ApprovalStatus, ControlAction, Decision, Scope, UpdateBotProfile};
-use raphie_core::engine::Command;
+use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
 use support::{Driver, FakeHost, TOKEN, observation_json, sessions_json, turn_json};
 
@@ -399,6 +399,112 @@ fn a_bots_models_load_and_the_default_can_be_changed() {
         changes.last().unwrap().client_marker.as_deref(),
         Some("web")
     );
+}
+
+#[test]
+fn connections_are_added_edited_tested_and_removed() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    let change = |driver: &mut Driver, change: ConnectionChange| {
+        assert!(driver.model.begin_change_connection());
+        driver.send(Command::ChangeConnection {
+            bot_id: "default".into(),
+            change,
+        });
+        driver.until("the change", |m, _| !m.changing_connection);
+        driver.model.connection_message.clone().unwrap_or_default()
+    };
+    let key = || Secret::new("sk-test-key");
+
+    // A key not saved yet is tried through the provider test route.
+    let said = change(
+        &mut driver,
+        ConnectionChange::Test {
+            id: None,
+            key: Some(key()),
+        },
+    );
+    assert_eq!(said, "Connection successful.");
+
+    let said = change(
+        &mut driver,
+        ConnectionChange::Add {
+            provider: "openrouter".into(),
+            name: "Work".into(),
+            key: key(),
+        },
+    );
+    assert_eq!(said, "Connection added.");
+    let names = |driver: &Driver| -> Vec<String> {
+        driver.model.settings["default"]
+            .connections
+            .iter()
+            .map(|c| c.name.clone())
+            .collect()
+    };
+    assert_eq!(names(&driver), ["Main", "Work"]);
+
+    // Renaming without a key leaves the key out of the request.
+    change(
+        &mut driver,
+        ConnectionChange::Edit {
+            id: "c-2".into(),
+            name: "Office".into(),
+            key: None,
+        },
+    );
+    assert_eq!(names(&driver), ["Main", "Office"]);
+
+    host.with(|h| h.reject_key = true);
+    let said = change(
+        &mut driver,
+        ConnectionChange::Test {
+            id: Some("c-2".into()),
+            key: None,
+        },
+    );
+    assert!(said.contains("rejected"), "{said}");
+
+    let said = change(
+        &mut driver,
+        ConnectionChange::Remove {
+            id: "c-2".into(),
+            name: "Office".into(),
+        },
+    );
+    assert_eq!(said, "Office removed. Other connections are unchanged.");
+    assert_eq!(names(&driver), ["Main"]);
+
+    let requests = host.with(|h| h.connection_requests.clone());
+    let tails: Vec<&str> = requests.iter().map(|(tail, _)| tail.as_str()).collect();
+    assert_eq!(
+        tails,
+        [
+            "provider/test",
+            "connections",
+            "connections/c-2",
+            "connections/c-2/test",
+            "connections/c-2/remove"
+        ]
+    );
+    assert_eq!(requests[1].1["apiKey"], "sk-test-key");
+    assert!(
+        requests[2].1.get("apiKey").is_none(),
+        "no key: keep the saved one"
+    );
+    assert_eq!(requests[4].1, serde_json::json!({}));
+    // The key never appears when a command is printed.
+    let printed = format!(
+        "{:?}",
+        Command::ChangeConnection {
+            bot_id: "default".into(),
+            change: ConnectionChange::Test {
+                id: None,
+                key: Some(key()),
+            },
+        }
+    );
+    assert!(!printed.contains("sk-test-key"), "{printed}");
 }
 
 #[test]

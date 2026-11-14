@@ -53,6 +53,12 @@ pub struct Host {
     pub profile_saves: Vec<Value>,
     /// The default model, once one was chosen: `(model id, connection id)`.
     pub default_model: Option<(String, String)>,
+    /// Connections added by tests: `(id, provider, name)`.
+    pub added_connections: Vec<(String, String, String)>,
+    /// Connection requests: the path's tail and the body as received.
+    pub connection_requests: Vec<(String, Value)>,
+    /// Answer connection tests with a failure, as a wrong key would.
+    pub reject_key: bool,
     /// Every request: method, path, and the headers that matter.
     pub requests: Vec<Seen>,
 }
@@ -141,6 +147,10 @@ fn router(fake: Fake) -> Router {
         .route("/api/sessions/{id}/control", post(control))
         .route("/api/bots/{id}/profile", post(save_profile))
         .route("/api/settings", get(settings).post(set_default_model))
+        .route("/api/settings/connections", post(connection))
+        .route("/api/settings/connections/{id}", post(connection))
+        .route("/api/settings/connections/{id}/{action}", post(connection))
+        .route("/api/settings/provider/test", post(connection))
         .route(
             "/api/bots/{bot}/settings",
             get(settings).post(set_default_model),
@@ -267,10 +277,73 @@ fn settings_json(fake: &Fake) -> Value {
         "telemetryEnabled": true, "provider": connection, "providerEnabled": true,
         "credentialSource": "saved", "modelId": model,
         "providers": [{ "id": "openrouter", "name": "OpenRouter" }],
-        "connections": [{ "id": "c-main", "provider": "openrouter", "name": "Main",
-                          "credentialSource": "saved" }],
+        "connections": connections_json(fake),
         "models": [entry("fast", "Anthropic: Fast"), entry("deep", "Anthropic: Deep")]
     })
+}
+
+fn connections_json(fake: &Fake) -> Value {
+    let mut all = vec![
+        json!({ "id": "c-main", "provider": "openrouter", "name": "Main",
+                               "credentialSource": "saved" }),
+    ];
+    for (id, provider, name) in &fake.host.lock().unwrap().added_connections {
+        all.push(json!({ "id": id, "provider": provider, "name": name,
+                         "credentialSource": "saved" }));
+    }
+    Value::Array(all)
+}
+
+/// Every connection route: add, edit, remove and the two tests. Records the
+/// request, then answers as the runtime does.
+async fn connection(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let tail = uri.path().trim_start_matches("/api/settings/").to_owned();
+    {
+        let mut host = fake.host.lock().unwrap();
+        host.connection_requests.push((tail.clone(), body.clone()));
+        if tail.ends_with("test") {
+            return if host.reject_key {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "The provider rejected this API key." })),
+                )
+                    .into_response()
+            } else {
+                Json(json!({ "connected": true })).into_response()
+            };
+        }
+        if tail == "connections" {
+            let id = format!("c-{}", host.added_connections.len() + 2);
+            host.added_connections.push((
+                id,
+                body["provider"].as_str().unwrap_or_default().to_owned(),
+                body["name"].as_str().unwrap_or_default().to_owned(),
+            ));
+        } else if let Some(id) = tail.strip_suffix("/remove") {
+            let id = id.trim_start_matches("connections/").to_owned();
+            host.added_connections.retain(|(added, _, _)| *added != id);
+        } else {
+            let id = tail.trim_start_matches("connections/").to_owned();
+            for added in host
+                .added_connections
+                .iter_mut()
+                .filter(|(a, _, _)| *a == id)
+            {
+                added.2 = body["name"].as_str().unwrap_or_default().to_owned();
+            }
+        }
+    }
+    // The lock is released above, before the settings are read again.
+    Json(settings_json(&fake)).into_response()
 }
 
 async fn settings(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {

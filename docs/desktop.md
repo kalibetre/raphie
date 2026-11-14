@@ -29,6 +29,7 @@ icons and layout, in light and dark.
 | Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png)     |
 | Settings: Profile              | ![](images/desktop/settings-profile-light.png)    | ![](images/desktop/settings-profile-edited-dark.png) |
 | Settings: Models               | ![](images/desktop/settings-models-light.png)     | ![](images/desktop/settings-models-filter-dark.png)  |
+| Settings: Providers            | ![](images/desktop/settings-providers-light.png)  | ![](images/desktop/settings-providers-add-dark.png)  |
 
 ## What works
 
@@ -86,7 +87,11 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     bot's connections offer, with search and Provider, Model source and
     Connection filters. "Set as default" changes where new sessions start;
     existing sessions keep their model.
-  - **A bot's other pages** (Providers, Memory, ...) are not built yet: each
+  - **Providers** lists a bot's model connections and adds, renames, re-keys,
+    tests and removes them. An API key is typed into a masked field, sent to
+    the host once, and forgotten when the form closes: the app never stores a
+    provider key and never shows or logs one.
+  - **A bot's other pages** (Memory, MCP tools, ...) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
@@ -275,6 +280,8 @@ Where the two differ on purpose:
   ([Authentication](authentication.md#connect-a-native-device)), so the page
   links to the browser for them. Changing that is a decision about the web
   host's security, not about this app.
+- Providers opens one connection form at a time; the web can have several
+  open. That keeps at most one typed key in memory.
 - Profile takes a custom colour as typed hex digits; the web opens the
   browser's colour picker. It has no revision history or Delete yet.
 - Settings has no "UI plugins" page (this app has no plugins) and no "Create a

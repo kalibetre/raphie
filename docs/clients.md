@@ -71,23 +71,23 @@ A new feature is placed by asking these questions in order.
 
 ### Bot settings
 
-| Page                                       | Web | Desktop | Mobile  | Notes                                         |
-| ------------------------------------------ | --- | ------- | ------- | --------------------------------------------- |
-| Profile: name, description, colour         | Yes | Yes     | Planned |                                               |
-| Personality (SOUL.md)                      | Yes | Yes     | No      | Long-form editing. Saved with the profile.    |
-| Personality revision history               | Yes | Planned | No      |                                               |
-| Create a bot, delete a bot                 | Yes | Planned | No      | Rare, and deleting cannot be undone.          |
-| Providers (model connections and keys)     | Yes | Planned | No      | Setup.                                        |
-| Models (compare, pick the default)         | Yes | Yes     | Planned |                                               |
-| Memory settings                            | Yes | Planned | No      | Setup.                                        |
-| Browse, correct or forget memory           | Yes | Planned | Planned |                                               |
-| MCP tools                                  | Yes | Planned | No      | Setup. OAuth authorization opens the browser. |
-| Channels (Discord, Telegram, home channel) | Yes | Planned | No      | Setup.                                        |
-| Sandbox                                    | Yes | Planned | No      | Setup, and it decides how commands run.       |
-| Workspace files: browse, download          | Yes | Planned | Planned |                                               |
-| Scheduled jobs and their run history       | Yes | Planned | Planned |                                               |
-| Diagnostics, telemetry switch              | Yes | Planned | No      |                                               |
-| Activity                                   | Yes | Planned | Planned |                                               |
+| Page                                       | Web | Desktop | Mobile  | Notes                                                                           |
+| ------------------------------------------ | --- | ------- | ------- | ------------------------------------------------------------------------------- |
+| Profile: name, description, colour         | Yes | Yes     | Planned |                                                                                 |
+| Personality (SOUL.md)                      | Yes | Yes     | No      | Long-form editing. Saved with the profile.                                      |
+| Personality revision history               | Yes | Planned | No      |                                                                                 |
+| Create a bot, delete a bot                 | Yes | Planned | No      | Rare, and deleting cannot be undone.                                            |
+| Providers (model connections and keys)     | Yes | Yes     | No      | Setup. Keys are typed into a masked field and sent once; the client keeps none. |
+| Models (compare, pick the default)         | Yes | Yes     | Planned |                                                                                 |
+| Memory settings                            | Yes | Planned | No      | Setup.                                                                          |
+| Browse, correct or forget memory           | Yes | Planned | Planned |                                                                                 |
+| MCP tools                                  | Yes | Planned | No      | Setup. OAuth authorization opens the browser.                                   |
+| Channels (Discord, Telegram, home channel) | Yes | Planned | No      | Setup.                                                                          |
+| Sandbox                                    | Yes | Planned | No      | Setup, and it decides how commands run.                                         |
+| Workspace files: browse, download          | Yes | Planned | Planned |                                                                                 |
+| Scheduled jobs and their run history       | Yes | Planned | Planned |                                                                                 |
+| Diagnostics, telemetry switch              | Yes | Planned | No      |                                                                                 |
+| Activity                                   | Yes | Planned | Planned |                                                                                 |
 
 Until a "Planned" desktop page is built, the desktop client shows its header
 and an **Open in browser** button for the same page of the web workspace.

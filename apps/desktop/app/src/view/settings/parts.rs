@@ -4,11 +4,14 @@
 //! Mirrors `settings-page.tsx` and `settings-group.tsx`, and the rules in
 //! `shared/styles/settings/page.css` and `forms.css`.
 
+use raphie_core::engine::Command;
 use rune::{Color, El, Icon, col, el, icon, row, text};
 
 use crate::avatar::{Tone, bot_avatar};
+use crate::state::Ui;
 use crate::theme::{Theme, font};
 use crate::view::Look;
+use crate::widgets::{Kind, Size, button, centered, pressable};
 
 /// The widest a Settings page gets, padding included.
 const PAGE_WIDTH: f32 = 808.0;
@@ -189,6 +192,57 @@ pub fn setting(
         Some(control) => line.child(control),
         None => line,
     }
+}
+
+/// A card that says what is happening instead of a page's content: loading,
+/// failed, or nothing here yet (the web's `SettingsStatus`).
+pub fn status(t: &Theme, title: &str, message: &str, action: Option<El>) -> El {
+    let mut card = col()
+        .key("rd-settings-status")
+        .w_full()
+        .padding(24.0)
+        .gap(8.0)
+        .items_center()
+        .radius(12.0)
+        .fill(t.card)
+        .border(1.0, t.border)
+        .child(text(title).font(font(14.0, 600.0)).color(t.foreground))
+        .child(centered(message, font(12.5, 400.0), t.muted_foreground));
+    if let Some(action) = action {
+        card = card.child(action.mt(6.0));
+    }
+    card
+}
+
+/// A bot's settings are still loading, or the load failed and can be tried
+/// again. `what` is the plural the page is about ("models", "providers").
+pub fn settings_loading(s: &Ui, bot_id: &str, title: &str, what: &str, t: &Theme) -> El {
+    // The error names the bot it was for, so an old failure for another bot
+    // is not shown here.
+    let failed = s
+        .model
+        .settings_error
+        .as_ref()
+        .is_some_and(|(bot, _)| bot == bot_id);
+    if !failed {
+        return status(t, title, &format!("Loading {what}…"), None);
+    }
+    let bot_id = bot_id.to_owned();
+    status(
+        t,
+        title,
+        &format!("Could not load {what}. Check your connection to Raphie."),
+        Some(pressable(
+            button(t, Kind::Outline, Size::Regular, None, "Retry").key("rd-settings-retry"),
+            true,
+            move |s: &mut Ui| {
+                s.model.settings_error = None;
+                s.command(Command::LoadSettings {
+                    bot_id: bot_id.clone(),
+                });
+            },
+        )),
+    )
 }
 
 /// A read-only value on a row's right (the web's `.settings-value`).
