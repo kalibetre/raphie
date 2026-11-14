@@ -79,7 +79,7 @@ A new feature is placed by asking these questions in order.
 | Create a bot, delete a bot                 | Yes | Planned | No      | Rare, and deleting cannot be undone.                                            |
 | Providers (model connections and keys)     | Yes | Yes     | No      | Setup. Keys are typed into a masked field and sent once; the client keeps none. |
 | Models (compare, pick the default)         | Yes | Yes     | Planned |                                                                                 |
-| Memory settings                            | Yes | Planned | No      | Setup.                                                                          |
+| Memory settings                            | Yes | Yes     | No      | Setup. A Hindsight key is handled like a provider key.                          |
 | Browse, correct or forget memory           | Yes | Planned | Planned |                                                                                 |
 | MCP tools                                  | Yes | Planned | No      | Setup. OAuth authorization opens the browser.                                   |
 | Channels (Discord, Telegram, home channel) | Yes | Planned | No      | Setup.                                                                          |

@@ -1,11 +1,12 @@
 //! The pieces every Settings page is built from: the tinted header, titled
-//! groups, and rows inside a group's card.
+//! groups, rows inside a group's card, and the save bar.
 //!
-//! Mirrors `settings-page.tsx` and `settings-group.tsx`, and the rules in
+//! Mirrors `settings-page.tsx`, `settings-group.tsx` and `save-bar.tsx`, and
+//! the rules in
 //! `shared/styles/settings/page.css` and `forms.css`.
 
 use raphie_core::engine::Command;
-use rune::{Color, El, Icon, col, el, icon, row, text};
+use rune::{Color, El, Icon, Shadow, col, el, icon, row, text};
 
 use crate::avatar::{Tone, bot_avatar};
 use crate::state::Ui;
@@ -117,6 +118,11 @@ fn hero(title: &str, lede: &str, scope: Scope, look: &Look) -> El {
 
 /// A titled group: a heading with a note, then a card of rows.
 pub fn group(t: &Theme, title: &str, note: &str, rows: Vec<El>) -> El {
+    group_with(t, title, note, None, rows)
+}
+
+/// A [`group`] with a control beside its title ("Browse memories").
+pub fn group_with(t: &Theme, title: &str, note: &str, action: Option<El>, rows: Vec<El>) -> El {
     let mut card = col()
         .w_full()
         .radius(14.0)
@@ -132,27 +138,28 @@ pub fn group(t: &Theme, title: &str, note: &str, rows: Vec<El>) -> El {
             row.border_sides([1.0, 0.0, 0.0, 0.0], t.border)
         });
     }
-    col()
-        .w_full()
-        .gap(10.0)
+    let heading = col()
+        .grow(1.0)
+        .min_w(0.0)
+        .gap(3.0)
         .child(
-            col()
-                .px(2.0)
-                .gap(3.0)
-                .child(
-                    text(title)
-                        .role("heading")
-                        .font(font(13.5, 600.0).tracking(-0.1))
-                        .color(t.foreground),
-                )
-                .child(
-                    text(note)
-                        .font(font(12.5, 400.0).lh(19.4))
-                        .color(t.muted_foreground)
-                        .wrap(),
-                ),
+            text(title)
+                .role("heading")
+                .font(font(13.5, 600.0).tracking(-0.1))
+                .color(t.foreground),
         )
-        .child(card)
+        .child(
+            text(note)
+                .font(font(12.5, 400.0).lh(19.4))
+                .color(t.muted_foreground)
+                .wrap(),
+        );
+    // The action sits level with the bottom of the heading, as on the web.
+    let mut head = row().w_full().px(2.0).gap(12.0).items_end().child(heading);
+    if let Some(action) = action {
+        head = head.child(action);
+    }
+    col().w_full().gap(10.0).child(head).child(card)
 }
 
 /// One setting inside a group: an optional icon tile, a title over a
@@ -248,4 +255,69 @@ pub fn settings_loading(s: &Ui, bot_id: &str, title: &str, what: &str, t: &Theme
 /// A read-only value on a row's right (the web's `.settings-value`).
 pub fn value(content: impl Into<String>, color: Color) -> El {
     text(content).font(font(12.5, 500.0)).color(color)
+}
+
+/// What a [`save_bar`] says and allows. `key` prefixes the keys of its
+/// parts (`rd-profile` gives `rd-profile-save`, `rd-profile-status`, ...).
+pub struct SaveBar<'a> {
+    pub key: &'a str,
+    /// Why saving failed or cannot happen, shown in red above the status.
+    pub error: Option<String>,
+    pub status: String,
+    pub save_label: &'a str,
+    pub can_save: bool,
+    pub can_discard: bool,
+}
+
+/// The bar docked under a page once there is something to save or report,
+/// so clean pages stay quiet. `discard` and `save` are `fn` pointers: plain
+/// functions or closures that capture nothing.
+pub fn save_bar(t: &Theme, bar: SaveBar, discard: fn(&mut Ui), save: fn(&mut Ui)) -> El {
+    let line =
+        |content: String, color: Color| text(content).font(font(12.5, 500.0)).color(color).wrap();
+    let key = bar.key;
+    let mut copy = col().grow(1.0).min_w(0.0).gap(2.0);
+    if let Some(error) = bar.error {
+        copy = copy.child(line(error, t.error).key(format!("{key}-error")));
+    }
+    copy = copy.child(
+        row()
+            .gap(8.0)
+            .center_y()
+            .child(el().size(6.0, 6.0).radius(3.0).fill(t.accent).a11y_hidden())
+            .child(
+                line(bar.status, t.foreground)
+                    .key(format!("{key}-status"))
+                    .shrink(),
+            ),
+    );
+    row()
+        .key("rd-save-bar")
+        .w_full()
+        .px(44.0)
+        .py(14.0)
+        .gap(12.0)
+        .center_y()
+        .fill(t.card)
+        .border_sides([1.0, 0.0, 0.0, 0.0], t.border)
+        // A soft shadow upwards, so the page seems to slide under it.
+        .box_shadow(Shadow {
+            y: -12.0,
+            blur: 28.0,
+            spread: -20.0,
+            color: Color::BLACK.alpha(0.3),
+            ..Shadow::default()
+        })
+        .child(copy)
+        .child(pressable(
+            button(t, Kind::Ghost, Size::Regular, None, "Discard").key(format!("{key}-discard")),
+            bar.can_discard,
+            discard,
+        ))
+        .child(pressable(
+            button(t, Kind::Primary, Size::Regular, None, bar.save_label)
+                .key(format!("{key}-save")),
+            bar.can_save,
+            save,
+        ))
 }

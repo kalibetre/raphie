@@ -6,7 +6,8 @@
 
 use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::{
-    Account, BotProfile, Page as Paged, RuntimeSettings, SessionObservation, SessionSummary,
+    Account, BotProfile, MemoryStatus, Page as Paged, RuntimeSettings, SessionObservation,
+    SessionSummary,
 };
 use raphie_core::model::{AuthState, Event};
 use raphie_core::origin::Origin;
@@ -42,6 +43,9 @@ pub const SCENES: &[Scene] = &[
     ("settings-providers-add", settings_providers_add),
     ("settings-providers-empty", settings_providers_empty),
     ("settings-providers-edit", settings_providers_edit),
+    ("settings-memory", settings_memory),
+    ("settings-memory-hindsight", settings_memory_hindsight),
+    ("settings-memory-loading", settings_memory_loading),
     ("settings-bot", settings_bot),
 ];
 
@@ -154,8 +158,69 @@ pub fn settings_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Bot {
         bot_id: "b-research".into(),
+        section: BotSection::Mcp,
+    }));
+}
+
+/// Memory settings as the runtime answers them, for the built-in back end
+/// or a Hindsight server that holds a key.
+pub fn memory_status(hindsight: bool) -> MemoryStatus {
+    let (provider, reflect, endpoint, bank) = if hindsight {
+        (
+            "hindsight",
+            "provider",
+            "https://hindsight.example.ts.net",
+            "raphie",
+        )
+    } else {
+        ("builtin", "model-assisted", "", "")
+    };
+    serde_json::from_value(json!({
+        "configuration": {
+            "enabled": true, "provider": provider, "scope": "owner",
+            "endpoint": endpoint, "bankId": bank, "hasCredential": hindsight,
+        },
+        "capabilities": {
+            "browse": !hindsight, "retain": true, "recall": true, "reflect": reflect,
+            "revise": !hindsight, "forget": !hindsight,
+            "consolidation": if hindsight { "provider" } else { "none" },
+        },
+        "error": null,
+    }))
+    .expect("the scene's memory settings match the contract")
+}
+
+fn open_memory(ui: &mut Ui, status: Option<MemoryStatus>) {
+    settings_account(ui);
+    if let Some(status) = status {
+        ui.model.apply(Event::Memory {
+            bot_id: "default".into(),
+            status,
+        });
+    }
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
         section: BotSection::Memory,
     }));
+}
+
+/// Settings → Memory on the built-in back end, nothing edited.
+pub fn settings_memory(ui: &mut Ui) {
+    open_memory(ui, Some(memory_status(false)));
+}
+
+/// Settings → Memory before the settings have arrived.
+pub fn settings_memory_loading(ui: &mut Ui) {
+    open_memory(ui, None);
+}
+
+/// Settings → Memory on Hindsight, with the bank changed and a new key
+/// typed, so the save bar shows.
+pub fn settings_memory_hindsight(ui: &mut Ui) {
+    open_memory(ui, Some(memory_status(true)));
+    ui.memory.bank_id = TextEdit::new("raphie-work");
+    // A made-up key. The field is secure, so the snapshot shows dots.
+    ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
 }
 
 /// Settings → Providers, with two connections.

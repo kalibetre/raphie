@@ -4,8 +4,9 @@
 //! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
 
 use raphie_core::auth::Secret;
-use raphie_core::contracts::{BotProfile, ControlAction, Decision, Scope};
+use raphie_core::contracts::{BotProfile, ControlAction, Decision, MemoryProvider, Scope};
 use raphie_core::engine::{Command, ConnectionChange};
+use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, Event};
 use raphie_core::settings::ThemeChoice;
 use raphie_desktop::sections::{BotSection, Page};
@@ -633,20 +634,20 @@ fn a_bots_page_names_the_bot_and_offers_the_web_page() {
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
     assert!(
-        text.contains("What Research keeps between conversations"),
+        text.contains("Connect the tools Research can use"),
         "{text}"
     );
     click(&mut rt, "rd-bot-page-web");
     assert_eq!(
         rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=memory&bot=b-research"]
+        ["https://raphie.example.ts.net/?view=settings&section=mcp&bot=b-research"]
     );
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-memory").is_none());
+    assert!(rt.find("rd-nav-b-research-mcp").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("Memory")
+        Some("MCP tools")
     );
 }
 
@@ -971,4 +972,192 @@ fn notices_can_be_dismissed() {
     assert!(rt.find("rd-notice").is_some());
     click(&mut rt, "rd-dismiss");
     assert_eq!(rt.state.model.notice, None);
+}
+
+#[test]
+fn memory_settings_load_and_a_change_is_saved() {
+    for dark in [false, true] {
+        // Opening the page asks for the bot's memory settings and waits.
+        let mut rt = render_sized(scenes::settings_account, dark, (1280.0, 1300.0));
+        click(&mut rt, "rd-nav-default-memory");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::LoadMemory {
+                bot_id: "default".into()
+            })
+        );
+        assert!(screen_text(&rt).contains("Loading memory settings…"));
+        deliver(
+            &mut rt,
+            Event::Memory {
+                bot_id: "default".into(),
+                status: scenes::memory_status(false),
+            },
+        );
+        let text = screen_text(&rt);
+        for expected in [
+            "Enable memory",
+            "Stored locally in this backend’s SQLite database.",
+            "Model-assisted reflection",
+            "Available",
+        ] {
+            assert!(text.contains(expected), "{expected} in {text}");
+        }
+        // Nothing changed yet: no save bar, and no Hindsight fields.
+        assert!(rt.find("rd-save-bar").is_none());
+        assert!(rt.find("rd-memory-endpoint").is_none());
+
+        // Switching memory off is a change; a test must wait for the save.
+        click(&mut rt, "rd-memory-enabled");
+        assert_eq!(
+            element(&rt, "rd-memory-status").text.as_deref(),
+            Some("Unsaved memory changes")
+        );
+        click(&mut rt, "rd-memory-test");
+        assert!(
+            !rt.state
+                .sent
+                .iter()
+                .any(|c| matches!(c, Command::TestMemory { .. })),
+            "a test uses the saved setup"
+        );
+        click(&mut rt, "rd-memory-save");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SaveMemory {
+                bot_id: "default".into(),
+                update: MemoryUpdate {
+                    enabled: false,
+                    provider: MemoryProvider::Builtin,
+                    scope: "owner".into(),
+                    endpoint: String::new(),
+                    bank_id: String::new(),
+                    key: KeyChange::Keep,
+                },
+            })
+        );
+        let mut saved = scenes::memory_status(false);
+        saved.configuration.enabled = false;
+        deliver(
+            &mut rt,
+            Event::MemorySaved {
+                bot_id: "default".into(),
+                status: saved,
+            },
+        );
+        assert!(rt.find("rd-save-bar").is_none());
+        assert_eq!(
+            element(&rt, "rd-memory-message").text.as_deref(),
+            Some("Memory settings saved.")
+        );
+    }
+}
+
+#[test]
+fn a_hindsight_key_is_replaced_or_cleared_and_never_shown() {
+    let mut rt = render_sized(scenes::settings_memory_hindsight, false, (1280.0, 1500.0));
+    // The typed key is drawn as dots: its text is nowhere on screen.
+    let text = screen_text(&rt);
+    assert!(!text.contains("hs-not-a-real-key"), "{text}");
+    assert!(text.contains("API key · saved"), "{text}");
+    assert!(text.contains("Provider reflection"), "{text}");
+
+    click(&mut rt, "rd-memory-save");
+    let Some(Command::SaveMemory { update, .. }) = rt.state.sent.last() else {
+        panic!("no save was sent");
+    };
+    assert_eq!(update.bank_id, "raphie-work");
+    assert_eq!(
+        update.key,
+        KeyChange::Replace(Secret::new("hs-not-a-real-key"))
+    );
+    // A command that carries a key can be logged: the key is redacted.
+    assert!(!format!("{update:?}").contains("hs-not-a-real-key"));
+
+    // What the runtime refuses is shown, and nothing typed is lost.
+    deliver(
+        &mut rt,
+        Event::MemorySaveFailed {
+            message: "Wait for active turns to finish before changing memory settings.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-memory-error").text.as_deref(),
+        Some("Wait for active turns to finish before changing memory settings.")
+    );
+    assert_eq!(rt.state.memory.bank_id.text, "raphie-work");
+
+    // Ticking "Clear saved API key" drops the typed key and sends a clear.
+    click(&mut rt, "rd-memory-clear-key");
+    assert!(rt.state.memory.key.text.is_empty());
+    click(&mut rt, "rd-memory-save");
+    let Some(Command::SaveMemory { update, .. }) = rt.state.sent.last() else {
+        panic!("no save was sent");
+    };
+    assert_eq!(update.key, KeyChange::Clear);
+
+    // A saved form forgets the key and the bar goes away.
+    let mut saved = scenes::memory_status(true);
+    saved.configuration.bank_id = "raphie-work".into();
+    saved.configuration.has_credential = false;
+    deliver(
+        &mut rt,
+        Event::MemorySaved {
+            bot_id: "default".into(),
+            status: saved,
+        },
+    );
+    assert!(rt.find("rd-save-bar").is_none());
+    assert!(rt.find("rd-memory-clear-key").is_none());
+    assert!(screen_text(&rt).contains("API key · optional for a local server"));
+
+    // With nothing to save, the saved setup can be tested.
+    click(&mut rt, "rd-memory-test");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::TestMemory {
+            bot_id: "default".into()
+        })
+    );
+    deliver(
+        &mut rt,
+        Event::MemoryTested {
+            message: "Hindsight did not answer.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-memory-message").text.as_deref(),
+        Some("Hindsight did not answer.")
+    );
+}
+
+#[test]
+fn a_bad_scope_cannot_be_saved_and_browsing_opens_the_browser() {
+    let mut rt = render_sized(scenes::settings_memory, false, (1280.0, 1300.0));
+    rt.update(|ui, _| ui.memory.scope = rune::TextEdit::new("two words"));
+    settle(&mut rt);
+    assert!(
+        element(&rt, "rd-memory-error")
+            .text
+            .unwrap_or_default()
+            .contains("scope")
+    );
+    click(&mut rt, "rd-memory-save");
+    assert!(
+        !rt.state
+            .sent
+            .iter()
+            .any(|c| matches!(c, Command::SaveMemory { .. }))
+    );
+    // Discard puts the saved scope back.
+    click(&mut rt, "rd-memory-discard");
+    assert_eq!(rt.state.memory.scope.text, "owner");
+    assert!(rt.find("rd-save-bar").is_none());
+
+    // Browsing memories is a page of the web workspace for now.
+    click(&mut rt, "rd-memory-browse");
+    assert_eq!(
+        rt.state.opened,
+        ["https://raphie.example.ts.net/?view=settings&section=memory-browse&bot=default"]
+    );
 }

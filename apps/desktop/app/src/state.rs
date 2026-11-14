@@ -15,6 +15,7 @@ use raphie_core::origin::Origin;
 use raphie_core::settings::{Settings, ThemeChoice};
 use rune::{TextEdit, Tx, Waker};
 
+use crate::memory::MemoryDraft;
 use crate::profile::ProfileDraft;
 use crate::sections::{BotSection, Page};
 
@@ -163,6 +164,8 @@ pub struct Ui {
     pub models: ModelsView,
     /// Settings → Providers: its form.
     pub providers: ProvidersView,
+    /// Settings → Memory: its form.
+    pub memory: MemoryDraft,
     /// The Profile form on screen.
     pub profile: ProfileDraft,
     /// Unsaved Profile edits for other bots, kept while the owner looks at
@@ -208,6 +211,7 @@ impl Ui {
             theme: ThemeChoice::System,
             models: ModelsView::new(),
             providers: ProvidersView::new(),
+            memory: MemoryDraft::empty(),
             profile: ProfileDraft::empty(),
             parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
@@ -356,6 +360,14 @@ impl Ui {
                 self.providers = ProvidersView::new();
                 self.model.connection_message = None;
                 self.command(Command::LoadSettings {
+                    bot_id: bot_id.clone(),
+                });
+            }
+            if *section == BotSection::Memory {
+                self.show_memory(bot_id);
+                self.model.memory_message = None;
+                // Notice settings saved in another client.
+                self.command(Command::LoadMemory {
                     bot_id: bot_id.clone(),
                 });
             }
@@ -529,6 +541,86 @@ impl Ui {
         }
     }
 
+    /// Puts `bot_id`'s memory settings in the form. Unsaved edits for the
+    /// same bot stay; edits for another bot are dropped, typed key included,
+    /// so a key is never held for a page that is not on screen.
+    fn show_memory(&mut self, bot_id: &str) {
+        if self.memory.bot_id() == Some(bot_id) && self.memory.is_dirty() {
+            return;
+        }
+        self.model.memory_save_error = None;
+        self.memory = match self.model.memory.get(bot_id) {
+            Some(status) => MemoryDraft::of(bot_id, &status.configuration),
+            None => MemoryDraft::empty(),
+        };
+    }
+
+    /// After news from the host: a Memory form with no edits shows what the
+    /// host has now; a form with edits keeps them.
+    fn follow_memory(&mut self) {
+        let Screen::Settings(Page::Bot {
+            bot_id,
+            section: BotSection::Memory,
+        }) = &self.screen
+        else {
+            return;
+        };
+        let Some(status) = self.model.memory.get(bot_id) else {
+            return;
+        };
+        let shown = self
+            .memory
+            .saved
+            .as_ref()
+            .is_some_and(|(id, saved)| id == bot_id && *saved == status.configuration);
+        if !shown && !self.memory.is_dirty() && !self.model.saving_memory {
+            self.memory = MemoryDraft::of(bot_id, &status.configuration);
+        }
+    }
+
+    /// What stops the Memory form from being saved, in words for the owner.
+    pub fn memory_problem(&self) -> Option<&'static str> {
+        self.memory.update().problem()
+    }
+
+    pub fn can_save_memory(&self) -> bool {
+        self.memory.is_dirty()
+            && self.memory_problem().is_none()
+            && !self.model.saving_memory
+            && !self.model.testing_memory
+    }
+
+    pub fn save_memory(&mut self) {
+        if !self.can_save_memory() {
+            return;
+        }
+        let Some(bot_id) = self.memory.bot_id().map(str::to_owned) else {
+            return;
+        };
+        if self.model.begin_save_memory() {
+            let update = self.memory.update();
+            self.command(Command::SaveMemory { bot_id, update });
+        }
+    }
+
+    /// Throws the edits away, typed key included.
+    pub fn discard_memory(&mut self) {
+        if let Some((bot_id, saved)) = self.memory.saved.take() {
+            self.memory = MemoryDraft::of(&bot_id, &saved);
+        }
+        self.model.memory_save_error = None;
+    }
+
+    /// Asks the runtime to reach the memory back end as it is saved.
+    pub fn test_memory(&mut self) {
+        let Some(bot_id) = self.memory.bot_id().map(str::to_owned) else {
+            return;
+        };
+        if !self.memory.is_dirty() && self.model.begin_test_memory() {
+            self.command(Command::TestMemory { bot_id });
+        }
+    }
+
     /// Makes a model the default for `bot_id`'s new sessions.
     pub fn set_default_model(&mut self, bot_id: &str, model_id: &str, connection_id: &str) {
         if self.model.begin_set_model() {
@@ -592,6 +684,24 @@ impl Ui {
         let Some(url) = self.web_url(page) else {
             return;
         };
+        self.open_url(url, tx);
+    }
+
+    /// Opens the web workspace's "Browse memories" page for `bot_id`. It is
+    /// a page of its own there, reached from Memory rather than listed in
+    /// the navigation, so it has no [`Page`] here.
+    pub fn open_memory_browse(&mut self, bot_id: &str, tx: &mut Tx) {
+        let memory = Page::Bot {
+            bot_id: bot_id.to_owned(),
+            section: BotSection::Memory,
+        };
+        let Some(url) = self.web_url(&memory) else {
+            return;
+        };
+        self.open_url(url.replace("section=memory", "section=memory-browse"), tx);
+    }
+
+    fn open_url(&mut self, url: String, tx: &mut Tx) {
         if self.client.is_none() {
             // Tests and headless runs: note it instead of opening a browser.
             self.opened.push(url);
@@ -678,6 +788,15 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     // Replacing the form drops the typed key, which wipes it.
                     ui.providers = ProvidersView::new();
                 }
+                Effect::MemorySaved(bot_id) => {
+                    // Show what was saved. Replacing the form drops the
+                    // typed key, which wipes it.
+                    if ui.memory.bot_id() == Some(bot_id.as_str())
+                        && let Some(status) = ui.model.memory.get(&bot_id)
+                    {
+                        ui.memory = MemoryDraft::of(&bot_id, &status.configuration);
+                    }
+                }
                 Effect::ProfileSaved(profile) => {
                     // Show what was saved, at its new revision.
                     if ui.profile.bot_id() == Some(profile.id.as_str()) {
@@ -689,5 +808,6 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
         }
     }
     ui.follow_profile();
+    ui.follow_memory();
     true
 }

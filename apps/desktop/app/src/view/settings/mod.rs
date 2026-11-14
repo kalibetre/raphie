@@ -8,6 +8,7 @@
 mod account;
 mod appearance;
 mod bot;
+mod memory;
 mod models;
 mod nav;
 mod parts;
@@ -41,14 +42,22 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::Providers,
         } => providers::providers(s, bot_id, look, overlays),
+        Page::Bot {
+            bot_id,
+            section: BotSection::Memory,
+        } => memory::memory(s, bot_id, look, overlays),
         Page::Bot { bot_id, section } => bot::bot_page(s, bot_id, *section, look),
     };
-    // The Profile page docks a save bar under the scrolling page.
+    // Pages with a form dock a save bar under the scrolling page.
     let footer = match page {
         Page::Bot {
             section: BotSection::Profile,
             ..
         } => profile::save_bar(s, look),
+        Page::Bot {
+            section: BotSection::Memory,
+            ..
+        } => memory::memory_save_bar(s, look),
         _ => None,
     };
     let mut main = col()
