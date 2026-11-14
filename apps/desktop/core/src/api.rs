@@ -16,9 +16,9 @@ use serde::de::DeserializeOwned;
 
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll};
 use crate::contracts::{
-    ApprovalStatus, BotList, BotProfile, Decision, DecisionBody, DecisionResult,
-    DeviceCodeResponse, DeviceTokenResponse, ErrorBody, Page, Receipt, SessionObservation,
-    SessionSummary, SessionTurn, SubmitMessage,
+    ApprovalStatus, BotList, BotProfile, ControlAction, ControlBody, Decision, DecisionBody,
+    DecisionResult, DeviceCodeResponse, DeviceTokenResponse, ErrorBody, Page, Receipt, Scope,
+    SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
 };
 use crate::origin::Origin;
 
@@ -261,17 +261,35 @@ impl ApiClient {
         bot_id: &str,
         approval_id: &str,
         decision: Decision,
+        scope: Scope,
     ) -> Result<ApprovalStatus, ApiError> {
         let path = bot_path(
             bot_id,
             &format!("/api/tool-approvals/{}", encode(approval_id)),
         );
-        let body = DecisionBody {
-            decision,
-            scope: "once",
-        };
+        let body = DecisionBody { decision, scope };
         let result: DecisionResult = self.post_json(&path, &body).await?;
         Ok(result.status)
+    }
+
+    /// Stops the session's run, or changes how a queued message joins it.
+    pub async fn control(
+        &self,
+        bot_id: &str,
+        session_id: &str,
+        action: ControlAction,
+        turn_id: Option<&str>,
+    ) -> Result<(), ApiError> {
+        let path = bot_path(
+            bot_id,
+            &format!("/api/sessions/{}/control", encode(session_id)),
+        );
+        // The answer is `{ "ok": true }`; only success or failure matters,
+        // so read it as any JSON value and drop it.
+        let _: serde_json::Value = self
+            .post_json(&path, &ControlBody { action, turn_id })
+            .await?;
+        Ok(())
     }
 
     // ----- Plumbing -----

@@ -1,20 +1,27 @@
 //! The open conversation: the owner's messages as bubbles on the right,
-//! replies as Markdown on the page, and tool actions waiting for approval.
+//! replies as Markdown on the page, and under each message the tools the
+//! run used.
 //!
-//! Mirrors `apps/web/src/domains/conversations/presentation/chat.tsx`,
-//! `domains/approvals/presentation/` and the message, `.steps` and
-//! `.decision` rules in `chat.css`.
+//! Mirrors `apps/web/src/domains/conversations/presentation/chat.tsx` and
+//! `active-run.tsx`, and the message rules in `chat.css`.
 
-use raphie_core::contracts::{Decision, RunPhase, SessionApproval, SessionTurn, TurnStatus};
+use raphie_core::contracts::{
+    ControlAction, QueueMode, SessionActivity, SessionObservation, SessionTurn, TurnStatus,
+};
 use raphie_core::model::Conversation;
-use rune::{El, LiveRegion, ScrollSpec, TextCase, col, icon, row, text};
+use raphie_core::projections::{
+    ToolStep, active_run_label, completed_at, format_cost, format_duration, format_tokens,
+    run_usage, steps_by_turn,
+};
+use rune::{El, LiveRegion, ScrollSpec, col, icon, row, text};
 use rune_kit::{Loader, Markdown};
 
 use super::Look;
+use super::steps::{Run, Working, tool_steps};
 use crate::format;
 use crate::icons;
 use crate::state::Ui;
-use crate::theme::{Theme, font, mono};
+use crate::theme::{Theme, font};
 use crate::widgets::{Kind, Size, button, pressable};
 
 /// The widest the conversation column gets, padding included, as on the web
@@ -61,40 +68,98 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
     // `let ... else` handles the "nothing yet" case and leaves the happy
     // path unindented.
     let Some(observation) = &conversation.observation else {
-        items.push(working("rd-loading", "Loading conversation…", look).pt(40.0));
+        items.push(
+            row()
+                .key("rd-loading")
+                .pt(40.0)
+                .gap(7.0)
+                .center_y()
+                .child(
+                    Loader::new()
+                        .size(14.0)
+                        .color(t.muted_foreground)
+                        .build(&look.kit),
+                )
+                .child(
+                    text("Loading conversation…")
+                        .font(font(13.0, 400.0))
+                        .color(t.muted_foreground),
+                ),
+        );
         return items;
     };
 
+    let now = format::now_ms();
     let turns = conversation.turns();
+    // Each turn with the tool steps of its run, worked out from the journal.
+    let runs = steps_by_turn(&turns, &observation.activity, &observation.tool_approvals);
     let live = conversation.live_text();
-    // The reply being written belongs to the newest pending turn.
-    let pending = turns
+    // The reply being written belongs to the newest turn that is running.
+    let writing = runs
         .iter()
         .rev()
-        .find(|turn| turn.status == TurnStatus::Pending);
-    for turn in &turns {
-        items.push(owner_message(turn, t));
-        let streaming = pending
-            .is_some_and(|p| p.id == turn.id)
+        .map(|(turn, _)| *turn)
+        .find(|turn| is_running(turn));
+
+    for (turn, steps) in &runs {
+        items.push(owner_turn(s, turn, steps, now, look));
+        let streaming = writing
+            .is_some_and(|w| w.id == turn.id)
             .then_some(live)
             .flatten();
-        if let Some(reply) = reply(turn, streaming, look) {
+        if let Some(reply) = reply(turn, streaming, &observation.activity, look) {
             items.push(reply);
         }
     }
-
-    let approvals = conversation.pending_approvals();
-    if !approvals.is_empty() {
-        items.push(waiting_for_approval(&approvals, s, t));
-    } else if pending.is_some() {
-        // No reply text yet, or more to come: say what Raphie is doing.
-        let label = phase_label(observation.phase, live.is_some_and(|text| !text.is_empty()));
-        items.push(working("rd-working", label, look));
+    // What each running turn is doing now, after the messages.
+    for (turn, steps) in &runs {
+        if is_running(turn) {
+            items.push(active_run(s, turn, steps, observation, now, look));
+        }
     }
     if let Some(error) = &observation.error {
         items.push(error_line("rd-reply-error", &error.message, t));
     }
     items
+}
+
+/// A turn Raphie is working on now (not one waiting in the queue).
+fn is_running(turn: &SessionTurn) -> bool {
+    turn.status == TurnStatus::Pending && turn.queue_mode.is_none()
+}
+
+/// The owner's side of a turn: the message, then what became of it (queue
+/// controls, the tools a finished run used, a stop or failure line).
+fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &Look) -> El {
+    let t = &look.theme;
+    let mut block = col().w_full().gap(14.0).child(owner_message(turn, t));
+    if let Some(mode) = turn.queue_mode {
+        block = block.child(queue_controls(turn, mode, t));
+    }
+    let working = turn.status == TurnStatus::Pending;
+    if !working && !steps.is_empty() {
+        let run = Run {
+            turn_id: &turn.id,
+            steps,
+            working: None,
+        };
+        block = block.child(tool_steps(s, &run, now, look));
+    }
+    if turn.cancelled == Some(true) {
+        block = block.child(
+            text("Stopped · message not completed")
+                .key(format!("rd-stopped-{}", turn.id))
+                .font(font(11.5, 400.0))
+                .color(t.faint),
+        );
+    } else if turn.status == TurnStatus::Error {
+        block = block.child(error_line(
+            &format!("rd-failed-{}", turn.id),
+            "Raphie could not complete this reply. Send a new message to retry.",
+            t,
+        ));
+    }
+    block
 }
 
 /// The owner's message: a bubble on the right, or a centred marker when a
@@ -129,15 +194,24 @@ fn owner_message(turn: &SessionTurn, t: &Theme) -> El {
                 ),
         );
     }
+    // A queued message is tinted until Raphie picks it up.
+    let queued = turn.queue_mode.is_some();
+    let (fill, border) = if queued {
+        (t.card.mix(t.accent, 0.16), t.border.mix(t.accent, 0.45))
+    } else {
+        (t.muted, t.border)
+    };
     row().key(key).w_full().justify_end().child(
         col()
             .max_w(560.0)
             .px(14.0)
             .py(9.0)
-            .fill(t.muted)
-            .border(1.0, t.border)
+            .fill(fill)
+            .border(1.0, border)
             // A speech bubble: every corner round but the bottom-right.
             .corners([16.0, 16.0, 4.0, 16.0])
+            // The time the message was sent, on hover.
+            .help(format::clock(turn.created_at))
             .child(
                 text(turn.text.clone())
                     .font(font(14.0, 400.0).lh(23.0))
@@ -149,39 +223,142 @@ fn owner_message(turn: &SessionTurn, t: &Theme) -> El {
     )
 }
 
-/// What Raphie answered to `turn`, if there is anything to show yet.
-fn reply(turn: &SessionTurn, live: Option<&str>, look: &Look) -> Option<El> {
+/// Under a queued message: how it will join the run, and a button to change
+/// that (the web's `.message-queue-controls`).
+fn queue_controls(turn: &SessionTurn, mode: QueueMode, t: &Theme) -> El {
+    let steering = mode == QueueMode::Steer;
+    let (status, glyph, label, action) = if steering {
+        (
+            "Steering after this step",
+            &icons::LIST_END,
+            "Keep queued",
+            ControlAction::Queue,
+        )
+    } else {
+        (
+            "Queued",
+            &icons::CORNER_UP_RIGHT,
+            "Steer",
+            ControlAction::Steer,
+        )
+    };
+    let turn_id = turn.id.clone();
+    row()
+        .key(format!("rd-queue-{}", turn.id))
+        .w_full()
+        .gap(10.0)
+        .justify_end()
+        .center_y()
+        .child(
+            text(status)
+                .font(font(11.0, 400.0))
+                .color(t.muted_foreground),
+        )
+        .child(
+            row()
+                .key(format!("rd-queue-toggle-{}", turn.id))
+                .role("button")
+                .label(label)
+                .px(9.0)
+                .py(5.0)
+                .gap(5.0)
+                .center_y()
+                .radius(6.0)
+                .fill(t.card)
+                .border(1.0, t.border)
+                .hover(t.hover.alpha(0.6))
+                .focus_ring(2.0, 2.0, t.accent)
+                .child(icon(glyph, 14.0).color(t.foreground).a11y_hidden())
+                .child(
+                    text(label)
+                        .font(font(11.0, 400.0))
+                        .color(t.foreground)
+                        .a11y_hidden(),
+                )
+                .on_press(move |s: &mut Ui| s.control(action, Some(&turn_id))),
+        )
+}
+
+/// What Raphie answered to `turn`, if there is anything to show yet: the
+/// finished reply with its time and cost, or the text written so far.
+fn reply(
+    turn: &SessionTurn,
+    live: Option<&str>,
+    activity: &[SessionActivity],
+    look: &Look,
+) -> Option<El> {
     let t = &look.theme;
-    let key = format!("rd-reply-{}", turn.id);
-    let markdown = |source: &str, streaming: bool| {
-        col().key(key.clone()).w_full().px(2.0).child(
+    let (source, streaming) = match (&turn.answer, live) {
+        (Some(answer), _) => (answer.as_str(), false),
+        (None, Some(text)) if !text.is_empty() => (text, true),
+        _ => return None,
+    };
+    let mut reply = col()
+        .key(format!("rd-reply-{}", turn.id))
+        .w_full()
+        .px(2.0)
+        .child(
             Markdown::new(source)
                 .style(t.markdown(&look.kit))
                 .streaming(streaming)
                 .selectable(true)
                 .build(&look.kit),
-        )
+        );
+    if turn.status == TurnStatus::Done {
+        // "08:45 PM   88 tokens · $0.0000", from the run's model calls.
+        let mut meta = row().key(format!("rd-meta-{}", turn.id)).mt(6.0).gap(10.0);
+        let small = |content: String| text(content).font(font(11.5, 400.0)).color(t.faint);
+        if let Some(at) = completed_at(&turn.id, activity) {
+            meta = meta.child(small(format::clock(at)));
+        }
+        if let Some(usage) = run_usage(&turn.id, activity) {
+            let calls = if usage.calls == 1 { "call" } else { "calls" };
+            meta = meta.child(
+                small(format!(
+                    "{} tokens · {}",
+                    format_tokens(usage.tokens),
+                    format_cost(usage.cost)
+                ))
+                .help(format!(
+                    "{} tokens across {} model {calls}, provider-reported",
+                    usage.tokens, usage.calls
+                )),
+            );
+        }
+        reply = reply.child(meta);
+    }
+    Some(reply)
+}
+
+/// What a running turn is doing: its label, how long it has been going, and
+/// its steps so far (the web's `ActiveRun`).
+fn active_run(
+    s: &Ui,
+    turn: &SessionTurn,
+    steps: &[ToolStep],
+    observation: &SessionObservation,
+    now: i64,
+    look: &Look,
+) -> El {
+    // The label looks at this run's events only.
+    let own: Vec<SessionActivity> = observation
+        .activity
+        .iter()
+        .filter(|event| event.run_id.as_deref() == Some(turn.id.as_str()))
+        .cloned()
+        .collect();
+    let run = Run {
+        turn_id: &turn.id,
+        steps,
+        working: Some(Working {
+            label: active_run_label(observation.live.as_ref(), steps, &own),
+            elapsed: format_duration(now - turn.created_at),
+        }),
     };
-    if let Some(answer) = &turn.answer {
-        return Some(markdown(answer, false));
-    }
-    match turn.status {
-        TurnStatus::Pending => live
-            .filter(|text| !text.is_empty())
-            .map(|text| markdown(text, true)),
-        TurnStatus::Error if turn.cancelled == Some(true) => Some(
-            text("Stopped · message not completed")
-                .key(key)
-                .font(font(11.5, 400.0))
-                .color(t.faint),
-        ),
-        TurnStatus::Error => Some(error_line(
-            &key,
-            "Raphie could not complete this reply. Send a new message to retry.",
-            t,
-        )),
-        TurnStatus::Done | TurnStatus::Unknown => None,
-    }
+    col()
+        .key("rd-working")
+        .w_full()
+        .child(tool_steps(s, &run, now, look))
 }
 
 fn error_line(key: &str, message: &str, t: &Theme) -> El {
@@ -203,207 +380,4 @@ fn error_line(key: &str, message: &str, t: &Theme) -> El {
                 .wrap()
                 .shrink(),
         )
-}
-
-/// What the run is doing, in the web's words (`activeRunLabel`).
-fn phase_label(phase: RunPhase, writing: bool) -> &'static str {
-    match phase {
-        RunPhase::Queued => "Queued…",
-        RunPhase::Tool => "Running tool…",
-        RunPhase::Writing => "Writing reply…",
-        _ if writing => "Writing reply…",
-        _ => "Waiting for model…",
-    }
-}
-
-/// A spinner and a quiet line: Raphie is busy.
-fn working(key: &str, label: &str, look: &Look) -> El {
-    let t = &look.theme;
-    row()
-        .key(key)
-        .gap(7.0)
-        .center_y()
-        .live_region(LiveRegion::Polite)
-        .child(
-            Loader::new()
-                .size(14.0)
-                .color(t.muted_foreground)
-                .build(&look.kit),
-        )
-        .child(
-            text(label.to_owned())
-                .font(font(13.0, 400.0))
-                .color(t.muted_foreground),
-        )
-}
-
-/// The tool actions that need the owner, as the web's step list: a heading,
-/// then each action with its exact arguments and the decision bar.
-fn waiting_for_approval(approvals: &[&SessionApproval], s: &Ui, t: &Theme) -> El {
-    let mut steps = col().w_full().mt(6.0);
-    for (index, approval) in approvals.iter().enumerate() {
-        let last = index + 1 == approvals.len();
-        steps = steps.child(step(
-            approval,
-            s.model.deciding.contains(&approval.id),
-            last,
-            t,
-        ));
-    }
-    col()
-        .key("rd-approvals")
-        .w_full()
-        .child(
-            row()
-                .gap(7.0)
-                .center_y()
-                .live_region(LiveRegion::Polite)
-                .child(
-                    icon(&icons::SHIELD_QUESTION_MARK, 14.0)
-                        .color(t.attention)
-                        .a11y_hidden(),
-                )
-                .child(
-                    text("Waiting for your approval")
-                        .font(font(13.0, 560.0))
-                        .color(t.attention),
-                ),
-        )
-        .child(steps)
-}
-
-/// One proposed action: icon in the left gutter, details on the right.
-fn step(approval: &SessionApproval, deciding: bool, last: bool, t: &Theme) -> El {
-    let mut gutter = col().w(20.0).items_center().child(
-        row()
-            .size(20.0, 20.0)
-            .mt(1.0)
-            .center()
-            .radius(10.0)
-            .fill(t.attention_soft)
-            .child(
-                icon(&icons::SHIELD_QUESTION_MARK, 13.0)
-                    .color(t.attention)
-                    .a11y_hidden(),
-            ),
-    );
-    if !last {
-        // The line that joins this step to the next one.
-        gutter = gutter.child(rune::el().w(1.0).grow(1.0).fill(t.border));
-    }
-    let name = row()
-        .w_full()
-        .min_h(22.0)
-        .gap(10.0)
-        .center_y()
-        .child(
-            row()
-                .gap(6.0)
-                .center_y()
-                .grow(1.0)
-                .min_w(0.0)
-                .child(
-                    text(approval.server.clone())
-                        .font(font(13.0, 400.0))
-                        .color(t.muted_foreground),
-                )
-                .child(
-                    text(approval.tool.clone())
-                        .font(mono(12.0))
-                        .color(t.foreground),
-                ),
-        )
-        .child(
-            text("needs approval")
-                .font(font(11.5, 400.0))
-                .color(t.attention),
-        );
-    let body = col()
-        .grow(1.0)
-        .min_w(0.0)
-        .pb(8.0)
-        .child(name)
-        .child(
-            text("Arguments")
-                .font(font(11.0, 400.0).tracking(0.6))
-                .color(t.faint)
-                .text_case(TextCase::Uppercase)
-                .mt(8.0)
-                .mb(4.0),
-        )
-        .child(
-            // The exact arguments the action will run with.
-            col()
-                .key(format!("rd-approval-args-{}", approval.id))
-                .w_full()
-                .max_h(260.0)
-                .scroll(ScrollSpec {
-                    stick_bottom: false,
-                })
-                .radius(8.0)
-                .fill(t.card)
-                .border(1.0, t.border)
-                .child(
-                    text(approval.arguments_pretty())
-                        .font(mono(12.0))
-                        .color(t.foreground)
-                        .selectable(true)
-                        .selection_color(t.selection())
-                        .wrap_anywhere()
-                        .px(12.0)
-                        .py(10.0),
-                ),
-        )
-        .child(decision(approval, deciding, t));
-    row()
-        .key(format!("rd-approval-{}", approval.id))
-        .role("group")
-        .label(format!(
-            "Approval needed: {} {}",
-            approval.server, approval.tool
-        ))
-        .w_full()
-        .gap(10.0)
-        .child(gutter)
-        .child(body)
-}
-
-/// When the approval expires, and the two answers (the web's `.decision`).
-fn decision(approval: &SessionApproval, deciding: bool, t: &Theme) -> El {
-    let approve_id = approval.id.clone();
-    let reject_id = approval.id.clone();
-    row()
-        .w_full()
-        .mt(10.0)
-        .px(12.0)
-        .py(10.0)
-        .gap(8.0)
-        .center_y()
-        .radius(10.0)
-        .fill(t.card)
-        .border(1.0, t.attention_soft)
-        .child(
-            text(format!("Expires {}", format::clock(approval.expires_at)))
-                .font(font(12.0, 400.0))
-                .color(t.muted_foreground)
-                .grow(1.0),
-        )
-        .child(pressable(
-            button(t, Kind::Outline, Size::Small, Some(&icons::X), "Reject")
-                .key(format!("rd-reject-{}", approval.id)),
-            !deciding,
-            move |s: &mut Ui| s.decide(&reject_id, Decision::Rejected),
-        ))
-        .child(pressable(
-            button(
-                t,
-                Kind::Primary,
-                Size::Small,
-                Some(&icons::CHECK),
-                "Approve once",
-            )
-            .key(format!("rd-approve-{}", approval.id)),
-            !deciding,
-            move |s: &mut Ui| s.decide(&approve_id, Decision::Approved),
-        ))
 }

@@ -3,10 +3,10 @@
 //! with no GPU and no network. Pixel snapshots are rendered separately with
 //! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
 
-use raphie_core::contracts::Decision;
+use raphie_core::contracts::{ControlAction, Decision, Scope};
 use raphie_core::engine::Command;
 use raphie_core::model::AuthState;
-use raphie_desktop::state::Filter;
+use raphie_desktop::state::{Filter, WebPage};
 use raphie_desktop::{Ui, scenes, view::view};
 use rune::{ElementInfo, Env, Runtime};
 
@@ -253,7 +253,7 @@ fn a_streaming_reply_shows_the_text_so_far() {
 fn approvals_show_exact_arguments_and_send_one_decision() {
     for dark in [false, true] {
         let mut rt = render(scenes::approval, dark);
-        let id = "6f1d7f8e-2a7b-4f1e-9c4e-1b2a3c4d5e6f";
+        let id = scenes::APPROVAL_ID;
         let text = screen_text(&rt);
         assert!(text.contains("Waiting for your approval"));
         assert!(text.contains("calendar") && text.contains("execute"));
@@ -268,7 +268,8 @@ fn approvals_show_exact_arguments_and_send_one_decision() {
             rt.state.sent.last(),
             Some(&Command::Decide {
                 approval_id: id.into(),
-                decision: Decision::Approved
+                decision: Decision::Approved,
+                scope: Scope::Once,
             })
         );
         // While the decision is on its way, a second click sends nothing.
@@ -281,6 +282,106 @@ fn approvals_show_exact_arguments_and_send_one_decision() {
             .count();
         assert_eq!(decisions, 1);
     }
+}
+
+#[test]
+fn only_command_approvals_offer_approve_for_session() {
+    let rt = render(scenes::approval, false);
+    let offer = format!("rd-approve-session-{}", scenes::APPROVAL_ID);
+    assert!(rt.find(&offer).is_none(), "MCP approvals are once-only");
+
+    let mut rt = render(scenes::command_approval, false);
+    let id = scenes::COMMAND_APPROVAL_ID;
+    // A multi-line command is shown as written, not as an escaped string.
+    let text = screen_text(&rt);
+    assert!(text.contains("ls -la notes\nwc -l notes/*.md"), "{text}");
+    click(&mut rt, &format!("rd-approve-session-{id}"));
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Decide {
+            approval_id: id.into(),
+            decision: Decision::Approved,
+            scope: Scope::Session,
+        })
+    );
+}
+
+#[test]
+fn finished_replies_show_their_tools_time_and_cost() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::conversation, dark);
+        let text = screen_text(&rt);
+        assert!(text.contains("88 tokens · $0.0004"), "{text}");
+        // 640 + 1,210 tokens over the run's two model calls.
+        assert!(text.contains("1.9k tokens · $0.01"), "{text}");
+        assert!(text.contains("Used 2 tools · 3s"), "{text}");
+        assert!(rt.find("rd-step-op-1").is_none(), "steps start folded");
+
+        click(&mut rt, "rd-steps-toggle-t2");
+        let text = screen_text(&rt);
+        assert!(
+            text.contains("read_file") && text.contains("search"),
+            "{text}"
+        );
+        assert!(!text.contains("notes/rust.md"), "details start folded");
+        click(&mut rt, "rd-step-toggle-op-1");
+        assert!(screen_text(&rt).contains("notes/rust.md"));
+        click(&mut rt, "rd-steps-toggle-t2");
+        assert!(rt.find("rd-step-op-1").is_none());
+    }
+}
+
+#[test]
+fn a_running_task_can_be_stopped_and_a_queued_message_steered() {
+    let mut rt = render(scenes::working, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Running calendar · list_events…"), "{text}");
+    assert!(text.contains("elapsed"), "{text}");
+    assert!(text.contains("Queued"), "{text}");
+    assert!(rt.find("rd-send").is_none(), "nothing typed: Stop only");
+
+    click(&mut rt, "rd-stop");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Control {
+            session_id: "s-1".into(),
+            action: ControlAction::Stop,
+            turn_id: None,
+        })
+    );
+    click(&mut rt, "rd-queue-toggle-t3");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Control {
+            session_id: "s-1".into(),
+            action: ControlAction::Steer,
+            turn_id: Some("t3".into()),
+        })
+    );
+
+    // With a message typed, it can be queued or the task stopped.
+    click(&mut rt, "rd-composer");
+    rt.paste("And Saturday?");
+    settle(&mut rt);
+    assert!(rt.find("rd-send").is_some() && rt.find("rd-stop").is_some());
+}
+
+#[test]
+fn settings_and_account_open_the_web_workspace() {
+    let mut rt = render(scenes::new_conversation, false);
+    click(&mut rt, "rd-settings");
+    click(&mut rt, "rd-account-settings");
+    assert_eq!(
+        rt.state.opened,
+        [
+            "https://raphie.example.ts.net/?view=settings&bot=default",
+            "https://raphie.example.ts.net/?view=settings&section=account",
+        ]
+    );
+    assert_eq!(
+        rt.state.web_url(WebPage::Settings).as_deref(),
+        Some("https://raphie.example.ts.net/?view=settings&bot=default")
+    );
 }
 
 #[test]

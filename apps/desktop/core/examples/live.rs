@@ -7,7 +7,8 @@
 //!
 //! It signs in with a device code (open the printed link and approve it), then
 //! lists bots and sessions. With `--exercise` it also sends two messages, waits
-//! for the streamed reply, and approves the tool action the fixture proposes.
+//! for the streamed reply, approves the tool action the fixture proposes, and
+//! prints each run's tool steps and usage as read from the activity journal.
 //! `--exercise` makes model calls: use it only with the test fixture
 //! (`bun run dev:fixture`), whose model is a free canned one.
 //!
@@ -18,10 +19,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use raphie_core::auth::MemoryStore;
-use raphie_core::contracts::{ApprovalStatus, Decision};
+use raphie_core::contracts::{ApprovalStatus, Decision, Scope};
 use raphie_core::engine::{Client, Command, EngineConfig};
 use raphie_core::model::{AuthState, Event, Model};
 use raphie_core::origin::Origin;
+use raphie_core::projections::{format_tokens, run_usage, step_state, steps_by_turn};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -110,6 +112,7 @@ fn main() {
         client.send(Command::Decide {
             approval_id: approval.id.clone(),
             decision,
+            scope: Scope::Once,
         });
         wait(&client, &mut model, "the decision", 30, |m, _| {
             !m.deciding.contains(&approval.id)
@@ -125,6 +128,25 @@ fn main() {
             }) && c.turns().last().is_some_and(|t| t.answer.is_some())
         })
     });
+    // What the journal says each run did (the tool steps and usage the app
+    // shows under a reply).
+    let conversation = model.conversation.as_ref().unwrap();
+    let observation = conversation.observation.as_ref().unwrap();
+    let turns = conversation.turns();
+    for (turn, steps) in steps_by_turn(&turns, &observation.activity, &observation.tool_approvals) {
+        let names: Vec<String> = steps
+            .iter()
+            .map(|step| format!("{} ({:?})", step.tool, step_state(step, i64::MAX)))
+            .collect();
+        let usage = run_usage(&turn.id, &observation.activity).map_or("no usage".to_owned(), |u| {
+            format!("{} tokens, {} calls", format_tokens(u.tokens), u.calls)
+        });
+        println!(
+            "Turn {:?}: steps [{}]; {usage}",
+            turn.text,
+            names.join(", ")
+        );
+    }
     println!("Exercise passed: streamed reply, approval, stale second decision reported.");
 }
 

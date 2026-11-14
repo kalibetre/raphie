@@ -32,7 +32,8 @@ use tokio::time::{Instant, sleep};
 use crate::api::{ApiClient, ApiError, bot_path};
 use crate::auth::{AccessToken, DevicePolicy, DevicePoll, TokenStore};
 use crate::contracts::{
-    ApprovalStatus, BotProfile, Decision, Page, SessionObservation, SessionSummary, SubmitMessage,
+    ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
+    SessionSummary, SubmitMessage,
 };
 use crate::model::{DecisionOutcome, Event, StreamStatus};
 use crate::origin::Origin;
@@ -80,6 +81,13 @@ pub enum Command {
     Decide {
         approval_id: String,
         decision: Decision,
+        scope: Scope,
+    },
+    /// Stop a session's run, or steer or re-queue one of its queued messages.
+    Control {
+        session_id: String,
+        action: ControlAction,
+        turn_id: Option<String>,
     },
 }
 
@@ -279,7 +287,13 @@ impl Engine {
             Command::Decide {
                 approval_id,
                 decision,
-            } => self.decide(approval_id, decision),
+                scope,
+            } => self.decide(approval_id, decision, scope),
+            Command::Control {
+                session_id,
+                action,
+                turn_id,
+            } => self.control(session_id, action, turn_id),
         }
     }
 
@@ -512,14 +526,14 @@ impl Engine {
         });
     }
 
-    fn decide(&mut self, approval_id: String, decision: Decision) {
+    fn decide(&mut self, approval_id: String, decision: Decision, scope: Scope) {
         let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
             return;
         };
         let emit = self.emit.clone();
         let inbox = self.inbox.clone();
         tokio::spawn(async move {
-            let outcome = match api.decide(&bot_id, &approval_id, decision).await {
+            let outcome = match api.decide(&bot_id, &approval_id, decision, scope).await {
                 Ok(status) => decision_outcome(decision, status),
                 Err(ApiError::NotFound(_)) => DecisionOutcome::Gone,
                 Err(ApiError::Unauthenticated) => {
@@ -532,6 +546,33 @@ impl Engine {
                 approval_id,
                 outcome,
             });
+        });
+    }
+
+    fn control(&mut self, session_id: String, action: ControlAction, turn_id: Option<String>) {
+        let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            // Success needs no event: the session stream shows the run
+            // stopping or the message changing queue.
+            match api
+                .control(&bot_id, &session_id, action, turn_id.as_deref())
+                .await
+            {
+                Ok(()) => {}
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(_) if action == ControlAction::Stop => emit.emit(Event::Problem(
+                    "Could not stop this task. It may already have finished.".into(),
+                )),
+                Err(_) => emit.emit(Event::Problem(
+                    "This message could not be changed. It may already have been picked up.".into(),
+                )),
+            }
         });
     }
 }

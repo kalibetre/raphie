@@ -24,8 +24,11 @@ pub const SCENES: &[Scene] = &[
     ("new-conversation", new_conversation),
     ("conversations", conversations),
     ("conversation", conversation),
+    ("tools", tools),
     ("streaming", streaming),
+    ("working", working),
     ("approval", approval),
+    ("command-approval", command_approval),
 ];
 
 const ORIGIN: &str = "https://raphie.example.ts.net";
@@ -130,8 +133,16 @@ pub fn conversation(ui: &mut Ui) {
             None,
             "idle",
             vec![],
+            finished_activity(),
         ),
     );
+}
+
+/// The same conversation with the second reply's tool steps unfolded.
+pub fn tools(ui: &mut Ui) {
+    conversation(ui);
+    ui.open_runs.insert("t2".into());
+    ui.open_steps.insert("op-1".into());
 }
 
 pub fn streaming(ui: &mut Ui) {
@@ -153,8 +164,58 @@ pub fn streaming(ui: &mut Ui) {
             Some("Tomorrow, start with the **review**, then"),
             "writing",
             vec![],
+            vec![activity(
+                1,
+                -900,
+                "t2",
+                None,
+                "model.started",
+                "model started",
+                json!({}),
+            )],
         ),
     );
+}
+
+/// A tool is running, and a second message waits in the queue.
+pub fn working(ui: &mut Ui) {
+    let mut queued = turn("t3", -4_000, "Also check Friday.", None, "pending");
+    queued["queueMode"] = json!("followUp");
+    open(
+        ui,
+        "s-1",
+        observation(
+            "Plan the week",
+            vec![
+                turn("t2", -12_000, "What's on this week?", None, "pending"),
+                queued,
+            ],
+            None,
+            "tool",
+            vec![],
+            vec![
+                activity(
+                    1,
+                    -11_000,
+                    "t2",
+                    None,
+                    "model.completed",
+                    "model completed",
+                    json!({"stopReason": "toolUse"}),
+                ),
+                activity(
+                    2,
+                    -10_500,
+                    "t2",
+                    Some("op-1"),
+                    "tool.started",
+                    "mcp_calendar_list_events started",
+                    json!({"week": "2026-W43"}),
+                ),
+            ],
+        ),
+    );
+    ui.open_runs.insert("t2".into());
 }
 
 pub fn approval(ui: &mut Ui) {
@@ -174,15 +235,88 @@ pub fn approval(ui: &mut Ui) {
             None,
             "approval",
             vec![json!({
-                "id": "6f1d7f8e-2a7b-4f1e-9c4e-1b2a3c4d5e6f", "conversationId": "s-2",
+                "id": APPROVAL_ID, "conversationId": "s-2",
                 "server": "calendar", "tool": "execute",
                 "argumentsJson": "{\"code\":\"return calendar.events.list({ date: \\\"2026-10-21\\\" });\"}",
                 "createdAt": now - 30_000, "expiresAt": now + 570_000, "status": "pending",
                 "decidedVia": null, "execution": "waiting"
             })],
+            vec![
+                activity(
+                    1,
+                    -31_000,
+                    "t1",
+                    Some("op-1"),
+                    "tool.started",
+                    "mcp_calendar_execute started",
+                    json!({}),
+                ),
+                activity(
+                    2,
+                    -30_000,
+                    "t1",
+                    Some(APPROVAL_ID),
+                    "approval.requested",
+                    "approval requested",
+                    json!({}),
+                ),
+            ],
         ),
     );
 }
+
+/// A shell command waiting for approval, which can also be allowed for the
+/// rest of the conversation.
+pub fn command_approval(ui: &mut Ui) {
+    let now = now_ms();
+    open(
+        ui,
+        "s-2",
+        observation(
+            "Tidy the notes",
+            vec![turn(
+                "t1",
+                -20_000,
+                "List my notes folder.",
+                None,
+                "pending",
+            )],
+            None,
+            "approval",
+            vec![json!({
+                "id": COMMAND_APPROVAL_ID, "conversationId": "s-2",
+                "connectionIdentity": "raphie.workspace.command",
+                "server": "workspace", "tool": "bash",
+                "argumentsJson": "{\"command\":\"ls -la notes\\nwc -l notes/*.md\"}",
+                "createdAt": now - 10_000, "expiresAt": now + 590_000, "status": "pending",
+                "decidedVia": null, "execution": "waiting"
+            })],
+            vec![
+                activity(
+                    1,
+                    -11_000,
+                    "t1",
+                    Some("op-1"),
+                    "tool.started",
+                    "bash started",
+                    json!({}),
+                ),
+                activity(
+                    2,
+                    -10_000,
+                    "t1",
+                    Some(COMMAND_APPROVAL_ID),
+                    "approval.requested",
+                    "approval requested",
+                    json!({}),
+                ),
+            ],
+        ),
+    );
+}
+
+pub const APPROVAL_ID: &str = "6f1d7f8e-2a7b-4f1e-9c4e-1b2a3c4d5e6f";
+pub const COMMAND_APPROVAL_ID: &str = "0b7c1a52-93de-4c1f-8a44-5d6e7f809a1b";
 
 // ───────────────────────── builders ─────────────────────────
 
@@ -229,12 +363,101 @@ fn turn(id: &str, offset_ms: i64, text: &str, answer: Option<&str>, status: &str
     })
 }
 
+/// One journal entry, `offset_ms` from now.
+fn activity(
+    id: i64,
+    offset_ms: i64,
+    run_id: &str,
+    operation_id: Option<&str>,
+    kind: &str,
+    summary: &str,
+    details: Value,
+) -> Value {
+    json!({
+        "id": id, "at": now_ms() + offset_ms, "attemptId": "a", "conversationId": "s-1",
+        "runId": run_id, "operationId": operation_id, "pluginId": null,
+        "type": kind, "summary": summary, "detailsJson": details.to_string()
+    })
+}
+
+/// The journal behind the finished conversation: one plain reply, then a
+/// reply that read a file and searched the web first.
+fn finished_activity() -> Vec<Value> {
+    let usage = |tokens: u64, cost: f64| json!({"stopReason": "stop", "usage": {"totalTokens": tokens, "cost": {"total": cost}}});
+    vec![
+        activity(
+            1,
+            -598_000,
+            "t1",
+            None,
+            "model.completed",
+            "model completed",
+            usage(88, 0.0004),
+        ),
+        activity(
+            2,
+            -299_000,
+            "t2",
+            None,
+            "model.completed",
+            "model completed",
+            json!({"stopReason": "toolUse", "usage": {"totalTokens": 640, "cost": {"total": 0.0031}}}),
+        ),
+        activity(
+            3,
+            -298_500,
+            "t2",
+            Some("op-1"),
+            "tool.started",
+            "read_file started",
+            json!({"path": "notes/rust.md"}),
+        ),
+        activity(
+            4,
+            -298_200,
+            "t2",
+            Some("op-1"),
+            "tool.completed",
+            "read_file completed",
+            json!({}),
+        ),
+        activity(
+            5,
+            -298_000,
+            "t2",
+            Some("op-2"),
+            "tool.started",
+            "mcp_docs_search started",
+            json!({"query": "std::fs::read_dir"}),
+        ),
+        activity(
+            6,
+            -295_700,
+            "t2",
+            Some("op-2"),
+            "tool.completed",
+            "mcp_docs_search completed",
+            json!({}),
+        ),
+        activity(
+            7,
+            -294_000,
+            "t2",
+            None,
+            "model.completed",
+            "model completed",
+            usage(1210, 0.0092),
+        ),
+    ]
+}
+
 fn observation(
     title: &str,
     turns: Vec<Value>,
     live: Option<&str>,
     phase: &str,
     approvals: Vec<Value>,
+    activity: Vec<Value>,
 ) -> SessionObservation {
     from_json(json!({
         "session": {
@@ -245,6 +468,7 @@ fn observation(
         "turns": turns,
         "toolApprovals": approvals,
         "live": live.map(|text| json!({ "text": text, "generating": true })),
+        "activity": activity,
         "nextBefore": null,
         "phase": phase,
         "error": null

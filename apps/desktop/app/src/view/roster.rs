@@ -7,12 +7,12 @@
 use raphie_core::contracts::BotProfile;
 use raphie_core::engine::Command;
 use raphie_core::model::StreamStatus;
-use rune::{El, LiveRegion, ScrollSpec, TextCase, col, row, text};
+use rune::{El, LiveRegion, ScrollSpec, TextCase, Tx, col, row, text};
 
 use super::Look;
 use crate::avatar::bot_avatar;
 use crate::icons;
-use crate::state::Ui;
+use crate::state::{Ui, WebPage};
 use crate::theme::font;
 use crate::widgets::{count_badge, icon_button, one_line, pressable, status_dot};
 
@@ -181,7 +181,9 @@ pub fn plain(preview: &str) -> String {
         .join(" ")
 }
 
-/// Connection status on the left, sign-out on the right.
+/// Connection status on the left; account, settings and sign-out on the
+/// right. Account and settings open the web workspace, which has those
+/// screens; this app does not yet.
 fn footer(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     // "Reconnecting…" while the open conversation's stream is down.
@@ -223,9 +225,34 @@ fn footer(s: &Ui, look: &Look) -> El {
                     .live_region(LiveRegion::Polite),
                 ),
         )
-        .child(pressable(
-            icon_button(t, &icons::LOG_OUT, 15.0, "Sign out").key("rd-sign-out"),
-            true,
-            |s: &mut Ui| s.command(Command::SignOut),
-        ))
+        .child(
+            row()
+                .gap(4.0)
+                .center_y()
+                .child(
+                    icon_button(
+                        t,
+                        &icons::USER_ROUND,
+                        15.0,
+                        "Account (opens in your browser)",
+                    )
+                    .key("rd-account-settings")
+                    .on_press_tx(|s: &mut Ui, tx: &mut Tx| s.open_web(WebPage::Account, tx)),
+                )
+                .child(
+                    icon_button(
+                        t,
+                        &icons::SETTINGS,
+                        15.0,
+                        "Settings (opens in your browser)",
+                    )
+                    .key("rd-settings")
+                    .on_press_tx(|s: &mut Ui, tx: &mut Tx| s.open_web(WebPage::Settings, tx)),
+                )
+                .child(pressable(
+                    icon_button(t, &icons::LOG_OUT, 15.0, "Sign out").key("rd-sign-out"),
+                    true,
+                    |s: &mut Ui| s.command(Command::SignOut),
+                )),
+        )
 }

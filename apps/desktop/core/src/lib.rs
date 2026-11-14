@@ -6,6 +6,7 @@
 //! - [`sse`]: the event-stream parser.
 //! - [`auth`]: device sign-in rules and token storage.
 //! - [`model`]: client state and how each event changes it (pure, no I/O).
+//! - [`projections`]: tool steps, usage and labels worked out from activity.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
 //! - [`settings`]: non-secret preferences.
 //!
@@ -21,5 +22,6 @@ pub mod contracts;
 pub mod engine;
 pub mod model;
 pub mod origin;
+pub mod projections;
 pub mod settings;
 pub mod sse;

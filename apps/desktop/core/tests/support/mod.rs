@@ -40,6 +40,12 @@ pub struct Host {
     pub failing_submits: u32,
     pub submits: Vec<Value>,
     pub approvals: HashMap<String, &'static str>,
+    /// Decision bodies, as received.
+    pub decisions: Vec<Value>,
+    /// Control requests: the session id and the body.
+    pub controls: Vec<(String, Value)>,
+    /// Answer control requests with 409, as when the run already ended.
+    pub control_conflict: bool,
     pub history: Vec<Value>,
     /// Every request: method, path, and the headers that matter.
     pub requests: Vec<Seen>,
@@ -125,6 +131,7 @@ fn router(fake: Fake) -> Router {
         .route("/api/sessions/{id}/events", get(session_events))
         .route("/api/sessions/{id}/history", get(history))
         .route("/api/tool-approvals/{id}", post(decide))
+        .route("/api/sessions/{id}/control", post(control))
         .with_state(fake)
 }
 
@@ -335,6 +342,7 @@ async fn decide(
         return denied;
     }
     let mut host = fake.host.lock().unwrap();
+    host.decisions.push(body.clone());
     let Some(status) = host.approvals.get_mut(&id) else {
         return (
             StatusCode::NOT_FOUND,
@@ -351,6 +359,33 @@ async fn decide(
         };
     }
     Json(json!({ "status": *status })).into_response()
+}
+
+async fn control(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(
+        &fake,
+        "POST",
+        format!("/api/sessions/{id}/control"),
+        &headers,
+    );
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    host.controls.push((id, body));
+    if host.control_conflict {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Nothing is running." })),
+        )
+            .into_response();
+    }
+    Json(json!({ "ok": true })).into_response()
 }
 
 // ----- JSON in the runtime's shapes -----

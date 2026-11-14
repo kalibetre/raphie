@@ -1,9 +1,12 @@
 //! The UI's state: the core [`Model`] plus what only the window needs (text
 //! being typed, which side panels are open), and the bridge to the engine.
 
+use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use raphie_core::auth::KeychainStore;
+use raphie_core::contracts::{ControlAction, Decision, Scope, TurnStatus};
 use raphie_core::engine::{Client, Command, EngineConfig};
 use raphie_core::model::{AuthState, Effect, Model};
 use raphie_core::origin::Origin;
@@ -21,6 +24,16 @@ pub enum Filter {
     Approvals,
 }
 
+/// A page of the web workspace that this app opens in the browser because
+/// it has no screen of its own for it yet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WebPage {
+    /// The selected bot's settings.
+    Settings,
+    /// Account settings: password, passkeys, connected devices.
+    Account,
+}
+
 pub struct Ui {
     /// Everything the core knows. The view only reads it.
     pub model: Model,
@@ -29,6 +42,8 @@ pub struct Ui {
     client: Option<Client>,
     /// Commands sent while there was no engine (for tests).
     pub sent: Vec<Command>,
+    /// Web pages opened while there was no engine (for tests).
+    pub opened: Vec<String>,
     /// The sign-in screen's address field.
     pub origin_field: TextEdit,
     /// What the owner is typing to Raphie.
@@ -40,6 +55,13 @@ pub struct Ui {
     /// The conversations panel's search box.
     pub search: TextEdit,
     pub filter: Filter,
+    /// Turns whose list of tool steps is unfolded.
+    pub open_runs: HashSet<String>,
+    /// Tool steps whose arguments and result are unfolded.
+    pub open_steps: HashSet<String>,
+    /// The frame clock (seconds) when the view last refreshed its "elapsed"
+    /// labels.
+    ticked_at: f64,
 }
 
 impl Ui {
@@ -58,6 +80,7 @@ impl Ui {
             model: Model::new(),
             client: None,
             sent: Vec::new(),
+            opened: Vec::new(),
             origin_field: TextEdit::new(origin),
             composer: TextEdit::new(""),
             roster_open: true,
@@ -65,6 +88,9 @@ impl Ui {
             panel_open: false,
             search: TextEdit::new(""),
             filter: Filter::All,
+            open_runs: HashSet::new(),
+            open_steps: HashSet::new(),
+            ticked_at: 0.0,
         }
     }
 
@@ -139,12 +165,79 @@ impl Ui {
         self.command(Command::Send { text });
     }
 
-    pub fn decide(&mut self, approval_id: &str, decision: raphie_core::contracts::Decision) {
+    pub fn decide(&mut self, approval_id: &str, decision: Decision, scope: Scope) {
         if self.model.begin_decide(approval_id) {
             self.command(Command::Decide {
                 approval_id: approval_id.to_owned(),
                 decision,
+                scope,
             });
+        }
+    }
+
+    /// Stops the open conversation's run.
+    pub fn stop(&mut self) {
+        self.control(ControlAction::Stop, None);
+    }
+
+    /// Stops the run, or steers or re-queues the queued message `turn_id`.
+    pub fn control(&mut self, action: ControlAction, turn_id: Option<&str>) {
+        // `let ... else` returns early when there is no open conversation.
+        let Some(conversation) = &self.model.conversation else {
+            return;
+        };
+        self.command(Command::Control {
+            session_id: conversation.session_id.clone(),
+            action,
+            turn_id: turn_id.map(str::to_owned),
+        });
+    }
+
+    /// Whether Raphie is working in the open conversation: its newest turn
+    /// has no finished reply yet.
+    pub fn busy(&self) -> bool {
+        self.model.conversation.as_ref().is_some_and(|c| {
+            c.turns()
+                .last()
+                .is_some_and(|turn| turn.status == TurnStatus::Pending)
+        })
+    }
+
+    /// Unfolds or folds something by id: a run's steps, or one step's details.
+    pub fn toggle(set: &mut HashSet<String>, id: &str) {
+        // `remove` says whether the id was there; if not, add it.
+        if !set.remove(id) {
+            set.insert(id.to_owned());
+        }
+    }
+
+    /// The address of a web workspace page on the signed-in host.
+    pub fn web_url(&self, page: WebPage) -> Option<String> {
+        let origin = self.model.origin.as_ref()?;
+        let query = match page {
+            WebPage::Account => "view=settings&section=account".to_owned(),
+            WebPage::Settings => match &self.model.bot_id {
+                // Bot ids are letters, digits and dashes, so they need no
+                // escaping; anything else is left out rather than guessed at.
+                Some(id) if id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') => {
+                    format!("view=settings&bot={id}")
+                }
+                _ => "view=settings".to_owned(),
+            },
+        };
+        Some(origin.url(&format!("/?{query}")))
+    }
+
+    /// Opens a web workspace page in the owner's browser.
+    pub fn open_web(&mut self, page: WebPage, tx: &mut Tx) {
+        let Some(url) = self.web_url(page) else {
+            return;
+        };
+        if self.client.is_none() {
+            // Tests and headless runs: note it instead of opening a browser.
+            self.opened.push(url);
+        } else if tx.open_url(&url).is_err() {
+            self.model.notice = Some("Could not open a browser.".into());
         }
     }
 }
@@ -189,13 +282,24 @@ fn origin_argument(args: &[String]) -> Option<&str> {
 
 /// `AppSpec::poll`: runs before each frame. Applies whatever the engine
 /// reported; returns true when the view should be rebuilt.
-pub fn poll(ui: &mut Ui, _clock: f64, tx: &mut Tx) -> bool {
+pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     let Some(client) = &ui.client else {
         return false;
     };
     let events = client.drain();
+    // While Raphie works, wake up every second so "12s elapsed" keeps
+    // counting and an approval's deadline is noticed. Asking again on every
+    // poll adds no extra polls.
+    let busy = ui.busy();
+    if busy {
+        tx.wake_after(Duration::from_secs(1));
+    }
+    let ticked = busy && clock - ui.ticked_at >= 1.0;
+    if ticked {
+        ui.ticked_at = clock;
+    }
     if events.is_empty() {
-        return false;
+        return ticked;
     }
     for event in events {
         for effect in ui.model.apply(event) {

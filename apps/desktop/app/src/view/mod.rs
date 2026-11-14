@@ -25,6 +25,7 @@ mod header;
 mod panel;
 mod roster;
 mod sign_in;
+mod steps;
 mod welcome;
 
 use raphie_core::model::AuthState;
