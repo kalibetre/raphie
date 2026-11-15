@@ -7,13 +7,15 @@
 //! both icons because only debug builds have Rune's `--snap`.
 //!
 //! The icon is the brand face on a dark tile: sage for the release build,
-//! amber for the dev build, so the two are told apart in the Dock.
+//! amber with a "DEV" pill for the dev build, so the two are told apart
+//! in the Dock.
 
 use raphie_core::flavor::Flavor;
 use rune::color::hex;
-use rune::{AppSpec, Color, Cx, El, col, el};
+use rune::{AppSpec, Color, Cx, El, col, el, row, text};
 
 use crate::avatar::{Tone, bot_avatar};
+use crate::theme::font;
 
 /// The side of the drawing, in points. macOS's largest icon is 1024 px.
 const CANVAS: f32 = 1024.0;
@@ -66,16 +68,43 @@ pub fn tone(flavor: Flavor) -> Tone {
 
 // `_cx` is Rune's per-frame context; this drawing needs nothing from it.
 fn view(flavor: &Flavor, _cx: &mut Cx<Flavor>) -> El {
+    let mut tile = col()
+        .size(TILE, TILE)
+        .radius(TILE_RADIUS)
+        // The dark theme's sidebar colour.
+        .fill(color("#161512"))
+        .center()
+        .child(el().child(bot_avatar("default", tone(*flavor), FACE)));
+    if flavor.is_dev() {
+        tile = tile.child(dev_pill());
+    }
     // Nothing is filled outside the tile, so the corners stay transparent.
-    col().w_full().h_full().center().child(
-        col()
-            .size(TILE, TILE)
-            .radius(TILE_RADIUS)
-            // The dark theme's sidebar colour.
-            .fill(color("#161512"))
-            .center()
-            .child(el().child(bot_avatar("default", tone(*flavor), FACE))),
-    )
+    col().w_full().h_full().center().child(tile)
+}
+
+/// "DEV" in a light pill across the bottom of the tile, readable even at
+/// the Dock's small sizes. A ring in the tile's colour keeps it apart from
+/// the face it overlaps.
+fn dev_pill() -> El {
+    // A full-width row pinned near the bottom edge, out of the tile's flow,
+    // so the face stays where it is; the row centres the pill.
+    row()
+        .pin(Some(0.0), None, Some(0.0), Some(64.0))
+        .center()
+        .child(
+            row()
+                .px(60.0)
+                .py(6.0)
+                .radius(90.0)
+                // The dark theme's foreground, ringed in the tile's colour.
+                .fill(color("#ebe8df"))
+                .border(18.0, color("#161512"))
+                .child(
+                    text("DEV")
+                        .font(font(120.0, 800.0).tracking(8.0))
+                        .color(color("#161512")),
+                ),
+        )
 }
 
 fn color(value: &str) -> Color {

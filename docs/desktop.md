@@ -231,13 +231,13 @@ release build (`--release`) is **Raphie**. They are separate apps that can be
 installed and signed in side by side, so trying a change never disturbs the
 app in daily use:
 
-|                  | Raphie Dev                         | Raphie                         |
-| ---------------- | ---------------------------------- | ------------------------------ |
-| Identifier       | `dev.raphie.desktop.dev`           | `dev.raphie.desktop`           |
-| Settings folder  | `<config dir>/raphie-desktop-dev/` | `<config dir>/raphie-desktop/` |
-| Keychain service | `dev.raphie.desktop.dev`           | `dev.raphie.desktop`           |
-| Icon             | The brand face in amber            | The brand face in sage         |
-| In the window    | A "DEV" badge beside the brand     | Nothing extra                  |
+|                  | Raphie Dev                                 | Raphie                         |
+| ---------------- | ------------------------------------------ | ------------------------------ |
+| Identifier       | `dev.raphie.desktop.dev`                   | `dev.raphie.desktop`           |
+| Settings folder  | `<config dir>/raphie-desktop-dev/`         | `<config dir>/raphie-desktop/` |
+| Keychain service | `dev.raphie.desktop.dev`                   | `dev.raphie.desktop`           |
+| Icon             | The brand face in amber, with a "DEV" pill | The brand face in sage         |
+| In the window    | A "DEV" badge beside the brand             | Nothing extra                  |
 
 The release build keeps the names used before the split, so its settings
 and sign-in carry over; the dev build starts signed out. The theme is the
