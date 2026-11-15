@@ -292,6 +292,9 @@ pub struct Ui {
     pub roster_open: bool,
     /// Whether the conversations panel on the right shows.
     pub panel_open: bool,
+    /// The workspace's width in points, as last laid out; 0 before the
+    /// first layout. It decides whether the panel docks or floats.
+    pub workspace_width: f32,
     /// The conversations panel's search box.
     pub search: TextEdit,
     pub filter: Filter,
@@ -404,6 +407,16 @@ pub struct Viewer {
     pub name: String,
 }
 
+/// The bot roster's width on the left, the web's default.
+pub const ROSTER_WIDTH: f32 = 264.0;
+
+/// The conversations panel's width on the right, the web's default.
+pub const PANEL_WIDTH: f32 = 340.0;
+
+/// The narrowest the conversation may be with the panel docked beside it;
+/// narrower, and the panel floats over it instead.
+pub const MIN_CONVERSATION: f32 = 560.0;
+
 /// The composer's model picker: whether it is open, and how its list is
 /// narrowed.
 #[derive(Default)]
@@ -447,6 +460,7 @@ impl Ui {
             composer: TextEdit::new(""),
             drop_hover: false,
             roster_open: true,
+            workspace_width: 0.0,
             // Closed until asked for, like the web workspace's panel.
             panel_open: false,
             search: TextEdit::new(""),
@@ -538,7 +552,21 @@ impl Ui {
         });
     }
 
+    /// True when the conversations panel floats over the conversation
+    /// rather than standing beside it: when docking it would leave the
+    /// conversation narrower than [`MIN_CONVERSATION`]. The web's panel does
+    /// the same with its sheet.
+    pub fn panel_floats(&self) -> bool {
+        let roster = if self.roster_open { ROSTER_WIDTH } else { 0.0 };
+        // Before the first layout the width is unknown: dock, as usual.
+        self.workspace_width > 0.0 && self.workspace_width - roster - PANEL_WIDTH < MIN_CONVERSATION
+    }
+
     pub fn select_session(&mut self, session_id: Option<&str>) {
+        // A floating panel has done its job once a conversation is picked.
+        if self.panel_floats() {
+            self.panel_open = false;
+        }
         self.inbox_open = false;
         self.new_model = None;
         self.model_picker.open = false;

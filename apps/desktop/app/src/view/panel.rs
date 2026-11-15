@@ -13,14 +13,13 @@ use super::Look;
 use super::roster::plain;
 use crate::format;
 use crate::icons;
-use crate::state::{Filter, Ui};
+use crate::state::{Filter, PANEL_WIDTH, Ui};
 use crate::theme::{Theme, font};
-use crate::widgets::{Kind, Size, button, centered, count_badge, one_line, pressable};
+use crate::widgets::{Kind, Size, button, centered, count_badge, icon_button, one_line, pressable};
 
-/// The panel's width, the web's default.
-const WIDTH: f32 = 340.0;
-
-pub fn panel(s: &Ui, look: &Look) -> El {
+/// `floating` is true when the panel lies over the conversation (a narrow
+/// window); it then has a close button, as the web's sheet does.
+pub fn panel(s: &Ui, look: &Look, floating: bool) -> El {
     let t = &look.theme;
     let model = &s.model;
     let query = s.search.text.trim().to_lowercase();
@@ -151,11 +150,11 @@ pub fn panel(s: &Ui, look: &Look) -> El {
 
     col()
         .key("rd-panel")
-        .w(WIDTH)
+        .w(PANEL_WIDTH)
         .h_full()
         .fill(t.sidebar)
         .border_sides([0.0, 0.0, 0.0, 1.0], t.border)
-        .child(tab_strip(attention, look))
+        .child(tab_strip(attention, floating, look))
         .child(
             col()
                 .w_full()
@@ -178,7 +177,7 @@ fn conversations(count: usize) -> String {
 
 /// The strip of panel tabs. The web has room for more tabs here; the only
 /// one so far is Conversations, so it is always the selected one.
-fn tab_strip(attention: usize, look: &Look) -> El {
+fn tab_strip(attention: usize, floating: bool, look: &Look) -> El {
     let t = &look.theme;
     let mut tab = row()
         .w(176.0)
@@ -198,7 +197,7 @@ fn tab_strip(attention: usize, look: &Look) -> El {
     if attention > 0 {
         tab = tab.child(count_badge(t, attention));
     }
-    row()
+    let strip = row()
         .w_full()
         // As tall as the bar over the conversation beside it, so the tab
         // sits level with that bar's buttons. No line under it: with one
@@ -206,9 +205,18 @@ fn tab_strip(attention: usize, look: &Look) -> El {
         .h(44.0)
         .px(10.5)
         .center_y()
+        .justify_between()
         // Empty parts of the strip move the window, like the header's.
         .window_drag()
-        .child(tab)
+        .child(tab);
+    if !floating {
+        return strip;
+    }
+    strip.child(pressable(
+        icon_button(t, &icons::X, 16.0, "Close").key("rd-panel-close"),
+        true,
+        |s: &mut Ui| s.panel_open = false,
+    ))
 }
 
 fn search_box(s: &Ui, t: &Theme) -> El {

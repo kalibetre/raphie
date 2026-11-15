@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use raphie_core::attachments::Upload;
 use raphie_core::model::AuthState;
 use raphie_core::settings::ThemeChoice;
-use rune::{Cx, El, LiveRegion, Tx, col, row, text};
+use rune::{Color, Cx, El, LiveRegion, Tx, col, el, row, text};
 use rune_kit::Kit;
 
 use crate::avatar::Tones;
@@ -144,9 +144,35 @@ fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     }
     shell = shell.child(main);
     if s.panel_open {
-        shell = shell.child(panel::panel(s, look));
+        if s.panel_floats() {
+            overlays.push(floating_panel(s, look));
+        } else {
+            shell = shell.child(panel::panel(s, look, false));
+        }
     }
-    shell
+    // The width decides whether the panel docks (`Ui::panel_floats`).
+    shell.on_layout(|s: &mut Ui, rect: [f32; 4]| s.workspace_width = rect[2])
+}
+
+/// The conversations panel over the right of the conversation, for a window
+/// too narrow to dock it: a dimmed backdrop that closes it when pressed,
+/// and the panel with a shadow along its edge and a close button.
+fn floating_panel(s: &Ui, look: &Look) -> El {
+    row()
+        .key("rd-panel-float")
+        .absolute(0.0, 0.0)
+        .w_full()
+        .h_full()
+        .child(
+            el().key("rd-panel-scrim")
+                .grow(1.0)
+                .h_full()
+                // Dimmed and blurred, as behind the web's sheet.
+                .fill(Color::BLACK.alpha(0.1))
+                .backdrop_blur(4.0)
+                .on_press(|s: &mut Ui| s.panel_open = false),
+        )
+        .child(panel::panel(s, look, true).box_shadow(look.theme.composer_shadow[1]))
 }
 
 /// A message for the owner (a stale approval, a failed send), styled like

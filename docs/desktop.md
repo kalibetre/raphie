@@ -40,7 +40,10 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   "Load more conversations" pages), and bot-prefixed routes for named bots. The
   conversations panel (the button at the top right) searches titles and
   filters to conversations with new replies or that need an approval. ⌘B
-  hides the roster.
+  hides the roster. In a window too narrow to keep the conversation at least
+  560 pt wide beside the roster and the panel, the panel floats over the
+  conversation instead, as the web's sheet does: picking a conversation, its
+  close button, Escape or a press outside closes it.
 - **New replies**: a conversation with replies you have not read shows a dot,
   a bolder title and "2 new replies"; the panel's button, its tab and each
   bot's row in the roster count the conversations that need you (new

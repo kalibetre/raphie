@@ -4020,3 +4020,70 @@ fn a_picture_that_is_not_ready_cannot_be_opened_and_shows_nothing() {
     settle(&mut rt);
     assert!(rt.find("rd-viewer").is_none());
 }
+
+#[test]
+fn a_narrow_window_floats_the_conversations_panel_over_the_conversation() {
+    // 1280 wide leaves the conversation 676 points beside both columns.
+    let rt = render(scenes::conversations, false);
+    assert!(rt.state.panel_open);
+    assert!(!rt.state.panel_floats());
+    assert!(rt.find("rd-panel").is_some());
+    assert!(rt.find("rd-panel-float").is_none());
+    assert!(rt.find("rd-panel-close").is_none());
+
+    // 960 would leave it 356: the panel floats instead.
+    let mut rt = render_sized(scenes::conversations, false, (960.0, 640.0));
+    assert!(rt.state.panel_floats());
+    assert!(rt.find("rd-panel-float").is_some());
+    // The conversation keeps the window's width beside the roster.
+    let main = element(&rt, "rd-main");
+    assert!(main.rect[2] > 600.0, "{:?}", main.rect);
+
+    // Picking a conversation closes it.
+    // The key is read first: `click` needs `rt` to itself.
+    let row = element_with_label(&rt, "Tea preferences");
+    click(&mut rt, &row);
+    assert!(!rt.state.panel_open);
+    assert!(rt.find("rd-panel-float").is_none());
+
+    // So does a press outside it.
+    rt.update(|ui, _| ui.panel_open = true);
+    settle(&mut rt);
+    click(&mut rt, "rd-panel-scrim");
+    assert!(!rt.state.panel_open);
+
+    // And its close button, which only a floating panel has.
+    rt.update(|ui, _| ui.panel_open = true);
+    settle(&mut rt);
+    click(&mut rt, "rd-panel-close");
+    assert!(!rt.state.panel_open);
+
+    // Hiding the roster makes room: at 960 the panel docks again.
+    rt.update(|ui, _| {
+        ui.roster_open = false;
+        ui.panel_open = true;
+    });
+    settle(&mut rt);
+    assert!(!rt.state.panel_floats());
+    assert!(rt.find("rd-panel-float").is_none());
+}
+
+#[test]
+fn escape_closes_a_floating_panel_but_not_a_docked_one() {
+    let on_key = raphie_desktop::spec().on_key.expect("window keys");
+    let escape = KeyEvent {
+        key: Key::Escape,
+        mods: Default::default(),
+    };
+    let mut rt = render_sized(scenes::conversations, false, (960.0, 640.0));
+    rt.update(|ui, tx| {
+        assert!(on_key(ui, &escape, tx));
+    });
+    assert!(!rt.state.panel_open);
+
+    let mut rt = render(scenes::conversations, false);
+    rt.update(|ui, tx| {
+        assert!(!on_key(ui, &escape, tx));
+    });
+    assert!(rt.state.panel_open);
+}

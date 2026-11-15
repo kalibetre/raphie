@@ -13,12 +13,9 @@ use super::Look;
 use crate::avatar::bot_avatar;
 use crate::icons;
 use crate::sections::Page;
-use crate::state::Ui;
+use crate::state::{ROSTER_WIDTH, Ui};
 use crate::theme::font;
 use crate::widgets::{count_badge, dev_badge, icon_button, one_line, pressable, status_dot};
-
-/// The roster's width, the web's default.
-const WIDTH: f32 = 264.0;
 
 pub fn roster(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
@@ -31,7 +28,7 @@ pub fn roster(s: &Ui, look: &Look) -> El {
     }
     col()
         .key("rd-roster")
-        .w(WIDTH)
+        .w(ROSTER_WIDTH)
         .h_full()
         .pb(16.0)
         .fill(t.sidebar)
