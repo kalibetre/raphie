@@ -28,7 +28,7 @@ pub fn diagnostics(s: &Ui, look: &Look) -> El {
     page(
         "rd-page-diagnostics",
         "Diagnostics",
-        "Timings and failures from this Raphie backend’s runs. Nothing leaves it.",
+        "Timings and failures from every bot’s runs. Nothing leaves this backend.",
         Scope::App,
         vec![telemetry(s, BACKEND, t), traces(s, t)],
         look,
