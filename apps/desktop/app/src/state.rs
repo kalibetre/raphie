@@ -162,6 +162,10 @@ const JOBS_REFRESH: f64 = 5.0;
 /// interval).
 const INSPECT_REFRESH: f64 = 5.0;
 
+/// The bot whose routes carry what belongs to the whole backend: the
+/// runtime serves trace collection and traces on the default bot's routes.
+pub const BACKEND: &str = "default";
+
 /// The filter box and the unfolded rows of Diagnostics or Activity.
 pub struct InspectView {
     pub filter: TextEdit,
@@ -523,21 +527,6 @@ impl Ui {
                     bot_id: bot_id.clone(),
                 });
             }
-            if *section == BotSection::Diagnostics {
-                self.spans = InspectView::new();
-                self.model.export_saved = None;
-                self.model.export_error = None;
-                self.model.telemetry_error = None;
-                // The settings hold the telemetry switch.
-                self.command(Command::LoadSettings {
-                    bot_id: bot_id.clone(),
-                });
-                self.model.traces.open(bot_id, self.trace_hours);
-                self.command(Command::LoadTraces {
-                    bot_id: bot_id.clone(),
-                    hours: self.trace_hours,
-                });
-            }
             if *section == BotSection::Activity {
                 self.events = InspectView::new();
                 self.model.export_saved = None;
@@ -615,6 +604,21 @@ impl Ui {
                     bot_id: bot_id.clone(),
                 });
             }
+        }
+        if page == Page::Diagnostics {
+            self.spans = InspectView::new();
+            self.model.export_saved = None;
+            self.model.export_error = None;
+            self.model.telemetry_error = None;
+            // The runtime's settings hold the telemetry switch.
+            self.command(Command::LoadSettings {
+                bot_id: BACKEND.to_owned(),
+            });
+            self.model.traces.open(BACKEND, self.trace_hours);
+            self.command(Command::LoadTraces {
+                bot_id: BACKEND.to_owned(),
+                hours: self.trace_hours,
+            });
         }
         let browsing = matches!(
             &page,
@@ -1025,17 +1029,15 @@ impl Ui {
         }
     }
 
-    /// The bot whose Diagnostics (`traces`) or Activity page is on screen.
+    /// Whose list is on screen: the backend's for Diagnostics (`traces`),
+    /// or the bot whose Activity page shows.
     fn inspected_bot(&self, traces: bool) -> Option<String> {
-        let wanted = if traces {
-            BotSection::Diagnostics
-        } else {
-            BotSection::Activity
-        };
         match &self.screen {
-            Screen::Settings(Page::Bot { bot_id, section }) if *section == wanted => {
-                Some(bot_id.clone())
-            }
+            Screen::Settings(Page::Diagnostics) if traces => Some(BACKEND.to_owned()),
+            Screen::Settings(Page::Bot {
+                bot_id,
+                section: BotSection::Activity,
+            }) if !traces => Some(bot_id.clone()),
             _ => None,
         }
     }

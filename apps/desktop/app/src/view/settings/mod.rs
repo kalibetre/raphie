@@ -38,6 +38,7 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
     let content = match page {
         Page::Account => account::account(s, look),
         Page::Appearance => appearance::appearance(s, look),
+        Page::Diagnostics => diagnostics::diagnostics(s, look),
         Page::Bot {
             bot_id,
             section: BotSection::Profile,
@@ -54,10 +55,6 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::Memory,
         } => memory::memory(s, bot_id, look, overlays),
-        Page::Bot {
-            bot_id,
-            section: BotSection::Diagnostics,
-        } => diagnostics::diagnostics(s, bot_id, look),
         Page::Bot {
             bot_id,
             section: BotSection::Activity,
@@ -262,6 +259,7 @@ pub fn page_icon(page: &Page) -> &'static Icon {
     match page {
         Page::Account => &icons::LOG_OUT,
         Page::Appearance => &icons::PALETTE,
+        Page::Diagnostics => &icons::RADIO,
         Page::Bot { section, .. } => match section {
             BotSection::Profile => &icons::USER_ROUND,
             BotSection::Providers => &icons::KEY_ROUND,
@@ -273,7 +271,6 @@ pub fn page_icon(page: &Page) -> &'static Icon {
             BotSection::Sandbox => &icons::BOX,
             BotSection::Workspace => &icons::FOLDER_OPEN,
             BotSection::Jobs => &icons::CLOCK,
-            BotSection::Diagnostics => &icons::RADIO,
             BotSection::Activity => &icons::LIST_TREE,
         },
     }

@@ -1,10 +1,14 @@
 //! Settings → Diagnostics: the switch that collects diagnostic traces, and
-//! the recent traces themselves.
+//! the recent traces themselves. An app-wide page, beside Account and
+//! Appearance: trace collection is one setting of the runtime and its
+//! trace store is shared by every bot.
 //!
 //! Mirrors `telemetry-settings.tsx` and `diagnostics.tsx`. The traces and
 //! the filter's rule are in the core (`raphie_core::inspection`).
 //!
-//! One difference from the web: "Export traces" saves the JSON straight
+//! Two differences from the web. There Diagnostics is listed under each
+//! bot, though only the default bot's page has anything to show; here it is
+//! one page under App. And "Export traces" saves the JSON straight
 //! into this machine's Downloads folder and says what it was saved as.
 
 use raphie_core::contracts::{DiagnosticSpan, SpanStatus, TraceDiagnostics, TraceState};
@@ -13,41 +17,22 @@ use raphie_core::inspection::{TRACE_WINDOWS, span_matches};
 use rune::{El, col, row, text};
 
 use super::inspect::{Entry, empty, entry, filter_box, heading, meta};
-use super::parts::{Scope, group, group_heading, page, setting};
+use super::parts::{Scope, group, page, setting};
 use crate::format::{iso_utc, time_seconds};
 use crate::icons;
-use crate::sections::BotSection;
-use crate::state::Ui;
+use crate::state::{BACKEND, Ui};
 use crate::theme::{Theme, font};
 use crate::view::Look;
 use crate::widgets::{Kind, Size, button, icon_button, pressable, switch};
 
-pub fn diagnostics(s: &Ui, bot_id: &str, look: &Look) -> El {
+pub fn diagnostics(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
-    let name = s
-        .model
-        .bots
-        .iter()
-        .find(|bot| bot.id == bot_id)
-        .map_or(bot_id, |bot| bot.name.as_str());
-    // Trace collection is one setting of the runtime, kept with the
-    // default bot.
-    let first = if bot_id == "default" {
-        telemetry(s, bot_id, t)
-    } else {
-        group_heading(
-            t,
-            "Trace export",
-            "This bot’s conversation activity is available from the activity inspector. Trace export is currently available for the default bot.",
-            None,
-        )
-    };
     page(
         "rd-page-diagnostics",
         "Diagnostics",
-        &BotSection::Diagnostics.lede(name),
-        Scope::Bot { id: bot_id, name },
-        vec![first, traces(s, t)],
+        "Timings and failures from this Raphie backend’s runs. Nothing leaves it.",
+        Scope::App,
+        vec![telemetry(s, BACKEND, t), traces(s, t)],
         look,
     )
 }

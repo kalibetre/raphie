@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 
 use crate::format::now_ms;
 use crate::sections::{BotSection, Page};
-use crate::state::{Dropdown, Ui};
+use crate::state::{BACKEND, Dropdown, Ui};
 
 /// A named change to a fresh [`Ui`], as `AppSpec::scenes` takes them.
 pub type Scene = (&'static str, fn(&mut Ui));
@@ -76,10 +76,6 @@ pub const SCENES: &[Scene] = &[
     ("settings-mcp-empty", settings_mcp_empty),
     ("settings-mcp-loading", settings_mcp_loading),
     ("settings-diagnostics", settings_diagnostics),
-    (
-        "settings-diagnostics-research",
-        settings_diagnostics_research,
-    ),
     (
         "settings-diagnostics-unavailable",
         settings_diagnostics_unavailable,
@@ -314,20 +310,17 @@ pub fn bot_events() -> Vec<ActivityEvent> {
     .expect("the scene's events match the contract")
 }
 
-/// Opens a bot's Diagnostics with `traces` for the last hour.
-fn open_diagnostics(ui: &mut Ui, bot_id: &str, traces: Option<TraceDiagnostics>) {
+/// Opens Settings → Diagnostics with `traces` for the last hour.
+fn open_diagnostics(ui: &mut Ui, traces: Option<TraceDiagnostics>) {
     settings_account(ui);
     ui.model.apply(Event::BotSettings {
-        bot_id: bot_id.to_owned(),
+        bot_id: BACKEND.to_owned(),
         settings: Box::new(model_settings()),
     });
-    ui.open_settings(Some(Page::Bot {
-        bot_id: bot_id.to_owned(),
-        section: BotSection::Diagnostics,
-    }));
+    ui.open_settings(Some(Page::Diagnostics));
     if let Some(data) = traces {
         ui.model.apply(Event::Traces {
-            bot_id: bot_id.to_owned(),
+            bot_id: BACKEND.to_owned(),
             hours: 1,
             data: Box::new(data),
         });
@@ -336,24 +329,17 @@ fn open_diagnostics(ui: &mut Ui, bot_id: &str, traces: Option<TraceDiagnostics>)
 
 /// Settings → Diagnostics with three spans, the failed one unfolded.
 pub fn settings_diagnostics(ui: &mut Ui) {
-    open_diagnostics(ui, "default", Some(trace_diagnostics(true)));
+    open_diagnostics(ui, Some(trace_diagnostics(true)));
     ui.spans
         .open
         .insert("4bf92f3577b34da6a3ce929d0e0e4736:c7ad6b7169203331".into());
 }
 
-/// Diagnostics for a bot other than the default, with no exported traces.
-pub fn settings_diagnostics_research(ui: &mut Ui) {
-    let mut none = trace_diagnostics(true);
-    none.spans.clear();
-    open_diagnostics(ui, "b-research", Some(none));
-}
-
 /// Diagnostics while the trace backend does not answer.
 pub fn settings_diagnostics_unavailable(ui: &mut Ui) {
-    open_diagnostics(ui, "default", None);
+    open_diagnostics(ui, None);
     ui.model.apply(Event::TracesFailed {
-        bot_id: "default".into(),
+        bot_id: BACKEND.to_owned(),
         hours: 1,
     });
 }

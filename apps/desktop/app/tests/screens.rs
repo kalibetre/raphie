@@ -636,30 +636,38 @@ fn a_failed_save_says_why_and_a_bad_custom_colour_is_refused() {
 }
 
 #[test]
-fn another_bots_diagnostics_have_no_telemetry_switch_and_fold_with_the_bot() {
-    let mut rt = render(scenes::settings_diagnostics_research, false);
+fn diagnostics_is_an_app_page_and_folding_a_bot_keeps_the_page() {
+    let mut rt = render(scenes::settings_account, false);
+    // Diagnostics is listed with Account and Appearance, not under a bot.
+    assert!(rt.find("rd-nav-default-telemetry").is_none());
+    click(&mut rt, "rd-nav-diagnostics");
+    assert_eq!(rt.state.screen, Screen::Settings(Page::Diagnostics));
     let text = screen_text(&rt);
-    assert!(text.contains("Research only"), "{text}");
-    assert!(text.contains("Trace export is currently available for the default bot."));
-    assert!(rt.find("rd-telemetry").is_none());
-    assert_eq!(
-        element(&rt, "rd-traces-empty-title").text.as_deref(),
-        Some("No exported traces in this window")
-    );
+    assert!(text.contains("App-wide"), "{text}");
+    assert!(rt.find("rd-telemetry").is_some());
     assert!(rt.state.opened.is_empty(), "every page is in the app now");
+
     // Folding a bot hides its pages without leaving the page.
+    rt.update(|ui, _| {
+        ui.open_settings(Some(Page::Bot {
+            bot_id: "b-research".into(),
+            section: BotSection::Activity,
+        }));
+    });
+    settle(&mut rt);
+    assert!(rt.find("rd-nav-b-research-activity").is_some());
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-telemetry").is_none());
+    assert!(rt.find("rd-nav-b-research-activity").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("Diagnostics")
+        Some("Activity")
     );
 }
 
 #[test]
 fn traces_load_filter_unfold_and_switch_window() {
     let mut rt = render_sized(scenes::settings_account, false, (1280.0, 1800.0));
-    click(&mut rt, "rd-nav-default-telemetry");
+    click(&mut rt, "rd-nav-diagnostics");
     assert_eq!(
         rt.state.sent.last(),
         Some(&Command::LoadTraces {
