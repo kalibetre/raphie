@@ -11,6 +11,7 @@ use raphie_core::contracts::{
     ControlAction, Decision, MemoryProvider, MemoryStatus, Scope, TurnStatus,
 };
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
+use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
 use raphie_core::model::{AuthState, Effect, Event, Model};
 use raphie_core::model_library::ModelFilter;
@@ -18,6 +19,7 @@ use raphie_core::origin::Origin;
 use raphie_core::settings::{Settings, ThemeChoice};
 use rune::{TextEdit, Tx, Waker};
 
+use crate::mcp::McpForm;
 use crate::memory::MemoryDraft;
 use crate::profile::ProfileDraft;
 use crate::sections::{BotSection, Page};
@@ -132,6 +134,11 @@ impl Default for ModelsView {
 /// (the web waits 300 ms too).
 const SEARCH_PAUSE: f64 = 0.3;
 
+/// How often the MCP tools page asks again how its connections are doing,
+/// in seconds (the web's interval). A connection's state changes on its
+/// own: an authorization finishes in the browser, a server drops.
+const MCP_REFRESH: f64 = 5.0;
+
 /// "Browse memory": the search box, and the one memory being changed. The
 /// list itself is in the core (`Model::memories`).
 pub struct MemoriesView {
@@ -218,6 +225,11 @@ pub struct Ui {
     pub memory: MemoryDraft,
     /// Settings → Memory → Browse memory.
     pub memories: MemoriesView,
+    /// Settings → MCP tools: the "Add a connection" form.
+    pub mcp: McpForm,
+    /// The frame clock when the MCP tools page last asked for its
+    /// connections.
+    mcp_asked_at: f64,
     /// The Profile form on screen.
     pub profile: ProfileDraft,
     /// Unsaved Profile edits for other bots, kept while the owner looks at
@@ -265,6 +277,8 @@ impl Ui {
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
             memories: MemoriesView::new(),
+            mcp: McpForm::new(),
+            mcp_asked_at: 0.0,
             profile: ProfileDraft::empty(),
             parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
@@ -421,6 +435,16 @@ impl Ui {
                 self.model.memory_message = None;
                 // Notice settings saved in another client.
                 self.command(Command::LoadMemory {
+                    bot_id: bot_id.clone(),
+                });
+            }
+            if *section == BotSection::Mcp {
+                // A fresh form each time: a typed token is never kept for
+                // a page that is not on screen.
+                self.mcp = McpForm::new();
+                self.model.mcp_message = None;
+                self.model.mcp_change_error = None;
+                self.command(Command::LoadMcp {
                     bot_id: bot_id.clone(),
                 });
             }
@@ -842,6 +866,83 @@ impl Ui {
         }
     }
 
+    /// Sends the "Add a connection" form, or says what is wrong with it.
+    pub fn add_mcp(&mut self) {
+        // The form belongs to the page on screen, so that names the bot.
+        let Screen::Settings(Page::Bot {
+            bot_id,
+            section: BotSection::Mcp,
+        }) = &self.screen
+        else {
+            return;
+        };
+        let bot_id = bot_id.clone();
+        if !self.mcp.is_complete() {
+            return;
+        }
+        match self.mcp.connection() {
+            Ok(connection) => {
+                self.mcp.error = None;
+                if self.model.begin_change_mcp() {
+                    self.command(Command::AddMcp { bot_id, connection });
+                }
+            }
+            Err(problem) => {
+                self.mcp.error = Some(problem);
+                self.model.mcp_message = None;
+            }
+        }
+    }
+
+    /// Enables, pauses, removes or imports one MCP connection.
+    pub fn change_mcp(&mut self, bot_id: &str, id: &str, action: McpAction) {
+        self.mcp.error = None;
+        if self.model.begin_change_mcp() {
+            self.command(Command::ChangeMcp {
+                bot_id: bot_id.to_owned(),
+                id: id.to_owned(),
+                action,
+            });
+        }
+    }
+
+    /// Empties the "Add a connection" form, typed token included.
+    pub fn discard_mcp(&mut self) {
+        self.mcp = McpForm::new();
+        self.model.mcp_change_error = None;
+    }
+
+    /// Opens an MCP server's sign-in page in the owner's browser. The
+    /// address comes from the server, so anything but a web page is refused.
+    pub fn authorize_mcp(&mut self, url: &str, tx: &mut Tx) {
+        if url.starts_with("https://") || url.starts_with("http://") {
+            self.open_url(url.to_owned(), tx);
+        } else {
+            self.model.mcp_change_error = Some("The authorization link is not a web page.".into());
+        }
+    }
+
+    /// While the MCP tools page shows, asks for its connections again every
+    /// few seconds; `clock` is the frame clock in seconds. Returns true
+    /// while the page shows, so the caller keeps the clock ticking.
+    pub fn refresh_mcp(&mut self, clock: f64) -> bool {
+        let Screen::Settings(Page::Bot {
+            bot_id,
+            section: BotSection::Mcp,
+        }) = &self.screen
+        else {
+            return false;
+        };
+        let due = clock - self.mcp_asked_at >= MCP_REFRESH;
+        // Not while a change is on its way: its answer is the newer list.
+        if due && !self.model.changing_mcp {
+            let bot_id = bot_id.clone();
+            self.mcp_asked_at = clock;
+            self.command(Command::LoadMcp { bot_id });
+        }
+        true
+    }
+
     /// Leaves Settings for the conversation a memory came from.
     pub fn open_memory_source(&mut self, bot_id: &str, session_id: &str) {
         self.select_bot(bot_id);
@@ -975,6 +1076,9 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     if ui.memories.search_pending() {
         tx.wake_after(Duration::from_millis(300));
     }
+    if ui.refresh_mcp(clock) {
+        tx.wake_after(Duration::from_secs(1));
+    }
     // While Raphie works, wake up every second so "12s elapsed" keeps
     // counting and an approval's deadline is noticed. Asking again on every
     // poll adds no extra polls.
@@ -1015,6 +1119,11 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     {
                         ui.memory = MemoryDraft::of(&bot_id, &status.configuration);
                     }
+                }
+                Effect::McpAdded => {
+                    // Replacing the form drops what was typed, which wipes
+                    // the token and the environment.
+                    ui.mcp = McpForm::new();
                 }
                 Effect::MemoryChanged(id) => {
                     // The correction was saved or the memory is gone: close

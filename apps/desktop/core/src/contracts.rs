@@ -20,6 +20,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::mcp::{McpAction, McpTransport};
+
 /// `Page<T>` in `packages/contracts/src/sessions/views.ts`.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Page<T> {
@@ -627,4 +629,66 @@ pub(crate) struct SaveMemoryBody<'a> {
     /// replaces it (`Some(Some(key))`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<Option<&'a str>>,
+}
+
+/// `BotMcpConnection` in `packages/contracts/src/bots/automation.ts`: one of
+/// a bot's connections to an MCP server, and how it is doing.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct McpConnection {
+    /// Set by the host's environment rather than saved for this bot. Such
+    /// a connection can only be imported.
+    #[serde(default, deserialize_with = "from_environment", rename = "source")]
+    pub from_environment: bool,
+    pub id: String,
+    pub name: String,
+    pub transport: McpTransport,
+    /// The server's URL, or the command the runtime starts.
+    pub address: String,
+    pub enabled: bool,
+    pub connected: bool,
+    pub tool_count: u32,
+    /// Where the owner signs in, while the server waits for authorization.
+    #[serde(default)]
+    pub authorization_url: Option<String>,
+    #[serde(default)]
+    pub authorization_failed: bool,
+}
+
+/// Reads `source`: `"environment"` or `"saved"`.
+fn from_environment<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    let source = Option::<String>::deserialize(deserializer)?;
+    Ok(source.as_deref() == Some("environment"))
+}
+
+/// What every `/api/mcp` route answers: the bot's connections as they are
+/// after the request.
+#[derive(Debug, Deserialize)]
+pub(crate) struct McpList {
+    pub items: Vec<McpConnection>,
+}
+
+/// The body of `POST /api/mcp` (`SaveMcpConnection`). `tag` writes the
+/// variant's name into a `transport` field beside the others.
+#[derive(Serialize)]
+#[serde(tag = "transport", rename_all = "lowercase")]
+pub(crate) enum SaveMcpBody<'a> {
+    Http {
+        name: &'a str,
+        url: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        token: Option<&'a str>,
+    },
+    Stdio {
+        name: &'a str,
+        command: &'a str,
+        args: &'a [String],
+        env: std::collections::BTreeMap<&'a str, &'a str>,
+    },
+}
+
+/// The body of `POST /api/mcp/:id`.
+#[derive(Serialize)]
+pub(crate) struct McpActionBody {
+    pub action: McpAction,
 }

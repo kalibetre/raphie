@@ -10,6 +10,7 @@ use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, Scope, UpdateBotProfile,
 };
 use raphie_core::engine::{Command, ConnectionChange};
+use raphie_core::mcp::{McpAction, NewMcpConnection, summary};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
 use support::{Driver, FakeHost, TOKEN, observation_json, sessions_json, turn_json};
@@ -594,6 +595,96 @@ fn memory_settings_load_save_and_test() {
     host.with(|h| h.memory_unreachable = true);
     let said = test(&mut driver);
     assert!(said.contains("did not answer"), "{said}");
+}
+
+#[test]
+fn mcp_connections_are_listed_added_and_changed() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.mcp = vec![serde_json::json!({
+            "source": "environment", "id": "env-1", "name": "Host tools",
+            "transport": "stdio", "address": "npx", "enabled": true,
+            "connected": true, "toolCount": 5, "credentialConfigured": false,
+        })];
+    });
+    let (mut driver, _) = signed_in(&host);
+    let bot_id = || "default".to_owned();
+    driver.send(Command::LoadMcp { bot_id: bot_id() });
+    driver.until("the connections", |m, _| m.mcp.contains_key("default"));
+    let listed = &driver.model.mcp["default"];
+    assert!(listed[0].from_environment);
+    assert_eq!(summary(&listed[0]), "5 tools · Local command · npx");
+
+    let add = |driver: &mut Driver, connection: NewMcpConnection| {
+        assert!(driver.model.begin_change_mcp());
+        driver.send(Command::AddMcp {
+            bot_id: "default".into(),
+            connection,
+        });
+        driver.until("the add", |m, _| !m.changing_mcp);
+    };
+    // A URL server without a token waits for the owner to authorize it.
+    add(
+        &mut driver,
+        NewMcpConnection::Http {
+            name: "Project tools".into(),
+            url: "https://tools.example.com/mcp".into(),
+            token: None,
+        },
+    );
+    let added = &driver.model.mcp["default"][1];
+    assert!(added.authorization_url.is_some());
+    assert!(summary(added).starts_with("Authorization required · Streamable HTTP"));
+    let said = driver.model.mcp_message.clone().unwrap_or_default();
+    assert!(said.contains("Choose Authorize"), "{said}");
+
+    // A local command carries its arguments and environment once.
+    add(
+        &mut driver,
+        NewMcpConnection::Stdio {
+            name: "Local".into(),
+            command: "npx".into(),
+            args: vec!["-y".into(), "a-server".into()],
+            env: vec![("API_TOKEN".into(), Secret::new("mcp-test-token"))],
+        },
+    );
+    host.with(|h| {
+        assert!(h.mcp_adds[0].get("token").is_none());
+        assert_eq!(h.mcp_adds[1]["transport"], "stdio");
+        assert_eq!(h.mcp_adds[1]["args"][1], "a-server");
+        assert_eq!(h.mcp_adds[1]["env"]["API_TOKEN"], "mcp-test-token");
+    });
+    let printed = format!("{:?}", driver.model.mcp["default"]);
+    assert!(!printed.contains("mcp-test-token"), "{printed}");
+
+    // What the runtime refuses is reported and adds nothing.
+    add(
+        &mut driver,
+        NewMcpConnection::Http {
+            name: "Broken".into(),
+            url: "not a url".into(),
+            token: Some(Secret::new("mcp-test-token")),
+        },
+    );
+    let error = driver.model.mcp_change_error.clone().unwrap_or_default();
+    assert!(error.contains("valid server URL"), "{error}");
+    assert_eq!(driver.model.mcp["default"].len(), 3);
+
+    let change = |driver: &mut Driver, id: &str, action: McpAction| {
+        assert!(driver.model.begin_change_mcp());
+        driver.send(Command::ChangeMcp {
+            bot_id: "default".into(),
+            id: id.into(),
+            action,
+        });
+        driver.until("the change", |m, _| !m.changing_mcp);
+    };
+    change(&mut driver, "mcp-3", McpAction::Disable);
+    assert!(summary(&driver.model.mcp["default"][2]).starts_with("Paused"));
+    change(&mut driver, "env-1", McpAction::Import);
+    assert!(!driver.model.mcp["default"][0].from_environment);
+    change(&mut driver, "mcp-2", McpAction::Remove);
+    assert_eq!(driver.model.mcp["default"].len(), 2);
 }
 
 #[test]

@@ -10,8 +10,9 @@ use std::collections::{HashMap, HashSet};
 
 use crate::auth::DeviceCode;
 use crate::contracts::{
-    Account, ApprovalStatus, BotProfile, MemoryEvidence, MemoryPage, MemoryStatus, Page, Receipt,
-    RuntimeSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
+    Account, ApprovalStatus, BotProfile, McpConnection, MemoryEvidence, MemoryPage, MemoryStatus,
+    Page, Receipt, RuntimeSettings, SessionApproval, SessionObservation, SessionSummary,
+    SessionTurn,
 };
 use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
@@ -80,6 +81,28 @@ pub enum Event {
     },
     /// A test of the saved memory back end ended; `message` says how.
     MemoryTested {
+        message: String,
+    },
+    /// A bot's connections to MCP servers.
+    Mcp {
+        bot_id: String,
+        items: Vec<McpConnection>,
+    },
+    McpFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// A connection was added; these are the bot's connections with it.
+    McpAdded {
+        bot_id: String,
+        items: Vec<McpConnection>,
+    },
+    /// A connection was enabled, paused, removed or imported.
+    McpChanged {
+        bot_id: String,
+        items: Vec<McpConnection>,
+    },
+    McpChangeFailed {
         message: String,
     },
     /// One page of a bot's saved memories. `ticket` is the load's, from
@@ -209,6 +232,9 @@ pub enum Effect {
     /// This bot's memory settings were saved: its form should show them and
     /// forget any typed key.
     MemorySaved(String),
+    /// An MCP connection was added: empty its form and forget what was
+    /// typed.
+    McpAdded,
     /// The memory with this id was corrected or forgotten: close its editor
     /// or its "Confirm forget".
     MemoryChanged(String),
@@ -352,6 +378,16 @@ pub struct Model {
     pub memory_message: Option<String>,
     /// The saved memories on "Browse memory".
     pub memories: MemoryBrowser,
+    /// Each bot's MCP connections, once loaded.
+    pub mcp: HashMap<String, Vec<McpConnection>>,
+    /// The bot whose MCP connections could not be loaded, and why.
+    pub mcp_error: Option<(String, String)>,
+    /// A connection is being added or changed.
+    pub changing_mcp: bool,
+    /// Why the last add or change failed, until the next attempt.
+    pub mcp_change_error: Option<String>,
+    /// What the last add said.
+    pub mcp_message: Option<String>,
     /// A profile save is on its way.
     pub saving_profile: bool,
     /// Why the last profile save failed, until the next attempt.
@@ -391,6 +427,11 @@ impl Default for Model {
             testing_memory: false,
             memory_message: None,
             memories: MemoryBrowser::default(),
+            mcp: HashMap::new(),
+            mcp_error: None,
+            changing_mcp: false,
+            mcp_change_error: None,
+            mcp_message: None,
             saving_profile: false,
             profile_error: None,
             bots: Vec::new(),
@@ -497,6 +538,36 @@ impl Model {
             Event::MemoryTested { message } => {
                 self.testing_memory = false;
                 self.memory_message = Some(message);
+            }
+            Event::Mcp { bot_id, items } => {
+                self.mcp_error = None;
+                self.mcp.insert(bot_id, items);
+            }
+            Event::McpFailed { bot_id, message } => {
+                self.mcp_error = Some((bot_id, message));
+            }
+            Event::McpAdded { bot_id, items } => {
+                self.changing_mcp = false;
+                // A server that needs a sign-in comes back with a link.
+                let waiting = items.iter().any(|item| item.authorization_url.is_some());
+                self.mcp_message = Some(
+                    if waiting {
+                        "Server added. Choose Authorize to sign in and grant access."
+                    } else {
+                        "Connected. These tools are available only to this bot."
+                    }
+                    .to_owned(),
+                );
+                self.mcp.insert(bot_id, items);
+                return vec![Effect::McpAdded];
+            }
+            Event::McpChanged { bot_id, items } => {
+                self.changing_mcp = false;
+                self.mcp.insert(bot_id, items);
+            }
+            Event::McpChangeFailed { message } => {
+                self.changing_mcp = false;
+                self.mcp_change_error = Some(message);
             }
             Event::MemoryListed { ticket, more, page } => self.memories.listed(ticket, more, page),
             Event::MemoryRecalled { ticket, evidence } => self.memories.recalled(ticket, evidence),
@@ -646,6 +717,18 @@ impl Model {
         self.saving_memory = true;
         self.memory_save_error = None;
         self.memory_message = None;
+        true
+    }
+
+    /// The owner added or changed an MCP connection. Returns false while
+    /// another change is on its way.
+    pub fn begin_change_mcp(&mut self) -> bool {
+        if self.changing_mcp {
+            return false;
+        }
+        self.changing_mcp = true;
+        self.mcp_change_error = None;
+        self.mcp_message = None;
         true
     }
 

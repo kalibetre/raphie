@@ -6,10 +6,11 @@
 
 use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::{
-    Account, BotProfile, MemoryEvidence, MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings,
-    SessionObservation, SessionSummary,
+    Account, BotProfile, McpConnection, MemoryEvidence, MemoryPage, MemoryStatus, Page as Paged,
+    RuntimeSettings, SessionObservation, SessionSummary,
 };
 use raphie_core::engine::Command;
+use raphie_core::mcp::McpTransport;
 use raphie_core::model::{AuthState, Event};
 use raphie_core::origin::Origin;
 use rune::TextEdit;
@@ -51,6 +52,10 @@ pub const SCENES: &[Scene] = &[
     ("settings-memories-editing", settings_memories_editing),
     ("settings-memories-search", settings_memories_search),
     ("settings-memories-empty", settings_memories_empty),
+    ("settings-mcp", settings_mcp),
+    ("settings-mcp-command", settings_mcp_command),
+    ("settings-mcp-empty", settings_mcp_empty),
+    ("settings-mcp-loading", settings_mcp_loading),
     ("settings-bot", settings_bot),
 ];
 
@@ -158,12 +163,12 @@ pub fn settings_profile_edited(ui: &mut Ui) {
     ui.profile.color = Some("#83bcb4".into());
 }
 
-/// A bot's settings page that is not native yet (Research → Memory).
+/// A bot's settings page that is not native yet (Research → Channels).
 pub fn settings_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Bot {
         bot_id: "b-research".into(),
-        section: BotSection::Mcp,
+        section: BotSection::Channels,
     }));
 }
 
@@ -226,6 +231,77 @@ pub fn settings_memory_hindsight(ui: &mut Ui) {
     ui.memory.bank_id = TextEdit::new("raphie-work");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
+}
+
+/// Made-up MCP connections in each state a row can show: connected, waiting
+/// for authorization, paused, and one set by the host's environment.
+pub fn mcp_connections() -> Vec<McpConnection> {
+    serde_json::from_value(json!([
+        {
+            "source": "saved", "id": "mcp-calendar", "name": "Calendar",
+            "transport": "http", "address": "https://calendar.example.com/mcp",
+            "enabled": true, "connected": true, "toolCount": 12, "credentialConfigured": true,
+        },
+        {
+            "source": "saved", "id": "mcp-docs", "name": "Team docs",
+            "transport": "http", "address": "https://docs.example.com/mcp",
+            "enabled": true, "connected": false, "toolCount": 0, "credentialConfigured": false,
+            "authorizationUrl": "https://docs.example.com/oauth/authorize?state=made-up",
+        },
+        {
+            "source": "saved", "id": "mcp-files", "name": "Project files",
+            "transport": "stdio", "address": "npx",
+            "enabled": false, "connected": false, "toolCount": 0, "credentialConfigured": false,
+        },
+        {
+            "source": "environment", "id": "env-search", "name": "Search",
+            "transport": "stdio", "address": "uvx",
+            "enabled": true, "connected": true, "toolCount": 4, "credentialConfigured": false,
+        },
+    ]))
+    .expect("the scene's MCP connections match the contract")
+}
+
+fn open_mcp(ui: &mut Ui, connections: Option<Vec<McpConnection>>) {
+    settings_account(ui);
+    if let Some(items) = connections {
+        ui.model.apply(Event::Mcp {
+            bot_id: "default".into(),
+            items,
+        });
+    }
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Mcp,
+    }));
+}
+
+/// Settings → MCP tools with connections in every state.
+pub fn settings_mcp(ui: &mut Ui) {
+    open_mcp(ui, Some(mcp_connections()));
+}
+
+/// MCP tools with the form set to a local command whose arguments are not
+/// a JSON array, so the form says so.
+pub fn settings_mcp_command(ui: &mut Ui) {
+    open_mcp(ui, Some(Vec::new()));
+    ui.mcp.name = TextEdit::new("Project files");
+    ui.mcp.choose(McpTransport::Stdio);
+    ui.mcp.address = TextEdit::new("npx");
+    ui.mcp.args = TextEdit::new("-y a-server");
+    // A made-up value. The field is secure, so the snapshot shows dots.
+    ui.mcp.env = TextEdit::new(r#"{"API_TOKEN":"not-a-real-token"}"#).secure();
+    ui.add_mcp();
+}
+
+/// MCP tools before any server was connected.
+pub fn settings_mcp_empty(ui: &mut Ui) {
+    open_mcp(ui, Some(Vec::new()));
+}
+
+/// MCP tools before the connections have arrived.
+pub fn settings_mcp_loading(ui: &mut Ui) {
+    open_mcp(ui, None);
 }
 
 /// Made-up saved memories, newest first, as the runtime lists them.
