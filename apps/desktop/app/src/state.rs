@@ -1,11 +1,12 @@
 //! The UI's state: the core [`Model`] plus what only the window needs (text
 //! being typed, which side panels are open), and the bridge to the engine.
 
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use raphie_core::attachments::Upload;
+use raphie_core::attachments::{Preview, Upload, is_image};
 use raphie_core::auth::KeychainStore;
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome, is_telegram_token};
@@ -27,7 +28,7 @@ use raphie_core::replies::ReadReplies;
 use raphie_core::settings::{Settings, ThemeChoice};
 use raphie_core::updates::UpdateStatus;
 use raphie_core::workspace::{self, ROOT};
-use rune::{ClipboardContent, FileDialogOptions, TextEdit, Tx, Waker};
+use rune::{ClipboardContent, FileDialogOptions, Image, ImageCache, TextEdit, Tx, Waker};
 
 use crate::channels::{DiscordForm, TelegramForm, UNSAVED};
 use crate::format::now_ms;
@@ -386,6 +387,11 @@ pub struct Ui {
     /// The frame clock (seconds) when the view last refreshed its "elapsed"
     /// labels.
     ticked_at: f64,
+    /// Decodes pictures off the UI thread. Made in `setup`, which has the
+    /// waker it needs; `None` in tests, where cards keep their icons.
+    images: Option<ImageCache>,
+    /// Image attachments' pictures, decoded or decoding, by bot and file id.
+    pictures: HashMap<(String, String), Image>,
 }
 
 /// The composer's model picker: whether it is open, and how its list is
@@ -479,6 +485,8 @@ impl Ui {
             open_runs: HashSet::new(),
             open_steps: HashSet::new(),
             ticked_at: 0.0,
+            images: None,
+            pictures: HashMap::new(),
         }
     }
 
@@ -2351,6 +2359,67 @@ impl Ui {
         self.open_url(url.to_owned(), tx);
     }
 
+    /// Asks for the picture of every image attachment on screen, once each:
+    /// those waiting in the composer and those on the open conversation's
+    /// messages.
+    pub fn ask_previews(&mut self) {
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            return;
+        };
+        // Collected first: asking needs `&mut self`, which cannot happen
+        // while the model's lists are borrowed.
+        let mut wanted: Vec<String> = self
+            .model
+            .attachments
+            .files_for(Some(&bot_id))
+            .iter()
+            .filter(|file| is_image(file))
+            .map(|file| file.id.clone())
+            .collect();
+        if let Some(conversation) = &self.model.conversation {
+            for turn in conversation.turns() {
+                let images = turn.attachments.iter().filter(|file| is_image(file));
+                wanted.extend(images.map(|file| file.id.clone()));
+            }
+        }
+        for id in wanted {
+            if self.model.previews.begin(&bot_id, &id) {
+                self.command(Command::LoadPreview {
+                    bot_id: bot_id.clone(),
+                    id,
+                });
+            }
+        }
+    }
+
+    /// Hands newly arrived picture bytes to the decoder, and lets go of
+    /// pictures whose bytes are gone. True when something changed.
+    pub fn decode_previews(&mut self) -> bool {
+        let Some(images) = &self.images else {
+            return false;
+        };
+        let previews = &self.model.previews;
+        let before = self.pictures.len();
+        self.pictures
+            .retain(|(bot_id, id), _| matches!(previews.get(bot_id, id), Some(Preview::Ready(_))));
+        let mut changed = self.pictures.len() != before;
+        for (key, bytes) in previews.ready() {
+            // `entry` looks the key up once: `Vacant` when it is not there.
+            if let Entry::Vacant(slot) = self.pictures.entry(key) {
+                // Cloning `Arc<[u8]>` shares the bytes; nothing is copied.
+                slot.insert(images.load(bytes.0.clone()));
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// The decoded picture of `bot_id`'s file `id`, once it can be drawn.
+    pub fn picture(&self, bot_id: &str, id: &str) -> Option<&Image> {
+        let picture = self.pictures.get(&(bot_id.to_owned(), id.to_owned()))?;
+        (picture.is_ready() && picture.error().is_none()).then_some(picture)
+    }
+
     /// Asks whether a newer Raphie has been released, unless a check is
     /// already on its way.
     pub fn check_for_updates(&mut self) {
@@ -2387,6 +2456,9 @@ impl Default for Ui {
 /// `AppSpec::setup`: runs once with Rune's waker. Starts the engine and, if
 /// this machine signed in before, quietly restores that sign-in.
 pub fn setup(ui: &mut Ui, waker: Waker) {
+    // Headless snapshots draw pictures too, so this comes first. A decode
+    // finishing wakes the app with `waker`.
+    ui.images = Some(ImageCache::new(waker.clone()));
     // Headless runs (`--snap`, `--tree`, `--script`) render scenes; they must
     // never touch the network or the Keychain.
     if rune::tooling::headless_run().is_some() {
@@ -2423,8 +2495,10 @@ fn origin_argument(args: &[String]) -> Option<&str> {
 /// `AppSpec::poll`: runs before each frame. Applies whatever the engine
 /// reported; returns true when the view should be rebuilt.
 pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
+    // Before the engine check, so headless snapshots decode their pictures.
+    let decoded = ui.decode_previews();
     let Some(client) = &ui.client else {
-        return false;
+        return decoded;
     };
     let events = client.drain();
     // A search box has no "changed" handler, so each frame looks at it.
@@ -2455,7 +2529,7 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         ui.ticked_at = clock;
     }
     // `|` rather than `||`: the events are applied even after a tick.
-    receive(ui, events, tx) | ticked | searched
+    receive(ui, events, tx) | ticked | searched | decoded
 }
 
 /// Applies what the engine reported; returns true when anything arrived.
@@ -2568,6 +2642,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_sandbox();
     ui.ensure_models();
     ui.ensure_command_mode();
+    ui.ask_previews();
     // A reply that arrived while its conversation is on screen is read.
     ui.mark_read();
     // Whatever is still new after that is worth a system notification.

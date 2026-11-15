@@ -7,6 +7,7 @@
 //! (`packages/runtime/src/domains/attachments/domain/policy.ts` and the
 //! message route), checked here first so the owner hears at once.
 
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -162,6 +163,77 @@ impl AttachmentDraft {
     /// True when another file may be chosen.
     pub fn has_room(&self) -> bool {
         !self.uploading && self.files.len() < MAX_FILES
+    }
+}
+
+/// How many image previews are kept. Each is up to [`MAX_BYTES`], so the
+/// oldest are let go; one scrolled back into view is fetched again.
+pub const PREVIEWS_KEPT: usize = 24;
+
+/// One image's preview, by where it stands.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Preview {
+    Loading,
+    Ready(FileBytes),
+    /// Not shown; the card keeps its image icon, as on the web.
+    Failed,
+}
+
+/// The pictures in image attachments, fetched once each. Files belong to a
+/// bot, so a preview is known by the bot and the file's id.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Previews {
+    entries: HashMap<(String, String), Preview>,
+    /// Keys oldest first, for letting the oldest go.
+    order: VecDeque<(String, String)>,
+}
+
+impl Previews {
+    /// True the first time a preview is asked for: the caller fetches it.
+    pub fn begin(&mut self, bot_id: &str, id: &str) -> bool {
+        let key = (bot_id.to_owned(), id.to_owned());
+        if self.entries.contains_key(&key) {
+            return false;
+        }
+        while self.order.len() >= PREVIEWS_KEPT {
+            if let Some(oldest) = self.order.pop_front() {
+                self.entries.remove(&oldest);
+            }
+        }
+        self.entries.insert(key.clone(), Preview::Loading);
+        self.order.push_back(key);
+        true
+    }
+
+    /// The bytes arrived. An answer for a preview already let go is dropped.
+    pub fn loaded(&mut self, bot_id: &str, id: &str, bytes: FileBytes) {
+        if let Some(entry) = self.entry_mut(bot_id, id) {
+            *entry = Preview::Ready(bytes);
+        }
+    }
+
+    pub fn failed(&mut self, bot_id: &str, id: &str) {
+        if let Some(entry) = self.entry_mut(bot_id, id) {
+            *entry = Preview::Failed;
+        }
+    }
+
+    /// Every preview whose bytes have arrived, as `((bot, id), bytes)`.
+    pub fn ready(&self) -> impl Iterator<Item = ((String, String), &FileBytes)> {
+        self.entries
+            .iter()
+            .filter_map(|(key, preview)| match preview {
+                Preview::Ready(bytes) => Some((key.clone(), bytes)),
+                _ => None,
+            })
+    }
+
+    pub fn get(&self, bot_id: &str, id: &str) -> Option<&Preview> {
+        self.entries.get(&(bot_id.to_owned(), id.to_owned()))
+    }
+
+    fn entry_mut(&mut self, bot_id: &str, id: &str) -> Option<&mut Preview> {
+        self.entries.get_mut(&(bot_id.to_owned(), id.to_owned()))
     }
 }
 
@@ -342,6 +414,31 @@ mod tests {
         assert!(text.starts_with("--XYZ\r\n"));
         assert!(text.contains("filename=\"a%22b.txt\""));
         assert!(text.contains("\r\n\r\nhi\r\n--XYZ--\r\n"));
+    }
+
+    #[test]
+    fn a_preview_is_asked_for_once_and_the_oldest_are_let_go() {
+        let mut previews = Previews::default();
+        assert!(previews.begin("default", "a"));
+        assert!(!previews.begin("default", "a"));
+        // The same id in another bot is another file.
+        assert!(previews.begin("research", "a"));
+        previews.loaded("default", "a", FileBytes::from(vec![1, 2]));
+        assert_eq!(
+            previews.get("default", "a"),
+            Some(&Preview::Ready(FileBytes::from(vec![1, 2])))
+        );
+        previews.failed("research", "a");
+        assert_eq!(previews.get("research", "a"), Some(&Preview::Failed));
+
+        for n in 0..PREVIEWS_KEPT {
+            assert!(previews.begin("default", &format!("more-{n}")));
+        }
+        assert_eq!(previews.get("default", "a"), None, "the oldest went");
+        // A late answer for it is dropped, and it can be asked for again.
+        previews.loaded("default", "a", FileBytes::from(vec![3]));
+        assert_eq!(previews.get("default", "a"), None);
+        assert!(previews.begin("default", "a"));
     }
 
     #[test]

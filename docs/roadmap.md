@@ -161,7 +161,7 @@ Delivered capabilities and remaining work are labelled below. See the
   forget), MCP tools, Channels, Sandbox, Workspace files, Scheduled jobs, Diagnostics and Activity: every bot
   settings page is native.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
-- **Desktop — planned:** image previews on attachments, listing and revoking session approvals,
+- **Desktop — planned:** listing and revoking session approvals,
   distributable
   packaging (Developer ID signing, notarisation, a desktop asset in releases)
   and installing updates, Windows and Linux

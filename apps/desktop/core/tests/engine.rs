@@ -5,7 +5,7 @@ mod support;
 
 use std::sync::Arc;
 
-use raphie_core::attachments::{FileBytes, TOO_LARGE, Upload};
+use raphie_core::attachments::{FileBytes, Preview, TOO_LARGE, Upload};
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
 use raphie_core::contracts::{ApprovalMode, ModelSelection, NewBot, TraceState};
@@ -1902,5 +1902,37 @@ fn an_update_check_with_nowhere_to_ask_says_so() {
     driver.send(Command::CheckForUpdates);
     driver.until("the check's answer", |m, _| {
         matches!(m.update, UpdateStatus::Failed(_))
+    });
+}
+
+#[test]
+fn an_image_preview_is_fetched_once_and_a_missing_one_fails() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.uploads
+            .push(("img-1".into(), "photo.png".into(), b"PNG bytes".to_vec()));
+    });
+    let (mut driver, _store) = signed_in(&host);
+    assert!(driver.model.previews.begin("default", "img-1"));
+    driver.send(Command::LoadPreview {
+        bot_id: "default".into(),
+        id: "img-1".into(),
+    });
+    driver.until("the preview", |m, _| {
+        matches!(m.previews.get("default", "img-1"), Some(Preview::Ready(_)))
+    });
+    assert_eq!(
+        driver.model.previews.get("default", "img-1"),
+        Some(&Preview::Ready(FileBytes::from(b"PNG bytes".to_vec())))
+    );
+    assert_eq!(host.requests("/api/files/img-1").len(), 1);
+
+    assert!(driver.model.previews.begin("default", "gone"));
+    driver.send(Command::LoadPreview {
+        bot_id: "default".into(),
+        id: "gone".into(),
+    });
+    driver.until("the failure", |m, _| {
+        m.previews.get("default", "gone") == Some(&Preview::Failed)
     });
 }

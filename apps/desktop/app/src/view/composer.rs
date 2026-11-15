@@ -29,7 +29,8 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let busy = running || s.model.sending;
     let draft = &s.model.attachments;
     // Only the selected bot's files: uploads belong to one bot.
-    let files = draft.files_for(s.model.bot_id.as_deref());
+    let bot_id = s.model.bot_id.as_deref();
+    let files = draft.files_for(bot_id);
     // Nothing can be added, removed or sent while either is on its way.
     let locked = s.model.sending || draft.uploading;
     let has_content = !empty || !files.is_empty();
@@ -141,7 +142,8 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
             .flex_wrap();
         for file in files {
             let key = format!("rd-attachment-{}", file.id);
-            chips = chips.child(file_card(t, &key, file, &Action::Remove, !locked));
+            let picture = bot_id.and_then(|bot| s.picture(bot, &file.id));
+            chips = chips.child(file_card(t, &key, file, picture, &Action::Remove, !locked));
         }
         card = card.child(chips);
     }

@@ -143,7 +143,7 @@ fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &L
     let mut block = col()
         .w_full()
         .gap(14.0)
-        .child(owner_message(turn, can_save, t));
+        .child(owner_message(s, turn, can_save, t));
     if let Some(mode) = turn.queue_mode {
         block = block.child(queue_controls(turn, mode, t));
     }
@@ -175,7 +175,7 @@ fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &L
 
 /// The owner's message: a bubble on the right, or a centred marker when a
 /// scheduled job started the turn.
-fn owner_message(turn: &SessionTurn, can_save: bool, t: &Theme) -> El {
+fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, t: &Theme) -> El {
     let key = format!("rd-turn-{}", turn.id);
     if let Some(job) = &turn.scheduled {
         return row().key(key).w_full().justify_center().child(
@@ -243,10 +243,24 @@ fn owner_message(turn: &SessionTurn, can_save: bool, t: &Theme) -> El {
             .role("list")
             .label("Message attachments")
             .gap(8.0)
+            // Each card keeps its own height beside a taller image card.
+            .items_start()
             .flex_wrap();
         for file in &turn.attachments {
             let key = format!("rd-file-{}-{}", turn.id, file.id);
-            files = files.child(file_card(t, &key, file, &Action::Download, can_save));
+            let picture = s
+                .model
+                .bot_id
+                .as_deref()
+                .and_then(|bot| s.picture(bot, &file.id));
+            files = files.child(file_card(
+                t,
+                &key,
+                file,
+                picture,
+                &Action::Download,
+                can_save,
+            ));
         }
         bubble = bubble.child(files);
     }

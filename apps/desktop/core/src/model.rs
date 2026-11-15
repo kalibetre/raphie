@@ -8,7 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::attachments::AttachmentDraft;
+use crate::attachments::{AttachmentDraft, FileBytes, Previews};
 use crate::auth::DeviceCode;
 use crate::channels::{Channel, ChannelOutcome};
 use crate::contracts::ApprovalMode;
@@ -373,6 +373,16 @@ pub enum Event {
         run_id: String,
     },
     RunAcknowledgeFailed,
+    /// An image attachment's bytes, for its preview.
+    PreviewLoaded {
+        bot_id: String,
+        id: String,
+        bytes: FileBytes,
+    },
+    PreviewFailed {
+        bot_id: String,
+        id: String,
+    },
     /// What a check for a newer release found: the newer release, none,
     /// or why the check failed.
     UpdateChecked(Result<Option<Update>, String>),
@@ -725,6 +735,8 @@ pub struct Model {
     pub inbox: Inbox,
     /// Whether a newer Raphie has been released.
     pub update: UpdateStatus,
+    /// The pictures of image attachments.
+    pub previews: Previews,
     /// How the open session treats commands.
     pub command_mode: CommandMode,
     /// A change of the open session's model is on its way.
@@ -809,6 +821,7 @@ impl Default for Model {
             sending: false,
             inbox: Inbox::default(),
             update: UpdateStatus::default(),
+            previews: Previews::default(),
             command_mode: CommandMode::default(),
             choosing_model: false,
             model_error: None,
@@ -1211,6 +1224,10 @@ impl Model {
                 self.inbox.acknowledged(&bot_id, &run_id);
             }
             Event::RunAcknowledgeFailed => self.inbox.acknowledge_failed(),
+            Event::PreviewLoaded { bot_id, id, bytes } => {
+                self.previews.loaded(&bot_id, &id, bytes);
+            }
+            Event::PreviewFailed { bot_id, id } => self.previews.failed(&bot_id, &id),
             Event::UpdateChecked(result) => {
                 self.update = match result {
                     Ok(Some(update)) => UpdateStatus::Available(update),

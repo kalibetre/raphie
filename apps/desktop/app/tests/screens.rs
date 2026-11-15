@@ -3932,3 +3932,34 @@ fn a_notification_clicked_after_signing_out_opens_nothing() {
     assert!(rt.state.sent.is_empty());
     assert!(rt.find("rd-sign-in").is_some());
 }
+
+#[test]
+fn image_attachments_ask_for_their_pictures_once_and_files_do_not() {
+    let mut rt = render(scenes::attachments, false);
+    let previews = |rt: &Runtime<Ui>| -> Vec<String> {
+        rt.state
+            .sent
+            .iter()
+            .filter_map(|command| match command {
+                Command::LoadPreview { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    // The scene's pictures count as fetched: nothing is asked again.
+    rt.update(|ui, _| ui.ask_previews());
+    assert!(previews(&rt).is_empty());
+
+    // Forgotten, they are asked for: the sent floor plan and the photo in
+    // the composer, but not the PDF or the CSV.
+    rt.update(|ui, _| {
+        ui.model.previews = Default::default();
+        ui.ask_previews();
+        ui.ask_previews();
+    });
+    assert_eq!(previews(&rt), vec!["c".repeat(64), "a".repeat(64)]);
+
+    // Without a decoder (as here) a sent image keeps its icon in the band.
+    let plan = format!("rd-file-t1-{}-preview", "a".repeat(64));
+    assert!(rt.find(&plan).is_some());
+}
