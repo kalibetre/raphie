@@ -9,16 +9,19 @@
 use raphie_core::contracts::BotProfile;
 use rune::color::hex;
 use rune::{Color, El, Tx, col, el, icon, row, text, text_input};
+use rune_kit::Dialog;
 
 use super::parts::{SaveBar, Scope, page, save_bar as save_bar_of};
 use crate::avatar::{PALETTE_NAMES, Tones, bot_avatar, tone_of};
 use crate::icons;
+use crate::profile::NEW_BOT;
+use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 use crate::theme::{Theme, font, mono};
 use crate::view::Look;
 use crate::widgets::{Field, Kind, Size, button, pressable, text_field};
 
-pub fn profile(s: &Ui, bot_id: &str, look: &Look) -> El {
+pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
     let lede = |name: &str| {
         format!("The identity, color and personality {name} brings to your conversations.")
@@ -43,7 +46,65 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look) -> El {
             look,
         );
     };
-    let saving = s.model.saving_profile;
+    let (identity, personality) = fields(s, &bot.id, look);
+    let history = {
+        let bot_id = bot.id.clone();
+        pressable(
+            button(t, Kind::Ghost, Size::Small, None, "View revision history ↗")
+                .key("rd-profile-history"),
+            true,
+            move |s: &mut Ui| {
+                s.open_settings(Some(Page::Bot {
+                    bot_id: bot_id.clone(),
+                    section: BotSection::History,
+                }));
+            },
+        )
+        .self_start()
+    };
+    let mut groups = vec![identity, personality, history];
+    // The default bot stays: the runtime refuses to delete it.
+    if bot.id != "default" {
+        groups.push(delete_section(s, bot, t));
+        delete_dialog(s, bot, look, overlays);
+    }
+    page(
+        "rd-page-profile",
+        "Profile",
+        &lede(&bot.name),
+        Scope::Bot {
+            id: &bot.id,
+            name: &bot.name,
+        },
+        groups,
+        look,
+    )
+}
+
+/// "Create a bot": the Profile form for a bot that does not exist yet.
+pub fn new_bot(s: &Ui, look: &Look) -> El {
+    let t = &look.theme;
+    let (identity, personality) = fields(s, NEW_BOT, look);
+    let note = text("New bots start with their own memory and an empty workspace. Add a provider connection after creation.")
+        .font(font(12.0, 400.0).lh(19.2))
+        .color(t.muted_foreground)
+        .wrap();
+    page(
+        "rd-page-new-bot",
+        "Create a bot",
+        "A separate assistant with its own personality, memory and model connections.",
+        Scope::NewBot,
+        vec![identity, personality, note],
+        look,
+    )
+}
+
+/// The two cards every profile has: Identity and Personality. `id` is the
+/// bot's id, or [`NEW_BOT`] for one being created; it picks the face and
+/// the colour Raphie would choose.
+fn fields(s: &Ui, id: &str, look: &Look) -> (El, El) {
+    let t = &look.theme;
+    let saving = s.model.saving_profile || s.model.creating_bot;
     let identity = section(
         t,
         "Identity",
@@ -79,7 +140,7 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look) -> El {
                 |s: &mut Ui| &mut s.profile.description,
                 |s: &mut Ui, _: &mut Tx| s.save_profile(),
             ))
-            .child(color_picker(s, bot, look)),
+            .child(color_picker(s, id, look)),
     );
     let personality = section(
         t,
@@ -92,17 +153,143 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look) -> El {
                 .wrap(),
         ),
     );
-    page(
-        "rd-page-profile",
-        "Profile",
-        &lede(&bot.name),
-        Scope::Bot {
-            id: &bot.id,
-            name: &bot.name,
-        },
-        vec![identity, personality],
-        look,
-    )
+    (identity, personality)
+}
+
+/// "Delete bot", under the form: what it removes, and the button that asks
+/// for confirmation.
+fn delete_section(s: &Ui, bot: &BotProfile, t: &Theme) -> El {
+    let busy = s.model.saving_profile || s.model.deleting_bot;
+    // Unsaved edits, or a newer revision elsewhere, would make the
+    // confirmation name a bot that is not the one on the host.
+    let stale = s.profile.is_dirty() || s.profile.changed_elsewhere(bot);
+    col()
+        .key("rd-delete-bot")
+        .w_full()
+        .pt(24.0)
+        .gap(10.5)
+        .border_sides([1.0, 0.0, 0.0, 0.0], t.border)
+        .child(
+            text("Delete bot")
+                .role("heading")
+                .font(font(14.0, 500.0))
+                .color(t.foreground),
+        )
+        .child(
+            text("Permanently remove this bot and all its local data. Save or discard profile changes first.")
+                .font(font(12.25, 400.0))
+                .color(t.muted_foreground)
+                .wrap(),
+        )
+        .child(
+            pressable(
+                button(t, Kind::Destructive, Size::Regular, None, "Delete bot…")
+                    .key("rd-delete-bot-open"),
+                !busy && !stale,
+                |s: &mut Ui| s.ask_delete_bot(),
+            )
+            .self_start(),
+        )
+}
+
+/// "Delete <name>?": says what is lost and takes the bot's name as
+/// confirmation. A modal: Rune keeps focus inside it.
+fn delete_dialog(s: &Ui, bot: &BotProfile, look: &Look, overlays: &mut Vec<El>) {
+    let t = &look.theme;
+    if !s.deleting_bot {
+        return;
+    }
+    let busy = s.model.deleting_bot;
+    let quiet = |content: &str| {
+        text(content)
+            .font(font(12.25, 400.0).lh(19.0))
+            .color(t.muted_foreground)
+            .wrap()
+    };
+    let mut body = col()
+        .key("rd-delete-bot-form")
+        .w_full()
+        .px(16.0)
+        .pb(16.0)
+        .gap(14.0)
+        // The kit's own description is one unwrapped line, so the long
+        // warning sits here, where it wraps.
+        .child(quiet(
+            "This permanently removes its profile history, conversations, attachments, local memory, connections, scheduled jobs and workspace files. This cannot be undone.",
+        ))
+        .child(quiet(
+            "External memory and messages stay in their services. Provider keys are not revoked. Backups are not erased.",
+        ))
+        .child(
+            col()
+                .w_full()
+                .gap(7.0)
+                .child(
+                    text(format!("Type {} to confirm", bot.name))
+                        .font(font(12.25, 400.0))
+                        .color(t.foreground)
+                        .wrap(),
+                )
+                .child(text_field(
+                    t,
+                    Field {
+                        key: "rd-delete-bot-name",
+                        label: "Bot name",
+                        placeholder: "",
+                        edit: &s.delete_confirmation,
+                        disabled: busy,
+                        compact: true,
+                    },
+                    |s: &mut Ui| &mut s.delete_confirmation,
+                    |s: &mut Ui, _: &mut Tx| s.delete_bot(),
+                )),
+        );
+    if let Some(error) = &s.model.delete_bot_error {
+        body = body.child(
+            text(error.clone())
+                .key("rd-delete-bot-error")
+                .role("alert")
+                .font(font(12.25, 400.0))
+                .color(t.error)
+                .wrap(),
+        );
+    }
+    body = body.child(
+        row()
+            .w_full()
+            .gap(8.0)
+            .justify_end()
+            .center_y()
+            .child(pressable(
+                button(t, Kind::Outline, Size::Regular, None, "Cancel").key("rd-delete-bot-cancel"),
+                !busy,
+                |s: &mut Ui| s.close_delete_bot(),
+            ))
+            .child(pressable(
+                button(
+                    t,
+                    Kind::Destructive,
+                    Size::Regular,
+                    None,
+                    if busy {
+                        "Deleting…"
+                    } else {
+                        "Permanently delete bot"
+                    },
+                )
+                .key("rd-delete-bot-confirm"),
+                // Only the bot's name, typed exactly, enables the button.
+                !busy && s.delete_confirmed(),
+                |s: &mut Ui| s.delete_bot(),
+            )),
+    );
+    Dialog::new("rd-delete-bot-dialog", format!("Delete {}?", bot.name))
+        .width(480.0)
+        .fit()
+        .open(true)
+        .on_close(|s: &mut Ui| s.close_delete_bot())
+        .child(body)
+        .build(&look.kit, overlays);
 }
 
 /// A card with a heading and a line of explanation over its fields (the
@@ -140,17 +327,26 @@ fn label(t: &Theme, content: &str) -> El {
 
 /// The bot's face in the chosen colour, the palette to choose from, and a
 /// field for any other colour.
-fn color_picker(s: &Ui, bot: &BotProfile, look: &Look) -> El {
+fn color_picker(s: &Ui, id: &str, look: &Look) -> El {
     let t = &look.theme;
     let chosen = s.profile.color.as_deref();
     // What Raphie would pick if the owner chose nothing: the roster's
     // colours worked out as if this bot had no colour of its own.
     let automatic = {
         let mut others = s.model.bots.clone();
-        if let Some(this) = others.iter_mut().find(|other| other.id == bot.id) {
-            this.color = None;
+        match others.iter_mut().find(|other| other.id == id) {
+            Some(this) => this.color = None,
+            // A bot being created is not in the roster yet: stand in for it.
+            None => others.push(BotProfile {
+                id: id.to_owned(),
+                name: String::new(),
+                description: String::new(),
+                color: None,
+                soul: String::new(),
+                revision: 0,
+            }),
         }
-        Tones::assign(&others).of(&bot.id)
+        Tones::assign(&others).of(id)
     };
     let tone = chosen.and_then(tone_of).unwrap_or(automatic);
     let ring = |e: El, on: bool| {
@@ -248,7 +444,7 @@ fn color_picker(s: &Ui, bot: &BotProfile, look: &Look) -> El {
                 .gap(12.0)
                 .center_y()
                 .my(16.0)
-                .child(bot_avatar(&bot.id, tone, 32.0))
+                .child(bot_avatar(id, tone, 32.0))
                 .child(
                     text(match chosen {
                         Some(color) => color.to_uppercase(),
@@ -343,6 +539,9 @@ fn soul_editor(s: &Ui, t: &Theme) -> El {
 pub fn save_bar(s: &Ui, look: &Look) -> Option<El> {
     let t = &look.theme;
     let draft = &s.profile;
+    if draft.creating {
+        return Some(create_bar(s, t));
+    }
     let saved = draft.saved.as_ref()?;
     let dirty = draft.is_dirty();
     let saving = s.model.saving_profile;
@@ -379,8 +578,51 @@ pub fn save_bar(s: &Ui, look: &Look) -> Option<El> {
             save_label,
             can_save: s.can_save_profile(),
             can_discard: dirty && !saving,
+            extra: None,
         },
         |s: &mut Ui| s.discard_profile(),
         |s: &mut Ui| s.save_profile(),
     ))
+}
+
+/// The bar under "Create a bot". It always shows: there is always a bot to
+/// create or a way out.
+fn create_bar(s: &Ui, t: &Theme) -> El {
+    let draft = &s.profile;
+    let dirty = draft.is_dirty();
+    let creating = s.model.creating_bot;
+    // What the host refused first, then what the form still needs. An
+    // untouched form is not nagged about its empty name.
+    let error = match &s.model.profile_error {
+        Some(error) => Some(error.clone()),
+        None if dirty => draft.problem().map(str::to_owned),
+        None => None,
+    };
+    let cancel = pressable(
+        button(t, Kind::Ghost, Size::Regular, None, "Cancel").key("rd-profile-cancel"),
+        !creating,
+        |s: &mut Ui| s.cancel_new_bot(),
+    );
+    save_bar_of(
+        t,
+        SaveBar {
+            key: "rd-profile",
+            error,
+            status: if dirty {
+                "Unsaved changes".to_owned()
+            } else {
+                "Independent configuration. No settings are copied.".to_owned()
+            },
+            save_label: if creating {
+                "Creating…"
+            } else {
+                "Create bot"
+            },
+            can_save: s.can_save_profile(),
+            can_discard: dirty && !creating,
+            extra: Some(cancel),
+        },
+        |s: &mut Ui| s.discard_profile(),
+        |s: &mut Ui| s.save_profile(),
+    )
 }

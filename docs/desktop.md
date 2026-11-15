@@ -71,6 +71,19 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     else meanwhile, the draft is kept and saving is blocked until you
     discard it, so nobody's edits are overwritten silently. Unsaved edits
     survive a look at another page.
+    - **View revision history** lists the bot's last 50 saved versions,
+      newest first. Open one to read the personality it had. History is
+      read-only: there is no restore.
+    - **Delete bot** (not offered for the default bot) asks you to type the
+      bot's name. It removes the bot's profile history, conversations,
+      attachments, local memory, connections, scheduled jobs and workspace
+      files, and cannot be undone. The host refuses if the name is wrong or
+      the bot changed since the page loaded.
+  - **Create a bot** is the **+** beside "Bots" in the navigation. It is the
+    Profile form with a starter personality. A bot needs a name and a
+    personality; afterwards its Providers page opens, since a new bot has no
+    model connection yet. A half-written new bot survives a look at another
+    page until you Cancel it or create it.
   - **Models** shows the default model for new sessions and the catalogue the
     bot's connections offer, with search and Provider, Model source and
     Connection filters. "Set as default" changes where new sessions start;
@@ -244,7 +257,8 @@ apps/desktop/
       settings/             Settings: shell, navigation, page parts,
                             Account, Appearance, bot pages
     src/sections.rs       the pages of Settings, named as the web names them
-    src/profile.rs        the Profile form's edits and saving rules
+    src/profile.rs        the Profile form's edits and saving rules, for
+                          a saved bot and for one being created
     src/scenes.rs         synthetic states for snapshots and tests
     tests/screens.rs      headless element-tree checks, light and dark
   scripts/snapshots.sh    renders every scene to PNGs under target/snapshots
@@ -337,9 +351,10 @@ Where the two differ on purpose:
   the planned ones, greyed out). Unsaved Memory edits are dropped when you open another bot's
   Memory page, so a typed key is never kept off screen.
 - Profile takes a custom colour as typed hex digits; the web opens the
-  browser's colour picker. It has no revision history or Delete yet.
-- Settings has no "UI plugins" page (this app has no plugins) and no "Create a
-  bot" yet.
+  browser's colour picker.
+- Revision history shows a revision's name, description and colour on one
+  line above its personality; the web lays them out as labelled fields.
+- Settings has no "UI plugins" page (this app has no plugins).
 - The roster shows "N conversations need you" and the last message only for
   the selected bot, because the app follows one bot's sessions at a time.
 - Sign-in asks for a Raphie address and shows a device code instead of a

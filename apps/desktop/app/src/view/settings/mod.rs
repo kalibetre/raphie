@@ -10,6 +10,7 @@ mod activity;
 mod appearance;
 mod channels;
 mod diagnostics;
+mod history;
 mod inspect;
 mod jobs;
 mod mcp;
@@ -38,11 +39,16 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
     let content = match page {
         Page::Account => account::account(s, look),
         Page::Appearance => appearance::appearance(s, look),
+        Page::NewBot => profile::new_bot(s, look),
         Page::Diagnostics => diagnostics::diagnostics(s, look),
         Page::Bot {
             bot_id,
             section: BotSection::Profile,
-        } => profile::profile(s, bot_id, look),
+        } => profile::profile(s, bot_id, look, overlays),
+        Page::Bot {
+            bot_id,
+            section: BotSection::History,
+        } => history::history(s, bot_id, look),
         Page::Bot {
             bot_id,
             section: BotSection::Models,
@@ -89,7 +95,8 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
         Page::Bot {
             section: BotSection::Profile,
             ..
-        } => profile::save_bar(s, look),
+        }
+        | Page::NewBot => profile::save_bar(s, look),
         Page::Bot {
             section: BotSection::Memory,
             ..
@@ -259,9 +266,11 @@ pub fn page_icon(page: &Page) -> &'static Icon {
     match page {
         Page::Account => &icons::LOG_OUT,
         Page::Appearance => &icons::PALETTE,
+        Page::NewBot => &icons::BOT,
         Page::Diagnostics => &icons::RADIO,
         Page::Bot { section, .. } => match section {
             BotSection::Profile => &icons::USER_ROUND,
+            BotSection::History => &icons::HISTORY,
             BotSection::Providers => &icons::KEY_ROUND,
             BotSection::Models => &icons::BRAIN,
             BotSection::Memory => &icons::BOOK_OPEN,

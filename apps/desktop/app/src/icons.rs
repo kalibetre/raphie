@@ -243,6 +243,18 @@ pub static DOWNLOAD: Icon = Icon {
     body: r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></g>"#,
 };
 
+pub static HISTORY: Icon = Icon {
+    name: "rd-history",
+    view: 24.0,
+    body: r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></g>"#,
+};
+
+pub static BOT: Icon = Icon {
+    name: "rd-bot",
+    view: 24.0,
+    body: r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></g>"#,
+};
+
 pub static LIBRARY: Icon = Icon {
     name: "rd-library",
     view: 24.0,

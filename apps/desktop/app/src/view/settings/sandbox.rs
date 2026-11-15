@@ -463,6 +463,7 @@ pub fn sandbox_save_bar(s: &Ui, look: &Look) -> Option<El> {
             save_label: if saving { "Saving…" } else { "Save changes" },
             can_save: s.can_save_sandbox(),
             can_discard: dirty && !saving,
+            extra: None,
         },
         |s: &mut Ui| s.discard_sandbox(),
         |s: &mut Ui| s.save_sandbox(),

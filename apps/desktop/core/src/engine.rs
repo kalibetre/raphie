@@ -32,6 +32,7 @@ use tokio::time::{Instant, sleep};
 use crate::api::{ApiClient, ApiError, ChannelAnswer, bot_path};
 use crate::auth::{AccessToken, DevicePolicy, DevicePoll, Secret, TokenStore};
 use crate::channels::{Channel, ChannelChange};
+use crate::contracts::NewBot;
 use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
@@ -123,6 +124,21 @@ pub enum Command {
     /// Ask the runtime to reach the bot's saved memory back end.
     TestMemory {
         bot_id: String,
+    },
+    /// Load the saved versions of a bot's profile.
+    LoadBotHistory {
+        bot_id: String,
+    },
+    /// Create a bot.
+    CreateBot {
+        bot: NewBot,
+    },
+    /// Delete a bot and everything the runtime keeps for it. `name` and
+    /// `revision` are the bot as the owner confirmed it.
+    DeleteBot {
+        bot_id: String,
+        name: String,
+        revision: u32,
     },
     /// Load a bot's sandbox settings, provider, limits and usage.
     LoadSandbox {
@@ -488,6 +504,13 @@ impl Engine {
             Command::LoadMemory { bot_id } => self.load_memory(bot_id),
             Command::SaveMemory { bot_id, update } => self.save_memory(bot_id, update),
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
+            Command::LoadBotHistory { bot_id } => self.load_bot_history(bot_id),
+            Command::CreateBot { bot } => self.create_bot(bot),
+            Command::DeleteBot {
+                bot_id,
+                name,
+                revision,
+            } => self.delete_bot(bot_id, name, revision),
             Command::LoadSandbox { bot_id } => self.load_sandbox(bot_id),
             Command::SaveSandbox { bot_id, update } => self.save_sandbox(bot_id, update),
             Command::LoadTraces { bot_id, hours } => self.load_traces(bot_id, hours),
@@ -956,6 +979,77 @@ impl Engine {
                 Err(error) => error.to_string(),
             };
             emit.emit(Event::MemoryTested { message });
+        });
+    }
+
+    fn load_bot_history(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.bot_history(&bot_id).await {
+                Ok(items) => emit.emit(Event::BotHistory { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::BotHistoryFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn create_bot(&mut self, bot: NewBot) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.create_bot(&bot).await {
+                Ok(profile) => {
+                    emit.emit(Event::BotCreated(profile));
+                    // The list as the host has it now, in its order.
+                    if let Ok(bots) = api.bots().await {
+                        emit.emit(Event::Bots(bots));
+                    }
+                }
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::BotCreateFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn delete_bot(&mut self, bot_id: String, name: String, revision: u32) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.delete_bot(&bot_id, &name, revision).await {
+                Ok(()) => emit.emit(Event::BotDeleted { bot_id }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => {
+                    // The bot may have changed elsewhere: read the list so
+                    // the page shows it as it is now.
+                    if let Ok(bots) = api.bots().await {
+                        emit.emit(Event::Bots(bots));
+                    }
+                    emit.emit(Event::BotDeleteFailed {
+                        message: error.to_string(),
+                    });
+                }
+            }
         });
     }
 

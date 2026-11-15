@@ -492,6 +492,203 @@ fn research_profile(ui: &mut Ui) {
 }
 
 #[test]
+fn revision_history_lists_saved_versions_and_unfolds_them() {
+    let mut rt = render_sized(research_profile, false, (1280.0, 1700.0));
+    click(&mut rt, "rd-profile-history");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadBotHistory {
+            bot_id: "b-research".into()
+        })
+    );
+    assert_eq!(
+        element(&rt, "rd-settings-page-name").text.as_deref(),
+        Some("Revision history")
+    );
+    assert!(screen_text(&rt).contains("Loading revisions…"));
+    deliver(
+        &mut rt,
+        Event::BotHistory {
+            bot_id: "b-research".into(),
+            items: scenes::bot_revisions(),
+        },
+    );
+    // The current revision is marked and starts unfolded; older ones fold.
+    let text = screen_text(&rt);
+    assert!(text.contains("Current"));
+    assert!(text.contains("Prefer the primary source"));
+    assert!(text.contains("Research · Reads and summarises. · Color: Automatic"));
+    assert!(rt.find("rd-revision-2-soul").is_none());
+    click(&mut rt, "rd-revision-2");
+    let text = screen_text(&rt);
+    assert!(text.contains("Research · Reads papers · Color: #83bcb4"));
+    click(&mut rt, "rd-revision-3");
+    assert!(rt.find("rd-revision-3-soul").is_none());
+
+    // The link over the title goes back to Profile, where the nav stayed.
+    click(&mut rt, "rd-history-back");
+    assert_eq!(
+        element(&rt, "rd-settings-page-name").text.as_deref(),
+        Some("Profile")
+    );
+}
+
+#[test]
+fn a_bot_is_created_from_a_form_that_keeps_its_draft() {
+    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 1700.0));
+    click(&mut rt, "rd-nav-new-bot");
+    assert_eq!(rt.state.screen, Screen::Settings(Page::NewBot));
+    let text = screen_text(&rt);
+    assert!(text.contains("New bot"), "{text}");
+    assert_eq!(
+        element(&rt, "rd-profile-status").text.as_deref(),
+        Some("Independent configuration. No settings are copied.")
+    );
+    // The starter personality is there; an untouched form is not nagged.
+    assert!(rt.state.profile.soul.text.starts_with("Be thoughtful"));
+    assert!(rt.find("rd-profile-error").is_none());
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-profile-save");
+    assert_eq!(rt.state.sent.len(), before, "a bot needs a name");
+
+    rt.update(|ui, _| ui.profile.description = TextEdit::new("Plans trips"));
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-profile-error").text.as_deref(),
+        Some("Give this bot a name.")
+    );
+    // The draft survives a look at another page.
+    click(&mut rt, "rd-nav-appearance");
+    click(&mut rt, "rd-nav-new-bot");
+    assert_eq!(rt.state.profile.description.text, "Plans trips");
+
+    rt.update(|ui, _| ui.profile.name = TextEdit::new(" Travel "));
+    settle(&mut rt);
+    click(&mut rt, "rd-profile-save");
+    let Some(Command::CreateBot { bot }) = rt.state.sent.last() else {
+        panic!("the bot is sent");
+    };
+    assert_eq!(
+        (bot.name.as_str(), bot.description.as_str()),
+        ("Travel", "Plans trips")
+    );
+    assert_eq!(
+        element(&rt, "rd-profile-save").label.as_deref(),
+        Some("Creating…")
+    );
+
+    // A refusal keeps the form; success opens the new bot's Providers.
+    deliver(
+        &mut rt,
+        Event::BotCreateFailed {
+            message: "A bot with this name already exists.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-profile-error").text.as_deref(),
+        Some("A bot with this name already exists.")
+    );
+    assert_eq!(rt.state.profile.name.text, " Travel ");
+    click(&mut rt, "rd-profile-save");
+    let mut created = research("Plans trips", 1);
+    created.id = "b-travel".into();
+    created.name = "Travel".into();
+    deliver(&mut rt, Event::BotCreated(created));
+    assert_eq!(
+        rt.state.screen,
+        Screen::Settings(Page::Bot {
+            bot_id: "b-travel".into(),
+            section: BotSection::Providers,
+        })
+    );
+    assert!(rt.state.model.bots.iter().any(|bot| bot.id == "b-travel"));
+
+    // Cancel leaves without creating and drops the form.
+    click(&mut rt, "rd-nav-new-bot");
+    rt.update(|ui, _| ui.profile.name = TextEdit::new("Scratch"));
+    settle(&mut rt);
+    click(&mut rt, "rd-profile-cancel");
+    assert!(matches!(
+        rt.state.screen,
+        Screen::Settings(Page::Bot {
+            section: BotSection::Profile,
+            ..
+        })
+    ));
+    click(&mut rt, "rd-nav-new-bot");
+    assert!(rt.state.profile.name.text.is_empty());
+}
+
+#[test]
+fn a_bot_is_deleted_only_after_its_name_is_typed() {
+    // The default bot cannot be deleted, so it is not offered.
+    let rt = render_sized(scenes::settings_profile, false, (1280.0, 1700.0));
+    assert!(rt.find("rd-delete-bot").is_none());
+
+    let mut rt = render_sized(research_profile, false, (1280.0, 1700.0));
+    // Unsaved edits block it: the confirmation must name the saved bot.
+    rt.update(|ui, _| ui.profile.description = TextEdit::new("Edited"));
+    settle(&mut rt);
+    click(&mut rt, "rd-delete-bot-open");
+    assert!(rt.find("rd-delete-bot-form").is_none());
+    rt.update(|ui, _| ui.discard_profile());
+    settle(&mut rt);
+
+    click(&mut rt, "rd-delete-bot-open");
+    assert!(rt.find("rd-delete-bot-form").is_some());
+    assert!(screen_text(&rt).contains("Delete Research?"));
+    // Anything but the exact name leaves the button dead.
+    let before = rt.state.sent.len();
+    for wrong in ["", "research", "Research "] {
+        rt.update(|ui, _| ui.delete_confirmation = TextEdit::new(wrong));
+        settle(&mut rt);
+        click(&mut rt, "rd-delete-bot-confirm");
+        assert_eq!(rt.state.sent.len(), before, "{wrong:?}");
+    }
+    rt.update(|ui, _| ui.delete_confirmation = TextEdit::new("Research"));
+    settle(&mut rt);
+    click(&mut rt, "rd-delete-bot-confirm");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::DeleteBot {
+            bot_id: "b-research".into(),
+            name: "Research".into(),
+            revision: 3,
+        })
+    );
+    // While it is on its way the dialog cannot be dismissed.
+    click(&mut rt, "rd-delete-bot-cancel");
+    assert!(rt.find("rd-delete-bot-form").is_some());
+
+    // A refusal is shown in the dialog and deletes nothing.
+    deliver(
+        &mut rt,
+        Event::BotDeleteFailed {
+            message: "This bot changed. Reload and try again.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-delete-bot-error").text.as_deref(),
+        Some("This bot changed. Reload and try again.")
+    );
+    assert!(rt.state.model.bots.iter().any(|bot| bot.id == "b-research"));
+
+    // Once deleted, its pages close and the default bot is selected.
+    rt.update(|ui, _| ui.select_bot("b-research"));
+    click(&mut rt, "rd-delete-bot-confirm");
+    deliver(
+        &mut rt,
+        Event::BotDeleted {
+            bot_id: "b-research".into(),
+        },
+    );
+    assert_eq!(rt.state.screen, Screen::Workspace);
+    assert!(rt.state.model.bots.iter().all(|bot| bot.id != "b-research"));
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+    assert!(rt.state.delete_confirmation.text.is_empty());
+}
+
+#[test]
 fn a_profile_is_edited_saved_and_shown_at_its_new_revision() {
     for dark in [false, true] {
         let mut rt = render(research_profile, dark);

@@ -369,6 +369,7 @@ pub fn memory_save_bar(s: &Ui, look: &Look) -> Option<El> {
             },
             can_save: s.can_save_memory(),
             can_discard: dirty && !saving,
+            extra: None,
         },
         |s: &mut Ui| s.discard_memory(),
         |s: &mut Ui| s.save_memory(),

@@ -28,6 +28,7 @@ use crate::contracts::{
     TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
 };
 use crate::contracts::{ActivityEvent, TelemetryBody, TraceDiagnostics};
+use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
 use crate::jobs::{JobAction, NewJob};
 use crate::mcp::{McpAction, NewMcpConnection};
@@ -246,6 +247,37 @@ impl ApiClient {
     ) -> Result<BotProfile, ApiError> {
         self.post_json(&format!("/api/bots/{}/profile", encode(bot_id)), update)
             .await
+    }
+
+    /// The saved versions of a bot's profile, newest first.
+    pub async fn bot_history(&self, bot_id: &str) -> Result<Vec<BotRevision>, ApiError> {
+        let path = format!("/api/bots/{}/history", encode(bot_id));
+        let history: BotHistory = self.get_json(&path).await?;
+        Ok(history.items)
+    }
+
+    /// Creates a bot and returns it.
+    pub async fn create_bot(&self, bot: &NewBot) -> Result<BotProfile, ApiError> {
+        self.post_json("/api/bots", bot).await
+    }
+
+    /// Deletes a bot and everything the runtime keeps for it. `name` and
+    /// `revision` are the bot as the owner confirmed it; the runtime
+    /// refuses if it changed since.
+    pub async fn delete_bot(
+        &self,
+        bot_id: &str,
+        name: &str,
+        revision: u32,
+    ) -> Result<(), ApiError> {
+        let path = format!("/api/bots/{}", encode(bot_id));
+        let request = self
+            .authorized(self.http.delete(self.origin.url(&path)))
+            .header("x-raphie-client", "web")
+            .json(&DeleteBotBody { name, revision });
+        // The answer is 204 with no body; a failure is an error.
+        send(request).await?;
+        Ok(())
     }
 
     /// One bot's model connections and models.

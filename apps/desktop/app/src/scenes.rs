@@ -10,7 +10,7 @@ use raphie_core::contracts::{
     MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionObservation,
     SessionSummary, TelegramPairingCode, WorkspaceListing,
 };
-use raphie_core::contracts::{ActivityEvent, TraceDiagnostics};
+use raphie_core::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use raphie_core::contracts::{JobRun, ScheduledJob};
 use raphie_core::engine::Command;
 use raphie_core::mcp::McpTransport;
@@ -42,6 +42,9 @@ pub const SCENES: &[Scene] = &[
     ("settings-appearance", settings_appearance),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
+    ("settings-history", settings_history),
+    ("settings-new-bot", settings_new_bot),
+    ("settings-delete-bot", settings_delete_bot),
     ("settings-models", settings_models),
     ("settings-models-filter", settings_models_filter),
     ("settings-providers", settings_providers),
@@ -248,6 +251,68 @@ pub fn settings_memory_hindsight(ui: &mut Ui) {
     ui.memory.bank_id = TextEdit::new("raphie-work");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
+}
+
+/// Made-up saved versions of the Research bot's profile, newest first.
+pub fn bot_revisions() -> Vec<BotRevision> {
+    serde_json::from_value(json!([
+        {
+            "id": "b-research", "revision": 3, "name": "Research",
+            "description": "Reads and summarises.", "color": null,
+            "soul": "Read the source before summarising it.\nSay what is uncertain, and why.\nPrefer the primary source to a write-up of it.",
+            "createdAt": 1_794_200_400_000_i64, "updatedAt": 1_794_650_100_000_i64,
+        },
+        {
+            "id": "b-research", "revision": 2, "name": "Research",
+            "description": "Reads papers", "color": "#83bcb4",
+            "soul": "Read the source before summarising it.\nSay what is uncertain.",
+            "createdAt": 1_794_200_400_000_i64, "updatedAt": 1_794_563_700_000_i64,
+        },
+        {
+            "id": "b-research", "revision": 1, "name": "Reader",
+            "description": "", "color": null, "soul": "Be brief.",
+            "createdAt": 1_794_200_400_000_i64, "updatedAt": 1_794_200_400_000_i64,
+        },
+    ]))
+    .expect("the scene's revisions match the contract")
+}
+
+/// The Research bot at revision 3, on one of its settings pages.
+fn open_research(ui: &mut Ui, section: BotSection) {
+    settings_account(ui);
+    let mut bots = ui.model.bots.clone();
+    if let Some(research) = bots.iter_mut().find(|bot| bot.id == "b-research") {
+        research.revision = 3;
+    }
+    ui.model.apply(Event::Bots(bots));
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "b-research".into(),
+        section,
+    }));
+}
+
+/// Settings → Profile → Revision history, the current revision unfolded.
+pub fn settings_history(ui: &mut Ui) {
+    open_research(ui, BotSection::History);
+    ui.model.apply(Event::BotHistory {
+        bot_id: "b-research".into(),
+        items: bot_revisions(),
+    });
+}
+
+/// Settings → Create a bot, with a name typed.
+pub fn settings_new_bot(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::NewBot));
+    ui.profile.name = TextEdit::new("Travel");
+    ui.profile.description = TextEdit::new("Plans trips and keeps the bookings straight.");
+}
+
+/// A bot's Profile with "Delete bot" asking for its name.
+pub fn settings_delete_bot(ui: &mut Ui) {
+    open_research(ui, BotSection::Profile);
+    ui.ask_delete_bot();
+    ui.delete_confirmation = TextEdit::new("Resear");
 }
 
 /// Made-up exported traces: a run with a model call, a tool call that

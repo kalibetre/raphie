@@ -153,7 +153,7 @@ Delivered capabilities and remaining work are labelled below. See the
   for the session for commands) with stale decisions reported. It follows the
   web workspace's design, and light and dark follow the OS or the
   choice in Settings. Settings open in the app with native Account,
-  Appearance, bot Profile, Providers, Models and Memory settings pages, and Browse memory (list, search, correct,
+  Appearance, bot Profile (with revision history, creating and deleting a bot), Providers, Models and Memory settings pages, and Browse memory (list, search, correct,
   forget), MCP tools, Channels, Sandbox, Workspace files, Scheduled jobs, Diagnostics and Activity: every bot
   settings page is native.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).

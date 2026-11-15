@@ -11,6 +11,8 @@ pub enum Page {
     Bot { bot_id: String, section: BotSection },
     /// Who is signed in, and signing out.
     Account,
+    /// A new bot, before it exists.
+    NewBot,
     /// Light or dark.
     Appearance,
     /// The switch that collects diagnostic traces, and recent traces. They
@@ -23,6 +25,8 @@ pub enum Page {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BotSection {
     Profile,
+    /// Every saved version of the profile, reached from Profile.
+    History,
     Providers,
     Models,
     Memory,
@@ -54,6 +58,7 @@ impl BotSection {
     pub fn label(self) -> &'static str {
         match self {
             BotSection::Profile => "Profile",
+            BotSection::History => "Revision history",
             BotSection::Providers => "Providers",
             BotSection::Models => "Models",
             BotSection::Memory => "Memory",
@@ -71,6 +76,7 @@ impl BotSection {
     pub fn web_id(self) -> &'static str {
         match self {
             BotSection::Profile => "bot",
+            BotSection::History => "bot-history",
             BotSection::Providers => "providers",
             BotSection::Models => "models",
             BotSection::Memory => "memory",
@@ -89,6 +95,7 @@ impl BotSection {
     pub fn parent(self) -> Option<BotSection> {
         match self {
             BotSection::MemoryBrowse => Some(BotSection::Memory),
+            BotSection::History => Some(BotSection::Profile),
             _ => None,
         }
     }
@@ -99,6 +106,9 @@ impl BotSection {
         match self {
             BotSection::Profile => {
                 format!("The identity, color and personality {bot} brings to your conversations.")
+            }
+            BotSection::History => {
+                format!("Every saved version of {bot}’s personality, newest first.")
             }
             BotSection::Providers => {
                 format!(
@@ -141,6 +151,7 @@ impl Page {
         match self {
             Page::Bot { section, .. } => section.label(),
             Page::Account => "Account",
+            Page::NewBot => "Create a bot",
             Page::Appearance => "Appearance",
             Page::Diagnostics => "Diagnostics",
         }
@@ -150,6 +161,7 @@ impl Page {
     pub fn web_query(&self) -> String {
         match self {
             Page::Account => "view=settings&section=account".to_owned(),
+            Page::NewBot => "view=settings&section=new-bot".to_owned(),
             Page::Appearance => "view=settings&section=general".to_owned(),
             Page::Diagnostics => "view=settings&section=telemetry".to_owned(),
             Page::Bot { bot_id, section } => {

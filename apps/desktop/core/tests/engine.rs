@@ -7,11 +7,11 @@ use std::sync::Arc;
 
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
-use raphie_core::contracts::TraceState;
 use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
     UpdateBotProfile, WorkspaceKind,
 };
+use raphie_core::contracts::{NewBot, TraceState};
 use raphie_core::engine::{Command, ConnectionChange, EngineConfig};
 use raphie_core::inspection::{pretty_json, span_matches};
 use raphie_core::jobs::{JobAction, NewJob, job_badge, job_interval, run_description};
@@ -601,6 +601,89 @@ fn memory_settings_load_save_and_test() {
     host.with(|h| h.memory_unreachable = true);
     let said = test(&mut driver);
     assert!(said.contains("did not answer"), "{said}");
+}
+
+#[test]
+fn a_bot_is_created_its_history_read_and_it_is_deleted_only_as_confirmed() {
+    let host = FakeHost::start();
+    host.with(|h| h.profile_revision = 3);
+    let (mut driver, _) = signed_in(&host);
+    let names = |driver: &Driver| -> Vec<String> {
+        driver
+            .model
+            .bots
+            .iter()
+            .map(|bot| bot.name.clone())
+            .collect()
+    };
+    assert_eq!(names(&driver), ["Raphie", "Research"]);
+
+    // Saved versions come newest first, each with what it said.
+    driver.send(Command::LoadBotHistory {
+        bot_id: "b-research".into(),
+    });
+    driver.until("the history", |m, _| {
+        m.bot_history.contains_key("b-research")
+    });
+    let history = driver.model.bot_history["b-research"].clone();
+    let revisions: Vec<u32> = history.iter().map(|item| item.revision).collect();
+    assert_eq!(revisions, [3, 2, 1]);
+    assert_eq!(history[0].soul, "Be brief. (revision 3)");
+    assert!(history[0].updated_at > history[2].updated_at);
+
+    let create = |driver: &mut Driver, name: &str| {
+        assert!(driver.model.begin_create_bot());
+        driver.send(Command::CreateBot {
+            bot: NewBot {
+                name: name.into(),
+                description: "Plans trips".into(),
+                soul: "Be practical.".into(),
+                color: None,
+            },
+        });
+        driver.until("the create", |m, _| !m.creating_bot);
+    };
+    // What the runtime refuses is reported and creates nothing.
+    create(&mut driver, "Research");
+    let error = driver.model.profile_error.clone().unwrap_or_default();
+    assert!(error.contains("already exists"), "{error}");
+    assert_eq!(names(&driver), ["Raphie", "Research"]);
+
+    create(&mut driver, "Travel");
+    assert_eq!(names(&driver), ["Raphie", "Research", "Travel"]);
+    let created = driver.model.bots[2].clone();
+    assert_eq!((created.id.as_str(), created.revision), ("b-new-1", 1));
+
+    let delete = |driver: &mut Driver, id: &str, name: &str, revision: u32| {
+        assert!(driver.model.begin_delete_bot());
+        driver.send(Command::DeleteBot {
+            bot_id: id.into(),
+            name: name.into(),
+            revision,
+        });
+        driver.until("the delete", |m, _| !m.deleting_bot);
+    };
+    // A confirmation for an older revision deletes nothing.
+    delete(&mut driver, "b-research", "Research", 2);
+    let error = driver.model.delete_bot_error.clone().unwrap_or_default();
+    assert!(error.contains("changed"), "{error}");
+    assert_eq!(names(&driver).len(), 3);
+    // The default bot stays, whatever is confirmed.
+    delete(&mut driver, "default", "Raphie", 1);
+    assert!(driver.model.delete_bot_error.is_some());
+
+    delete(&mut driver, "b-research", "Research", 3);
+    assert_eq!(names(&driver), ["Raphie", "Travel"]);
+    assert_eq!(driver.model.delete_bot_error, None);
+    assert!(!driver.model.bot_history.contains_key("b-research"));
+    host.with(|h| {
+        let (id, body) = h.bot_deletes.last().unwrap();
+        assert_eq!(id, "b-research");
+        assert_eq!(
+            *body,
+            serde_json::json!({ "name": "Research", "revision": 3 })
+        );
+    });
 }
 
 #[test]
