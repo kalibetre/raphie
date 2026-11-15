@@ -8,6 +8,7 @@ use raphie_core::contracts::{
     BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, Scope,
 };
 use raphie_core::engine::{Command, ConnectionChange};
+use raphie_core::mcp::{McpAction, NewMcpConnection};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, Event};
 use raphie_core::settings::ThemeChoice;
@@ -636,20 +637,20 @@ fn a_bots_page_names_the_bot_and_offers_the_web_page() {
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
     assert!(
-        text.contains("Connect the tools Research can use"),
+        text.contains("Connect Research to messaging channels."),
         "{text}"
     );
     click(&mut rt, "rd-bot-page-web");
     assert_eq!(
         rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=mcp&bot=b-research"]
+        ["https://raphie.example.ts.net/?view=settings&section=channels&bot=b-research"]
     );
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-mcp").is_none());
+    assert!(rt.find("rd-nav-b-research-channels").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("MCP tools")
+        Some("Channels")
     );
 }
 
@@ -1134,7 +1135,7 @@ fn a_hindsight_key_is_replaced_or_cleared_and_never_shown() {
 }
 
 #[test]
-fn a_bad_scope_cannot_be_saved_and_browsing_opens_the_browser() {
+fn a_bad_scope_cannot_be_saved() {
     let mut rt = render_sized(scenes::settings_memory, false, (1280.0, 1300.0));
     rt.update(|ui, _| ui.memory.scope = rune::TextEdit::new("two words"));
     settle(&mut rt);
@@ -1155,6 +1156,202 @@ fn a_bad_scope_cannot_be_saved_and_browsing_opens_the_browser() {
     click(&mut rt, "rd-memory-discard");
     assert_eq!(rt.state.memory.scope.text, "owner");
     assert!(rt.find("rd-save-bar").is_none());
+}
+
+#[test]
+fn mcp_connections_load_and_show_what_each_can_do() {
+    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 1500.0));
+    click(&mut rt, "rd-nav-default-mcp");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadMcp {
+            bot_id: "default".into()
+        })
+    );
+    assert!(screen_text(&rt).contains("Loading connections…"));
+    deliver(
+        &mut rt,
+        Event::Mcp {
+            bot_id: "default".into(),
+            items: scenes::mcp_connections(),
+        },
+    );
+    let label = |rt: &Runtime<Ui>, key: &str| element(rt, key).label.unwrap_or_default();
+    assert_eq!(
+        element(&rt, "rd-mcp-mcp-calendar-summary").text.as_deref(),
+        Some("12 tools · Streamable HTTP · https://calendar.example.com/mcp")
+    );
+    assert_eq!(label(&rt, "rd-mcp-mcp-calendar-toggle"), "Pause");
+    assert_eq!(label(&rt, "rd-mcp-mcp-docs-toggle"), "Cancel authorization");
+    assert_eq!(label(&rt, "rd-mcp-mcp-files-toggle"), "Enable");
+    // A connection from the host's environment can only be imported.
+    assert!(rt.find("rd-mcp-env-search-toggle").is_none());
+    assert!(rt.find("rd-mcp-env-search-remove").is_none());
+    assert!(screen_text(&rt).contains("Import saves an encrypted copy"));
+
+    // Authorizing happens in the browser, at the address the server gave.
+    click(&mut rt, "rd-mcp-mcp-docs-authorize");
+    assert_eq!(
+        rt.state.opened,
+        ["https://docs.example.com/oauth/authorize?state=made-up"]
+    );
+
+    click(&mut rt, "rd-mcp-mcp-calendar-toggle");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ChangeMcp {
+            bot_id: "default".into(),
+            id: "mcp-calendar".into(),
+            action: McpAction::Disable,
+        })
+    );
+    // One change at a time: the other buttons wait for the answer.
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-mcp-mcp-files-remove");
+    assert_eq!(rt.state.sent.len(), before);
+    let mut paused = scenes::mcp_connections();
+    paused[0].connected = false;
+    paused[0].enabled = false;
+    deliver(
+        &mut rt,
+        Event::McpChanged {
+            bot_id: "default".into(),
+            items: paused,
+        },
+    );
+    assert_eq!(label(&rt, "rd-mcp-mcp-calendar-toggle"), "Enable");
+    click(&mut rt, "rd-mcp-env-search-import");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::ChangeMcp { id, action: McpAction::Import, .. }) if id == "env-search"
+    ));
+    deliver(
+        &mut rt,
+        Event::McpChangeFailed {
+            message: "Remove a saved connection before importing.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-mcp-error").text.as_deref(),
+        Some("Remove a saved connection before importing.")
+    );
+}
+
+#[test]
+fn an_mcp_server_is_added_and_its_token_is_never_shown() {
+    let mut rt = render_sized(scenes::settings_mcp_empty, false, (1280.0, 1500.0));
+    assert!(screen_text(&rt).contains("No MCP servers yet"));
+    // Nothing typed: nothing to connect or discard.
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-mcp-connect");
+    assert_eq!(rt.state.sent.len(), before);
+    rt.update(|ui, _| {
+        ui.mcp.name = TextEdit::new("Team docs");
+        ui.mcp.address = TextEdit::new("https://docs.example.com/mcp");
+        ui.mcp.token = TextEdit::new("mcp-not-a-real-token").secure();
+    });
+    settle(&mut rt);
+    assert!(!screen_text(&rt).contains("mcp-not-a-real-token"));
+    click(&mut rt, "rd-mcp-connect");
+    let Some(Command::AddMcp { connection, .. }) = rt.state.sent.last() else {
+        panic!("the form is sent");
+    };
+    assert!(matches!(
+        connection,
+        NewMcpConnection::Http { token: Some(token), .. } if token.expose() == "mcp-not-a-real-token"
+    ));
+    assert!(!format!("{:?}", rt.state.sent).contains("mcp-not-a-real-token"));
+    assert_eq!(
+        element(&rt, "rd-mcp-connect").label.as_deref(),
+        Some("Connecting…")
+    );
+
+    // A refusal keeps what was typed; success empties the form.
+    deliver(
+        &mut rt,
+        Event::McpChangeFailed {
+            message: "A bot can have at most 16 MCP connections.".into(),
+        },
+    );
+    assert_eq!(rt.state.mcp.name.text, "Team docs");
+    click(&mut rt, "rd-mcp-connect");
+    deliver(
+        &mut rt,
+        Event::McpAdded {
+            bot_id: "default".into(),
+            items: scenes::mcp_connections(),
+        },
+    );
+    assert!(rt.state.mcp.token.text.is_empty() && rt.state.mcp.name.text.is_empty());
+    assert_eq!(
+        element(&rt, "rd-mcp-message").text.as_deref(),
+        Some("Server added. Choose Authorize to sign in and grant access.")
+    );
+    assert!(rt.find("rd-mcp-error").is_none());
+}
+
+#[test]
+fn a_local_command_checks_its_json_and_discard_empties_the_form() {
+    let mut rt = render_sized(scenes::settings_mcp_command, false, (1280.0, 1500.0));
+    // The scene pressed "Connect server" with arguments that are not JSON.
+    assert_eq!(
+        element(&rt, "rd-mcp-error").text.as_deref(),
+        Some("Check the arguments and environment JSON.")
+    );
+    assert!(
+        rt.state
+            .sent
+            .iter()
+            .all(|c| !matches!(c, Command::AddMcp { .. }))
+    );
+    assert!(rt.find("rd-mcp-token").is_none(), "a command has no token");
+    assert!(!screen_text(&rt).contains("not-a-real-token"));
+    rt.update(|ui, _| ui.mcp.args = TextEdit::new(r#"["-y", "a-server"]"#));
+    settle(&mut rt);
+    click(&mut rt, "rd-mcp-connect");
+    let Some(Command::AddMcp { connection, .. }) = rt.state.sent.last() else {
+        panic!("the form is sent");
+    };
+    assert!(matches!(
+        connection,
+        NewMcpConnection::Stdio { command, args, env, .. }
+            if command == "npx" && args.len() == 2 && env[0].0 == "API_TOKEN"
+    ));
+    deliver(
+        &mut rt,
+        Event::McpChangeFailed {
+            message: "offline".into(),
+        },
+    );
+    click(&mut rt, "rd-mcp-discard");
+    assert!(!rt.state.mcp.is_dirty());
+    assert!(rt.find("rd-mcp-error").is_none());
+    assert!(rt.find("rd-mcp-token").is_some(), "back to a URL server");
+}
+
+#[test]
+fn the_mcp_page_asks_again_every_few_seconds_while_it_shows() {
+    let mut rt = render(scenes::settings_mcp, false);
+    let loads = |rt: &Runtime<Ui>| {
+        let sent = &rt.state.sent;
+        sent.iter()
+            .filter(|c| matches!(c, Command::LoadMcp { .. }))
+            .count()
+    };
+    let opened = loads(&rt);
+    rt.update(|ui, _| {
+        assert!(ui.refresh_mcp(100.0));
+        // Two seconds later is too soon to ask again.
+        assert!(ui.refresh_mcp(102.0));
+    });
+    assert_eq!(loads(&rt), opened + 1);
+    rt.update(|ui, _| {
+        ui.refresh_mcp(105.5);
+        // Elsewhere in Settings, nothing is asked.
+        ui.open_settings(Some(Page::Account));
+        assert!(!ui.refresh_mcp(200.0));
+    });
+    assert_eq!(loads(&rt), opened + 2);
 }
 
 /// The ticket of the load the page last asked for.

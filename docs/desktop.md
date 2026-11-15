@@ -91,7 +91,15 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     Return sends the query. Where the back end allows it, a memory can be
     corrected in place or forgotten after a confirmation. "Open source
     session" leaves Settings for the conversation the memory came from.
-  - **A bot's other pages** (MCP tools, Channels, ...) are not built yet: each
+  - **MCP tools** lists a bot's connections to MCP servers with how each is
+    doing, and pauses, reconnects, removes or imports one. The form adds a
+    server by URL (with an optional bearer token) or as a local command
+    (arguments as a JSON array, environment as a JSON object). The token and
+    the environment are typed into masked fields, sent once, and dropped;
+    the app never stores or shows them. "Authorize" opens the server's
+    sign-in page in your browser. While the page shows it asks the host
+    again every five seconds, so a finished authorization appears by itself.
+  - **A bot's other pages** (Channels, Sandbox, ...) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
