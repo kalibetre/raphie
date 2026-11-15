@@ -44,6 +44,10 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   560 pt wide beside the roster and the panel, the panel floats over the
   conversation instead, as the web's sheet does: picking a conversation, its
   close button, Escape or a press outside closes it.
+  Dragging the inner edge of the roster or of a docked panel resizes it, as
+  on the web: the roster from 220 to 480 pt, the panel from 280 to 640 pt.
+  The widths are kept in the settings for the next launch; a window too
+  small for them draws them narrower without forgetting them.
 - **New replies**: a conversation with replies you have not read shows a dot,
   a bolder title and "2 new replies"; the panel's button, its tab and each
   bot's row in the roster count the conversations that need you (new
@@ -527,8 +531,8 @@ current.
   the web).
 - Tool steps come from the session's latest 200 journal entries, as on the
   web: turns older than that show their reply without steps or usage.
-- The roster and panel have fixed widths (264 and 340 pt) and their open state
-  is not remembered between launches. The window is at least 960×560.
+- The roster's and the panel's open state is not remembered between
+  launches. The window is at least 960×560.
 - No distributable package: no Developer ID signing, notarisation or
   installer, and the release workflow publishes no desktop app. The update
   check only says a newer Raphie exists and links to its release page.

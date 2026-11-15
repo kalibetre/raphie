@@ -13,7 +13,7 @@ use super::Look;
 use super::roster::plain;
 use crate::format;
 use crate::icons;
-use crate::state::{Filter, PANEL_WIDTH, Ui};
+use crate::state::{Filter, Ui};
 use crate::theme::{Theme, font};
 use crate::widgets::{Kind, Size, button, centered, count_badge, icon_button, one_line, pressable};
 
@@ -150,7 +150,7 @@ pub fn panel(s: &Ui, look: &Look, floating: bool) -> El {
 
     col()
         .key("rd-panel")
-        .w(PANEL_WIDTH)
+        .w(s.visible_panel_width())
         .h_full()
         .fill(t.sidebar)
         .border_sides([0.0, 0.0, 0.0, 1.0], t.border)

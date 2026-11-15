@@ -13,7 +13,7 @@ use super::Look;
 use crate::avatar::bot_avatar;
 use crate::icons;
 use crate::sections::Page;
-use crate::state::{ROSTER_WIDTH, Ui};
+use crate::state::Ui;
 use crate::theme::font;
 use crate::widgets::{count_badge, dev_badge, icon_button, one_line, pressable, status_dot};
 
@@ -28,7 +28,7 @@ pub fn roster(s: &Ui, look: &Look) -> El {
     }
     col()
         .key("rd-roster")
-        .w(ROSTER_WIDTH)
+        .w(s.visible_roster_width())
         .h_full()
         .pb(16.0)
         .fill(t.sidebar)

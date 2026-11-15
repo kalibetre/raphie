@@ -4087,3 +4087,64 @@ fn escape_closes_a_floating_panel_but_not_a_docked_one() {
     });
     assert!(rt.state.panel_open);
 }
+
+/// Drags the handle keyed `key` sideways by `dx` points.
+fn drag(rt: &mut Runtime<Ui>, key: &str, dx: f32) {
+    let (x, y) = rt
+        .find(key)
+        .unwrap_or_else(|| panic!("no element keyed {key}"));
+    rt.pointer_down(x, y);
+    for step in 1..=4 {
+        rt.pointer_move(x + dx * step as f32 / 4.0, y);
+        rt.frame(1.0 / 60.0);
+    }
+    rt.pointer_up(x + dx, y);
+    settle(rt);
+}
+
+#[test]
+fn the_side_columns_resize_by_their_edges_within_the_webs_limits() {
+    let mut rt = render(scenes::conversations, false);
+    assert_eq!(rt.state.roster_width, 264.0);
+    assert_eq!(rt.state.panel_width, 340.0);
+
+    // The roster's edge moves right to widen it.
+    drag(&mut rt, "rd-roster-resize", 60.0);
+    assert!(
+        (rt.state.roster_width - 324.0).abs() < 1.0,
+        "{}",
+        rt.state.roster_width
+    );
+    assert!((element(&rt, "rd-roster").rect[2] - 324.0).abs() < 1.0);
+    // The panel's edge moves left to widen it.
+    drag(&mut rt, "rd-panel-resize", -40.0);
+    assert!(
+        (rt.state.panel_width - 380.0).abs() < 1.0,
+        "{}",
+        rt.state.panel_width
+    );
+    assert!((element(&rt, "rd-panel").rect[2] - 380.0).abs() < 1.0);
+
+    // Never past the limits: 220 to 480, and 280 to 640.
+    drag(&mut rt, "rd-roster-resize", -400.0);
+    assert_eq!(rt.state.roster_width, 220.0);
+    drag(&mut rt, "rd-panel-resize", 400.0);
+    assert_eq!(rt.state.panel_width, 280.0);
+}
+
+#[test]
+fn a_window_too_small_for_the_chosen_widths_draws_them_narrower() {
+    let mut rt = render_sized(scenes::conversations, false, (1100.0, 700.0));
+    rt.update(|ui, _| {
+        ui.roster_width = 480.0;
+        ui.roster_open = true;
+        ui.panel_open = false;
+    });
+    settle(&mut rt);
+    // 1100 less the conversation's 320 leaves 780: 480 fits.
+    assert_eq!(rt.state.visible_roster_width(), 480.0);
+    // The chosen width is kept while a narrower window draws less.
+    rt.update(|ui, _| ui.workspace_width = 700.0);
+    assert_eq!(rt.state.visible_roster_width(), 380.0);
+    assert_eq!(rt.state.roster_width, 480.0);
+}
