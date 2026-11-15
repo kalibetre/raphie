@@ -15,6 +15,7 @@ use raphie_core::contracts::{
     RuntimeSettings, Scope, TurnStatus,
 };
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
+use raphie_core::inbox::{self, Announcement, Announcements, Item};
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
@@ -31,6 +32,7 @@ use crate::format::now_ms;
 use crate::jobs::JobForm;
 use crate::mcp::McpForm;
 use crate::memory::MemoryDraft;
+use crate::notify;
 use crate::profile::{NEW_BOT, ProfileDraft};
 use crate::sandbox::SandboxDraft;
 use crate::sections::{BotSection, Page};
@@ -47,6 +49,20 @@ pub enum Filter {
     /// Only conversations with an action waiting for approval.
     Approvals,
 }
+
+/// Which notifications the inbox lists (the web's tabs).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InboxFilter {
+    #[default]
+    All,
+    Replies,
+    Approvals,
+    Jobs,
+}
+
+/// How often the other bots' conversations and every bot's job updates
+/// are asked for, in seconds. The web asks every 15.
+const INBOX_REFRESH: f64 = 15.0;
 
 /// Which connection the form on Settings → Providers is for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -286,6 +302,18 @@ pub struct Ui {
     /// The model chosen for a conversation that has not started yet. It
     /// goes with the first message.
     pub new_model: Option<ModelSelection>,
+    /// The inbox (notifications across every bot) shows in place of the
+    /// conversation.
+    pub inbox_open: bool,
+    pub inbox_filter: InboxFilter,
+    /// When the inbox was last asked for, on `poll`'s clock; negative
+    /// until the first time.
+    inbox_asked_at: f64,
+    /// Which updates the owner has been told about by the system.
+    announced: Announcements,
+    /// System notifications that would have been posted, kept while there
+    /// is no engine (for tests).
+    pub posted: Vec<Announcement>,
     /// How many of each conversation's replies were read on this computer.
     pub read_replies: ReadReplies,
     /// The conversation on screen is scrolled to its end.
@@ -402,6 +430,11 @@ impl Ui {
             model_picker: ModelPicker::default(),
             favorites: Vec::new(),
             new_model: None,
+            inbox_open: false,
+            inbox_filter: InboxFilter::All,
+            inbox_asked_at: -INBOX_REFRESH,
+            announced: Announcements::default(),
+            posted: Vec::new(),
             read_replies: ReadReplies::default(),
             // A conversation opens at its end, in a window in front.
             at_bottom: true,
@@ -463,6 +496,7 @@ impl Ui {
     }
 
     pub fn select_bot(&mut self, bot_id: &str) {
+        self.inbox_open = false;
         // A model chosen for one bot's new conversation is not another's.
         self.new_model = None;
         self.model_picker.open = false;
@@ -475,6 +509,7 @@ impl Ui {
     }
 
     pub fn select_session(&mut self, session_id: Option<&str>) {
+        self.inbox_open = false;
         self.new_model = None;
         self.model_picker.open = false;
         // A conversation opens at its end.
@@ -580,14 +615,129 @@ impl Ui {
         }
     }
 
-    /// How many of a conversation's replies have not been read on this
-    /// computer. Only the selected bot's conversations are on hand.
+    /// How many of one of the selected bot's conversations' replies have
+    /// not been read on this computer.
     pub fn unread(&self, session: &SessionSummary) -> u32 {
-        match (&self.model.origin, &self.model.bot_id) {
-            (Some(origin), Some(bot_id)) => {
-                self.read_replies.unread(origin.as_str(), bot_id, session)
+        match &self.model.bot_id {
+            Some(bot_id) => self.unread_in(bot_id, session),
+            None => 0,
+        }
+    }
+
+    /// The same for any bot's conversation.
+    pub fn unread_in(&self, bot_id: &str, session: &SessionSummary) -> u32 {
+        match &self.model.origin {
+            Some(origin) => self.read_replies.unread(origin.as_str(), bot_id, session),
+            None => 0,
+        }
+    }
+
+    /// A bot's conversations as last heard: the selected bot's from its
+    /// live list, another's from the inbox's last round.
+    pub fn sessions_of(&self, bot_id: &str) -> Vec<&SessionSummary> {
+        if self.model.bot_id.as_deref() == Some(bot_id) {
+            self.model.session_list().collect()
+        } else {
+            self.model
+                .inbox
+                .sessions
+                .get(bot_id)
+                .map(|sessions| sessions.iter().collect())
+                .unwrap_or_default()
+        }
+    }
+
+    /// How many of a bot's conversations have something for the owner.
+    pub fn attention_in(&self, bot_id: &str) -> usize {
+        self.sessions_of(bot_id)
+            .into_iter()
+            .filter(|session| session.waiting || self.unread_in(bot_id, session) > 0)
+            .count()
+    }
+
+    /// The notifications across every bot, newest first, and how many the
+    /// bell counts.
+    pub fn notifications(&self) -> (Vec<Item>, usize) {
+        let bots = &self.model.bots;
+        let jobs = self.model.inbox.job_entries(bots);
+        let (list, _) = inbox::items(
+            bots,
+            |bot_id| self.sessions_of(bot_id),
+            |bot_id, session| self.unread_in(bot_id, session),
+            &jobs,
+        );
+        let count = inbox::count(list.len(), self.model.inbox.job_total(), jobs.len());
+        (list, count)
+    }
+
+    /// Tells the owner, through the system, about updates that are new
+    /// since the last look. Only while this window is not in front: in
+    /// front, the bell and its count already show them.
+    pub fn announce(&mut self) {
+        let (items, _) = self.notifications();
+        // Always look, so what was seen in front is not announced later.
+        let news = self.announced.news(&items);
+        if self.window_focused {
+            return;
+        }
+        for announcement in news {
+            match &self.client {
+                Some(_) => notify::post(announcement),
+                // Tests and headless runs post nothing to the system.
+                None => self.posted.push(announcement),
             }
-            _ => 0,
+        }
+    }
+
+    /// Asks for the other bots' conversations and every bot's job updates
+    /// when they are due. Returns true while signed in, so `poll` keeps
+    /// looking at the clock.
+    pub fn refresh_inbox(&mut self, clock: f64) -> bool {
+        if !matches!(self.model.auth, AuthState::SignedIn) || self.model.bots.is_empty() {
+            return false;
+        }
+        if clock - self.inbox_asked_at >= INBOX_REFRESH {
+            self.inbox_asked_at = clock;
+            self.load_inbox();
+        }
+        true
+    }
+
+    /// Asks now, whatever the clock says.
+    pub fn load_inbox(&mut self) {
+        let selected = self.model.bot_id.clone();
+        let all: Vec<String> = self.model.bots.iter().map(|bot| bot.id.clone()).collect();
+        // The selected bot's conversations arrive on its own stream.
+        let others = all
+            .iter()
+            .filter(|id| Some(*id) != selected.as_ref())
+            .cloned()
+            .collect();
+        self.command(Command::LoadInbox {
+            session_bots: others,
+            job_bots: all,
+        });
+    }
+
+    /// Opens a notification's conversation. A job update is dismissed on
+    /// the way, as on the web.
+    pub fn open_notification(&mut self, item: &Item) {
+        let Some(session_id) = item.session_id().map(str::to_owned) else {
+            return;
+        };
+        if let Some(run) = &item.run {
+            self.dismiss_run(&item.bot_id, &run.id);
+        }
+        self.open_conversation(&item.bot_id, &session_id);
+    }
+
+    /// Dismisses one job update from the inbox.
+    pub fn dismiss_run(&mut self, bot_id: &str, run_id: &str) {
+        if self.model.inbox.begin_acknowledge() {
+            self.command(Command::AcknowledgeRun {
+                bot_id: bot_id.to_owned(),
+                run_id: run_id.to_owned(),
+            });
         }
     }
 
@@ -601,7 +751,9 @@ impl Ui {
     /// be taken to have seen them: it is on screen, scrolled to its end,
     /// in the window in front. The web's rule (`conversation.tsx`).
     pub fn mark_read(&mut self) {
-        if !self.at_bottom || !self.window_focused || !matches!(self.screen, Screen::Workspace) {
+        // The inbox and Settings cover the conversation.
+        let on_screen = matches!(self.screen, Screen::Workspace) && !self.inbox_open;
+        if !self.at_bottom || !self.window_focused || !on_screen {
             return;
         }
         let (Some(origin), Some(bot_id)) = (&self.model.origin, &self.model.bot_id) else {
@@ -2202,6 +2354,8 @@ pub fn setup(ui: &mut Ui, waker: Waker) {
         waker,
     );
     ui.client = Some(client);
+    // Ask, the first time, whether updates may be shown as notifications.
+    notify::prepare();
     // `raphie-desktop --origin https://…` signs in to that origin at once;
     // otherwise reuse the last origin's stored token, if there is one.
     if let Some(origin) = origin_argument(rune::extra_args()) {
@@ -2231,7 +2385,8 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         tx.wake_after(Duration::from_millis(300));
     }
     // `|` rather than `||`: both pages get their look at the clock.
-    let watching = ui.refresh_mcp(clock)
+    let watching = ui.refresh_inbox(clock)
+        | ui.refresh_mcp(clock)
         | ui.refresh_channels(clock)
         | ui.refresh_sandbox(clock)
         | ui.watch_files(clock)
@@ -2367,5 +2522,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.ensure_command_mode();
     // A reply that arrived while its conversation is on screen is read.
     ui.mark_read();
+    // Whatever is still new after that is worth a system notification.
+    ui.announce();
     true
 }

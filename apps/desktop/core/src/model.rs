@@ -23,6 +23,7 @@ use crate::contracts::{
 };
 use crate::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use crate::contracts::{JobRun, ScheduledJob};
+use crate::inbox::{Inbox, JobUpdates};
 use crate::inspection::TraceView;
 use crate::jobs::RunHistory;
 use crate::memory::MemoryBrowser;
@@ -352,6 +353,25 @@ pub enum Event {
     MessageFailed {
         message: String,
     },
+    /// Another bot's conversations (its first page).
+    InboxSessions {
+        bot_id: String,
+        sessions: Vec<SessionSummary>,
+    },
+    /// A bot's undismissed job runs.
+    JobUpdates {
+        bot_id: String,
+        updates: JobUpdates,
+    },
+    JobUpdatesFailed {
+        bot_id: String,
+    },
+    /// A job run was dismissed from the notifications.
+    RunAcknowledged {
+        bot_id: String,
+        run_id: String,
+    },
+    RunAcknowledgeFailed,
     /// How a session treats commands.
     ApprovalMode {
         session_id: String,
@@ -696,6 +716,9 @@ pub struct Model {
     /// The open conversation; `None` means a new, unsent conversation.
     pub conversation: Option<Conversation>,
     pub sending: bool,
+    /// What was last heard from the bots that are not on screen, and
+    /// every bot's job updates.
+    pub inbox: Inbox,
     /// How the open session treats commands.
     pub command_mode: CommandMode,
     /// A change of the open session's model is on its way.
@@ -778,6 +801,7 @@ impl Default for Model {
             sessions_next: None,
             conversation: None,
             sending: false,
+            inbox: Inbox::default(),
             command_mode: CommandMode::default(),
             choosing_model: false,
             model_error: None,
@@ -1171,6 +1195,15 @@ impl Model {
                 self.attachments.not_sent();
                 self.notice = Some(message);
             }
+            Event::InboxSessions { bot_id, sessions } => {
+                self.inbox.sessions_loaded(bot_id, sessions);
+            }
+            Event::JobUpdates { bot_id, updates } => self.inbox.jobs_loaded(bot_id, updates),
+            Event::JobUpdatesFailed { bot_id } => self.inbox.jobs_failed(bot_id),
+            Event::RunAcknowledged { bot_id, run_id } => {
+                self.inbox.acknowledged(&bot_id, &run_id);
+            }
+            Event::RunAcknowledgeFailed => self.inbox.acknowledge_failed(),
             Event::ApprovalMode { session_id, mode } => {
                 self.command_mode.loaded(&session_id, mode);
             }

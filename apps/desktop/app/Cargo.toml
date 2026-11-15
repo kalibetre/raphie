@@ -19,6 +19,12 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Scene fixtures are written as JSON in the runtime's shapes.
 serde = "1"
 serde_json = "1"
+# System notifications for updates that arrive while the window is not in
+# front. `preview-macos-un` is the crate's path to macOS's current
+# notification API (`UNUserNotificationCenter`), which only works from an
+# app bundle: see `scripts/bundle.sh`. The older path posts under Finder's
+# name and macOS drops it.
+notify-rust = { version = "4.19", features = ["preview-macos-un"] }
 
 [lints]
 workspace = true

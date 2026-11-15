@@ -229,6 +229,9 @@ pub struct SessionSummary {
     /// count them.
     #[serde(default)]
     pub reply_count: Option<u32>,
+    /// The turn the latest finished reply answers, when the runtime says.
+    #[serde(default)]
+    pub reply_turn_id: Option<String>,
     /// The model chosen for this session; `None` uses the bot's default.
     #[serde(default)]
     pub model: Option<ModelSelection>,
@@ -1100,6 +1103,9 @@ pub struct JobRun {
     #[serde(default)]
     pub failure_reason: Option<FailureReason>,
     pub started_at: i64,
+    /// When it ended; `None` while it is queued or running.
+    #[serde(default)]
+    pub finished_at: Option<i64>,
     pub status: RunStatus,
     /// The conversation its reply is in, once the prompt was admitted.
     #[serde(default)]
@@ -1107,6 +1113,19 @@ pub struct JobRun {
     /// The turn that answers it, once the prompt was admitted.
     #[serde(default)]
     pub turn_id: Option<String>,
+}
+
+/// What `GET /api/jobs/notifications` answers: a bot's job runs the owner
+/// has not dismissed, newest first.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct JobNotifications {
+    pub items: Vec<JobRun>,
+    /// Cursor for older ones, or `None` when these are all.
+    #[serde(default)]
+    pub next: Option<String>,
+    /// How many there are in all, when the runtime counts them.
+    #[serde(default)]
+    pub total: Option<usize>,
 }
 
 /// What `/api/jobs` answers: the bot's jobs as they are after the request.

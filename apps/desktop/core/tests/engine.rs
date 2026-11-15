@@ -1780,3 +1780,87 @@ fn a_sessions_command_mode_is_read_changed_and_sent_with_a_new_session() {
     driver.until("acceptance", |m, _| !m.sending);
     host.with(|h| assert_eq!(h.submits.last().unwrap()["approvalMode"], "full-access"));
 }
+
+#[test]
+fn other_bots_conversations_and_job_updates_are_loaded_and_a_job_is_dismissed() {
+    let host = FakeHost::start();
+    let run = |id: &str, status: &str| {
+        serde_json::json!({
+            "id": id, "jobId": "j-1", "name": "Morning brief", "startedAt": 50,
+            "finishedAt": 60, "status": status, "sessionId": null, "turnId": null,
+        })
+    };
+    host.with(|h| {
+        h.bot_sessions.insert(
+            "b-research".into(),
+            vec![serde_json::json!({
+                "id": "r-1", "title": "Papers", "origin": "web", "lastAt": 9,
+                "working": false, "failed": false, "waiting": true, "preview": "",
+                "turnCount": 2, "replyCount": 3, "replyTurnId": "t-3",
+            })],
+        );
+        h.job_updates.insert(
+            "default".into(),
+            vec![
+                run("r-1", "failed"),
+                run("r-2", "completed"),
+                run("r-3", "failed"),
+            ],
+        );
+    });
+    let (mut driver, _) = signed_in(&host);
+    let load = |driver: &mut Driver| {
+        driver.send(Command::LoadInbox {
+            session_bots: vec!["b-research".into()],
+            job_bots: vec!["default".into(), "b-research".into()],
+        });
+    };
+    load(&mut driver);
+    driver.until("the inbox", |m, _| {
+        m.inbox.sessions.contains_key("b-research") && m.inbox.jobs.len() == 2
+    });
+    let papers = &driver.model.inbox.sessions["b-research"][0];
+    assert!(papers.waiting);
+    assert_eq!(papers.reply_count, Some(3));
+    assert_eq!(papers.reply_turn_id.as_deref(), Some("t-3"));
+    // Two of the default bot's three updates fit a page; the total says so.
+    let updates = driver.model.inbox.jobs["default"].clone();
+    assert_eq!(updates.runs.len(), 2);
+    assert_eq!((updates.total, updates.more), (3, true));
+    assert_eq!(updates.runs[0].finished_at, Some(60));
+    assert!(driver.model.inbox.jobs["b-research"].runs.is_empty());
+    assert_eq!(host.requests("/api/bots/b-research/sessions").len(), 1);
+    assert_eq!(
+        host.requests("/api/bots/b-research/jobs/notifications")
+            .len(),
+        1
+    );
+
+    // Dismissing a run tells the runtime and takes it off the list.
+    assert!(driver.model.inbox.begin_acknowledge());
+    driver.send(Command::AcknowledgeRun {
+        bot_id: "default".into(),
+        run_id: "r-1".into(),
+    });
+    driver.until("the dismissal", |m, _| !m.inbox.acknowledging);
+    assert_eq!(driver.model.inbox.jobs["default"].runs.len(), 1);
+    assert_eq!(host.requests("/api/jobs/runs/r-1/read").len(), 1);
+    host.with(|h| assert_eq!(h.job_updates["default"].len(), 2));
+
+    // A refused dismissal says so and keeps the run.
+    host.with(|h| h.acknowledge_down = true);
+    assert!(driver.model.inbox.begin_acknowledge());
+    driver.send(Command::AcknowledgeRun {
+        bot_id: "default".into(),
+        run_id: "r-2".into(),
+    });
+    driver.until("the refusal", |m, _| !m.inbox.acknowledging);
+    assert!(driver.model.inbox.acknowledge_failed);
+    assert_eq!(driver.model.inbox.jobs["default"].runs.len(), 1);
+
+    // Job updates that cannot be loaded are flagged, and what was known stays.
+    host.with(|h| h.job_updates_down = true);
+    load(&mut driver);
+    driver.until("the failure", |m, _| m.inbox.jobs_failed.len() == 2);
+    assert_eq!(driver.model.inbox.jobs["default"].runs.len(), 1);
+}

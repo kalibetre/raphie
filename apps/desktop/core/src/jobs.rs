@@ -270,6 +270,7 @@ mod tests {
             waiting_for_bot: false,
             failure_reason: None,
             started_at: 1_700_000_000_000,
+            finished_at: None,
             status,
             session_id: None,
             turn_id: None,

@@ -40,6 +40,7 @@ use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
 };
+use crate::inbox::JobUpdates;
 use crate::jobs::{JobAction, NewJob};
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::MemoryUpdate;
@@ -95,6 +96,18 @@ pub enum Command {
         model: Option<ModelSelection>,
         /// The command mode to start a new session with.
         approval_mode: Option<ApprovalMode>,
+    },
+    /// Ask what needs the owner beyond the conversation on screen: the
+    /// first page of each of `session_bots`' conversations, and each of
+    /// `job_bots`' undismissed job runs.
+    LoadInbox {
+        session_bots: Vec<String>,
+        job_bots: Vec<String>,
+    },
+    /// Dismiss one job run from the notifications.
+    AcknowledgeRun {
+        bot_id: String,
+        run_id: String,
     },
     /// Ask how a session treats commands.
     LoadApprovalMode {
@@ -530,6 +543,11 @@ impl Engine {
                 model,
                 approval_mode,
             } => self.send(text, attachments, model, approval_mode),
+            Command::LoadInbox {
+                session_bots,
+                job_bots,
+            } => self.load_inbox(session_bots, job_bots),
+            Command::AcknowledgeRun { bot_id, run_id } => self.acknowledge_run(bot_id, run_id),
             Command::LoadApprovalMode { session_id } => self.load_approval_mode(session_id),
             Command::SetApprovalMode { session_id, mode } => {
                 self.set_approval_mode(session_id, mode);
@@ -860,6 +878,67 @@ impl Engine {
                 Err(error) => emit.emit(Event::MessageFailed {
                     message: error.to_string(),
                 }),
+            }
+        });
+    }
+
+    fn load_inbox(&mut self, session_bots: Vec<String>, job_bots: Vec<String>) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        // One task per request, so a slow bot does not hold up the rest.
+        for bot_id in session_bots {
+            let (api, emit, inbox) = (api.clone(), self.emit.clone(), self.inbox.clone());
+            tokio::spawn(async move {
+                match api.sessions(&bot_id, None).await {
+                    Ok(page) => emit.emit(Event::InboxSessions {
+                        bot_id,
+                        sessions: page.items,
+                    }),
+                    Err(ApiError::Unauthenticated) => {
+                        let _ = inbox.send(Input::Expired);
+                    }
+                    // A missed round keeps what was known; the next one
+                    // asks again.
+                    Err(_) => {}
+                }
+            });
+        }
+        for bot_id in job_bots {
+            let (api, emit, inbox) = (api.clone(), self.emit.clone(), self.inbox.clone());
+            tokio::spawn(async move {
+                match api.job_notifications(&bot_id).await {
+                    Ok(page) => emit.emit(Event::JobUpdates {
+                        bot_id,
+                        updates: JobUpdates {
+                            // An older runtime sends no total: count what came.
+                            total: page.total.unwrap_or(page.items.len()),
+                            more: page.next.is_some(),
+                            runs: page.items,
+                        },
+                    }),
+                    Err(ApiError::Unauthenticated) => {
+                        let _ = inbox.send(Input::Expired);
+                    }
+                    Err(_) => emit.emit(Event::JobUpdatesFailed { bot_id }),
+                }
+            });
+        }
+    }
+
+    fn acknowledge_run(&mut self, bot_id: String, run_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.acknowledge_run(&bot_id, &run_id).await {
+                Ok(()) => emit.emit(Event::RunAcknowledged { bot_id, run_id }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(_) => emit.emit(Event::RunAcknowledgeFailed),
             }
         });
     }
