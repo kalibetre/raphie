@@ -109,7 +109,14 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     two seconds, so your account shows as verified by itself. The home
     channel is where scheduled results go: web only, or a known Discord or
     Telegram conversation.
-  - **A bot's other pages** (Sandbox, Workspace, ...) are not built yet: each
+  - **Sandbox** chooses how a bot runs commands: the provider (just-bash or
+    Container), the acknowledgement Container needs before it may reach
+    services on the Raphie machine and its network, idle minutes and a disk
+    quota. Edits are saved from a bar under the page, which also says when
+    a number is out of range or the settings changed elsewhere. Below the
+    form the page describes the active provider, what the workspace keeps,
+    and the execution limits and usage, re-read every five seconds.
+  - **A bot's other pages** (Workspace, Scheduled jobs, ...) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.

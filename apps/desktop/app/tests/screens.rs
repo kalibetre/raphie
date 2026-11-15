@@ -6,12 +6,14 @@
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome};
 use raphie_core::contracts::{
-    BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, Scope, TelegramPairingCode,
+    BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, SandboxProvider, Scope,
+    TelegramPairingCode,
 };
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::mcp::{McpAction, NewMcpConnection};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, Event};
+use raphie_core::sandbox::SandboxUpdate;
 use raphie_core::settings::ThemeChoice;
 use raphie_desktop::sections::{BotSection, Page};
 use raphie_desktop::state::{self, Filter, Screen};
@@ -637,18 +639,21 @@ fn a_bots_page_names_the_bot_and_offers_the_web_page() {
     let mut rt = render(scenes::settings_bot, false);
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
-    assert!(text.contains("How Research runs commands"), "{text}");
+    assert!(
+        text.contains("The files Research keeps between conversations."),
+        "{text}"
+    );
     click(&mut rt, "rd-bot-page-web");
     assert_eq!(
         rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=sandbox&bot=b-research"]
+        ["https://raphie.example.ts.net/?view=settings&section=workspace&bot=b-research"]
     );
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-sandbox").is_none());
+    assert!(rt.find("rd-nav-b-research-workspace").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("Sandbox")
+        Some("Workspace")
     );
 }
 
@@ -1154,6 +1159,187 @@ fn a_bad_scope_cannot_be_saved() {
     click(&mut rt, "rd-memory-discard");
     assert_eq!(rt.state.memory.scope.text, "owner");
     assert!(rt.find("rd-save-bar").is_none());
+}
+
+#[test]
+fn the_sandbox_page_loads_and_describes_the_active_provider() {
+    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 2000.0));
+    click(&mut rt, "rd-nav-default-sandbox");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadSandbox {
+            bot_id: "default".into()
+        })
+    );
+    assert!(screen_text(&rt).contains("Loading sandbox details…"));
+    deliver(
+        &mut rt,
+        Event::Sandbox {
+            bot_id: "default".into(),
+            info: Box::new(scenes::sandbox_info(false)),
+        },
+    );
+    let text = screen_text(&rt);
+    for expected in [
+        "Active · Version 2.9.0 · Shell commands over a virtual filesystem",
+        "Checkpoint policy",
+        "1 running or waiting · 8 admitted operations per bot · 4 simultaneous workers across the runtime",
+        "120 seconds, including worker startup",
+        "64.0 KiB command source · 1.0 MiB output",
+        "18.0 MiB used of 100.0 MiB · 1,284 of 10,000 checkpoint entries",
+        "403.0 KiB used of 10.0 MiB.",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+    // just-bash needs no acknowledgement, and a clean form has no save bar.
+    assert!(rt.find("rd-sandbox-acknowledge").is_none());
+    assert!(rt.find("rd-save-bar").is_none());
+
+    // A failed refresh keeps the details and says they may be stale.
+    deliver(
+        &mut rt,
+        Event::SandboxFailed {
+            bot_id: "default".into(),
+            message: "offline".into(),
+        },
+    );
+    assert!(rt.find("rd-sandbox-stale").is_some());
+    assert!(screen_text(&rt).contains("Checkpoint policy"));
+
+    // "Browse files" goes to the bot's Workspace page.
+    click(&mut rt, "rd-sandbox-browse");
+    assert_eq!(
+        element(&rt, "rd-settings-page-name").text.as_deref(),
+        Some("Workspace")
+    );
+}
+
+#[test]
+fn a_container_needs_the_acknowledgement_before_it_can_be_saved() {
+    let mut rt = render_sized(scenes::settings_sandbox, false, (1280.0, 2000.0));
+    rt.update(|ui, _| ui.sandbox.provider = SandboxProvider::Container);
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-sandbox-error").text.as_deref(),
+        Some("Acknowledge host and local network access to use Container.")
+    );
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-sandbox-save");
+    assert_eq!(rt.state.sent.len(), before, "nothing is sent yet");
+
+    click(&mut rt, "rd-sandbox-acknowledge");
+    // A bad number is named too.
+    rt.update(|ui, _| ui.sandbox.idle = TextEdit::new("0"));
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-sandbox-error").text.as_deref(),
+        Some("Idle minutes are a whole number from 1 to 1440.")
+    );
+    rt.update(|ui, _| {
+        ui.sandbox.idle = TextEdit::new("45");
+        ui.sandbox.quota = TextEdit::new("2048");
+    });
+    settle(&mut rt);
+    assert!(rt.find("rd-sandbox-error").is_none());
+    click(&mut rt, "rd-sandbox-save");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::SaveSandbox {
+            bot_id: "default".into(),
+            update: SandboxUpdate {
+                provider: SandboxProvider::Container,
+                host_network_acknowledged: true,
+                idle_minutes: 45,
+                disk_quota_mib: Some(2048),
+                revision: 3,
+            },
+        })
+    );
+    assert_eq!(
+        element(&rt, "rd-sandbox-save").label.as_deref(),
+        Some("Saving…")
+    );
+
+    // The save lands: the form shows the new revision with nothing to save.
+    let mut saved = scenes::sandbox_info(true).settings;
+    saved.idle_minutes = 45;
+    saved.disk_quota_mib = Some(2048);
+    saved.revision = 4;
+    deliver(
+        &mut rt,
+        Event::SandboxSaved {
+            bot_id: "default".into(),
+            settings: saved,
+        },
+    );
+    assert!(!rt.state.sandbox.is_dirty());
+    assert_eq!(
+        element(&rt, "rd-sandbox-status").text.as_deref(),
+        Some("Saved revision 4.")
+    );
+}
+
+#[test]
+fn sandbox_settings_changed_elsewhere_keep_the_draft_and_block_saving() {
+    let mut rt = render_sized(scenes::settings_sandbox_container, false, (1280.0, 2000.0));
+    assert_eq!(
+        element(&rt, "rd-sandbox-status").text.as_deref(),
+        Some("Unsaved changes")
+    );
+    // Another client saved revision 4 while this form has edits.
+    let mut newer = scenes::sandbox_info(true);
+    newer.settings.revision = 4;
+    newer.settings.idle_minutes = 10;
+    deliver(
+        &mut rt,
+        Event::Sandbox {
+            bot_id: "default".into(),
+            info: Box::new(newer),
+        },
+    );
+    assert_eq!(rt.state.sandbox.idle.text, "90", "the draft is kept");
+    let error = element(&rt, "rd-sandbox-error").text.unwrap_or_default();
+    assert!(error.contains("changed elsewhere"), "{error}");
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-sandbox-save");
+    assert_eq!(rt.state.sent.len(), before);
+
+    // Discard loads the latest revision and the bar goes away.
+    click(&mut rt, "rd-sandbox-discard");
+    assert_eq!(rt.state.sandbox.idle.text, "10");
+    assert!(rt.find("rd-save-bar").is_none());
+
+    // With no edits, a newer revision is simply shown.
+    let mut newest = scenes::sandbox_info(true);
+    newest.settings.revision = 5;
+    newest.settings.idle_minutes = 20;
+    deliver(
+        &mut rt,
+        Event::Sandbox {
+            bot_id: "default".into(),
+            info: Box::new(newest),
+        },
+    );
+    assert_eq!(rt.state.sandbox.idle.text, "20");
+}
+
+#[test]
+fn the_sandbox_page_asks_again_every_few_seconds_while_it_shows() {
+    let mut rt = render(scenes::settings_sandbox, false);
+    let loads = |rt: &Runtime<Ui>| {
+        let sent = rt.state.sent.iter();
+        sent.filter(|c| matches!(c, Command::LoadSandbox { .. }))
+            .count()
+    };
+    let opened = loads(&rt);
+    rt.update(|ui, _| {
+        assert!(ui.refresh_sandbox(100.0));
+        ui.refresh_sandbox(102.0);
+        ui.refresh_sandbox(105.5);
+        ui.open_settings(Some(Page::Account));
+        assert!(!ui.refresh_sandbox(200.0));
+    });
+    assert_eq!(loads(&rt), opened + 2);
 }
 
 fn changes(rt: &Runtime<Ui>) -> Vec<&ChannelChange> {

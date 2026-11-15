@@ -188,22 +188,21 @@ pub fn group_with(t: &Theme, title: &str, note: &str, action: Option<El>, rows: 
             row.border_sides([1.0, 0.0, 0.0, 0.0], t.border)
         });
     }
-    let heading = col()
-        .grow(1.0)
-        .min_w(0.0)
-        .gap(3.0)
-        .child(
-            text(title)
-                .role("heading")
-                .font(font(13.5, 600.0).tracking(-0.1))
-                .color(t.foreground),
-        )
-        .child(
+    let mut heading = col().grow(1.0).min_w(0.0).gap(3.0).child(
+        text(title)
+            .role("heading")
+            .font(font(13.5, 600.0).tracking(-0.1))
+            .color(t.foreground),
+    );
+    // A group may have no note ("Persistent workspace").
+    if !note.is_empty() {
+        heading = heading.child(
             text(note)
                 .font(font(12.5, 400.0).lh(19.4))
                 .color(t.muted_foreground)
                 .wrap(),
         );
+    }
     // The action sits level with the bottom of the heading, as on the web.
     let mut head = row().w_full().px(2.0).gap(12.0).items_end().child(heading);
     if let Some(action) = action {
