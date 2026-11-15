@@ -418,7 +418,7 @@ fn source(s: &Ui, bot_id: &str, item: &MemoryEvidence, t: &Theme) -> El {
                 .spans(vec![Span::new(0, link.len()).underline(t.foreground)])
                 .focusable(true)
                 .self_start()
-                .on_press(move |s: &mut Ui| s.open_memory_source(&bot_id, &session)),
+                .on_press(move |s: &mut Ui| s.open_conversation(&bot_id, &session)),
         );
     }
     details

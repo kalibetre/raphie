@@ -12,6 +12,7 @@ use raphie_core::contracts::{
     ControlAction, Decision, MemoryProvider, MemoryStatus, Scope, TurnStatus,
 };
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
+use raphie_core::jobs::JobAction;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
 use raphie_core::model::{AuthState, Effect, Event, Model};
@@ -22,6 +23,8 @@ use raphie_core::workspace::{self, ROOT};
 use rune::{TextEdit, Tx, Waker};
 
 use crate::channels::{DiscordForm, TelegramForm, UNSAVED};
+use crate::format::now_ms;
+use crate::jobs::JobForm;
 use crate::mcp::McpForm;
 use crate::memory::MemoryDraft;
 use crate::profile::ProfileDraft;
@@ -151,6 +154,10 @@ const HOME_REFRESH: f64 = 5.0;
 /// interval): usage and running operations change on their own.
 const SANDBOX_REFRESH: f64 = 5.0;
 
+/// How often the Scheduled jobs page asks again for its jobs and newest
+/// runs (the web's interval): runs start and finish on their own.
+const JOBS_REFRESH: f64 = 5.0;
+
 /// How often the Workspace page asks again for the folder on screen (the
 /// web's interval): the bot may be writing files while the owner looks.
 const FILES_REFRESH: f64 = 5.0;
@@ -242,6 +249,10 @@ pub struct Ui {
     pub memory: MemoryDraft,
     /// Settings → Memory → Browse memory.
     pub memories: MemoriesView,
+    /// Settings → Scheduled jobs: the "Create a job" form.
+    pub job: JobForm,
+    /// The frame clock when the Scheduled jobs page last asked for news.
+    jobs_asked_at: f64,
     /// The frame clock when the Workspace page last asked for its folder.
     files_asked_at: f64,
     /// Settings → Sandbox: its form.
@@ -306,6 +317,8 @@ impl Ui {
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
             memories: MemoriesView::new(),
+            job: JobForm::new_at(0),
+            jobs_asked_at: 0.0,
             files_asked_at: 0.0,
             sandbox: SandboxDraft::empty(),
             sandbox_asked_at: 0.0,
@@ -471,6 +484,23 @@ impl Ui {
                 // Notice settings saved in another client.
                 self.command(Command::LoadMemory {
                     bot_id: bot_id.clone(),
+                });
+            }
+            if *section == BotSection::Jobs {
+                self.job = JobForm::new_at(now_ms());
+                self.model.job_message = None;
+                self.model.job_error = None;
+                self.command(Command::LoadJobs {
+                    bot_id: bot_id.clone(),
+                });
+                // Every job's runs, from the newest.
+                self.model.runs.show(None);
+                let ticket = self.model.runs.begin_load(false);
+                self.command(Command::LoadJobRuns {
+                    bot_id: bot_id.clone(),
+                    job_id: None,
+                    before: None,
+                    ticket,
                 });
             }
             if *section == BotSection::Workspace {
@@ -935,6 +965,136 @@ impl Ui {
         }
     }
 
+    /// The bot whose Scheduled jobs page is on screen.
+    fn jobs_bot(&self) -> Option<String> {
+        match &self.screen {
+            Screen::Settings(Page::Bot {
+                bot_id,
+                section: BotSection::Jobs,
+            }) => Some(bot_id.clone()),
+            _ => None,
+        }
+    }
+
+    /// Opens an empty "Create a job" dialog.
+    pub fn open_job_form(&mut self) {
+        self.job = JobForm::new_at(now_ms());
+        self.job.open = true;
+        self.model.job_error = None;
+    }
+
+    /// The dialog's close button, Escape, or a press outside it. A draft
+    /// keeps the dialog open and says how to leave it, as on the web.
+    pub fn close_job_form(&mut self) {
+        if self.model.changing_job {
+            self.job.error = Some("Wait for the job to finish scheduling.");
+        } else if self.job.is_dirty() {
+            self.job.error = Some("Discard your draft before closing.");
+        } else {
+            self.job.open = false;
+        }
+    }
+
+    /// Closes the dialog and drops what was typed.
+    pub fn discard_job_form(&mut self) {
+        self.job = JobForm::new_at(now_ms());
+        self.model.job_error = None;
+    }
+
+    /// Schedules the job in the form, or says what is wrong with it.
+    pub fn add_job(&mut self) {
+        let Some(bot_id) = self.jobs_bot() else {
+            return;
+        };
+        if !self.job.is_complete() {
+            return;
+        }
+        match self.job.job() {
+            Ok(job) => {
+                self.job.error = None;
+                if self.model.begin_change_job() {
+                    self.command(Command::AddJob { bot_id, job });
+                }
+            }
+            Err(problem) => self.job.error = Some(problem),
+        }
+    }
+
+    /// Resumes, pauses, removes or runs one job.
+    pub fn change_job(&mut self, id: &str, action: JobAction) {
+        let Some(bot_id) = self.jobs_bot() else {
+            return;
+        };
+        if self.model.begin_change_job() {
+            self.command(Command::ChangeJob {
+                bot_id,
+                id: id.to_owned(),
+                action,
+            });
+        }
+    }
+
+    /// Leaves Settings for the conversation a job's results are in.
+    pub fn open_job_session(&mut self, session_id: &str) {
+        if let Some(bot_id) = self.jobs_bot() {
+            self.open_conversation(&bot_id, session_id);
+        }
+    }
+
+    /// Shows one job's runs, or with `None` every job's, from the newest.
+    pub fn show_runs(&mut self, job_id: Option<String>) {
+        self.model.runs.show(job_id);
+        self.load_runs(false);
+    }
+
+    /// Loads the newest runs again, or with `older` the page after the
+    /// ones on screen.
+    pub fn load_runs(&mut self, older: bool) {
+        let Some(bot_id) = self.jobs_bot() else {
+            return;
+        };
+        let before = if older {
+            // Nothing older to ask for without a cursor.
+            let Some(cursor) = self.model.runs.next.clone() else {
+                return;
+            };
+            Some(cursor)
+        } else {
+            None
+        };
+        let job_id = self.model.runs.job_id.clone();
+        let ticket = self.model.runs.begin_load(older);
+        self.command(Command::LoadJobRuns {
+            bot_id,
+            job_id,
+            before,
+            ticket,
+        });
+    }
+
+    /// While the Scheduled jobs page shows, asks for its jobs and newest
+    /// runs again every few seconds; `clock` is the frame clock in seconds.
+    /// Returns true while the page shows.
+    pub fn refresh_jobs(&mut self, clock: f64) -> bool {
+        let Some(bot_id) = self.jobs_bot() else {
+            return false;
+        };
+        if clock - self.jobs_asked_at < JOBS_REFRESH {
+            return true;
+        }
+        self.jobs_asked_at = clock;
+        // Not while a change is on its way: its answer is the newer list.
+        if !self.model.changing_job {
+            self.command(Command::LoadJobs { bot_id });
+        }
+        // Not while runs are loading: a new load would retire that one.
+        let runs = &self.model.runs;
+        if !runs.loading && !runs.loading_older {
+            self.load_runs(false);
+        }
+        true
+    }
+
     /// The bot whose Workspace page is on screen.
     fn files_bot(&self) -> Option<String> {
         match &self.screen {
@@ -1307,8 +1467,9 @@ impl Ui {
         true
     }
 
-    /// Leaves Settings for the conversation a memory came from.
-    pub fn open_memory_source(&mut self, bot_id: &str, session_id: &str) {
+    /// Leaves Settings for a conversation: the one a memory came from, or
+    /// the one a job's result is in.
+    pub fn open_conversation(&mut self, bot_id: &str, session_id: &str) {
         self.select_bot(bot_id);
         self.select_session(Some(session_id));
         self.close_settings();
@@ -1450,7 +1611,8 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     let watching = ui.refresh_mcp(clock)
         | ui.refresh_channels(clock)
         | ui.refresh_sandbox(clock)
-        | ui.watch_files(clock);
+        | ui.watch_files(clock)
+        | ui.refresh_jobs(clock);
     if watching {
         tx.wake_after(Duration::from_secs(1));
     }
@@ -1494,6 +1656,10 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     {
                         ui.memory = MemoryDraft::of(&bot_id, &status.configuration);
                     }
+                }
+                Effect::JobAdded => {
+                    // The job is scheduled: close its dialog and empty it.
+                    ui.job = JobForm::new_at(now_ms());
                 }
                 Effect::SandboxSaved(bot_id) => {
                     // Show what was saved, at its new revision.

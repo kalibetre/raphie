@@ -10,6 +10,7 @@ use raphie_core::contracts::{
     TelegramPairingCode,
 };
 use raphie_core::engine::{Command, ConnectionChange};
+use raphie_core::jobs::JobAction;
 use raphie_core::mcp::{McpAction, NewMcpConnection};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, Event};
@@ -640,20 +641,20 @@ fn a_bots_page_names_the_bot_and_offers_the_web_page() {
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
     assert!(
-        text.contains("Give Research reminders and recurring work"),
+        text.contains("Timings and failures from Research’s runs."),
         "{text}"
     );
     click(&mut rt, "rd-bot-page-web");
     assert_eq!(
         rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=jobs&bot=b-research"]
+        ["https://raphie.example.ts.net/?view=settings&section=telemetry&bot=b-research"]
     );
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-jobs").is_none());
+    assert!(rt.find("rd-nav-b-research-telemetry").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("Scheduled jobs")
+        Some("Diagnostics")
     );
 }
 
@@ -1500,6 +1501,294 @@ fn a_failed_listing_keeps_the_files_but_stops_downloads() {
         ui.open_settings(Some(Page::Account));
         assert!(!ui.watch_files(200.0));
     });
+}
+
+#[test]
+fn jobs_are_listed_with_their_state_and_what_can_be_done() {
+    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 2000.0));
+    click(&mut rt, "rd-nav-default-jobs");
+    assert!(rt.state.sent.contains(&Command::LoadJobs {
+        bot_id: "default".into()
+    }));
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::LoadJobRuns {
+            job_id: None,
+            before: None,
+            ..
+        })
+    ));
+    assert!(screen_text(&rt).contains("Loading jobs…"));
+    deliver(
+        &mut rt,
+        Event::Jobs {
+            bot_id: "default".into(),
+            items: scenes::scheduled_jobs(),
+        },
+    );
+    let badge = |rt: &Runtime<Ui>, id: &str| {
+        let key = format!("rd-job-{id}-badge");
+        element(rt, &key).text.unwrap_or_default()
+    };
+    assert_eq!(badge(&rt, "job-brief"), "Active");
+    assert_eq!(badge(&rt, "job-renewal"), "Failed");
+    assert_eq!(badge(&rt, "job-digest"), "Paused");
+    let text = screen_text(&rt);
+    for expected in [
+        "Every 1440 minutes · Next: ",
+        "Last run: Completed · ",
+        "One-time reminder",
+        "No runs yet",
+        "Loading run history…",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+    // A finished one-time job has nothing to pause; only a job with a
+    // conversation can open one.
+    assert!(rt.find("rd-job-job-renewal-toggle").is_none());
+    assert!(rt.find("rd-job-job-renewal-open").is_none());
+    assert_eq!(
+        element(&rt, "rd-job-job-digest-toggle").label.as_deref(),
+        Some("Resume")
+    );
+
+    click(&mut rt, "rd-job-job-brief-run");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ChangeJob {
+            bot_id: "default".into(),
+            id: "job-brief".into(),
+            action: JobAction::Run,
+        })
+    );
+    // One change at a time: the other buttons wait for the answer.
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-job-job-digest-remove");
+    assert_eq!(rt.state.sent.len(), before);
+    deliver(
+        &mut rt,
+        Event::JobChanged {
+            bot_id: "default".into(),
+            items: scenes::scheduled_jobs(),
+            ran: true,
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-jobs-message").text.as_deref(),
+        Some("Run queued. Its result will appear in the job's conversation.")
+    );
+    click(&mut rt, "rd-job-job-digest-remove");
+    deliver(
+        &mut rt,
+        Event::JobChangeFailed {
+            message: "Scheduled job not found.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-jobs-error").text.as_deref(),
+        Some("Scheduled job not found.")
+    );
+
+    // A job's conversation opens in the workspace.
+    click(&mut rt, "rd-job-job-brief-open");
+    assert_eq!(rt.state.screen, Screen::Workspace);
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::SelectSession {
+            session_id: Some("0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b".into()),
+        })
+    );
+}
+
+/// The ticket of the runs load the page last asked for.
+fn runs_ticket(rt: &Runtime<Ui>) -> u64 {
+    match rt.state.sent.last() {
+        Some(Command::LoadJobRuns { ticket, .. }) => *ticket,
+        other => panic!("the last command is not a runs load: {other:?}"),
+    }
+}
+
+#[test]
+fn run_history_pages_filters_by_job_and_refreshes() {
+    let mut rt = render_sized(scenes::settings_jobs, false, (1280.0, 2400.0));
+    let text = screen_text(&rt);
+    for expected in [
+        "Running · Late",
+        "Reply in progress; tool actions may be waiting for your approval.",
+        "No model configured. Connect a model provider in Settings.",
+        "The reply is ready in its conversation.",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+
+    // Older runs load from the button, after the cursor.
+    click(&mut rt, "rd-runs-older");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::LoadJobRuns { before: Some(cursor), .. }) if cursor == "cursor-older"
+    ));
+    let ticket = runs_ticket(&rt);
+    deliver(
+        &mut rt,
+        Event::JobRunsFailed {
+            ticket,
+            older: true,
+            message: "offline".into(),
+        },
+    );
+    assert!(rt.find("rd-runs-older-error").is_some());
+    assert_eq!(
+        element(&rt, "rd-runs-older").label.as_deref(),
+        Some("Retry loading older runs")
+    );
+    assert!(rt.find("rd-run-run-104").is_some(), "the runs stay");
+
+    // "Run history" on a job narrows the list to it; a late answer for
+    // every job's runs is dropped.
+    let stale = runs_ticket(&rt);
+    click(&mut rt, "rd-job-job-renewal-history");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::LoadJobRuns { job_id: Some(id), before: None, .. }) if id == "job-renewal"
+    ));
+    assert!(rt.find("rd-runs-loading").is_some());
+    deliver(
+        &mut rt,
+        Event::JobRuns {
+            ticket: stale,
+            older: false,
+            page: scenes::job_runs(),
+        },
+    );
+    assert!(rt.find("rd-runs-loading").is_some());
+    let ticket = runs_ticket(&rt);
+    let mut one = scenes::job_runs();
+    one.items.retain(|run| run.job_id == "job-renewal");
+    one.next = None;
+    deliver(
+        &mut rt,
+        Event::JobRuns {
+            ticket,
+            older: false,
+            page: one,
+        },
+    );
+    assert!(rt.find("rd-run-run-101").is_some());
+    assert!(rt.find("rd-run-run-104").is_none());
+    assert!(rt.find("rd-runs-older").is_none());
+    click(&mut rt, "rd-runs-all");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::LoadJobRuns { job_id: None, .. })
+    ));
+
+    // While the page shows it asks again every few seconds.
+    let ticket = runs_ticket(&rt);
+    deliver(
+        &mut rt,
+        Event::JobRuns {
+            ticket,
+            older: false,
+            page: scenes::job_runs(),
+        },
+    );
+    let before = rt.state.sent.len();
+    rt.update(|ui, _| {
+        assert!(ui.refresh_jobs(100.0));
+        ui.refresh_jobs(102.0);
+    });
+    // The jobs and the newest runs, once.
+    assert_eq!(rt.state.sent.len(), before + 2);
+
+    // A run with a conversation opens it.
+    click(&mut rt, "rd-run-run-104");
+    assert_eq!(rt.state.screen, Screen::Workspace);
+}
+
+#[test]
+fn a_job_is_created_in_a_dialog_that_keeps_a_draft() {
+    let mut rt = render_sized(scenes::settings_jobs_empty, false, (1280.0, 1200.0));
+    let text = screen_text(&rt);
+    assert!(text.contains("No scheduled jobs yet."));
+    assert!(text.contains("No tracked runs yet."));
+    assert!(rt.find("rd-job-form").is_none());
+    click(&mut rt, "rd-jobs-create");
+    assert!(rt.find("rd-job-form").is_some());
+    // Nothing typed: nothing to schedule, and Cancel closes it.
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-job-schedule");
+    assert_eq!(rt.state.sent.len(), before);
+    assert_eq!(
+        element(&rt, "rd-job-discard").label.as_deref(),
+        Some("Cancel")
+    );
+    click(&mut rt, "rd-job-discard");
+    assert!(rt.find("rd-job-form").is_none());
+
+    // A draft keeps the dialog open when it is dismissed.
+    click(&mut rt, "rd-jobs-create");
+    rt.update(|ui, _| {
+        ui.job.name = TextEdit::new("Friday wrap-up");
+        ui.job.prompt = TextEdit::new("Summarize what shipped this week.");
+        ui.job.date = TextEdit::new("next Friday");
+        ui.close_job_form();
+    });
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-job-error").text.as_deref(),
+        Some("Discard your draft before closing.")
+    );
+    // A date that is not one is caught before anything is sent.
+    click(&mut rt, "rd-job-schedule");
+    let error = element(&rt, "rd-job-error").text.unwrap_or_default();
+    assert!(error.contains("valid first-run time"), "{error}");
+    assert_eq!(rt.state.sent.len(), before);
+
+    // A single run carries no interval.
+    click(&mut rt, "rd-job-once");
+    assert!(rt.find("rd-job-minutes").is_none());
+    rt.update(|ui, _| {
+        ui.job.date = TextEdit::new("2027-03-05");
+        ui.job.time = TextEdit::new("16:30");
+    });
+    settle(&mut rt);
+    click(&mut rt, "rd-job-schedule");
+    let Some(Command::AddJob { job, .. }) = rt.state.sent.last() else {
+        panic!("the job is sent");
+    };
+    assert_eq!(job.name, "Friday wrap-up");
+    assert_eq!(job.every_minutes, None);
+    assert_eq!(
+        element(&rt, "rd-job-schedule").label.as_deref(),
+        Some("Scheduling…")
+    );
+
+    // A refusal keeps the dialog and the draft; success closes it.
+    deliver(
+        &mut rt,
+        Event::JobChangeFailed {
+            message: "Choose a first run in the future.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-job-error").text.as_deref(),
+        Some("Choose a first run in the future.")
+    );
+    assert_eq!(rt.state.job.name.text, "Friday wrap-up");
+    click(&mut rt, "rd-job-schedule");
+    deliver(
+        &mut rt,
+        Event::JobAdded {
+            bot_id: "default".into(),
+            items: scenes::scheduled_jobs(),
+        },
+    );
+    assert!(rt.find("rd-job-form").is_none());
+    assert!(rt.state.job.name.text.is_empty());
+    assert_eq!(
+        element(&rt, "rd-jobs-message").text.as_deref(),
+        Some("Job scheduled. The runtime must be running when it is due.")
+    );
 }
 
 fn changes(rt: &Runtime<Ui>) -> Vec<&ChannelChange> {

@@ -85,7 +85,7 @@ A new feature is placed by asking these questions in order.
 | Channels (Discord, Telegram, home channel) | Yes | Yes     | No      | Setup.                                                                          |
 | Sandbox                                    | Yes | Yes     | No      | Setup, and it decides how commands run.                                         |
 | Workspace files: browse, download          | Yes | Yes     | Planned |                                                                                 |
-| Scheduled jobs and their run history       | Yes | Planned | Planned |                                                                                 |
+| Scheduled jobs and their run history       | Yes | Yes     | Planned |                                                                                 |
 | Diagnostics, telemetry switch              | Yes | Planned | No      |                                                                                 |
 | Activity                                   | Yes | Planned | Planned |                                                                                 |
 

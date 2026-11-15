@@ -171,6 +171,7 @@ pub fn group(t: &Theme, title: &str, note: &str, rows: Vec<El>) -> El {
 
 /// A [`group`] with a control beside its title ("Browse memories").
 pub fn group_with(t: &Theme, title: &str, note: &str, action: Option<El>, rows: Vec<El>) -> El {
+    let head = group_heading(t, title, note, action);
     let mut card = col()
         .w_full()
         .radius(14.0)
@@ -188,6 +189,12 @@ pub fn group_with(t: &Theme, title: &str, note: &str, action: Option<El>, rows: 
             row.border_sides([1.0, 0.0, 0.0, 0.0], t.border)
         });
     }
+    col().w_full().gap(10.0).child(head).child(card)
+}
+
+/// A group's title and note, with an optional control beside them. For a
+/// section that lists its content without a card ("Run history").
+pub fn group_heading(t: &Theme, title: &str, note: &str, action: Option<El>) -> El {
     let mut heading = col().grow(1.0).min_w(0.0).gap(3.0).child(
         text(title)
             .role("heading")
@@ -208,7 +215,7 @@ pub fn group_with(t: &Theme, title: &str, note: &str, action: Option<El>, rows: 
     if let Some(action) = action {
         head = head.child(action);
     }
-    col().w_full().gap(10.0).child(head).child(card)
+    head
 }
 
 /// One setting inside a group: an optional icon tile, a title over a
