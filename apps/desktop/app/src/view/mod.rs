@@ -19,6 +19,7 @@
 //! Element keys made here start with `rd-`, because Rune keys the parts of
 //! its own components (`label`, `value`, ...) in the same namespace.
 
+mod attachments;
 mod composer;
 mod conversation;
 mod header;
@@ -29,9 +30,12 @@ mod sign_in;
 mod steps;
 mod welcome;
 
+use std::path::PathBuf;
+
+use raphie_core::attachments::Upload;
 use raphie_core::model::AuthState;
 use raphie_core::settings::ThemeChoice;
-use rune::{Cx, El, LiveRegion, col, row, text};
+use rune::{Cx, El, LiveRegion, Tx, col, row, text};
 use rune_kit::Kit;
 
 use crate::avatar::Tones;
@@ -90,6 +94,12 @@ fn workspace(s: &Ui, look: &Look) -> El {
         .h_full()
         .min_w(0.0)
         .min_h(0.0)
+        // Files dragged from Finder onto any part of the conversation are
+        // attached to the next message.
+        .on_drop_files(|s: &mut Ui, files: &[PathBuf], _: &mut Tx| {
+            s.attach(files.iter().cloned().map(Upload::File).collect());
+        })
+        .on_drop_hover(|s: &mut Ui, over: bool, _: &mut Tx| s.drop_hover = over)
         .child(header::header(s, look));
     if let Some(notice) = &s.model.notice {
         main = main.child(notice_banner(notice, t));

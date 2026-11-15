@@ -20,6 +20,7 @@
 //! not in the UI crate.
 
 pub mod api;
+pub mod attachments;
 pub mod auth;
 pub mod channels;
 pub mod contracts;

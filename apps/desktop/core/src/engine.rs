@@ -30,6 +30,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep};
 
 use crate::api::{ApiClient, ApiError, ChannelAnswer, bot_path};
+use crate::attachments::{FileBytes, MAX_BYTES, TOO_LARGE, Upload, upload_name};
 use crate::auth::{AccessToken, DevicePolicy, DevicePoll, Secret, TokenStore};
 use crate::channels::{Channel, ChannelChange};
 use crate::contracts::NewBot;
@@ -82,8 +83,23 @@ pub enum Command {
         session_id: String,
         before: String,
     },
+    /// Send a message. `attachments` are ids of files already uploaded
+    /// with [`Command::Attach`].
     Send {
         text: String,
+        attachments: Vec<String>,
+    },
+    /// Upload files to a bot, one after another, so they can go with the
+    /// next message.
+    Attach {
+        bot_id: String,
+        uploads: Vec<Upload>,
+    },
+    /// Save one uploaded file to this machine's Downloads folder.
+    DownloadAttachment {
+        bot_id: String,
+        id: String,
+        name: String,
     },
     Decide {
         approval_id: String,
@@ -487,7 +503,11 @@ impl Engine {
             Command::SelectSession { session_id } => self.open_session(session_id),
             Command::LoadMoreSessions { after } => self.load_more_sessions(after),
             Command::LoadOlder { session_id, before } => self.load_older(session_id, before),
-            Command::Send { text } => self.send(text),
+            Command::Send { text, attachments } => self.send(text, attachments),
+            Command::Attach { bot_id, uploads } => self.attach(bot_id, uploads),
+            Command::DownloadAttachment { bot_id, id, name } => {
+                self.download_attachment(bot_id, id, name);
+            }
             Command::Decide {
                 approval_id,
                 decision,
@@ -754,7 +774,7 @@ impl Engine {
 
     // ----- Messages and approvals -----
 
-    fn send(&mut self, text: String) {
+    fn send(&mut self, text: String, attachments: Vec<String>) {
         let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
             self.emit.emit(Event::MessageFailed {
                 message: "Choose a bot before sending.".into(),
@@ -766,6 +786,7 @@ impl Engine {
             // One id per message, reused on retry: the runtime admits it once.
             event_id: uuid::Uuid::new_v4().to_string(),
             session_id: self.session_id.clone(),
+            attachments,
         };
         let new_session = message.session_id.is_none();
         let retries = self.config.send_retries.clone();
@@ -798,6 +819,73 @@ impl Engine {
                 Err(error) => emit.emit(Event::MessageFailed {
                     message: error.to_string(),
                 }),
+            }
+        });
+    }
+
+    fn attach(&mut self, bot_id: String, uploads: Vec<Upload>) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            // Whatever happens, the last event says the uploads are over,
+            // so the composer never waits forever.
+            let outcome = upload_all(&api, &bot_id, uploads, &emit).await;
+            let failed = |message: String| {
+                emit.emit(Event::AttachFailed {
+                    bot_id: bot_id.clone(),
+                    message,
+                });
+            };
+            match outcome {
+                Ok(()) => {}
+                Err(AttachStop::Api(ApiError::Unauthenticated)) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(AttachStop::Api(error)) => failed(error.to_string()),
+                Err(AttachStop::Refused(message)) => failed(message),
+            }
+            emit.emit(Event::AttachFinished { bot_id });
+        });
+    }
+
+    fn download_attachment(&mut self, bot_id: String, id: String, name: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        let folder = self.config.downloads.clone();
+        tokio::spawn(async move {
+            let failed = |message: String| emit.emit(Event::AttachmentSaveFailed { message });
+            let Some(folder) = folder else {
+                failed("This machine has no Downloads folder to save to.".into());
+                return;
+            };
+            let bytes = match api.download_attachment(&bot_id, &id).await {
+                Ok(bytes) => bytes,
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                    return;
+                }
+                Err(error) => {
+                    failed(error.to_string());
+                    return;
+                }
+            };
+            let written =
+                tokio::task::spawn_blocking(move || save_download(&folder, &name, &bytes)).await;
+            match written {
+                Ok(Ok(saved)) => {
+                    let saved_as = saved
+                        .file_name()
+                        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+                    emit.emit(Event::AttachmentSaved { saved_as });
+                }
+                Ok(Err(error)) => failed(format!("Could not save the file: {error}.")),
+                Err(_) => failed("Could not save the file.".into()),
             }
         });
     }
@@ -1830,6 +1918,74 @@ fn decision_outcome(asked: Decision, status: ApprovalStatus) -> DecisionOutcome 
 fn signed_out_notice() -> String {
     "This device was signed out (it may have been disconnected in Settings → Account). Sign in again."
         .into()
+}
+
+/// Why attaching stopped: a file this client refused or could not read
+/// (with the sentence to show), or a failed upload.
+enum AttachStop {
+    Refused(String),
+    Api(ApiError),
+}
+
+/// Reads and uploads each chosen file in turn, reporting each one as it is
+/// filed. Stops at the first that fails; the ones before it stay attached.
+async fn upload_all(
+    api: &ApiClient,
+    bot_id: &str,
+    uploads: Vec<Upload>,
+    emit: &Emitter,
+) -> Result<(), AttachStop> {
+    // Read everything first: one file that is too large refuses the whole
+    // choice before anything is sent, as on the web.
+    let mut files = Vec::with_capacity(uploads.len());
+    for upload in uploads {
+        files.push(read_upload(upload).await.map_err(AttachStop::Refused)?);
+    }
+    for (name, bytes) in files {
+        let file = api
+            .upload_attachment(bot_id, &name, &bytes.0)
+            .await
+            .map_err(AttachStop::Api)?;
+        emit.emit(Event::Attached {
+            bot_id: bot_id.to_owned(),
+            file,
+        });
+    }
+    Ok(())
+}
+
+/// The name and bytes of one chosen file, or the sentence that says why
+/// it cannot be attached. A file on disk is read on Tokio's thread pool
+/// for blocking work.
+async fn read_upload(upload: Upload) -> Result<(String, FileBytes), String> {
+    match upload {
+        Upload::Bytes { name, bytes } => {
+            if bytes.0.len() as u64 > MAX_BYTES {
+                return Err(TOO_LARGE.to_owned());
+            }
+            Ok((upload_name(&name), bytes))
+        }
+        Upload::File(path) => {
+            let read = tokio::task::spawn_blocking(move || {
+                let name = upload_name(&path.to_string_lossy());
+                let unreadable = |error: std::io::Error| format!("Could not read {name}: {error}.");
+                // Ask the size before reading, so a huge file is refused
+                // without being loaded.
+                let details = std::fs::metadata(&path).map_err(unreadable)?;
+                if !details.is_file() {
+                    return Err("Only files can be attached, not folders.".to_owned());
+                }
+                if details.len() > MAX_BYTES {
+                    return Err(TOO_LARGE.to_owned());
+                }
+                let bytes = std::fs::read(&path).map_err(unreadable)?;
+                Ok((name, FileBytes::from(bytes)))
+            })
+            .await;
+            // The outer error is the blocking task itself failing.
+            read.unwrap_or_else(|_| Err("Could not read the file.".to_owned()))
+        }
+    }
 }
 
 #[cfg(test)]

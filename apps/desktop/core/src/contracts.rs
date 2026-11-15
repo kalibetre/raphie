@@ -234,6 +234,24 @@ pub struct ScheduledBy {
     pub name: String,
 }
 
+/// `Attachment` in `packages/contracts/src/index.ts`: a file uploaded to a
+/// bot, named by the hash of its contents.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    /// 64 hex digits. The same bytes always get the same id.
+    pub id: String,
+    pub name: String,
+    /// In bytes.
+    pub size: u64,
+    /// Where the bot finds the file in its workspace.
+    #[serde(default)]
+    pub path: Option<String>,
+    /// Decided by the runtime from the file's bytes.
+    #[serde(default)]
+    pub mime_type: Option<String>,
+}
+
 /// `SessionTurn` in `packages/contracts/src/sessions/views.ts`: one owner
 /// message and the reply that answers it.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -243,6 +261,9 @@ pub struct SessionTurn {
     pub source: Channel,
     /// The owner's message.
     pub text: String,
+    /// The files sent with it. `default` reads a missing field as none.
+    #[serde(default)]
+    pub attachments: Vec<Attachment>,
     pub created_at: i64,
     pub status: TurnStatus,
     /// The finished reply (Markdown), if any.
@@ -412,6 +433,9 @@ pub struct SubmitMessage {
     pub event_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// Ids of uploaded files to send with the text, at most four.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<String>,
 }
 
 /// The runtime's receipt for an admitted message. Admission, not completion.

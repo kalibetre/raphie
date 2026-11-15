@@ -3,6 +3,7 @@
 //! with no GPU and no network. Pixel snapshots are rendered separately with
 //! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
 
+use raphie_core::attachments::{TOO_MANY, Upload};
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome};
 use raphie_core::contracts::{
@@ -1444,7 +1445,8 @@ fn the_composer_sends_what_was_typed() {
     assert_eq!(
         rt.state.sent.last(),
         Some(&Command::Send {
-            text: "Thanks!".into()
+            text: "Thanks!".into(),
+            attachments: Vec::new(),
         })
     );
     assert!(rt.state.model.sending, "the button waits for the receipt");
@@ -3054,4 +3056,167 @@ fn browse_memory_says_when_memory_is_off() {
             .iter()
             .all(|c| !matches!(c, Command::BrowseMemory { .. }))
     );
+}
+
+#[test]
+fn files_wait_in_the_composer_and_go_with_the_message() {
+    let mut rt = render(scenes::attachments, false);
+    let c = "c".repeat(64);
+    let d = "d".repeat(64);
+    let shown = screen_text(&rt);
+    assert!(shown.contains("site-photo.png") && shown.contains("2.2 MB"));
+    assert!(shown.contains("measurements.csv") && shown.contains("812 B"));
+
+    // Removing one leaves the other.
+    click(&mut rt, &format!("rd-attachment-{c}-action"));
+    assert!(rt.find(&format!("rd-attachment-{c}")).is_none());
+    assert!(rt.find(&format!("rd-attachment-{d}")).is_some());
+
+    // Files alone are a message: with the text cleared, Send still works.
+    rt.state.composer = TextEdit::new("");
+    settle(&mut rt);
+    click(&mut rt, "rd-send");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Send {
+            text: String::new(),
+            attachments: vec![d.clone()],
+        })
+    );
+    // The file stays until the runtime admits the message, then leaves.
+    assert!(rt.find(&format!("rd-attachment-{d}")).is_some());
+    rt.update(|ui, _| {
+        ui.model.apply(Event::MessageAccepted {
+            receipt: serde_json::from_value(
+                serde_json::json!({ "id": "turn-new", "sessionId": "s-1" }),
+            )
+            .unwrap(),
+        });
+    });
+    settle(&mut rt);
+    assert!(rt.find("rd-attachments").is_none());
+}
+
+#[test]
+fn files_are_attached_by_picker_drop_and_paste_up_to_four() {
+    let mut rt = render(scenes::conversation, false);
+    let attached = |rt: &Runtime<Ui>| match rt.state.sent.last() {
+        Some(Command::Attach { bot_id, uploads }) => {
+            assert_eq!(bot_id, "default");
+            uploads.clone()
+        }
+        other => panic!("expected an Attach, got {other:?}"),
+    };
+    // What the engine would answer: one file filed, then the end.
+    let mut next = 0;
+    let mut uploaded = |rt: &mut Runtime<Ui>, name: &str| {
+        next += 1;
+        let file = serde_json::from_value(serde_json::json!({
+            "id": format!("{next}").repeat(64), "name": name, "size": 10,
+        }))
+        .unwrap();
+        rt.update(|ui, _| {
+            ui.model.apply(Event::Attached {
+                bot_id: "default".into(),
+                file,
+            });
+            ui.model.apply(Event::AttachFinished {
+                bot_id: "default".into(),
+            });
+        });
+        settle(rt);
+    };
+
+    // The paperclip opens the system's picker; the chosen file goes up.
+    click(&mut rt, "rd-attach");
+    assert!(rt.file_dialog().is_some(), "the picker is open");
+    rt.resolve_file_dialog(Some("/tmp/report.pdf".into()))
+        .unwrap();
+    settle(&mut rt);
+    assert_eq!(attached(&rt), [Upload::File("/tmp/report.pdf".into())]);
+    assert!(screen_text(&rt).contains("Uploading to workspace…"));
+    // Nothing else can be chosen until the upload is over.
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-attach");
+    assert!(rt.file_dialog().is_none());
+    assert_eq!(rt.state.sent.len(), before);
+    uploaded(&mut rt, "report.pdf");
+    assert!(screen_text(&rt).contains("report.pdf"));
+
+    // Closing the picker attaches nothing.
+    click(&mut rt, "rd-attach");
+    rt.resolve_file_dialog(None).unwrap();
+    settle(&mut rt);
+    assert_eq!(rt.state.sent.len(), before);
+
+    // Files dropped on the conversation go up together.
+    let (x, y) = rt.find("rd-main").unwrap();
+    rt.drop_files(vec!["/tmp/a.txt".into(), "/tmp/b.txt".into()], Some((x, y)));
+    settle(&mut rt);
+    assert_eq!(
+        attached(&rt),
+        [
+            Upload::File("/tmp/a.txt".into()),
+            Upload::File("/tmp/b.txt".into())
+        ]
+    );
+    uploaded(&mut rt, "a.txt");
+    uploaded(&mut rt, "b.txt");
+
+    // A pasted screenshot is attached instead of pasted as text.
+    let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+    png.extend_from_slice(&[0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]);
+    let image = rune::ClipboardImage::from_png(png.clone()).expect("a PNG header");
+    click(&mut rt, "rd-composer");
+    rt.paste_content(rune::ClipboardContent::new("").with_image(image));
+    settle(&mut rt);
+    assert_eq!(
+        attached(&rt),
+        [Upload::Bytes {
+            name: "Pasted image.png".into(),
+            bytes: png.into(),
+        }]
+    );
+    assert_eq!(rt.state.composer.text, "");
+    uploaded(&mut rt, "Pasted image.png");
+
+    // Four is the most: the paperclip is off, and a fifth says why.
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-attach");
+    assert!(rt.file_dialog().is_none());
+    let (x, y) = rt.find("rd-main").unwrap();
+    rt.drop_files(vec!["/tmp/fifth.txt".into()], Some((x, y)));
+    settle(&mut rt);
+    assert_eq!(rt.state.sent.len(), before);
+    assert_eq!(
+        element(&rt, "rd-attach-error").text.as_deref(),
+        Some(TOO_MANY)
+    );
+}
+
+#[test]
+fn a_messages_file_is_saved_from_its_card() {
+    let mut rt = render(scenes::attachments, true);
+    let a = "a".repeat(64);
+    let b = "b".repeat(64);
+    click(&mut rt, &format!("rd-file-t1-{a}-action"));
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::DownloadAttachment {
+            bot_id: "default".into(),
+            id: a.clone(),
+            name: "floor-plan.png".into(),
+        })
+    );
+    // One save at a time: the other card waits.
+    let before = rt.state.sent.len();
+    click(&mut rt, &format!("rd-file-t1-{b}-action"));
+    assert_eq!(rt.state.sent.len(), before);
+    rt.update(|ui, _| {
+        ui.model.apply(Event::AttachmentSaved {
+            saved_as: "floor-plan.png".into(),
+        });
+    });
+    settle(&mut rt);
+    assert!(screen_text(&rt).contains("Saved to your Downloads folder as floor-plan.png."));
 }

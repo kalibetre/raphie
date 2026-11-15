@@ -22,7 +22,9 @@ publish = false
 # against stock winit/parley/wgpu-hal/accesskit. When bumping, copy the list
 # from the [patch.crates-io] table in Rune's root Cargo.toml at the new rev.
 [workspace.dependencies]
-rune = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
+# `native-file-dialog` is the system file picker behind the composer's
+# paperclip (the `rfd` crate on macOS and Windows).
+rune = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac", features = ["native-file-dialog"] }
 rune-kit = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac", features = ["markdown"] }
 
 [patch.crates-io]

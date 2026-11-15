@@ -8,8 +8,10 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::attachments::AttachmentDraft;
 use crate::auth::DeviceCode;
 use crate::channels::{Channel, ChannelOutcome};
+use crate::contracts::Attachment;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection,
@@ -347,6 +349,27 @@ pub enum Event {
     MessageFailed {
         message: String,
     },
+    /// One chosen file was uploaded to `bot_id`.
+    Attached {
+        bot_id: String,
+        file: Attachment,
+    },
+    /// An upload was refused or failed; the files before it stay.
+    AttachFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// The uploads asked for are over, whether or not all of them worked.
+    AttachFinished {
+        bot_id: String,
+    },
+    /// A message's file was saved to this machine as `saved_as`.
+    AttachmentSaved {
+        saved_as: String,
+    },
+    AttachmentSaveFailed {
+        message: String,
+    },
     Decided {
         approval_id: String,
         outcome: DecisionOutcome,
@@ -644,6 +667,10 @@ pub struct Model {
     /// The open conversation; `None` means a new, unsent conversation.
     pub conversation: Option<Conversation>,
     pub sending: bool,
+    /// The files waiting in the composer to go with the next message.
+    pub attachments: AttachmentDraft,
+    /// The id of the message file being saved to this machine, if one is.
+    pub saving_attachment: Option<String>,
     /// Approvals with a decision on its way.
     pub deciding: HashSet<String>,
     /// A message for the owner, shown until dismissed or replaced.
@@ -716,6 +743,8 @@ impl Default for Model {
             sessions_next: None,
             conversation: None,
             sending: false,
+            attachments: AttachmentDraft::default(),
+            saving_attachment: None,
             deciding: HashSet::new(),
             notice: None,
         }
@@ -1095,11 +1124,24 @@ impl Model {
             }
             Event::MessageAccepted { receipt: _ } => {
                 self.sending = false;
+                self.attachments.sent();
                 return vec![Effect::ClearComposer];
             }
             Event::MessageFailed { message } => {
                 // The draft stays in the composer so nothing typed is lost.
                 self.sending = false;
+                self.attachments.not_sent();
+                self.notice = Some(message);
+            }
+            Event::Attached { bot_id, file } => self.attachments.added(&bot_id, file),
+            Event::AttachFailed { bot_id, message } => self.attachments.failed(&bot_id, message),
+            Event::AttachFinished { bot_id } => self.attachments.finished(&bot_id),
+            Event::AttachmentSaved { saved_as } => {
+                self.saving_attachment = None;
+                self.notice = Some(format!("Saved to your Downloads folder as {saved_as}."));
+            }
+            Event::AttachmentSaveFailed { message } => {
+                self.saving_attachment = None;
                 self.notice = Some(message);
             }
             Event::Decided {
@@ -1150,6 +1192,17 @@ impl Model {
         let cursor = conversation.older_cursor()?;
         conversation.loading_older = true;
         Some(cursor)
+    }
+
+    /// The owner asked to save a message's file. Returns false while
+    /// another is being saved.
+    pub fn begin_save_attachment(&mut self, id: &str) -> bool {
+        if self.saving_attachment.is_some() {
+            return false;
+        }
+        self.saving_attachment = Some(id.to_owned());
+        self.notice = None;
+        true
     }
 
     /// The owner sent a message. Returns false when one is already on its way.

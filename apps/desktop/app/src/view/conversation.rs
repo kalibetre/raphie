@@ -17,6 +17,7 @@ use rune::{El, LiveRegion, ScrollSpec, col, icon, row, text};
 use rune_kit::{Loader, Markdown};
 
 use super::Look;
+use super::attachments::{Action, file_card};
 use super::steps::{Run, Working, tool_steps};
 use crate::format;
 use crate::icons;
@@ -132,7 +133,12 @@ fn is_running(turn: &SessionTurn) -> bool {
 /// controls, the tools a finished run used, a stop or failure line).
 fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &Look) -> El {
     let t = &look.theme;
-    let mut block = col().w_full().gap(14.0).child(owner_message(turn, t));
+    // One file is saved at a time, so the buttons wait while one is.
+    let can_save = s.model.saving_attachment.is_none();
+    let mut block = col()
+        .w_full()
+        .gap(14.0)
+        .child(owner_message(turn, can_save, t));
     if let Some(mode) = turn.queue_mode {
         block = block.child(queue_controls(turn, mode, t));
     }
@@ -164,7 +170,7 @@ fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &L
 
 /// The owner's message: a bubble on the right, or a centred marker when a
 /// scheduled job started the turn.
-fn owner_message(turn: &SessionTurn, t: &Theme) -> El {
+fn owner_message(turn: &SessionTurn, can_save: bool, t: &Theme) -> El {
     let key = format!("rd-turn-{}", turn.id);
     if let Some(job) = &turn.scheduled {
         return row().key(key).w_full().justify_center().child(
@@ -201,26 +207,45 @@ fn owner_message(turn: &SessionTurn, t: &Theme) -> El {
     } else {
         (t.muted, t.border)
     };
-    row().key(key).w_full().justify_end().child(
-        col()
-            .max_w(560.0)
-            .px(14.0)
-            .py(9.0)
-            .fill(fill)
-            .border(1.0, border)
-            // A speech bubble: every corner round but the bottom-right.
-            .corners([16.0, 16.0, 4.0, 16.0])
-            // The time the message was sent, on hover.
-            .help(format::clock(turn.created_at))
-            .child(
-                text(turn.text.clone())
-                    .font(font(14.0, 400.0).lh(23.0))
-                    .color(t.foreground)
-                    .wrap()
-                    .selectable(true)
-                    .selection_color(t.selection()),
-            ),
-    )
+    let mut bubble = col()
+        .max_w(560.0)
+        // Allowed to be narrower than its widest line, so a small window
+        // wraps the text and the file cards instead of cutting them off.
+        .shrink()
+        .px(14.0)
+        .py(9.0)
+        .gap(10.0)
+        .fill(fill)
+        .border(1.0, border)
+        // A speech bubble: every corner round but the bottom-right.
+        .corners([16.0, 16.0, 4.0, 16.0])
+        // The time the message was sent, on hover.
+        .help(format::clock(turn.created_at));
+    // A message can be files alone.
+    if !turn.text.is_empty() {
+        bubble = bubble.child(
+            text(turn.text.clone())
+                .font(font(14.0, 400.0).lh(23.0))
+                .color(t.foreground)
+                .wrap()
+                .selectable(true)
+                .selection_color(t.selection()),
+        );
+    }
+    if !turn.attachments.is_empty() {
+        let mut files = row()
+            .key(format!("rd-files-{}", turn.id))
+            .role("list")
+            .label("Message attachments")
+            .gap(8.0)
+            .flex_wrap();
+        for file in &turn.attachments {
+            let key = format!("rd-file-{}-{}", turn.id, file.id);
+            files = files.child(file_card(t, &key, file, &Action::Download, can_save));
+        }
+        bubble = bubble.child(files);
+    }
+    row().key(key).w_full().justify_end().child(bubble)
 }
 
 /// Under a queued message: how it will join the run, and a button to change
