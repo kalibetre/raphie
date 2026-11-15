@@ -23,6 +23,7 @@ use crate::contracts::{
 };
 use crate::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use crate::contracts::{JobRun, ScheduledJob};
+use crate::contracts::{ProviderSignIn, SignInStatus};
 use crate::inbox::{Inbox, JobUpdates};
 use crate::inspection::TraceView;
 use crate::jobs::RunHistory;
@@ -383,6 +384,16 @@ pub enum Event {
         bot_id: String,
         id: String,
     },
+    /// Where a subscription sign-in has got to.
+    ProviderSignIn {
+        bot_id: String,
+        sign_in: ProviderSignIn,
+    },
+    /// A sign-in step was refused (another sign-in running, say).
+    ProviderSignInFailed {
+        bot_id: String,
+        message: String,
+    },
     /// What a check for a newer release found: the newer release, none,
     /// or why the check failed.
     UpdateChecked(Result<Option<Update>, String>),
@@ -499,6 +510,9 @@ pub enum Effect {
     /// The memory with this id was corrected or forgotten: close its editor
     /// or its "Confirm forget".
     MemoryChanged(String),
+    /// A subscription sign-in connected for this bot: reload its settings
+    /// and close the form.
+    SignedIn(String),
 }
 
 /// The open conversation.
@@ -735,6 +749,12 @@ pub struct Model {
     pub inbox: Inbox,
     /// Whether a newer Raphie has been released.
     pub update: UpdateStatus,
+    /// The subscription sign-in on screen, and whose bot it is for.
+    pub sign_in: Option<(String, ProviderSignIn)>,
+    /// A sign-in step waiting for the runtime's answer.
+    pub sign_in_busy: bool,
+    /// Why the last sign-in step was refused.
+    pub sign_in_error: Option<String>,
     /// The pictures of image attachments.
     pub previews: Previews,
     /// How the open session treats commands.
@@ -821,6 +841,9 @@ impl Default for Model {
             sending: false,
             inbox: Inbox::default(),
             update: UpdateStatus::default(),
+            sign_in: None,
+            sign_in_busy: false,
+            sign_in_error: None,
             previews: Previews::default(),
             command_mode: CommandMode::default(),
             choosing_model: false,
@@ -1228,6 +1251,19 @@ impl Model {
                 self.previews.loaded(&bot_id, &id, bytes);
             }
             Event::PreviewFailed { bot_id, id } => self.previews.failed(&bot_id, &id),
+            Event::ProviderSignIn { bot_id, sign_in } => {
+                self.sign_in_busy = false;
+                self.sign_in_error = None;
+                let connected = sign_in.status == SignInStatus::Connected;
+                self.sign_in = Some((bot_id.clone(), sign_in));
+                if connected {
+                    return vec![Effect::SignedIn(bot_id)];
+                }
+            }
+            Event::ProviderSignInFailed { bot_id: _, message } => {
+                self.sign_in_busy = false;
+                self.sign_in_error = Some(message);
+            }
             Event::UpdateChecked(result) => {
                 self.update = match result {
                     Ok(Some(update)) => UpdateStatus::Available(update),

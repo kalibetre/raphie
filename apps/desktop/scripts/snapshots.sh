@@ -14,7 +14,7 @@ bin=target/debug/raphie-desktop
 # where macOS puts them.
 for scene in sign-in device-code new-conversation conversations unread inbox inbox-empty conversation attachments image-viewer model-picker model-picker-favorites model-picker-family permissions tools streaming working approval \
   settings-account settings-appearance settings-profile settings-profile-edited \
-  settings-models settings-models-filter settings-providers settings-providers-add \
+  settings-models settings-models-filter settings-providers settings-providers-add settings-providers-sign-in settings-providers-subscription \
   settings-memory settings-memory-hindsight settings-memories settings-memories-editing \
   settings-mcp settings-mcp-command \
   settings-channels settings-channels-discord settings-channels-telegram \

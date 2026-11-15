@@ -32,6 +32,7 @@ use crate::contracts::{
     TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
 };
 use crate::contracts::{ActivityEvent, TelemetryBody, TraceDiagnostics};
+use crate::contracts::{AnswerSignInBody, ProviderSignIn, StartSignInBody};
 use crate::contracts::{ApprovalMode, ApprovalModeBody};
 use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
@@ -882,6 +883,53 @@ impl ApiClient {
         // The answer is `{ "ok": true }`; only success matters.
         let _: serde_json::Value = self.post_json(&path, &serde_json::json!({})).await?;
         Ok(())
+    }
+
+    /// Starts signing in to a subscription for a bot: a new connection, or
+    /// `connection_id` renewed.
+    pub async fn start_sign_in(
+        &self,
+        bot_id: &str,
+        provider: &str,
+        name: &str,
+        connection_id: Option<&str>,
+    ) -> Result<ProviderSignIn, ApiError> {
+        let body = StartSignInBody {
+            provider,
+            name,
+            connection_id,
+        };
+        self.post_json(&bot_path(bot_id, "/api/settings/sign-ins"), &body)
+            .await
+    }
+
+    /// Where a sign-in has got to.
+    pub async fn sign_in(&self, bot_id: &str, id: &str) -> Result<ProviderSignIn, ApiError> {
+        let path = format!("/api/settings/sign-ins/{}", encode(id));
+        self.get_json(&bot_path(bot_id, &path)).await
+    }
+
+    /// Answers the sign-in's question `prompt_id`. The answer (a pasted
+    /// address or code) is read from the secret only to send it.
+    pub async fn answer_sign_in(
+        &self,
+        bot_id: &str,
+        id: &str,
+        prompt_id: &str,
+        value: &Secret,
+    ) -> Result<ProviderSignIn, ApiError> {
+        let path = format!("/api/settings/sign-ins/{}/answer", encode(id));
+        let body = AnswerSignInBody {
+            prompt_id,
+            value: value.expose(),
+        };
+        self.post_json(&bot_path(bot_id, &path), &body).await
+    }
+
+    pub async fn cancel_sign_in(&self, bot_id: &str, id: &str) -> Result<ProviderSignIn, ApiError> {
+        let path = format!("/api/settings/sign-ins/{}/cancel", encode(id));
+        self.post_json(&bot_path(bot_id, &path), &serde_json::json!({}))
+            .await
     }
 
     /// Tells the runtime the owner has read `reply_count` of a session's

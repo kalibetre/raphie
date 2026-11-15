@@ -110,6 +110,30 @@ pub enum Command {
         bot_id: String,
         run_id: String,
     },
+    /// Start signing a bot in to a subscription: a new connection, or
+    /// `connection_id` renewed.
+    StartProviderSignIn {
+        bot_id: String,
+        provider: String,
+        name: String,
+        connection_id: Option<String>,
+    },
+    /// Ask where a sign-in has got to.
+    PollProviderSignIn {
+        bot_id: String,
+        id: String,
+    },
+    /// Answer a sign-in's question; the answer is secret.
+    AnswerProviderSignIn {
+        bot_id: String,
+        id: String,
+        prompt_id: String,
+        value: Secret,
+    },
+    CancelProviderSignIn {
+        bot_id: String,
+        id: String,
+    },
     /// Share that the owner has read `reply_count` of a session's replies.
     MarkRead {
         bot_id: String,
@@ -485,6 +509,26 @@ impl Emitter {
 ///
 /// Tokio does not cancel a task when its `JoinHandle` is dropped, so this
 /// wrapper does (RAII: cleanup tied to a value's lifetime). Assigning a new
+/// What a sign-in command asks of the runtime.
+enum SignInStep {
+    Start {
+        provider: String,
+        name: String,
+        connection_id: Option<String>,
+    },
+    Poll {
+        id: String,
+    },
+    Answer {
+        id: String,
+        prompt_id: String,
+        value: Secret,
+    },
+    Cancel {
+        id: String,
+    },
+}
+
 /// `Task` to a field drops the old one, which aborts the old stream.
 struct Task(JoinHandle<()>);
 
@@ -568,6 +612,38 @@ impl Engine {
             Command::AcknowledgeRun { bot_id, run_id } => self.acknowledge_run(bot_id, run_id),
             Command::CheckForUpdates => self.check_for_updates(),
             Command::LoadPreview { bot_id, id } => self.load_preview(bot_id, id),
+            Command::StartProviderSignIn {
+                bot_id,
+                provider,
+                name,
+                connection_id,
+            } => self.provider_sign_in(
+                bot_id,
+                SignInStep::Start {
+                    provider,
+                    name,
+                    connection_id,
+                },
+            ),
+            Command::PollProviderSignIn { bot_id, id } => {
+                self.provider_sign_in(bot_id, SignInStep::Poll { id })
+            }
+            Command::AnswerProviderSignIn {
+                bot_id,
+                id,
+                prompt_id,
+                value,
+            } => self.provider_sign_in(
+                bot_id,
+                SignInStep::Answer {
+                    id,
+                    prompt_id,
+                    value,
+                },
+            ),
+            Command::CancelProviderSignIn { bot_id, id } => {
+                self.provider_sign_in(bot_id, SignInStep::Cancel { id });
+            }
             Command::MarkRead {
                 bot_id,
                 session_id,
@@ -964,6 +1040,46 @@ impl Engine {
                     let _ = inbox.send(Input::Expired);
                 }
                 Err(_) => emit.emit(Event::RunAcknowledgeFailed),
+            }
+        });
+    }
+
+    /// One step of a subscription sign-in; the answer reports where it is.
+    fn provider_sign_in(&mut self, bot_id: String, step: SignInStep) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let answer = match &step {
+                SignInStep::Start {
+                    provider,
+                    name,
+                    connection_id,
+                } => {
+                    api.start_sign_in(&bot_id, provider, name, connection_id.as_deref())
+                        .await
+                }
+                SignInStep::Poll { id } => api.sign_in(&bot_id, id).await,
+                SignInStep::Answer {
+                    id,
+                    prompt_id,
+                    value,
+                } => api.answer_sign_in(&bot_id, id, prompt_id, value).await,
+                SignInStep::Cancel { id } => api.cancel_sign_in(&bot_id, id).await,
+            };
+            match answer {
+                Ok(sign_in) => emit.emit(Event::ProviderSignIn { bot_id, sign_in }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                // A poll that fails is tried again on the next tick.
+                Err(_) if matches!(step, SignInStep::Poll { .. }) => {}
+                Err(error) => emit.emit(Event::ProviderSignInFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
             }
         });
     }

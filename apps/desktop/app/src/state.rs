@@ -15,6 +15,7 @@ use raphie_core::contracts::{
     ApprovalMode, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
     RuntimeSettings, Scope, TurnStatus,
 };
+use raphie_core::contracts::{ProviderSignIn, SignInStatus};
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::{self, Announcement, Announcements, Item, Target};
@@ -88,6 +89,9 @@ pub struct ProvidersView {
     pub choosing_provider: bool,
     pub name: TextEdit,
     pub key: TextEdit,
+    /// The answer to a subscription sign-in's question: a pasted address
+    /// or code, so a secure field.
+    pub answer: TextEdit,
 }
 
 impl ProvidersView {
@@ -98,6 +102,7 @@ impl ProvidersView {
             choosing_provider: false,
             name: TextEdit::new(""),
             key: TextEdit::new("").secure(),
+            answer: TextEdit::new("").secure(),
         }
     }
 }
@@ -382,6 +387,8 @@ pub struct Ui {
     /// The frame clock when the MCP tools page last asked for its
     /// connections.
     mcp_asked_at: f64,
+    /// The frame clock when a waiting sign-in was last asked about.
+    sign_in_asked_at: f64,
     /// The Profile form on screen.
     pub profile: ProfileDraft,
     /// Unsaved Profile edits for other bots, kept while the owner looks at
@@ -535,6 +542,7 @@ impl Ui {
             channels_asked_at: (0.0, 0.0),
             mcp: McpForm::new(),
             mcp_asked_at: 0.0,
+            sign_in_asked_at: 0.0,
             profile: ProfileDraft::empty(),
             parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
@@ -1508,6 +1516,38 @@ impl Ui {
         self.model.connection_message = None;
     }
 
+    /// "OpenRouter 2", "OpenAI 1": a provider's name and the next number.
+    fn suggested_connection_name(&self, provider_id: &str) -> Option<String> {
+        let settings = self.settings_for_open_page()?;
+        let provider = settings.providers.iter().find(|p| p.id == provider_id)?;
+        let count = settings
+            .connections
+            .iter()
+            .filter(|c| c.provider == provider_id)
+            .count();
+        Some(format!("{} {}", provider.name, count + 1))
+    }
+
+    /// The settings of the bot whose page is open, if one is.
+    fn settings_for_open_page(&self) -> Option<&RuntimeSettings> {
+        let Screen::Settings(Page::Bot { bot_id, .. }) = &self.screen else {
+            return None;
+        };
+        self.model.settings.get(bot_id)
+    }
+
+    /// Chooses the provider of a new connection. A name still at its
+    /// suggestion follows the provider, as on the web.
+    pub fn choose_connection_provider(&mut self, provider_id: &str) {
+        let suggested = self.suggested_connection_name(&self.providers.provider);
+        if suggested.as_deref() == Some(self.providers.name.text.as_str())
+            && let Some(next) = self.suggested_connection_name(provider_id)
+        {
+            self.providers.name = TextEdit::new(next);
+        }
+        self.providers.provider = provider_id.to_owned();
+    }
+
     /// Opens the form for a saved connection, with no key typed.
     pub fn edit_connection(&mut self, connection_id: &str, name: &str) {
         self.providers = ProvidersView {
@@ -1516,6 +1556,136 @@ impl Ui {
             ..ProvidersView::new()
         };
         self.model.connection_message = None;
+    }
+
+    /// Whether the open connection form signs in to a subscription rather
+    /// than taking a key: a new one to such a provider, or a saved one.
+    pub fn form_signs_in(&self, bot_id: &str) -> bool {
+        let Some(settings) = self.model.settings.get(bot_id) else {
+            return false;
+        };
+        match &self.providers.open {
+            Some(ConnectionTarget::New) => settings
+                .providers
+                .iter()
+                .any(|p| p.id == self.providers.provider && p.signs_in()),
+            Some(ConnectionTarget::Edit(id)) => settings
+                .connections
+                .iter()
+                .any(|c| &c.id == id && c.is_subscription()),
+            None => false,
+        }
+    }
+
+    /// The sign-in on screen for `bot_id`, if any.
+    pub fn sign_in_for(&self, bot_id: &str) -> Option<&ProviderSignIn> {
+        match &self.model.sign_in {
+            Some((owner, sign_in)) if owner == bot_id => Some(sign_in),
+            _ => None,
+        }
+    }
+
+    /// True while a sign-in for `bot_id` waits on the owner or the provider.
+    pub fn signing_in(&self, bot_id: &str) -> bool {
+        self.sign_in_for(bot_id)
+            .is_some_and(|s| s.status == SignInStatus::Waiting)
+    }
+
+    /// Starts the form's sign-in: a new subscription connection, or the
+    /// saved one renewed.
+    pub fn start_sign_in(&mut self, bot_id: &str) {
+        let name = self.providers.name.text.trim().to_owned();
+        if name.is_empty() || self.model.sign_in_busy {
+            return;
+        }
+        let (provider, connection_id) = match &self.providers.open {
+            Some(ConnectionTarget::New) => (self.providers.provider.clone(), None),
+            Some(ConnectionTarget::Edit(id)) => {
+                let Some(saved) = self
+                    .model
+                    .settings
+                    .get(bot_id)
+                    .and_then(|s| s.connections.iter().find(|c| &c.id == id))
+                else {
+                    return;
+                };
+                (saved.provider.clone(), Some(id.clone()))
+            }
+            None => return,
+        };
+        self.model.sign_in = None;
+        self.model.sign_in_error = None;
+        self.model.sign_in_busy = true;
+        self.command(Command::StartProviderSignIn {
+            bot_id: bot_id.to_owned(),
+            provider,
+            name,
+            connection_id,
+        });
+    }
+
+    /// Answers the sign-in's question with `value`, or with what is typed
+    /// in the answer field when `value` is `None`.
+    pub fn answer_sign_in(&mut self, bot_id: &str, value: Option<String>) {
+        let Some(sign_in) = self.sign_in_for(bot_id) else {
+            return;
+        };
+        let Some(prompt) = &sign_in.prompt else {
+            return;
+        };
+        let value = value.unwrap_or_else(|| self.providers.answer.text.trim().to_owned());
+        if value.is_empty() || self.model.sign_in_busy {
+            return;
+        }
+        let (id, prompt_id) = (sign_in.id.clone(), prompt.id.clone());
+        // Replacing the field drops the pasted text from memory.
+        self.providers.answer = TextEdit::new("").secure();
+        self.model.sign_in_busy = true;
+        self.command(Command::AnswerProviderSignIn {
+            bot_id: bot_id.to_owned(),
+            id,
+            prompt_id,
+            value: Secret::new(value),
+        });
+    }
+
+    /// Stops a waiting sign-in, as closing its form does.
+    pub fn cancel_sign_in(&mut self, bot_id: &str) {
+        if let Some(sign_in) = self.sign_in_for(bot_id)
+            && sign_in.status == SignInStatus::Waiting
+        {
+            let id = sign_in.id.clone();
+            self.command(Command::CancelProviderSignIn {
+                bot_id: bot_id.to_owned(),
+                id,
+            });
+        }
+        self.model.sign_in = None;
+        self.model.sign_in_error = None;
+    }
+
+    /// Asks every second where a waiting sign-in has got to: the owner
+    /// may be finishing it in a browser. True while one waits.
+    pub fn follow_sign_in(&mut self, clock: f64) -> bool {
+        let Some((bot_id, sign_in)) = &self.model.sign_in else {
+            return false;
+        };
+        if sign_in.status != SignInStatus::Waiting {
+            return false;
+        }
+        if clock - self.sign_in_asked_at >= 1.0 && !self.model.sign_in_busy {
+            let (bot_id, id) = (bot_id.clone(), sign_in.id.clone());
+            self.sign_in_asked_at = clock;
+            self.command(Command::PollProviderSignIn { bot_id, id });
+        }
+        true
+    }
+
+    /// Opens a sign-in page the runtime reported, when it is a web address.
+    pub fn open_sign_in_page(&mut self, url: &str, tx: &mut Tx) {
+        if url.starts_with("https://") {
+            self.open_url(url.to_owned(), tx);
+        }
     }
 
     /// Whether the open connection form can be submitted: a name, and for a
@@ -2727,6 +2897,7 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     }
     // `|` rather than `||`: both pages get their look at the clock.
     let watching = ui.refresh_inbox(clock)
+        | ui.follow_sign_in(clock)
         | ui.refresh_mcp(clock)
         | ui.refresh_channels(clock)
         | ui.refresh_sandbox(clock)
@@ -2829,6 +3000,13 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     ChannelOutcome::TelegramRemoved => ui.telegram = TelegramForm::new(),
                     _ => {}
                 },
+                Effect::SignedIn(bot_id) => {
+                    // The connection is made: show it, with its models.
+                    ui.providers = ProvidersView::new();
+                    ui.model.sign_in = None;
+                    ui.model.connection_message = Some("Signed in.".into());
+                    ui.command(Command::LoadSettings { bot_id });
+                }
                 Effect::McpAdded => {
                     // Replacing the form drops what was typed, which wipes
                     // the token and the environment.

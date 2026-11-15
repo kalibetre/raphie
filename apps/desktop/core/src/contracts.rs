@@ -75,7 +75,7 @@ pub struct RuntimeSettings {
     /// The default model for new sessions.
     pub model_id: String,
     #[serde(default)]
-    pub providers: Vec<Named>,
+    pub providers: Vec<ConnectionProvider>,
     #[serde(default)]
     pub connections: Vec<ProviderConnection>,
     #[serde(default)]
@@ -88,11 +88,168 @@ pub struct RuntimeSettings {
 /// `ProviderConnection` in the same file: a named set of credentials for
 /// one provider. A bot can connect the same provider more than once.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderConnection {
     pub id: String,
     /// The provider service this connects to.
     pub provider: String,
     pub name: String,
+    /// `None` from a runtime too old to have subscriptions: an API key.
+    #[serde(default)]
+    pub auth: Option<ConnectionAuth>,
+    /// A subscription whose sign-in expired and could not be renewed.
+    #[serde(default)]
+    pub needs_sign_in: bool,
+}
+
+impl ProviderConnection {
+    pub fn is_subscription(&self) -> bool {
+        self.auth == Some(ConnectionAuth::Subscription)
+    }
+}
+
+/// How a connection authenticates: an API key, or a subscription sign-in.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectionAuth {
+    ApiKey,
+    Subscription,
+    /// Something a newer runtime offers; treated as unknown.
+    #[serde(other)]
+    Unknown,
+}
+
+/// `ConnectionProvider`: a provider a connection can be made to, and how.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionProvider {
+    pub id: String,
+    pub name: String,
+    /// Empty from a runtime too old to say: API keys only.
+    #[serde(default)]
+    pub auth: Vec<ConnectionAuth>,
+    /// The subscription sign-in's button label, "Sign in with ChatGPT".
+    #[serde(default)]
+    pub sign_in_label: Option<String>,
+}
+
+impl ConnectionProvider {
+    /// True for a provider connected by signing in rather than with a key.
+    pub fn signs_in(&self) -> bool {
+        self.auth.contains(&ConnectionAuth::Subscription)
+            && !self.auth.contains(&ConnectionAuth::ApiKey)
+    }
+}
+
+/// `ProviderSignIn`: one subscription sign-in, in progress or finished.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSignIn {
+    pub id: String,
+    pub provider: String,
+    pub name: String,
+    pub status: SignInStatus,
+    /// Oldest first.
+    #[serde(default)]
+    pub events: Vec<SignInEvent>,
+    /// The question waiting for an answer, if any.
+    #[serde(default)]
+    pub prompt: Option<SignInPrompt>,
+    #[serde(default)]
+    pub error: Option<String>,
+    /// The connection made or renewed, once connected.
+    #[serde(default)]
+    pub connection_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SignInStatus {
+    Waiting,
+    Connected,
+    Failed,
+    Cancelled,
+}
+
+/// `SignInEvent`: what a provider's sign-in reports along the way. The
+/// `type` field picks the variant (`#[serde(tag = "type")]`).
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SignInEvent {
+    /// A page to open and sign in on.
+    #[serde(rename_all = "camelCase")]
+    AuthUrl {
+        url: String,
+        #[serde(default)]
+        instructions: Option<String>,
+    },
+    /// A code to enter on the provider's page.
+    #[serde(rename_all = "camelCase")]
+    DeviceCode {
+        user_code: String,
+        verification_uri: String,
+        #[serde(default)]
+        expires_in_seconds: Option<u64>,
+    },
+    Progress {
+        message: String,
+    },
+    Info {
+        message: String,
+    },
+    #[serde(other)]
+    Unknown,
+}
+
+/// `SignInPrompt`: what a provider's sign-in asks the owner for.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SignInPrompt {
+    /// Answered with this id, so a stale answer cannot reach a newer question.
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: SignInPromptKind,
+    pub message: String,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub options: Vec<SignInOption>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SignInPromptKind {
+    Text,
+    Secret,
+    Select,
+    ManualCode,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct SignInOption {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// Body of `POST /api/settings/sign-ins`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StartSignInBody<'a> {
+    pub provider: &'a str,
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<&'a str>,
+}
+
+/// Body of `POST /api/settings/sign-ins/<id>/answer`. The value is
+/// borrowed from a `Secret` only while the request is built.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AnswerSignInBody<'a> {
+    pub prompt_id: &'a str,
+    pub value: &'a str,
 }
 
 /// Bodies of the connection routes under `/api/settings/connections`

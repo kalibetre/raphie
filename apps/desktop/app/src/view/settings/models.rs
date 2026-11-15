@@ -305,6 +305,16 @@ fn filters(
         search_box = search_box.outline(3.0, 0.0, t.accent.alpha(0.3));
     }
 
+    // The providers as plain names: how a connection authenticates does
+    // not matter to the filter.
+    let provider_names: Vec<Named> = settings
+        .providers
+        .iter()
+        .map(|provider| Named {
+            id: provider.id.clone(),
+            name: provider.name.clone(),
+        })
+        .collect();
     let source_names: Vec<Named> = sources(&settings.models)
         .into_iter()
         .map(|source| Named {
@@ -326,7 +336,7 @@ fn filters(
         .child(col().child(caption("Provider")).child(dropdown(
             Dropdown::Provider,
             "All providers",
-            &settings.providers,
+            &provider_names,
             view.provider.as_deref(),
             view.open,
             look,
