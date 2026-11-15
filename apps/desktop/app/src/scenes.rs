@@ -4,6 +4,7 @@
 //! one without a window or a network. They are synthetic on purpose: never
 //! paste real conversations here.
 
+use raphie_core::attachments::FileBytes;
 use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::ApprovalMode;
 use raphie_core::contracts::{
@@ -42,6 +43,7 @@ pub const SCENES: &[Scene] = &[
     ("inbox-empty", inbox_empty),
     ("conversation", conversation),
     ("attachments", attachments),
+    ("image-viewer", image_viewer),
     ("permissions", permissions),
     ("model-picker", model_picker),
     ("model-picker-favorites", model_picker_favorites),
@@ -1320,7 +1322,44 @@ pub fn attachments(ui: &mut Ui) {
     }
     ui.model.attachments.finished(&bot_id);
     ui.composer = TextEdit::new("And these two from this morning.");
+    // Their pictures, as if fetched. Drawn as SVG so no image file is kept
+    // in the repository; the decoder reads the format from the bytes.
+    for (digit, picture) in [("a", FLOOR_PLAN_SVG), ("c", SITE_PHOTO_SVG)] {
+        let id = digit.repeat(64);
+        ui.model.previews.begin(&bot_id, &id);
+        let bytes = FileBytes::from(picture.as_bytes().to_vec());
+        ui.model.previews.loaded(&bot_id, &id, bytes);
+    }
 }
+
+/// The floor plan from `attachments`, shown enlarged.
+pub fn image_viewer(ui: &mut Ui) {
+    attachments(ui);
+    let bot_id = ui.model.bot_id.clone().unwrap_or_else(|| "default".into());
+    ui.open_viewer(&bot_id, &"a".repeat(64), "floor-plan.png");
+}
+
+/// A made-up floor plan: walls on paper. No text: the SVG renderer has
+/// no fonts.
+const FLOOR_PLAN_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260" viewBox="0 0 400 260">
+<rect width="400" height="260" fill="#f4f1e8"/>
+<g fill="none" stroke="#3b4a5c" stroke-width="6">
+<rect x="30" y="30" width="340" height="200"/>
+<path d="M200 30v120M200 190v40M30 130h110M260 130h110M260 130v100"/>
+</g>
+</svg>"##;
+
+/// A made-up site photo: sky, a hill and a house.
+const SITE_PHOTO_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#8fb8de"/><stop offset="1" stop-color="#dbe8f2"/></linearGradient></defs>
+<rect width="300" height="300" fill="url(#sky)"/>
+<circle cx="230" cy="70" r="28" fill="#f3d27a"/>
+<path d="M0 210 Q150 150 300 200 V300 H0 Z" fill="#7fa36b"/>
+<rect x="95" y="160" width="90" height="70" fill="#d9c7a7"/>
+<path d="M85 165 L140 120 L195 165 Z" fill="#a4553f"/>
+<rect x="128" y="195" width="24" height="35" fill="#6b4a33"/>
+</svg>"##;
 
 /// The same conversation with the second reply's tool steps unfolded.
 pub fn tools(ui: &mut Ui) {

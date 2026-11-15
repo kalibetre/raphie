@@ -89,7 +89,15 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   is chosen and waits in the composer as a card, which can be removed; files
   alone can be sent without text. A sent message shows its files, and the
   download button on each saves it to this machine's Downloads folder,
-  never replacing a file that is already there.
+  never replacing a file that is already there. An image (PNG, JPEG, GIF
+  or WebP) shows its picture: small in the composer's card, and across the
+  top of the card on a sent message, as on the web. The picture is fetched
+  once (`GET /api/files/<id>`) when the image is in the composer or the open
+  conversation, and decoded off the UI thread; the latest 24 are kept, and
+  until one arrives, or if it cannot be shown, the card shows the image icon.
+  Pressing a picture shows it enlarged over the window, whole, on a dark
+  backdrop; a press anywhere, its close button or Escape closes it. The web
+  has no such view yet.
 - **Model**: the button beside the paperclip names the model the next
   message will be answered with, and opens a list of the bot's models to
   choose another: search by name, id or connection, and star models to keep
@@ -459,8 +467,7 @@ Where the two differ on purpose:
   do not move between its rows as they do on the web.
 - Attachments: the paperclip picks one file at a time (the web's picker
   takes several); drag several onto the conversation instead. Cards in the
-  composer wrap onto new rows where the web scrolls them sideways. An image
-  shows the image icon in its card, not its picture. Pasting an image or
+  composer wrap onto new rows where the web scrolls them sideways. Pasting an image or
   copied files attaches them, which the web does not do.
 - Account has no device list or passkeys. The web host answers those
   requests only for a signed-in browser, never for a device token
@@ -515,7 +522,6 @@ current.
   been run.
 - Approvals given "for session" cannot be listed or revoked here (nor on
   the web).
-- Image attachments have no picture preview yet.
 - Tool steps come from the session's latest 200 journal entries, as on the
   web: turns older than that show their reply without steps or usage.
 - The roster and panel have fixed widths (264 and 340 pt) and their open state

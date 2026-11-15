@@ -110,6 +110,11 @@ pub enum Command {
         bot_id: String,
         run_id: String,
     },
+    /// Fetch the picture of an image attachment, to preview it.
+    LoadPreview {
+        bot_id: String,
+        id: String,
+    },
     /// Ask GitHub whether a newer Raphie has been released. Works signed
     /// in or not: it does not involve the host.
     CheckForUpdates,
@@ -556,6 +561,7 @@ impl Engine {
             } => self.load_inbox(session_bots, job_bots),
             Command::AcknowledgeRun { bot_id, run_id } => self.acknowledge_run(bot_id, run_id),
             Command::CheckForUpdates => self.check_for_updates(),
+            Command::LoadPreview { bot_id, id } => self.load_preview(bot_id, id),
             Command::LoadApprovalMode { session_id } => self.load_approval_mode(session_id),
             Command::SetApprovalMode { session_id, mode } => {
                 self.set_approval_mode(session_id, mode);
@@ -947,6 +953,27 @@ impl Engine {
                     let _ = inbox.send(Input::Expired);
                 }
                 Err(_) => emit.emit(Event::RunAcknowledgeFailed),
+            }
+        });
+    }
+
+    fn load_preview(&mut self, bot_id: String, id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.download_attachment(&bot_id, &id).await {
+                Ok(bytes) => emit.emit(Event::PreviewLoaded {
+                    bot_id,
+                    id,
+                    bytes: bytes.into(),
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(_) => emit.emit(Event::PreviewFailed { bot_id, id }),
             }
         });
     }

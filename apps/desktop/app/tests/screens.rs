@@ -3,6 +3,8 @@
 //! with no GPU and no network. Pixel snapshots are rendered separately with
 //! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
 
+use std::sync::Arc;
+
 use raphie_core::attachments::{TOO_MANY, Upload};
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome};
@@ -24,7 +26,7 @@ use raphie_core::updates::current_version;
 use raphie_desktop::sections::{BotSection, Page};
 use raphie_desktop::state::{self, Filter, InboxFilter, Screen};
 use raphie_desktop::{Ui, scenes, view::view};
-use rune::{ElementInfo, Env, Runtime, TextEdit};
+use rune::{ElementInfo, Env, ImageCache, Key, KeyEvent, Runtime, TextEdit};
 
 const SIZE: (f32, f32) = (1280.0, 800.0);
 
@@ -3931,4 +3933,90 @@ fn a_notification_clicked_after_signing_out_opens_nothing() {
     settle(&mut rt);
     assert!(rt.state.sent.is_empty());
     assert!(rt.find("rd-sign-in").is_some());
+}
+
+#[test]
+fn image_attachments_ask_for_their_pictures_once_and_files_do_not() {
+    let mut rt = render(scenes::attachments, false);
+    let previews = |rt: &Runtime<Ui>| -> Vec<String> {
+        rt.state
+            .sent
+            .iter()
+            .filter_map(|command| match command {
+                Command::LoadPreview { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    // The scene's pictures count as fetched: nothing is asked again.
+    rt.update(|ui, _| ui.ask_previews());
+    assert!(previews(&rt).is_empty());
+
+    // Forgotten, they are asked for: the sent floor plan and the photo in
+    // the composer, but not the PDF or the CSV.
+    rt.update(|ui, _| {
+        ui.model.previews = Default::default();
+        ui.ask_previews();
+        ui.ask_previews();
+    });
+    assert_eq!(previews(&rt), vec!["c".repeat(64), "a".repeat(64)]);
+
+    // Without a decoder (as here) a sent image keeps its icon in the band.
+    let plan = format!("rd-file-t1-{}-preview", "a".repeat(64));
+    assert!(rt.find(&plan).is_some());
+}
+
+/// The attachments scene with its pictures decoded, as in a window.
+fn with_pictures(rt: &mut Runtime<Ui>) {
+    rt.update(|ui, _| {
+        ui.use_images(ImageCache::new(Arc::new(|| {})));
+        ui.decode_previews();
+        ui.wait_for_pictures();
+    });
+    settle(rt);
+}
+
+#[test]
+fn a_picture_opens_enlarged_and_closes_with_its_button_or_escape() {
+    let mut rt = render(scenes::attachments, false);
+    with_pictures(&mut rt);
+    let plan = format!("rd-file-t1-{}-preview", "a".repeat(64));
+    click(&mut rt, &plan);
+    let shown = rt.state.viewer.clone().expect("the viewer opened");
+    assert_eq!(shown.name, "floor-plan.png");
+    assert!(rt.find("rd-viewer-picture").is_some());
+
+    click(&mut rt, "rd-viewer-close");
+    assert_eq!(rt.state.viewer, None);
+    assert!(rt.find("rd-viewer").is_none());
+
+    // The composer's photo opens too, and Escape closes it.
+    click(
+        &mut rt,
+        &format!("rd-attachment-{}-preview", "c".repeat(64)),
+    );
+    assert!(rt.state.viewer.is_some());
+    let on_key = raphie_desktop::spec().on_key.expect("window keys");
+    let escape = KeyEvent {
+        key: Key::Escape,
+        mods: Default::default(),
+    };
+    rt.update(|ui, tx| {
+        assert!(on_key(ui, &escape, tx));
+    });
+    settle(&mut rt);
+    assert_eq!(rt.state.viewer, None);
+}
+
+#[test]
+fn a_picture_that_is_not_ready_cannot_be_opened_and_shows_nothing() {
+    // No decoder: the cards keep their icons and are not buttons.
+    let mut rt = render(scenes::attachments, false);
+    let plan = format!("rd-file-t1-{}-preview", "a".repeat(64));
+    click(&mut rt, &plan);
+    assert_eq!(rt.state.viewer, None);
+    // A viewer for a picture that is gone draws nothing.
+    rt.update(|ui, _| ui.open_viewer("default", "gone", "gone.png"));
+    settle(&mut rt);
+    assert!(rt.find("rd-viewer").is_none());
 }
