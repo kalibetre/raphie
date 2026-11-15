@@ -45,6 +45,7 @@ All routes below are prefixed `/api`. The web host proxies them to the runtime.
 | PUT    | `/sessions/<uuid>/approval-mode`                     | Set the conversation command mode                                              |
 | GET    | `/sessions/<uuid>/grants`                            | List active session grants                                                     |
 | DELETE | `/sessions/<uuid>/grants/<id>`                       | Revoke a session grant                                                         |
+| POST   | `/sessions/<uuid>/read`                              | `{ replyCount }`: replies read so far; answers `{ readReplyCount }`            |
 | GET    | `/sessions/<uuid>/events`                            | Authoritative selected-session observations over SSE                           |
 | POST   | `/tool-approvals/<id>`                               | Shared explicit approval decision                                              |
 | GET    | `/inspection/activity?before=<event-id>&limit=100`   | Optional bounded diagnostic page                                               |
@@ -178,3 +179,11 @@ a message. It validates the connected provider and catalog and rejects active
 sessions with 409. A session observation exposes the saved choice as
 `session.model`. Sessions preserve their model through default changes and
 restarts; legacy records are backfilled from their existing Pi agent model.
+
+`POST /api/sessions/:id/read` with `{ "replyCount": n }` records that the owner
+has read the session's first `n` completed replies, in whichever client. The
+marker only moves forward and never past the replies that exist, so a client
+that read less cannot undo another's reading; the answer is the stored count.
+Session summaries carry it as `readReplyCount` (0 when nothing was read), so
+every client's unread count is `replyCount - readReplyCount`, and the live
+summary streams deliver a change to the other clients.

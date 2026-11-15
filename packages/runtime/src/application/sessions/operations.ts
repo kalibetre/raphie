@@ -191,6 +191,14 @@ export class Sessions implements SessionOperations {
     await this.conversations.chooseModel(sessionId, model);
   }
 
+  /** Records how many of a session's replies the owner has read. */
+  async markRead(actor: ActorContext, sessionId: string, replyCount: number) {
+    const verified = this.authority.require(actor);
+    if (verified.source !== "web")
+      throw new InputError("Read markers require a client interface.", 403);
+    return this.conversations.markRead(sessionId, replyCount);
+  }
+
   /** Compatibility admission retains numeric request fingerprints during client migration. */
   async submitLegacy(
     actor: ActorContext,

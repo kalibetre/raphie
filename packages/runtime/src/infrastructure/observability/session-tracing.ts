@@ -6,6 +6,8 @@ export function traceSessions(sessions: Sessions, telemetry: Telemetry) {
   return {
     chooseModel: (...args: Parameters<Sessions["chooseModel"]>) =>
       sessions.chooseModel(...args),
+    markRead: (...args: Parameters<Sessions["markRead"]>) =>
+      sessions.markRead(...args),
     submit: (...args: Parameters<Sessions["submit"]>) =>
       telemetry.run(
         "session.submit",

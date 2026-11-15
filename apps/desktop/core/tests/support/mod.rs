@@ -84,6 +84,8 @@ pub struct Host {
     pub uploads: Vec<(String, String, Vec<u8>)>,
     /// Answer uploads as a runtime whose workspace is unavailable does.
     pub uploads_down: bool,
+    /// Read counts shared by the client: the request path and `replyCount`.
+    pub reads: Vec<(String, u64)>,
     /// Trace collection is switched off.
     pub telemetry_off: bool,
     /// The exported spans, and the bot's durable events oldest first, as
@@ -251,6 +253,8 @@ fn router(fake: Fake) -> Router {
         .route("/api/jobs/notifications", get(job_updates))
         .route("/api/bots/{bot}/jobs/notifications", get(job_updates))
         .route("/api/jobs/runs/{id}/read", post(acknowledge_run))
+        .route("/api/sessions/{id}/read", post(mark_read))
+        .route("/api/bots/{bot}/sessions/{id}/read", post(mark_read))
         .route("/api/bots/{bot}/jobs/runs/{id}/read", post(acknowledge_run))
         .route("/api/jobs/{id}", post(change_job))
         .route("/api/workspace/files", get(workspace_files))
@@ -547,6 +551,26 @@ async fn job_updates(
     let items: Vec<&Value> = all.iter().take(2).collect();
     let next = (all.len() > 2).then(|| "2".to_owned());
     Json(json!({ "items": items, "next": next, "total": all.len() })).into_response()
+}
+
+/// Keeps what a client says it read; answers as the runtime does.
+async fn mark_read(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let count = body["replyCount"].as_u64().unwrap_or(0);
+    fake.host
+        .lock()
+        .unwrap()
+        .reads
+        .push((uri.path().to_owned(), count));
+    Json(json!({ "readReplyCount": count })).into_response()
 }
 
 async fn acknowledge_run(

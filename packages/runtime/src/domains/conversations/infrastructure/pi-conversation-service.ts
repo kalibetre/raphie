@@ -45,10 +45,11 @@ import {
 } from "../../schedules/infrastructure/job-runs.ts";
 import type { ConversationCommands } from "../application/ports.ts";
 import { messageViolation } from "../domain/admission.ts";
-import type {
-  ChatConversation,
-  ChatDelivery,
-  ChatTurn,
+import {
+  type ChatConversation,
+  type ChatDelivery,
+  type ChatTurn,
+  nextReadReplyCount,
 } from "../domain/model.ts";
 import { newSessionId } from "./session-id.ts";
 
@@ -680,6 +681,30 @@ export class ChatService implements ConversationCommands {
         );
       session.model = { ...model };
       await configure(tx, session.id as ConversationId, { model });
+    }, context);
+  }
+
+  async markRead(sessionId: string, replyCount: number) {
+    return this.app.root.commit(async (tx) => {
+      const state = await tx.doc(Chats);
+      const session = state.conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!session) throw new InputError("Session not found.", 404);
+      const replies = state.turns.filter(
+        (t) =>
+          t.conversationId === session.id &&
+          t.status === "done" &&
+          t.answer !== null,
+      ).length;
+      const next = nextReadReplyCount(
+        session.readReplyCount,
+        replyCount,
+        replies,
+      );
+      // Unchanged markers write nothing, so idle clients cost no commits.
+      if (next !== (session.readReplyCount ?? 0)) session.readReplyCount = next;
+      return next;
     }, context);
   }
 

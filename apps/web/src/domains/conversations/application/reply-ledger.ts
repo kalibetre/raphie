@@ -23,6 +23,18 @@ export function mergeReplyLedgers(...ledgers: ReplyLedger[]): ReplyLedger {
   );
 }
 
+/** How far the owner has read, here or in any other client: the furthest. */
+export function readCount(
+  ledger: ReplyLedger,
+  botId: string,
+  session: SessionSummary,
+) {
+  return Math.max(
+    ledger[botId]?.[session.sessionId] ?? 0,
+    session.readReplyCount ?? 0,
+  );
+}
+
 export function unreadReplies(
   ledger: ReplyLedger,
   botId: string,
@@ -30,7 +42,7 @@ export function unreadReplies(
 ) {
   return Math.max(
     0,
-    (session.replyCount ?? 0) - (ledger[botId]?.[session.sessionId] ?? 0),
+    (session.replyCount ?? 0) - readCount(ledger, botId, session),
   );
 }
 

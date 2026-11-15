@@ -67,7 +67,7 @@ A new feature is placed by asking these questions in order.
 | Choose the model for a conversation          | Yes     | Yes     | Planned |                                                                                              |
 | Command mode (Ask or Full access)            | Yes     | Yes     | Planned |                                                                                              |
 | List and revoke "approve for session" grants | Planned | Planned | Planned | The runtime has the routes; no client shows them yet.                                        |
-| Unread markers and the "New replies" filter  | Yes     | Yes     | Planned | Read state is kept per client today, not shared.                                             |
+| Unread markers and the "New replies" filter  | Yes     | Yes     | Planned | Read state is shared through the runtime: the furthest any client has read wins.             |
 | Notifications                                | Yes     | Yes     | Planned | In-app on web. In-app and system notifications on desktop. Push on mobile needs server work. |
 
 ### Bot settings

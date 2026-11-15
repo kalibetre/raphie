@@ -127,6 +127,7 @@ export class PiClientQueries implements ClientQueries {
           replyCount: turns.filter(
             (t) => t.status === "done" && t.answer !== null,
           ).length,
+          readReplyCount: c.readReplyCount ?? 0,
           replyPreview:
             turns
               .findLast((t) => t.status === "done" && t.answer !== null)
@@ -278,6 +279,7 @@ export class PiClientQueries implements ClientQueries {
             t.status === "done" &&
             t.answer !== null,
         ).length,
+        readReplyCount: session.readReplyCount ?? 0,
         replyPreview:
           chats.turns
             .findLast(

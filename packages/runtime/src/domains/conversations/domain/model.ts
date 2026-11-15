@@ -13,7 +13,21 @@ export type ChatConversation = {
   sessionId: string;
   title: string;
   createdAt: number;
+  /** Completed replies the owner has read, in any client; absent means none. */
+  readReplyCount?: number;
 };
+
+/**
+ * Where a read marker moves to: never backwards, so a client that read less
+ * cannot undo another's reading, and never past the replies that exist.
+ */
+export function nextReadReplyCount(
+  stored: number | undefined,
+  reported: number,
+  replies: number,
+) {
+  return Math.max(stored ?? 0, Math.min(reported, replies));
+}
 
 export type ChatTurn = {
   id: string;
