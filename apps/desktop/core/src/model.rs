@@ -17,6 +17,8 @@ use crate::contracts::{
     SandboxSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
     TelegramPairingCode,
 };
+use crate::contracts::{JobRun, ScheduledJob};
+use crate::jobs::RunHistory;
 use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
 use crate::workspace::WorkspaceBrowser;
@@ -102,6 +104,42 @@ pub enum Event {
         settings: SandboxSettings,
     },
     SandboxSaveFailed {
+        message: String,
+    },
+    /// A bot's scheduled jobs.
+    Jobs {
+        bot_id: String,
+        items: Vec<ScheduledJob>,
+    },
+    JobsFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// A job was scheduled; these are the bot's jobs with it.
+    JobAdded {
+        bot_id: String,
+        items: Vec<ScheduledJob>,
+    },
+    /// A job was resumed, paused, removed or run. `ran` says it was a
+    /// "Run now", which has something to tell the owner.
+    JobChanged {
+        bot_id: String,
+        items: Vec<ScheduledJob>,
+        ran: bool,
+    },
+    JobChangeFailed {
+        message: String,
+    },
+    /// One page of job runs. `ticket` is the load's, from
+    /// [`RunHistory::begin_load`]; `older` says it follows the runs shown.
+    JobRuns {
+        ticket: u64,
+        older: bool,
+        page: Page<JobRun>,
+    },
+    JobRunsFailed {
+        ticket: u64,
+        older: bool,
         message: String,
     },
     /// What one folder of a bot's workspace holds.
@@ -302,6 +340,8 @@ pub enum Effect {
     /// This bot's memory settings were saved: its form should show them and
     /// forget any typed key.
     MemorySaved(String),
+    /// A job was scheduled: close its form and empty it.
+    JobAdded,
     /// This bot's sandbox settings were saved: its form should show them.
     SandboxSaved(String),
     /// A change to a bot's channels was made: forget what was typed for
@@ -464,6 +504,18 @@ pub struct Model {
     pub sandbox_save_error: Option<String>,
     /// What the last save of sandbox settings said.
     pub sandbox_message: Option<String>,
+    /// Each bot's scheduled jobs, once loaded.
+    pub jobs: HashMap<String, Vec<ScheduledJob>>,
+    /// The bot whose jobs could not be loaded, and why.
+    pub jobs_error: Option<(String, String)>,
+    /// A job is being scheduled or changed.
+    pub changing_job: bool,
+    /// Why the last add or change failed, until the next attempt.
+    pub job_error: Option<String>,
+    /// What the last add or "Run now" said.
+    pub job_message: Option<String>,
+    /// The run history on screen.
+    pub runs: RunHistory,
     /// The workspace folder on screen and what it holds.
     pub files: WorkspaceBrowser,
     /// Each bot's Discord and Telegram connections, once loaded.
@@ -537,6 +589,12 @@ impl Default for Model {
             saving_sandbox: false,
             sandbox_save_error: None,
             sandbox_message: None,
+            jobs: HashMap::new(),
+            jobs_error: None,
+            changing_job: false,
+            job_error: None,
+            job_message: None,
+            runs: RunHistory::default(),
             files: WorkspaceBrowser::default(),
             channels: HashMap::new(),
             channels_error: None,
@@ -679,6 +737,43 @@ impl Model {
                 self.saving_sandbox = false;
                 self.sandbox_save_error = Some(message);
             }
+            Event::Jobs { bot_id, items } => {
+                self.jobs_error = None;
+                self.jobs.insert(bot_id, items);
+            }
+            Event::JobsFailed { bot_id, message } => {
+                self.jobs_error = Some((bot_id, message));
+            }
+            Event::JobAdded { bot_id, items } => {
+                self.changing_job = false;
+                self.job_message =
+                    Some("Job scheduled. The runtime must be running when it is due.".to_owned());
+                self.jobs.insert(bot_id, items);
+                return vec![Effect::JobAdded];
+            }
+            Event::JobChanged { bot_id, items, ran } => {
+                self.changing_job = false;
+                if ran {
+                    self.job_message = Some(
+                        "Run queued. Its result will appear in the job's conversation.".to_owned(),
+                    );
+                }
+                self.jobs.insert(bot_id, items);
+            }
+            Event::JobChangeFailed { message } => {
+                self.changing_job = false;
+                self.job_error = Some(message);
+            }
+            Event::JobRuns {
+                ticket,
+                older,
+                page,
+            } => self.runs.loaded(ticket, older, page),
+            Event::JobRunsFailed {
+                ticket,
+                older,
+                message,
+            } => self.runs.failed(ticket, older, message),
             Event::WorkspaceFiles { bot_id, listing } => self.files.listed(&bot_id, listing),
             Event::WorkspaceFilesFailed {
                 bot_id,
@@ -912,6 +1007,18 @@ impl Model {
         self.saving_memory = true;
         self.memory_save_error = None;
         self.memory_message = None;
+        true
+    }
+
+    /// The owner scheduled or changed a job. Returns false while another
+    /// change is on its way.
+    pub fn begin_change_job(&mut self) -> bool {
+        if self.changing_job {
+            return false;
+        }
+        self.changing_job = true;
+        self.job_error = None;
+        self.job_message = None;
         true
     }
 

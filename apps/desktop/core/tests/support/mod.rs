@@ -65,6 +65,12 @@ pub struct Host {
     pub memory_saves: Vec<Value>,
     /// Answer memory tests with a failure, as an unreachable server would.
     pub memory_unreachable: bool,
+    /// The bot's scheduled jobs, and their runs newest first, as the
+    /// runtime lists them.
+    pub jobs: Vec<Value>,
+    pub job_runs: Vec<Value>,
+    /// Bodies of job adds, as received.
+    pub job_adds: Vec<Value>,
     /// The workspace's files: `(path, bytes)`. Folders are implied by the
     /// paths. `workspace_revision` is the listing revision downloads name.
     pub workspace: Vec<(String, Vec<u8>)>,
@@ -189,6 +195,9 @@ fn router(fake: Fake) -> Router {
         .route("/api/memory/test", post(test_memory))
         .route("/api/workspace", get(sandbox))
         .route("/api/workspace/settings", post(save_sandbox))
+        .route("/api/jobs", get(jobs).post(add_job))
+        .route("/api/jobs/runs", get(job_runs))
+        .route("/api/jobs/{id}", post(change_job))
         .route("/api/workspace/files", get(workspace_files))
         .route("/api/workspace/download", get(workspace_download))
         .route("/api/channels", get(channels))
@@ -275,6 +284,119 @@ async fn save_memory(
         }));
     }
     Json(memory_json(&fake)).into_response()
+}
+
+fn jobs_json(fake: &Fake) -> Response {
+    let items = fake.host.lock().unwrap().jobs.clone();
+    Json(json!({ "items": items })).into_response()
+}
+
+async fn jobs(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    jobs_json(&fake)
+}
+
+/// Schedules a job, unless its first run is in the past.
+async fn add_job(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    {
+        let mut host = fake.host.lock().unwrap();
+        host.job_adds.push(body.clone());
+        if body["firstRunAt"].as_i64().unwrap_or(0) < 1_000 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Choose a first run in the future." })),
+            )
+                .into_response();
+        }
+        let id = format!("job-{}", host.jobs.len() + 1);
+        host.jobs.push(json!({
+            "id": id, "name": body["name"], "prompt": body["prompt"],
+            "everyMinutes": body["everyMinutes"], "firstRunAt": body["firstRunAt"],
+            "enabled": true, "nextRunAt": body["firstRunAt"], "sessionId": null,
+            "lastRunAt": null, "lastStatus": null,
+        }));
+    }
+    let mut response = jobs_json(&fake);
+    *response.status_mut() = StatusCode::CREATED;
+    response
+}
+
+/// Resumes, pauses or removes a job; "run" records a queued run.
+async fn change_job(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let id = uri.path().rsplit('/').next().unwrap_or("").to_owned();
+    {
+        let mut host = fake.host.lock().unwrap();
+        let Some(index) = host.jobs.iter().position(|job| job["id"] == id.as_str()) else {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Scheduled job not found." })),
+            )
+                .into_response();
+        };
+        match body["action"].as_str() {
+            Some("remove") => {
+                host.jobs.remove(index);
+            }
+            Some("disable") => host.jobs[index]["enabled"] = json!(false),
+            Some("enable") => host.jobs[index]["enabled"] = json!(true),
+            Some("run") => {
+                let run = json!({
+                    "id": format!("run-{}", host.job_runs.len() + 1), "jobId": id,
+                    "name": host.jobs[index]["name"], "scheduledFor": 1_700_000_000_000_i64,
+                    "startedAt": 1_700_000_000_000_i64, "finishedAt": null,
+                    "status": "queued", "sessionId": null, "turnId": null,
+                    "acknowledgedAt": null,
+                });
+                // Newest first, as the runtime lists them.
+                host.job_runs.insert(0, run);
+            }
+            _ => {}
+        }
+    }
+    jobs_json(&fake)
+}
+
+/// Runs two to a page, newest first; the cursor is the index to go on
+/// from. `jobId` narrows them to one job.
+async fn job_runs(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.to_string(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let only = query_value(&uri, "jobId");
+    let from: usize = query_value(&uri, "before")
+        .and_then(|cursor| cursor.parse().ok())
+        .unwrap_or(0);
+    let host = fake.host.lock().unwrap();
+    let matching: Vec<&Value> = host
+        .job_runs
+        .iter()
+        .filter(|run| only.as_deref().is_none_or(|id| run["jobId"] == id))
+        .collect();
+    let items: Vec<&Value> = matching.iter().skip(from).take(2).copied().collect();
+    let next = (from + 2 < matching.len()).then(|| (from + 2).to_string());
+    Json(json!({ "items": items, "next": next })).into_response()
 }
 
 /// One query value from a request's address, percent-decoded.

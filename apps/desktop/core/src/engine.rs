@@ -36,6 +36,7 @@ use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
 };
+use crate::jobs::{JobAction, NewJob};
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::MemoryUpdate;
 use crate::model::{DecisionOutcome, Event, StreamStatus};
@@ -131,6 +132,30 @@ pub enum Command {
     SaveSandbox {
         bot_id: String,
         update: SandboxUpdate,
+    },
+    /// Load a bot's scheduled jobs.
+    LoadJobs {
+        bot_id: String,
+    },
+    /// Schedule a job.
+    AddJob {
+        bot_id: String,
+        job: NewJob,
+    },
+    /// Resume, pause, remove or run one job.
+    ChangeJob {
+        bot_id: String,
+        id: String,
+        action: JobAction,
+    },
+    /// Load a page of job runs: every job's, or only `job_id`'s; the
+    /// newest, or the page after the cursor `before`. `ticket` comes from
+    /// `RunHistory::begin_load` and returns with the answer.
+    LoadJobRuns {
+        bot_id: String,
+        job_id: Option<String>,
+        before: Option<String>,
+        ticket: u64,
     },
     /// Load what one folder of a bot's workspace holds.
     LoadWorkspaceFiles {
@@ -445,6 +470,15 @@ impl Engine {
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
             Command::LoadSandbox { bot_id } => self.load_sandbox(bot_id),
             Command::SaveSandbox { bot_id, update } => self.save_sandbox(bot_id, update),
+            Command::LoadJobs { bot_id } => self.load_jobs(bot_id),
+            Command::AddJob { bot_id, job } => self.add_job(bot_id, job),
+            Command::ChangeJob { bot_id, id, action } => self.change_job(bot_id, id, action),
+            Command::LoadJobRuns {
+                bot_id,
+                job_id,
+                before,
+                ticket,
+            } => self.load_job_runs(bot_id, job_id, before, ticket),
             Command::LoadWorkspaceFiles { bot_id, path } => self.load_workspace_files(bot_id, path),
             Command::DownloadWorkspaceFile {
                 bot_id,
@@ -949,6 +983,103 @@ impl Engine {
                         });
                     }
                 }
+            }
+        });
+    }
+
+    fn load_jobs(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.jobs(&bot_id).await {
+                Ok(items) => emit.emit(Event::Jobs { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::JobsFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn add_job(&mut self, bot_id: String, job: NewJob) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.add_job(&bot_id, &job).await {
+                Ok(items) => emit.emit(Event::JobAdded { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::JobChangeFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn change_job(&mut self, bot_id: String, id: String, action: JobAction) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.change_job(&bot_id, &id, action).await {
+                Ok(items) => emit.emit(Event::JobChanged {
+                    bot_id,
+                    items,
+                    ran: action == JobAction::Run,
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::JobChangeFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn load_job_runs(
+        &mut self,
+        bot_id: String,
+        job_id: Option<String>,
+        before: Option<String>,
+        ticket: u64,
+    ) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let older = before.is_some();
+            let page = api
+                .job_runs(&bot_id, job_id.as_deref(), before.as_deref())
+                .await;
+            match page {
+                Ok(page) => emit.emit(Event::JobRuns {
+                    ticket,
+                    older,
+                    page,
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::JobRunsFailed {
+                    ticket,
+                    older,
+                    message: error.to_string(),
+                }),
             }
         });
     }

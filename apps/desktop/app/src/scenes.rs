@@ -10,6 +10,7 @@ use raphie_core::contracts::{
     MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionObservation,
     SessionSummary, TelegramPairingCode, WorkspaceListing,
 };
+use raphie_core::contracts::{JobRun, ScheduledJob};
 use raphie_core::engine::Command;
 use raphie_core::mcp::McpTransport;
 use raphie_core::model::{AuthState, Event};
@@ -53,6 +54,10 @@ pub const SCENES: &[Scene] = &[
     ("settings-memories-editing", settings_memories_editing),
     ("settings-memories-search", settings_memories_search),
     ("settings-memories-empty", settings_memories_empty),
+    ("settings-jobs", settings_jobs),
+    ("settings-jobs-create", settings_jobs_create),
+    ("settings-jobs-empty", settings_jobs_empty),
+    ("settings-jobs-loading", settings_jobs_loading),
     ("settings-workspace", settings_workspace),
     ("settings-workspace-folder", settings_workspace_folder),
     ("settings-workspace-empty", settings_workspace_empty),
@@ -176,13 +181,12 @@ pub fn settings_profile_edited(ui: &mut Ui) {
     ui.profile.color = Some("#83bcb4".into());
 }
 
-/// A bot's settings page that is not native yet (Research → Scheduled
-/// jobs).
+/// A bot's settings page that is not native yet (Research → Diagnostics).
 pub fn settings_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Bot {
         bot_id: "b-research".into(),
-        section: BotSection::Jobs,
+        section: BotSection::Diagnostics,
     }));
 }
 
@@ -245,6 +249,138 @@ pub fn settings_memory_hindsight(ui: &mut Ui) {
     ui.memory.bank_id = TextEdit::new("raphie-work");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
+}
+
+/// Made-up jobs in the states a card can show: recurring and active with a
+/// finished run, a one-time reminder that failed, and a paused job that
+/// never ran.
+pub fn scheduled_jobs() -> Vec<ScheduledJob> {
+    serde_json::from_value(json!([
+        {
+            "id": "job-brief", "name": "Morning project brief",
+            "prompt": "Summarize the project's open tasks and suggest today's priorities.",
+            "everyMinutes": 1440, "firstRunAt": 1_794_200_400_000_i64,
+            "enabled": true, "nextRunAt": 1_794_718_800_000_i64,
+            "sessionId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+            "lastRunAt": 1_794_632_400_000_i64, "lastStatus": "submitted",
+            "lastRun": {
+                "id": "run-104", "jobId": "job-brief", "name": "Morning project brief",
+                "scheduledFor": 1_794_632_400_000_i64, "startedAt": 1_794_632_400_000_i64,
+                "finishedAt": 1_794_632_460_000_i64, "status": "completed",
+                "sessionId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b", "turnId": "t-311",
+                "acknowledgedAt": null,
+            },
+        },
+        {
+            "id": "job-renewal", "name": "Renew the domain",
+            "prompt": "Remind me to renew the domain before it lapses.",
+            "everyMinutes": null, "firstRunAt": 1_794_546_000_000_i64,
+            "enabled": false, "nextRunAt": 1_794_546_000_000_i64, "sessionId": null,
+            "lastRunAt": 1_794_546_000_000_i64, "lastStatus": "failed",
+            "lastRun": {
+                "id": "run-101", "jobId": "job-renewal", "name": "Renew the domain",
+                "scheduledFor": 1_794_546_000_000_i64, "startedAt": 1_794_546_000_000_i64,
+                "finishedAt": 1_794_546_001_000_i64, "status": "failed",
+                "failureReason": "no_model", "sessionId": null, "turnId": null,
+                "acknowledgedAt": null,
+            },
+        },
+        {
+            "id": "job-digest", "name": "Weekly reading digest",
+            "prompt": "List what I saved to read this week, shortest first.",
+            "everyMinutes": 10080, "firstRunAt": 1_794_805_200_000_i64,
+            "enabled": false, "nextRunAt": 1_794_805_200_000_i64, "sessionId": null,
+            "lastRunAt": null, "lastStatus": null,
+        },
+    ]))
+    .expect("the scene's jobs match the contract")
+}
+
+/// A made-up page of runs, newest first, with more behind it.
+pub fn job_runs() -> Paged<JobRun> {
+    serde_json::from_value(json!({
+        "items": [
+            {
+                "id": "run-105", "jobId": "job-brief", "name": "Morning project brief",
+                "scheduledFor": 1_794_650_000_000_i64, "late": true,
+                "startedAt": 1_794_650_100_000_i64, "finishedAt": null, "status": "running",
+                "sessionId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b", "turnId": "t-320",
+                "acknowledgedAt": null,
+            },
+            {
+                "id": "run-104", "jobId": "job-brief", "name": "Morning project brief",
+                "scheduledFor": 1_794_632_400_000_i64, "startedAt": 1_794_632_400_000_i64,
+                "finishedAt": 1_794_632_460_000_i64, "status": "completed",
+                "sessionId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b", "turnId": "t-311",
+                "acknowledgedAt": null,
+            },
+            {
+                "id": "run-101", "jobId": "job-renewal", "name": "Renew the domain",
+                "scheduledFor": 1_794_546_000_000_i64, "startedAt": 1_794_546_000_000_i64,
+                "finishedAt": 1_794_546_001_000_i64, "status": "failed",
+                "failureReason": "no_model", "sessionId": null, "turnId": null,
+                "acknowledgedAt": null,
+            },
+        ],
+        "next": "cursor-older",
+    }))
+    .expect("the scene's runs match the contract")
+}
+
+/// Opens Settings → Scheduled jobs with `jobs`, and answers the runs it
+/// asks for with `runs`.
+fn open_jobs(ui: &mut Ui, jobs: Option<Vec<ScheduledJob>>, runs: Option<Paged<JobRun>>) {
+    settings_account(ui);
+    if let Some(items) = jobs {
+        ui.model.apply(Event::Jobs {
+            bot_id: "default".into(),
+            items,
+        });
+    }
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Jobs,
+    }));
+    // The page asked for the newest runs; the answer carries its ticket.
+    if let (Some(Command::LoadJobRuns { ticket, .. }), Some(page)) = (ui.sent.last(), runs) {
+        ui.model.apply(Event::JobRuns {
+            ticket: *ticket,
+            older: false,
+            page,
+        });
+    }
+}
+
+/// Settings → Scheduled jobs with three jobs and their recent runs.
+pub fn settings_jobs(ui: &mut Ui) {
+    open_jobs(ui, Some(scheduled_jobs()), Some(job_runs()));
+}
+
+/// Scheduled jobs with the "Create a job" dialog open on a draft whose
+/// date is not one.
+pub fn settings_jobs_create(ui: &mut Ui) {
+    settings_jobs(ui);
+    ui.open_job_form();
+    ui.job.name = TextEdit::new("Friday wrap-up");
+    ui.job.prompt = TextEdit::new("Summarize what shipped this week and what slipped.");
+    ui.job.minutes = TextEdit::new("10080");
+    ui.job.date = TextEdit::new("next Friday");
+    ui.job.time = TextEdit::new("16:30");
+    ui.add_job();
+}
+
+/// Scheduled jobs before any job was created.
+pub fn settings_jobs_empty(ui: &mut Ui) {
+    let nothing = Paged {
+        items: Vec::new(),
+        next: None,
+    };
+    open_jobs(ui, Some(Vec::new()), Some(nothing));
+}
+
+/// Scheduled jobs before the jobs have arrived.
+pub fn settings_jobs_loading(ui: &mut Ui) {
+    open_jobs(ui, None, None);
 }
 
 /// A made-up listing of the top of a workspace, or of its `reports` folder.

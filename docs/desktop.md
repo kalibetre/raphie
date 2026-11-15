@@ -123,7 +123,14 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     replaces a file already there (a second `notes.md` becomes
     `notes (1).md`), and a name from the runtime can never place a file
     outside that folder.
-  - **A bot's other pages** (Scheduled jobs, Diagnostics, Activity) are not built yet: each
+  - **Scheduled jobs** lists a bot's jobs with their schedule, state and
+    last run, and runs, pauses, resumes or removes one. "Create job" opens
+    a dialog for a name, a prompt, once or recurring, and the first run's
+    local date (`YYYY-MM-DD`) and time (`HH:MM`); a draft keeps the dialog
+    open. Run history shows recent runs for every job or one job, loads
+    older runs from a button, and opens a run's conversation. Jobs and the
+    newest runs are re-read every five seconds.
+  - **A bot's other pages** (Diagnostics, Activity) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.

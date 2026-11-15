@@ -956,3 +956,107 @@ pub struct WorkspaceListing {
     pub revision: u64,
     pub items: Vec<WorkspaceEntry>,
 }
+
+/// How a job's last submission went, for runs from before the runtime
+/// tracked each run's outcome.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LastStatus {
+    Submitted,
+    Failed,
+}
+
+/// `ScheduledJob` in `packages/contracts/src/bots/automation.ts`: a prompt
+/// a bot is given on a schedule.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduledJob {
+    pub id: String,
+    pub name: String,
+    pub prompt: String,
+    /// How often it repeats; `None` runs it once.
+    pub every_minutes: Option<u32>,
+    pub enabled: bool,
+    /// When it runs next, in milliseconds since the Unix epoch.
+    pub next_run_at: i64,
+    /// The conversation its results go to, once it has one.
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub last_run_at: Option<i64>,
+    #[serde(default)]
+    pub last_status: Option<LastStatus>,
+    #[serde(default)]
+    pub last_run: Option<JobRun>,
+}
+
+/// Where a run stands.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RunStatus {
+    Queued,
+    Running,
+    Completed,
+    Failed,
+    Interrupted,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Why a run failed, when the runtime knows.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureReason {
+    Unknown,
+    /// The bot has no model to run the prompt with.
+    NoModel,
+}
+
+/// `ScheduledJobRun`: one time a job ran.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct JobRun {
+    pub id: String,
+    pub job_id: String,
+    /// The job's name when it ran; the job may have been removed since.
+    pub name: String,
+    /// It started later than it was scheduled for.
+    #[serde(default)]
+    pub late: bool,
+    /// It is held behind the bot's active turn or an approval.
+    #[serde(default)]
+    pub waiting_for_bot: bool,
+    #[serde(default)]
+    pub failure_reason: Option<FailureReason>,
+    pub started_at: i64,
+    pub status: RunStatus,
+    /// The conversation its reply is in, once the prompt was admitted.
+    #[serde(default)]
+    pub session_id: Option<String>,
+    /// The turn that answers it, once the prompt was admitted.
+    #[serde(default)]
+    pub turn_id: Option<String>,
+}
+
+/// What `/api/jobs` answers: the bot's jobs as they are after the request.
+#[derive(Debug, Deserialize)]
+pub(crate) struct JobList {
+    pub items: Vec<ScheduledJob>,
+}
+
+/// The body of `POST /api/jobs` (`SaveScheduledJob`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveJobBody<'a> {
+    pub name: &'a str,
+    pub prompt: &'a str,
+    /// Always written: `null` is how "run once" is said.
+    pub every_minutes: Option<u32>,
+    pub first_run_at: i64,
+}
+
+/// The body of `POST /api/jobs/:id`.
+#[derive(Serialize)]
+pub(crate) struct JobActionBody {
+    pub action: crate::jobs::JobAction,
+}

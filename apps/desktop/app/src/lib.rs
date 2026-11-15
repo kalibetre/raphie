@@ -22,6 +22,7 @@ pub mod avatar;
 pub mod channels;
 pub mod format;
 pub mod icons;
+pub mod jobs;
 pub mod mcp;
 pub mod memory;
 pub mod profile;

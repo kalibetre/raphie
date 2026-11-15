@@ -27,6 +27,8 @@ use crate::contracts::{
     SelectHomeBody, SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
     TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
 };
+use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
+use crate::jobs::{JobAction, NewJob};
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::{KeyChange, MemoryUpdate};
 use crate::origin::Origin;
@@ -395,6 +397,60 @@ impl ApiClient {
         };
         self.post_json(&bot_path(bot_id, "/api/workspace/settings"), &body)
             .await
+    }
+
+    /// A bot's scheduled jobs.
+    pub async fn jobs(&self, bot_id: &str) -> Result<Vec<ScheduledJob>, ApiError> {
+        let list: JobList = self.get_json(&bot_path(bot_id, "/api/jobs")).await?;
+        Ok(list.items)
+    }
+
+    /// Schedules a job and returns the bot's jobs with it.
+    pub async fn add_job(&self, bot_id: &str, job: &NewJob) -> Result<Vec<ScheduledJob>, ApiError> {
+        let body = SaveJobBody {
+            name: &job.name,
+            prompt: &job.prompt,
+            every_minutes: job.every_minutes,
+            first_run_at: job.first_run_at,
+        };
+        let list: JobList = self
+            .post_json(&bot_path(bot_id, "/api/jobs"), &body)
+            .await?;
+        Ok(list.items)
+    }
+
+    /// Resumes, pauses, removes or runs one job and returns the bot's jobs
+    /// as they are afterwards.
+    pub async fn change_job(
+        &self,
+        bot_id: &str,
+        id: &str,
+        action: JobAction,
+    ) -> Result<Vec<ScheduledJob>, ApiError> {
+        let path = format!("/api/jobs/{}", encode(id));
+        let list: JobList = self
+            .post_json(&bot_path(bot_id, &path), &JobActionBody { action })
+            .await?;
+        Ok(list.items)
+    }
+
+    /// One page of a bot's job runs, newest first: every job's, or only
+    /// `job_id`'s. `before` is the cursor the page before it gave.
+    pub async fn job_runs(
+        &self,
+        bot_id: &str,
+        job_id: Option<&str>,
+        before: Option<&str>,
+    ) -> Result<Page<JobRun>, ApiError> {
+        let mut query = Vec::new();
+        if let Some(job_id) = job_id {
+            query.push(format!("jobId={}", encode(job_id)));
+        }
+        if let Some(before) = before {
+            query.push(format!("before={}", encode(before)));
+        }
+        let path = format!("/api/jobs/runs?{}", query.join("&"));
+        self.get_json(&bot_path(bot_id, &path)).await
     }
 
     /// What one folder of a bot's workspace holds.
