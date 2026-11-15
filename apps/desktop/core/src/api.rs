@@ -16,6 +16,7 @@ use serde::de::DeserializeOwned;
 
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::channels::ChannelChange;
+use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile,
     ChannelHomeSettings, ChannelSettings, ControlAction, ControlBody, Decision, DecisionBody,
@@ -30,6 +31,7 @@ use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::{KeyChange, MemoryUpdate};
 use crate::origin::Origin;
 use crate::sandbox::SandboxUpdate;
+use crate::workspace::DOWNLOAD_LIMIT;
 
 /// Ordinary requests give up after this long. Event streams have no overall
 /// timeout (they stay open for as long as the conversation is on screen).
@@ -393,6 +395,45 @@ impl ApiClient {
         };
         self.post_json(&bot_path(bot_id, "/api/workspace/settings"), &body)
             .await
+    }
+
+    /// What one folder of a bot's workspace holds.
+    pub async fn workspace_files(
+        &self,
+        bot_id: &str,
+        path: &str,
+    ) -> Result<WorkspaceListing, ApiError> {
+        let route = format!("/api/workspace/files?path={}", encode(path));
+        self.get_json(&bot_path(bot_id, &route)).await
+    }
+
+    /// The bytes of one workspace file, as it was at `revision`. The
+    /// runtime refuses if the file changed since that listing.
+    pub async fn download_workspace_file(
+        &self,
+        bot_id: &str,
+        path: &str,
+        revision: u64,
+    ) -> Result<Vec<u8>, ApiError> {
+        let route = format!(
+            "/api/workspace/download?path={}&revision={revision}",
+            encode(path)
+        );
+        let request = self.authorized(self.http.get(self.origin.url(&bot_path(bot_id, &route))));
+        let response = send(request).await?;
+        // Refuse early when the server says the file is too large to hold.
+        let too_large = || ApiError::Decode("This file is too large to download here.".into());
+        if response
+            .content_length()
+            .is_some_and(|length| length > DOWNLOAD_LIMIT as u64)
+        {
+            return Err(too_large());
+        }
+        let bytes = response.bytes().await.map_err(network)?;
+        if bytes.len() > DOWNLOAD_LIMIT {
+            return Err(too_large());
+        }
+        Ok(bytes.to_vec())
     }
 
     /// A bot's Discord and Telegram connections.

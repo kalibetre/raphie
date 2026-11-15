@@ -84,7 +84,7 @@ A new feature is placed by asking these questions in order.
 | MCP tools                                  | Yes | Yes     | No      | Setup. OAuth authorization opens the browser.                                   |
 | Channels (Discord, Telegram, home channel) | Yes | Yes     | No      | Setup.                                                                          |
 | Sandbox                                    | Yes | Yes     | No      | Setup, and it decides how commands run.                                         |
-| Workspace files: browse, download          | Yes | Planned | Planned |                                                                                 |
+| Workspace files: browse, download          | Yes | Yes     | Planned |                                                                                 |
 | Scheduled jobs and their run history       | Yes | Planned | Planned |                                                                                 |
 | Diagnostics, telemetry switch              | Yes | Planned | No      |                                                                                 |
 | Activity                                   | Yes | Planned | Planned |                                                                                 |

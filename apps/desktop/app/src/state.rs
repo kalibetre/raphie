@@ -18,6 +18,7 @@ use raphie_core::model::{AuthState, Effect, Event, Model};
 use raphie_core::model_library::ModelFilter;
 use raphie_core::origin::Origin;
 use raphie_core::settings::{Settings, ThemeChoice};
+use raphie_core::workspace::{self, ROOT};
 use rune::{TextEdit, Tx, Waker};
 
 use crate::channels::{DiscordForm, TelegramForm, UNSAVED};
@@ -149,6 +150,10 @@ const HOME_REFRESH: f64 = 5.0;
 /// How often the Sandbox page asks again for its details (the web's
 /// interval): usage and running operations change on their own.
 const SANDBOX_REFRESH: f64 = 5.0;
+
+/// How often the Workspace page asks again for the folder on screen (the
+/// web's interval): the bot may be writing files while the owner looks.
+const FILES_REFRESH: f64 = 5.0;
 const PAIRING_REFRESH: f64 = 2.0;
 
 /// "Browse memory": the search box, and the one memory being changed. The
@@ -237,6 +242,8 @@ pub struct Ui {
     pub memory: MemoryDraft,
     /// Settings → Memory → Browse memory.
     pub memories: MemoriesView,
+    /// The frame clock when the Workspace page last asked for its folder.
+    files_asked_at: f64,
     /// Settings → Sandbox: its form.
     pub sandbox: SandboxDraft,
     /// The frame clock when the Sandbox page last asked for its details.
@@ -299,6 +306,7 @@ impl Ui {
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
             memories: MemoriesView::new(),
+            files_asked_at: 0.0,
             sandbox: SandboxDraft::empty(),
             sandbox_asked_at: 0.0,
             discord: DiscordForm::new(),
@@ -462,6 +470,19 @@ impl Ui {
                 self.model.memory_message = None;
                 // Notice settings saved in another client.
                 self.command(Command::LoadMemory {
+                    bot_id: bot_id.clone(),
+                });
+            }
+            if *section == BotSection::Workspace {
+                // Start at the top each time; the sandbox details say which
+                // provider keeps the files and how full the workspace is.
+                self.model.files = workspace::WorkspaceBrowser::default();
+                self.model.files.open(bot_id, ROOT);
+                self.command(Command::LoadWorkspaceFiles {
+                    bot_id: bot_id.clone(),
+                    path: ROOT.to_owned(),
+                });
+                self.command(Command::LoadSandbox {
                     bot_id: bot_id.clone(),
                 });
             }
@@ -914,6 +935,75 @@ impl Ui {
         }
     }
 
+    /// The bot whose Workspace page is on screen.
+    fn files_bot(&self) -> Option<String> {
+        match &self.screen {
+            Screen::Settings(Page::Bot {
+                bot_id,
+                section: BotSection::Workspace,
+            }) => Some(bot_id.clone()),
+            _ => None,
+        }
+    }
+
+    /// Opens a workspace folder, or asks again for the one on screen.
+    pub fn open_folder(&mut self, path: &str) {
+        let Some(bot_id) = self.files_bot() else {
+            return;
+        };
+        self.model.files.open(&bot_id, path);
+        self.command(Command::LoadWorkspaceFiles {
+            bot_id,
+            path: path.to_owned(),
+        });
+    }
+
+    /// The Refresh button: the folder on screen again, and the sandbox
+    /// details that say how full the workspace is.
+    pub fn refresh_files(&mut self) {
+        let Some(bot_id) = self.files_bot() else {
+            return;
+        };
+        self.model.files.download_error = None;
+        let path = self.model.files.path.clone();
+        self.open_folder(&path);
+        self.command(Command::LoadSandbox { bot_id });
+    }
+
+    /// Saves the workspace file at `path` to this machine's Downloads
+    /// folder, as the listing on screen has it.
+    pub fn download_file(&mut self, path: &str, name: &str) {
+        let (Some(bot_id), Some(listing)) = (self.files_bot(), &self.model.files.listing) else {
+            return;
+        };
+        let revision = listing.revision;
+        if self.model.files.begin_download(path) {
+            self.command(Command::DownloadWorkspaceFile {
+                bot_id,
+                path: path.to_owned(),
+                name: name.to_owned(),
+                revision,
+            });
+        }
+    }
+
+    /// While the Workspace page shows, asks for the folder on screen again
+    /// every few seconds; `clock` is the frame clock in seconds. Returns
+    /// true while the page shows.
+    pub fn watch_files(&mut self, clock: f64) -> bool {
+        let Some(bot_id) = self.files_bot() else {
+            return false;
+        };
+        // Not while one is already on its way.
+        if clock - self.files_asked_at >= FILES_REFRESH && !self.model.files.loading {
+            self.files_asked_at = clock;
+            let path = self.model.files.path.clone();
+            self.model.files.open(&bot_id, &path);
+            self.command(Command::LoadWorkspaceFiles { bot_id, path });
+        }
+        true
+    }
+
     /// Puts `bot_id`'s sandbox settings in the form. Unsaved edits for the
     /// same bot stay; edits for another bot are dropped.
     fn show_sandbox(&mut self, bot_id: &str) {
@@ -1357,7 +1447,11 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         tx.wake_after(Duration::from_millis(300));
     }
     // `|` rather than `||`: both pages get their look at the clock.
-    if ui.refresh_mcp(clock) | ui.refresh_channels(clock) | ui.refresh_sandbox(clock) {
+    let watching = ui.refresh_mcp(clock)
+        | ui.refresh_channels(clock)
+        | ui.refresh_sandbox(clock)
+        | ui.watch_files(clock);
+    if watching {
         tx.wake_after(Duration::from_secs(1));
     }
     // While Raphie works, wake up every second so "12s elapsed" keeps

@@ -33,3 +33,4 @@ pub mod projections;
 pub mod sandbox;
 pub mod settings;
 pub mod sse;
+pub mod workspace;

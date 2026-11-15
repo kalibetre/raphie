@@ -640,20 +640,20 @@ fn a_bots_page_names_the_bot_and_offers_the_web_page() {
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
     assert!(
-        text.contains("The files Research keeps between conversations."),
+        text.contains("Give Research reminders and recurring work"),
         "{text}"
     );
     click(&mut rt, "rd-bot-page-web");
     assert_eq!(
         rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=workspace&bot=b-research"]
+        ["https://raphie.example.ts.net/?view=settings&section=jobs&bot=b-research"]
     );
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-workspace").is_none());
+    assert!(rt.find("rd-nav-b-research-jobs").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("Workspace")
+        Some("Scheduled jobs")
     );
 }
 
@@ -1340,6 +1340,166 @@ fn the_sandbox_page_asks_again_every_few_seconds_while_it_shows() {
         assert!(!ui.refresh_sandbox(200.0));
     });
     assert_eq!(loads(&rt), opened + 2);
+}
+
+#[test]
+fn workspace_folders_open_and_lead_back_up() {
+    let mut rt = render_sized(scenes::settings_sandbox, false, (1280.0, 1400.0));
+    click(&mut rt, "rd-nav-default-workspace");
+    assert!(rt.state.sent.contains(&Command::LoadWorkspaceFiles {
+        bot_id: "default".into(),
+        path: "/workspace".into(),
+    }));
+    assert!(rt.find("rd-files-loading").is_some());
+    assert!(rt.find("rd-files-up").is_some());
+    deliver(
+        &mut rt,
+        Event::WorkspaceFiles {
+            bot_id: "default".into(),
+            listing: scenes::workspace_listing(false),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-files-summary").text.as_deref(),
+        Some("4 items · Checkpoint 41 · 18.0 MiB of 100.0 MiB")
+    );
+    let text = screen_text(&rt);
+    for expected in [
+        "Folder · ",
+        "1.2 KiB · ",
+        "Symbolic link · not followed · ",
+        "2.3 MiB · ",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+    // Only files can be downloaded.
+    assert!(rt.find("rd-file-/workspace/README.md-download").is_some());
+    assert!(rt.find("rd-file-/workspace/reports-download").is_none());
+    assert!(rt.find("rd-file-/workspace/latest-download").is_none());
+
+    // A folder's name opens it; the list empties until its files arrive.
+    click(&mut rt, "rd-file-/workspace/reports");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadWorkspaceFiles {
+            bot_id: "default".into(),
+            path: "/workspace/reports".into(),
+        })
+    );
+    assert_eq!(
+        element(&rt, "rd-files-path").text.as_deref(),
+        Some("/workspace/reports")
+    );
+    assert!(rt.find("rd-files-loading").is_some());
+    // A late answer for the folder the owner left is dropped.
+    deliver(
+        &mut rt,
+        Event::WorkspaceFiles {
+            bot_id: "default".into(),
+            listing: scenes::workspace_listing(false),
+        },
+    );
+    assert!(rt.find("rd-files-loading").is_some());
+    deliver(
+        &mut rt,
+        Event::WorkspaceFiles {
+            bot_id: "default".into(),
+            listing: scenes::workspace_listing(true),
+        },
+    );
+    assert!(screen_text(&rt).contains("q3-summary.csv"));
+
+    // Up, by the arrow or by the first crumb.
+    click(&mut rt, "rd-files-up");
+    assert_eq!(rt.state.model.files.path, "/workspace");
+    click(&mut rt, "rd-files-sandbox");
+    assert_eq!(
+        element(&rt, "rd-settings-page-name").text.as_deref(),
+        Some("Sandbox")
+    );
+}
+
+#[test]
+fn a_workspace_file_downloads_once_at_a_time_and_says_where_it_went() {
+    let mut rt = render_sized(scenes::settings_workspace, false, (1280.0, 1400.0));
+    click(&mut rt, "rd-file-/workspace/README.md-download");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::DownloadWorkspaceFile {
+            bot_id: "default".into(),
+            path: "/workspace/README.md".into(),
+            name: "README.md".into(),
+            revision: 41,
+        })
+    );
+    assert!(rt.find("rd-files-downloading").is_some());
+    // The other files wait for this one.
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-file-/workspace/plan-2027.xlsx-download");
+    assert_eq!(rt.state.sent.len(), before);
+
+    deliver(
+        &mut rt,
+        Event::FileDownloaded {
+            saved_as: "README (1).md".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-files-saved").text.as_deref(),
+        Some("Saved to your Downloads folder as README (1).md.")
+    );
+    click(&mut rt, "rd-file-/workspace/plan-2027.xlsx-download");
+    deliver(
+        &mut rt,
+        Event::FileDownloadFailed {
+            message: "The workspace changed. Refresh and try again.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-files-download-error").text.as_deref(),
+        Some("The workspace changed. Refresh and try again.")
+    );
+    assert!(rt.find("rd-files-saved").is_none());
+
+    // Refresh asks for the folder and the sandbox details again.
+    click(&mut rt, "rd-files-refresh");
+    assert!(rt.find("rd-files-download-error").is_none());
+    let tail = &rt.state.sent[rt.state.sent.len() - 2..];
+    assert!(matches!(tail[0], Command::LoadWorkspaceFiles { .. }));
+    assert!(matches!(tail[1], Command::LoadSandbox { .. }));
+}
+
+#[test]
+fn a_failed_listing_keeps_the_files_but_stops_downloads() {
+    let mut rt = render_sized(scenes::settings_workspace, false, (1280.0, 1400.0));
+    deliver(
+        &mut rt,
+        Event::WorkspaceFilesFailed {
+            bot_id: "default".into(),
+            path: "/workspace".into(),
+            message: "Could not reach Raphie.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-files-error").text.as_deref(),
+        Some("Could not reach Raphie. Use Refresh to retry or open a parent folder.")
+    );
+    assert!(screen_text(&rt).contains("README.md"));
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-file-/workspace/README.md-download");
+    assert_eq!(rt.state.sent.len(), before, "the listing may be stale");
+
+    // The page asks again by itself every few seconds while it shows.
+    rt.update(|ui, _| {
+        ui.model.files.loading = false;
+        assert!(ui.watch_files(100.0));
+        ui.watch_files(102.0);
+    });
+    assert_eq!(rt.state.sent.len(), before + 1);
+    rt.update(|ui, _| {
+        ui.open_settings(Some(Page::Account));
+        assert!(!ui.watch_files(200.0));
+    });
 }
 
 fn changes(rt: &Runtime<Ui>) -> Vec<&ChannelChange> {

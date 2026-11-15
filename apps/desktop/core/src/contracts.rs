@@ -923,3 +923,36 @@ pub(crate) struct SaveSandboxBody {
     pub disk_quota_mib: Option<u64>,
     pub revision: u64,
 }
+
+/// What a workspace entry is.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkspaceKind {
+    File,
+    Directory,
+    /// A symbolic link. The runtime does not follow it.
+    Symlink,
+}
+
+/// `WorkspaceEntry` in `packages/contracts/src/workspaces/views.ts`: one
+/// file, folder or link in a bot's workspace.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntry {
+    /// Where it is, from `/workspace` down.
+    pub path: String,
+    pub name: String,
+    pub kind: WorkspaceKind,
+    pub bytes: u64,
+    /// When it last changed, in milliseconds since the Unix epoch.
+    pub modified_at: i64,
+}
+
+/// `WorkspaceListing`: what one folder holds. A download names the
+/// `revision` it saw, so the runtime can refuse a file that changed since.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct WorkspaceListing {
+    pub path: String,
+    pub revision: u64,
+    pub items: Vec<WorkspaceEntry>,
+}

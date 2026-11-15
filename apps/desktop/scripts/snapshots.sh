@@ -18,7 +18,8 @@ for scene in sign-in device-code new-conversation conversations conversation too
   settings-memory settings-memory-hindsight settings-memories settings-memories-editing \
   settings-mcp settings-mcp-command \
   settings-channels settings-channels-discord settings-channels-telegram \
-  settings-sandbox settings-sandbox-container settings-bot; do
+  settings-sandbox settings-sandbox-container \
+  settings-workspace settings-workspace-folder settings-bot; do
   for theme in light dark; do
     "$bin" --snap "$out/$scene-$theme.png" --scene "$scene" --theme "$theme" \
       --size 1280x800 --scale 2 --at 1.5 --chrome
