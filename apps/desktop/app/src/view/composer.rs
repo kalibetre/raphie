@@ -2,9 +2,8 @@
 //! becomes Stop while Raphie works.
 //!
 //! Mirrors `apps/web/src/domains/conversations/presentation/composer.tsx`
-//! and the `.composer` rules in `chat.css`. The web's model and permission
-//! controls are not here because this app does not have those features
-//! yet.
+//! and the `.composer` rules in `chat.css`. The web's permission control
+//! is not here because this app does not have that feature yet.
 //!
 //! Files join a message three ways: the paperclip (the system's file
 //! picker, one file at a time), dragging them onto the conversation, or
@@ -16,12 +15,13 @@ use rune::{ClipboardContent, El, Tx, auto_grow, col, icon, row, text, text_input
 use super::Look;
 use super::attachments::{Action, file_card};
 use super::conversation::READING_WIDTH;
+use super::model_picker::model_picker;
 use crate::icons;
 use crate::state::Ui;
 use crate::theme::font;
 use crate::widgets::{centered, icon_button, pressable};
 
-pub fn composer(s: &Ui, look: &Look) -> El {
+pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
     let empty = s.composer.text.trim().is_empty();
     // A run is going in this conversation, so it can be stopped.
@@ -157,7 +157,17 @@ pub fn composer(s: &Ui, look: &Look) -> El {
                 .center_y()
                 // The paperclip sits 6 left of the text's edge so its
                 // glyph, not its hover square, lines up with the text.
-                .child(attach.ml(-6.0))
+                .child(
+                    row()
+                        .gap(6.0)
+                        .center_y()
+                        .min_w(0.0)
+                        .shrink()
+                        .child(attach.ml(-6.0))
+                        // The model cannot change while Raphie works or a
+                        // message is on its way.
+                        .child(model_picker(s, !busy && !locked, look, overlays)),
+                )
                 .child(actions),
         )
         // A press anywhere on the card puts the caret in the text.

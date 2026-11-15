@@ -23,6 +23,7 @@ mod attachments;
 mod composer;
 mod conversation;
 mod header;
+mod model_picker;
 mod panel;
 mod roster;
 mod settings;
@@ -78,7 +79,7 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
     let mut overlays: Vec<El> = Vec::new();
     let base = match &s.model.auth {
         AuthState::SignedIn => match &s.screen {
-            Screen::Workspace => workspace(s, &look),
+            Screen::Workspace => workspace(s, &look, &mut overlays),
             Screen::Settings(page) => settings::settings(s, page, &look, &mut overlays),
         },
         _ => sign_in::sign_in(s, &look),
@@ -86,7 +87,7 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
     rune_kit::root(base, overlays)
 }
 
-fn workspace(s: &Ui, look: &Look) -> El {
+fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
     let mut main = col()
         .key("rd-main")
@@ -108,7 +109,7 @@ fn workspace(s: &Ui, look: &Look) -> El {
         Some(conversation) => main.child(conversation::conversation(s, conversation, look)),
         None => main.child(welcome::welcome(s, look)),
     };
-    main = main.child(composer::composer(s, look));
+    main = main.child(composer::composer(s, look, overlays));
 
     let mut shell = row()
         .key("rd-workspace")

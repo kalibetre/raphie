@@ -63,6 +63,13 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   alone can be sent without text. A sent message shows its files, and the
   download button on each saves it to this machine's Downloads folder,
   never replacing a file that is already there.
+- **Model**: the button beside the paperclip names the model the next
+  message will be answered with, and opens a list of the bot's models to
+  choose another: search by name, id or connection, and star models to keep
+  them under Favorites. For an open conversation the choice is saved on the
+  host at once; for a new one it goes with the first message. Without a
+  choice, a conversation uses the bot's default for new sessions. Stars are
+  kept on this computer. The model cannot be changed while Raphie works.
 - **Approvals**: pending actions show their server, tool and exact arguments,
   when they expire, and **Reject** and **Approve once**; command approvals
   also offer **Approve for session**. A decision that arrives after the
@@ -245,7 +252,7 @@ apps/desktop/
     src/model_library.rs  grouping, filtering and labelling models
     src/engine.rs         Tokio runtime: sign-in, streams, commands → events
     src/attachments.rs    the files waiting in the composer and their limits
-    src/settings.rs       last origin (non-secret)
+    src/settings.rs       last origin, appearance, starred models (non-secret)
     tests/                fake web host (axum) and engine/model tests
     examples/live.rs      live check against a running web host
   app/                    raphie-desktop: the Rune UI
@@ -263,6 +270,7 @@ apps/desktop/
       steps.rs              a run's tool steps and the approval bar
       composer.rs           the message box
       attachments.rs        one attached file as a card
+      model_picker.rs       the composer's model button and its list
       welcome.rs            a new conversation
       settings/             Settings: shell, navigation, page parts,
                             Account, Appearance, bot pages
@@ -346,8 +354,11 @@ render with `scripts/snapshots.sh` and put the PNGs beside the web workspace at
 Where the two differ on purpose:
 
 - Controls for features this app lacks are left out rather than shown dead:
-  the model picker, command-permission mode, usage, notifications and the
-  "New replies" filter (there is no read tracking).
+  command-permission mode, usage, notifications and the "New replies"
+  filter (there is no read tracking).
+- The model picker has no "model family" drop-down; typing the family
+  ("anthropic") in its search finds the same models. The Up and Down keys
+  do not move between its rows as they do on the web.
 - Attachments: the paperclip picks one file at a time (the web's picker
   takes several); drag several onto the conversation instead. Cards in the
   composer wrap onto new rows where the web scrolls them sideways. An image
@@ -398,8 +409,8 @@ current.
 - Built and checked on macOS (Apple silicon). The code builds for Windows and
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
-- No model picker, command-permission mode, grant list, notifications or
-  unread markers. Use the web workspace for those.
+- No command-permission mode, grant list, notifications or unread markers.
+  Use the web workspace for those.
 - Image attachments have no picture preview yet.
 - Tool steps come from the session's latest 200 journal entries, as on the
   web: turns older than that show their reply without steps or usage.

@@ -15,6 +15,7 @@ use raphie_core::contracts::{JobRun, ScheduledJob};
 use raphie_core::engine::Command;
 use raphie_core::mcp::McpTransport;
 use raphie_core::model::{AuthState, Event};
+use raphie_core::model_library::PickerFilter;
 use raphie_core::origin::Origin;
 use rune::TextEdit;
 use serde_json::{Value, json};
@@ -34,6 +35,8 @@ pub const SCENES: &[Scene] = &[
     ("conversations", conversations),
     ("conversation", conversation),
     ("attachments", attachments),
+    ("model-picker", model_picker),
+    ("model-picker-favorites", model_picker_favorites),
     ("tools", tools),
     ("streaming", streaming),
     ("working", working),
@@ -1130,6 +1133,23 @@ pub fn conversation(ui: &mut Ui) {
             finished_activity(),
         ),
     );
+}
+
+/// The conversation with the composer's model picker open.
+pub fn model_picker(ui: &mut Ui) {
+    conversation(ui);
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(model_settings()),
+    });
+    ui.favorites = vec!["c-router:openai/gpt-next".into()];
+    ui.open_model_picker();
+}
+
+/// The picker showing only the starred models.
+pub fn model_picker_favorites(ui: &mut Ui) {
+    model_picker(ui);
+    ui.model_picker.filter = PickerFilter::Favorites;
 }
 
 /// A message sent with two files, and two more waiting in the composer.
