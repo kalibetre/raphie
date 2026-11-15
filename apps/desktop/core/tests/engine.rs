@@ -12,6 +12,7 @@ use raphie_core::contracts::{
     UpdateBotProfile, WorkspaceKind,
 };
 use raphie_core::engine::{Command, ConnectionChange, EngineConfig};
+use raphie_core::jobs::{JobAction, NewJob, job_badge, job_interval, run_description};
 use raphie_core::mcp::{McpAction, NewMcpConnection, summary};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
@@ -598,6 +599,108 @@ fn memory_settings_load_save_and_test() {
     host.with(|h| h.memory_unreachable = true);
     let said = test(&mut driver);
     assert!(said.contains("did not answer"), "{said}");
+}
+
+#[test]
+fn jobs_are_scheduled_run_paused_and_their_runs_paged() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    let bot_id = || "default".to_owned();
+    driver.send(Command::LoadJobs { bot_id: bot_id() });
+    driver.until("the jobs", |m, _| m.jobs.contains_key("default"));
+    assert!(driver.model.jobs["default"].is_empty());
+
+    let add = |driver: &mut Driver, job: NewJob| {
+        assert!(driver.model.begin_change_job());
+        driver.send(Command::AddJob {
+            bot_id: "default".into(),
+            job,
+        });
+        driver.until("the add", |m, _| !m.changing_job);
+    };
+    let job = |name: &str, every_minutes: Option<u32>, first_run_at: i64| NewJob {
+        name: name.into(),
+        prompt: "Summarise the open tasks.".into(),
+        every_minutes,
+        first_run_at,
+    };
+    // What the runtime refuses is reported and schedules nothing.
+    add(&mut driver, job("Past", Some(60), 5));
+    let error = driver.model.job_error.clone().unwrap_or_default();
+    assert!(error.contains("in the future"), "{error}");
+    assert!(driver.model.jobs["default"].is_empty());
+
+    add(
+        &mut driver,
+        job("Morning brief", Some(60), 1_800_000_000_000),
+    );
+    add(&mut driver, job("Reminder", None, 1_800_000_000_000));
+    let jobs = driver.model.jobs["default"].clone();
+    assert_eq!(job_interval(&jobs[0]), "Every 60 minutes");
+    assert_eq!(job_interval(&jobs[1]), "One-time reminder");
+    assert_eq!(job_badge(&jobs[0]), "Active");
+    let said = driver.model.job_message.clone().unwrap_or_default();
+    assert!(said.starts_with("Job scheduled."), "{said}");
+    // "Run once" is sent as null, not left out.
+    host.with(|h| {
+        let once = h.job_adds.last().unwrap();
+        assert!(
+            once.get("everyMinutes")
+                .is_some_and(serde_json::Value::is_null)
+        );
+    });
+
+    let change = |driver: &mut Driver, id: &str, action: JobAction| {
+        assert!(driver.model.begin_change_job());
+        driver.send(Command::ChangeJob {
+            bot_id: "default".into(),
+            id: id.into(),
+            action,
+        });
+        driver.until("the change", |m, _| !m.changing_job);
+    };
+    change(&mut driver, "job-1", JobAction::Disable);
+    assert_eq!(job_badge(&driver.model.jobs["default"][0]), "Paused");
+    assert_eq!(driver.model.job_message, None, "pausing says nothing");
+    // Three runs of the first job and one of the second.
+    for id in ["job-1", "job-1", "job-2", "job-1"] {
+        change(&mut driver, id, JobAction::Run);
+    }
+    let said = driver.model.job_message.clone().unwrap_or_default();
+    assert!(said.starts_with("Run queued."), "{said}");
+
+    let load = |driver: &mut Driver, job_id: Option<&str>, before: Option<String>| {
+        let older = before.is_some();
+        let ticket = driver.model.runs.begin_load(older);
+        driver.send(Command::LoadJobRuns {
+            bot_id: "default".into(),
+            job_id: job_id.map(str::to_owned),
+            before,
+            ticket,
+        });
+        driver.until("the runs", |m, _| !m.runs.loading && !m.runs.loading_older);
+    };
+    let ids = |driver: &Driver| -> Vec<String> {
+        let runs = driver.model.runs.runs.clone().unwrap_or_default();
+        runs.into_iter().map(|run| run.id).collect()
+    };
+    // Every job's runs, newest first, then the page after the cursor.
+    load(&mut driver, None, None);
+    assert_eq!(ids(&driver), ["run-4", "run-3"]);
+    let before = driver.model.runs.next.clone();
+    load(&mut driver, None, before);
+    assert_eq!(ids(&driver), ["run-4", "run-3", "run-2", "run-1"]);
+    assert_eq!(driver.model.runs.next, None);
+
+    // One job's runs only.
+    driver.model.runs.show(Some("job-2".into()));
+    load(&mut driver, Some("job-2"), None);
+    assert_eq!(ids(&driver), ["run-3"]);
+    let run = driver.model.runs.runs.clone().unwrap()[0].clone();
+    assert_eq!(run_description(&run), "Waiting for prompt admission.");
+
+    change(&mut driver, "job-2", JobAction::Remove);
+    assert_eq!(driver.model.jobs["default"].len(), 1);
 }
 
 #[test]
