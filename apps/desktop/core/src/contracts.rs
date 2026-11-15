@@ -198,6 +198,16 @@ pub enum Channel {
     Unknown,
 }
 
+/// `ModelSelection` in `packages/contracts/src/index.ts`: one model, and
+/// which of the bot's connections runs it.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelSelection {
+    /// A connection's id (the web calls it the provider instance).
+    pub provider: String,
+    pub model_id: String,
+}
+
 /// `SessionSummary` in `packages/contracts/src/sessions/views.ts`.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -215,6 +225,9 @@ pub struct SessionSummary {
     pub turn_count: u32,
     #[serde(default)]
     pub reply_preview: Option<String>,
+    /// The model chosen for this session; `None` uses the bot's default.
+    #[serde(default)]
+    pub model: Option<ModelSelection>,
 }
 
 /// `Turn["status"]` in `packages/contracts/src/index.ts`.
@@ -436,6 +449,10 @@ pub struct SubmitMessage {
     /// Ids of uploaded files to send with the text, at most four.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<String>,
+    /// The model for a new session. The runtime ignores it for a session
+    /// that exists; that one is changed with its own route.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelSelection>,
 }
 
 /// The runtime's receipt for an admitted message. Admission, not completion.

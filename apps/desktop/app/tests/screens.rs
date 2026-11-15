@@ -7,8 +7,8 @@ use raphie_core::attachments::{TOO_MANY, Upload};
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome};
 use raphie_core::contracts::{
-    BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, SandboxProvider, Scope,
-    TelegramPairingCode,
+    BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, ModelSelection,
+    SandboxProvider, Scope, TelegramPairingCode,
 };
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::jobs::JobAction;
@@ -1447,6 +1447,7 @@ fn the_composer_sends_what_was_typed() {
         Some(&Command::Send {
             text: "Thanks!".into(),
             attachments: Vec::new(),
+            model: None,
         })
     );
     assert!(rt.state.model.sending, "the button waits for the receipt");
@@ -3081,6 +3082,7 @@ fn files_wait_in_the_composer_and_go_with_the_message() {
         Some(&Command::Send {
             text: String::new(),
             attachments: vec![d.clone()],
+            model: None,
         })
     );
     // The file stays until the runtime admits the message, then leaves.
@@ -3219,4 +3221,147 @@ fn a_messages_file_is_saved_from_its_card() {
     });
     settle(&mut rt);
     assert!(screen_text(&rt).contains("Saved to your Downloads folder as floor-plan.png."));
+}
+
+#[test]
+fn the_model_picker_changes_an_open_conversations_model() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::conversation, dark);
+        deliver(
+            &mut rt,
+            Event::BotSettings {
+                bot_id: "default".into(),
+                settings: Box::new(scenes::model_settings()),
+            },
+        );
+        // The button names the bot's default until the session has its own.
+        assert_eq!(
+            element(&rt, "rd-model").label.as_deref(),
+            Some("Choose model: Claude Fable Latest")
+        );
+        assert!(rt.find("rd-model-picker").is_none());
+        click(&mut rt, "rd-model");
+        assert_eq!(element(&rt, "rd-model-count").text.as_deref(), Some("5"));
+        let shown = screen_text(&rt);
+        assert!(shown.contains("Personal · claude-fable · $10 / $50 per M · New-session default"));
+        assert!(shown.contains("Work · openai/gpt-next · $2.5 / $0.075 per M"));
+        assert!(shown.contains("Via Personal"));
+
+        // Typing narrows the list: the caret is already in the search.
+        rt.paste("opus");
+        settle(&mut rt);
+        assert_eq!(element(&rt, "rd-model-count").text.as_deref(), Some("1"));
+        click(&mut rt, "rd-model-choice-c-router:anthropic/claude-opus");
+        let chosen = ModelSelection {
+            provider: "c-router".into(),
+            model_id: "anthropic/claude-opus".into(),
+        };
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::ChooseModel {
+                session_id: "s-1".into(),
+                model: chosen.clone(),
+            })
+        );
+        // The list stays, saying it is saving, until the host agrees.
+        assert!(screen_text(&rt).contains("Saving…"));
+        deliver(
+            &mut rt,
+            Event::ModelChosen {
+                session_id: "s-1".into(),
+                model: chosen,
+            },
+        );
+        assert!(rt.find("rd-model-picker").is_none());
+        assert_eq!(
+            element(&rt, "rd-model").label.as_deref(),
+            Some("Choose model: Anthropic: Claude Opus")
+        );
+    }
+}
+
+#[test]
+fn a_refused_model_says_why_and_pressing_outside_closes_the_picker() {
+    let mut rt = render(scenes::model_picker, false);
+    click(&mut rt, "rd-model-choice-c-direct:claude-haiku");
+    deliver(
+        &mut rt,
+        Event::ModelChoiceFailed {
+            message: "That model is not available.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-model-error").text.as_deref(),
+        Some("That model is not available.")
+    );
+    assert!(rt.find("rd-model-picker").is_some());
+    // A press on the page, away from the list (which covers the middle).
+    rt.pointer_down(1200.0, 120.0);
+    rt.pointer_up(1200.0, 120.0);
+    settle(&mut rt);
+    assert!(rt.find("rd-model-picker").is_none());
+}
+
+#[test]
+fn a_new_conversation_starts_with_the_model_picked_for_it() {
+    let mut rt = render(scenes::new_conversation, false);
+    deliver(
+        &mut rt,
+        Event::BotSettings {
+            bot_id: "default".into(),
+            settings: Box::new(scenes::model_settings()),
+        },
+    );
+    click(&mut rt, "rd-model");
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-model-choice-c-direct:claude-haiku");
+    // Nothing is sent to the host yet: there is no session to change.
+    assert_eq!(rt.state.sent.len(), before);
+    assert!(rt.find("rd-model-picker").is_none());
+    assert_eq!(
+        element(&rt, "rd-model").label.as_deref(),
+        Some("Choose model: Claude Haiku Latest")
+    );
+    click(&mut rt, "rd-composer");
+    rt.paste("Hello");
+    settle(&mut rt);
+    click(&mut rt, "rd-send");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Send {
+            text: "Hello".into(),
+            attachments: Vec::new(),
+            model: Some(ModelSelection {
+                provider: "c-direct".into(),
+                model_id: "claude-haiku".into(),
+            }),
+        })
+    );
+}
+
+#[test]
+fn starred_models_are_listed_under_favorites() {
+    let mut rt = render(scenes::model_picker, false);
+    click(&mut rt, "rd-model-favorites");
+    assert_eq!(element(&rt, "rd-model-count").text.as_deref(), Some("1"));
+    assert!(screen_text(&rt).contains("OpenAI: GPT Next"));
+    // Unstarring the only favourite empties the list and says how to fill it.
+    click(&mut rt, "rd-model-star-c-router:openai/gpt-next");
+    assert_eq!(
+        element(&rt, "rd-model-empty").text.as_deref(),
+        Some("Star a model to keep it here.")
+    );
+    click(&mut rt, "rd-model-all");
+    click(&mut rt, "rd-model-star-c-direct:claude-haiku");
+    assert_eq!(rt.state.favorites, ["c-direct:claude-haiku"]);
+
+    // "Manage connection" leaves for the bot's Providers page.
+    click(&mut rt, "rd-model-manage");
+    assert!(matches!(
+        &rt.state.screen,
+        Screen::Settings(Page::Bot {
+            section: BotSection::Providers,
+            ..
+        })
+    ));
 }

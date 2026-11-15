@@ -16,6 +16,11 @@ pub struct Settings {
     /// settings files written before this field existed still load.
     #[serde(default)]
     pub theme: ThemeChoice,
+    /// Models starred in the composer's picker, as
+    /// [`crate::model_library::favorite_key`]s. Kept on this computer, as
+    /// the web keeps its own in the browser.
+    #[serde(default)]
+    pub model_favorites: Vec<String>,
 }
 
 /// The appearance chosen in Settings → Appearance.
@@ -69,6 +74,7 @@ mod tests {
         let settings = Settings {
             origin: Some("http://127.0.0.1:4321".into()),
             theme: ThemeChoice::Dark,
+            model_favorites: vec!["openrouter-1:anthropic/claude".into()],
         };
         settings.save(&path).unwrap();
         assert_eq!(Settings::load(&path), settings);

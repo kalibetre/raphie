@@ -151,14 +151,15 @@ Delivered capabilities and remaining work are labelled below. See the
   conversations with history paging and streamed replies, each run's tool
   steps, time and usage, sending, Stop and steer, and approve/reject (once, or
   for the session for commands) with stale decisions reported, and attachments
-  (file picker, drag and drop, paste; download from a sent message). It follows the
+  (file picker, drag and drop, paste; download from a sent message), and
+  choosing the model for a conversation. It follows the
   web workspace's design, and light and dark follow the OS or the
   choice in Settings. Settings open in the app with native Account,
   Appearance, bot Profile (with revision history, creating and deleting a bot), Providers, Models and Memory settings pages, and Browse memory (list, search, correct,
   forget), MCP tools, Channels, Sandbox, Workspace files, Scheduled jobs, Diagnostics and Activity: every bot
   settings page is native.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
-- **Desktop — planned:** image previews on attachments, model and command-permission controls,
+- **Desktop — planned:** image previews on attachments, command-permission controls,
   unread markers and notifications, packaging/signing
   and updates, Windows and Linux
   verification, generated contract types, and local runtime packaging,

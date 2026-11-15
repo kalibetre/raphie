@@ -5,7 +5,7 @@
 //! (`modelSource`, `filterModels`) and the number formats in
 //! `presentation/model-card.tsx`. The tests pin that code's output.
 
-use crate::contracts::LibraryModel;
+use crate::contracts::{LibraryModel, ModelSelection};
 use crate::projections::to_fixed;
 
 /// Who made a model, as the catalogue groups them: `id` for comparing,
@@ -90,6 +90,113 @@ pub fn filter_models<'a>(
                     .contains(&query)
         })
         .collect()
+}
+
+/// Which models the composer's picker lists.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PickerFilter {
+    #[default]
+    All,
+    /// Only the starred ones.
+    Favorites,
+}
+
+/// The most favourites kept, as on the web.
+pub const MAX_FAVORITES: usize = 200;
+
+/// How a starred model is remembered: its connection and its id, since
+/// the same model can be reached through two connections.
+pub fn favorite_key(model: &LibraryModel) -> String {
+    format!("{}:{}", model.connection_id, model.id)
+}
+
+/// Stars or unstars `key`. Past [`MAX_FAVORITES`] the oldest is dropped.
+pub fn toggle_favorite(favorites: &mut Vec<String>, key: &str) {
+    if let Some(index) = favorites.iter().position(|kept| kept == key) {
+        favorites.remove(index);
+    } else {
+        favorites.push(key.to_owned());
+        if favorites.len() > MAX_FAVORITES {
+            favorites.remove(0);
+        }
+    }
+}
+
+/// The models the picker lists for what was typed and the filter chosen,
+/// in the catalogue's order. Mirrors the web's `modelCatalog`: the search
+/// reads the name, the id and the connection's name, whatever the case.
+pub fn pick_models<'a>(
+    models: &'a [LibraryModel],
+    search: &str,
+    filter: PickerFilter,
+    favorites: &[String],
+) -> Vec<&'a LibraryModel> {
+    let query = search.trim().to_lowercase();
+    models
+        .iter()
+        .filter(|model| {
+            let listed = match filter {
+                PickerFilter::All => true,
+                PickerFilter::Favorites => favorites.contains(&favorite_key(model)),
+            };
+            listed
+                && format!("{} {} {}", model.name, model.id, model.connection_name)
+                    .to_lowercase()
+                    .contains(&query)
+        })
+        .collect()
+}
+
+/// The catalogue's entry for a selection, if the model is still offered.
+pub fn selected<'a>(
+    models: &'a [LibraryModel],
+    selection: &ModelSelection,
+) -> Option<&'a LibraryModel> {
+    models
+        .iter()
+        .find(|model| model.id == selection.model_id && model.connection_id == selection.provider)
+}
+
+/// What the picker's button calls a selection: the model's name, or the
+/// last part of its id when the catalogue no longer has it, or an
+/// invitation when nothing is selected.
+pub fn selection_name(models: &[LibraryModel], selection: Option<&ModelSelection>) -> String {
+    let Some(selection) = selection else {
+        return "Choose model".to_owned();
+    };
+    match selected(models, selection) {
+        Some(model) => model.name.clone(),
+        // "anthropic/claude-x" reads as "claude-x".
+        None => selection
+            .model_id
+            .rsplit('/')
+            .next()
+            .unwrap_or(&selection.model_id)
+            .to_owned(),
+    }
+}
+
+/// A price to two significant digits, as the picker shows it: "$3",
+/// "$0.25", "$0.075", "$15". Mirrors `Number(usd.toPrecision(2))`.
+pub fn short_price(usd: f64) -> String {
+    if usd <= 0.0 || !usd.is_finite() {
+        return "$0".to_owned();
+    }
+    // How many digits sit before the decimal point: 15.0 has 2, 0.075
+    // has -1. Two significant digits then need `2 - digits` decimals.
+    #[allow(clippy::cast_possible_truncation)]
+    let digits = usd.log10().floor() as i32 + 1;
+    let decimals = usize::try_from((2 - digits).max(0)).unwrap_or(0);
+    let scale = 10_f64.powi(2 - digits);
+    let rounded = (usd * scale).round() / scale;
+    let fixed = format!("{rounded:.decimals$}");
+    // "0.250" reads as "0.25", "3.0" as "3".
+    let trimmed = if fixed.contains('.') {
+        fixed.trim_end_matches('0').trim_end_matches('.')
+    } else {
+        fixed.as_str()
+    };
+    format!("${trimmed}")
 }
 
 /// Every maker among `models`, once each, sorted by label.
@@ -320,5 +427,69 @@ mod tests {
             "$2.50",
         ];
         assert_eq!(prices.map(price), expected);
+    }
+
+    #[test]
+    fn the_picker_searches_names_ids_and_connections_and_lists_favourites() {
+        let models = catalogue();
+        let names = |found: Vec<&LibraryModel>| -> Vec<String> {
+            found.iter().map(|model| model.name.clone()).collect()
+        };
+        let all = pick_models(&models, "  LLAMA ", PickerFilter::All, &[]);
+        assert_eq!(names(all), ["Llama 9"]);
+        // Every model here runs through the connection named "Main".
+        let by_connection = pick_models(&models, "main", PickerFilter::All, &[]);
+        assert_eq!(by_connection.len(), models.len());
+
+        let mut favorites = Vec::new();
+        toggle_favorite(&mut favorites, &favorite_key(&models[2]));
+        assert_eq!(favorites, ["c1:openai/gpt-x"]);
+        let starred = pick_models(&models, "", PickerFilter::Favorites, &favorites);
+        assert_eq!(names(starred), ["GPT X"]);
+        // The search narrows the favourites too.
+        assert!(pick_models(&models, "llama", PickerFilter::Favorites, &favorites).is_empty());
+        toggle_favorite(&mut favorites, "c1:openai/gpt-x");
+        assert!(favorites.is_empty());
+    }
+
+    #[test]
+    fn favourites_keep_the_newest_two_hundred() {
+        let mut favorites = Vec::new();
+        for index in 0..=MAX_FAVORITES {
+            toggle_favorite(&mut favorites, &format!("c1:model-{index}"));
+        }
+        assert_eq!(favorites.len(), MAX_FAVORITES);
+        assert_eq!(favorites[0], "c1:model-1");
+    }
+
+    #[test]
+    fn a_selection_is_named_by_the_catalogue_or_by_its_id() {
+        let models = catalogue();
+        let pick = |provider: &str, model_id: &str| ModelSelection {
+            provider: provider.into(),
+            model_id: model_id.into(),
+        };
+        assert_eq!(
+            selection_name(&models, Some(&pick("c1", "openai/gpt-x"))),
+            "GPT X"
+        );
+        // The same id through another connection is not this model.
+        assert_eq!(
+            selection_name(&models, Some(&pick("c2", "openai/gpt-x"))),
+            "gpt-x"
+        );
+        assert_eq!(selection_name(&models, Some(&pick("c1", "gone"))), "gone");
+        assert_eq!(selection_name(&models, None), "Choose model");
+    }
+
+    #[test]
+    fn short_prices_keep_two_significant_digits() {
+        // The values `Number(usd.toPrecision(2))` gives for the same input.
+        assert_eq!(short_price(3.0), "$3");
+        assert_eq!(short_price(15.0), "$15");
+        assert_eq!(short_price(0.25), "$0.25");
+        assert_eq!(short_price(0.075), "$0.075");
+        assert_eq!(short_price(1.249), "$1.2");
+        assert_eq!(short_price(0.0), "$0");
     }
 }

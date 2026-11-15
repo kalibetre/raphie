@@ -71,6 +71,10 @@ pub struct Host {
     pub deleted_bots: Vec<String>,
     /// Bodies of bot deletes: the id and the confirmation sent.
     pub bot_deletes: Vec<(String, Value)>,
+    /// Model choices: the path asked and the body.
+    pub model_choices: Vec<(String, Value)>,
+    /// Answer model choices as a runtime that no longer has the model.
+    pub model_unavailable: bool,
     /// Uploaded files: the id given, the name sent and the bytes.
     pub uploads: Vec<(String, String, Vec<u8>)>,
     /// Answer uploads as a runtime whose workspace is unavailable does.
@@ -205,6 +209,8 @@ fn router(fake: Fake) -> Router {
         .route("/api/sessions/{id}/history", get(history))
         .route("/api/tool-approvals/{id}", post(decide))
         .route("/api/sessions/{id}/control", post(control))
+        .route("/api/sessions/{id}/model", post(choose_model))
+        .route("/api/bots/{bot}/sessions/{id}/model", post(choose_model))
         .route("/api/bots/{id}/profile", post(save_profile))
         .route("/api/settings", get(settings).post(set_default_model))
         .route("/api/settings/connections", post(connection))
@@ -1413,6 +1419,29 @@ async fn submit(
         Json(json!({ "id": "turn-new", "sessionId": session })),
     )
         .into_response()
+}
+
+async fn choose_model(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    host.model_choices
+        .push((uri.path().to_owned(), body.clone()));
+    if host.model_unavailable {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "That model is not available." })),
+        )
+            .into_response();
+    }
+    Json(json!({ "model": body })).into_response()
 }
 
 /// `POST /api/attachments`: files one multipart upload and answers as the

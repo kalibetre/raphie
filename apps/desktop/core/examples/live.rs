@@ -67,6 +67,7 @@ fn main() {
     client.send(Command::Send {
         text: "Plan my day".into(),
         attachments: Vec::new(),
+        model: None,
     });
     wait(&client, &mut model, "the streamed reply", 60, |m, e| {
         if let Event::Observation { observation, .. } = e
@@ -98,6 +99,7 @@ fn main() {
     client.send(Command::Send {
         text: "Use the calendar tool".into(),
         attachments: Vec::new(),
+        model: None,
     });
     wait(&client, &mut model, "an approval", 60, |m, _| {
         m.conversation

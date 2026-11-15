@@ -64,7 +64,7 @@ A new feature is placed by asking these questions in order.
 | Tool steps, reply time, tokens and cost       | Yes | Yes     | Planned |                                                                                   |
 | Approve or reject; approve for session        | Yes | Yes     | Planned |                                                                                   |
 | Attachments                                   | Yes | Yes     | Planned |                                                                                   |
-| Choose the model for a conversation           | Yes | Planned | Planned |                                                                                   |
+| Choose the model for a conversation           | Yes | Yes     | Planned |                                                                                   |
 | Command mode (Ask or Full access), grant list | Yes | Planned | Planned |                                                                                   |
 | Unread markers and the "New replies" filter   | Yes | Planned | Planned | Read state is kept per client today, not shared.                                  |
 | Notifications                                 | Yes | Planned | Planned | In-app on web. System notifications on desktop. Push on mobile needs server work. |

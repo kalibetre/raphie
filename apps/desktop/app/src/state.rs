@@ -10,14 +10,15 @@ use raphie_core::auth::KeychainStore;
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome, is_telegram_token};
 use raphie_core::contracts::{
-    ControlAction, Decision, MemoryProvider, MemoryStatus, Scope, TurnStatus,
+    ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection, RuntimeSettings, Scope,
+    TurnStatus,
 };
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
 use raphie_core::model::{AuthState, Effect, Event, Model};
-use raphie_core::model_library::ModelFilter;
+use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
 use raphie_core::settings::{Settings, ThemeChoice};
 use raphie_core::workspace::{self, ROOT};
@@ -274,6 +275,16 @@ pub struct Ui {
     pub expanded_bots: HashSet<String>,
     /// Light, dark or following the system (Settings → Appearance).
     pub theme: ThemeChoice,
+    /// The composer's model picker.
+    pub model_picker: ModelPicker,
+    /// Models starred in the picker, kept on this computer.
+    pub favorites: Vec<String>,
+    /// The model chosen for a conversation that has not started yet. It
+    /// goes with the first message.
+    pub new_model: Option<ModelSelection>,
+    /// The bot whose models were last asked for, so they are asked for
+    /// once and not on every event.
+    models_asked: Option<String>,
     /// Settings → Models: its filters.
     pub models: ModelsView,
     /// Settings → Providers: its form.
@@ -330,6 +341,15 @@ pub struct Ui {
     ticked_at: f64,
 }
 
+/// The composer's model picker: whether it is open, and how its list is
+/// narrowed.
+#[derive(Default)]
+pub struct ModelPicker {
+    pub open: bool,
+    pub search: TextEdit,
+    pub filter: PickerFilter,
+}
+
 impl Ui {
     /// A UI with no engine attached yet (`setup` attaches one in a window),
     /// offering the last origin this machine signed in to.
@@ -339,6 +359,7 @@ impl Ui {
             .unwrap_or_default();
         let mut ui = Ui::with_origin(saved.origin.as_deref().unwrap_or(DEFAULT_ORIGIN));
         ui.theme = saved.theme;
+        ui.favorites = saved.model_favorites;
         ui
     }
 
@@ -360,6 +381,10 @@ impl Ui {
             screen: Screen::Workspace,
             expanded_bots: HashSet::new(),
             theme: ThemeChoice::System,
+            model_picker: ModelPicker::default(),
+            favorites: Vec::new(),
+            new_model: None,
+            models_asked: None,
             models: ModelsView::new(),
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
@@ -414,6 +439,9 @@ impl Ui {
     }
 
     pub fn select_bot(&mut self, bot_id: &str) {
+        // A model chosen for one bot's new conversation is not another's.
+        self.new_model = None;
+        self.model_picker.open = false;
         self.model.select_bot(bot_id.to_owned());
         self.command(Command::SelectBot {
             bot_id: bot_id.to_owned(),
@@ -421,6 +449,8 @@ impl Ui {
     }
 
     pub fn select_session(&mut self, session_id: Option<&str>) {
+        self.new_model = None;
+        self.model_picker.open = false;
         self.model.select_session(session_id.map(str::to_owned));
         self.command(Command::SelectSession {
             session_id: session_id.map(str::to_owned),
@@ -465,7 +495,111 @@ impl Ui {
             Some(bot_id) => self.model.attachments.take_for_send(bot_id),
             None => Vec::new(),
         };
-        self.command(Command::Send { text, attachments });
+        // Only a conversation that has not started takes a model from
+        // its first message.
+        let model = match self.model.conversation {
+            Some(_) => None,
+            None => self.new_model.clone(),
+        };
+        self.command(Command::Send {
+            text,
+            attachments,
+            model,
+        });
+    }
+
+    /// The models the selected bot can run, once they have loaded.
+    pub fn bot_models(&self) -> Option<&RuntimeSettings> {
+        self.model.settings.get(self.model.bot_id.as_deref()?)
+    }
+
+    /// The model the next message will be answered with: the one chosen
+    /// for this conversation, else the bot's default for new sessions.
+    pub fn active_model(&self) -> Option<ModelSelection> {
+        let chosen = match self.model.conversation {
+            Some(_) => self.model.session_model().cloned(),
+            None => self.new_model.clone(),
+        };
+        chosen.or_else(|| {
+            let settings = self.bot_models()?;
+            // A bot with no connection has no default: both are empty.
+            (!settings.model_id.is_empty()).then(|| ModelSelection {
+                provider: settings.provider.clone(),
+                model_id: settings.model_id.clone(),
+            })
+        })
+    }
+
+    /// Asks for the selected bot's models, once per bot, so the picker's
+    /// button can name the model before the picker is ever opened.
+    fn ensure_models(&mut self) {
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            return;
+        };
+        // Only the conversation screen has the picker; Settings pages load
+        // the models themselves when they need them.
+        let wanted = matches!(self.model.auth, AuthState::SignedIn)
+            && matches!(self.screen, Screen::Workspace);
+        if wanted && self.models_asked.as_deref() != Some(bot_id.as_str()) {
+            self.models_asked = Some(bot_id.clone());
+            if !self.model.settings.contains_key(&bot_id) {
+                self.command(Command::LoadSettings { bot_id });
+            }
+        }
+    }
+
+    /// Opens the model picker with an empty search.
+    pub fn open_model_picker(&mut self) {
+        self.model_picker = ModelPicker {
+            open: true,
+            ..ModelPicker::default()
+        };
+        self.model.model_error = None;
+    }
+
+    /// Asks again for the selected bot's models after a failed load.
+    pub fn reload_models(&mut self) {
+        if let Some(bot_id) = self.model.bot_id.clone() {
+            self.model.settings_error = None;
+            self.command(Command::LoadSettings { bot_id });
+        }
+    }
+
+    /// The owner picked a model. An open conversation is changed on the
+    /// host and the picker closes when it agrees; a new conversation just
+    /// remembers the choice for its first message.
+    pub fn choose_model(&mut self, model: ModelSelection) {
+        let open = self
+            .model
+            .conversation
+            .as_ref()
+            .map(|open| open.session_id.clone());
+        match open {
+            Some(session_id) => {
+                if self.model.begin_choose_model() {
+                    self.command(Command::ChooseModel { session_id, model });
+                }
+            }
+            None => {
+                self.new_model = Some(model);
+                self.model_picker.open = false;
+            }
+        }
+    }
+
+    /// Stars or unstars a model, and remembers it between launches.
+    pub fn toggle_favorite(&mut self, key: &str) {
+        model_library::toggle_favorite(&mut self.favorites, key);
+        // Tests and headless runs have no engine and must not write files.
+        if self.client.is_none() {
+            return;
+        }
+        if let Some(path) = Settings::default_path() {
+            let mut saved = Settings::load(&path);
+            saved.model_favorites.clone_from(&self.favorites);
+            // Forgetting a star is harmless; it stays for this launch.
+            let _ = saved.save(&path);
+        }
     }
 
     /// Uploads what the owner chose to the selected bot, to go with the
@@ -1987,6 +2121,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     for event in events {
         for effect in ui.model.apply(event) {
             match effect {
+                Effect::ModelChosen => ui.model_picker.open = false,
                 Effect::ClearComposer => {
                     ui.composer.clear();
                     tx.scroll_to_bottom("rd-transcript");
@@ -2085,5 +2220,6 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_memory();
     ui.follow_memories();
     ui.follow_sandbox();
+    ui.ensure_models();
     true
 }

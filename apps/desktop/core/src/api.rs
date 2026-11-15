@@ -18,6 +18,7 @@ use crate::attachments::multipart;
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::channels::ChannelChange;
 use crate::contracts::Attachment;
+use crate::contracts::ModelSelection;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile,
@@ -848,6 +849,22 @@ impl ApiClient {
         let _: serde_json::Value = self
             .post_json(&path, &ControlBody { action, turn_id })
             .await?;
+        Ok(())
+    }
+
+    /// Chooses the model an existing session answers with from now on.
+    pub async fn choose_model(
+        &self,
+        bot_id: &str,
+        session_id: &str,
+        model: &ModelSelection,
+    ) -> Result<(), ApiError> {
+        let path = bot_path(
+            bot_id,
+            &format!("/api/sessions/{}/model", encode(session_id)),
+        );
+        // The answer repeats the model sent; only success matters.
+        let _: serde_json::Value = self.post_json(&path, model).await?;
         Ok(())
     }
 
