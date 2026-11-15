@@ -8,6 +8,7 @@
 //! - [`model`]: client state and how each event changes it (pure, no I/O).
 //! - [`projections`]: tool steps, usage and labels worked out from activity.
 //! - [`model_library`]: filtering and labelling the models a bot can run.
+//! - [`mcp`]: what a new MCP connection carries, and its checks.
 //! - [`memory`]: what a save of a bot's memory settings carries, and its checks.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
 //! - [`settings`]: non-secret preferences.
@@ -22,6 +23,7 @@ pub mod api;
 pub mod auth;
 pub mod contracts;
 pub mod engine;
+pub mod mcp;
 pub mod memory;
 pub mod model;
 pub mod model_library;

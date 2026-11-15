@@ -18,11 +18,12 @@ use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::contracts::{
     Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction,
     ControlBody, Decision, DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse,
-    DeviceTokenResponse, EditConnectionBody, ErrorBody, MemoryPage, MemoryRecall, MemoryStatus,
-    Page, RecallBody, Receipt, ReviseMemoryBody, RuntimeSettings, SaveMemoryBody, Scope,
-    SessionObservation, SessionSummary, SessionTurn, SubmitMessage, TestConnectionBody,
-    UpdateBotProfile,
+    DeviceTokenResponse, EditConnectionBody, ErrorBody, McpActionBody, McpConnection, McpList,
+    MemoryPage, MemoryRecall, MemoryStatus, Page, RecallBody, Receipt, ReviseMemoryBody,
+    RuntimeSettings, SaveMcpBody, SaveMemoryBody, Scope, SessionObservation, SessionSummary,
+    SessionTurn, SubmitMessage, TestConnectionBody, UpdateBotProfile,
 };
+use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::{KeyChange, MemoryUpdate};
 use crate::origin::Origin;
 
@@ -352,6 +353,58 @@ impl ApiClient {
             )
             .await?;
         Ok(())
+    }
+
+    /// A bot's connections to MCP servers.
+    pub async fn mcp(&self, bot_id: &str) -> Result<Vec<McpConnection>, ApiError> {
+        let list: McpList = self.get_json(&bot_path(bot_id, "/api/mcp")).await?;
+        Ok(list.items)
+    }
+
+    /// Adds a connection and returns the bot's connections with it.
+    pub async fn add_mcp(
+        &self,
+        bot_id: &str,
+        connection: &NewMcpConnection,
+    ) -> Result<Vec<McpConnection>, ApiError> {
+        let body = match connection {
+            NewMcpConnection::Http { name, url, token } => SaveMcpBody::Http {
+                name,
+                url,
+                token: token.as_ref().map(Secret::expose),
+            },
+            NewMcpConnection::Stdio {
+                name,
+                command,
+                args,
+                env,
+            } => SaveMcpBody::Stdio {
+                name,
+                command,
+                args,
+                env: env
+                    .iter()
+                    .map(|(name, value)| (name.as_str(), value.expose()))
+                    .collect(),
+            },
+        };
+        let list: McpList = self.post_json(&bot_path(bot_id, "/api/mcp"), &body).await?;
+        Ok(list.items)
+    }
+
+    /// Enables, pauses, removes or imports one connection and returns the
+    /// bot's connections as they are afterwards.
+    pub async fn change_mcp(
+        &self,
+        bot_id: &str,
+        id: &str,
+        action: McpAction,
+    ) -> Result<Vec<McpConnection>, ApiError> {
+        let path = format!("/api/mcp/{}", encode(id));
+        let list: McpList = self
+            .post_json(&bot_path(bot_id, &path), &McpActionBody { action })
+            .await?;
+        Ok(list.items)
     }
 
     /// One page of a bot's saved memories, newest first; `after` is the

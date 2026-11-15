@@ -35,6 +35,7 @@ use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
 };
+use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::MemoryUpdate;
 use crate::model::{DecisionOutcome, Event, StreamStatus};
 use crate::origin::Origin;
@@ -118,6 +119,21 @@ pub enum Command {
     /// Ask the runtime to reach the bot's saved memory back end.
     TestMemory {
         bot_id: String,
+    },
+    /// Load a bot's connections to MCP servers.
+    LoadMcp {
+        bot_id: String,
+    },
+    /// Add a connection to an MCP server.
+    AddMcp {
+        bot_id: String,
+        connection: NewMcpConnection,
+    },
+    /// Enable, pause, remove or import one MCP connection.
+    ChangeMcp {
+        bot_id: String,
+        id: String,
+        action: McpAction,
     },
     /// Load a page of a bot's saved memories: the first, or the one after
     /// the cursor `after`. `ticket` comes from `MemoryBrowser::begin_load`
@@ -386,6 +402,9 @@ impl Engine {
             Command::LoadMemory { bot_id } => self.load_memory(bot_id),
             Command::SaveMemory { bot_id, update } => self.save_memory(bot_id, update),
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
+            Command::LoadMcp { bot_id } => self.load_mcp(bot_id),
+            Command::AddMcp { bot_id, connection } => self.add_mcp(bot_id, connection),
+            Command::ChangeMcp { bot_id, id, action } => self.change_mcp(bot_id, id, action),
             Command::BrowseMemory {
                 bot_id,
                 after,
@@ -826,6 +845,64 @@ impl Engine {
                 Err(error) => error.to_string(),
             };
             emit.emit(Event::MemoryTested { message });
+        });
+    }
+
+    fn load_mcp(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.mcp(&bot_id).await {
+                Ok(items) => emit.emit(Event::Mcp { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::McpFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn add_mcp(&mut self, bot_id: String, connection: NewMcpConnection) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.add_mcp(&bot_id, &connection).await {
+                Ok(items) => emit.emit(Event::McpAdded { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::McpChangeFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn change_mcp(&mut self, bot_id: String, id: String, action: McpAction) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.change_mcp(&bot_id, &id, action).await {
+                Ok(items) => emit.emit(Event::McpChanged { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::McpChangeFailed {
+                    message: error.to_string(),
+                }),
+            }
         });
     }
 

@@ -65,6 +65,10 @@ pub struct Host {
     pub memory_saves: Vec<Value>,
     /// Answer memory tests with a failure, as an unreachable server would.
     pub memory_unreachable: bool,
+    /// The bot's MCP connections, as the runtime lists them.
+    pub mcp: Vec<Value>,
+    /// Bodies of MCP adds, as received.
+    pub mcp_adds: Vec<Value>,
     /// The saved memories, newest first: `(id, content)`.
     pub memories: Vec<(String, String)>,
     /// Answer corrections and forgets with 409, as while a turn is running.
@@ -167,6 +171,8 @@ fn router(fake: Fake) -> Router {
         )
         .route("/api/memory", get(memory).post(save_memory))
         .route("/api/memory/test", post(test_memory))
+        .route("/api/mcp", get(mcp).post(add_mcp))
+        .route("/api/mcp/{id}", post(change_mcp))
         .route("/api/memory/evidence", get(memory_evidence))
         .route("/api/memory/recall", post(recall_memory))
         .route("/api/memory/evidence/{id}", post(change_memory))
@@ -245,6 +251,103 @@ async fn save_memory(
         }));
     }
     Json(memory_json(&fake)).into_response()
+}
+
+fn mcp_json(fake: &Fake) -> Response {
+    let items = fake.host.lock().unwrap().mcp.clone();
+    Json(json!({ "items": items })).into_response()
+}
+
+async fn mcp(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    mcp_json(&fake)
+}
+
+/// Adds a connection. As the runtime does: a URL server without a token
+/// waits for authorization; anything else connects with three tools.
+async fn add_mcp(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    {
+        let mut host = fake.host.lock().unwrap();
+        host.mcp_adds.push(body.clone());
+        let http = body["transport"] == "http";
+        let address = if http { &body["url"] } else { &body["command"] };
+        if http && !address.as_str().unwrap_or("").starts_with("http") {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Enter a valid server URL." })),
+            )
+                .into_response();
+        }
+        let waiting = http && body.get("token").is_none();
+        let id = format!("mcp-{}", host.mcp.len() + 1);
+        let mut item = json!({
+            "source": "saved", "id": id, "name": body["name"],
+            "transport": body["transport"], "address": address,
+            "enabled": true, "connected": !waiting,
+            "toolCount": if waiting { 0 } else { 3 },
+            "credentialConfigured": !waiting,
+        });
+        if waiting {
+            item["authorizationUrl"] = json!("https://tools.example.com/authorize?state=abc");
+        }
+        host.mcp.push(item);
+    }
+    let mut response = mcp_json(&fake);
+    *response.status_mut() = StatusCode::CREATED;
+    response
+}
+
+async fn change_mcp(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let id = uri.path().rsplit('/').next().unwrap_or("").to_owned();
+    {
+        let mut host = fake.host.lock().unwrap();
+        let Some(index) = host.mcp.iter().position(|item| item["id"] == id.as_str()) else {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "MCP connection not found." })),
+            )
+                .into_response();
+        };
+        match body["action"].as_str() {
+            Some("remove") => {
+                host.mcp.remove(index);
+            }
+            Some("disable") => {
+                let item = &mut host.mcp[index];
+                item["enabled"] = json!(false);
+                item["connected"] = json!(false);
+                item.as_object_mut().unwrap().remove("authorizationUrl");
+            }
+            Some("enable") => {
+                host.mcp[index]["enabled"] = json!(true);
+                host.mcp[index]["connected"] = json!(true);
+            }
+            Some("import") => host.mcp[index]["source"] = json!("saved"),
+            _ => {}
+        }
+    }
+    mcp_json(&fake)
 }
 
 fn evidence_json(id: &str, content: &str) -> Value {
