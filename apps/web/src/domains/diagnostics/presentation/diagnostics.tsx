@@ -1,3 +1,4 @@
+import type { DiagnosticSpan } from "@raphie/contracts";
 import {
   Activity,
   Download,
@@ -12,14 +13,27 @@ import { CodeBlock } from "../../../shared/ui/code-block";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { useTraces } from "../infrastructure/use-traces";
 
-export function Diagnostics() {
+/** One trace store serves every bot, so each span says whose it is. */
+export function Diagnostics({
+  bots,
+}: {
+  bots: readonly { id: string; name: string }[];
+}) {
   const [hours, setHours] = useState<1 | 6 | 24>(1);
   const [filter, setFilter] = useState("");
   const traces = useTraces(hours);
   const data = traces.data;
   const ready = !traces.error && data?.state === "ready";
+  // A span from before bots were recorded, or from the runtime itself, has
+  // no bot. A bot that was deleted since keeps its id.
+  const botOf = (span: DiagnosticSpan) => {
+    const id = span.attributes["bot.id"];
+    return typeof id === "string"
+      ? (bots.find((bot) => bot.id === id)?.name ?? id)
+      : undefined;
+  };
   const visible = (ready ? data.spans : []).filter((span) =>
-    `${span.name} ${span.traceId} ${span.status} ${JSON.stringify(span.attributes)}`
+    `${span.name} ${span.traceId} ${span.status} ${botOf(span) ?? ""} ${JSON.stringify(span.attributes)}`
       .toLowerCase()
       .includes(filter.toLowerCase()),
   );
@@ -41,7 +55,10 @@ export function Diagnostics() {
       <div className="panel-heading">
         <div>
           <h2>Recent traces</h2>
-          <p>Operation timings and failures from exported OTLP traces.</p>
+          <p>
+            Operation timings and failures from exported OTLP traces, for every
+            bot.
+          </p>
         </div>
         <div className="trace-actions">
           <Button
@@ -85,7 +102,7 @@ export function Diagnostics() {
         <Search size={14} />
         <input
           aria-label="Filter traces"
-          placeholder="Filter by operation, trace or session…"
+          placeholder="Filter by operation, bot, trace or session…"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
         />
@@ -134,6 +151,9 @@ export function Diagnostics() {
                   />
                   <span className="event-main">
                     <span>{span.name}</span>
+                    {botOf(span) && (
+                      <span className="trace-bot">{botOf(span)}</span>
+                    )}
                     <span className="trace-timing">
                       {span.status === "error" ? "Error · " : ""}
                       {span.durationMs.toFixed(1)} ms
@@ -145,6 +165,8 @@ export function Diagnostics() {
                 </summary>
                 <div className="event-detail">
                   <dl>
+                    <dt>Bot</dt>
+                    <dd>{botOf(span) ?? "Not recorded"}</dd>
                     <dt>Trace</dt>
                     <dd>{span.traceId}</dd>
                     <dt>Span</dt>

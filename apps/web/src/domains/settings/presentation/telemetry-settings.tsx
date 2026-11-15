@@ -1,25 +1,13 @@
 import type { ReactNode } from "react";
 
-import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Switch } from "../../../shared/ui/switch";
-import { useRuntimeSettings } from "../infrastructure/use-runtime-settings";
+import { useTelemetry } from "../infrastructure/use-telemetry";
 import { Group, Row } from "./settings-group";
 
 /** Trace collection controls with the trace list on the same page. */
 export function TelemetrySettings({ traces }: { traces: ReactNode }) {
-  const { workspace } = useBackend();
-  const settings = useRuntimeSettings();
-  if (workspace.botId !== "default")
-    return (
-      <>
-        <Group
-          title="Trace export"
-          note="This bot’s conversation activity is available from the activity inspector. Trace export is currently available for the default bot."
-        />
-        {traces}
-      </>
-    );
+  const settings = useTelemetry();
   return (
     <>
       <Group
@@ -34,9 +22,7 @@ export function TelemetrySettings({ traces }: { traces: ReactNode }) {
             aria-label="Collect diagnostic traces"
             checked={settings.data?.telemetryEnabled ?? false}
             disabled={!settings.data || settings.update.isPending}
-            onCheckedChange={(checked) =>
-              settings.update.mutate({ telemetryEnabled: checked })
-            }
+            onCheckedChange={(checked) => settings.update.mutate(checked)}
           />
         </Row>
         <div className="settings-form">

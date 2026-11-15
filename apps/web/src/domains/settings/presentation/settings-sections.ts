@@ -144,8 +144,8 @@ export const sections = [
     id: "telemetry",
     label: "Diagnostics",
     icon: Radio,
-    lede: (bot: string) =>
-      `Timings and failures from ${bot}’s runs. Nothing leaves this backend.`,
+    lede: () =>
+      "Timings and failures from every bot’s runs. Nothing leaves this backend.",
   },
 ] as const;
 
@@ -155,7 +155,7 @@ export const isSection = (value: unknown): value is Section =>
   sections.some((section) => section.id === value);
 
 export const isAppSection = (section: string) =>
-  ["account", "general", "plugins"].includes(section);
+  ["account", "general", "telemetry", "plugins"].includes(section);
 
 export const sectionOf = (id: Section) =>
   sections.find((section) => section.id === id)!;

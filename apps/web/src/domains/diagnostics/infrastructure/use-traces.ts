@@ -9,7 +9,11 @@ export function useTraces(hours: 1 | 6 | 24) {
   return useQuery({
     queryKey: ["diagnostics", "traces", hours],
     queryFn: () =>
-      api<TraceDiagnostics>(`/api/diagnostics/traces?hours=${hours}`),
+      // One trace store serves every bot; the runtime reads it on the
+      // default bot's routes, whichever bot is selected.
+      api<TraceDiagnostics>(
+        `/api/bots/default/diagnostics/traces?hours=${hours}`,
+      ),
     refetchInterval: 5000,
     retry: false,
   });

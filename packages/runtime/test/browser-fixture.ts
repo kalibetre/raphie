@@ -26,6 +26,7 @@ import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-
 import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
 import { appDataIdentity } from "../src/infrastructure/workspace/app-data.ts";
+import { botTelemetry } from "../src/shared/application/telemetry.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 import { FakeTelegram } from "./fake-telegram.ts";
 const directory = await mkdtemp(join(tmpdir(), "raphie-browser-"));
@@ -194,7 +195,7 @@ const app = await Gateway.open({
   directory,
   models,
   model: settings.model,
-  telemetry,
+  telemetry: botTelemetry(telemetry, "default"),
   mcp: {
     identity: "acceptance",
     client: {
@@ -319,6 +320,7 @@ const bots = await BotHost.open(
       deferResume: true,
       directory: path,
       botId,
+      telemetry: botTelemetry(telemetry, botId),
       models: botModels,
       model: botSettings.model,
       memory: botMemory,
