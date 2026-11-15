@@ -446,6 +446,15 @@ impl Ui {
     /// A UI with no engine attached yet (`setup` attaches one in a window),
     /// offering the last origin this machine signed in to.
     pub fn new() -> Ui {
+        // Snapshots (`--snap`) only run in debug builds, but they show the
+        // app as people get it: the release look, with every setting at
+        // its default, whatever this computer's owner has chosen. The
+        // `dev-build` scene shows the dev look.
+        if rune::tooling::headless_run().is_some() {
+            let mut ui = Ui::with_origin(DEFAULT_ORIGIN);
+            ui.flavor = Flavor::Release;
+            return ui;
+        }
         let saved = Settings::default_path()
             .map(|path| Settings::load(&path))
             .unwrap_or_default();
@@ -462,12 +471,6 @@ impl Ui {
         ui.read_replies = ReadReplies::default_path()
             .map(|path| ReadReplies::load(&path))
             .unwrap_or_default();
-        // Snapshots (`--snap`) only run in debug builds, but they show the
-        // app as people get it, so they draw the release look. The
-        // `dev-build` scene shows the dev one.
-        if rune::tooling::headless_run().is_some() {
-            ui.flavor = Flavor::Release;
-        }
         ui
     }
 
