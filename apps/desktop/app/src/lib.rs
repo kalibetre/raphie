@@ -62,7 +62,7 @@ pub fn spec() -> AppSpec<Ui> {
 
 /// Window-wide keys, as in the web workspace: ⌘B shows and hides the
 /// sidebar, and ⌘, opens Settings as Mac apps do (Ctrl off macOS).
-fn on_key(ui: &mut Ui, ev: &KeyEvent, _: &mut Tx) -> bool {
+fn on_key(ui: &mut Ui, ev: &KeyEvent, tx: &mut Tx) -> bool {
     // Escape closes an enlarged picture, then a floating panel.
     if ev.key == Key::Escape && ui.viewer.is_some() {
         ui.viewer = None;
@@ -71,6 +71,15 @@ fn on_key(ui: &mut Ui, ev: &KeyEvent, _: &mut Tx) -> bool {
     if ev.key == Key::Escape && ui.panel_open && ui.panel_floats() {
         ui.panel_open = false;
         return true;
+    }
+    // Up and Down move between the model picker's rows, as on the web.
+    if ui.model_picker.open && (ev.key == Key::Up || ev.key == Key::Down) {
+        let step = if ev.key == Key::Down { 1 } else { -1 };
+        if let Some(row) = ui.picker_step(tx.focused(), step) {
+            tx.focus(row, true);
+            return true;
+        }
+        return false;
     }
     if ev.mods.shift || ev.mods.alt {
         return false;

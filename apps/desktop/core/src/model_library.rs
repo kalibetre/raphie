@@ -93,12 +93,34 @@ pub fn filter_models<'a>(
 }
 
 /// Which models the composer's picker lists.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+///
+/// Not `Copy`: a family carries its name, a `String`, which owns heap
+/// memory and so must be cloned on purpose.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum PickerFilter {
     #[default]
     All,
     /// Only the starred ones.
     Favorites,
+    /// Only one family's models, by [`family`].
+    Family(String),
+}
+
+/// The family a model belongs to, as the web's `modelCatalog` names it:
+/// the part of its id before `/` (`openai/gpt-x` is `openai`, without a
+/// leading `~`), else its provider.
+pub fn family(model: &LibraryModel) -> String {
+    match model.id.split_once('/') {
+        Some((family, _)) => family.trim_start_matches('~').to_owned(),
+        None => model.provider.clone(),
+    }
+}
+
+/// Every family among `models`, sorted and each once.
+pub fn families(models: &[LibraryModel]) -> Vec<String> {
+    // A `BTreeSet` keeps its items sorted and drops repeats.
+    let unique: std::collections::BTreeSet<String> = models.iter().map(family).collect();
+    unique.into_iter().collect()
 }
 
 /// The most favourites kept, as on the web.
@@ -128,7 +150,7 @@ pub fn toggle_favorite(favorites: &mut Vec<String>, key: &str) {
 pub fn pick_models<'a>(
     models: &'a [LibraryModel],
     search: &str,
-    filter: PickerFilter,
+    filter: &PickerFilter,
     favorites: &[String],
 ) -> Vec<&'a LibraryModel> {
     let query = search.trim().to_lowercase();
@@ -138,6 +160,7 @@ pub fn pick_models<'a>(
             let listed = match filter {
                 PickerFilter::All => true,
                 PickerFilter::Favorites => favorites.contains(&favorite_key(model)),
+                PickerFilter::Family(name) => family(model) == *name,
             };
             listed
                 && format!("{} {} {}", model.name, model.id, model.connection_name)
@@ -435,21 +458,38 @@ mod tests {
         let names = |found: Vec<&LibraryModel>| -> Vec<String> {
             found.iter().map(|model| model.name.clone()).collect()
         };
-        let all = pick_models(&models, "  LLAMA ", PickerFilter::All, &[]);
+        let all = pick_models(&models, "  LLAMA ", &PickerFilter::All, &[]);
         assert_eq!(names(all), ["Llama 9"]);
         // Every model here runs through the connection named "Main".
-        let by_connection = pick_models(&models, "main", PickerFilter::All, &[]);
+        let by_connection = pick_models(&models, "main", &PickerFilter::All, &[]);
         assert_eq!(by_connection.len(), models.len());
 
         let mut favorites = Vec::new();
         toggle_favorite(&mut favorites, &favorite_key(&models[2]));
         assert_eq!(favorites, ["c1:openai/gpt-x"]);
-        let starred = pick_models(&models, "", PickerFilter::Favorites, &favorites);
+        let starred = pick_models(&models, "", &PickerFilter::Favorites, &favorites);
         assert_eq!(names(starred), ["GPT X"]);
         // The search narrows the favourites too.
-        assert!(pick_models(&models, "llama", PickerFilter::Favorites, &favorites).is_empty());
+        assert!(pick_models(&models, "llama", &PickerFilter::Favorites, &favorites).is_empty());
         toggle_favorite(&mut favorites, "c1:openai/gpt-x");
         assert!(favorites.is_empty());
+    }
+
+    #[test]
+    fn families_are_named_as_the_web_names_them() {
+        let models = catalogue();
+        // The fixture's ids have no "/", so their provider is the family;
+        // "~meta-llama" loses its "~".
+        assert_eq!(
+            families(&models),
+            ["anthropic", "fixture", "meta-llama", "openai", "x-ai"]
+        );
+        let only = pick_models(&models, "", &PickerFilter::Family("openai".into()), &[]);
+        assert_eq!(only.len(), 1);
+        assert_eq!(only[0].name, "GPT X");
+        // The search still narrows a family.
+        let fixture = PickerFilter::Family("fixture".into());
+        assert_eq!(pick_models(&models, "alternate", &fixture, &[]).len(), 1);
     }
 
     #[test]

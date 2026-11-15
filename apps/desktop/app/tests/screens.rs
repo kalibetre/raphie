@@ -20,6 +20,7 @@ use raphie_core::jobs::JobAction;
 use raphie_core::mcp::{McpAction, NewMcpConnection};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, Event};
+use raphie_core::model_library::PickerFilter;
 use raphie_core::sandbox::SandboxUpdate;
 use raphie_core::settings::ThemeChoice;
 use raphie_core::updates::current_version;
@@ -4147,4 +4148,63 @@ fn a_window_too_small_for_the_chosen_widths_draws_them_narrower() {
     rt.update(|ui, _| ui.workspace_width = 700.0);
     assert_eq!(rt.state.visible_roster_width(), 380.0);
     assert_eq!(rt.state.roster_width, 480.0);
+}
+
+#[test]
+fn the_model_picker_narrows_to_one_family() {
+    let mut rt = render(scenes::model_picker, false);
+    let count = |rt: &Runtime<Ui>| element(rt, "rd-model-count").text.unwrap_or_default();
+    assert_eq!(count(&rt), "5");
+    click(&mut rt, "rd-model-family-trigger");
+    assert!(rt.state.model_picker.family_open);
+    let openai = element_with_label(&rt, "openai");
+    click(&mut rt, &openai);
+    assert_eq!(
+        rt.state.model_picker.filter,
+        PickerFilter::Family("openai".into())
+    );
+    assert!(!rt.state.model_picker.family_open);
+    assert_eq!(count(&rt), "1");
+    // The rail's All goes back to every family.
+    click(&mut rt, "rd-model-all");
+    assert_eq!(rt.state.model_picker.filter, PickerFilter::All);
+    assert_eq!(count(&rt), "5");
+}
+
+#[test]
+fn up_and_down_move_between_the_model_picker_rows() {
+    let rt = render(scenes::model_picker, false);
+    let rows = rt.state.picker_rows();
+    assert_eq!(rows.len(), 5);
+    let ui = &rt.state;
+    // From the search box, Down goes to the first row and Up to the last.
+    assert_eq!(
+        ui.picker_step(Some("rd-model-search"), 1),
+        Some(rows[0].clone())
+    );
+    assert_eq!(
+        ui.picker_step(Some("rd-model-search"), -1),
+        Some(rows[4].clone())
+    );
+    // Between rows, and around at the ends.
+    assert_eq!(ui.picker_step(Some(&rows[0]), 1), Some(rows[1].clone()));
+    assert_eq!(ui.picker_step(Some(&rows[4]), 1), Some(rows[0].clone()));
+    assert_eq!(ui.picker_step(Some(&rows[0]), -1), Some(rows[4].clone()));
+    // Focus elsewhere is left alone.
+    assert_eq!(ui.picker_step(Some("rd-composer"), 1), None);
+    assert_eq!(ui.picker_step(None, 1), None);
+
+    // The window's key handler moves the focus.
+    let mut rt = rt;
+    click(&mut rt, "rd-model-search");
+    let on_key = raphie_desktop::spec().on_key.expect("window keys");
+    let down = KeyEvent {
+        key: Key::Down,
+        mods: Default::default(),
+    };
+    rt.update(|ui, tx| {
+        assert!(on_key(ui, &down, tx));
+    });
+    settle(&mut rt);
+    assert!(element(&rt, &rows[0]).focused);
 }
