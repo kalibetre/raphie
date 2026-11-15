@@ -80,7 +80,7 @@ A new feature is placed by asking these questions in order.
 | Providers (model connections and keys)     | Yes | Yes     | No      | Setup. Keys are typed into a masked field and sent once; the client keeps none. |
 | Models (compare, pick the default)         | Yes | Yes     | Planned |                                                                                 |
 | Memory settings                            | Yes | Yes     | No      | Setup. A Hindsight key is handled like a provider key.                          |
-| Browse, correct or forget memory           | Yes | Planned | Planned |                                                                                 |
+| Browse, correct or forget memory           | Yes | Yes     | Planned |                                                                                 |
 | MCP tools                                  | Yes | Planned | No      | Setup. OAuth authorization opens the browser.                                   |
 | Channels (Discord, Telegram, home channel) | Yes | Planned | No      | Setup.                                                                          |
 | Sandbox                                    | Yes | Planned | No      | Setup, and it decides how commands run.                                         |

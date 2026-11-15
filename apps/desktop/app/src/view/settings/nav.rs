@@ -141,7 +141,10 @@ fn bot_group(s: &Ui, bot: &BotProfile, current: &Page, look: &Look) -> El {
     let open = s.expanded_bots.contains(&bot.id);
     // Which of this bot's pages is showing, if any.
     let here = match current {
-        Page::Bot { bot_id, section } if bot_id == &bot.id => Some(*section),
+        // A sub-page marks the listed page it was reached from.
+        Page::Bot { bot_id, section } if bot_id == &bot.id => {
+            Some(section.parent().unwrap_or(*section))
+        }
         _ => None,
     };
     let id = bot.id.clone();

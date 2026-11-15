@@ -24,6 +24,8 @@ pub enum Kind {
     Outline,
     /// No fill until hovered: toolbar actions.
     Ghost,
+    /// Filled with the error colour: an action that removes something.
+    Destructive,
 }
 
 /// A button's height and padding (the web's `size`).
@@ -53,6 +55,7 @@ pub fn button(t: &Theme, kind: Kind, size: Size, glyph: Option<&'static Icon>, l
     let ink = match kind {
         Kind::Primary => t.primary_foreground,
         Kind::Outline | Kind::Ghost => t.foreground,
+        Kind::Destructive => Color::WHITE,
     };
     let mut e = row()
         .role("button")
@@ -106,6 +109,11 @@ fn paint(t: &Theme, e: El, kind: Kind) -> El {
             .hover(t.hover.alpha(0.6))
             .press(t.hover),
         Kind::Ghost => e.hover(t.hover).press(t.hover),
+        Kind::Destructive => e
+            // The web's `bg-destructive`, at 60% in dark mode.
+            .fill(t.error.alpha(if t.dark { 0.6 } else { 1.0 }))
+            .hover(t.background.alpha(0.1))
+            .press(t.background.alpha(0.2)),
     };
     // The web's `:focus-visible`: a ring only when focus came from the keyboard.
     e.focus_ring(2.0, 2.0, t.accent)

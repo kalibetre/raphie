@@ -7,8 +7,11 @@ use std::time::Duration;
 
 use raphie_core::auth::KeychainStore;
 use raphie_core::auth::Secret;
-use raphie_core::contracts::{ControlAction, Decision, Scope, TurnStatus};
+use raphie_core::contracts::{
+    ControlAction, Decision, MemoryProvider, MemoryStatus, Scope, TurnStatus,
+};
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
+use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
 use raphie_core::model::{AuthState, Effect, Event, Model};
 use raphie_core::model_library::ModelFilter;
 use raphie_core::origin::Origin;
@@ -125,6 +128,53 @@ impl Default for ModelsView {
     }
 }
 
+/// How long typing must pause before a live search is sent, in seconds
+/// (the web waits 300 ms too).
+const SEARCH_PAUSE: f64 = 0.3;
+
+/// "Browse memory": the search box, and the one memory being changed. The
+/// list itself is in the core (`Model::memories`).
+pub struct MemoriesView {
+    pub query: TextEdit,
+    /// The query the list on screen is for, so a change in the box shows.
+    seen: String,
+    /// The frame clock when the box last changed, while a live search waits
+    /// for the typing to pause.
+    typed_at: Option<f64>,
+    /// The memory being corrected, and what it should say instead.
+    pub editing: Option<String>,
+    pub correction: TextEdit,
+    /// The memory waiting on "Confirm forget".
+    pub forgetting: Option<String>,
+    /// Memories whose source and record id are unfolded.
+    pub open_sources: HashSet<String>,
+}
+
+impl MemoriesView {
+    pub fn new() -> MemoriesView {
+        MemoriesView {
+            query: TextEdit::new(""),
+            seen: String::new(),
+            typed_at: None,
+            editing: None,
+            correction: TextEdit::new(""),
+            forgetting: None,
+            open_sources: HashSet::new(),
+        }
+    }
+
+    /// Whether a live search is waiting for the typing to pause.
+    pub fn search_pending(&self) -> bool {
+        self.typed_at.is_some()
+    }
+}
+
+impl Default for MemoriesView {
+    fn default() -> MemoriesView {
+        MemoriesView::new()
+    }
+}
+
 /// What fills the window once signed in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Screen {
@@ -166,6 +216,8 @@ pub struct Ui {
     pub providers: ProvidersView,
     /// Settings → Memory: its form.
     pub memory: MemoryDraft,
+    /// Settings → Memory → Browse memory.
+    pub memories: MemoriesView,
     /// The Profile form on screen.
     pub profile: ProfileDraft,
     /// Unsaved Profile edits for other bots, kept while the owner looks at
@@ -212,6 +264,7 @@ impl Ui {
             models: ModelsView::new(),
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
+            memories: MemoriesView::new(),
             profile: ProfileDraft::empty(),
             parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
@@ -380,7 +433,26 @@ impl Ui {
                 });
             }
         }
+        let browsing = matches!(
+            &page,
+            Page::Bot {
+                section: BotSection::MemoryBrowse,
+                ..
+            }
+        );
+        if let (true, Page::Bot { bot_id, .. }) = (browsing, &page) {
+            // A fresh list each time, and the settings that say what this
+            // back end allows.
+            self.memories = MemoriesView::new();
+            self.model.memories.clear();
+            self.command(Command::LoadMemory {
+                bot_id: bot_id.clone(),
+            });
+        }
         self.screen = Screen::Settings(page);
+        if browsing {
+            self.follow_memories();
+        }
     }
 
     /// Puts `bot_id`'s profile in the form: its unsaved edits if there are
@@ -621,6 +693,162 @@ impl Ui {
         }
     }
 
+    /// The bot whose saved memories are on screen, with its memory
+    /// settings, while "Browse memory" shows and memory is switched on.
+    fn browsed(&self) -> Option<(&str, &MemoryStatus)> {
+        let Screen::Settings(Page::Bot {
+            bot_id,
+            section: BotSection::MemoryBrowse,
+        }) = &self.screen
+        else {
+            return None;
+        };
+        let status = self.model.memory.get(bot_id)?;
+        status
+            .configuration
+            .enabled
+            .then_some((bot_id.as_str(), status))
+    }
+
+    /// Loads what the search box asks for: the matches of its query, or
+    /// with the box empty every memory (the page after `after`, if given).
+    pub fn load_memories(&mut self, after: Option<String>) {
+        let Some((bot_id, status)) = self.browsed() else {
+            return;
+        };
+        let bot_id = bot_id.to_owned();
+        let can_browse = status.capabilities.browse;
+        let query = self.memories.query.text.trim().to_owned();
+        // This load answers the box as it is now.
+        self.memories.seen = query.clone();
+        self.memories.typed_at = None;
+        if query.chars().count() > QUERY_LIMIT {
+            self.model.memories.clear();
+            self.model.memories.error = Some("A search can be at most 2,000 characters.".into());
+        } else if !query.is_empty() {
+            let ticket = self.model.memories.begin_load();
+            self.command(Command::SearchMemory {
+                bot_id,
+                query,
+                ticket,
+            });
+        } else if can_browse {
+            let ticket = self.model.memories.begin_load();
+            self.command(Command::BrowseMemory {
+                bot_id,
+                after,
+                ticket,
+            });
+        }
+    }
+
+    /// After news from the host: with nothing asked for yet, list every
+    /// memory once the settings say the back end can.
+    fn follow_memories(&mut self) {
+        let idle = self.model.memories.evidence.is_none()
+            && !self.model.memories.busy()
+            && self.model.memories.error.is_none()
+            && self.memories.query.text.trim().is_empty();
+        let can_browse = self
+            .browsed()
+            .is_some_and(|(_, status)| status.capabilities.browse);
+        if idle && can_browse {
+            self.load_memories(None);
+        }
+    }
+
+    /// Notices typing in the search box; `clock` is the frame clock in
+    /// seconds. A new query empties the list at once. The built-in back end
+    /// then searches when the typing pauses; others wait for Search, since
+    /// each of their searches is a request to a server. Returns true when
+    /// the screen changed.
+    pub fn watch_memory_query(&mut self, clock: f64) -> bool {
+        let Some((_, status)) = self.browsed() else {
+            return false;
+        };
+        let live = status.configuration.provider == MemoryProvider::Builtin;
+        let query = self.memories.query.text.trim().to_owned();
+        if query != self.memories.seen {
+            self.memories.seen = query.clone();
+            // Retires the answer to the previous query, if it is still on
+            // its way.
+            self.model.memories.clear();
+            self.memories.typed_at = None;
+            if query.is_empty() {
+                self.load_memories(None);
+            } else if live {
+                self.memories.typed_at = Some(clock);
+            }
+            return true;
+        }
+        match self.memories.typed_at {
+            Some(at) if clock - at >= SEARCH_PAUSE => {
+                self.load_memories(None);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Empties the search box and goes back to every memory.
+    pub fn clear_memory_search(&mut self) {
+        self.memories.query.clear();
+        self.memories.seen.clear();
+        self.model.memories.clear();
+        self.load_memories(None);
+    }
+
+    /// Opens the editor on one memory, holding what it says now.
+    pub fn correct_memory(&mut self, id: &str) {
+        let shown = self.model.memories.evidence.iter().flatten();
+        let Some(item) = shown.into_iter().find(|item| item.id == id) else {
+            return;
+        };
+        self.memories.correction = TextEdit::new(item.content.clone());
+        self.memories.editing = Some(id.to_owned());
+    }
+
+    /// Whether the correction in the editor can be sent: some words, and no
+    /// more than the runtime takes.
+    pub fn can_save_correction(&self) -> bool {
+        let text = self.memories.correction.text.trim();
+        !text.is_empty() && text.chars().count() <= CONTENT_LIMIT && !self.model.memories.busy()
+    }
+
+    pub fn save_correction(&mut self) {
+        let (Some(id), Some((bot_id, _))) = (self.memories.editing.clone(), self.browsed()) else {
+            return;
+        };
+        let bot_id = bot_id.to_owned();
+        if self.can_save_correction() && self.model.memories.begin_change() {
+            let content = self.memories.correction.text.trim().to_owned();
+            self.command(Command::ReviseMemory {
+                bot_id,
+                id,
+                content,
+            });
+        }
+    }
+
+    /// Forgets the memory waiting on "Confirm forget".
+    pub fn forget_memory(&mut self) {
+        let (Some(id), Some((bot_id, _))) = (self.memories.forgetting.clone(), self.browsed())
+        else {
+            return;
+        };
+        let bot_id = bot_id.to_owned();
+        if self.model.memories.begin_change() {
+            self.command(Command::ForgetMemory { bot_id, id });
+        }
+    }
+
+    /// Leaves Settings for the conversation a memory came from.
+    pub fn open_memory_source(&mut self, bot_id: &str, session_id: &str) {
+        self.select_bot(bot_id);
+        self.select_session(Some(session_id));
+        self.close_settings();
+    }
+
     /// Makes a model the default for `bot_id`'s new sessions.
     pub fn set_default_model(&mut self, bot_id: &str, model_id: &str, connection_id: &str) {
         if self.model.begin_set_model() {
@@ -687,20 +915,6 @@ impl Ui {
         self.open_url(url, tx);
     }
 
-    /// Opens the web workspace's "Browse memories" page for `bot_id`. It is
-    /// a page of its own there, reached from Memory rather than listed in
-    /// the navigation, so it has no [`Page`] here.
-    pub fn open_memory_browse(&mut self, bot_id: &str, tx: &mut Tx) {
-        let memory = Page::Bot {
-            bot_id: bot_id.to_owned(),
-            section: BotSection::Memory,
-        };
-        let Some(url) = self.web_url(&memory) else {
-            return;
-        };
-        self.open_url(url.replace("section=memory", "section=memory-browse"), tx);
-    }
-
     fn open_url(&mut self, url: String, tx: &mut Tx) {
         if self.client.is_none() {
             // Tests and headless runs: note it instead of opening a browser.
@@ -756,6 +970,11 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         return false;
     };
     let events = client.drain();
+    // A search box has no "changed" handler, so each frame looks at it.
+    let searched = ui.watch_memory_query(clock);
+    if ui.memories.search_pending() {
+        tx.wake_after(Duration::from_millis(300));
+    }
     // While Raphie works, wake up every second so "12s elapsed" keeps
     // counting and an approval's deadline is noticed. Asking again on every
     // poll adds no extra polls.
@@ -768,7 +987,7 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         ui.ticked_at = clock;
     }
     // `|` rather than `||`: the events are applied even after a tick.
-    receive(ui, events, tx) | ticked
+    receive(ui, events, tx) | ticked | searched
 }
 
 /// Applies what the engine reported; returns true when anything arrived.
@@ -797,6 +1016,17 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                         ui.memory = MemoryDraft::of(&bot_id, &status.configuration);
                     }
                 }
+                Effect::MemoryChanged(id) => {
+                    // The correction was saved or the memory is gone: close
+                    // what was open on it.
+                    if ui.memories.editing.as_deref() == Some(id.as_str()) {
+                        ui.memories.editing = None;
+                        ui.memories.correction.clear();
+                    }
+                    if ui.memories.forgetting.as_deref() == Some(id.as_str()) {
+                        ui.memories.forgetting = None;
+                    }
+                }
                 Effect::ProfileSaved(profile) => {
                     // Show what was saved, at its new revision.
                     if ui.profile.bot_id() == Some(profile.id.as_str()) {
@@ -809,5 +1039,6 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     }
     ui.follow_profile();
     ui.follow_memory();
+    ui.follow_memories();
     true
 }

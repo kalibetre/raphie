@@ -10,9 +10,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::auth::DeviceCode;
 use crate::contracts::{
-    Account, ApprovalStatus, BotProfile, MemoryStatus, Page, Receipt, RuntimeSettings,
-    SessionApproval, SessionObservation, SessionSummary, SessionTurn,
+    Account, ApprovalStatus, BotProfile, MemoryEvidence, MemoryPage, MemoryStatus, Page, Receipt,
+    RuntimeSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
 };
+use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
 
 /// News from the engine. Events about a bot or session carry its id, so news
@@ -79,6 +80,36 @@ pub enum Event {
     },
     /// A test of the saved memory back end ended; `message` says how.
     MemoryTested {
+        message: String,
+    },
+    /// One page of a bot's saved memories. `ticket` is the load's, from
+    /// [`MemoryBrowser::begin_load`]; `more` says it follows earlier pages.
+    MemoryListed {
+        ticket: u64,
+        more: bool,
+        page: MemoryPage,
+    },
+    /// The saved memories that match a search.
+    MemoryRecalled {
+        ticket: u64,
+        evidence: Vec<MemoryEvidence>,
+    },
+    MemoryLoadFailed {
+        ticket: u64,
+        more: bool,
+        message: String,
+    },
+    /// A correction was saved: the memory `id` says `content` now.
+    MemoryRevised {
+        id: String,
+        content: String,
+    },
+    /// The memory `id` was forgotten.
+    MemoryForgotten {
+        id: String,
+    },
+    /// A correction or a forget failed.
+    MemoryChangeFailed {
         message: String,
     },
     /// A bot's profile was saved; this is it at its new revision.
@@ -178,6 +209,9 @@ pub enum Effect {
     /// This bot's memory settings were saved: its form should show them and
     /// forget any typed key.
     MemorySaved(String),
+    /// The memory with this id was corrected or forgotten: close its editor
+    /// or its "Confirm forget".
+    MemoryChanged(String),
 }
 
 /// The open conversation.
@@ -316,6 +350,8 @@ pub struct Model {
     pub testing_memory: bool,
     /// What the last memory test or save said.
     pub memory_message: Option<String>,
+    /// The saved memories on "Browse memory".
+    pub memories: MemoryBrowser,
     /// A profile save is on its way.
     pub saving_profile: bool,
     /// Why the last profile save failed, until the next attempt.
@@ -354,6 +390,7 @@ impl Default for Model {
             memory_save_error: None,
             testing_memory: false,
             memory_message: None,
+            memories: MemoryBrowser::default(),
             saving_profile: false,
             profile_error: None,
             bots: Vec::new(),
@@ -461,6 +498,22 @@ impl Model {
                 self.testing_memory = false;
                 self.memory_message = Some(message);
             }
+            Event::MemoryListed { ticket, more, page } => self.memories.listed(ticket, more, page),
+            Event::MemoryRecalled { ticket, evidence } => self.memories.recalled(ticket, evidence),
+            Event::MemoryLoadFailed {
+                ticket,
+                more,
+                message,
+            } => self.memories.load_failed(ticket, more, message),
+            Event::MemoryRevised { id, content } => {
+                self.memories.revised(&id, content);
+                return vec![Effect::MemoryChanged(id)];
+            }
+            Event::MemoryForgotten { id } => {
+                self.memories.forgotten(&id);
+                return vec![Effect::MemoryChanged(id)];
+            }
+            Event::MemoryChangeFailed { message } => self.memories.change_failed(message),
             Event::ProfileSaved(profile) => {
                 self.saving_profile = false;
                 self.profile_error = None;

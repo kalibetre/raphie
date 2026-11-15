@@ -15,13 +15,16 @@ pub enum Page {
     Appearance,
 }
 
-/// The pages every bot has, in the order the navigation lists them.
+/// A bot's pages. The navigation lists those in [`BotSection::ALL`]; the
+/// rest are reached from inside another page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BotSection {
     Profile,
     Providers,
     Models,
     Memory,
+    /// The saved memories, reached from Memory.
+    MemoryBrowse,
     Mcp,
     Channels,
     Sandbox,
@@ -32,6 +35,7 @@ pub enum BotSection {
 }
 
 impl BotSection {
+    /// The pages the navigation lists, in its order.
     pub const ALL: [BotSection; 11] = [
         BotSection::Profile,
         BotSection::Providers,
@@ -52,6 +56,7 @@ impl BotSection {
             BotSection::Providers => "Providers",
             BotSection::Models => "Models",
             BotSection::Memory => "Memory",
+            BotSection::MemoryBrowse => "Browse memory",
             BotSection::Mcp => "MCP tools",
             BotSection::Channels => "Channels",
             BotSection::Sandbox => "Sandbox",
@@ -69,6 +74,7 @@ impl BotSection {
             BotSection::Providers => "providers",
             BotSection::Models => "models",
             BotSection::Memory => "memory",
+            BotSection::MemoryBrowse => "memory-browse",
             BotSection::Mcp => "mcp",
             BotSection::Channels => "channels",
             BotSection::Sandbox => "sandbox",
@@ -76,6 +82,15 @@ impl BotSection {
             BotSection::Jobs => "jobs",
             BotSection::Diagnostics => "telemetry",
             BotSection::Activity => "activity",
+        }
+    }
+
+    /// The page this one was reached from, for pages the navigation does
+    /// not list (the web's `parentSection`).
+    pub fn parent(self) -> Option<BotSection> {
+        match self {
+            BotSection::MemoryBrowse => Some(BotSection::Memory),
+            _ => None,
         }
     }
 
@@ -96,6 +111,9 @@ impl BotSection {
             }
             BotSection::Memory => {
                 format!("What {bot} keeps between conversations, and where it lives.")
+            }
+            BotSection::MemoryBrowse => {
+                format!("What {bot} remembers, with sources. Correct or forget anything.")
             }
             BotSection::Mcp => {
                 format!("Connect the tools {bot} can use. Every connection belongs to this bot.")

@@ -6,10 +6,9 @@
 //! `shared/styles/settings/forms.css`. The form's state lives in
 //! `crate::memory`; its checks in `raphie_core::memory`.
 //!
-//! Two differences from the web. The back ends it lists as "planned"
+//! One difference from the web: the back ends it lists as "planned"
 //! (Honcho, Obsidian) are left out here, because this list cannot show an
-//! option that cannot be chosen. And "Browse memories" opens the web
-//! workspace until that page is built here.
+//! option that cannot be chosen.
 
 use raphie_core::contracts::{MemoryProvider, MemoryStatus, Reflection};
 use rune::{El, Tx, col, row, text};
@@ -18,7 +17,7 @@ use rune_kit::{Select, SelectAppearance};
 use super::parts::{SaveBar, Scope, group, group_with, page, save_bar, setting, status, value};
 use crate::icons;
 use crate::memory::MemoryDraft;
-use crate::sections::BotSection;
+use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
 use crate::view::Look;
@@ -98,16 +97,16 @@ fn backend(s: &Ui, bot_id: &str, status: &MemoryStatus, look: &Look, overlays: &
     let external = draft.provider == MemoryProvider::Hindsight;
 
     let browse_bot = bot_id.to_owned();
-    let browse = button(
-        t,
-        Kind::Outline,
-        Size::Small,
-        Some(&icons::EXTERNAL_LINK),
-        "Browse memories",
-    )
-    .key("rd-memory-browse")
-    .help("Opens in your browser")
-    .on_press_tx(move |s: &mut Ui, tx: &mut Tx| s.open_memory_browse(&browse_bot, tx));
+    let browse = pressable(
+        button(t, Kind::Outline, Size::Small, None, "Browse memories").key("rd-memory-browse"),
+        true,
+        move |s: &mut Ui| {
+            s.open_settings(Some(Page::Bot {
+                bot_id: browse_bot.clone(),
+                section: BotSection::MemoryBrowse,
+            }));
+        },
+    );
 
     let enable = setting(
         t,

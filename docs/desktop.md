@@ -15,22 +15,9 @@ What belongs in this app and what stays in the browser is set out in
 It looks like the web workspace on purpose: the same colours, type, bot faces,
 icons and layout, in light and dark.
 
-![Approval, light](images/desktop/approval-light.png)
-
-|                                | Light                                             | Dark                                                   |
-| ------------------------------ | ------------------------------------------------- | ------------------------------------------------------ |
-| Sign in                        | ![](images/desktop/sign-in-light.png)             | ![](images/desktop/device-code-dark.png)               |
-| New conversation, panel open   | ![](images/desktop/conversations-light.png)       | ![](images/desktop/conversations-dark.png)             |
-| Conversation                   | ![](images/desktop/conversation-light.png)        | ![](images/desktop/conversation-dark.png)              |
-| Reply streaming in             | ![](images/desktop/streaming-light.png)           | ![](images/desktop/streaming-dark.png)                 |
-| Tools a run used               | ![](images/desktop/tools-light.png)               | ![](images/desktop/tools-dark.png)                     |
-| Working, with a queued message | ![](images/desktop/working-light.png)             | ![](images/desktop/working-dark.png)                   |
-| Settings: Account              | ![](images/desktop/settings-account-light.png)    | ![](images/desktop/settings-account-dark.png)          |
-| Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png)       |
-| Settings: Profile              | ![](images/desktop/settings-profile-light.png)    | ![](images/desktop/settings-profile-edited-dark.png)   |
-| Settings: Models               | ![](images/desktop/settings-models-light.png)     | ![](images/desktop/settings-models-filter-dark.png)    |
-| Settings: Providers            | ![](images/desktop/settings-providers-light.png)  | ![](images/desktop/settings-providers-add-dark.png)    |
-| Settings: Memory               | ![](images/desktop/settings-memory-light.png)     | ![](images/desktop/settings-memory-hindsight-dark.png) |
+Screenshots are not kept in the repository. `scripts/snapshots.sh` renders
+every screen in light and dark from made-up data; see
+[Headless snapshots](#headless-snapshots) below.
 
 ## What works
 
@@ -97,6 +84,13 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     API key is typed into a masked field and sent once, or cleared; the app
     never stores or shows it. Edits are saved from a bar under the page, and
     the runtime refuses a change while the bot is working.
+  - **Browse memory**, reached from Memory, lists what a bot remembers,
+    newest first and a page at a time, with each memory's kind, time,
+    revision and source. On the built-in back end typing searches after a
+    short pause; on Hindsight, which cannot list every record, Search or
+    Return sends the query. Where the back end allows it, a memory can be
+    corrected in place or forgotten after a confirmation. "Open source
+    session" leaves Settings for the conversation the memory came from.
   - **A bot's other pages** (MCP tools, Channels, ...) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
@@ -204,7 +198,7 @@ apps/desktop/
     src/profile.rs        the Profile form's edits and saving rules
     src/scenes.rs         synthetic states for snapshots and tests
     tests/screens.rs      headless element-tree checks, light and dark
-  scripts/snapshots.sh    renders the PNGs in docs/images/desktop
+  scripts/snapshots.sh    renders every scene to PNGs under target/snapshots
 ```
 
 The crate split is the boundary for later work: the core owns the API client,
@@ -242,7 +236,7 @@ B=target/debug/raphie-desktop
 $B --list-scenes
 $B --snap out.png --scene approval --theme dark --size 1280x800 --scale 2 --chrome
 $B --tree tree.json --scene conversation      # element tree as JSON
-scripts/snapshots.sh                           # every scene, both themes, into docs/images/desktop
+scripts/snapshots.sh                           # every scene, both themes, into target/snapshots (not committed)
 ```
 
 Scenes are synthetic data from `app/src/scenes.rs`. Headless runs never start
@@ -289,8 +283,7 @@ Where the two differ on purpose:
 - Providers opens one connection form at a time; the web can have several
   open. That keeps at most one typed key in memory.
 - Memory lists only the back ends that can be chosen (the web also shows
-  the planned ones, greyed out), and "Browse memories" opens the web
-  workspace. Unsaved Memory edits are dropped when you open another bot's
+  the planned ones, greyed out). Unsaved Memory edits are dropped when you open another bot's
   Memory page, so a typed key is never kept off screen.
 - Profile takes a custom colour as typed hex digits; the web opens the
   browser's colour picker. It has no revision history or Delete yet.
