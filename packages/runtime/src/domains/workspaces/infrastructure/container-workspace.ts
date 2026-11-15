@@ -200,6 +200,7 @@ export class ContainerWorkspace {
           "Container installation identity does not match the bot; deletion remains pending.",
         );
       const cli = new ContainerCli();
+      const files = realpathSync(join(directory, "workspace", "files"));
       // Discover independently of the possibly corrupted lease scope. The
       // separate identity and Docker's persisted bind identify this bot.
       const containers = cli
@@ -209,8 +210,7 @@ export class ContainerWorkspace {
             (mount) =>
               mount.Type === "bind" &&
               mount.Destination === "/workspace" &&
-              realpathSync(mount.Source) ===
-                realpathSync(join(directory, "workspace", "files")),
+              resolvedOrNull(mount.Source) === files,
           ),
         );
       if (
@@ -871,5 +871,19 @@ export class ContainerWorkspace {
       await this.tail;
       this.db.close();
     }
+  }
+}
+
+/**
+ * The real path of `path`, or null when it no longer exists. Another bot's
+ * leftover container can still bind a folder that has since been removed;
+ * such a container is not this bot's and must not stop its deletion.
+ */
+function resolvedOrNull(path: string) {
+  try {
+    return realpathSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
   }
 }
