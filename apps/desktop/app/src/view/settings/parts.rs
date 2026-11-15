@@ -25,6 +25,20 @@ pub enum Scope<'a> {
 
 /// A page: its header, then its groups, in a centred column.
 pub fn page(key: &str, title: &str, lede: &str, scope: Scope, groups: Vec<El>, look: &Look) -> El {
+    sub_page(key, title, lede, scope, None, groups, look)
+}
+
+/// A [`page`] reached from inside another one. `back` is the link to that
+/// page, shown over the title (see [`back_link`]).
+pub fn sub_page(
+    key: &str,
+    title: &str,
+    lede: &str,
+    scope: Scope,
+    back: Option<El>,
+    groups: Vec<El>,
+    look: &Look,
+) -> El {
     col()
         .key(key)
         .w_full()
@@ -33,13 +47,44 @@ pub fn page(key: &str, title: &str, lede: &str, scope: Scope, groups: Vec<El>, l
         .pt(36.0)
         .pb(32.0)
         .gap(28.0)
-        .child(hero(title, lede, scope, look))
+        .child(hero(title, lede, scope, back, look))
         .children(groups)
+}
+
+/// "← Memory": the way back from a sub-page (the web's `.settings-back`).
+/// Give it a handler with [`pressable`].
+pub fn back_link(t: &Theme, label: &str) -> El {
+    row()
+        .role("button")
+        .label(format!("Back to {label}"))
+        .h(28.0)
+        .px(8.0)
+        .gap(4.0)
+        .center_y()
+        .radius(7.0)
+        .hover(t.hover)
+        .press(t.hover)
+        .focus_ring(2.0, 2.0, t.accent)
+        // Its text lines up with the title under it, not its padding.
+        .ml(-8.0)
+        .mb(4.0)
+        .self_start()
+        .child(
+            icon(&crate::icons::ARROW_LEFT, 14.0)
+                .color(t.muted_foreground)
+                .a11y_hidden(),
+        )
+        .child(
+            text(label)
+                .font(font(12.5, 500.0))
+                .color(t.muted_foreground)
+                .a11y_hidden(),
+        )
 }
 
 /// The top of every page. Bot pages wash in the bot's colour, so whose
 /// settings these are is visible before any field; app pages use the accent.
-fn hero(title: &str, lede: &str, scope: Scope, look: &Look) -> El {
+fn hero(title: &str, lede: &str, scope: Scope, back: Option<El>, look: &Look) -> El {
     let t = &look.theme;
     let (tone, avatar_id, tag) = match scope {
         Scope::Bot { id, name } => (look.tones.of(id), id, format!("{name} only")),
@@ -86,6 +131,9 @@ fn hero(title: &str, lede: &str, scope: Scope, look: &Look) -> El {
                 .grow(1.0)
                 .min_w(0.0)
                 .gap(4.0)
+                // `children` takes any number of elements; an `Option` is
+                // none or one.
+                .children(back)
                 .child(
                     text(title)
                         .role("heading")

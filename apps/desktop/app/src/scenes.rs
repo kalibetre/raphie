@@ -6,9 +6,10 @@
 
 use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::{
-    Account, BotProfile, MemoryStatus, Page as Paged, RuntimeSettings, SessionObservation,
-    SessionSummary,
+    Account, BotProfile, MemoryEvidence, MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings,
+    SessionObservation, SessionSummary,
 };
+use raphie_core::engine::Command;
 use raphie_core::model::{AuthState, Event};
 use raphie_core::origin::Origin;
 use rune::TextEdit;
@@ -46,6 +47,10 @@ pub const SCENES: &[Scene] = &[
     ("settings-memory", settings_memory),
     ("settings-memory-hindsight", settings_memory_hindsight),
     ("settings-memory-loading", settings_memory_loading),
+    ("settings-memories", settings_memories),
+    ("settings-memories-editing", settings_memories_editing),
+    ("settings-memories-search", settings_memories_search),
+    ("settings-memories-empty", settings_memories_empty),
     ("settings-bot", settings_bot),
 ];
 
@@ -221,6 +226,101 @@ pub fn settings_memory_hindsight(ui: &mut Ui) {
     ui.memory.bank_id = TextEdit::new("raphie-work");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
+}
+
+/// Made-up saved memories, newest first, as the runtime lists them.
+pub fn memory_evidence() -> Vec<MemoryEvidence> {
+    serde_json::from_value(json!([
+        {
+            "id": "mem_01jc8x2v7q", "kind": "fact", "revision": 2,
+            "content": "Prefers short answers with the conclusion first, then the reasoning.",
+            "source": "session:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b/turn:t-204",
+            "eventTime": 1_794_650_100_000_i64,
+        },
+        {
+            "id": "mem_01jc7m4k2d", "kind": "experience", "revision": 1,
+            "content": "Moved the weekly planning review to Friday mornings after two Mondays were lost to travel.",
+            "source": "session:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b/turn:t-188",
+            "eventTime": 1_794_563_700_000_i64,
+        },
+        {
+            "id": "mem_01jc5p9s8h", "kind": "fact", "revision": 1,
+            "content": "Works in UTC+3 and keeps evenings after 19:00 free.",
+            "source": "session:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b/turn:t-121",
+            "eventTime": 0,
+        },
+    ]))
+    .expect("the scene's memories match the contract")
+}
+
+/// Opens Settings → Memory → Browse memory, and answers the list it asks
+/// for with `page` (when the back end lists memories at all).
+fn open_memories(ui: &mut Ui, hindsight: bool, page: Option<MemoryPage>) {
+    settings_account(ui);
+    ui.model.apply(Event::Memory {
+        bot_id: "default".into(),
+        status: memory_status(hindsight),
+    });
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::MemoryBrowse,
+    }));
+    // The page asked for the first page; the answer carries its ticket.
+    if let (Some(Command::BrowseMemory { ticket, .. }), Some(page)) = (ui.sent.last(), page) {
+        ui.model.apply(Event::MemoryListed {
+            ticket: *ticket,
+            more: false,
+            page,
+        });
+    }
+}
+
+/// Browse memory with a first page of saved memories, one source unfolded.
+pub fn settings_memories(ui: &mut Ui) {
+    open_memories(
+        ui,
+        false,
+        Some(MemoryPage {
+            evidence: memory_evidence(),
+            next: Some("cursor-2".into()),
+            total: 14,
+        }),
+    );
+    ui.memories.open_sources.insert("mem_01jc8x2v7q".into());
+}
+
+/// Browse memory with one memory being corrected and another waiting on
+/// "Confirm forget".
+pub fn settings_memories_editing(ui: &mut Ui) {
+    open_memories(
+        ui,
+        false,
+        Some(MemoryPage {
+            evidence: memory_evidence(),
+            next: None,
+            total: 3,
+        }),
+    );
+    ui.correct_memory("mem_01jc8x2v7q");
+    ui.memories.forgetting = Some("mem_01jc7m4k2d".into());
+}
+
+/// Browse memory on Hindsight, which searches but does not list.
+pub fn settings_memories_search(ui: &mut Ui) {
+    open_memories(ui, true, None);
+}
+
+/// Browse memory before anything was remembered.
+pub fn settings_memories_empty(ui: &mut Ui) {
+    open_memories(
+        ui,
+        false,
+        Some(MemoryPage {
+            evidence: Vec::new(),
+            next: None,
+            total: 0,
+        }),
+    );
 }
 
 /// Settings → Providers, with two connections.

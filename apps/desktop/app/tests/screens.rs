@@ -4,7 +4,9 @@
 //! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
 
 use raphie_core::auth::Secret;
-use raphie_core::contracts::{BotProfile, ControlAction, Decision, MemoryProvider, Scope};
+use raphie_core::contracts::{
+    BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, Scope,
+};
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, Event};
@@ -12,7 +14,7 @@ use raphie_core::settings::ThemeChoice;
 use raphie_desktop::sections::{BotSection, Page};
 use raphie_desktop::state::{self, Filter, Screen};
 use raphie_desktop::{Ui, scenes, view::view};
-use rune::{ElementInfo, Env, Runtime};
+use rune::{ElementInfo, Env, Runtime, TextEdit};
 
 const SIZE: (f32, f32) = (1280.0, 800.0);
 
@@ -1153,11 +1155,314 @@ fn a_bad_scope_cannot_be_saved_and_browsing_opens_the_browser() {
     click(&mut rt, "rd-memory-discard");
     assert_eq!(rt.state.memory.scope.text, "owner");
     assert!(rt.find("rd-save-bar").is_none());
+}
 
-    // Browsing memories is a page of the web workspace for now.
+/// The ticket of the load the page last asked for.
+fn memory_ticket(rt: &Runtime<Ui>) -> u64 {
+    match rt.state.sent.last() {
+        Some(Command::BrowseMemory { ticket, .. } | Command::SearchMemory { ticket, .. }) => {
+            *ticket
+        }
+        other => panic!("the last command is not a memory load: {other:?}"),
+    }
+}
+
+fn browse_page() -> Page {
+    Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::MemoryBrowse,
+    }
+}
+
+#[test]
+fn saved_memories_are_listed_paged_corrected_and_forgotten() {
+    let mut rt = render_sized(scenes::settings_memory, false, (1280.0, 1500.0));
     click(&mut rt, "rd-memory-browse");
+    assert_eq!(rt.state.screen, Screen::Settings(browse_page()));
+    assert!(rt.state.opened.is_empty(), "the page is in the app");
     assert_eq!(
-        rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=memory-browse&bot=default"]
+        element(&rt, "rd-settings-page-name").text.as_deref(),
+        Some("Browse memory")
+    );
+    // The page asks for the first page at once and says so.
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::BrowseMemory { after: None, .. })
+    ));
+    assert_eq!(
+        element(&rt, "rd-memories-status").text.as_deref(),
+        Some("Loading memories…")
+    );
+    let mut evidence = scenes::memory_evidence();
+    let third = evidence.pop().unwrap();
+    let ticket = memory_ticket(&rt);
+    deliver(
+        &mut rt,
+        Event::MemoryListed {
+            ticket,
+            more: false,
+            page: MemoryPage {
+                evidence,
+                next: Some("cursor-2".into()),
+                total: 3,
+            },
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-memories-status").text.as_deref(),
+        Some("Showing 2 of 3 saved memories")
+    );
+    let text = screen_text(&rt);
+    for expected in ["Prefers short answers", "Experience", "revision 2"] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+
+    // "Load more" asks for the page after the cursor and adds to the list.
+    click(&mut rt, "rd-memories-more");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::BrowseMemory { after: Some(cursor), .. }) if cursor == "cursor-2"
+    ));
+    let ticket = memory_ticket(&rt);
+    deliver(
+        &mut rt,
+        Event::MemoryListed {
+            ticket,
+            more: true,
+            page: MemoryPage {
+                evidence: vec![third],
+                next: None,
+                total: 3,
+            },
+        },
+    );
+    assert!(rt.find("rd-memories-more").is_none());
+    assert!(screen_text(&rt).contains("Time not supplied"));
+
+    // Correcting opens an editor holding what the memory says now.
+    click(&mut rt, "rd-memory-mem_01jc8x2v7q-correct");
+    assert!(
+        rt.state
+            .memories
+            .correction
+            .text
+            .starts_with("Prefers short")
+    );
+    rt.update(|ui, _| ui.memories.correction = TextEdit::new("  Prefers long answers.  "));
+    settle(&mut rt);
+    click(&mut rt, "rd-memory-mem_01jc8x2v7q-save");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ReviseMemory {
+            bot_id: "default".into(),
+            id: "mem_01jc8x2v7q".into(),
+            content: "Prefers long answers.".into(),
+        })
+    );
+    deliver(
+        &mut rt,
+        Event::MemoryRevised {
+            id: "mem_01jc8x2v7q".into(),
+            content: "Prefers long answers.".into(),
+        },
+    );
+    assert!(rt.find("rd-memory-mem_01jc8x2v7q-save").is_none());
+    let text = screen_text(&rt);
+    assert!(text.contains("Prefers long answers."));
+    assert!(text.contains("revision 3"));
+
+    // Forgetting asks first. A refusal is shown and keeps the memory.
+    click(&mut rt, "rd-memory-mem_01jc7m4k2d-forget");
+    assert!(
+        rt.state
+            .sent
+            .iter()
+            .all(|c| !matches!(c, Command::ForgetMemory { .. })),
+        "nothing is forgotten before the owner confirms"
+    );
+    click(&mut rt, "rd-memory-mem_01jc7m4k2d-confirm");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ForgetMemory {
+            bot_id: "default".into(),
+            id: "mem_01jc7m4k2d".into(),
+        })
+    );
+    deliver(
+        &mut rt,
+        Event::MemoryChangeFailed {
+            message: "Wait for active turns to finish.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-memories-status").text.as_deref(),
+        Some("Wait for active turns to finish.")
+    );
+    assert!(rt.find("rd-memory-mem_01jc7m4k2d").is_some());
+    click(&mut rt, "rd-memory-mem_01jc7m4k2d-confirm");
+    deliver(
+        &mut rt,
+        Event::MemoryForgotten {
+            id: "mem_01jc7m4k2d".into(),
+        },
+    );
+    assert!(rt.find("rd-memory-mem_01jc7m4k2d").is_none());
+    assert_eq!(
+        element(&rt, "rd-memories-status").text.as_deref(),
+        Some("Showing 2 of 2 saved memories")
+    );
+
+    // The link over the title goes back to Memory.
+    click(&mut rt, "rd-memories-back");
+    assert_eq!(
+        element(&rt, "rd-settings-page-name").text.as_deref(),
+        Some("Memory")
+    );
+}
+
+#[test]
+fn a_memory_search_waits_for_typing_to_pause_and_drops_late_answers() {
+    let mut rt = render_sized(scenes::settings_memories, false, (1280.0, 1500.0));
+    let sent = |rt: &Runtime<Ui>| rt.state.sent.len();
+    let before = sent(&rt);
+    // Typing empties the list at once but sends nothing yet.
+    rt.update(|ui, _| {
+        ui.memories.query = TextEdit::new("plan");
+        assert!(ui.watch_memory_query(10.0));
+    });
+    settle(&mut rt);
+    assert!(rt.state.model.memories.evidence.is_none());
+    assert_eq!(sent(&rt), before);
+    assert_eq!(
+        element(&rt, "rd-memories-status").text.as_deref(),
+        Some("Loading memories…")
+    );
+    rt.update(|ui, _| {
+        ui.memories.query = TextEdit::new("planning");
+        assert!(ui.watch_memory_query(10.2));
+        // Still typing 0.2 s later: the pause starts again.
+        assert!(!ui.watch_memory_query(10.4));
+        assert!(ui.watch_memory_query(10.5));
+    });
+    settle(&mut rt);
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::SearchMemory { query, .. }) if query == "planning"
+    ));
+    assert_eq!(sent(&rt), before + 1, "one search for the whole word");
+
+    // The owner types on; the answer to "planning" arrives late and is dropped.
+    let late = memory_ticket(&rt);
+    rt.update(|ui, _| {
+        ui.memories.query = TextEdit::new("planning review");
+        ui.watch_memory_query(11.0);
+        ui.watch_memory_query(11.3);
+    });
+    deliver(
+        &mut rt,
+        Event::MemoryRecalled {
+            ticket: late,
+            evidence: scenes::memory_evidence(),
+        },
+    );
+    assert!(rt.state.model.memories.evidence.is_none());
+    let ticket = memory_ticket(&rt);
+    deliver(
+        &mut rt,
+        Event::MemoryRecalled {
+            ticket,
+            evidence: Vec::new(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-memories-status").text.as_deref(),
+        Some("0 matching memories")
+    );
+    assert!(screen_text(&rt).contains("No matching memories"));
+
+    // Clearing the search lists every memory again.
+    click(&mut rt, "rd-memories-clear");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::BrowseMemory { after: None, .. })
+    ));
+}
+
+#[test]
+fn a_search_only_back_end_searches_on_request_and_cannot_change_memories() {
+    let mut rt = render_sized(scenes::settings_memories_search, false, (1280.0, 1500.0));
+    // Hindsight does not list memories, so nothing is asked for yet.
+    assert!(
+        rt.state
+            .sent
+            .iter()
+            .all(|c| !matches!(c, Command::BrowseMemory { .. }))
+    );
+    assert!(screen_text(&rt).contains("Press Search or Enter to query the provider."));
+    rt.update(|ui, _| {
+        ui.memories.query = TextEdit::new("tea");
+        ui.watch_memory_query(1.0);
+        // However long the pause, a search waits for the button.
+        assert!(!ui.watch_memory_query(9.0));
+    });
+    settle(&mut rt);
+    assert!(
+        rt.state
+            .sent
+            .iter()
+            .all(|c| !matches!(c, Command::SearchMemory { .. }))
+    );
+    click(&mut rt, "rd-memories-search");
+    let ticket = memory_ticket(&rt);
+    deliver(
+        &mut rt,
+        Event::MemoryRecalled {
+            ticket,
+            evidence: scenes::memory_evidence(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-memories-status").text.as_deref(),
+        Some("3 matching memories")
+    );
+    assert!(rt.find("rd-memory-mem_01jc8x2v7q-correct").is_none());
+}
+
+#[test]
+fn a_memory_leads_back_to_the_conversation_it_came_from() {
+    let mut rt = render_sized(scenes::settings_memories, false, (1280.0, 1500.0));
+    // The first source is unfolded in the scene; the second is folded.
+    assert!(rt.find("rd-memory-mem_01jc7m4k2d-session").is_none());
+    click(&mut rt, "rd-memory-mem_01jc7m4k2d-source");
+    click(&mut rt, "rd-memory-mem_01jc7m4k2d-session");
+    assert_eq!(rt.state.screen, Screen::Workspace);
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::SelectSession {
+            session_id: Some("0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b".into()),
+        })
+    );
+}
+
+#[test]
+fn browse_memory_says_when_memory_is_off() {
+    let mut rt = render(scenes::settings_memory, false);
+    let mut off = scenes::memory_status(false);
+    off.configuration.enabled = false;
+    deliver(
+        &mut rt,
+        Event::Memory {
+            bot_id: "default".into(),
+            status: off,
+        },
+    );
+    rt.update(|ui, _| ui.open_settings(Some(browse_page())));
+    settle(&mut rt);
+    assert!(screen_text(&rt).contains("Memory is off"));
+    assert!(
+        rt.state
+            .sent
+            .iter()
+            .all(|c| !matches!(c, Command::BrowseMemory { .. }))
     );
 }

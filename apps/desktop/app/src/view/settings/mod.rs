@@ -8,6 +8,7 @@
 mod account;
 mod appearance;
 mod bot;
+mod memories;
 mod memory;
 mod models;
 mod nav;
@@ -46,6 +47,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::Memory,
         } => memory::memory(s, bot_id, look, overlays),
+        Page::Bot {
+            bot_id,
+            section: BotSection::MemoryBrowse,
+        } => memories::memories(s, bot_id, look),
         Page::Bot { bot_id, section } => bot::bot_page(s, bot_id, *section, look),
     };
     // Pages with a form dock a save bar under the scrolling page.
@@ -222,6 +227,7 @@ pub fn page_icon(page: &Page) -> &'static Icon {
             BotSection::Providers => &icons::KEY_ROUND,
             BotSection::Models => &icons::BRAIN,
             BotSection::Memory => &icons::BOOK_OPEN,
+            BotSection::MemoryBrowse => &icons::LIBRARY,
             BotSection::Mcp => &icons::PLUG,
             BotSection::Channels => &icons::MESSAGES_SQUARE,
             BotSection::Sandbox => &icons::BOX,

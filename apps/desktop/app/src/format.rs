@@ -36,6 +36,19 @@ pub fn clock(at: i64) -> String {
     }
 }
 
+/// The local date and time of `at`: "Nov 14, 2026, 08:55 PM".
+pub fn date_time(at: i64) -> String {
+    match chrono::DateTime::from_timestamp_millis(at) {
+        Some(utc) => {
+            let local = utc.with_timezone(&chrono::Local);
+            // `%-d` is the day without a leading zero.
+            let date = local.format("%b %-d, %Y");
+            format!("{date}, {}", twelve_hour(local.hour(), local.minute()))
+        }
+        None => String::new(),
+    }
+}
+
 /// "08:55 PM" for 20:55. Midnight and noon are 12, not 0.
 fn twelve_hour(hour: u32, minute: u32) -> String {
     let half = if hour < 12 { "AM" } else { "PM" };
