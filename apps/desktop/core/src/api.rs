@@ -14,8 +14,10 @@ use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::attachments::multipart;
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::channels::ChannelChange;
+use crate::contracts::Attachment;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile,
@@ -40,6 +42,9 @@ use crate::workspace::DOWNLOAD_LIMIT;
 /// Ordinary requests give up after this long. Event streams have no overall
 /// timeout (they stay open for as long as the conversation is on screen).
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// How long one file upload may take.
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Why a call failed, sorted by what the caller should do about it.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -537,20 +542,42 @@ impl ApiClient {
             encode(path)
         );
         let request = self.authorized(self.http.get(self.origin.url(&bot_path(bot_id, &route))));
-        let response = send(request).await?;
-        // Refuse early when the server says the file is too large to hold.
-        let too_large = || ApiError::Decode("This file is too large to download here.".into());
-        if response
-            .content_length()
-            .is_some_and(|length| length > DOWNLOAD_LIMIT as u64)
-        {
-            return Err(too_large());
-        }
-        let bytes = response.bytes().await.map_err(network)?;
-        if bytes.len() > DOWNLOAD_LIMIT {
-            return Err(too_large());
-        }
-        Ok(bytes.to_vec())
+        read_file(send(request).await?).await
+    }
+
+    /// Uploads one file to a bot and returns how the runtime filed it. The
+    /// message that carries it names it by the returned id.
+    pub async fn upload_attachment(
+        &self,
+        bot_id: &str,
+        name: &str,
+        bytes: &[u8],
+    ) -> Result<Attachment, ApiError> {
+        // A random boundary cannot occur in the file by accident.
+        let boundary = format!("raphie-{}", uuid::Uuid::new_v4().simple());
+        let (content_type, body) = multipart(&boundary, name, bytes);
+        let request = self
+            .authorized(
+                self.http
+                    .post(self.origin.url(&bot_path(bot_id, "/api/attachments"))),
+            )
+            .header("x-raphie-client", "web")
+            .header("content-type", content_type)
+            .body(body);
+        // Megabytes over a slow link need longer than a JSON call.
+        let response = request
+            .timeout(UPLOAD_TIMEOUT)
+            .send()
+            .await
+            .map_err(network)?;
+        read_json(check(response).await?).await
+    }
+
+    /// The bytes of one uploaded file, by its id.
+    pub async fn download_attachment(&self, bot_id: &str, id: &str) -> Result<Vec<u8>, ApiError> {
+        let route = format!("/api/files/{}", encode(id));
+        let request = self.authorized(self.http.get(self.origin.url(&bot_path(bot_id, &route))));
+        read_file(send(request).await?).await
     }
 
     /// A bot's Discord and Telegram connections.
@@ -858,6 +885,23 @@ async fn send(request: RequestBuilder) -> Result<Response, ApiError> {
         .await
         .map_err(network)?;
     check(response).await
+}
+
+/// Reads a file's bytes from a response, refusing one too large to hold.
+async fn read_file(response: Response) -> Result<Vec<u8>, ApiError> {
+    let too_large = || ApiError::Decode("This file is too large to download here.".into());
+    // Refuse early when the server says how large the file is.
+    if response
+        .content_length()
+        .is_some_and(|length| length > DOWNLOAD_LIMIT as u64)
+    {
+        return Err(too_large());
+    }
+    let bytes = response.bytes().await.map_err(network)?;
+    if bytes.len() > DOWNLOAD_LIMIT {
+        return Err(too_large());
+    }
+    Ok(bytes.to_vec())
 }
 
 /// Turns an unsuccessful response into an [`ApiError`], using the server's own

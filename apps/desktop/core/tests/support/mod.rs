@@ -71,6 +71,10 @@ pub struct Host {
     pub deleted_bots: Vec<String>,
     /// Bodies of bot deletes: the id and the confirmation sent.
     pub bot_deletes: Vec<(String, Value)>,
+    /// Uploaded files: the id given, the name sent and the bytes.
+    pub uploads: Vec<(String, String, Vec<u8>)>,
+    /// Answer uploads as a runtime whose workspace is unavailable does.
+    pub uploads_down: bool,
     /// Trace collection is switched off.
     pub telemetry_off: bool,
     /// The exported spans, and the bot's durable events oldest first, as
@@ -193,6 +197,9 @@ fn router(fake: Fake) -> Router {
         .route("/api/sessions/events", get(session_list_events))
         .route("/api/bots/{bot}/sessions/events", get(session_list_events))
         .route("/api/sessions/messages", post(submit))
+        .route("/api/attachments", post(upload))
+        .route("/api/bots/{bot}/attachments", post(upload))
+        .route("/api/files/{id}", get(uploaded_file))
         .route("/api/bots/{bot}/sessions/messages", post(submit))
         .route("/api/sessions/{id}/events", get(session_events))
         .route("/api/sessions/{id}/history", get(history))
@@ -1406,6 +1413,96 @@ async fn submit(
         Json(json!({ "id": "turn-new", "sessionId": session })),
     )
         .into_response()
+}
+
+/// `POST /api/attachments`: files one multipart upload and answers as the
+/// runtime does. The id is made from the bytes, so the same file twice
+/// gets the same id.
+async fn upload(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let refused = |status: StatusCode, message: &str| {
+        (status, Json(json!({ "error": message }))).into_response()
+    };
+    let mut host = fake.host.lock().unwrap();
+    if host.uploads_down {
+        return refused(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Workspace uploads are unavailable.",
+        );
+    }
+    let content_type = headers
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    let Some(boundary) = content_type.strip_prefix("multipart/form-data; boundary=") else {
+        return refused(StatusCode::BAD_REQUEST, "Choose a file to upload.");
+    };
+    // One part: headers, a blank line, the bytes, the closing boundary.
+    let find = |haystack: &[u8], needle: &[u8]| {
+        haystack
+            .windows(needle.len())
+            .position(|window| window == needle)
+    };
+    let closing = format!("\r\n--{boundary}--\r\n");
+    let (Some(blank), Some(end)) = (find(&body, b"\r\n\r\n"), find(&body, closing.as_bytes()))
+    else {
+        return refused(StatusCode::BAD_REQUEST, "Choose a file to upload.");
+    };
+    let head = String::from_utf8_lossy(&body[..blank]).into_owned();
+    let name = head
+        .split("filename=\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .unwrap_or("attachment")
+        .to_owned();
+    let bytes = body[blank + 4..end].to_vec();
+    // 64 hex digits from a small hash of the bytes, repeated.
+    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3)
+    });
+    let id = format!("{hash:016x}").repeat(4);
+    let mime = if bytes.starts_with(&[137, 80, 78, 71]) {
+        "image/png"
+    } else {
+        "application/octet-stream"
+    };
+    let answer = json!({
+        "id": id,
+        "name": name,
+        "size": bytes.len(),
+        "path": format!("/workspace/uploads/{id}/{name}"),
+        "mimeType": mime,
+    });
+    host.uploads.push((id, name, bytes));
+    (StatusCode::CREATED, Json(answer)).into_response()
+}
+
+async fn uploaded_file(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", format!("/api/files/{id}"), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let host = fake.host.lock().unwrap();
+    match host.uploads.iter().find(|(known, _, _)| *known == id) {
+        Some((_, _, bytes)) => bytes.clone().into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "File not found." })),
+        )
+            .into_response(),
+    }
 }
 
 async fn decide(

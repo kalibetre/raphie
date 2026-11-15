@@ -5,6 +5,7 @@ mod support;
 
 use std::sync::Arc;
 
+use raphie_core::attachments::{FileBytes, TOO_LARGE, Upload};
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
 use raphie_core::contracts::{
@@ -232,6 +233,7 @@ fn a_first_message_creates_and_opens_a_session() {
     assert!(driver.model.begin_send());
     driver.send(Command::Send {
         text: "Hello".into(),
+        attachments: Vec::new(),
     });
     driver.until("acceptance", |m, _| !m.sending);
     assert!(driver.seen.contains(&Event::SessionCreated {
@@ -1458,4 +1460,141 @@ fn a_missing_session_is_reported() {
     driver.until("the problem", |m, _| {
         m.notice.as_deref() == Some("This conversation no longer exists.")
     });
+}
+
+#[test]
+fn files_are_uploaded_sent_with_a_message_and_saved_back() {
+    let host = FakeHost::start();
+    // Files are read from and saved to a folder of this test's own.
+    let folder =
+        std::env::temp_dir().join(format!("raphie-engine-attachments-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let config = EngineConfig {
+        downloads: Some(folder.clone()),
+        ..support::fast_config()
+    };
+    let mut driver = Driver::with_config(Arc::new(MemoryStore::new()), config);
+    driver.send(Command::Connect {
+        origin: host.origin.clone(),
+    });
+    driver.until("the session list", |m, _| !m.sessions.is_empty());
+    let attach = |driver: &mut Driver, uploads: Vec<Upload>| {
+        assert!(driver.model.attachments.begin("default", uploads.len()));
+        driver.send(Command::Attach {
+            bot_id: "default".into(),
+            uploads,
+        });
+        driver.until("the uploads", |m, _| !m.attachments.uploading);
+    };
+
+    // A file on disk and a pasted image go up in the order chosen.
+    let notes = folder.join("notes to send.md");
+    std::fs::write(&notes, b"# Notes").unwrap();
+    let pasted = FileBytes::from(vec![137, 80, 78, 71, 1, 2, 3]);
+    attach(
+        &mut driver,
+        vec![
+            Upload::File(notes),
+            Upload::Bytes {
+                name: "Pasted image.png".into(),
+                bytes: pasted,
+            },
+        ],
+    );
+    let files = driver.model.attachments.files.clone();
+    let names: Vec<_> = files.iter().map(|file| file.name.as_str()).collect();
+    assert_eq!(names, ["notes to send.md", "Pasted image.png"]);
+    assert_eq!(files[0].size, 7);
+    assert_eq!(files[1].mime_type.as_deref(), Some("image/png"));
+    host.with(|h| {
+        assert_eq!(h.uploads[0].2, b"# Notes");
+        assert!(
+            h.requests
+                .iter()
+                .filter(|seen| seen.path == "/api/attachments")
+                .all(|seen| seen.authorization.as_deref() == Some(&format!("Bearer {TOKEN}"))),
+            "uploads carry the token"
+        );
+    });
+
+    // One file over the limit refuses the whole choice before any upload.
+    let too_large = FileBytes::from(vec![0; 8 * 1024 * 1024 + 1]);
+    attach(
+        &mut driver,
+        vec![
+            Upload::Bytes {
+                name: "ok.txt".into(),
+                bytes: FileBytes::from(b"ok".to_vec()),
+            },
+            Upload::Bytes {
+                name: "huge.bin".into(),
+                bytes: too_large,
+            },
+        ],
+    );
+    assert_eq!(driver.model.attachments.error.as_deref(), Some(TOO_LARGE));
+    assert_eq!(driver.model.attachments.files.len(), 2);
+    host.with(|h| assert_eq!(h.uploads.len(), 2));
+
+    // A runtime that cannot take uploads says so, and the composer is freed.
+    host.with(|h| h.uploads_down = true);
+    attach(
+        &mut driver,
+        vec![Upload::Bytes {
+            name: "later.txt".into(),
+            bytes: FileBytes::from(b"later".to_vec()),
+        }],
+    );
+    assert_eq!(
+        driver.model.attachments.error.as_deref(),
+        Some("Workspace uploads are unavailable.")
+    );
+    host.with(|h| h.uploads_down = false);
+
+    // The message names the files by id, and they leave the composer.
+    assert!(driver.model.begin_send());
+    let ids = driver.model.attachments.take_for_send("default");
+    assert_eq!(ids.len(), 2);
+    driver.send(Command::Send {
+        text: String::new(),
+        attachments: ids.clone(),
+    });
+    driver.until("acceptance", |m, _| !m.sending);
+    assert!(driver.model.attachments.files.is_empty());
+    host.with(|h| {
+        let sent = h.submits.last().unwrap();
+        assert_eq!(sent["attachments"], serde_json::json!(ids));
+    });
+
+    // A message's file is saved to Downloads without replacing anything.
+    assert!(driver.model.begin_save_attachment(&ids[0]));
+    assert!(
+        !driver.model.begin_save_attachment(&ids[1]),
+        "one at a time"
+    );
+    driver.send(Command::DownloadAttachment {
+        bot_id: "default".into(),
+        id: ids[0].clone(),
+        name: "notes to send.md".into(),
+    });
+    driver.until("the save", |m, _| m.saving_attachment.is_none());
+    assert_eq!(
+        driver.model.notice.as_deref(),
+        Some("Saved to your Downloads folder as notes to send (1).md.")
+    );
+    assert_eq!(
+        std::fs::read(folder.join("notes to send (1).md")).unwrap(),
+        b"# Notes"
+    );
+
+    // A file the runtime no longer has says why.
+    assert!(driver.model.begin_save_attachment("gone"));
+    driver.send(Command::DownloadAttachment {
+        bot_id: "default".into(),
+        id: "gone".into(),
+        name: "gone.txt".into(),
+    });
+    driver.until("the failure", |m, _| m.saving_attachment.is_none());
+    assert_eq!(driver.model.notice.as_deref(), Some("File not found."));
+    let _ = std::fs::remove_dir_all(&folder);
 }
