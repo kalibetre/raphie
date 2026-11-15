@@ -7,11 +7,13 @@ use std::sync::Arc;
 
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
+use raphie_core::contracts::TraceState;
 use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
     UpdateBotProfile, WorkspaceKind,
 };
 use raphie_core::engine::{Command, ConnectionChange, EngineConfig};
+use raphie_core::inspection::{pretty_json, span_matches};
 use raphie_core::jobs::{JobAction, NewJob, job_badge, job_interval, run_description};
 use raphie_core::mcp::{McpAction, NewMcpConnection, summary};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
@@ -599,6 +601,101 @@ fn memory_settings_load_save_and_test() {
     host.with(|h| h.memory_unreachable = true);
     let said = test(&mut driver);
     assert!(said.contains("did not answer"), "{said}");
+}
+
+#[test]
+fn traces_activity_telemetry_and_exports() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.spans = vec![serde_json::json!({
+            "traceId": "4bf92f3577b34da6", "spanId": "00f067aa", "parentSpanId": null,
+            "name": "model.call", "startedAt": 1_700_000_000_000_i64, "durationMs": 812.4,
+            "status": "ok", "attributes": { "session.id": "s-1", "tokens": 42 },
+        })];
+        h.activity = vec![serde_json::json!({
+            "id": 7, "at": 1_700_000_000_000_i64, "attemptId": "a-1", "conversationId": 3,
+            "runId": "run-7", "operationId": null, "pluginId": null,
+            "type": "model.completed", "summary": "model completed",
+            "detailsJson": "{\"stopReason\":\"stop\"}",
+        })];
+    });
+    // Exports go to a folder of this test's own, never the real one.
+    let folder = std::env::temp_dir().join(format!("raphie-engine-exports-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let config = EngineConfig {
+        downloads: Some(folder.clone()),
+        ..support::fast_config()
+    };
+    let mut driver = Driver::with_config(Arc::new(MemoryStore::new()), config);
+    driver.send(Command::Connect {
+        origin: host.origin.clone(),
+    });
+    driver.until("the session list", |m, _| !m.sessions.is_empty());
+    let bot_id = || "default".to_owned();
+
+    let load_traces = |driver: &mut Driver, hours: u8| {
+        driver.model.traces.open("default", hours);
+        driver.send(Command::LoadTraces {
+            bot_id: "default".into(),
+            hours,
+        });
+        driver.until("the traces", |m, _| !m.traces.loading);
+    };
+    load_traces(&mut driver, 6);
+    let data = driver.model.traces.data.clone().unwrap();
+    assert_eq!(data.state, TraceState::Ready);
+    assert_eq!(data.spans[0].name, "model.call");
+    assert!(span_matches(&data.spans[0], "s-1"));
+    host.with(|h| {
+        let asked = h.requests.iter().any(|seen| seen.path.ends_with("hours=6"));
+        assert!(asked, "the window is part of the request");
+    });
+    // A backend that is down keeps the traces and marks them unavailable.
+    host.with(|h| h.traces_down = true);
+    load_traces(&mut driver, 6);
+    assert!(driver.model.traces.failed && driver.model.traces.data.is_some());
+    host.with(|h| h.traces_down = false);
+
+    driver.send(Command::LoadBotActivity { bot_id: bot_id() });
+    driver.until("the activity", |m, _| m.activity.contains_key("default"));
+    let event = driver.model.activity["default"][0].clone();
+    assert_eq!(event.kind, "model.completed");
+    assert_eq!(
+        pretty_json(&event.details_json),
+        "{\n  \"stopReason\": \"stop\"\n}"
+    );
+
+    // The telemetry switch is a setting of the runtime.
+    driver.send(Command::LoadSettings { bot_id: bot_id() });
+    driver.until("the settings", |m, _| m.settings.contains_key("default"));
+    assert!(driver.model.settings["default"].telemetry_enabled);
+    assert!(driver.model.begin_set_telemetry());
+    driver.send(Command::SetTelemetry {
+        bot_id: bot_id(),
+        enabled: false,
+    });
+    driver.until("the switch", |m, _| !m.setting_telemetry);
+    assert!(!driver.model.settings["default"].telemetry_enabled);
+    load_traces(&mut driver, 6);
+    assert!(!driver.model.traces.data.as_ref().unwrap().export_enabled);
+
+    // An export is written beside any file already there, never over it.
+    let export = |driver: &mut Driver| {
+        assert!(driver.model.begin_export());
+        driver.send(Command::SaveExport {
+            name: "raphie-traces-1.json".into(),
+            contents: "{\"spans\":[]}".into(),
+        });
+        driver.until("the export", |m, _| !m.exporting);
+        driver.model.export_saved.clone().unwrap_or_default()
+    };
+    assert_eq!(export(&mut driver), "raphie-traces-1.json");
+    assert_eq!(export(&mut driver), "raphie-traces-1 (1).json");
+    assert_eq!(
+        std::fs::read_to_string(folder.join("raphie-traces-1.json")).unwrap(),
+        "{\"spans\":[]}"
+    );
+    std::fs::remove_dir_all(&folder).unwrap();
 }
 
 #[test]

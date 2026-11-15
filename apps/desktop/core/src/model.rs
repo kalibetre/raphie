@@ -17,7 +17,9 @@ use crate::contracts::{
     SandboxSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
     TelegramPairingCode,
 };
+use crate::contracts::{ActivityEvent, TraceDiagnostics};
 use crate::contracts::{JobRun, ScheduledJob};
+use crate::inspection::TraceView;
 use crate::jobs::RunHistory;
 use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
@@ -104,6 +106,39 @@ pub enum Event {
         settings: SandboxSettings,
     },
     SandboxSaveFailed {
+        message: String,
+    },
+    /// Exported traces for a bot and a time window (in hours).
+    Traces {
+        bot_id: String,
+        hours: u8,
+        data: Box<TraceDiagnostics>,
+    },
+    TracesFailed {
+        bot_id: String,
+        hours: u8,
+    },
+    /// A bot's most recent durable events.
+    BotActivity {
+        bot_id: String,
+        items: Vec<ActivityEvent>,
+    },
+    BotActivityFailed {
+        bot_id: String,
+    },
+    /// Trace collection was switched; these are the settings afterwards.
+    TelemetrySet {
+        bot_id: String,
+        settings: Box<RuntimeSettings>,
+    },
+    TelemetryFailed {
+        message: String,
+    },
+    /// An export was written to this machine; `saved_as` is its file name.
+    ExportSaved {
+        saved_as: String,
+    },
+    ExportFailed {
         message: String,
     },
     /// A bot's scheduled jobs.
@@ -504,6 +539,21 @@ pub struct Model {
     pub sandbox_save_error: Option<String>,
     /// What the last save of sandbox settings said.
     pub sandbox_message: Option<String>,
+    /// The traces on Diagnostics.
+    pub traces: TraceView,
+    /// Each bot's most recent events, once loaded.
+    pub activity: HashMap<String, Vec<ActivityEvent>>,
+    /// The bot whose events could not be loaded. Events loaded before stay.
+    pub activity_failed: Option<String>,
+    /// The telemetry switch is being changed.
+    pub setting_telemetry: bool,
+    /// Why the last change of the telemetry switch failed.
+    pub telemetry_error: Option<String>,
+    /// An export is being written.
+    pub exporting: bool,
+    /// What the last export said: the file's name, or why it failed.
+    pub export_saved: Option<String>,
+    pub export_error: Option<String>,
     /// Each bot's scheduled jobs, once loaded.
     pub jobs: HashMap<String, Vec<ScheduledJob>>,
     /// The bot whose jobs could not be loaded, and why.
@@ -589,6 +639,14 @@ impl Default for Model {
             saving_sandbox: false,
             sandbox_save_error: None,
             sandbox_message: None,
+            traces: TraceView::default(),
+            activity: HashMap::new(),
+            activity_failed: None,
+            setting_telemetry: false,
+            telemetry_error: None,
+            exporting: false,
+            export_saved: None,
+            export_error: None,
             jobs: HashMap::new(),
             jobs_error: None,
             changing_job: false,
@@ -736,6 +794,36 @@ impl Model {
             Event::SandboxSaveFailed { message } => {
                 self.saving_sandbox = false;
                 self.sandbox_save_error = Some(message);
+            }
+            Event::Traces {
+                bot_id,
+                hours,
+                data,
+            } => self.traces.loaded(&bot_id, hours, *data),
+            Event::TracesFailed { bot_id, hours } => self.traces.load_failed(&bot_id, hours),
+            Event::BotActivity { bot_id, items } => {
+                if self.activity_failed.as_deref() == Some(bot_id.as_str()) {
+                    self.activity_failed = None;
+                }
+                self.activity.insert(bot_id, items);
+            }
+            Event::BotActivityFailed { bot_id } => self.activity_failed = Some(bot_id),
+            Event::TelemetrySet { bot_id, settings } => {
+                self.setting_telemetry = false;
+                self.telemetry_error = None;
+                self.settings.insert(bot_id, *settings);
+            }
+            Event::TelemetryFailed { message } => {
+                self.setting_telemetry = false;
+                self.telemetry_error = Some(message);
+            }
+            Event::ExportSaved { saved_as } => {
+                self.exporting = false;
+                self.export_saved = Some(saved_as);
+            }
+            Event::ExportFailed { message } => {
+                self.exporting = false;
+                self.export_error = Some(message);
             }
             Event::Jobs { bot_id, items } => {
                 self.jobs_error = None;
@@ -1007,6 +1095,29 @@ impl Model {
         self.saving_memory = true;
         self.memory_save_error = None;
         self.memory_message = None;
+        true
+    }
+
+    /// The owner flipped the telemetry switch. Returns false while a change
+    /// is already on its way.
+    pub fn begin_set_telemetry(&mut self) -> bool {
+        if self.setting_telemetry {
+            return false;
+        }
+        self.setting_telemetry = true;
+        self.telemetry_error = None;
+        true
+    }
+
+    /// The owner asked for an export. Returns false while one is being
+    /// written.
+    pub fn begin_export(&mut self) -> bool {
+        if self.exporting {
+            return false;
+        }
+        self.exporting = true;
+        self.export_saved = None;
+        self.export_error = None;
         true
     }
 

@@ -27,6 +27,7 @@ use crate::contracts::{
     SelectHomeBody, SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
     TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
 };
+use crate::contracts::{ActivityEvent, TelemetryBody, TraceDiagnostics};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
 use crate::jobs::{JobAction, NewJob};
 use crate::mcp::{McpAction, NewMcpConnection};
@@ -396,6 +397,34 @@ impl ApiClient {
             revision: update.revision,
         };
         self.post_json(&bot_path(bot_id, "/api/workspace/settings"), &body)
+            .await
+    }
+
+    /// Exported traces from the last `hours` hours (1, 6 or 24).
+    pub async fn traces(&self, bot_id: &str, hours: u8) -> Result<TraceDiagnostics, ApiError> {
+        let path = format!("/api/diagnostics/traces?hours={hours}");
+        self.get_json(&bot_path(bot_id, &path)).await
+    }
+
+    /// A bot's most recent durable events, across its conversations.
+    pub async fn bot_activity(&self, bot_id: &str) -> Result<Vec<ActivityEvent>, ApiError> {
+        let page: Page<ActivityEvent> = self
+            .get_json(&bot_path(bot_id, "/api/inspection/activity?limit=100"))
+            .await?;
+        Ok(page.items)
+    }
+
+    /// Switches the runtime's trace collection on or off and returns the
+    /// settings afterwards.
+    pub async fn set_telemetry(
+        &self,
+        bot_id: &str,
+        enabled: bool,
+    ) -> Result<RuntimeSettings, ApiError> {
+        let body = TelemetryBody {
+            telemetry_enabled: enabled,
+        };
+        self.post_json(&bot_path(bot_id, "/api/settings"), &body)
             .await
     }
 

@@ -80,6 +80,9 @@ pub struct RuntimeSettings {
     pub connections: Vec<ProviderConnection>,
     #[serde(default)]
     pub models: Vec<LibraryModel>,
+    /// Whether the runtime records diagnostic traces.
+    #[serde(default)]
+    pub telemetry_enabled: bool,
 }
 
 /// `ProviderConnection` in the same file: a named set of credentials for
@@ -1059,4 +1062,107 @@ pub(crate) struct SaveJobBody<'a> {
 #[derive(Serialize)]
 pub(crate) struct JobActionBody {
     pub action: crate::jobs::JobAction,
+}
+
+/// A span's outcome.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SpanStatus {
+    /// The code that made the span did not say.
+    Unset,
+    Ok,
+    Error,
+    #[serde(other)]
+    Unknown,
+}
+
+impl SpanStatus {
+    /// The status as the runtime spells it.
+    pub fn word(self) -> &'static str {
+        match self {
+            SpanStatus::Unset => "unset",
+            SpanStatus::Ok => "ok",
+            SpanStatus::Error => "error",
+            SpanStatus::Unknown => "unknown",
+        }
+    }
+}
+
+/// `DiagnosticSpan` in `packages/contracts/src/diagnostics/views.ts`: one
+/// timed operation from an exported trace. It also serializes, in the
+/// runtime's shape, so an export reads like the web's.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticSpan {
+    pub trace_id: String,
+    pub span_id: String,
+    /// The span this one ran inside; `None` for a trace's first span.
+    pub parent_span_id: Option<String>,
+    pub name: String,
+    /// When it started, in milliseconds since the Unix epoch.
+    pub started_at: i64,
+    pub duration_ms: f64,
+    pub status: SpanStatus,
+    /// Extra facts about the operation: an object of strings, numbers and
+    /// booleans, kept as JSON because the keys vary by operation.
+    pub attributes: serde_json::Value,
+}
+
+/// Whether the runtime has traces to show.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TraceState {
+    Ready,
+    /// No trace backend is set up.
+    Unconfigured,
+    /// One is set up but did not answer.
+    #[serde(other)]
+    Unavailable,
+}
+
+/// `TraceDiagnostics`: what `GET /api/diagnostics/traces` answers.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceDiagnostics {
+    pub source: String,
+    pub state: TraceState,
+    /// Whether new traces are being exported; when not, only retained ones
+    /// are shown.
+    pub export_enabled: bool,
+    pub spans: Vec<DiagnosticSpan>,
+    pub from: i64,
+    pub to: i64,
+    /// The most spans one answer carries; this is not a full history.
+    pub span_limit: u32,
+}
+
+/// `ActivityEvent` in `packages/contracts/src/index.ts`, as
+/// `GET /api/inspection/activity` lists them: one durable step a bot took,
+/// in any of its conversations. Serializes in the runtime's shape for
+/// exports.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityEvent {
+    pub id: i64,
+    /// Milliseconds since the Unix epoch.
+    pub at: i64,
+    pub attempt_id: String,
+    pub run_id: Option<String>,
+    pub operation_id: Option<String>,
+    pub plugin_id: Option<String>,
+    /// `model.completed`, `tool.started`, ... `type` is a Rust keyword, so
+    /// the field is `kind` here.
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub summary: String,
+    /// Extra data as JSON text; `{}` when there is none.
+    pub details_json: String,
+}
+
+/// The body of `POST /api/settings` that switches trace collection
+/// (`UpdateRuntimeSettings`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TelemetryBody {
+    pub telemetry_enabled: bool,
 }
