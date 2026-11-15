@@ -65,6 +65,12 @@ pub struct Host {
     pub memory_saves: Vec<Value>,
     /// Answer memory tests with a failure, as an unreachable server would.
     pub memory_unreachable: bool,
+    /// Bots created by tests, as the runtime lists them.
+    pub created_bots: Vec<Value>,
+    /// Ids of bots deleted by tests.
+    pub deleted_bots: Vec<String>,
+    /// Bodies of bot deletes: the id and the confirmation sent.
+    pub bot_deletes: Vec<(String, Value)>,
     /// Trace collection is switched off.
     pub telemetry_off: bool,
     /// The exported spans, and the bot's durable events oldest first, as
@@ -181,7 +187,9 @@ fn router(fake: Fake) -> Router {
         .route("/api/auth/device/code", post(device_code))
         .route("/api/auth/device/token", post(device_token))
         .route("/auth/status", get(auth_status))
-        .route("/api/bots", get(bots))
+        .route("/api/bots", get(bots).post(create_bot))
+        .route("/api/bots/{id}", axum::routing::delete(delete_bot))
+        .route("/api/bots/{id}/history", get(bot_history))
         .route("/api/sessions/events", get(session_list_events))
         .route("/api/bots/{bot}/sessions/events", get(session_list_events))
         .route("/api/sessions/messages", post(submit))
@@ -1018,14 +1026,118 @@ async fn bots(State(fake): State<Fake>, headers: HeaderMap) -> Response {
     if let Some(denied) = refuse(&fake, &headers) {
         return denied;
     }
-    let revision = fake.host.lock().unwrap().profile_revision.max(1);
-    Json(json!({ "items": [
-        { "id": "default", "name": "Raphie", "description": "", "soul": "", "color": null,
-          "revision": 1, "createdAt": 1, "updatedAt": 1 },
-        { "id": "b-research", "name": "Research", "description": "Reads papers", "soul": "Be brief.",
-          "revision": revision, "createdAt": 2, "updatedAt": 2 }
-    ]}))
-    .into_response()
+    Json(json!({ "items": bot_list(&fake.host.lock().unwrap()) })).into_response()
+}
+
+/// The bots as the runtime lists them: the two it starts with, less any a
+/// test deleted, then any a test created.
+fn bot_list(host: &Host) -> Vec<Value> {
+    let revision = host.profile_revision.max(1);
+    let mut items = vec![
+        json!({ "id": "default", "name": "Raphie", "description": "", "soul": "", "color": null,
+                "revision": 1, "createdAt": 1, "updatedAt": 1 }),
+        json!({ "id": "b-research", "name": "Research", "description": "Reads papers",
+                "soul": "Be brief.", "revision": revision, "createdAt": 2, "updatedAt": 2 }),
+    ];
+    items.extend(host.created_bots.iter().cloned());
+    items.retain(|bot| {
+        let id = bot["id"].as_str().unwrap_or("");
+        !host.deleted_bots.iter().any(|deleted| deleted == id)
+    });
+    items
+}
+
+/// Creates a bot at revision 1, unless one already has its name.
+async fn create_bot(
+    State(fake): State<Fake>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", "/api/bots".into(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    if bot_list(&host)
+        .iter()
+        .any(|bot| bot["name"] == body["name"])
+    {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "A bot with this name already exists." })),
+        )
+            .into_response();
+    }
+    let created = json!({
+        "id": format!("b-new-{}", host.created_bots.len() + 1),
+        "name": body["name"], "description": body["description"], "soul": body["soul"],
+        "color": body["color"], "revision": 1, "createdAt": 5, "updatedAt": 5,
+    });
+    host.created_bots.push(created.clone());
+    (StatusCode::CREATED, Json(created)).into_response()
+}
+
+/// Deletes a bot if the confirmation names it as it is now, as the
+/// runtime does; the default bot cannot be deleted.
+async fn delete_bot(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "DELETE", format!("/api/bots/{id}"), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    host.bot_deletes.push((id.clone(), body.clone()));
+    let refused = |status: StatusCode, message: &str| {
+        (status, Json(json!({ "error": message }))).into_response()
+    };
+    if id == "default" {
+        return refused(
+            StatusCode::BAD_REQUEST,
+            "The default bot cannot be deleted.",
+        );
+    }
+    let Some(bot) = bot_list(&host)
+        .into_iter()
+        .find(|bot| bot["id"] == id.as_str())
+    else {
+        return refused(StatusCode::NOT_FOUND, "Bot not found.");
+    };
+    if bot["name"] != body["name"] || bot["revision"] != body["revision"] {
+        return refused(
+            StatusCode::CONFLICT,
+            "This bot changed. Reload and try again.",
+        );
+    }
+    host.deleted_bots.push(id);
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// The research bot's saved versions, newest first: one per revision.
+async fn bot_history(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", format!("/api/bots/{id}/history"), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let latest = fake.host.lock().unwrap().profile_revision.max(1);
+    let items: Vec<Value> = (1..=latest)
+        .rev()
+        .map(|revision| {
+            json!({
+                "id": id, "name": "Research", "description": "Reads papers", "color": null,
+                "soul": format!("Be brief. (revision {revision})"), "revision": revision,
+                "createdAt": 2, "updatedAt": 1_700_000_000_000_i64 + i64::from(revision),
+            })
+        })
+        .collect();
+    Json(json!({ "items": items })).into_response()
 }
 
 /// Two models through one connection; the default is the first until the

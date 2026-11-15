@@ -17,7 +17,7 @@ use crate::contracts::{
     SandboxSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
     TelegramPairingCode,
 };
-use crate::contracts::{ActivityEvent, TraceDiagnostics};
+use crate::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use crate::contracts::{JobRun, ScheduledJob};
 use crate::inspection::TraceView;
 use crate::jobs::RunHistory;
@@ -89,6 +89,27 @@ pub enum Event {
     },
     /// A test of the saved memory back end ended; `message` says how.
     MemoryTested {
+        message: String,
+    },
+    /// The saved versions of a bot's profile, newest first.
+    BotHistory {
+        bot_id: String,
+        items: Vec<BotRevision>,
+    },
+    BotHistoryFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// A bot was created; this is it.
+    BotCreated(BotProfile),
+    BotCreateFailed {
+        message: String,
+    },
+    /// A bot and everything the runtime kept for it were deleted.
+    BotDeleted {
+        bot_id: String,
+    },
+    BotDeleteFailed {
         message: String,
     },
     /// A bot's sandbox settings, provider, limits and usage.
@@ -375,6 +396,10 @@ pub enum Effect {
     /// This bot's memory settings were saved: its form should show them and
     /// forget any typed key.
     MemorySaved(String),
+    /// A bot was created: open its settings so it can be given a model.
+    BotCreated(String),
+    /// A bot was deleted: leave its pages.
+    BotDeleted(String),
     /// A job was scheduled: close its form and empty it.
     JobAdded,
     /// This bot's sandbox settings were saved: its form should show them.
@@ -539,6 +564,16 @@ pub struct Model {
     pub sandbox_save_error: Option<String>,
     /// What the last save of sandbox settings said.
     pub sandbox_message: Option<String>,
+    /// Each bot's saved profile versions, once loaded.
+    pub bot_history: HashMap<String, Vec<BotRevision>>,
+    /// The bot whose history could not be loaded, and why.
+    pub bot_history_error: Option<(String, String)>,
+    /// A bot is being created.
+    pub creating_bot: bool,
+    /// A bot is being deleted.
+    pub deleting_bot: bool,
+    /// Why the last delete failed, until the next attempt.
+    pub delete_bot_error: Option<String>,
     /// The traces on Diagnostics.
     pub traces: TraceView,
     /// Each bot's most recent events, once loaded.
@@ -639,6 +674,11 @@ impl Default for Model {
             saving_sandbox: false,
             sandbox_save_error: None,
             sandbox_message: None,
+            bot_history: HashMap::new(),
+            bot_history_error: None,
+            creating_bot: false,
+            deleting_bot: false,
+            delete_bot_error: None,
             traces: TraceView::default(),
             activity: HashMap::new(),
             activity_failed: None,
@@ -773,6 +813,42 @@ impl Model {
             Event::MemoryTested { message } => {
                 self.testing_memory = false;
                 self.memory_message = Some(message);
+            }
+            Event::BotHistory { bot_id, items } => {
+                self.bot_history_error = None;
+                self.bot_history.insert(bot_id, items);
+            }
+            Event::BotHistoryFailed { bot_id, message } => {
+                self.bot_history_error = Some((bot_id, message));
+            }
+            Event::BotCreated(profile) => {
+                self.creating_bot = false;
+                self.profile_error = None;
+                let id = profile.id.clone();
+                // The list is read again too; until then show the new bot.
+                if !self.bots.iter().any(|bot| bot.id == id) {
+                    self.bots.push(profile);
+                }
+                return vec![Effect::BotCreated(id)];
+            }
+            Event::BotCreateFailed { message } => {
+                self.creating_bot = false;
+                // Shown where a failed profile save is: the form's save bar.
+                self.profile_error = Some(message);
+            }
+            Event::BotDeleted { bot_id } => {
+                self.deleting_bot = false;
+                self.delete_bot_error = None;
+                self.bots.retain(|bot| bot.id != bot_id);
+                // Nothing of the bot's is kept here either.
+                self.bot_history.remove(&bot_id);
+                self.settings.remove(&bot_id);
+                self.memory.remove(&bot_id);
+                return vec![Effect::BotDeleted(bot_id)];
+            }
+            Event::BotDeleteFailed { message } => {
+                self.deleting_bot = false;
+                self.delete_bot_error = Some(message);
             }
             Event::Sandbox { bot_id, info } => {
                 self.sandbox_error = None;
@@ -1130,6 +1206,27 @@ impl Model {
         self.changing_job = true;
         self.job_error = None;
         self.job_message = None;
+        true
+    }
+
+    /// The owner created a bot. Returns false while one is being created.
+    pub fn begin_create_bot(&mut self) -> bool {
+        if self.creating_bot {
+            return false;
+        }
+        self.creating_bot = true;
+        self.profile_error = None;
+        true
+    }
+
+    /// The owner confirmed deleting a bot. Returns false while a delete is
+    /// already on its way.
+    pub fn begin_delete_bot(&mut self) -> bool {
+        if self.deleting_bot {
+            return false;
+        }
+        self.deleting_bot = true;
+        self.delete_bot_error = None;
         true
     }
 

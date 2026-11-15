@@ -1166,3 +1166,47 @@ pub struct ActivityEvent {
 pub(crate) struct TelemetryBody {
     pub telemetry_enabled: bool,
 }
+
+/// One saved version of a bot's profile, as `GET /api/bots/<id>/history`
+/// lists them (a `BotProfile` with when it was saved).
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BotRevision {
+    pub revision: u32,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub color: Option<String>,
+    /// The personality (SOUL.md) as it was at this revision.
+    #[serde(default)]
+    pub soul: String,
+    /// When it was saved, in milliseconds since the Unix epoch.
+    #[serde(default)]
+    pub updated_at: i64,
+}
+
+/// What `GET /api/bots/<id>/history` answers.
+#[derive(Debug, Deserialize)]
+pub(crate) struct BotHistory {
+    pub items: Vec<BotRevision>,
+}
+
+/// A bot to create: the body of `POST /api/bots`.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct NewBot {
+    pub name: String,
+    pub description: String,
+    pub soul: String,
+    /// `None` is sent as `null`: let Raphie pick a colour.
+    pub color: Option<String>,
+}
+
+/// The body of `DELETE /api/bots/<id>`. The runtime deletes only if both
+/// still match, so a bot renamed or saved elsewhere is not removed by an
+/// out-of-date confirmation.
+#[derive(Serialize)]
+pub(crate) struct DeleteBotBody<'a> {
+    pub name: &'a str,
+    pub revision: u32,
+}
