@@ -46,11 +46,21 @@ function Root() {
       </head>
       <body>
         {testWorkspace && (
+          // An amber frame round the whole window, with a small tag on its
+          // top edge: unmistakable, yet over none of the app's text.
           <div
             role="status"
-            className="pointer-events-none fixed top-2 left-1/2 z-50 -translate-x-1/2 rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-black shadow"
+            className="pointer-events-none fixed inset-0 z-50 border-[3px] border-amber-500"
           >
-            Test workspace · fake models, not your data
+            <span
+              aria-hidden="true"
+              className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-md bg-amber-500 px-2 text-[9px] leading-3 font-bold tracking-wider text-black"
+            >
+              TEST
+            </span>
+            <span className="sr-only">
+              Test workspace · fake models, not your data
+            </span>
           </div>
         )}
         {authPage ? (
