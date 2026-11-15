@@ -15,7 +15,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    height: 60px;
+    /* Compact, as in the desktop client. */
+    height: 44px;
     padding: 0 24px;
     border-bottom: 1px solid var(--border);
   }
@@ -257,7 +258,7 @@
       flex-shrink: 2;
     }
     .settings-topbar {
-      height: 56px;
+      height: 44px;
       padding: 0 12px;
       gap: 6px;
     }
