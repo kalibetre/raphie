@@ -97,6 +97,14 @@ pub struct Host {
     /// runtime lists them.
     pub jobs: Vec<Value>,
     pub job_runs: Vec<Value>,
+    /// Each named bot's conversations, as its sessions page lists them.
+    pub bot_sessions: HashMap<String, Vec<Value>>,
+    /// Each bot's undismissed job runs ("default" for the default bot).
+    pub job_updates: HashMap<String, Vec<Value>>,
+    /// Answer job update requests with a failure.
+    pub job_updates_down: bool,
+    /// Refuse to dismiss job runs.
+    pub acknowledge_down: bool,
     /// Bodies of job adds, as received.
     pub job_adds: Vec<Value>,
     /// The workspace's files: `(path, bytes)`. Folders are implied by the
@@ -238,6 +246,11 @@ fn router(fake: Fake) -> Router {
         .route("/api/inspection/activity", get(bot_activity))
         .route("/api/jobs", get(jobs).post(add_job))
         .route("/api/jobs/runs", get(job_runs))
+        .route("/api/bots/{bot}/sessions", get(bot_sessions))
+        .route("/api/jobs/notifications", get(job_updates))
+        .route("/api/bots/{bot}/jobs/notifications", get(job_updates))
+        .route("/api/jobs/runs/{id}/read", post(acknowledge_run))
+        .route("/api/bots/{bot}/jobs/runs/{id}/read", post(acknowledge_run))
         .route("/api/jobs/{id}", post(change_job))
         .route("/api/workspace/files", get(workspace_files))
         .route("/api/workspace/download", get(workspace_download))
@@ -478,6 +491,93 @@ async fn job_runs(State(fake): State<Fake>, uri: axum::http::Uri, headers: Heade
     let items: Vec<&Value> = matching.iter().skip(from).take(2).copied().collect();
     let next = (from + 2 < matching.len()).then(|| (from + 2).to_string());
     Json(json!({ "items": items, "next": next })).into_response()
+}
+
+/// The bot a request is for: the `/api/bots/<id>/` prefix, or the default.
+fn bot_of(uri: &axum::http::Uri) -> String {
+    uri.path()
+        .strip_prefix("/api/bots/")
+        .and_then(|rest| rest.split('/').next())
+        .unwrap_or("default")
+        .to_owned()
+}
+
+async fn bot_sessions(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let host = fake.host.lock().unwrap();
+    let items = host
+        .bot_sessions
+        .get(&bot_of(&uri))
+        .cloned()
+        .unwrap_or_default();
+    Json(json!({ "items": items, "next": null })).into_response()
+}
+
+/// A bot's undismissed job runs: at most two a page, with the total.
+async fn job_updates(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let host = fake.host.lock().unwrap();
+    if host.job_updates_down {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "The runtime is unavailable. Please retry." })),
+        )
+            .into_response();
+    }
+    let all = host
+        .job_updates
+        .get(&bot_of(&uri))
+        .cloned()
+        .unwrap_or_default();
+    let items: Vec<&Value> = all.iter().take(2).collect();
+    let next = (all.len() > 2).then(|| "2".to_owned());
+    Json(json!({ "items": items, "next": next, "total": all.len() })).into_response()
+}
+
+async fn acknowledge_run(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    if host.acknowledge_down {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "The runtime is unavailable. Please retry." })),
+        )
+            .into_response();
+    }
+    // ".../jobs/runs/<id>/read": the id is the part before "read".
+    let id = uri
+        .path()
+        .trim_end_matches("/read")
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    let bot = bot_of(&uri);
+    if let Some(runs) = host.job_updates.get_mut(&bot) {
+        runs.retain(|run| run["id"] != id.as_str());
+    }
+    Json(json!({ "ok": true })).into_response()
 }
 
 /// One query value from a request's address, percent-decoded.

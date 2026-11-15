@@ -25,6 +25,7 @@ pub mod auth;
 pub mod channels;
 pub mod contracts;
 pub mod engine;
+pub mod inbox;
 pub mod inspection;
 pub mod jobs;
 pub mod mcp;

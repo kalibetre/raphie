@@ -18,6 +18,7 @@ use crate::attachments::multipart;
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::channels::ChannelChange;
 use crate::contracts::Attachment;
+use crate::contracts::JobNotifications;
 use crate::contracts::ModelSelection;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
@@ -866,6 +867,20 @@ impl ApiClient {
         );
         // The answer repeats the model sent; only success matters.
         let _: serde_json::Value = self.post_json(&path, model).await?;
+        Ok(())
+    }
+
+    /// A bot's job runs the owner has not dismissed.
+    pub async fn job_notifications(&self, bot_id: &str) -> Result<JobNotifications, ApiError> {
+        self.get_json(&bot_path(bot_id, "/api/jobs/notifications"))
+            .await
+    }
+
+    /// Dismisses one job run from the notifications.
+    pub async fn acknowledge_run(&self, bot_id: &str, run_id: &str) -> Result<(), ApiError> {
+        let path = bot_path(bot_id, &format!("/api/jobs/runs/{}/read", encode(run_id)));
+        // The answer is `{ "ok": true }`; only success matters.
+        let _: serde_json::Value = self.post_json(&path, &serde_json::json!({})).await?;
         Ok(())
     }
 
