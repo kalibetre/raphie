@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 use crate::attachments::AttachmentDraft;
 use crate::auth::DeviceCode;
 use crate::channels::{Channel, ChannelOutcome};
+use crate::contracts::ApprovalMode;
 use crate::contracts::Attachment;
 use crate::contracts::ModelSelection;
 use crate::contracts::WorkspaceListing;
@@ -26,6 +27,7 @@ use crate::inspection::TraceView;
 use crate::jobs::RunHistory;
 use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
+use crate::permissions::CommandMode;
 use crate::workspace::WorkspaceBrowser;
 
 /// News from the engine. Events about a bot or session carry its id, so news
@@ -349,6 +351,22 @@ pub enum Event {
     },
     MessageFailed {
         message: String,
+    },
+    /// How a session treats commands.
+    ApprovalMode {
+        session_id: String,
+        mode: ApprovalMode,
+    },
+    ApprovalModeFailed {
+        session_id: String,
+    },
+    /// A change of command mode was saved; `mode` is the one in force.
+    ApprovalModeSaved {
+        session_id: String,
+        mode: ApprovalMode,
+    },
+    ApprovalModeSaveFailed {
+        session_id: String,
     },
     /// The session answers with `model` from now on.
     ModelChosen {
@@ -678,6 +696,8 @@ pub struct Model {
     /// The open conversation; `None` means a new, unsent conversation.
     pub conversation: Option<Conversation>,
     pub sending: bool,
+    /// How the open session treats commands.
+    pub command_mode: CommandMode,
     /// A change of the open session's model is on its way.
     pub choosing_model: bool,
     /// Why the last change of model failed, until the next attempt.
@@ -758,6 +778,7 @@ impl Default for Model {
             sessions_next: None,
             conversation: None,
             sending: false,
+            command_mode: CommandMode::default(),
             choosing_model: false,
             model_error: None,
             attachments: AttachmentDraft::default(),
@@ -1149,6 +1170,16 @@ impl Model {
                 self.sending = false;
                 self.attachments.not_sent();
                 self.notice = Some(message);
+            }
+            Event::ApprovalMode { session_id, mode } => {
+                self.command_mode.loaded(&session_id, mode);
+            }
+            Event::ApprovalModeFailed { session_id } => self.command_mode.load_failed(&session_id),
+            Event::ApprovalModeSaved { session_id, mode } => {
+                self.command_mode.saved(&session_id, mode);
+            }
+            Event::ApprovalModeSaveFailed { session_id } => {
+                self.command_mode.save_failed(&session_id);
             }
             Event::ModelChosen { session_id, model } => {
                 self.choosing_model = false;

@@ -71,6 +71,11 @@ pub struct Host {
     pub deleted_bots: Vec<String>,
     /// Bodies of bot deletes: the id and the confirmation sent.
     pub bot_deletes: Vec<(String, Value)>,
+    /// Each session's command mode, once a test or a change set one;
+    /// a session not listed asks.
+    pub approval_modes: HashMap<String, String>,
+    /// Answer command mode requests with a failure.
+    pub approval_mode_down: bool,
     /// Model choices: the path asked and the body.
     pub model_choices: Vec<(String, Value)>,
     /// Answer model choices as a runtime that no longer has the model.
@@ -210,6 +215,10 @@ fn router(fake: Fake) -> Router {
         .route("/api/tool-approvals/{id}", post(decide))
         .route("/api/sessions/{id}/control", post(control))
         .route("/api/sessions/{id}/model", post(choose_model))
+        .route(
+            "/api/sessions/{id}/approval-mode",
+            get(approval_mode).put(set_approval_mode),
+        )
         .route("/api/bots/{bot}/sessions/{id}/model", post(choose_model))
         .route("/api/bots/{id}/profile", post(save_profile))
         .route("/api/settings", get(settings).post(set_default_model))
@@ -1419,6 +1428,52 @@ async fn submit(
         Json(json!({ "id": "turn-new", "sessionId": session })),
     )
         .into_response()
+}
+
+async fn approval_mode(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/api/sessions/{id}/approval-mode");
+    record(&fake, "GET", path, &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let host = fake.host.lock().unwrap();
+    if host.approval_mode_down {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "The runtime is unavailable. Please retry." })),
+        )
+            .into_response();
+    }
+    let mode = host.approval_modes.get(&id).map_or("ask", String::as_str);
+    Json(json!({ "mode": mode })).into_response()
+}
+
+async fn set_approval_mode(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    let path = format!("/api/sessions/{id}/approval-mode");
+    record(&fake, "PUT", path, &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    if host.approval_mode_down {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "The runtime is unavailable. Please retry." })),
+        )
+            .into_response();
+    }
+    let mode = body["mode"].as_str().unwrap_or("ask").to_owned();
+    host.approval_modes.insert(id, mode.clone());
+    Json(json!({ "mode": mode })).into_response()
 }
 
 async fn choose_model(
