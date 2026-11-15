@@ -102,7 +102,7 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
     let waiting = if selected {
         s.model
             .session_list()
-            .filter(|session| session.waiting)
+            .filter(|session| s.needs_attention(session))
             .count()
     } else {
         0

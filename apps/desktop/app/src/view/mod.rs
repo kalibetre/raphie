@@ -85,7 +85,12 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
         },
         _ => sign_in::sign_in(s, &look),
     };
-    rune_kit::root(base, overlays)
+    // Replies that arrive while another app is in front stay new until
+    // this window is looked at again.
+    rune_kit::root(base, overlays).on_window_focus(|s: &mut Ui, focused: bool, _: &mut Tx| {
+        s.window_focused = focused;
+        s.mark_read();
+    })
 }
 
 fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {

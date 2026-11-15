@@ -34,6 +34,7 @@ pub mod model_library;
 pub mod origin;
 pub mod permissions;
 pub mod projections;
+pub mod replies;
 pub mod sandbox;
 pub mod settings;
 pub mod sse;

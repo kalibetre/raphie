@@ -152,8 +152,8 @@ Delivered capabilities and remaining work are labelled below. See the
   steps, time and usage, sending, Stop and steer, and approve/reject (once, or
   for the session for commands) with stale decisions reported, and attachments
   (file picker, drag and drop, paste; download from a sent message),
-  choosing the model for a conversation, and its command mode (Ask or Full
-  access). It follows the
+  choosing the model for a conversation, its command mode (Ask or Full
+  access), and unread markers with the "New replies" filter. It follows the
   web workspace's design, and light and dark follow the OS or the
   choice in Settings. Settings open in the app with native Account,
   Appearance, bot Profile (with revision history, creating and deleting a bot), Providers, Models and Memory settings pages, and Browse memory (list, search, correct,
@@ -161,7 +161,7 @@ Delivered capabilities and remaining work are labelled below. See the
   settings page is native.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
 - **Desktop — planned:** image previews on attachments, listing and revoking session approvals,
-  unread markers and notifications, packaging/signing
+  notifications (with unread counts for every bot), packaging/signing
   and updates, Windows and Linux
   verification, generated contract types, and local runtime packaging,
   discovery and single-owner lifecycle. Later, a _desktop host_ role that offers

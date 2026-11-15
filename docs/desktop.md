@@ -38,7 +38,16 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   (`GET /api/bots`), each bot's live session list (`/api/sessions/events`, plus
   "Load more conversations" pages), and bot-prefixed routes for named bots. The
   conversations panel (the button at the top right) searches titles and
-  filters to conversations that need an approval. ⌘B hides the roster.
+  filters to conversations with new replies or that need an approval. ⌘B
+  hides the roster.
+- **New replies**: a conversation with replies you have not read shows a dot,
+  a bolder title and "2 new replies"; the panel's button, its tab and the
+  selected bot's row in the roster count the conversations that need you
+  (new replies or an approval). Replies count as read when their
+  conversation is on screen, scrolled to its end, in the window in front,
+  as on the web. What was read is remembered on this computer
+  (`read-replies.json` beside the settings), per Raphie and per bot; it is
+  not shared with the web workspace or another computer.
 - **Conversations** from the session event stream (`/api/sessions/<id>/events`):
   history with "Show earlier messages" paging, the reply streaming in as it is
   written, Markdown with syntax-coloured code blocks, selectable text, run
@@ -259,6 +268,7 @@ apps/desktop/
     src/engine.rs         Tokio runtime: sign-in, streams, commands → events
     src/attachments.rs    the files waiting in the composer and their limits
     src/permissions.rs    a session's command mode: what is known, what may change
+    src/replies.rs        which replies were read on this computer, and its file
     src/settings.rs       last origin, appearance, starred models (non-secret)
     tests/                fake web host (axum) and engine/model tests
     examples/live.rs      live check against a running web host
@@ -362,8 +372,10 @@ render with `scripts/snapshots.sh` and put the PNGs beside the web workspace at
 Where the two differ on purpose:
 
 - Controls for features this app lacks are left out rather than shown dead:
-  usage, notifications and the "New replies" filter (there is no read
-  tracking).
+  usage and notifications.
+- Only the selected bot's row in the roster counts conversations that need
+  you; the web counts every bot's. The web's "conversations with updates"
+  card over the composer is not here.
 - The model picker has no "model family" drop-down; typing the family
   ("anthropic") in its search finds the same models. The Up and Down keys
   do not move between its rows as they do on the web.
@@ -419,7 +431,7 @@ current.
 - Built and checked on macOS (Apple silicon). The code builds for Windows and
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
-- No notifications or unread markers. Use the web workspace for those.
+- No notifications. Use the web workspace for those.
 - Approvals given "for session" cannot be listed or revoked here (nor on
   the web).
 - Image attachments have no picture preview yet.

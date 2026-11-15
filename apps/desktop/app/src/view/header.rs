@@ -53,10 +53,11 @@ pub fn header(s: &Ui, look: &Look) -> El {
         identity = identity.child(name);
     }
 
-    // How many of this bot's conversations wait for an approval.
+    // How many of this bot's conversations have something for the owner:
+    // a reply not read yet, or an action waiting for approval.
     let waiting = model
         .session_list()
-        .filter(|session| session.waiting)
+        .filter(|session| s.needs_attention(session))
         .count();
     let mut panel_toggle = pressable(
         icon_button(
