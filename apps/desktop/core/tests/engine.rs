@@ -12,7 +12,7 @@ use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
     UpdateBotProfile, WorkspaceKind,
 };
-use raphie_core::contracts::{NewBot, TraceState};
+use raphie_core::contracts::{ModelSelection, NewBot, TraceState};
 use raphie_core::engine::{Command, ConnectionChange, EngineConfig};
 use raphie_core::inspection::{pretty_json, span_matches};
 use raphie_core::jobs::{JobAction, NewJob, job_badge, job_interval, run_description};
@@ -234,6 +234,7 @@ fn a_first_message_creates_and_opens_a_session() {
     driver.send(Command::Send {
         text: "Hello".into(),
         attachments: Vec::new(),
+        model: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     assert!(driver.seen.contains(&Event::SessionCreated {
@@ -1558,6 +1559,7 @@ fn files_are_uploaded_sent_with_a_message_and_saved_back() {
     driver.send(Command::Send {
         text: String::new(),
         attachments: ids.clone(),
+        model: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     assert!(driver.model.attachments.files.is_empty());
@@ -1597,4 +1599,90 @@ fn files_are_uploaded_sent_with_a_message_and_saved_back() {
     driver.until("the failure", |m, _| m.saving_attachment.is_none());
     assert_eq!(driver.model.notice.as_deref(), Some("File not found."));
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn a_sessions_model_is_changed_and_a_new_session_starts_with_the_one_chosen() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    let pick = |model_id: &str| ModelSelection {
+        provider: "openrouter-1".into(),
+        model_id: model_id.into(),
+    };
+
+    // An open session: the change goes to its own route, and the session
+    // carries the model once the runtime agrees.
+    driver.model.select_session(Some("s-1".into()));
+    driver.send(Command::SelectSession {
+        session_id: Some("s-1".into()),
+    });
+    driver.until("the conversation", |m, _| {
+        m.conversation
+            .as_ref()
+            .is_some_and(|open| open.observation.is_some())
+    });
+    assert_eq!(driver.model.session_model(), None);
+    assert!(driver.model.begin_choose_model());
+    assert!(!driver.model.begin_choose_model(), "one change at a time");
+    driver.send(Command::ChooseModel {
+        session_id: "s-1".into(),
+        model: pick("anthropic/claude-x"),
+    });
+    driver.until("the change", |m, _| !m.choosing_model);
+    assert_eq!(
+        driver.model.session_model(),
+        Some(&pick("anthropic/claude-x"))
+    );
+    host.with(|h| {
+        let (path, body) = h.model_choices.last().unwrap();
+        assert_eq!(path, "/api/sessions/s-1/model");
+        assert_eq!(
+            *body,
+            serde_json::json!({ "provider": "openrouter-1", "modelId": "anthropic/claude-x" })
+        );
+    });
+
+    // A refusal says why and leaves the model as it was.
+    host.with(|h| h.model_unavailable = true);
+    assert!(driver.model.begin_choose_model());
+    driver.send(Command::ChooseModel {
+        session_id: "s-1".into(),
+        model: pick("gone"),
+    });
+    driver.until("the refusal", |m, _| !m.choosing_model);
+    assert_eq!(
+        driver.model.model_error.as_deref(),
+        Some("That model is not available.")
+    );
+    assert_eq!(
+        driver.model.session_model(),
+        Some(&pick("anthropic/claude-x"))
+    );
+
+    // A message to an existing session never carries a model.
+    assert!(driver.model.begin_send());
+    driver.send(Command::Send {
+        text: "Again".into(),
+        attachments: Vec::new(),
+        model: Some(pick("openai/gpt-x")),
+    });
+    driver.until("acceptance", |m, _| !m.sending);
+    host.with(|h| assert!(h.submits.last().unwrap().get("model").is_none()));
+
+    // A new session starts with the model chosen for it.
+    driver.model.select_session(None);
+    driver.send(Command::SelectSession { session_id: None });
+    assert!(driver.model.begin_send());
+    driver.send(Command::Send {
+        text: "Hello".into(),
+        attachments: Vec::new(),
+        model: Some(pick("openai/gpt-x")),
+    });
+    driver.until("acceptance", |m, _| !m.sending);
+    host.with(|h| {
+        assert_eq!(
+            h.submits.last().unwrap()["model"],
+            serde_json::json!({ "provider": "openrouter-1", "modelId": "openai/gpt-x" })
+        );
+    });
 }

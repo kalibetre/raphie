@@ -12,6 +12,7 @@ use crate::attachments::AttachmentDraft;
 use crate::auth::DeviceCode;
 use crate::channels::{Channel, ChannelOutcome};
 use crate::contracts::Attachment;
+use crate::contracts::ModelSelection;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection,
@@ -349,6 +350,14 @@ pub enum Event {
     MessageFailed {
         message: String,
     },
+    /// The session answers with `model` from now on.
+    ModelChosen {
+        session_id: String,
+        model: ModelSelection,
+    },
+    ModelChoiceFailed {
+        message: String,
+    },
     /// One chosen file was uploaded to `bot_id`.
     Attached {
         bot_id: String,
@@ -412,6 +421,8 @@ pub enum AuthState {
 pub enum Effect {
     /// The message was admitted: empty the composer.
     ClearComposer,
+    /// The session's model was changed: close the picker.
+    ModelChosen,
     /// A connection was added or saved: close its form and forget the key.
     CloseConnectionForm,
     /// A profile was saved: the form should show the saved values.
@@ -667,6 +678,10 @@ pub struct Model {
     /// The open conversation; `None` means a new, unsent conversation.
     pub conversation: Option<Conversation>,
     pub sending: bool,
+    /// A change of the open session's model is on its way.
+    pub choosing_model: bool,
+    /// Why the last change of model failed, until the next attempt.
+    pub model_error: Option<String>,
     /// The files waiting in the composer to go with the next message.
     pub attachments: AttachmentDraft,
     /// The id of the message file being saved to this machine, if one is.
@@ -743,6 +758,8 @@ impl Default for Model {
             sessions_next: None,
             conversation: None,
             sending: false,
+            choosing_model: false,
+            model_error: None,
             attachments: AttachmentDraft::default(),
             saving_attachment: None,
             deciding: HashSet::new(),
@@ -1133,6 +1150,27 @@ impl Model {
                 self.attachments.not_sent();
                 self.notice = Some(message);
             }
+            Event::ModelChosen { session_id, model } => {
+                self.choosing_model = false;
+                // The session is listed (maybe twice) and may be open; each
+                // copy learns its new model without waiting for the stream.
+                let listed = self.sessions.iter_mut().chain(&mut self.more_sessions);
+                let open = self
+                    .conversation
+                    .as_mut()
+                    .and_then(|conversation| conversation.observation.as_mut())
+                    .map(|observation| &mut observation.session);
+                for session in listed.chain(open) {
+                    if session.id == session_id {
+                        session.model = Some(model.clone());
+                    }
+                }
+                return vec![Effect::ModelChosen];
+            }
+            Event::ModelChoiceFailed { message } => {
+                self.choosing_model = false;
+                self.model_error = Some(message);
+            }
             Event::Attached { bot_id, file } => self.attachments.added(&bot_id, file),
             Event::AttachFailed { bot_id, message } => self.attachments.failed(&bot_id, message),
             Event::AttachFinished { bot_id } => self.attachments.finished(&bot_id),
@@ -1192,6 +1230,31 @@ impl Model {
         let cursor = conversation.older_cursor()?;
         conversation.loading_older = true;
         Some(cursor)
+    }
+
+    /// The owner chose a model for the open session. Returns false while
+    /// an earlier choice is on its way.
+    pub fn begin_choose_model(&mut self) -> bool {
+        if self.choosing_model {
+            return false;
+        }
+        self.choosing_model = true;
+        self.model_error = None;
+        true
+    }
+
+    /// The model the open session answers with, if one was chosen for it.
+    pub fn session_model(&self) -> Option<&ModelSelection> {
+        let open = self.conversation.as_ref()?;
+        // The observation is the freshest; the list covers the moment
+        // before the stream's first event.
+        let observed = open.observation.as_ref().map(|seen| &seen.session);
+        let listed = self
+            .sessions
+            .iter()
+            .chain(&self.more_sessions)
+            .find(|session| session.id == open.session_id);
+        observed.or(listed)?.model.as_ref()
     }
 
     /// The owner asked to save a message's file. Returns false while

@@ -33,6 +33,7 @@ use crate::api::{ApiClient, ApiError, ChannelAnswer, bot_path};
 use crate::attachments::{FileBytes, MAX_BYTES, TOO_LARGE, Upload, upload_name};
 use crate::auth::{AccessToken, DevicePolicy, DevicePoll, Secret, TokenStore};
 use crate::channels::{Channel, ChannelChange};
+use crate::contracts::ModelSelection;
 use crate::contracts::NewBot;
 use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
@@ -88,6 +89,14 @@ pub enum Command {
     Send {
         text: String,
         attachments: Vec<String>,
+        /// The model to start a new session with; `None` for the bot's
+        /// default, and for a session that exists.
+        model: Option<ModelSelection>,
+    },
+    /// Change the model an existing session answers with.
+    ChooseModel {
+        session_id: String,
+        model: ModelSelection,
     },
     /// Upload files to a bot, one after another, so they can go with the
     /// next message.
@@ -503,7 +512,12 @@ impl Engine {
             Command::SelectSession { session_id } => self.open_session(session_id),
             Command::LoadMoreSessions { after } => self.load_more_sessions(after),
             Command::LoadOlder { session_id, before } => self.load_older(session_id, before),
-            Command::Send { text, attachments } => self.send(text, attachments),
+            Command::Send {
+                text,
+                attachments,
+                model,
+            } => self.send(text, attachments, model),
+            Command::ChooseModel { session_id, model } => self.choose_model(session_id, model),
             Command::Attach { bot_id, uploads } => self.attach(bot_id, uploads),
             Command::DownloadAttachment { bot_id, id, name } => {
                 self.download_attachment(bot_id, id, name);
@@ -774,7 +788,7 @@ impl Engine {
 
     // ----- Messages and approvals -----
 
-    fn send(&mut self, text: String, attachments: Vec<String>) {
+    fn send(&mut self, text: String, attachments: Vec<String>, model: Option<ModelSelection>) {
         let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
             self.emit.emit(Event::MessageFailed {
                 message: "Choose a bot before sending.".into(),
@@ -787,6 +801,12 @@ impl Engine {
             event_id: uuid::Uuid::new_v4().to_string(),
             session_id: self.session_id.clone(),
             attachments,
+            // Only a new session takes its model from the message.
+            model: if self.session_id.is_none() {
+                model
+            } else {
+                None
+            },
         };
         let new_session = message.session_id.is_none();
         let retries = self.config.send_retries.clone();
@@ -817,6 +837,25 @@ impl Engine {
                     let _ = inbox.send(Input::Expired);
                 }
                 Err(error) => emit.emit(Event::MessageFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn choose_model(&mut self, session_id: String, model: ModelSelection) {
+        let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.choose_model(&bot_id, &session_id, &model).await {
+                Ok(()) => emit.emit(Event::ModelChosen { session_id, model }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::ModelChoiceFailed {
                     message: error.to_string(),
                 }),
             }
