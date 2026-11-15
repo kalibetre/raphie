@@ -225,6 +225,10 @@ pub struct SessionSummary {
     pub turn_count: u32,
     #[serde(default)]
     pub reply_preview: Option<String>,
+    /// Finished replies in the session; `None` from a runtime too old to
+    /// count them.
+    #[serde(default)]
+    pub reply_count: Option<u32>,
     /// The model chosen for this session; `None` uses the bot's default.
     #[serde(default)]
     pub model: Option<ModelSelection>,
