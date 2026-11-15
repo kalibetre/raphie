@@ -14,6 +14,7 @@ use raphie_core::contracts::{
 use raphie_core::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use raphie_core::contracts::{JobRun, ScheduledJob};
 use raphie_core::engine::Command;
+use raphie_core::inbox::JobUpdates;
 use raphie_core::mcp::McpTransport;
 use raphie_core::model::{AuthState, Event};
 use raphie_core::model_library::PickerFilter;
@@ -35,6 +36,8 @@ pub const SCENES: &[Scene] = &[
     ("new-conversation", new_conversation),
     ("conversations", conversations),
     ("unread", unread),
+    ("inbox", inbox),
+    ("inbox-empty", inbox_empty),
     ("conversation", conversation),
     ("attachments", attachments),
     ("permissions", permissions),
@@ -1130,6 +1133,59 @@ pub fn unread(ui: &mut Ui) {
         ui.read_replies.read(&origin, "default", "s-1", 1);
         ui.read_replies.read(&origin, "default", "s-3", 1);
     }
+}
+
+/// The inbox with something of every kind: new replies in two bots, an
+/// approval, a scheduled reply that is ready and a job that failed.
+pub fn inbox(ui: &mut Ui) {
+    unread(ui);
+    let now = now_ms();
+    // The Research bot's conversations, as the inbox's last round heard them.
+    let papers: SessionSummary = from_json(json!({
+        "id": "r-1", "title": "This week's papers", "origin": "web",
+        "lastAt": now - 20 * 60_000, "working": false, "failed": false, "waiting": false,
+        "preview": "Summarise the three new papers.",
+        "replyPreview": "All three argue for smaller, cheaper evaluation sets.",
+        "turnCount": 4, "replyCount": 2,
+    }));
+    ui.model.apply(Event::InboxSessions {
+        bot_id: "b-research".into(),
+        sessions: vec![papers],
+    });
+    let run = |id: &str, name: &str, status: &str, ago_ms: i64| -> JobRun {
+        from_json(json!({
+            "id": id, "jobId": "j-1", "name": name, "startedAt": now - ago_ms - 30_000,
+            "finishedAt": now - ago_ms, "status": status, "sessionId": null, "turnId": null,
+            "failureReason": if status == "failed" { json!("no_model") } else { json!(null) },
+        }))
+    };
+    ui.model.apply(Event::JobUpdates {
+        bot_id: "default".into(),
+        updates: JobUpdates {
+            runs: vec![run("run-2", "Morning brief", "failed", 26 * 3_600_000)],
+            total: 1,
+            more: false,
+        },
+    });
+    ui.model.apply(Event::JobUpdates {
+        bot_id: "b-research".into(),
+        updates: JobUpdates {
+            runs: vec![run("run-1", "Weekly digest", "interrupted", 2 * 3_600_000)],
+            total: 1,
+            more: false,
+        },
+    });
+    ui.inbox_open = true;
+}
+
+/// The inbox with nothing in it.
+pub fn inbox_empty(ui: &mut Ui) {
+    conversation(ui);
+    // Nothing waits for approval and no reply is new.
+    for session in &mut ui.model.sessions {
+        session.waiting = false;
+    }
+    ui.inbox_open = true;
 }
 
 pub fn conversation(ui: &mut Ui) {

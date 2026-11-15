@@ -23,6 +23,7 @@ mod attachments;
 mod composer;
 mod conversation;
 mod header;
+mod inbox;
 mod model_picker;
 mod panel;
 mod permissions;
@@ -107,15 +108,24 @@ fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
             s.attach(files.iter().cloned().map(Upload::File).collect());
         })
         .on_drop_hover(|s: &mut Ui, over: bool, _: &mut Tx| s.drop_hover = over)
-        .child(header::header(s, look));
+        .child(if s.inbox_open {
+            inbox::header(s, look)
+        } else {
+            header::header(s, look)
+        });
     if let Some(notice) = &s.model.notice {
         main = main.child(notice_banner(notice, t));
     }
-    main = match &s.model.conversation {
-        Some(conversation) => main.child(conversation::conversation(s, conversation, look)),
-        None => main.child(welcome::welcome(s, look)),
-    };
-    main = main.child(composer::composer(s, look, overlays));
+    if s.inbox_open {
+        // The inbox takes the conversation's place, composer included.
+        main = main.child(inbox::page(s, look));
+    } else {
+        main = match &s.model.conversation {
+            Some(conversation) => main.child(conversation::conversation(s, conversation, look)),
+            None => main.child(welcome::welcome(s, look)),
+        };
+        main = main.child(composer::composer(s, look, overlays));
+    }
 
     let mut shell = row()
         .key("rd-workspace")

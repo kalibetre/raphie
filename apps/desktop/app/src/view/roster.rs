@@ -97,16 +97,9 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
     let t = &look.theme;
     let tone = look.tones.of(&bot.id);
     let selected = s.model.bot_id.as_deref() == Some(bot.id.as_str());
-    // The session list on hand belongs to the selected bot, so only that
-    // bot's row can say how many conversations wait and what was said last.
-    let waiting = if selected {
-        s.model
-            .session_list()
-            .filter(|session| s.needs_attention(session))
-            .count()
-    } else {
-        0
-    };
+    // How many of this bot's conversations have something for the owner.
+    // Another bot's are known from the inbox's last round.
+    let waiting = s.attention_in(&bot.id);
     let preview = if waiting == 1 {
         "1 conversation needs you".to_owned()
     } else if waiting > 1 {

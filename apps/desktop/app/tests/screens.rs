@@ -19,7 +19,7 @@ use raphie_core::model::{AuthState, Event};
 use raphie_core::sandbox::SandboxUpdate;
 use raphie_core::settings::ThemeChoice;
 use raphie_desktop::sections::{BotSection, Page};
-use raphie_desktop::state::{self, Filter, Screen};
+use raphie_desktop::state::{self, Filter, InboxFilter, Screen};
 use raphie_desktop::{Ui, scenes, view::view};
 use rune::{ElementInfo, Env, Runtime, TextEdit};
 
@@ -3611,4 +3611,149 @@ fn opening_a_conversation_reads_its_replies_only_at_its_end_in_the_front_window(
     rt.update(|ui, _| ui.open_settings(None));
     arrive(&mut rt, 6);
     assert_eq!(unread(&rt), 1);
+}
+
+#[test]
+fn the_bell_counts_updates_and_opens_the_inbox_across_bots() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::unread, dark);
+        // One conversation with new replies and one approval, both Raphie's.
+        assert!(rt.find("rd-bell-count").is_some());
+        assert_eq!(rt.state.notifications().1, 2);
+        click(&mut rt, "rd-bell");
+        assert!(rt.state.inbox_open);
+        assert_eq!(
+            element(&rt, "rd-inbox-count").text.as_deref(),
+            Some("2 new")
+        );
+        // The composer gives way to the inbox.
+        assert!(rt.find("rd-composer").is_none());
+        click(&mut rt, "rd-inbox-back");
+        assert!(rt.find("rd-composer").is_some());
+    }
+}
+
+#[test]
+fn the_inbox_lists_filters_opens_and_dismisses_updates() {
+    let mut rt = render(scenes::inbox, false);
+    let shown = screen_text(&rt);
+    assert_eq!(
+        element(&rt, "rd-inbox-count").text.as_deref(),
+        Some("5 new")
+    );
+    for expected in [
+        "Today",
+        "Earlier",
+        "2 new replies",
+        "Needs your approval",
+        "Action required",
+        "Scheduled job interrupted",
+        "Scheduled job failed",
+        "No model configured. Connect a model provider in Settings.",
+        "All three argue for smaller, cheaper evaluation sets.",
+    ] {
+        assert!(shown.contains(expected), "missing: {expected}");
+    }
+    // The other bot's row in the roster counts its conversation too.
+    assert!(shown.contains("1 conversation needs you"));
+
+    click(&mut rt, "rd-inbox-jobs");
+    assert_eq!(rt.state.inbox_filter, InboxFilter::Jobs);
+    assert!(rt.find("rd-notice-job:default:run-2").is_some());
+    assert!(rt.find("rd-notice-reply:default:s-1").is_none());
+    click(&mut rt, "rd-inbox-approvals");
+    assert!(rt.find("rd-notice-approval:default:s-2").is_some());
+    assert!(rt.find("rd-notice-job:default:run-2").is_none());
+
+    // Dismissing a job tells the runtime; it leaves once the runtime agrees.
+    click(&mut rt, "rd-inbox-all");
+    click(&mut rt, "rd-notice-job:default:run-2-dismiss");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::AcknowledgeRun {
+            bot_id: "default".into(),
+            run_id: "run-2".into(),
+        })
+    );
+    deliver(
+        &mut rt,
+        Event::RunAcknowledged {
+            bot_id: "default".into(),
+            run_id: "run-2".into(),
+        },
+    );
+    assert!(rt.find("rd-notice-job:default:run-2").is_none());
+    assert_eq!(
+        element(&rt, "rd-inbox-count").text.as_deref(),
+        Some("4 new")
+    );
+    // A refused dismissal says so.
+    click(&mut rt, "rd-notice-job:b-research:run-1-dismiss");
+    deliver(&mut rt, Event::RunAcknowledgeFailed);
+    assert!(screen_text(&rt).contains("Couldn’t dismiss the update. Please try again."));
+
+    // Another bot's update opens that bot's conversation and closes the inbox.
+    click(&mut rt, "rd-notice-reply:b-research:r-1");
+    assert!(!rt.state.inbox_open);
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("b-research"));
+    assert!(rt.state.sent.contains(&Command::SelectSession {
+        session_id: Some("r-1".into())
+    }));
+}
+
+#[test]
+fn an_empty_inbox_says_so_and_failed_job_updates_can_be_retried() {
+    let mut rt = render(scenes::inbox_empty, false);
+    assert_eq!(
+        element(&rt, "rd-inbox-empty").text.as_deref(),
+        Some("You’re all caught up.")
+    );
+    assert!(rt.find("rd-inbox-count").is_none());
+    click(&mut rt, "rd-inbox-replies");
+    assert_eq!(
+        element(&rt, "rd-inbox-empty").text.as_deref(),
+        Some("No updates in this view.")
+    );
+    deliver(
+        &mut rt,
+        Event::JobUpdatesFailed {
+            bot_id: "default".into(),
+        },
+    );
+    assert!(screen_text(&rt).contains("Some job updates couldn’t be loaded."));
+    click(&mut rt, "rd-inbox-retry");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::LoadInbox { .. })
+    ));
+}
+
+#[test]
+fn the_inbox_is_asked_for_every_fifteen_seconds_for_the_right_bots() {
+    let mut rt = render(scenes::conversation, false);
+    let loads = |rt: &Runtime<Ui>| -> Vec<Command> {
+        let sent = &rt.state.sent;
+        sent.iter()
+            .filter(|c| matches!(c, Command::LoadInbox { .. }))
+            .cloned()
+            .collect()
+    };
+    rt.update(|ui, _| {
+        assert!(ui.refresh_inbox(100.0));
+        // Five seconds later is too soon to ask again.
+        assert!(ui.refresh_inbox(105.0));
+    });
+    // The selected bot's conversations come on its stream, so only the
+    // other bot's are asked for; job updates are asked of both.
+    assert_eq!(
+        loads(&rt),
+        [Command::LoadInbox {
+            session_bots: vec!["b-research".into()],
+            job_bots: vec!["default".into(), "b-research".into()],
+        }]
+    );
+    rt.update(|ui, _| {
+        ui.refresh_inbox(115.5);
+    });
+    assert_eq!(loads(&rt).len(), 2);
 }

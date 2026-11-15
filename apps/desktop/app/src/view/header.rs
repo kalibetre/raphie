@@ -90,6 +90,7 @@ pub fn header(s: &Ui, look: &Look) -> El {
             true,
             |s: &mut Ui| s.select_session(None),
         ))
+        .child(bell(s, t))
         .child(panel_toggle);
 
     // With the roster hidden, the bar starts right of the window's buttons.
@@ -126,4 +127,30 @@ pub fn header(s: &Ui, look: &Look) -> El {
                 .min_w(0.0),
         )
         .child(actions)
+}
+
+/// The bell: opens the inbox, with a count of what waits in it.
+fn bell(s: &Ui, t: &crate::theme::Theme) -> El {
+    let (_, count) = s.notifications();
+    let label = if count == 0 {
+        "Notifications".to_owned()
+    } else {
+        format!("Notifications, {count} updates")
+    };
+    let mut bell = pressable(
+        icon_button(t, &icons::BELL, 17.0, &label).key("rd-bell"),
+        true,
+        |s: &mut Ui| s.inbox_open = true,
+    );
+    if count > 0 {
+        // "99+" keeps a busy day's count inside the badge.
+        let shown = count.min(99);
+        bell = bell.child(
+            count_badge(t, shown)
+                .key("rd-bell-count")
+                .pin(None, Some(-3.0), Some(-5.0), None)
+                .a11y_hidden(),
+        );
+    }
+    bell
 }

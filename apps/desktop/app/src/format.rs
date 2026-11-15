@@ -36,6 +36,29 @@ pub fn clock(at: i64) -> String {
     }
 }
 
+/// The local month and day of `at`: "Nov 14".
+pub fn month_day(at: i64) -> String {
+    match chrono::DateTime::from_timestamp_millis(at) {
+        Some(utc) => utc
+            .with_timezone(&chrono::Local)
+            .format("%b %-d")
+            .to_string(),
+        None => String::new(),
+    }
+}
+
+/// True when `at` is on the same local day as `now` or later.
+pub fn is_today(at: i64, now: i64) -> bool {
+    let day = |ms: i64| {
+        chrono::DateTime::from_timestamp_millis(ms)
+            .map(|utc| utc.with_timezone(&chrono::Local).date_naive())
+    };
+    match (day(at), day(now)) {
+        (Some(at), Some(now)) => at >= now,
+        _ => false,
+    }
+}
+
 /// The local date and time of `at`: "Nov 14, 2026, 08:55 PM".
 pub fn date_time(at: i64) -> String {
     match chrono::DateTime::from_timestamp_millis(at) {
