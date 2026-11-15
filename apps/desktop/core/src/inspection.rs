@@ -64,14 +64,23 @@ impl TraceView {
     }
 }
 
-/// Whether a span passes the filter box: its name, trace id, status or
-/// attributes contain the typed text, whatever its case.
-pub fn span_matches(span: &DiagnosticSpan, filter: &str) -> bool {
+/// The id of the bot a span belongs to. One trace store serves every bot,
+/// so the runtime records the bot on each span (`bot.id`). Spans from
+/// before it did, and from the runtime itself, have none.
+pub fn span_bot(span: &DiagnosticSpan) -> Option<&str> {
+    span.attributes.get("bot.id")?.as_str()
+}
+
+/// Whether a span passes the filter box: its name, its bot's name
+/// (`bot`), its trace id, status or attributes contain the typed text,
+/// whatever its case.
+pub fn span_matches(span: &DiagnosticSpan, bot: Option<&str>, filter: &str) -> bool {
     let haystack = format!(
-        "{} {} {} {}",
+        "{} {} {} {} {}",
         span.name,
         span.trace_id,
         span.status.word(),
+        bot.unwrap_or(""),
         span.attributes
     );
     haystack
@@ -154,12 +163,19 @@ mod tests {
     #[test]
     fn the_filter_looks_in_names_ids_status_and_attributes() {
         let failed = span("tool.run", SpanStatus::Error);
-        assert!(span_matches(&failed, ""));
-        assert!(span_matches(&failed, "TOOL"));
-        assert!(span_matches(&failed, "4bf92"));
-        assert!(span_matches(&failed, "error"));
-        assert!(span_matches(&failed, "s-1"), "an attribute's value");
-        assert!(!span_matches(&failed, "model"));
+        assert!(span_matches(&failed, None, ""));
+        assert!(span_matches(&failed, None, "TOOL"));
+        assert!(span_matches(&failed, None, "4bf92"));
+        assert!(span_matches(&failed, None, "error"));
+        assert!(span_matches(&failed, None, "s-1"), "an attribute's value");
+        assert!(!span_matches(&failed, None, "model"));
+        // A span is found by its bot's name, and says whose it is.
+        assert!(!span_matches(&failed, None, "research"));
+        assert!(span_matches(&failed, Some("Research"), "research"));
+        assert_eq!(span_bot(&failed), None, "not recorded");
+        let mut tagged = failed.clone();
+        tagged.attributes["bot.id"] = serde_json::json!("b-research");
+        assert_eq!(span_bot(&tagged), Some("b-research"));
 
         let started = event("tool.started", "search started");
         assert!(event_matches(&started, " Search "));

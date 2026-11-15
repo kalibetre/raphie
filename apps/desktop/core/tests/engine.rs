@@ -645,7 +645,7 @@ fn traces_activity_telemetry_and_exports() {
     let data = driver.model.traces.data.clone().unwrap();
     assert_eq!(data.state, TraceState::Ready);
     assert_eq!(data.spans[0].name, "model.call");
-    assert!(span_matches(&data.spans[0], "s-1"));
+    assert!(span_matches(&data.spans[0], None, "s-1"));
     host.with(|h| {
         let asked = h.requests.iter().any(|seen| seen.path.ends_with("hours=6"));
         assert!(asked, "the window is part of the request");

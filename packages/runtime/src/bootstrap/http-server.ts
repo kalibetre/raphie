@@ -35,11 +35,17 @@ export async function startServer(
   const app = new Hono();
   let port = options.port ?? 4315;
   app.use("*", async (c, next) => {
-    // Polling telemetry must not create a feedback stream of diagnostic spans.
-    if (c.req.path.startsWith("/api/diagnostics/")) return next();
+    // Polling telemetry must not create a feedback stream of diagnostic spans,
+    // whichever bot's routes the poll goes through.
+    if (/^\/api(\/bots\/[^/]+)?\/diagnostics\//.test(c.req.path)) return next();
+    // One server fronts every bot: a request belongs to the bot it addresses.
+    const addressed = /^\/api\/bots\/([a-z0-9-]{1,64})\//.exec(c.req.path)?.[1];
     return runtime.telemetry.run(
       "http.request",
-      { "http.method": c.req.method },
+      {
+        "http.method": c.req.method,
+        ...(addressed ? { "bot.id": addressed } : {}),
+      },
       async (annotate) => {
         await next();
         annotate({

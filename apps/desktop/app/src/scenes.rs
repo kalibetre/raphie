@@ -267,13 +267,13 @@ pub fn trace_diagnostics(export_enabled: bool) -> TraceDiagnostics {
                 "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "spanId": "a2fb4a1d1a96d312",
                 "parentSpanId": "00f067aa0ba902b7", "name": "model.call",
                 "startedAt": 1_794_650_041_000_i64, "durationMs": 3120.4, "status": "unset",
-                "attributes": { "model": "claude-fable", "tokens.input": 1840, "tokens.output": 312 },
+                "attributes": { "bot.id": "default", "model.id": "claude-fable", "model.input_tokens": 1840, "model.output_tokens": 312 },
             },
             {
                 "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "spanId": "c7ad6b7169203331",
                 "parentSpanId": "00f067aa0ba902b7", "name": "tool.mcp_calendar_list_events",
                 "startedAt": 1_794_650_045_000_i64, "durationMs": 804.0, "status": "error",
-                "attributes": { "tool": "mcp_calendar_list_events", "error": "timeout" },
+                "attributes": { "bot.id": "b-research", "tool.name": "mcp_calendar_list_events", "execution.outcome": "timeout" },
             },
         ],
     }))

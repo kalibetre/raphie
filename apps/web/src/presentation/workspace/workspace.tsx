@@ -340,7 +340,7 @@ export function Workspace({
                 section={section}
                 enabled={enabled}
                 setEnabled={setEnabled}
-                traces={<Diagnostics />}
+                traces={<Diagnostics bots={inbox.bots.data?.items ?? []} />}
                 activity={<BotActivity />}
                 onParent={(next) => selectSettings(workspace.botId, next)}
               />

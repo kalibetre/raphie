@@ -45,7 +45,15 @@ attributes. The same loopback Host/Origin checks as other local read routes appl
 The web page polls every five seconds while mounted, offers time-window and text
 filters, expandable metadata and a trace-only JSON download. Unconfigured or
 unavailable storage is explicit; there is **no activity-journal fallback**.
-Diagnostics polling is excluded from tracing to avoid a self-observation loop.
+Diagnostics polling is excluded from tracing to avoid a self-observation loop,
+whichever bot's routes the poll goes through.
+
+One trace store serves every bot. Each bot's runtime is traced, and every span
+it starts carries a `bot.id` attribute; an HTTP request is recorded under the bot
+its route addresses (`/api/bots/<id>/…`, otherwise the default bot). Diagnostics
+is therefore one app-wide page, read through the default bot's routes
+(`/api/bots/default/diagnostics/traces`), and shows each span's bot. Spans stored
+before this was recorded have no bot and are shown as "Not recorded".
 
 The session Activity panel, model usage and recovery remain journal-based. Old
 journal entries are not converted into traces: Diagnostics begins with newly

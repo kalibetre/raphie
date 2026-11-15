@@ -6,14 +6,12 @@
 //! Mirrors `telemetry-settings.tsx` and `diagnostics.tsx`. The traces and
 //! the filter's rule are in the core (`raphie_core::inspection`).
 //!
-//! Two differences from the web. There Diagnostics is listed under each
-//! bot, though only the default bot's page has anything to show; here it is
-//! one page under App. And "Export traces" saves the JSON straight
+//! One difference from the web: "Export traces" saves the JSON straight
 //! into this machine's Downloads folder and says what it was saved as.
 
 use raphie_core::contracts::{DiagnosticSpan, SpanStatus, TraceDiagnostics, TraceState};
 use raphie_core::engine::Command;
-use raphie_core::inspection::{TRACE_WINDOWS, span_matches};
+use raphie_core::inspection::{TRACE_WINDOWS, span_bot, span_matches};
 use rune::{El, col, row, text};
 
 use super::inspect::{Entry, empty, entry, filter_box, heading, meta};
@@ -30,7 +28,7 @@ pub fn diagnostics(s: &Ui, look: &Look) -> El {
     page(
         "rd-page-diagnostics",
         "Diagnostics",
-        "Timings and failures from this Raphie backend’s runs. Nothing leaves it.",
+        "Timings and failures from every bot’s runs. Nothing leaves this backend.",
         Scope::App,
         vec![telemetry(s, BACKEND, t), traces(s, t)],
         look,
@@ -116,11 +114,17 @@ fn traces(s: &Ui, t: &Theme) -> El {
         .as_ref()
         .filter(|data| !view.failed && data.state == TraceState::Ready);
     let filter = s.spans.filter.text.as_str();
+    // Whose span this is, by name. A bot deleted since keeps its id.
+    let bot_of = |span: &DiagnosticSpan| -> Option<String> {
+        let id = span_bot(span)?;
+        let known = s.model.bots.iter().find(|bot| bot.id == id);
+        Some(known.map_or_else(|| id.to_owned(), |bot| bot.name.clone()))
+    };
     let visible: Vec<&DiagnosticSpan> = ready
         .map(|data| {
             data.spans
                 .iter()
-                .filter(|span| span_matches(span, filter))
+                .filter(|span| span_matches(span, bot_of(span).as_deref(), filter))
                 .collect()
         })
         .unwrap_or_default();
@@ -165,7 +169,7 @@ fn traces(s: &Ui, t: &Theme) -> El {
             t,
             "Recent traces",
             20.0,
-            "Operation timings and failures from exported OTLP traces.",
+            "Operation timings and failures from exported OTLP traces, for every bot.",
             buttons,
         ))
         .child(windows)
@@ -173,7 +177,7 @@ fn traces(s: &Ui, t: &Theme) -> El {
             t,
             "rd-traces-filter",
             "Filter traces",
-            "Filter by operation, trace or session…",
+            "Filter by operation, bot, trace or session…",
             &s.spans.filter,
             |s: &mut Ui| &mut s.spans.filter,
         ))
@@ -233,13 +237,18 @@ fn traces(s: &Ui, t: &Theme) -> El {
         let id = format!("{}:{}", span.trace_id, span.span_id);
         let failed = span.status == SpanStatus::Error;
         let toggle = id.clone();
+        let bot = bot_of(span);
+        // "Research · Error · 804.0 ms": whose, then how it went.
+        let whose = bot
+            .as_ref()
+            .map_or(String::new(), |bot| format!("{bot} · "));
         list = list.child(entry(
             t,
             Entry {
                 key: format!("rd-span-{id}"),
                 summary: &span.name,
                 timing: Some(format!(
-                    "{}{:.1} ms",
+                    "{whose}{}{:.1} ms",
                     if failed { "Error · " } else { "" },
                     span.duration_ms
                 )),
@@ -247,6 +256,7 @@ fn traces(s: &Ui, t: &Theme) -> El {
                 failed,
                 open: s.spans.open.contains(&id),
                 facts: vec![
+                    ("Bot", bot.unwrap_or_else(|| "Not recorded".to_owned())),
                     ("Trace", span.trace_id.clone()),
                     ("Span", span.span_id.clone()),
                     (

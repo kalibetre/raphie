@@ -44,10 +44,15 @@ const botEntries: readonly Section[] = [
   "sandbox",
   "workspace",
   "jobs",
-  "telemetry",
   "activity",
 ];
-const appEntries: readonly Section[] = ["account", "general", "plugins"];
+// Diagnostics is here, not under a bot: one trace store serves every bot.
+const appEntries: readonly Section[] = [
+  "account",
+  "general",
+  "telemetry",
+  "plugins",
+];
 const label = (id: Section) => sections.find((s) => s.id === id)!.label;
 const expandedKey = "raphie:settings-expanded";
 
