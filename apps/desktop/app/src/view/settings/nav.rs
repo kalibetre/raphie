@@ -59,6 +59,10 @@ pub fn nav(s: &Ui, current: &Page, look: &Look) -> El {
                 7.0,
             )
             .on_press(|s: &mut Ui| s.open_settings(Some(Page::Diagnostics))),
+        )
+        .child(
+            entry(t, "rd-nav-about", "About", *current == Page::About, 7.0)
+                .on_press(|s: &mut Ui| s.open_settings(Some(Page::About))),
         );
     col()
         .key("rd-settings-nav")

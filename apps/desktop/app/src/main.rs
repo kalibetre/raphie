@@ -31,8 +31,10 @@ fn main() {
         traffic_lights: Some((13.0, 15.0)),
         drag_regions: true,
     };
-    rune::App::new(raphie_desktop::spec())
+    let app = rune::App::new(raphie_desktop::spec())
         .chrome(chrome)
-        .standard_menus()
-        .run();
+        .standard_menus();
+    // A click on a system notification reaches the window through this.
+    raphie_desktop::notify::connect(app.handle());
+    app.run();
 }

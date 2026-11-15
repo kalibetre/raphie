@@ -13,6 +13,7 @@ use raphie_core::contracts::{
 };
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::flavor::Flavor;
+use raphie_core::inbox::Target;
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::{McpAction, NewMcpConnection};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
@@ -485,7 +486,11 @@ fn only_the_dev_build_says_dev_beside_the_brand() {
 
 #[test]
 fn about_shows_the_version_and_checks_for_updates() {
+    // About has its own page in the navigation.
     let mut rt = render(scenes::settings_appearance, false);
+    assert!(!screen_text(&rt).contains("Raphie Desktop version"));
+    click(&mut rt, "rd-nav-about");
+    assert_eq!(rt.state.screen, Screen::Settings(Page::About));
     let text = screen_text(&rt);
     assert!(text.contains(current_version()), "{text}");
     assert!(text.contains("Not checked yet."), "{text}");
@@ -508,7 +513,7 @@ fn about_shows_the_version_and_checks_for_updates() {
 
 #[test]
 fn a_newer_release_opens_its_page() {
-    let mut rt = render(scenes::settings_appearance_update, false);
+    let mut rt = render(scenes::settings_about_update, false);
     assert!(screen_text(&rt).contains("Raphie v0.0.5 is available."));
     click(&mut rt, "rd-view-release");
     assert_eq!(
@@ -3847,4 +3852,83 @@ fn updates_that_arrive_behind_another_app_are_announced_by_the_system_once() {
     assert_eq!(posted.len(), 1);
     assert_eq!(posted[0].title, "Raphie · Tea preferences");
     assert_eq!(posted[0].body, "2 new replies");
+    assert_eq!(
+        posted[0].target,
+        Target {
+            bot_id: "default".into(),
+            session_id: Some("s-3".into()),
+            run_id: None,
+        }
+    );
+}
+
+fn target(bot_id: &str, session_id: Option<&str>, run_id: Option<&str>) -> Target {
+    Target {
+        bot_id: bot_id.into(),
+        session_id: session_id.map(Into::into),
+        run_id: run_id.map(Into::into),
+    }
+}
+
+#[test]
+fn a_clicked_notification_opens_its_conversation_from_anywhere() {
+    // From Settings, with the inbox open: the conversation replaces both.
+    let mut rt = render(scenes::settings_appearance, false);
+    rt.update(|ui, _| ui.open_target(&target("default", Some("s-3"), None)));
+    settle(&mut rt);
+    assert_eq!(rt.state.screen, Screen::Workspace);
+    assert!(!rt.state.inbox_open);
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+    let open = rt
+        .state
+        .model
+        .conversation
+        .as_ref()
+        .map(|c| c.session_id.as_str());
+    assert_eq!(open, Some("s-3"));
+}
+
+#[test]
+fn a_clicked_job_notification_dismisses_the_run_as_the_inbox_does() {
+    let mut rt = render(scenes::conversations, false);
+    rt.update(|ui, _| ui.open_target(&target("default", Some("s-1"), Some("run-1"))));
+    settle(&mut rt);
+    assert!(rt.state.sent.contains(&Command::AcknowledgeRun {
+        bot_id: "default".into(),
+        run_id: "run-1".into(),
+    }));
+    let open = rt
+        .state
+        .model
+        .conversation
+        .as_ref()
+        .map(|c| c.session_id.as_str());
+    assert_eq!(open, Some("s-1"));
+}
+
+#[test]
+fn a_notification_with_nothing_to_open_shows_the_inbox() {
+    // A job run with no conversation.
+    let mut rt = render(scenes::settings_appearance, false);
+    rt.update(|ui, _| ui.open_target(&target("default", None, Some("run-9"))));
+    settle(&mut rt);
+    assert_eq!(rt.state.screen, Screen::Workspace);
+    assert!(rt.state.inbox_open);
+
+    // A bot deleted since: nothing is sent about it.
+    let mut rt = render(scenes::conversations, false);
+    let before = rt.state.sent.len();
+    rt.update(|ui, _| ui.open_target(&target("b-gone", Some("s-1"), Some("run-1"))));
+    settle(&mut rt);
+    assert!(rt.state.inbox_open);
+    assert_eq!(rt.state.sent.len(), before);
+}
+
+#[test]
+fn a_notification_clicked_after_signing_out_opens_nothing() {
+    let mut rt = render(scenes::sign_in, false);
+    rt.update(|ui, _| ui.open_target(&target("default", Some("s-1"), None)));
+    settle(&mut rt);
+    assert!(rt.state.sent.is_empty());
+    assert!(rt.find("rd-sign-in").is_some());
 }

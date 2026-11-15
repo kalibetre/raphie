@@ -62,6 +62,10 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   announced for what already waited when the app started. On macOS this
   needs the app bundle (see "Run it as a macOS app" below): macOS asks once
   whether Raphie may send notifications, and a bare `cargo run` posts none.
+  Clicking a notification brings the window forward and opens its
+  conversation, as the inbox does (a finished job's run is dismissed on
+  the way); one with no conversation, or for a bot deleted since, opens the
+  inbox instead.
 - **Conversations** from the session event stream (`/api/sessions/<id>/events`):
   history with "Show earlier messages" paging, the reply streaming in as it is
   written, Markdown with syntax-coloured code blocks, selectable text, run
@@ -109,7 +113,9 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   - **Account** shows who this device is signed in as and the Raphie address,
     and signs out.
   - **Appearance** pins light or dark, or follows the system. The choice is
-    saved on this computer. Its **About** group shows Raphie's version (from
+    saved on this computer.
+  - **About** (desktop only; the web shows its version under Appearance)
+    shows Raphie's version (from
     the repository's `VERSION` file, or `RAPHIE_VERSION` at compile time, as
     the web does) and whether a newer release exists. The app checks once at
     launch, and **Check for updates** checks again: it reads Raphie's public
@@ -445,8 +451,9 @@ Where the two differ on purpose:
   usage.
 - The web's "conversations with updates" card over the composer is not
   here; the bell's count and the inbox cover it.
-- System notifications are this client's own; the web has none. Selecting
-  one does not open its conversation yet.
+- System notifications are this client's own; the web has none. Clicking
+  one has been checked on macOS; on Windows and Linux it is compiled in but
+  not run.
 - The model picker has no "model family" drop-down; typing the family
   ("anthropic") in its search finds the same models. The Up and Down keys
   do not move between its rows as they do on the web.
