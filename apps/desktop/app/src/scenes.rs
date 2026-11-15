@@ -33,6 +33,7 @@ pub const SCENES: &[Scene] = &[
     ("new-conversation", new_conversation),
     ("conversations", conversations),
     ("conversation", conversation),
+    ("attachments", attachments),
     ("tools", tools),
     ("streaming", streaming),
     ("working", working),
@@ -1129,6 +1130,52 @@ pub fn conversation(ui: &mut Ui) {
             finished_activity(),
         ),
     );
+}
+
+/// A message sent with two files, and two more waiting in the composer.
+pub fn attachments(ui: &mut Ui) {
+    // Ids are 64 hex digits, as the runtime's are.
+    let file = |digit: &str, name: &str, size: u64, mime: &str| {
+        json!({
+            "id": digit.repeat(64), "name": name, "size": size,
+            "path": format!("/workspace/uploads/{}/{name}", digit.repeat(64)),
+            "mimeType": mime,
+        })
+    };
+    let mut sent = turn(
+        "t1",
+        -300_000,
+        "Compare the floor plan with the quote and tell me what is missing.",
+        Some(
+            "The quote leaves out the **second bathroom** shown on the plan, and prices the kitchen at 14 m² where the plan shows 17 m².",
+        ),
+        "done",
+    );
+    sent["attachments"] = json!([
+        file("a", "floor-plan.png", 1_843_200, "image/png"),
+        file(
+            "b",
+            "Renovation quote (revised, with appendix).pdf",
+            412_314,
+            "application/pdf"
+        ),
+    ]);
+    open(
+        ui,
+        "s-1",
+        observation("Renovation quote", vec![sent], None, "idle", vec![], vec![]),
+    );
+    let bot_id = ui.model.bot_id.clone().unwrap_or_else(|| "default".into());
+    ui.model.attachments.begin(&bot_id, 2);
+    for waiting in [
+        file("c", "site-photo.png", 2_306_867, "image/png"),
+        file("d", "measurements.csv", 812, "application/octet-stream"),
+    ] {
+        let waiting = serde_json::from_value(waiting).expect("an attachment");
+        ui.model.attachments.added(&bot_id, waiting);
+    }
+    ui.model.attachments.finished(&bot_id);
+    ui.composer = TextEdit::new("And these two from this morning.");
 }
 
 /// The same conversation with the second reply's tool steps unfolded.

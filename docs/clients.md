@@ -63,7 +63,7 @@ A new feature is placed by asking these questions in order.
 | Send, Stop, queue or steer a message          | Yes | Yes     | Planned |                                                                                   |
 | Tool steps, reply time, tokens and cost       | Yes | Yes     | Planned |                                                                                   |
 | Approve or reject; approve for session        | Yes | Yes     | Planned |                                                                                   |
-| Attachments                                   | Yes | Planned | Planned |                                                                                   |
+| Attachments                                   | Yes | Yes     | Planned |                                                                                   |
 | Choose the model for a conversation           | Yes | Planned | Planned |                                                                                   |
 | Command mode (Ask or Full access), grant list | Yes | Planned | Planned |                                                                                   |
 | Unread markers and the "New replies" filter   | Yes | Planned | Planned | Read state is kept per client today, not shared.                                  |

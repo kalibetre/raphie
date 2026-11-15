@@ -55,6 +55,14 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
 - **Stop and steer**: the send button becomes **Stop** while Raphie works. A
   message sent meanwhile is queued, and can be switched between "Queued" and
   "Steering after this step".
+- **Attachments**: up to four files of at most 8 MiB each go with a
+  message. Add one with the paperclip (the system's file picker), drag files
+  from Finder onto the conversation, or paste a screenshot or copied files
+  into the message. A file is uploaded to the bot's workspace as soon as it
+  is chosen and waits in the composer as a card, which can be removed; files
+  alone can be sent without text. A sent message shows its files, and the
+  download button on each saves it to this machine's Downloads folder,
+  never replacing a file that is already there.
 - **Approvals**: pending actions show their server, tool and exact arguments,
   when they expire, and **Reject** and **Approve once**; command approvals
   also offer **Approve for session**. A decision that arrives after the
@@ -236,6 +244,7 @@ apps/desktop/
     src/projections.rs    tool steps, usage and run labels from the journal
     src/model_library.rs  grouping, filtering and labelling models
     src/engine.rs         Tokio runtime: sign-in, streams, commands → events
+    src/attachments.rs    the files waiting in the composer and their limits
     src/settings.rs       last origin (non-secret)
     tests/                fake web host (axum) and engine/model tests
     examples/live.rs      live check against a running web host
@@ -253,6 +262,7 @@ apps/desktop/
       conversation.rs       messages, replies, run status
       steps.rs              a run's tool steps and the approval bar
       composer.rs           the message box
+      attachments.rs        one attached file as a card
       welcome.rs            a new conversation
       settings/             Settings: shell, navigation, page parts,
                             Account, Appearance, bot pages
@@ -336,8 +346,13 @@ render with `scripts/snapshots.sh` and put the PNGs beside the web workspace at
 Where the two differ on purpose:
 
 - Controls for features this app lacks are left out rather than shown dead:
-  attachments, the model picker, command-permission mode, usage, notifications,
-  New bot, and the "New replies" filter (there is no read tracking).
+  the model picker, command-permission mode, usage, notifications and the
+  "New replies" filter (there is no read tracking).
+- Attachments: the paperclip picks one file at a time (the web's picker
+  takes several); drag several onto the conversation instead. Cards in the
+  composer wrap onto new rows where the web scrolls them sideways. An image
+  shows the image icon in its card, not its picture. Pasting an image or
+  copied files attaches them, which the web does not do.
 - Account has no device list or passkeys. The web host answers those
   requests only for a signed-in browser, never for a device token
   ([Authentication](authentication.md#connect-a-native-device)), so the page
@@ -383,9 +398,9 @@ current.
 - Built and checked on macOS (Apple silicon). The code builds for Windows and
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
-- No attachments, model picker, command-permission mode, grant list,
-  notifications or unread markers, and a bot's settings pages are not native
-  yet. Use the web workspace for those (each bot page links to it).
+- No model picker, command-permission mode, grant list, notifications or
+  unread markers. Use the web workspace for those.
+- Image attachments have no picture preview yet.
 - Tool steps come from the session's latest 200 journal entries, as on the
   web: turns older than that show their reply without steps or usage.
 - The roster and panel have fixed widths (264 and 340 pt) and their open state

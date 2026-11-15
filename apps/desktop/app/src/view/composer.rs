@@ -2,18 +2,24 @@
 //! becomes Stop while Raphie works.
 //!
 //! Mirrors `apps/web/src/domains/conversations/presentation/composer.tsx`
-//! and the `.composer` rules in `chat.css`. The web's attach, model and
-//! permission controls are not here because this app does not have those
-//! features yet.
+//! and the `.composer` rules in `chat.css`. The web's model and permission
+//! controls are not here because this app does not have those features
+//! yet.
+//!
+//! Files join a message three ways: the paperclip (the system's file
+//! picker, one file at a time), dragging them onto the conversation, or
+//! pasting an image or copied files into the text.
 
-use rune::{El, Tx, auto_grow, col, icon, row, text_input};
+use raphie_core::attachments::MAX_FILES;
+use rune::{ClipboardContent, El, Tx, auto_grow, col, icon, row, text, text_input};
 
 use super::Look;
+use super::attachments::{Action, file_card};
 use super::conversation::READING_WIDTH;
 use crate::icons;
 use crate::state::Ui;
 use crate::theme::font;
-use crate::widgets::{centered, pressable};
+use crate::widgets::{centered, icon_button, pressable};
 
 pub fn composer(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
@@ -21,6 +27,12 @@ pub fn composer(s: &Ui, look: &Look) -> El {
     // A run is going in this conversation, so it can be stopped.
     let running = s.busy();
     let busy = running || s.model.sending;
+    let draft = &s.model.attachments;
+    // Only the selected bot's files: uploads belong to one bot.
+    let files = draft.files_for(s.model.bot_id.as_deref());
+    // Nothing can be added, removed or sent while either is on its way.
+    let locked = s.model.sending || draft.uploading;
+    let has_content = !empty || !files.is_empty();
 
     let input = text_input(&s.composer, font(14.5, 400.0).lh(21.0))
         .key("rd-composer")
@@ -30,6 +42,10 @@ pub fn composer(s: &Ui, look: &Look) -> El {
         .placeholder("Message Raphie…", t.muted_foreground)
         .caret(t.foreground, t.selection())
         .on_edit(|s: &mut Ui| &mut s.composer)
+        // A pasted image or copied file is attached; text pastes as usual.
+        .on_input_paste(|s: &mut Ui, content: &ClipboardContent, _: &mut Tx| {
+            s.paste_attachment(content)
+        })
         // Return sends; Shift-Return types a new line.
         .on_submit(|s: &mut Ui, _: &mut Tx| s.send());
 
@@ -51,7 +67,7 @@ pub fn composer(s: &Ui, look: &Look) -> El {
                     .color(t.primary_foreground)
                     .a11y_hidden(),
             ),
-        !empty && !s.model.sending,
+        has_content && !locked,
         |s: &mut Ui| s.send(),
     );
     // While Raphie works: with nothing typed, Stop takes the send button's
@@ -74,9 +90,23 @@ pub fn composer(s: &Ui, look: &Look) -> El {
     if running {
         actions = actions.child(stop);
     }
-    if !running || !empty {
+    if !running || has_content {
         actions = actions.child(send);
     }
+    let attach = icon_button(
+        t,
+        &icons::PAPERCLIP,
+        16.0,
+        "Attach a file (up to four, 8 MiB each)",
+    )
+    .key("rd-attach");
+    // `pressable` takes a handler without `Tx`; opening the picker needs
+    // one, so the disabled look is applied here by hand.
+    let attach = if !locked && files.len() < MAX_FILES {
+        attach.on_press_tx(|_: &mut Ui, tx: &mut Tx| Ui::choose_attachment(tx))
+    } else {
+        attach.disabled(true).layer_opacity(0.5)
+    };
 
     let mut card = col()
         .key("rd-composer-card")
@@ -88,14 +118,34 @@ pub fn composer(s: &Ui, look: &Look) -> El {
         .radius(18.0)
         .fill(t.card)
         // The border warms towards the accent while typing, as on the web.
+        // The border turns to the accent while files are dragged over.
         .border(
             1.0,
-            if s.composer.focused {
+            if s.drop_hover {
+                t.accent
+            } else if s.composer.focused {
                 t.border.mix(t.accent, 0.4)
             } else {
                 t.border
             },
-        )
+        );
+    if !files.is_empty() {
+        // The web scrolls the cards sideways; here they wrap onto new rows.
+        let mut chips = row()
+            .key("rd-attachments")
+            .role("list")
+            .label("Attached files")
+            .w_full()
+            .mb(12.0)
+            .gap(8.0)
+            .flex_wrap();
+        for file in files {
+            let key = format!("rd-attachment-{}", file.id);
+            chips = chips.child(file_card(t, &key, file, &Action::Remove, !locked));
+        }
+        card = card.child(chips);
+    }
+    let mut card = card
         // The text grows from one line to ten, then scrolls.
         .child(auto_grow(input, 1, 10))
         .child(
@@ -103,8 +153,11 @@ pub fn composer(s: &Ui, look: &Look) -> El {
                 .w_full()
                 .mt(10.0)
                 .min_h(32.0)
-                .justify_end()
+                .justify_between()
                 .center_y()
+                // The paperclip sits 6 left of the text's edge so its
+                // glyph, not its hover square, lines up with the text.
+                .child(attach.ml(-6.0))
                 .child(actions),
         )
         // A press anywhere on the card puts the caret in the text.
@@ -118,8 +171,28 @@ pub fn composer(s: &Ui, look: &Look) -> El {
         .max_w(READING_WIDTH)
         .px(28.0)
         .pt(4.0)
-        .pb(14.0)
-        .child(card);
+        .pb(14.0);
+    if let Some(error) = &draft.error {
+        wrap = wrap.child(
+            text(error.clone())
+                .key("rd-attach-error")
+                .role("alert")
+                .font(font(12.5, 400.0))
+                .color(t.error)
+                .wrap()
+                .mb(8.0),
+        );
+    }
+    wrap = wrap.child(card);
+    if draft.uploading {
+        wrap = wrap.child(
+            centered("Uploading to workspace…", font(11.5, 400.0), t.faint)
+                .key("rd-attach-uploading")
+                .role("status")
+                .w_full()
+                .mt(8.0),
+        );
+    }
     if busy {
         wrap = wrap.child(
             centered(

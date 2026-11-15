@@ -150,6 +150,15 @@ impl AttachmentDraft {
         self.sending.clear();
     }
 
+    /// The files waiting for `bot_id`'s next message: none when the draft
+    /// is another bot's.
+    pub fn files_for(&self, bot_id: Option<&str>) -> &[Attachment] {
+        match bot_id {
+            Some(bot_id) if self.owns(bot_id) => &self.files,
+            _ => &[],
+        }
+    }
+
     /// True when another file may be chosen.
     pub fn has_room(&self) -> bool {
         !self.uploading && self.files.len() < MAX_FILES

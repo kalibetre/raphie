@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
+use raphie_core::attachments::Upload;
 use raphie_core::auth::KeychainStore;
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome, is_telegram_token};
@@ -20,7 +21,7 @@ use raphie_core::model_library::ModelFilter;
 use raphie_core::origin::Origin;
 use raphie_core::settings::{Settings, ThemeChoice};
 use raphie_core::workspace::{self, ROOT};
-use rune::{TextEdit, Tx, Waker};
+use rune::{ClipboardContent, FileDialogOptions, TextEdit, Tx, Waker};
 
 use crate::channels::{DiscordForm, TelegramForm, UNSAVED};
 use crate::format::now_ms;
@@ -259,6 +260,8 @@ pub struct Ui {
     pub origin_field: TextEdit,
     /// What the owner is typing to Raphie.
     pub composer: TextEdit,
+    /// Files are being dragged over the conversation.
+    pub drop_hover: bool,
     /// Whether the bot roster on the left shows (⌘B).
     pub roster_open: bool,
     /// Whether the conversations panel on the right shows.
@@ -348,6 +351,7 @@ impl Ui {
             opened: Vec::new(),
             origin_field: TextEdit::new(origin),
             composer: TextEdit::new(""),
+            drop_hover: false,
             roster_open: true,
             // Closed until asked for, like the web workspace's panel.
             panel_open: false,
@@ -444,7 +448,11 @@ impl Ui {
 
     pub fn send(&mut self) {
         let text = self.composer.text.trim().to_owned();
-        if text.is_empty() || !self.model.begin_send() {
+        let bot_id = self.model.bot_id.clone();
+        let draft = &self.model.attachments;
+        // Files alone are a message; an upload still running is not ready.
+        let nothing = text.is_empty() && draft.files_for(bot_id.as_deref()).is_empty();
+        if nothing || draft.uploading || !self.model.begin_send() {
             return;
         }
         // The runtime accepts up to 4,000 characters per message.
@@ -453,7 +461,74 @@ impl Ui {
             self.model.notice = Some("Messages can be at most 4,000 characters.".into());
             return;
         }
-        self.command(Command::Send { text });
+        let attachments = match &bot_id {
+            Some(bot_id) => self.model.attachments.take_for_send(bot_id),
+            None => Vec::new(),
+        };
+        self.command(Command::Send { text, attachments });
+    }
+
+    /// Uploads what the owner chose to the selected bot, to go with the
+    /// next message.
+    pub fn attach(&mut self, uploads: Vec<Upload>) {
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            self.model.notice = Some("Choose a bot before attaching files.".into());
+            return;
+        };
+        // `begin` refuses a fifth file and says so in the draft's error.
+        if !self.model.sending && self.model.attachments.begin(&bot_id, uploads.len()) {
+            self.command(Command::Attach { bot_id, uploads });
+        }
+    }
+
+    /// Opens the system's file picker and attaches the file chosen. The
+    /// answer arrives on a later frame, in the closure.
+    pub fn choose_attachment(tx: &mut Tx) {
+        let options = FileDialogOptions {
+            title: "Attach a file".into(),
+            ..FileDialogOptions::default()
+        };
+        tx.open_file(options, |s: &mut Ui, answer, _: &mut Tx| match answer {
+            Ok(Some(path)) => s.attach(vec![Upload::File(path)]),
+            // The owner closed the picker.
+            Ok(None) => {}
+            Err(error) => {
+                s.model.attachments.error =
+                    Some(format!("Could not open the file picker: {error}"));
+            }
+        });
+    }
+
+    /// Something was pasted into the composer. An image (a screenshot) or
+    /// copied files are attached; returns false for anything else, so text
+    /// is pasted as usual.
+    pub fn paste_attachment(&mut self, content: &ClipboardContent) -> bool {
+        if let Some(image) = content.image() {
+            self.attach(vec![Upload::Bytes {
+                name: "Pasted image.png".into(),
+                bytes: image.png().to_vec().into(),
+            }]);
+            true
+        } else if !content.files().is_empty() {
+            self.attach(content.files().iter().cloned().map(Upload::File).collect());
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Saves a message's file to this machine's Downloads folder.
+    pub fn save_attachment(&mut self, id: &str, name: &str) {
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            return;
+        };
+        if self.model.begin_save_attachment(id) {
+            self.command(Command::DownloadAttachment {
+                bot_id,
+                id: id.to_owned(),
+                name: name.to_owned(),
+            });
+        }
     }
 
     pub fn decide(&mut self, approval_id: &str, decision: Decision, scope: Scope) {
