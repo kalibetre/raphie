@@ -15,13 +15,16 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
+use crate::channels::ChannelChange;
 use crate::contracts::{
-    Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction,
-    ControlBody, Decision, DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse,
-    DeviceTokenResponse, EditConnectionBody, ErrorBody, McpActionBody, McpConnection, McpList,
-    MemoryPage, MemoryRecall, MemoryStatus, Page, RecallBody, Receipt, ReviseMemoryBody,
-    RuntimeSettings, SaveMcpBody, SaveMemoryBody, Scope, SessionObservation, SessionSummary,
-    SessionTurn, SubmitMessage, TestConnectionBody, UpdateBotProfile,
+    Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile,
+    ChannelHomeSettings, ChannelSettings, ControlAction, ControlBody, Decision, DecisionBody,
+    DecisionResult, DefaultModelBody, DeviceCodeResponse, DeviceTokenResponse, EditConnectionBody,
+    ErrorBody, McpActionBody, McpConnection, McpList, MemoryPage, MemoryRecall, MemoryStatus, Page,
+    RecallBody, Receipt, ReviseMemoryBody, RuntimeSettings, SaveDiscordBody, SaveMcpBody,
+    SaveMemoryBody, SaveTelegramBody, Scope, SelectHomeBody, SessionObservation, SessionSummary,
+    SessionTurn, SubmitMessage, TelegramPairingCode, TestConnectionBody, UnpairTelegramBody,
+    UpdateBotProfile,
 };
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::{KeyChange, MemoryUpdate};
@@ -62,6 +65,17 @@ impl ApiError {
         matches!(self, ApiError::Network(_))
             || matches!(self, ApiError::Rejected { status, .. } if *status >= 500)
     }
+}
+
+/// What a change to a bot's channels answered with.
+#[derive(Debug)]
+pub enum ChannelAnswer {
+    /// The change was made; the settings are read again.
+    Done,
+    /// The one-time code that verifies a Telegram account.
+    Pairing(TelegramPairingCode),
+    /// The home channel settings after choosing one.
+    Home(ChannelHomeSettings),
 }
 
 /// The path for one bot's API. The default bot keeps the unprefixed routes,
@@ -353,6 +367,80 @@ impl ApiClient {
             )
             .await?;
         Ok(())
+    }
+
+    /// A bot's Discord and Telegram connections.
+    pub async fn channels(&self, bot_id: &str) -> Result<ChannelSettings, ApiError> {
+        self.get_json(&bot_path(bot_id, "/api/channels")).await
+    }
+
+    /// Where a bot's scheduled results go, and where they could.
+    pub async fn channel_home(&self, bot_id: &str) -> Result<ChannelHomeSettings, ApiError> {
+        self.get_json(&bot_path(bot_id, "/api/channels/home")).await
+    }
+
+    /// Makes one change to a bot's channels. `Ok` carries the pairing code
+    /// when the change asked for one, and the home settings when it chose
+    /// a home channel; the other routes answer with settings the caller
+    /// reloads instead.
+    pub async fn change_channel(
+        &self,
+        bot_id: &str,
+        change: &ChannelChange,
+    ) -> Result<ChannelAnswer, ApiError> {
+        let path = |tail: &str| bot_path(bot_id, &format!("/api/channels/{tail}"));
+        let empty = serde_json::json!({});
+        // Most routes answer with settings this client reads again from
+        // `/api/channels`, so their bodies are decoded as plain JSON.
+        let done = |_: serde_json::Value| ChannelAnswer::Done;
+        match change {
+            ChannelChange::SaveDiscord(update) => {
+                let body = SaveDiscordBody {
+                    allowed_user_ids: &update.allowed_user_ids,
+                    channel_id: &update.channel_id,
+                    bot_token: update.token.as_ref().map(Secret::expose),
+                };
+                self.post_json(&path("discord"), &body).await.map(done)
+            }
+            ChannelChange::RemoveDiscord => self
+                .post_json(&path("discord/remove"), &empty)
+                .await
+                .map(done),
+            ChannelChange::SaveTelegram(token) => {
+                let body = SaveTelegramBody {
+                    bot_token: Some(token.expose()),
+                    enabled: None,
+                };
+                self.post_json(&path("telegram"), &body).await.map(done)
+            }
+            ChannelChange::EnableTelegram(enabled) => {
+                let body = SaveTelegramBody {
+                    bot_token: None,
+                    enabled: Some(*enabled),
+                };
+                self.post_json(&path("telegram"), &body).await.map(done)
+            }
+            ChannelChange::RemoveTelegram => self
+                .post_json(&path("telegram/remove"), &empty)
+                .await
+                .map(done),
+            ChannelChange::UnpairTelegram(user_id) => {
+                let body = UnpairTelegramBody { user_id };
+                self.post_json(&path("telegram/unpair"), &body)
+                    .await
+                    .map(done)
+            }
+            ChannelChange::PairTelegram => self
+                .post_json(&path("telegram/pairing"), &empty)
+                .await
+                .map(ChannelAnswer::Pairing),
+            ChannelChange::SelectHome(id) => {
+                let body = SelectHomeBody { id: id.as_deref() };
+                self.post_json(&path("home"), &body)
+                    .await
+                    .map(ChannelAnswer::Home)
+            }
+        }
     }
 
     /// A bot's connections to MCP servers.

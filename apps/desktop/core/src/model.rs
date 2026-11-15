@@ -9,10 +9,11 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::auth::DeviceCode;
+use crate::channels::{Channel, ChannelOutcome};
 use crate::contracts::{
-    Account, ApprovalStatus, BotProfile, McpConnection, MemoryEvidence, MemoryPage, MemoryStatus,
-    Page, Receipt, RuntimeSettings, SessionApproval, SessionObservation, SessionSummary,
-    SessionTurn,
+    Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection,
+    MemoryEvidence, MemoryPage, MemoryStatus, Page, Receipt, RuntimeSettings, SessionApproval,
+    SessionObservation, SessionSummary, SessionTurn, TelegramPairingCode,
 };
 use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
@@ -81,6 +82,37 @@ pub enum Event {
     },
     /// A test of the saved memory back end ended; `message` says how.
     MemoryTested {
+        message: String,
+    },
+    /// A bot's Discord and Telegram connections.
+    Channels {
+        bot_id: String,
+        settings: ChannelSettings,
+    },
+    ChannelsFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// Where a bot's scheduled results go, and where they could.
+    ChannelHome {
+        bot_id: String,
+        home: ChannelHomeSettings,
+    },
+    ChannelHomeFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// A change to a bot's channels was made. `settings` is what the
+    /// runtime has now, when it could be read again; `pairing` is the code
+    /// a pairing request was answered with.
+    ChannelChanged {
+        bot_id: String,
+        outcome: ChannelOutcome,
+        settings: Option<ChannelSettings>,
+        pairing: Option<TelegramPairingCode>,
+    },
+    ChannelChangeFailed {
+        channel: Channel,
         message: String,
     },
     /// A bot's connections to MCP servers.
@@ -232,6 +264,9 @@ pub enum Effect {
     /// This bot's memory settings were saved: its form should show them and
     /// forget any typed key.
     MemorySaved(String),
+    /// A change to a bot's channels was made: forget what was typed for
+    /// it, and close its form where the web does.
+    ChannelChanged(ChannelOutcome),
     /// An MCP connection was added: empty its form and forget what was
     /// typed.
     McpAdded,
@@ -378,6 +413,23 @@ pub struct Model {
     pub memory_message: Option<String>,
     /// The saved memories on "Browse memory".
     pub memories: MemoryBrowser,
+    /// Each bot's Discord and Telegram connections, once loaded.
+    pub channels: HashMap<String, ChannelSettings>,
+    /// The bot whose channels could not be loaded, and why.
+    pub channels_error: Option<(String, String)>,
+    /// Each bot's home channel settings, once loaded.
+    pub channel_home: HashMap<String, ChannelHomeSettings>,
+    /// The bot whose home channel could not be loaded, and why.
+    pub channel_home_error: Option<(String, String)>,
+    /// A change to a bot's channels is on its way.
+    pub changing_channel: bool,
+    /// What the last change to each part of the page said.
+    pub channel_messages: HashMap<Channel, String>,
+    /// Why the last change to each part of the page failed.
+    pub channel_errors: HashMap<Channel, String>,
+    /// The Telegram pairing code that is out, and the bot it is for. Shown
+    /// while the runtime says that same code is still live.
+    pub telegram_pairing: Option<(String, TelegramPairingCode)>,
     /// Each bot's MCP connections, once loaded.
     pub mcp: HashMap<String, Vec<McpConnection>>,
     /// The bot whose MCP connections could not be loaded, and why.
@@ -427,6 +479,14 @@ impl Default for Model {
             testing_memory: false,
             memory_message: None,
             memories: MemoryBrowser::default(),
+            channels: HashMap::new(),
+            channels_error: None,
+            channel_home: HashMap::new(),
+            channel_home_error: None,
+            changing_channel: false,
+            channel_messages: HashMap::new(),
+            channel_errors: HashMap::new(),
+            telegram_pairing: None,
             mcp: HashMap::new(),
             mcp_error: None,
             changing_mcp: false,
@@ -538,6 +598,53 @@ impl Model {
             Event::MemoryTested { message } => {
                 self.testing_memory = false;
                 self.memory_message = Some(message);
+            }
+            Event::Channels { bot_id, settings } => {
+                self.channels_error = None;
+                self.channels.insert(bot_id, settings);
+            }
+            Event::ChannelsFailed { bot_id, message } => {
+                self.channels_error = Some((bot_id, message));
+            }
+            Event::ChannelHome { bot_id, home } => {
+                // Also the answer to choosing a home channel.
+                if self
+                    .channel_home_error
+                    .as_ref()
+                    .is_some_and(|(bot, _)| *bot == bot_id)
+                {
+                    self.channel_home_error = None;
+                }
+                self.channel_home.insert(bot_id, home);
+            }
+            Event::ChannelHomeFailed { bot_id, message } => {
+                self.channel_home_error = Some((bot_id, message));
+            }
+            Event::ChannelChanged {
+                bot_id,
+                outcome,
+                settings,
+                pairing,
+            } => {
+                self.changing_channel = false;
+                if let Some(message) = outcome.message() {
+                    self.channel_messages
+                        .insert(outcome.channel(), message.to_owned());
+                }
+                if let Some(settings) = settings {
+                    self.channels.insert(bot_id.clone(), settings);
+                }
+                match (outcome, pairing) {
+                    (_, Some(code)) => self.telegram_pairing = Some((bot_id, code)),
+                    // A removed connection's code is of no use to anyone.
+                    (ChannelOutcome::TelegramRemoved, None) => self.telegram_pairing = None,
+                    _ => {}
+                }
+                return vec![Effect::ChannelChanged(outcome)];
+            }
+            Event::ChannelChangeFailed { channel, message } => {
+                self.changing_channel = false;
+                self.channel_errors.insert(channel, message);
             }
             Event::Mcp { bot_id, items } => {
                 self.mcp_error = None;
@@ -718,6 +825,26 @@ impl Model {
         self.memory_save_error = None;
         self.memory_message = None;
         true
+    }
+
+    /// The owner changed something on the Channels page. Returns false
+    /// while another change is on its way.
+    pub fn begin_change_channel(&mut self, channel: Channel) -> bool {
+        if self.changing_channel {
+            return false;
+        }
+        self.changing_channel = true;
+        self.channel_messages.remove(&channel);
+        self.channel_errors.remove(&channel);
+        true
+    }
+
+    /// The pairing code to show for `bot_id`: the one that was issued, as
+    /// long as the runtime says that same code has not been used or expired.
+    pub fn live_pairing(&self, bot_id: &str) -> Option<&TelegramPairingCode> {
+        let (bot, code) = self.telegram_pairing.as_ref()?;
+        let telegram = self.channels.get(bot_id)?.telegram.as_ref()?;
+        (bot == bot_id && telegram.pairing_expires_at == Some(code.expires_at)).then_some(code)
     }
 
     /// The owner added or changed an MCP connection. Returns false while

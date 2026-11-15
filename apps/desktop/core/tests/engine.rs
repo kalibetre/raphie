@@ -6,6 +6,7 @@ mod support;
 use std::sync::Arc;
 
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
+use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
 use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, Scope, UpdateBotProfile,
 };
@@ -595,6 +596,119 @@ fn memory_settings_load_save_and_test() {
     host.with(|h| h.memory_unreachable = true);
     let said = test(&mut driver);
     assert!(said.contains("did not answer"), "{said}");
+}
+
+#[test]
+fn channels_connect_pair_and_choose_a_home() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.home_destinations = vec![serde_json::json!({
+            "id": "telegram:42", "platform": "telegram",
+            "conversationId": "telegram:42", "userId": "42",
+        })];
+    });
+    let (mut driver, _) = signed_in(&host);
+    let bot_id = || "default".to_owned();
+    driver.send(Command::LoadChannels { bot_id: bot_id() });
+    driver.send(Command::LoadChannelHome { bot_id: bot_id() });
+    driver.until("the channels", |m, _| {
+        m.channels.contains_key("default") && m.channel_home.contains_key("default")
+    });
+    assert_eq!(driver.model.channels["default"].discord, None);
+    assert_eq!(driver.model.channel_home["default"].selected, None);
+
+    let change = |driver: &mut Driver, change: ChannelChange| {
+        assert!(
+            driver
+                .model
+                .begin_change_channel(change.outcome().channel())
+        );
+        driver.send(Command::ChangeChannel {
+            bot_id: "default".into(),
+            change,
+        });
+        driver.until("the change", |m, _| !m.changing_channel);
+    };
+    let discord = |token: Option<&str>| {
+        ChannelChange::SaveDiscord(DiscordUpdate {
+            token: token.map(Secret::new),
+            allowed_user_ids: vec!["1001".into(), "1002".into()],
+            channel_id: String::new(),
+        })
+    };
+
+    // What the runtime refuses is reported under Discord and saves nothing.
+    change(&mut driver, discord(None));
+    let error = driver.model.channel_errors[&Channel::Discord].clone();
+    assert!(error.contains("Discord bot token"), "{error}");
+    assert_eq!(driver.model.channels["default"].discord, None);
+
+    // The token is sent once; the settings never carry it back.
+    change(&mut driver, discord(Some("discord-test-token")));
+    let saved = driver.model.channels["default"].discord.clone().unwrap();
+    assert!(saved.connected);
+    assert_eq!(saved.allowed_user_ids, ["1001", "1002"]);
+    assert_eq!(
+        driver.model.channel_messages[&Channel::Discord],
+        "Discord settings saved."
+    );
+    assert!(!driver.model.channel_errors.contains_key(&Channel::Discord));
+    // Keeping the token leaves the field out.
+    change(&mut driver, discord(None));
+    host.with(|h| {
+        assert_eq!(h.channel_requests[1].1["botToken"], "discord-test-token");
+        assert!(h.channel_requests[2].1.get("botToken").is_none());
+    });
+    let printed = format!("{:?}", driver.model.channels);
+    assert!(!printed.contains("discord-test-token"), "{printed}");
+
+    // Telegram: connect, pair, revoke, pause.
+    change(
+        &mut driver,
+        ChannelChange::SaveTelegram(Secret::new("123456:telegram-test-token-xxxx")),
+    );
+    let telegram = driver.model.channels["default"].telegram.clone().unwrap();
+    assert_eq!(
+        telegram_summary(Some(&telegram)),
+        "Connected as @raphie_test_bot · 1 verified account"
+    );
+    assert!(driver.model.live_pairing("default").is_none());
+    change(&mut driver, ChannelChange::PairTelegram);
+    let code = driver.model.live_pairing("default").cloned().unwrap();
+    assert_eq!(code.code, "K7Q2-M9XD");
+    change(&mut driver, ChannelChange::UnpairTelegram("42".into()));
+    let telegram = driver.model.channels["default"].telegram.clone().unwrap();
+    assert!(telegram.verified_user_ids.is_empty());
+    change(&mut driver, ChannelChange::EnableTelegram(false));
+    assert_eq!(
+        driver.model.channel_messages[&Channel::Telegram],
+        "Telegram disabled."
+    );
+    host.with(|h| {
+        let (path, body) = h.channel_requests.last().unwrap();
+        assert_eq!(path, "telegram");
+        assert_eq!(*body, serde_json::json!({ "enabled": false }));
+    });
+
+    // The home channel is chosen by id, and web only is `null`.
+    change(
+        &mut driver,
+        ChannelChange::SelectHome(Some("telegram:42".into())),
+    );
+    assert_eq!(
+        driver.model.channel_home["default"].selected.as_deref(),
+        Some("telegram:42")
+    );
+    change(&mut driver, ChannelChange::SelectHome(None));
+    assert_eq!(driver.model.channel_home["default"].selected, None);
+    host.with(|h| assert!(h.channel_requests.last().unwrap().1["id"].is_null()));
+
+    // Removing Telegram also drops the pairing code that was out.
+    change(&mut driver, ChannelChange::RemoveTelegram);
+    assert_eq!(driver.model.channels["default"].telegram, None);
+    assert!(driver.model.telegram_pairing.is_none());
+    change(&mut driver, ChannelChange::RemoveDiscord);
+    assert_eq!(driver.model.channels["default"].discord, None);
 }
 
 #[test]

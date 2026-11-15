@@ -65,6 +65,14 @@ pub struct Host {
     pub memory_saves: Vec<Value>,
     /// Answer memory tests with a failure, as an unreachable server would.
     pub memory_unreachable: bool,
+    /// The Discord and Telegram settings, as the runtime answers them.
+    pub discord: Option<Value>,
+    pub telegram: Option<Value>,
+    /// Bodies of channel changes: the path's tail and the body.
+    pub channel_requests: Vec<(String, Value)>,
+    /// The home channel's selected destination, and the known ones.
+    pub home_selected: Option<String>,
+    pub home_destinations: Vec<Value>,
     /// The bot's MCP connections, as the runtime lists them.
     pub mcp: Vec<Value>,
     /// Bodies of MCP adds, as received.
@@ -171,6 +179,10 @@ fn router(fake: Fake) -> Router {
         )
         .route("/api/memory", get(memory).post(save_memory))
         .route("/api/memory/test", post(test_memory))
+        .route("/api/channels", get(channels))
+        .route("/api/channels/home", get(channel_home).post(channel_home))
+        .route("/api/channels/{channel}", post(change_channel))
+        .route("/api/channels/{channel}/{action}", post(change_channel))
         .route("/api/mcp", get(mcp).post(add_mcp))
         .route("/api/mcp/{id}", post(change_mcp))
         .route("/api/memory/evidence", get(memory_evidence))
@@ -251,6 +263,119 @@ async fn save_memory(
         }));
     }
     Json(memory_json(&fake)).into_response()
+}
+
+fn channels_json(fake: &Fake) -> Value {
+    let host = fake.host.lock().unwrap();
+    json!({ "discord": host.discord, "telegram": host.telegram })
+}
+
+async fn channels(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    Json(channels_json(&fake)).into_response()
+}
+
+/// Reads the home channel, or with a body selects one.
+async fn channel_home(
+    State(fake): State<Fake>,
+    method: axum::http::Method,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    body: Option<Json<Value>>,
+) -> Response {
+    let posted = method == axum::http::Method::POST;
+    record(
+        &fake,
+        if posted { "POST" } else { "GET" },
+        uri.path().to_owned(),
+        &headers,
+    );
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    if let (true, Some(Json(body))) = (posted, body) {
+        host.channel_requests.push(("home".into(), body.clone()));
+        host.home_selected = body["id"].as_str().map(str::to_owned);
+    }
+    Json(json!({ "selected": host.home_selected, "destinations": host.home_destinations }))
+        .into_response()
+}
+
+/// Discord and Telegram changes, behaving as the runtime does where the
+/// client depends on it.
+async fn change_channel(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let tail = uri
+        .path()
+        .rsplit_once("/channels/")
+        .map_or("", |(_, tail)| tail)
+        .to_owned();
+    let refused = |message: &str| {
+        (StatusCode::BAD_REQUEST, Json(json!({ "error": message }))).into_response()
+    };
+    {
+        let mut host = fake.host.lock().unwrap();
+        host.channel_requests.push((tail.clone(), body.clone()));
+        match tail.as_str() {
+            "discord" => {
+                if host.discord.is_none() && body.get("botToken").is_none() {
+                    return refused("Enter a Discord bot token.");
+                }
+                host.discord = Some(json!({
+                    "allowedUserIds": body["allowedUserIds"], "channelId": body["channelId"],
+                    "connected": true, "tokenConfigured": true, "conflict": false,
+                }));
+            }
+            "discord/remove" => host.discord = None,
+            "telegram" => {
+                if let Some(enabled) = body.get("enabled") {
+                    let Some(telegram) = host.telegram.as_mut() else {
+                        return refused("Telegram is not configured.");
+                    };
+                    telegram["enabled"] = enabled.clone();
+                    telegram["connected"] = enabled.clone();
+                } else {
+                    host.telegram = Some(json!({
+                        "enabled": true, "connected": true, "tokenConfigured": true,
+                        "botUsername": "raphie_test_bot", "verifiedUserIds": ["42"],
+                        "pairingExpiresAt": null, "problem": null,
+                    }));
+                }
+            }
+            "telegram/pairing" => {
+                let Some(telegram) = host.telegram.as_mut() else {
+                    return refused("Connect a Telegram bot first.");
+                };
+                telegram["pairingExpiresAt"] = json!(1_800_000_000_000_i64);
+                return Json(json!({ "code": "K7Q2-M9XD", "expiresAt": 1_800_000_000_000_i64 }))
+                    .into_response();
+            }
+            "telegram/unpair" => {
+                let Some(telegram) = host.telegram.as_mut() else {
+                    return refused("Telegram is not configured.");
+                };
+                let user = body["userId"].clone();
+                if let Some(ids) = telegram["verifiedUserIds"].as_array_mut() {
+                    ids.retain(|id| *id != user);
+                }
+            }
+            "telegram/remove" => host.telegram = None,
+            _ => return refused("Unknown channel route."),
+        }
+    }
+    Json(channels_json(&fake)).into_response()
 }
 
 fn mcp_json(fake: &Fake) -> Response {
