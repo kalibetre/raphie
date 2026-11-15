@@ -20,7 +20,7 @@ export function ToolDecision({ approval }: { approval: Approval }) {
   const busy = decision.isPending || decision.isSuccess;
   return (
     <div className="decision">
-      <small>
+      <small className="decision-expires">
         Expires{" "}
         <time dateTime={new Date(approval.expiresAt).toISOString()}>
           {new Date(approval.expiresAt).toLocaleTimeString(undefined, {
@@ -31,6 +31,7 @@ export function ToolDecision({ approval }: { approval: Approval }) {
       </small>
       <Button
         size="sm"
+        className="decision-action"
         variant="outline"
         disabled={busy}
         onClick={() => decision.mutate({ decision: "rejected", scope: "once" })}
@@ -39,6 +40,7 @@ export function ToolDecision({ approval }: { approval: Approval }) {
       </Button>
       <Button
         size="sm"
+        className="decision-action"
         disabled={busy}
         onClick={() => decision.mutate({ decision: "approved", scope: "once" })}
       >
@@ -49,6 +51,7 @@ export function ToolDecision({ approval }: { approval: Approval }) {
         (approval.tool === "bash" || approval.tool === "workspace_exec") && (
           <Button
             size="sm"
+            className="decision-action"
             variant="outline"
             disabled={busy}
             title={`Allow these exact arguments for ${approval.tool} in this bot conversation: ${approval.argumentsJson}`}

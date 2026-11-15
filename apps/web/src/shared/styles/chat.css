@@ -409,6 +409,16 @@
     color: var(--muted-foreground);
     font-size: 12px;
   }
+  @media (max-width: 767px) {
+    /* On a phone the expiry takes its own line and the buttons share the
+       rows below evenly, rather than wrapping wherever they happen to fit. */
+    .decision-expires {
+      flex-basis: 100%;
+    }
+    .decision-action {
+      flex: 1 1 auto;
+    }
+  }
 
   /* Composer */
   .composer-wrap {
