@@ -27,6 +27,10 @@ import { BackendSettings } from "../domains/settings/infrastructure/runtime-sett
 import { ContainerWorkspace } from "../domains/workspaces/infrastructure/container-workspace.ts";
 import type { McpConnection } from "../infrastructure/mcp/client.ts";
 import { InputError } from "../shared/application/input-error.ts";
+import {
+  botTelemetry,
+  type Telemetry,
+} from "../shared/application/telemetry.ts";
 import { Gateway } from "./agent-runtime.ts";
 
 export type BotRuntime = {
@@ -46,6 +50,8 @@ type Automation = {
   keyStore?: CredentialKeyStore;
   legacyMcp?: McpConnection;
   telegram?: TelegramOptions;
+  /** The process's tracer. Each bot opened here records under its own id. */
+  telemetry?: Telemetry;
 };
 
 /** One process, separate storage and authorities. Only bootstrap holds every bot. */
@@ -73,7 +79,8 @@ export class BotHost implements BotProfiles {
   static async open(
     directory: string,
     existing: Omit<BotRuntime, "close">,
-    openBot: OpenBot = openIsolatedBot,
+    openBot: OpenBot = (id, botDirectory) =>
+      openIsolatedBot(id, botDirectory, automation?.telemetry),
     automation?: Automation,
   ) {
     const host = new BotHost(directory, openBot, automation);
@@ -316,6 +323,7 @@ export class BotHost implements BotProfiles {
 async function openIsolatedBot(
   botId: string,
   directory: string,
+  telemetry?: Telemetry,
 ): Promise<BotRuntime> {
   const models = createModels();
   models.setProvider(openrouterProvider());
@@ -339,6 +347,7 @@ async function openIsolatedBot(
       deferResume: true,
       botId,
       directory,
+      telemetry: telemetry && botTelemetry(telemetry, botId),
       models,
       model: settings.model,
       memory,

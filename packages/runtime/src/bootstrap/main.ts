@@ -22,6 +22,7 @@ import {
   appDataDirectory,
   appDataIdentity,
 } from "../infrastructure/workspace/app-data.ts";
+import { botTelemetry } from "../shared/application/telemetry.ts";
 import { Gateway } from "./agent-runtime.ts";
 import { BotHost } from "./bot-host.ts";
 import { startServer } from "./http-server.ts";
@@ -103,7 +104,7 @@ const program = Effect.gen(function* () {
           deferResume: true,
           identity,
           directory,
-          telemetry,
+          telemetry: botTelemetry(telemetry, "default"),
           models,
           model: settings.model,
           modelConnectionGate: settings.connectionGate,
@@ -121,6 +122,7 @@ const program = Effect.gen(function* () {
     () =>
       BotHost.open(directory, { gateway: app, settings, memory }, undefined, {
         legacyMcp,
+        telemetry,
       }),
     (host) => host.close(),
   );

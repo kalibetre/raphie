@@ -23,6 +23,7 @@ export type TraceAttributes = Partial<
     | "model.cache_write_tokens"
     | "execution.outcome"
     | "execution.partial"
+    | "bot.id"
     | "session.id"
     | "turn.id"
     | "approval.id"
@@ -58,3 +59,17 @@ export const noTelemetry: Telemetry = {
   start: () => ({ annotate: () => {}, end: () => {} }),
   run: (_name, _attributes, operation) => operation(() => {}),
 };
+
+/**
+ * One trace store serves every bot, so each bot's spans carry its id. A span
+ * that names a bot itself keeps that one: the shared HTTP server records a
+ * request under the bot its route addresses.
+ */
+export function botTelemetry(telemetry: Telemetry, botId: string): Telemetry {
+  return {
+    start: (name, attributes, parent) =>
+      telemetry.start(name, { "bot.id": botId, ...attributes }, parent),
+    run: (name, attributes, operation) =>
+      telemetry.run(name, { "bot.id": botId, ...attributes }, operation),
+  };
+}

@@ -75,6 +75,7 @@ const allowed = new Set([
   "model.cache_write_tokens",
   "execution.outcome",
   "execution.partial",
+  "bot.id",
   "session.id",
   "turn.id",
   "approval.id",
