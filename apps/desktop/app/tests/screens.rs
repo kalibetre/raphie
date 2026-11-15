@@ -636,25 +636,289 @@ fn a_failed_save_says_why_and_a_bad_custom_colour_is_refused() {
 }
 
 #[test]
-fn a_bots_page_names_the_bot_and_offers_the_web_page() {
-    let mut rt = render(scenes::settings_bot, false);
+fn another_bots_diagnostics_have_no_telemetry_switch_and_fold_with_the_bot() {
+    let mut rt = render(scenes::settings_diagnostics_research, false);
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
-    assert!(
-        text.contains("Timings and failures from Research’s runs."),
-        "{text}"
-    );
-    click(&mut rt, "rd-bot-page-web");
+    assert!(text.contains("Trace export is currently available for the default bot."));
+    assert!(rt.find("rd-telemetry").is_none());
     assert_eq!(
-        rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=telemetry&bot=b-research"]
+        element(&rt, "rd-traces-empty-title").text.as_deref(),
+        Some("No exported traces in this window")
     );
+    assert!(rt.state.opened.is_empty(), "every page is in the app now");
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
     assert!(rt.find("rd-nav-b-research-telemetry").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
         Some("Diagnostics")
+    );
+}
+
+#[test]
+fn traces_load_filter_unfold_and_switch_window() {
+    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 1800.0));
+    click(&mut rt, "rd-nav-default-telemetry");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadTraces {
+            bot_id: "default".into(),
+            hours: 1,
+        })
+    );
+    assert_eq!(
+        element(&rt, "rd-traces-empty-title").text.as_deref(),
+        Some("Loading traces…")
+    );
+    deliver(
+        &mut rt,
+        Event::Traces {
+            bot_id: "default".into(),
+            hours: 1,
+            data: Box::new(scenes::trace_diagnostics(false)),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-traces-count").text.as_deref(),
+        Some("3 spans · OTLP")
+    );
+    let text = screen_text(&rt);
+    for expected in [
+        "Latest 500 spans",
+        "Error · 804.0 ms",
+        "3120.4 ms",
+        "Trace export is disabled. Showing retained traces only.",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+
+    // A row unfolds into its facts and attributes.
+    let failed = "rd-span-4bf92f3577b34da6a3ce929d0e0e4736:c7ad6b7169203331";
+    assert!(rt.find(&format!("{failed}-detail")).is_none());
+    click(&mut rt, failed);
+    let text = screen_text(&rt);
+    for expected in ["00f067aa0ba902b7", "\"error\": \"timeout\"", "Started"] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+    click(&mut rt, failed);
+    assert!(rt.find(&format!("{failed}-detail")).is_none());
+
+    // The filter looks in names, ids, status and attributes.
+    rt.update(|ui, _| ui.spans.filter = TextEdit::new("claude"));
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-traces-count").text.as_deref(),
+        Some("1 spans · OTLP")
+    );
+    rt.update(|ui, _| ui.spans.filter = TextEdit::new("nothing like this"));
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-traces-empty-title").text.as_deref(),
+        Some("No matching spans")
+    );
+
+    // Another window empties the list and asks for it; a late answer for
+    // the old window is dropped.
+    click(&mut rt, "rd-traces-24h");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadTraces {
+            bot_id: "default".into(),
+            hours: 24,
+        })
+    );
+    deliver(
+        &mut rt,
+        Event::Traces {
+            bot_id: "default".into(),
+            hours: 1,
+            data: Box::new(scenes::trace_diagnostics(true)),
+        },
+    );
+    assert!(rt.state.model.traces.data.is_none());
+    // A backend that does not answer says so.
+    deliver(
+        &mut rt,
+        Event::TracesFailed {
+            bot_id: "default".into(),
+            hours: 24,
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-traces-empty-title").text.as_deref(),
+        Some("Trace backend unavailable")
+    );
+}
+
+#[test]
+fn the_telemetry_switch_and_exports_go_through_the_engine() {
+    let mut rt = render_sized(scenes::settings_diagnostics, false, (1280.0, 1800.0));
+    assert_eq!(
+        element(&rt, "rd-telemetry-state").text.as_deref(),
+        Some("Trace collection is on.")
+    );
+    click(&mut rt, "rd-telemetry");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::SetTelemetry {
+            bot_id: "default".into(),
+            enabled: false,
+        })
+    );
+    // One change at a time.
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-telemetry");
+    assert_eq!(rt.state.sent.len(), before);
+    deliver(
+        &mut rt,
+        Event::TelemetryFailed {
+            message: "Wait for active turns to finish.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-telemetry-state").text.as_deref(),
+        Some("Wait for active turns to finish.")
+    );
+    let mut off = scenes::model_settings();
+    off.telemetry_enabled = false;
+    click(&mut rt, "rd-telemetry");
+    deliver(
+        &mut rt,
+        Event::TelemetrySet {
+            bot_id: "default".into(),
+            settings: Box::new(off),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-telemetry-state").text.as_deref(),
+        Some("Trace collection is off.")
+    );
+
+    // The export is the runtime's JSON, written by the engine.
+    click(&mut rt, "rd-traces-export");
+    let Some(Command::SaveExport { name, contents }) = rt.state.sent.last() else {
+        panic!("an export is sent");
+    };
+    assert!(name.starts_with("raphie-traces-") && name.ends_with(".json"));
+    let exported: serde_json::Value = serde_json::from_str(contents).expect("the export is JSON");
+    assert_eq!(exported["spanLimit"], 500);
+    assert_eq!(exported["spans"][2]["status"], "error");
+    assert_eq!(
+        exported["spans"][0]["traceId"],
+        "4bf92f3577b34da6a3ce929d0e0e4736"
+    );
+    deliver(
+        &mut rt,
+        Event::ExportSaved {
+            saved_as: "raphie-traces-1.json".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-export-saved").text.as_deref(),
+        Some("Saved to your Downloads folder as raphie-traces-1.json.")
+    );
+
+    // While the page shows it asks again every few seconds.
+    let loads = |rt: &Runtime<Ui>| {
+        let sent = rt.state.sent.iter();
+        sent.filter(|c| matches!(c, Command::LoadTraces { .. }))
+            .count()
+    };
+    let before = loads(&rt);
+    rt.update(|ui, _| {
+        assert!(ui.refresh_inspection(100.0));
+        ui.refresh_inspection(102.0);
+        ui.open_settings(Some(Page::Account));
+        assert!(!ui.refresh_inspection(200.0));
+    });
+    assert_eq!(loads(&rt), before + 1);
+}
+
+#[test]
+fn activity_lists_events_newest_first_and_filters_and_exports_them() {
+    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 1600.0));
+    click(&mut rt, "rd-nav-default-activity");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadBotActivity {
+            bot_id: "default".into()
+        })
+    );
+    assert_eq!(
+        element(&rt, "rd-activity-status").text.as_deref(),
+        Some("Loading activity…")
+    );
+    deliver(
+        &mut rt,
+        Event::BotActivityFailed {
+            bot_id: "default".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-activity-status").text.as_deref(),
+        Some("Couldn’t load activity. It will retry automatically.")
+    );
+    deliver(
+        &mut rt,
+        Event::BotActivity {
+            bot_id: "default".into(),
+            items: scenes::bot_events(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-activity-count").text.as_deref(),
+        Some("4 events")
+    );
+    // Newest first: the last event the runtime listed is the first row.
+    let text = screen_text(&rt);
+    let newest = text.find("model completed").expect("the newest event");
+    let oldest = text.find("model started").expect("the oldest event");
+    assert!(newest < oldest, "newest first");
+
+    click(&mut rt, "rd-event-4103");
+    let text = screen_text(&rt);
+    for expected in [
+        "tool.failed",
+        "call-88",
+        "att-7c1",
+        "\"error\": \"timeout\"",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+    rt.update(|ui, _| ui.events.filter = TextEdit::new("CALENDAR"));
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-activity-count").text.as_deref(),
+        Some("2 events")
+    );
+    rt.update(|ui, _| ui.events.filter = TextEdit::new("zzz"));
+    settle(&mut rt);
+    assert!(screen_text(&rt).contains("No matching events."));
+
+    // The export carries every event, not only the filtered ones.
+    click(&mut rt, "rd-activity-export");
+    let Some(Command::SaveExport { name, contents }) = rt.state.sent.last() else {
+        panic!("an export is sent");
+    };
+    assert!(name.starts_with("raphie-activity-"));
+    let exported: serde_json::Value = serde_json::from_str(contents).expect("the export is JSON");
+    assert_eq!(exported["events"].as_array().map(Vec::len), Some(4));
+    assert_eq!(exported["events"][1]["type"], "tool.started");
+    assert!(
+        exported["exportedAt"]
+            .as_str()
+            .is_some_and(|at| at.ends_with('Z'))
+    );
+    deliver(
+        &mut rt,
+        Event::ExportFailed {
+            message: "This machine has no Downloads folder to save to.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-export-error").text.as_deref(),
+        Some("This machine has no Downloads folder to save to.")
     );
 }
 

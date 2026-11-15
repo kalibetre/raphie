@@ -49,6 +49,50 @@ pub fn date_time(at: i64) -> String {
     }
 }
 
+/// The local time of day of `at` with seconds: "08:55:03 PM".
+pub fn time_seconds(at: i64) -> String {
+    match chrono::DateTime::from_timestamp_millis(at) {
+        Some(utc) => {
+            let local = utc.with_timezone(&chrono::Local);
+            let clock = twelve_hour(local.hour(), local.minute());
+            // "08:55 PM" becomes "08:55:03 PM": the seconds go before the
+            // space.
+            match clock.split_once(' ') {
+                Some((time, half)) => format!("{time}:{:02} {half}", local.second()),
+                None => clock,
+            }
+        }
+        None => String::new(),
+    }
+}
+
+/// The local time of day of `at` to the millisecond, on a 24-hour clock:
+/// "20:55:03.123".
+pub fn time_millis(at: i64) -> String {
+    match chrono::DateTime::from_timestamp_millis(at) {
+        Some(utc) => {
+            let local = utc.with_timezone(&chrono::Local);
+            // `%.3f` is the fraction of a second, to three digits.
+            local.format("%H:%M:%S%.3f").to_string()
+        }
+        None => String::new(),
+    }
+}
+
+/// `at` in UTC as ISO 8601: "2026-11-14T17:55:03.123Z".
+pub fn iso_utc(at: i64) -> String {
+    match chrono::DateTime::from_timestamp_millis(at) {
+        Some(utc) => utc.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+        None => String::new(),
+    }
+}
+
+/// This machine's offset from UTC now: "UTC+03:00".
+pub fn utc_offset() -> String {
+    // `%:z` is the offset with a colon, such as "+03:00".
+    format!("UTC{}", chrono::Local::now().format("%:z"))
+}
+
 /// "08:55 PM" for 20:55. Midnight and noon are 12, not 0.
 fn twelve_hour(hour: u32, minute: u32) -> String {
     let half = if hour < 12 { "AM" } else { "PM" };
@@ -71,6 +115,15 @@ mod tests {
         assert_eq!(ago(now - 3 * 3_600_000, now), "3h");
         assert_eq!(ago(now - 2 * 86_400_000, now), "2d");
         assert_eq!(ago(now + 1000, now), "now", "clock skew is not negative");
+    }
+
+    #[test]
+    fn utc_times_are_iso_8601() {
+        assert_eq!(iso_utc(1_700_000_000_123), "2023-11-14T22:13:20.123Z");
+        assert!(utc_offset().starts_with("UTC"));
+        // The local forms depend on this machine's zone; their shape does not.
+        assert_eq!(time_millis(1_700_000_000_123).len(), "20:55:03.123".len());
+        assert!(time_seconds(1_700_000_000_123).contains(":20 "));
     }
 
     #[test]

@@ -301,7 +301,7 @@ fn section_label(label: &str, t: &Theme) -> El {
 }
 
 /// Monospaced text in a bordered box that scrolls once it is tall.
-fn code_box(key: &str, content: String, t: &Theme) -> El {
+pub(crate) fn code_box(key: &str, content: String, t: &Theme) -> El {
     col()
         .key(key)
         .w_full()

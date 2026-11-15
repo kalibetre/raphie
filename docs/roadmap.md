@@ -154,12 +154,11 @@ Delivered capabilities and remaining work are labelled below. See the
   web workspace's design, and light and dark follow the OS or the
   choice in Settings. Settings open in the app with native Account,
   Appearance, bot Profile, Providers, Models and Memory settings pages, and Browse memory (list, search, correct,
-  forget), MCP tools, Channels, Sandbox, Workspace files and Scheduled jobs; a bot's other settings pages still link to
-  the web workspace.
+  forget), MCP tools, Channels, Sandbox, Workspace files, Scheduled jobs, Diagnostics and Activity: every bot
+  settings page is native.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
 - **Desktop — planned:** attachments, model and command-permission controls,
-  unread markers and notifications, the remaining native bot settings pages
-  (Diagnostics and Activity), packaging/signing
+  unread markers and notifications, packaging/signing
   and updates, Windows and Linux
   verification, generated contract types, and local runtime packaging,
   discovery and single-owner lifecycle. Later, a _desktop host_ role that offers

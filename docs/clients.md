@@ -86,8 +86,8 @@ A new feature is placed by asking these questions in order.
 | Sandbox                                    | Yes | Yes     | No      | Setup, and it decides how commands run.                                         |
 | Workspace files: browse, download          | Yes | Yes     | Planned |                                                                                 |
 | Scheduled jobs and their run history       | Yes | Yes     | Planned |                                                                                 |
-| Diagnostics, telemetry switch              | Yes | Planned | No      |                                                                                 |
-| Activity                                   | Yes | Planned | Planned |                                                                                 |
+| Diagnostics, telemetry switch              | Yes | Yes     | No      |                                                                                 |
+| Activity                                   | Yes | Yes     | Planned |                                                                                 |
 
 Until a "Planned" desktop page is built, the desktop client shows its header
 and an **Open in browser** button for the same page of the web workspace.

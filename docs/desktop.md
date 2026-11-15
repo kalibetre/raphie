@@ -130,8 +130,18 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     open. Run history shows recent runs for every job or one job, loads
     older runs from a button, and opens a run's conversation. Jobs and the
     newest runs are re-read every five seconds.
-  - **A bot's other pages** (Diagnostics, Activity) are not built yet: each
-    offers the same page of the web workspace in your browser.
+  - **Diagnostics** holds the switch that collects diagnostic traces (a
+    setting of the runtime, shown for the default bot) and lists recent
+    exported spans for the last 1, 6 or 24 hours, with a filter and each
+    span's ids, status and attributes.
+  - **Activity** lists a bot's most recent durable events across its
+    conversations, newest first, with a filter and each event's details.
+    Both lists are re-read every five seconds, and their export buttons
+    save the JSON into this machine's Downloads folder.
+
+  Every page of a bot's settings is now in the app; none opens the
+  browser.
+
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
 

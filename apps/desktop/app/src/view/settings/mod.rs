@@ -6,9 +6,11 @@
 //! `shared/styles/settings/bot.css`. Each page is its own module here.
 
 mod account;
+mod activity;
 mod appearance;
-mod bot;
 mod channels;
+mod diagnostics;
+mod inspect;
 mod jobs;
 mod mcp;
 mod memories;
@@ -54,6 +56,14 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
         } => memory::memory(s, bot_id, look, overlays),
         Page::Bot {
             bot_id,
+            section: BotSection::Diagnostics,
+        } => diagnostics::diagnostics(s, bot_id, look),
+        Page::Bot {
+            bot_id,
+            section: BotSection::Activity,
+        } => activity::activity(s, bot_id, look),
+        Page::Bot {
+            bot_id,
             section: BotSection::Jobs,
         } => jobs::jobs(s, bot_id, look, overlays),
         Page::Bot {
@@ -76,7 +86,6 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::MemoryBrowse,
         } => memories::memories(s, bot_id, look),
-        Page::Bot { bot_id, section } => bot::bot_page(s, bot_id, *section, look),
     };
     // Pages with a form dock a save bar under the scrolling page.
     let footer = match page {
