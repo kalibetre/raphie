@@ -377,8 +377,10 @@ Where the two differ on purpose:
   ([Authentication](authentication.md#connect-a-native-device)), so the page
   links to the browser for them. Changing that is a decision about the web
   host's security, not about this app.
-- The bar over a Settings page is 44 pt tall, not the web's 60, so its
-  breadcrumb sits level with the window's buttons.
+- The bar over a conversation shows the bot's name on one line, as on the
+  web; the bot's description is its tooltip here. That bar and the one over
+  a Settings page are 44 tall in both clients, level with the window's
+  buttons in this one.
 - Providers opens one connection form at a time; the web can have several
   open. That keeps at most one typed key in memory.
 - Memory lists only the back ends that can be chosen (the web also shows
@@ -396,8 +398,8 @@ Where the two differ on purpose:
 - A working run's label is plain text; the web's moves a shimmer across it.
 - A message's sent time is its tooltip; the web fades it in beside the bubble.
 - Numbered lists show their numbers.
-- The "raphie" brand sits level with the macOS traffic lights, to their right,
-  with less space above and below it than on the web, like a compact title bar.
+- The "raphie" brand sits to the right of the macOS traffic lights, level
+  with them.
 
 ## Keeping contracts in sync
 

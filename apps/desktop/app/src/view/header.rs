@@ -4,7 +4,7 @@
 //! Mirrors `apps/web/src/presentation/workspace/workspace-header.tsx` and the
 //! `.bot-workspace-header` rules in `bot-workspace.css`.
 
-use rune::{Align, El, col, row, text};
+use rune::{Align, El, row, text};
 
 use super::Look;
 use crate::avatar::bot_avatar;
@@ -40,19 +40,15 @@ pub fn header(s: &Ui, look: &Look) -> El {
                 s.roster_open = !s.roster_open;
             },
         ))
-        .child(bot_avatar(bot_id, look.tones.of(bot_id), 32.0));
+        .child(bot_avatar(bot_id, look.tones.of(bot_id), 24.0));
     if let Some(bot) = bot {
-        let mut name = col().max_w(180.0).gap(5.0).child(one_line(
-            bot.name.clone(),
-            font(13.0, 550.0),
-            t.foreground,
-        ));
+        // One line: the bar is as short as the one over a Settings page.
+        // The bot's description is in the roster, and here on hover.
+        let mut name = row()
+            .max_w(180.0)
+            .child(one_line(bot.name.clone(), font(13.0, 550.0), t.foreground).shrink());
         if !bot.description.is_empty() {
-            name = name.child(one_line(
-                bot.description.clone(),
-                font(10.0, 400.0),
-                t.muted_foreground,
-            ));
+            name = name.help(bot.description.clone());
         }
         identity = identity.child(name);
     }
@@ -104,7 +100,9 @@ pub fn header(s: &Ui, look: &Look) -> El {
     row()
         .key("rd-header")
         .w_full()
-        .h(72.0)
+        // The height of the bar over a Settings page, so both sit level
+        // with the window's buttons.
+        .h(44.0)
         .pl(left)
         .pr(24.0)
         .gap(16.0)
