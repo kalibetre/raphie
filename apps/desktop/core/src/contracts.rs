@@ -692,3 +692,127 @@ pub(crate) enum SaveMcpBody<'a> {
 pub(crate) struct McpActionBody {
     pub action: McpAction,
 }
+
+/// `DiscordChannel` in `packages/contracts/src/bots/channels.ts`: a bot's
+/// Discord connection. The bot token is never part of it.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscordChannel {
+    /// The Discord users who may message the bot.
+    pub allowed_user_ids: Vec<String>,
+    /// The one channel the bot answers in; empty for anywhere.
+    #[serde(default)]
+    pub channel_id: String,
+    pub connected: bool,
+    /// Another bot on this runtime already uses this Discord application.
+    #[serde(default)]
+    pub conflict: bool,
+}
+
+/// `TelegramProblem`: why a saved Telegram connection is not receiving.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TelegramProblem {
+    /// Another poller or a webhook is taking this bot's messages.
+    Conflict,
+    /// Telegram rejected the saved token.
+    Token,
+    Network,
+    /// The same Telegram bot is connected to another Raphie bot.
+    Duplicate,
+    #[serde(other)]
+    Unknown,
+}
+
+/// `TelegramChannel`: a bot's Telegram connection, without its token.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TelegramChannel {
+    pub enabled: bool,
+    pub connected: bool,
+    #[serde(default)]
+    pub bot_username: String,
+    /// The Telegram accounts that may use the bot, by numeric id.
+    pub verified_user_ids: Vec<String>,
+    /// When the pairing code that is out expires (milliseconds since the
+    /// Unix epoch), if one is.
+    #[serde(default)]
+    pub pairing_expires_at: Option<i64>,
+    #[serde(default)]
+    pub problem: Option<TelegramProblem>,
+}
+
+/// `ChannelSettings`: what `GET /api/channels` answers.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct ChannelSettings {
+    pub discord: Option<DiscordChannel>,
+    #[serde(default)]
+    pub telegram: Option<TelegramChannel>,
+}
+
+/// `TelegramPairingCode`: shown once when issued.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TelegramPairingCode {
+    pub code: String,
+    pub expires_at: i64,
+}
+
+/// Where a home channel lives.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ChannelPlatform {
+    Discord,
+    Telegram,
+}
+
+/// `HomeDestination`: a conversation scheduled results can be sent to.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HomeDestination {
+    pub id: String,
+    pub platform: ChannelPlatform,
+    pub conversation_id: String,
+    pub user_id: String,
+}
+
+/// `ChannelHomeSettings`: what `/api/channels/home` answers. `selected` is
+/// a destination's id, or `None` for web only.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct ChannelHomeSettings {
+    pub selected: Option<String>,
+    pub destinations: Vec<HomeDestination>,
+}
+
+/// The body of `POST /api/channels/discord`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveDiscordBody<'a> {
+    pub allowed_user_ids: &'a [String],
+    pub channel_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bot_token: Option<&'a str>,
+}
+
+/// The body of `POST /api/channels/telegram` (`SaveTelegramChannel`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveTelegramBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bot_token: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+}
+
+/// The body of `POST /api/channels/telegram/unpair`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UnpairTelegramBody<'a> {
+    pub user_id: &'a str,
+}
+
+/// The body of `POST /api/channels/home`.
+#[derive(Serialize)]
+pub(crate) struct SelectHomeBody<'a> {
+    pub id: Option<&'a str>,
+}

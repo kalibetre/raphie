@@ -12,12 +12,14 @@
 //! - [`icons`]: the web workspace's icons.
 //! - [`sections`]: the pages of Settings, named as the web names them.
 //! - [`profile`]: the edits in progress on a bot's Profile page.
+//! - [`channels`]: what is typed on a bot's Channels page.
 //! - [`mcp`]: the "Add a connection" form on a bot's MCP tools page.
 //! - [`memory`]: the edits in progress on a bot's Memory page.
 //! - [`scenes`]: fixture states for headless snapshots and tests.
 //! - [`format`]: small text helpers.
 
 pub mod avatar;
+pub mod channels;
 pub mod format;
 pub mod icons;
 pub mod mcp;

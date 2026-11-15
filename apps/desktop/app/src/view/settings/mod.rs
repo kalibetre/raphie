@@ -8,6 +8,7 @@
 mod account;
 mod appearance;
 mod bot;
+mod channels;
 mod mcp;
 mod memories;
 mod memory;
@@ -48,6 +49,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::Memory,
         } => memory::memory(s, bot_id, look, overlays),
+        Page::Bot {
+            bot_id,
+            section: BotSection::Channels,
+        } => channels::channels(s, bot_id, look),
         Page::Bot {
             bot_id,
             section: BotSection::Mcp,

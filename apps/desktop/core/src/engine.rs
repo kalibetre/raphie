@@ -29,8 +29,9 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep};
 
-use crate::api::{ApiClient, ApiError, bot_path};
+use crate::api::{ApiClient, ApiError, ChannelAnswer, bot_path};
 use crate::auth::{AccessToken, DevicePolicy, DevicePoll, Secret, TokenStore};
+use crate::channels::{Channel, ChannelChange};
 use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
@@ -119,6 +120,19 @@ pub enum Command {
     /// Ask the runtime to reach the bot's saved memory back end.
     TestMemory {
         bot_id: String,
+    },
+    /// Load a bot's Discord and Telegram connections.
+    LoadChannels {
+        bot_id: String,
+    },
+    /// Load where a bot's scheduled results go.
+    LoadChannelHome {
+        bot_id: String,
+    },
+    /// Make one change to a bot's channels.
+    ChangeChannel {
+        bot_id: String,
+        change: ChannelChange,
     },
     /// Load a bot's connections to MCP servers.
     LoadMcp {
@@ -402,6 +416,9 @@ impl Engine {
             Command::LoadMemory { bot_id } => self.load_memory(bot_id),
             Command::SaveMemory { bot_id, update } => self.save_memory(bot_id, update),
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
+            Command::LoadChannels { bot_id } => self.load_channels(bot_id),
+            Command::LoadChannelHome { bot_id } => self.load_channel_home(bot_id),
+            Command::ChangeChannel { bot_id, change } => self.change_channel(bot_id, change),
             Command::LoadMcp { bot_id } => self.load_mcp(bot_id),
             Command::AddMcp { bot_id, connection } => self.add_mcp(bot_id, connection),
             Command::ChangeMcp { bot_id, id, action } => self.change_mcp(bot_id, id, action),
@@ -845,6 +862,95 @@ impl Engine {
                 Err(error) => error.to_string(),
             };
             emit.emit(Event::MemoryTested { message });
+        });
+    }
+
+    fn load_channels(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.channels(&bot_id).await {
+                Ok(settings) => emit.emit(Event::Channels { bot_id, settings }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::ChannelsFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn load_channel_home(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.channel_home(&bot_id).await {
+                Ok(home) => emit.emit(Event::ChannelHome { bot_id, home }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::ChannelHomeFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn change_channel(&mut self, bot_id: String, change: ChannelChange) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let outcome = change.outcome();
+            let answer = match api.change_channel(&bot_id, &change).await {
+                Ok(answer) => answer,
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                    return;
+                }
+                Err(error) => {
+                    emit.emit(Event::ChannelChangeFailed {
+                        channel: outcome.channel(),
+                        message: error.to_string(),
+                    });
+                    return;
+                }
+            };
+            let pairing = match answer {
+                ChannelAnswer::Home(home) => {
+                    emit.emit(Event::ChannelHome {
+                        bot_id: bot_id.clone(),
+                        home,
+                    });
+                    None
+                }
+                ChannelAnswer::Pairing(code) => Some(code),
+                ChannelAnswer::Done => None,
+            };
+            // Read the settings again rather than piece them together from
+            // each route's answer. If that fails the change still happened;
+            // the page's next load catches up.
+            let settings = match outcome.channel() {
+                Channel::Home => None,
+                _ => api.channels(&bot_id).await.ok(),
+            };
+            emit.emit(Event::ChannelChanged {
+                bot_id,
+                outcome,
+                settings,
+                pairing,
+            });
         });
     }
 

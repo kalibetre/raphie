@@ -247,14 +247,14 @@ pub struct Field<'a> {
 /// A one-line text field in a bordered box, like the sign-in form's inputs.
 ///
 /// `access` tells Rune where the field's state lives so typing can change
-/// it; `submit` runs on Return. Both are `fn` pointers (plain functions or
-/// closures that capture nothing), which keeps this signature free of
-/// generics.
+/// it; `submit` runs on Return. Both may be closures that capture values
+/// (the index of a row, say). `for<'a>` in `access`'s type says the
+/// reference it returns lives exactly as long as the `Ui` it was given.
 pub fn text_field(
     t: &Theme,
     field: Field,
-    access: fn(&mut Ui) -> &mut TextEdit,
-    submit: fn(&mut Ui, &mut Tx),
+    access: impl for<'a> Fn(&'a mut Ui) -> &'a mut TextEdit + 'static,
+    submit: impl Fn(&mut Ui, &mut Tx) + 'static,
 ) -> El {
     let Field {
         key,

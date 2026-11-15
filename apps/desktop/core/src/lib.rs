@@ -21,6 +21,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod channels;
 pub mod contracts;
 pub mod engine;
 pub mod mcp;

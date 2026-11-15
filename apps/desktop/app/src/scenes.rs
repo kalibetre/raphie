@@ -6,8 +6,9 @@
 
 use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::{
-    Account, BotProfile, McpConnection, MemoryEvidence, MemoryPage, MemoryStatus, Page as Paged,
-    RuntimeSettings, SessionObservation, SessionSummary,
+    Account, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection, MemoryEvidence,
+    MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SessionObservation, SessionSummary,
+    TelegramPairingCode,
 };
 use raphie_core::engine::Command;
 use raphie_core::mcp::McpTransport;
@@ -52,6 +53,11 @@ pub const SCENES: &[Scene] = &[
     ("settings-memories-editing", settings_memories_editing),
     ("settings-memories-search", settings_memories_search),
     ("settings-memories-empty", settings_memories_empty),
+    ("settings-channels", settings_channels),
+    ("settings-channels-discord", settings_channels_discord),
+    ("settings-channels-telegram", settings_channels_telegram),
+    ("settings-channels-empty", settings_channels_empty),
+    ("settings-channels-loading", settings_channels_loading),
     ("settings-mcp", settings_mcp),
     ("settings-mcp-command", settings_mcp_command),
     ("settings-mcp-empty", settings_mcp_empty),
@@ -163,12 +169,12 @@ pub fn settings_profile_edited(ui: &mut Ui) {
     ui.profile.color = Some("#83bcb4".into());
 }
 
-/// A bot's settings page that is not native yet (Research → Channels).
+/// A bot's settings page that is not native yet (Research → Sandbox).
 pub fn settings_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Bot {
         bot_id: "b-research".into(),
-        section: BotSection::Channels,
+        section: BotSection::Sandbox,
     }));
 }
 
@@ -231,6 +237,109 @@ pub fn settings_memory_hindsight(ui: &mut Ui) {
     ui.memory.bank_id = TextEdit::new("raphie-work");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
+}
+
+/// Made-up channels: Discord connected for two users, Telegram connected
+/// with one verified account. `pairing` puts a pairing code out.
+pub fn channel_settings(pairing: bool) -> ChannelSettings {
+    serde_json::from_value(json!({
+        "discord": {
+            "allowedUserIds": ["318274650912345678", "402915873364512001"],
+            "channelId": "", "connected": true, "tokenConfigured": true, "conflict": false,
+        },
+        "telegram": {
+            "enabled": true, "connected": true, "tokenConfigured": true,
+            "botUsername": "raphie_example_bot", "verifiedUserIds": ["7300112233"],
+            "pairingExpiresAt": if pairing { json!(PAIRING_EXPIRES) } else { Value::Null },
+            "problem": null,
+        },
+    }))
+    .expect("the scene's channels match the contract")
+}
+
+/// When the scenes' pairing code expires.
+const PAIRING_EXPIRES: i64 = 1_794_650_400_000;
+
+/// A made-up home channel: one Telegram conversation, selected or not.
+pub fn channel_home(selected: bool) -> ChannelHomeSettings {
+    serde_json::from_value(json!({
+        "selected": if selected { json!("telegram:7300112233") } else { Value::Null },
+        "destinations": [{
+            "id": "telegram:7300112233", "platform": "telegram",
+            "conversationId": "telegram:7300112233", "userId": "7300112233",
+        }],
+    }))
+    .expect("the scene's home channel matches the contract")
+}
+
+fn open_channels(ui: &mut Ui, settings: Option<ChannelSettings>, home: ChannelHomeSettings) {
+    settings_account(ui);
+    if let Some(settings) = settings {
+        ui.model.apply(Event::Channels {
+            bot_id: "default".into(),
+            settings,
+        });
+        ui.model.apply(Event::ChannelHome {
+            bot_id: "default".into(),
+            home,
+        });
+    }
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Channels,
+    }));
+}
+
+/// Settings → Channels with both services connected and a home channel.
+pub fn settings_channels(ui: &mut Ui) {
+    open_channels(ui, Some(channel_settings(false)), channel_home(true));
+}
+
+/// Channels with the Discord form open on an application another bot
+/// already uses.
+pub fn settings_channels_discord(ui: &mut Ui) {
+    let mut settings = channel_settings(false);
+    if let Some(discord) = &mut settings.discord {
+        discord.connected = false;
+        discord.conflict = true;
+    }
+    open_channels(ui, Some(settings), channel_home(true));
+    ui.toggle_discord();
+}
+
+/// Channels with the Telegram panel open and a pairing code out.
+pub fn settings_channels_telegram(ui: &mut Ui) {
+    open_channels(ui, Some(channel_settings(true)), channel_home(false));
+    ui.toggle_telegram();
+    ui.model.telegram_pairing = Some((
+        "default".into(),
+        TelegramPairingCode {
+            code: "K7Q2-M9XD".into(),
+            expires_at: PAIRING_EXPIRES,
+        },
+    ));
+}
+
+/// Channels before anything was connected.
+pub fn settings_channels_empty(ui: &mut Ui) {
+    let nothing = ChannelSettings {
+        discord: None,
+        telegram: None,
+    };
+    let home = ChannelHomeSettings {
+        selected: None,
+        destinations: Vec::new(),
+    };
+    open_channels(ui, Some(nothing), home);
+}
+
+/// Channels before the settings have arrived.
+pub fn settings_channels_loading(ui: &mut Ui) {
+    let home = ChannelHomeSettings {
+        selected: None,
+        destinations: Vec::new(),
+    };
+    open_channels(ui, None, home);
 }
 
 /// Made-up MCP connections in each state a row can show: connected, waiting
