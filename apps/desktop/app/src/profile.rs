@@ -5,7 +5,7 @@
 //! bot-profile-form.tsx`: what counts as a change, when saving is allowed,
 //! and what happens when the bot was changed somewhere else meanwhile.
 
-use raphie_core::contracts::{BotProfile, UpdateBotProfile};
+use raphie_core::contracts::{BotProfile, NewBot, UpdateBotProfile};
 use rune::TextEdit;
 
 /// The runtime's limits (`packages/runtime/src/domains/bots/presentation/
@@ -13,6 +13,13 @@ use rune::TextEdit;
 const NAME_LIMIT: usize = 80;
 const DESCRIPTION_LIMIT: usize = 500;
 const SOUL_LIMIT: usize = 16_000;
+
+/// The personality a new bot starts with, as the web offers it.
+pub const STARTER_SOUL: &str = "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
+
+/// Where an unsaved "Create a bot" form is kept while the owner looks at
+/// another page. Bot ids never look like this.
+pub const NEW_BOT: &str = "new-bot";
 
 /// One bot's profile as the form shows it.
 pub struct ProfileDraft {
@@ -29,6 +36,8 @@ pub struct ProfileDraft {
     pub custom_color: TextEdit,
     /// What the last save said, until the next edit ("Saved revision 4.").
     pub message: Option<String>,
+    /// This form describes a bot that does not exist yet ("Create a bot").
+    pub creating: bool,
 }
 
 impl ProfileDraft {
@@ -42,6 +51,17 @@ impl ProfileDraft {
             color: None,
             custom_color: TextEdit::new(""),
             message: None,
+            creating: false,
+        }
+    }
+
+    /// The "Create a bot" form as it opens: a starter personality, and
+    /// nothing else filled in.
+    pub fn new_bot() -> ProfileDraft {
+        ProfileDraft {
+            soul: TextEdit::new(STARTER_SOUL),
+            creating: true,
+            ..ProfileDraft::empty()
         }
     }
 
@@ -55,6 +75,7 @@ impl ProfileDraft {
             color: profile.color.clone(),
             custom_color: TextEdit::new(profile.color.clone().unwrap_or_default()),
             message: None,
+            creating: false,
         }
     }
 
@@ -63,8 +84,25 @@ impl ProfileDraft {
         self.saved.as_ref().map(|saved| saved.id.as_str())
     }
 
-    /// Whether anything differs from the profile the edits started from.
+    /// The name an unsaved form is kept under while another page shows:
+    /// the bot's id, or [`NEW_BOT`] for a bot being created.
+    pub fn park_key(&self) -> Option<&str> {
+        if self.creating {
+            Some(NEW_BOT)
+        } else {
+            self.bot_id()
+        }
+    }
+
+    /// Whether anything differs from the profile the edits started from
+    /// or, for a new bot, from the form as it opened.
     pub fn is_dirty(&self) -> bool {
+        if self.creating {
+            return !self.name.text.is_empty()
+                || !self.description.text.is_empty()
+                || self.soul.text != STARTER_SOUL
+                || self.color.is_some();
+        }
         // `is_some_and` is false for `None`: an empty form has no changes.
         self.saved.as_ref().is_some_and(|saved| {
             self.name.text != saved.name
@@ -110,6 +148,17 @@ impl ProfileDraft {
             soul: self.soul.text.trim().to_owned(),
             color: self.color.clone(),
             revision: saved.revision,
+        })
+    }
+
+    /// The bot this form would create, or `None` for a form that edits
+    /// an existing one.
+    pub fn new_bot_request(&self) -> Option<NewBot> {
+        self.creating.then(|| NewBot {
+            name: self.name.text.trim().to_owned(),
+            description: self.description.text.trim().to_owned(),
+            soul: self.soul.text.trim().to_owned(),
+            color: self.color.clone(),
         })
     }
 
@@ -180,6 +229,23 @@ mod tests {
         assert!(draft.use_custom_color());
         assert_eq!(draft.color.as_deref(), Some("#b5c99b"));
         assert!(draft.is_dirty());
+    }
+
+    #[test]
+    fn a_new_bot_starts_with_a_personality_and_nothing_to_discard() {
+        let mut draft = ProfileDraft::new_bot();
+        assert!(!draft.is_dirty(), "the starter text is not an edit");
+        assert_eq!(draft.park_key(), Some(NEW_BOT));
+        assert_eq!(draft.problem(), Some("Give this bot a name."));
+        assert_eq!(draft.update(), None, "there is no bot to update");
+        draft.name = TextEdit::new(" Travel ");
+        assert!(draft.is_dirty());
+        assert_eq!(draft.problem(), None);
+        let bot = draft.new_bot_request().expect("a bot to create");
+        assert_eq!((bot.name.as_str(), bot.color), ("Travel", None));
+        assert_eq!(bot.soul, STARTER_SOUL);
+        // A form for an existing bot creates nothing.
+        assert_eq!(ProfileDraft::of(&research()).new_bot_request(), None);
     }
 
     #[test]

@@ -14,7 +14,7 @@ use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
 use crate::view::Look;
-use crate::widgets::one_line;
+use crate::widgets::{icon_button, one_line};
 
 /// As wide as the bot roster it replaces.
 const WIDTH: f32 = 264.0;
@@ -100,7 +100,22 @@ pub fn nav(s: &Ui, current: &Page, look: &Look) -> El {
                         .w_full()
                         .px(7.0)
                         .gap(3.5)
-                        .child(group_label(t, "Bots"))
+                        .child(
+                            // "Bots", with the button that starts a new one.
+                            row()
+                                .w_full()
+                                .justify_between()
+                                .center_y()
+                                .child(group_label(t, "Bots"))
+                                .child(
+                                    icon_button(t, &icons::PLUS, 14.0, "Create a bot")
+                                        .key("rd-nav-new-bot")
+                                        .size(24.5, 24.5)
+                                        .on_press(|s: &mut Ui| {
+                                            s.open_settings(Some(Page::NewBot));
+                                        }),
+                                ),
+                        )
                         .child(bots)
                         .child(group_label(t, "App").mt(14.0))
                         .child(app),

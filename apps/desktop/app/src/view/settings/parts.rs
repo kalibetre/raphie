@@ -19,8 +19,13 @@ const PAGE_WIDTH: f32 = 808.0;
 
 /// Whose settings a page changes: one bot's, or the whole app's.
 pub enum Scope<'a> {
-    Bot { id: &'a str, name: &'a str },
+    Bot {
+        id: &'a str,
+        name: &'a str,
+    },
     App,
+    /// A bot that does not exist yet ("Create a bot").
+    NewBot,
 }
 
 /// A page: its header, then its groups, in a centred column.
@@ -95,6 +100,14 @@ fn hero(title: &str, lede: &str, scope: Scope, back: Option<El>, look: &Look) ->
             },
             "default",
             "App-wide".to_owned(),
+        ),
+        Scope::NewBot => (
+            Tone {
+                body: t.accent,
+                eye: t.accent,
+            },
+            "default",
+            "New bot".to_owned(),
         ),
     };
     let wash = tone.body;
@@ -323,6 +336,8 @@ pub struct SaveBar<'a> {
     pub save_label: &'a str,
     pub can_save: bool,
     pub can_discard: bool,
+    /// One more button after Save, such as Cancel on "Create a bot".
+    pub extra: Option<El>,
 }
 
 /// The bar docked under a page once there is something to save or report,
@@ -365,6 +380,9 @@ pub fn save_bar(t: &Theme, bar: SaveBar, discard: fn(&mut Ui), save: fn(&mut Ui)
             ..Shadow::default()
         })
         .child(copy)
+        // The web puts the extra action before Discard. `children` takes any
+        // number of elements; an `Option` is none or one.
+        .children(bar.extra)
         .child(pressable(
             button(t, Kind::Ghost, Size::Regular, None, "Discard").key(format!("{key}-discard")),
             bar.can_discard,

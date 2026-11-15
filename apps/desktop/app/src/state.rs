@@ -27,7 +27,7 @@ use crate::format::now_ms;
 use crate::jobs::JobForm;
 use crate::mcp::McpForm;
 use crate::memory::MemoryDraft;
-use crate::profile::ProfileDraft;
+use crate::profile::{NEW_BOT, ProfileDraft};
 use crate::sandbox::SandboxDraft;
 use crate::sections::{BotSection, Page};
 
@@ -279,6 +279,12 @@ pub struct Ui {
     pub memory: MemoryDraft,
     /// Settings → Memory → Browse memory.
     pub memories: MemoriesView,
+    /// Settings → Revision history: the revisions that are unfolded.
+    pub open_revisions: HashSet<u32>,
+    /// Settings → Profile: whether "Delete bot" is asking to be confirmed,
+    /// and what was typed to confirm it.
+    pub deleting_bot: bool,
+    pub delete_confirmation: TextEdit,
     /// Settings → Diagnostics: its filter, and the time window in hours.
     pub spans: InspectView,
     pub trace_hours: u8,
@@ -354,6 +360,9 @@ impl Ui {
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
             memories: MemoriesView::new(),
+            open_revisions: HashSet::new(),
+            deleting_bot: false,
+            delete_confirmation: TextEdit::new(""),
             spans: InspectView::new(),
             trace_hours: 1,
             events: InspectView::new(),
@@ -508,8 +517,18 @@ impl Ui {
             self.expanded_bots.insert(bot_id.clone());
             if *section == BotSection::Profile {
                 self.show_profile(bot_id);
+                self.deleting_bot = false;
+                self.model.delete_bot_error = None;
                 // Notice a save made in another client before editing.
                 self.command(Command::RefreshBots);
+            }
+            if *section == BotSection::History {
+                // The current revision starts unfolded, as on the web.
+                let current = self.model.bots.iter().find(|bot| &bot.id == bot_id);
+                self.open_revisions = current.map(|bot| bot.revision).into_iter().collect();
+                self.command(Command::LoadBotHistory {
+                    bot_id: bot_id.clone(),
+                });
             }
             if *section == BotSection::Providers {
                 // Any half-typed key is dropped when the page is reopened.
@@ -605,6 +624,9 @@ impl Ui {
                 });
             }
         }
+        if page == Page::NewBot {
+            self.show_new_bot();
+        }
         if page == Page::Diagnostics {
             self.spans = InspectView::new();
             self.model.export_saved = None;
@@ -645,7 +667,7 @@ impl Ui {
     /// Puts `bot_id`'s profile in the form: its unsaved edits if there are
     /// any, else the profile as the host has it.
     fn show_profile(&mut self, bot_id: &str) {
-        if self.profile.bot_id() == Some(bot_id) {
+        if !self.profile.creating && self.profile.bot_id() == Some(bot_id) {
             return;
         }
         let next = match self.parked_profiles.remove(bot_id) {
@@ -655,12 +677,32 @@ impl Ui {
                 None => ProfileDraft::empty(),
             },
         };
+        self.swap_profile(next);
+    }
+
+    /// Puts the "Create a bot" form on screen: the one left unfinished, if
+    /// there is one, else a fresh one.
+    fn show_new_bot(&mut self) {
+        if self.profile.creating {
+            return;
+        }
+        let next = self
+            .parked_profiles
+            .remove(NEW_BOT)
+            .unwrap_or_else(ProfileDraft::new_bot);
+        self.swap_profile(next);
+        self.model.profile_error = None;
+    }
+
+    /// Shows `next` in the form, keeping the form it replaces if it has
+    /// unsaved edits.
+    fn swap_profile(&mut self, next: ProfileDraft) {
         // `mem::replace` swaps the new form in and hands back the old one.
         let previous = std::mem::replace(&mut self.profile, next);
         if previous.is_dirty()
-            && let Some(id) = previous.bot_id()
+            && let Some(key) = previous.park_key()
         {
-            self.parked_profiles.insert(id.to_owned(), previous);
+            self.parked_profiles.insert(key.to_owned(), previous);
         }
     }
 
@@ -672,6 +714,10 @@ impl Ui {
 
     /// Whether the Profile form may be saved now.
     pub fn can_save_profile(&self) -> bool {
+        if self.profile.creating {
+            // A new bot needs only a valid form.
+            return self.profile.problem().is_none() && !self.model.creating_bot;
+        }
         let unchanged_elsewhere = self
             .profile_bot()
             .is_some_and(|latest| !self.profile.changed_elsewhere(latest));
@@ -683,6 +729,12 @@ impl Ui {
 
     pub fn save_profile(&mut self) {
         if !self.can_save_profile() {
+            return;
+        }
+        if let Some(bot) = self.profile.new_bot_request() {
+            if self.model.begin_create_bot() {
+                self.command(Command::CreateBot { bot });
+            }
             return;
         }
         let (Some(bot_id), Some(update)) = (
@@ -1654,7 +1706,9 @@ impl Ui {
 
     /// Throws the edits away and shows the bot as the host has it now.
     pub fn discard_profile(&mut self) {
-        if let Some(latest) = self.profile_bot() {
+        if self.profile.creating {
+            self.profile = ProfileDraft::new_bot();
+        } else if let Some(latest) = self.profile_bot() {
             self.profile = ProfileDraft::of(latest);
         }
         self.model.profile_error = None;
@@ -1670,6 +1724,57 @@ impl Ui {
             let message = self.profile.message.take();
             self.discard_profile();
             self.profile.message = message;
+        }
+    }
+
+    /// Leaves "Create a bot" without creating one, for the selected bot's
+    /// Profile. The unfinished form is dropped: Cancel means discard.
+    pub fn cancel_new_bot(&mut self) {
+        self.profile = ProfileDraft::empty();
+        self.model.profile_error = None;
+        self.open_settings(None);
+    }
+
+    /// Opens "Delete bot" asking for the bot's name.
+    pub fn ask_delete_bot(&mut self) {
+        self.deleting_bot = true;
+        self.delete_confirmation = TextEdit::new("");
+        self.model.delete_bot_error = None;
+    }
+
+    /// Closes "Delete bot" without deleting. Not while the delete is on
+    /// its way: its answer needs somewhere to show.
+    pub fn close_delete_bot(&mut self) {
+        if !self.model.deleting_bot {
+            self.deleting_bot = false;
+        }
+    }
+
+    /// Whether what was typed is the bot's name, exactly.
+    pub fn delete_confirmed(&self) -> bool {
+        self.profile
+            .saved
+            .as_ref()
+            .is_some_and(|saved| self.delete_confirmation.text == saved.name)
+    }
+
+    /// Deletes the bot in the Profile form, once its name has been typed.
+    /// The runtime is sent the name and revision that were confirmed, and
+    /// refuses if the bot changed since.
+    pub fn delete_bot(&mut self) {
+        if !self.delete_confirmed() {
+            return;
+        }
+        let Some(saved) = &self.profile.saved else {
+            return;
+        };
+        let (bot_id, name, revision) = (saved.id.clone(), saved.name.clone(), saved.revision);
+        if self.model.begin_delete_bot() {
+            self.command(Command::DeleteBot {
+                bot_id,
+                name,
+                revision,
+            });
         }
     }
 
@@ -1822,6 +1927,36 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                         && let Some(status) = ui.model.memory.get(&bot_id)
                     {
                         ui.memory = MemoryDraft::of(&bot_id, &status.configuration);
+                    }
+                }
+                Effect::BotCreated(bot_id) => {
+                    // The form did its job. Next the new bot needs a model
+                    // connection, so open its Providers page, as the web does.
+                    ui.profile = ProfileDraft::empty();
+                    ui.open_settings(Some(Page::Bot {
+                        bot_id,
+                        section: BotSection::Providers,
+                    }));
+                }
+                Effect::BotDeleted(bot_id) => {
+                    ui.deleting_bot = false;
+                    ui.delete_confirmation.clear();
+                    ui.parked_profiles.remove(&bot_id);
+                    ui.expanded_bots.remove(&bot_id);
+                    if ui.profile.bot_id() == Some(bot_id.as_str()) {
+                        ui.profile = ProfileDraft::empty();
+                    }
+                    // Its pages and conversations are gone: go back to the
+                    // default bot's conversations, as the web does.
+                    let on_its_page = matches!(
+                        &ui.screen,
+                        Screen::Settings(Page::Bot { bot_id: shown, .. }) if *shown == bot_id
+                    );
+                    if on_its_page {
+                        ui.close_settings();
+                    }
+                    if ui.model.bot_id.as_deref() == Some(bot_id.as_str()) {
+                        ui.select_bot("default");
                     }
                 }
                 Effect::JobAdded => {
