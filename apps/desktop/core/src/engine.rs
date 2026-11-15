@@ -133,6 +133,26 @@ pub enum Command {
         bot_id: String,
         update: SandboxUpdate,
     },
+    /// Load exported traces from a bot's last `hours` hours (1, 6 or 24).
+    LoadTraces {
+        bot_id: String,
+        hours: u8,
+    },
+    /// Load a bot's most recent durable events.
+    LoadBotActivity {
+        bot_id: String,
+    },
+    /// Switch the runtime's trace collection on or off.
+    SetTelemetry {
+        bot_id: String,
+        enabled: bool,
+    },
+    /// Write an export to this machine's Downloads folder. `name` is what
+    /// to call the file; `contents` is its text.
+    SaveExport {
+        name: String,
+        contents: String,
+    },
     /// Load a bot's scheduled jobs.
     LoadJobs {
         bot_id: String,
@@ -470,6 +490,10 @@ impl Engine {
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
             Command::LoadSandbox { bot_id } => self.load_sandbox(bot_id),
             Command::SaveSandbox { bot_id, update } => self.save_sandbox(bot_id, update),
+            Command::LoadTraces { bot_id, hours } => self.load_traces(bot_id, hours),
+            Command::LoadBotActivity { bot_id } => self.load_bot_activity(bot_id),
+            Command::SetTelemetry { bot_id, enabled } => self.set_telemetry(bot_id, enabled),
+            Command::SaveExport { name, contents } => self.save_export(name, contents),
             Command::LoadJobs { bot_id } => self.load_jobs(bot_id),
             Command::AddJob { bot_id, job } => self.add_job(bot_id, job),
             Command::ChangeJob { bot_id, id, action } => self.change_job(bot_id, id, action),
@@ -983,6 +1007,98 @@ impl Engine {
                         });
                     }
                 }
+            }
+        });
+    }
+
+    fn load_traces(&mut self, bot_id: String, hours: u8) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.traces(&bot_id, hours).await {
+                Ok(data) => emit.emit(Event::Traces {
+                    bot_id,
+                    hours,
+                    data: Box::new(data),
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                // The page says the trace backend is unavailable; the
+                // reason is not shown, so it is not carried.
+                Err(_) => emit.emit(Event::TracesFailed { bot_id, hours }),
+            }
+        });
+    }
+
+    fn load_bot_activity(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.bot_activity(&bot_id).await {
+                Ok(items) => emit.emit(Event::BotActivity { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(_) => emit.emit(Event::BotActivityFailed { bot_id }),
+            }
+        });
+    }
+
+    fn set_telemetry(&mut self, bot_id: String, enabled: bool) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.set_telemetry(&bot_id, enabled).await {
+                Ok(settings) => emit.emit(Event::TelemetrySet {
+                    bot_id,
+                    settings: Box::new(settings),
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::TelemetryFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    /// Writes text the UI prepared into the Downloads folder. Nothing goes
+    /// over the network: the text is already on this machine.
+    fn save_export(&mut self, name: String, contents: String) {
+        let emit = self.emit.clone();
+        let folder = self.config.downloads.clone();
+        tokio::spawn(async move {
+            let failed = |message: String| emit.emit(Event::ExportFailed { message });
+            let Some(folder) = folder else {
+                failed("This machine has no Downloads folder to save to.".into());
+                return;
+            };
+            // Writing a file blocks, so it runs on Tokio's thread pool for
+            // blocking work.
+            let written = tokio::task::spawn_blocking(move || {
+                save_download(&folder, &name, contents.as_bytes())
+            })
+            .await;
+            match written {
+                Ok(Ok(saved)) => {
+                    let saved_as = saved
+                        .file_name()
+                        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+                    emit.emit(Event::ExportSaved { saved_as });
+                }
+                Ok(Err(error)) => failed(format!("Could not save the file: {error}.")),
+                Err(_) => failed("Could not save the file.".into()),
             }
         });
     }

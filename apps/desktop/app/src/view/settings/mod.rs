@@ -6,9 +6,11 @@
 //! `shared/styles/settings/bot.css`. Each page is its own module here.
 
 mod account;
+mod activity;
 mod appearance;
-mod bot;
 mod channels;
+mod diagnostics;
+mod inspect;
 mod jobs;
 mod mcp;
 mod memories;
@@ -36,6 +38,7 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
     let content = match page {
         Page::Account => account::account(s, look),
         Page::Appearance => appearance::appearance(s, look),
+        Page::Diagnostics => diagnostics::diagnostics(s, look),
         Page::Bot {
             bot_id,
             section: BotSection::Profile,
@@ -52,6 +55,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::Memory,
         } => memory::memory(s, bot_id, look, overlays),
+        Page::Bot {
+            bot_id,
+            section: BotSection::Activity,
+        } => activity::activity(s, bot_id, look),
         Page::Bot {
             bot_id,
             section: BotSection::Jobs,
@@ -76,7 +83,6 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::MemoryBrowse,
         } => memories::memories(s, bot_id, look),
-        Page::Bot { bot_id, section } => bot::bot_page(s, bot_id, *section, look),
     };
     // Pages with a form dock a save bar under the scrolling page.
     let footer = match page {
@@ -253,6 +259,7 @@ pub fn page_icon(page: &Page) -> &'static Icon {
     match page {
         Page::Account => &icons::LOG_OUT,
         Page::Appearance => &icons::PALETTE,
+        Page::Diagnostics => &icons::RADIO,
         Page::Bot { section, .. } => match section {
             BotSection::Profile => &icons::USER_ROUND,
             BotSection::Providers => &icons::KEY_ROUND,
@@ -264,7 +271,6 @@ pub fn page_icon(page: &Page) -> &'static Icon {
             BotSection::Sandbox => &icons::BOX,
             BotSection::Workspace => &icons::FOLDER_OPEN,
             BotSection::Jobs => &icons::CLOCK,
-            BotSection::Diagnostics => &icons::RADIO,
             BotSection::Activity => &icons::LIST_TREE,
         },
     }

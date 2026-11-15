@@ -10,6 +10,7 @@ use raphie_core::contracts::{
     MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionObservation,
     SessionSummary, TelegramPairingCode, WorkspaceListing,
 };
+use raphie_core::contracts::{ActivityEvent, TraceDiagnostics};
 use raphie_core::contracts::{JobRun, ScheduledJob};
 use raphie_core::engine::Command;
 use raphie_core::mcp::McpTransport;
@@ -20,7 +21,7 @@ use serde_json::{Value, json};
 
 use crate::format::now_ms;
 use crate::sections::{BotSection, Page};
-use crate::state::{Dropdown, Ui};
+use crate::state::{BACKEND, Dropdown, Ui};
 
 /// A named change to a fresh [`Ui`], as `AppSpec::scenes` takes them.
 pub type Scene = (&'static str, fn(&mut Ui));
@@ -74,7 +75,14 @@ pub const SCENES: &[Scene] = &[
     ("settings-mcp-command", settings_mcp_command),
     ("settings-mcp-empty", settings_mcp_empty),
     ("settings-mcp-loading", settings_mcp_loading),
-    ("settings-bot", settings_bot),
+    ("settings-diagnostics", settings_diagnostics),
+    (
+        "settings-diagnostics-unavailable",
+        settings_diagnostics_unavailable,
+    ),
+    ("settings-activity", settings_activity),
+    ("settings-activity-empty", settings_activity_empty),
+    ("settings-activity-loading", settings_activity_loading),
 ];
 
 const ORIGIN: &str = "https://raphie.example.ts.net";
@@ -181,15 +189,6 @@ pub fn settings_profile_edited(ui: &mut Ui) {
     ui.profile.color = Some("#83bcb4".into());
 }
 
-/// A bot's settings page that is not native yet (Research → Diagnostics).
-pub fn settings_bot(ui: &mut Ui) {
-    settings_account(ui);
-    ui.open_settings(Some(Page::Bot {
-        bot_id: "b-research".into(),
-        section: BotSection::Diagnostics,
-    }));
-}
-
 /// Memory settings as the runtime answers them, for the built-in back end
 /// or a Hindsight server that holds a key.
 pub fn memory_status(hindsight: bool) -> MemoryStatus {
@@ -249,6 +248,130 @@ pub fn settings_memory_hindsight(ui: &mut Ui) {
     ui.memory.bank_id = TextEdit::new("raphie-work");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
+}
+
+/// Made-up exported traces: a run with a model call, a tool call that
+/// failed, and a span with no status of its own.
+pub fn trace_diagnostics(export_enabled: bool) -> TraceDiagnostics {
+    serde_json::from_value(json!({
+        "source": "otlp", "state": "ready", "exportEnabled": export_enabled,
+        "from": 1_794_646_500_000_i64, "to": 1_794_650_100_000_i64, "spanLimit": 500,
+        "spans": [
+            {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "spanId": "00f067aa0ba902b7",
+                "parentSpanId": null, "name": "run.turn",
+                "startedAt": 1_794_650_040_000_i64, "durationMs": 9412.6, "status": "ok",
+                "attributes": { "session.id": "0190a1b2-c3d4", "bot.id": "default" },
+            },
+            {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "spanId": "a2fb4a1d1a96d312",
+                "parentSpanId": "00f067aa0ba902b7", "name": "model.call",
+                "startedAt": 1_794_650_041_000_i64, "durationMs": 3120.4, "status": "unset",
+                "attributes": { "model": "claude-fable", "tokens.input": 1840, "tokens.output": 312 },
+            },
+            {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "spanId": "c7ad6b7169203331",
+                "parentSpanId": "00f067aa0ba902b7", "name": "tool.mcp_calendar_list_events",
+                "startedAt": 1_794_650_045_000_i64, "durationMs": 804.0, "status": "error",
+                "attributes": { "tool": "mcp_calendar_list_events", "error": "timeout" },
+            },
+        ],
+    }))
+    .expect("the scene's traces match the contract")
+}
+
+/// Made-up durable events, oldest first as the runtime lists them.
+pub fn bot_events() -> Vec<ActivityEvent> {
+    serde_json::from_value(json!([
+        {
+            "id": 4101, "at": 1_794_650_040_120_i64, "attemptId": "att-7c1", "conversationId": 12,
+            "runId": "run-320", "operationId": null, "pluginId": null,
+            "type": "model.started", "summary": "model started", "detailsJson": "{}",
+        },
+        {
+            "id": 4102, "at": 1_794_650_043_480_i64, "attemptId": "att-7c1", "conversationId": 12,
+            "runId": "run-320", "operationId": "call-88", "pluginId": "mcp",
+            "type": "tool.started", "summary": "mcp_calendar_list_events started",
+            "detailsJson": "{\"range\":\"this week\"}",
+        },
+        {
+            "id": 4103, "at": 1_794_650_044_290_i64, "attemptId": "att-7c1", "conversationId": 12,
+            "runId": "run-320", "operationId": "call-88", "pluginId": "mcp",
+            "type": "tool.failed", "summary": "mcp_calendar_list_events failed",
+            "detailsJson": "{\"error\":\"timeout\"}",
+        },
+        {
+            "id": 4104, "at": 1_794_650_049_530_i64, "attemptId": "att-7c1", "conversationId": 12,
+            "runId": "run-320", "operationId": null, "pluginId": null,
+            "type": "model.completed", "summary": "model completed",
+            "detailsJson": "{\"stopReason\":\"stop\",\"tokens\":2152}",
+        },
+    ]))
+    .expect("the scene's events match the contract")
+}
+
+/// Opens Settings → Diagnostics with `traces` for the last hour.
+fn open_diagnostics(ui: &mut Ui, traces: Option<TraceDiagnostics>) {
+    settings_account(ui);
+    ui.model.apply(Event::BotSettings {
+        bot_id: BACKEND.to_owned(),
+        settings: Box::new(model_settings()),
+    });
+    ui.open_settings(Some(Page::Diagnostics));
+    if let Some(data) = traces {
+        ui.model.apply(Event::Traces {
+            bot_id: BACKEND.to_owned(),
+            hours: 1,
+            data: Box::new(data),
+        });
+    }
+}
+
+/// Settings → Diagnostics with three spans, the failed one unfolded.
+pub fn settings_diagnostics(ui: &mut Ui) {
+    open_diagnostics(ui, Some(trace_diagnostics(true)));
+    ui.spans
+        .open
+        .insert("4bf92f3577b34da6a3ce929d0e0e4736:c7ad6b7169203331".into());
+}
+
+/// Diagnostics while the trace backend does not answer.
+pub fn settings_diagnostics_unavailable(ui: &mut Ui) {
+    open_diagnostics(ui, None);
+    ui.model.apply(Event::TracesFailed {
+        bot_id: BACKEND.to_owned(),
+        hours: 1,
+    });
+}
+
+fn open_activity(ui: &mut Ui, events: Option<Vec<ActivityEvent>>) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Activity,
+    }));
+    if let Some(items) = events {
+        ui.model.apply(Event::BotActivity {
+            bot_id: "default".into(),
+            items,
+        });
+    }
+}
+
+/// Settings → Activity with four events, the failed one unfolded.
+pub fn settings_activity(ui: &mut Ui) {
+    open_activity(ui, Some(bot_events()));
+    ui.events.open.insert("4103".into());
+}
+
+/// Activity before the bot did anything.
+pub fn settings_activity_empty(ui: &mut Ui) {
+    open_activity(ui, Some(Vec::new()));
+}
+
+/// Activity before the events have arrived.
+pub fn settings_activity_loading(ui: &mut Ui) {
+    open_activity(ui, None);
 }
 
 /// Made-up jobs in the states a card can show: recurring and active with a

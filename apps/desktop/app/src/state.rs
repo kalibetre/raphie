@@ -158,6 +158,36 @@ const SANDBOX_REFRESH: f64 = 5.0;
 /// runs (the web's interval): runs start and finish on their own.
 const JOBS_REFRESH: f64 = 5.0;
 
+/// How often Diagnostics and Activity ask again for their lists (the web's
+/// interval).
+const INSPECT_REFRESH: f64 = 5.0;
+
+/// The bot whose routes carry what belongs to the whole backend: the
+/// runtime serves trace collection and traces on the default bot's routes.
+pub const BACKEND: &str = "default";
+
+/// The filter box and the unfolded rows of Diagnostics or Activity.
+pub struct InspectView {
+    pub filter: TextEdit,
+    /// Rows whose details are unfolded, by id.
+    pub open: HashSet<String>,
+}
+
+impl InspectView {
+    pub fn new() -> InspectView {
+        InspectView {
+            filter: TextEdit::new(""),
+            open: HashSet::new(),
+        }
+    }
+}
+
+impl Default for InspectView {
+    fn default() -> InspectView {
+        InspectView::new()
+    }
+}
+
 /// How often the Workspace page asks again for the folder on screen (the
 /// web's interval): the bot may be writing files while the owner looks.
 const FILES_REFRESH: f64 = 5.0;
@@ -249,6 +279,13 @@ pub struct Ui {
     pub memory: MemoryDraft,
     /// Settings → Memory → Browse memory.
     pub memories: MemoriesView,
+    /// Settings → Diagnostics: its filter, and the time window in hours.
+    pub spans: InspectView,
+    pub trace_hours: u8,
+    /// Settings → Activity: its filter.
+    pub events: InspectView,
+    /// The frame clock when Diagnostics or Activity last asked for news.
+    inspect_asked_at: f64,
     /// Settings → Scheduled jobs: the "Create a job" form.
     pub job: JobForm,
     /// The frame clock when the Scheduled jobs page last asked for news.
@@ -317,6 +354,10 @@ impl Ui {
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
             memories: MemoriesView::new(),
+            spans: InspectView::new(),
+            trace_hours: 1,
+            events: InspectView::new(),
+            inspect_asked_at: 0.0,
             job: JobForm::new_at(0),
             jobs_asked_at: 0.0,
             files_asked_at: 0.0,
@@ -486,6 +527,14 @@ impl Ui {
                     bot_id: bot_id.clone(),
                 });
             }
+            if *section == BotSection::Activity {
+                self.events = InspectView::new();
+                self.model.export_saved = None;
+                self.model.export_error = None;
+                self.command(Command::LoadBotActivity {
+                    bot_id: bot_id.clone(),
+                });
+            }
             if *section == BotSection::Jobs {
                 self.job = JobForm::new_at(now_ms());
                 self.model.job_message = None;
@@ -555,6 +604,21 @@ impl Ui {
                     bot_id: bot_id.clone(),
                 });
             }
+        }
+        if page == Page::Diagnostics {
+            self.spans = InspectView::new();
+            self.model.export_saved = None;
+            self.model.export_error = None;
+            self.model.telemetry_error = None;
+            // The runtime's settings hold the telemetry switch.
+            self.command(Command::LoadSettings {
+                bot_id: BACKEND.to_owned(),
+            });
+            self.model.traces.open(BACKEND, self.trace_hours);
+            self.command(Command::LoadTraces {
+                bot_id: BACKEND.to_owned(),
+                hours: self.trace_hours,
+            });
         }
         let browsing = matches!(
             &page,
@@ -963,6 +1027,108 @@ impl Ui {
         if self.model.memories.begin_change() {
             self.command(Command::ForgetMemory { bot_id, id });
         }
+    }
+
+    /// Whose list is on screen: the backend's for Diagnostics (`traces`),
+    /// or the bot whose Activity page shows.
+    fn inspected_bot(&self, traces: bool) -> Option<String> {
+        match &self.screen {
+            Screen::Settings(Page::Diagnostics) if traces => Some(BACKEND.to_owned()),
+            Screen::Settings(Page::Bot {
+                bot_id,
+                section: BotSection::Activity,
+            }) if !traces => Some(bot_id.clone()),
+            _ => None,
+        }
+    }
+
+    /// Asks for the traces of the window on screen, again.
+    pub fn load_traces(&mut self) {
+        let Some(bot_id) = self.inspected_bot(true) else {
+            return;
+        };
+        let hours = self.trace_hours;
+        self.model.traces.open(&bot_id, hours);
+        self.command(Command::LoadTraces { bot_id, hours });
+    }
+
+    /// Chooses the time window Diagnostics shows: the last 1, 6 or 24 hours.
+    pub fn set_trace_window(&mut self, hours: u8) {
+        if self.trace_hours != hours {
+            self.trace_hours = hours;
+            self.load_traces();
+        }
+    }
+
+    /// Flips the runtime's trace collection.
+    pub fn set_telemetry(&mut self, enabled: bool) {
+        let Some(bot_id) = self.inspected_bot(true) else {
+            return;
+        };
+        if self.model.begin_set_telemetry() {
+            self.command(Command::SetTelemetry { bot_id, enabled });
+        }
+    }
+
+    /// Saves the traces on screen to the Downloads folder as JSON, in the
+    /// shape the runtime sent them.
+    pub fn export_traces(&mut self) {
+        let Some(data) = &self.model.traces.data else {
+            return;
+        };
+        // Pretty JSON, as the web's export is.
+        let Ok(contents) = serde_json::to_string_pretty(data) else {
+            return;
+        };
+        self.save_export(format!("raphie-traces-{}.json", now_ms()), contents);
+    }
+
+    /// Saves the bot's events on screen to the Downloads folder as JSON.
+    pub fn export_activity(&mut self) {
+        let Some(bot_id) = self.inspected_bot(false) else {
+            return;
+        };
+        let Some(events) = self.model.activity.get(&bot_id) else {
+            return;
+        };
+        let now = now_ms();
+        let export = serde_json::json!({
+            "exportedAt": crate::format::iso_utc(now),
+            "events": events,
+        });
+        let Ok(contents) = serde_json::to_string_pretty(&export) else {
+            return;
+        };
+        self.save_export(format!("raphie-activity-{now}.json"), contents);
+    }
+
+    fn save_export(&mut self, name: String, contents: String) {
+        if self.model.begin_export() {
+            self.command(Command::SaveExport { name, contents });
+        }
+    }
+
+    /// While Diagnostics or Activity shows, asks for its list again every
+    /// few seconds; `clock` is the frame clock in seconds. Returns true
+    /// while either page shows.
+    pub fn refresh_inspection(&mut self, clock: f64) -> bool {
+        let traces = self.inspected_bot(true);
+        let activity = self.inspected_bot(false);
+        if traces.is_none() && activity.is_none() {
+            return false;
+        }
+        if clock - self.inspect_asked_at < INSPECT_REFRESH {
+            return true;
+        }
+        self.inspect_asked_at = clock;
+        // Not while a load is on its way.
+        if traces.is_some() && !self.model.traces.loading {
+            self.load_traces();
+        }
+        if let Some(bot_id) = activity {
+            self.command(Command::LoadBotActivity { bot_id });
+        }
+        true
     }
 
     /// The bot whose Scheduled jobs page is on screen.
@@ -1612,7 +1778,8 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         | ui.refresh_channels(clock)
         | ui.refresh_sandbox(clock)
         | ui.watch_files(clock)
-        | ui.refresh_jobs(clock);
+        | ui.refresh_jobs(clock)
+        | ui.refresh_inspection(clock);
     if watching {
         tx.wake_after(Duration::from_secs(1));
     }

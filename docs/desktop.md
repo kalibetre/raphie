@@ -130,8 +130,18 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     open. Run history shows recent runs for every job or one job, loads
     older runs from a button, and opens a run's conversation. Jobs and the
     newest runs are re-read every five seconds.
-  - **A bot's other pages** (Diagnostics, Activity) are not built yet: each
-    offers the same page of the web workspace in your browser.
+  - **Activity** lists a bot's most recent durable events across its
+    conversations, newest first, with a filter and each event's details.
+  - **Diagnostics** is an app-wide page beside Account and Appearance,
+    because trace collection is one setting of the runtime and its trace
+    store is shared. It holds the switch that collects diagnostic traces
+    and lists recent exported spans for the last 1, 6 or 24 hours, with a
+    filter and each span's ids, status and attributes.
+
+  Activity and Diagnostics are re-read every five seconds, and their
+  export buttons save the JSON into this machine's Downloads folder.
+  Every Settings page is now in the app; none opens the browser.
+
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
 
@@ -321,6 +331,9 @@ Where the two differ on purpose:
   host's security, not about this app.
 - The bar over a Settings page is 44 pt tall, not the web's 60, so its
   breadcrumb sits level with the window's buttons.
+- Diagnostics is one page under App. The web lists it under each bot,
+  though only the default bot's page has anything to show. Spans do not
+  say which bot they belong to yet; that needs a runtime change.
 - Providers opens one connection form at a time; the web can have several
   open. That keeps at most one typed key in memory.
 - Memory lists only the back ends that can be chosen (the web also shows

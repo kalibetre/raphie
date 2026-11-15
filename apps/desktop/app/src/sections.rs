@@ -13,6 +13,9 @@ pub enum Page {
     Account,
     /// Light or dark.
     Appearance,
+    /// The switch that collects diagnostic traces, and recent traces. They
+    /// belong to the whole Raphie backend, not to one bot.
+    Diagnostics,
 }
 
 /// A bot's pages. The navigation lists those in [`BotSection::ALL`]; the
@@ -30,13 +33,12 @@ pub enum BotSection {
     Sandbox,
     Workspace,
     Jobs,
-    Diagnostics,
     Activity,
 }
 
 impl BotSection {
     /// The pages the navigation lists, in its order.
-    pub const ALL: [BotSection; 11] = [
+    pub const ALL: [BotSection; 10] = [
         BotSection::Profile,
         BotSection::Providers,
         BotSection::Models,
@@ -46,7 +48,6 @@ impl BotSection {
         BotSection::Sandbox,
         BotSection::Workspace,
         BotSection::Jobs,
-        BotSection::Diagnostics,
         BotSection::Activity,
     ];
 
@@ -62,7 +63,6 @@ impl BotSection {
             BotSection::Sandbox => "Sandbox",
             BotSection::Workspace => "Workspace",
             BotSection::Jobs => "Scheduled jobs",
-            BotSection::Diagnostics => "Diagnostics",
             BotSection::Activity => "Activity",
         }
     }
@@ -80,7 +80,6 @@ impl BotSection {
             BotSection::Sandbox => "sandbox",
             BotSection::Workspace => "workspace",
             BotSection::Jobs => "jobs",
-            BotSection::Diagnostics => "telemetry",
             BotSection::Activity => "activity",
         }
     }
@@ -130,9 +129,6 @@ impl BotSection {
             BotSection::Jobs => format!(
                 "Give {bot} reminders and recurring work, with results saved in a conversation."
             ),
-            BotSection::Diagnostics => {
-                format!("Timings and failures from {bot}’s runs. Nothing leaves this backend.")
-            }
             BotSection::Activity => {
                 format!("Recent activity from {bot}, across its conversations.")
             }
@@ -146,6 +142,7 @@ impl Page {
             Page::Bot { section, .. } => section.label(),
             Page::Account => "Account",
             Page::Appearance => "Appearance",
+            Page::Diagnostics => "Diagnostics",
         }
     }
 
@@ -154,6 +151,7 @@ impl Page {
         match self {
             Page::Account => "view=settings&section=account".to_owned(),
             Page::Appearance => "view=settings&section=general".to_owned(),
+            Page::Diagnostics => "view=settings&section=telemetry".to_owned(),
             Page::Bot { bot_id, section } => {
                 // Bot ids are letters, digits and dashes, so they need no
                 // escaping; anything else is left out rather than guessed at.

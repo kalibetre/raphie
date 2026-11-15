@@ -65,6 +65,15 @@ pub struct Host {
     pub memory_saves: Vec<Value>,
     /// Answer memory tests with a failure, as an unreachable server would.
     pub memory_unreachable: bool,
+    /// Trace collection is switched off.
+    pub telemetry_off: bool,
+    /// The exported spans, and the bot's durable events oldest first, as
+    /// the runtime lists them.
+    pub spans: Vec<Value>,
+    pub activity: Vec<Value>,
+    /// Answer trace requests with a failure, as a trace backend that is
+    /// down would.
+    pub traces_down: bool,
     /// The bot's scheduled jobs, and their runs newest first, as the
     /// runtime lists them.
     pub jobs: Vec<Value>,
@@ -195,6 +204,8 @@ fn router(fake: Fake) -> Router {
         .route("/api/memory/test", post(test_memory))
         .route("/api/workspace", get(sandbox))
         .route("/api/workspace/settings", post(save_sandbox))
+        .route("/api/diagnostics/traces", get(traces))
+        .route("/api/inspection/activity", get(bot_activity))
         .route("/api/jobs", get(jobs).post(add_job))
         .route("/api/jobs/runs", get(job_runs))
         .route("/api/jobs/{id}", post(change_job))
@@ -284,6 +295,46 @@ async fn save_memory(
         }));
     }
     Json(memory_json(&fake)).into_response()
+}
+
+/// Exported spans for a window of 1, 6 or 24 hours.
+async fn traces(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.to_string(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let host = fake.host.lock().unwrap();
+    let refused = |status: StatusCode, message: &str| {
+        (status, Json(json!({ "error": message }))).into_response()
+    };
+    if host.traces_down {
+        return refused(StatusCode::BAD_GATEWAY, "The trace backend did not answer.");
+    }
+    let hours = query_value(&uri, "hours").unwrap_or_default();
+    if !["1", "6", "24"].contains(&hours.as_str()) {
+        return refused(
+            StatusCode::BAD_REQUEST,
+            "Choose a 1, 6 or 24 hour trace window.",
+        );
+    }
+    Json(json!({
+        "source": "otlp", "state": "ready", "exportEnabled": !host.telemetry_off,
+        "spans": host.spans, "from": 0, "to": 1, "spanLimit": 500,
+    }))
+    .into_response()
+}
+
+async fn bot_activity(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", uri.to_string(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let items = fake.host.lock().unwrap().activity.clone();
+    Json(json!({ "items": items, "next": null })).into_response()
 }
 
 fn jobs_json(fake: &Fake) -> Response {
@@ -996,7 +1047,7 @@ fn settings_json(fake: &Fake) -> Value {
         })
     };
     json!({
-        "telemetryEnabled": true, "provider": connection, "providerEnabled": true,
+        "telemetryEnabled": !fake.host.lock().unwrap().telemetry_off, "provider": connection, "providerEnabled": true,
         "credentialSource": "saved", "modelId": model,
         "providers": [{ "id": "openrouter", "name": "OpenRouter" }],
         "connections": connections_json(fake),
@@ -1085,6 +1136,11 @@ async fn set_default_model(
     record(&fake, "POST", uri.path().to_owned(), &headers);
     if let Some(denied) = refuse(&fake, &headers) {
         return denied;
+    }
+    // The same route also switches trace collection.
+    if let Some(enabled) = body["telemetryEnabled"].as_bool() {
+        fake.host.lock().unwrap().telemetry_off = !enabled;
+        return Json(settings_json(&fake)).into_response();
     }
     let (Some(model), Some(connection)) = (body["modelId"].as_str(), body["connectionId"].as_str())
     else {
