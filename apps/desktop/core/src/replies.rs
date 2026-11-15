@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::contracts::SessionSummary;
+use crate::flavor::Flavor;
 
 /// For one Raphie: each bot's sessions, and how many replies of each were
 /// read. `#[serde(transparent)]` writes it as the bare map, with no
@@ -62,7 +63,7 @@ impl ReadReplies {
     pub fn default_path() -> Option<PathBuf> {
         Some(
             dirs::config_dir()?
-                .join("raphie-desktop")
+                .join(Flavor::current().config_folder())
                 .join("read-replies.json"),
         )
     }

@@ -12,12 +12,14 @@ use raphie_core::contracts::{
     SandboxProvider, Scope, TelegramPairingCode,
 };
 use raphie_core::engine::{Command, ConnectionChange};
+use raphie_core::flavor::Flavor;
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::{McpAction, NewMcpConnection};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, Event};
 use raphie_core::sandbox::SandboxUpdate;
 use raphie_core::settings::ThemeChoice;
+use raphie_core::updates::current_version;
 use raphie_desktop::sections::{BotSection, Page};
 use raphie_desktop::state::{self, Filter, InboxFilter, Screen};
 use raphie_desktop::{Ui, scenes, view::view};
@@ -460,6 +462,59 @@ fn appearance_pins_the_theme_whatever_the_system_uses() {
     let mut rt = render(scenes::settings_appearance, true);
     click(&mut rt, "rd-theme-light");
     assert_eq!(color(&rt, "rd-settings"), "#f7f5ef");
+}
+
+#[test]
+fn only_the_dev_build_says_dev_beside_the_brand() {
+    let has_badge = |rt: &Runtime<Ui>| {
+        rt.elements()
+            .iter()
+            .any(|e| e.key.as_deref() == Some("rd-dev-badge"))
+    };
+    let mut rt = render(scenes::dev_build, false);
+    assert!(has_badge(&rt));
+    rt.update(|ui, _| ui.flavor = Flavor::Release);
+    settle(&mut rt);
+    assert!(!has_badge(&rt));
+    // The sign-in screen too.
+    let mut rt = render(scenes::sign_in, false);
+    rt.update(|ui, _| ui.flavor = Flavor::Dev);
+    settle(&mut rt);
+    assert!(has_badge(&rt));
+}
+
+#[test]
+fn about_shows_the_version_and_checks_for_updates() {
+    let mut rt = render(scenes::settings_appearance, false);
+    let text = screen_text(&rt);
+    assert!(text.contains(current_version()), "{text}");
+    assert!(text.contains("Not checked yet."), "{text}");
+
+    click(&mut rt, "rd-check-updates");
+    assert_eq!(rt.state.sent, vec![Command::CheckForUpdates]);
+    assert!(screen_text(&rt).contains("Checking GitHub"));
+    // While a check runs, a second press asks nothing more.
+    rt.update(|ui, _| ui.check_for_updates());
+    assert_eq!(rt.state.sent.len(), 1);
+
+    deliver(&mut rt, Event::UpdateChecked(Ok(None)));
+    assert!(screen_text(&rt).contains("This is the newest release."));
+    deliver(
+        &mut rt,
+        Event::UpdateChecked(Err("Could not reach GitHub.".into())),
+    );
+    assert!(screen_text(&rt).contains("Could not check: Could not reach GitHub."));
+}
+
+#[test]
+fn a_newer_release_opens_its_page() {
+    let mut rt = render(scenes::settings_appearance_update, false);
+    assert!(screen_text(&rt).contains("Raphie v0.0.5 is available."));
+    click(&mut rt, "rd-view-release");
+    assert_eq!(
+        rt.state.opened,
+        vec!["https://github.com/kalibetre/raphie/releases/tag/v0.0.5".to_owned()]
+    );
 }
 
 /// Delivers an engine event, as `poll` would in a window.

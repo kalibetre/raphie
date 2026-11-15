@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::flavor::Flavor;
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Settings {
     /// The last origin signed in to, offered again at launch.
@@ -36,11 +38,13 @@ pub enum ThemeChoice {
 
 impl Settings {
     /// `<config dir>/raphie-desktop/settings.json`, e.g.
-    /// `~/Library/Application Support/raphie-desktop/settings.json` on macOS.
+    /// `~/Library/Application Support/raphie-desktop/settings.json` on
+    /// macOS. The dev build's folder is `raphie-desktop-dev`
+    /// ([`Flavor::config_folder`]).
     pub fn default_path() -> Option<PathBuf> {
         Some(
             dirs::config_dir()?
-                .join("raphie-desktop")
+                .join(Flavor::current().config_folder())
                 .join("settings.json"),
         )
     }

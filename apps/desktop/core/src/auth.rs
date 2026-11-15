@@ -10,6 +10,7 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::flavor::Flavor;
 use crate::origin::Origin;
 
 /// The client id the web host accepts for first-party native devices.
@@ -141,7 +142,8 @@ pub struct KeychainStore {
 impl KeychainStore {
     pub fn new() -> KeychainStore {
         KeychainStore {
-            service: "dev.raphie.desktop".to_owned(),
+            // Each build keeps its own sign-in.
+            service: Flavor::current().identifier().to_owned(),
         }
     }
 

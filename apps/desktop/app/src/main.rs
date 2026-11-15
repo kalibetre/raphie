@@ -2,9 +2,22 @@
 //! instead, for example `raphie-desktop --snap out.png --scene approval
 //! --theme dark` (see `docs/desktop.md`).
 
-use rune::Chrome;
+use rune::{Chrome, WindowOptions};
 
 fn main() {
+    // `scripts/bundle.sh` runs the program this way to draw its own icon.
+    if raphie_desktop::app_icon::requested() {
+        // A transparent window keeps the icon's corners clear in the PNG.
+        // `..Default::default()` fills in every field not named here.
+        let options = WindowOptions {
+            transparent: true,
+            ..Default::default()
+        };
+        rune::App::new(raphie_desktop::app_icon::spec())
+            .window_options(options)
+            .run();
+        return;
+    }
     // Starts the GPU on a thread while macOS sets the app up (Rune's README,
     // "Launching fast").
     rune::prewarm_gpu();

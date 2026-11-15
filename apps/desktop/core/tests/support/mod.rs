@@ -247,6 +247,7 @@ fn router(fake: Fake) -> Router {
         .route("/api/jobs", get(jobs).post(add_job))
         .route("/api/jobs/runs", get(job_runs))
         .route("/api/bots/{bot}/sessions", get(bot_sessions))
+        .route("/github/releases", get(github_releases))
         .route("/api/jobs/notifications", get(job_updates))
         .route("/api/bots/{bot}/jobs/notifications", get(job_updates))
         .route("/api/jobs/runs/{id}/read", post(acknowledge_run))
@@ -1133,6 +1134,19 @@ async fn device_token(State(fake): State<Fake>, headers: HeaderMap) -> Response 
 }
 
 /// Like the real gateway: says who is signed in when the token is good.
+/// A stand-in for GitHub's list of Raphie releases: a nightly older than
+/// any build, a far-future release, and a draft that must be ignored.
+async fn github_releases(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(&fake, "GET", "/github/releases".into(), &headers);
+    let page = |tag: &str| format!("https://github.com/kalibetre/raphie/releases/tag/{tag}");
+    Json(json!([
+        { "tag_name": "v0.0.1-nightly.1", "html_url": page("v0.0.1-nightly.1"), "draft": false },
+        { "tag_name": "v99.0.0", "html_url": page("v99.0.0"), "draft": false },
+        { "tag_name": "v100.0.0", "html_url": page("v100.0.0"), "draft": true }
+    ]))
+    .into_response()
+}
+
 async fn auth_status(State(fake): State<Fake>, headers: HeaderMap) -> Response {
     record(&fake, "GET", "/auth/status".into(), &headers);
     let signed_in = refuse(&fake, &headers).is_none();
@@ -1795,6 +1809,9 @@ pub fn fast_config() -> EngineConfig {
         settings_path: None,
         // Tests never write to the real Downloads folder.
         downloads: None,
+        // Nor ask GitHub anything: a test that checks for updates points
+        // this at the fake host's `/github/releases`.
+        releases_url: None,
         reconnect_min: Duration::from_millis(20),
         reconnect_max: Duration::from_millis(100),
         send_retries: vec![Duration::from_millis(10), Duration::from_millis(10)],

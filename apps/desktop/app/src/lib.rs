@@ -9,6 +9,7 @@
 //! - [`theme`]: the web workspace's colours and type, which the views use.
 //! - [`widgets`]: buttons and fields shared by the screens.
 //! - [`avatar`]: a bot's face and colour, computed as the web computes them.
+//! - [`app_icon`]: the app's icon, drawn at build time.
 //! - [`icons`]: the web workspace's icons.
 //! - [`sections`]: the pages of Settings, named as the web names them.
 //! - [`profile`]: the edits in progress on a bot's Profile page.
@@ -18,6 +19,7 @@
 //! - [`scenes`]: fixture states for headless snapshots and tests.
 //! - [`format`]: small text helpers.
 
+pub mod app_icon;
 pub mod avatar;
 pub mod channels;
 pub mod format;
@@ -35,6 +37,7 @@ pub mod theme;
 pub mod view;
 pub mod widgets;
 
+use raphie_core::flavor::Flavor;
 use rune::{AppSpec, KeyEvent, Tx};
 
 pub use state::Ui;
@@ -47,7 +50,13 @@ pub fn spec() -> AppSpec<Ui> {
         setup: Some(state::setup),
         poll: Some(state::poll),
         on_key: Some(on_key),
-        ..AppSpec::new("Raphie", (1280.0, 800.0), Ui::new, view::view)
+        // "Raphie", or "Raphie Dev" for a debug build.
+        ..AppSpec::new(
+            Flavor::current().app_name(),
+            (1280.0, 800.0),
+            Ui::new,
+            view::view,
+        )
     }
 }
 

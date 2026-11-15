@@ -29,7 +29,8 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   faster than every 5 seconds, slower when asked), and refuses an approval link
   that points at a different origin.
 - **Token storage** in the OS credential store: the login Keychain on macOS
-  (service `dev.raphie.desktop`, one entry per origin). The token is never
+  (service `dev.raphie.desktop`, or `dev.raphie.desktop.dev` for the dev
+  build; one entry per origin). The token is never
   written to a file or a log. At launch the app reuses a stored token for the
   last origin; if the host answers 401 (the device was disconnected in
   Settings → Account, or the password was recovered), the token is deleted and
@@ -108,7 +109,14 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   - **Account** shows who this device is signed in as and the Raphie address,
     and signs out.
   - **Appearance** pins light or dark, or follows the system. The choice is
-    saved on this computer.
+    saved on this computer. Its **About** group shows Raphie's version (from
+    the repository's `VERSION` file, or `RAPHIE_VERSION` at compile time, as
+    the web does) and whether a newer release exists. The app checks once at
+    launch, and **Check for updates** checks again: it reads Raphie's public
+    releases on GitHub with its own HTTP client, never the signed-in one, so
+    the host's token is never sent there. A newer release offers **View
+    release**, which opens its GitHub page. Nothing is downloaded or
+    installed.
   - **Profile** edits a bot's name, description, colour and personality. A
     save bar appears once something changed. If the bot was saved somewhere
     else meanwhile, the draft is kept and saving is blocked until you
@@ -216,21 +224,50 @@ The first build compiles Rune and its GPU stack and takes several minutes.
 `cargo run --release -p raphie-desktop -- --origin http://127.0.0.1:4321`;
 otherwise the app reuses the last origin's stored token, or shows sign-in.
 
+### Dev and release builds
+
+A debug build (`cargo run`, `scripts/bundle.sh`) is **Raphie Dev**, and a
+release build (`--release`) is **Raphie**. They are separate apps that can be
+installed and signed in side by side, so trying a change never disturbs the
+app in daily use:
+
+|                  | Raphie Dev                                 | Raphie                         |
+| ---------------- | ------------------------------------------ | ------------------------------ |
+| Identifier       | `dev.raphie.desktop.dev`                   | `dev.raphie.desktop`           |
+| Settings folder  | `<config dir>/raphie-desktop-dev/`         | `<config dir>/raphie-desktop/` |
+| Keychain service | `dev.raphie.desktop.dev`                   | `dev.raphie.desktop`           |
+| Icon             | The brand face in amber, with a "DEV" pill | The brand face in sage         |
+| In the window    | A "DEV" badge beside the brand             | Nothing extra                  |
+
+The release build keeps the names used before the split, so its settings
+and sign-in carry over; the dev build starts signed out. The theme is the
+same in both. Headless snapshots draw the release look even though they come
+from a debug build; the `dev-build` scene shows the badge. The split is
+`Flavor` in `core/src/flavor.rs`.
+
 ### Run it as a macOS app
 
 ```sh
 cd apps/desktop
-scripts/bundle.sh                 # or: scripts/bundle.sh --release
-open target/bundle/Raphie.app     # add: --args --origin http://127.0.0.1:4321
+scripts/bundle.sh                    # target/bundle/Raphie Dev.app
+scripts/bundle.sh --release          # target/bundle/Raphie.app
+open "target/bundle/Raphie Dev.app"  # add: --args --origin http://127.0.0.1:4321
 ```
 
-`scripts/bundle.sh` wraps the binary in `target/bundle/Raphie.app` with an
-`Info.plist` (identifier `dev.raphie.desktop`, the one the Keychain entry
-already uses) and signs it ad hoc. macOS gives system notifications only to
-an app with a bundle identifier, so this is the way to get them: the first
-launch asks whether Raphie may send notifications. It is a development
-bundle for this machine, not a release: no icon, no notarisation, no
-updater.
+`scripts/bundle.sh` wraps the binary in an app bundle with an `Info.plist`
+(the build's name and identifier), an icon, and an ad hoc signature. macOS
+gives system notifications only to an app with a bundle identifier, so this
+is the way to get them: the first launch asks whether the app may send
+notifications, once for each of the two apps.
+
+The icon is drawn by the app itself (`app/src/app_icon.rs`), so no image is
+kept in the repository: the script runs the debug binary with
+`RAPHIE_ICON=dev` (or `release`) and `--snap` to render a 1024 px PNG, and
+`sips` and `iconutil` turn it into `AppIcon.icns`. Release builds leave out
+Rune's `--snap`, which is why the debug binary draws both.
+
+Both bundles are for this machine, not for distribution: no Developer ID
+signature and no notarisation.
 
 ### Connect to the test fixture
 
@@ -467,8 +504,8 @@ current.
   Secret Service), but they have not been run by hand.
 - System notifications on macOS need the app bundle from
   `scripts/bundle.sh`; a bare `cargo run` posts none. The bundle is signed
-  ad hoc and has no icon. Notifications on Windows and Linux are compiled
-  in but have not been run.
+  ad hoc. Notifications on Windows and Linux are compiled in but have not
+  been run.
 - Approvals given "for session" cannot be listed or revoked here (nor on
   the web).
 - Image attachments have no picture preview yet.
@@ -476,8 +513,11 @@ current.
   web: turns older than that show their reply without steps or usage.
 - The roster and panel have fixed widths (264 and 340 pt) and their open state
   is not remembered between launches. The window is at least 960×560.
-- No packaging, signing or auto-update: run it from a checkout. Without an app
-  bundle, macOS may ask to allow Keychain access the first time.
+- No distributable package: no Developer ID signing, notarisation or
+  installer, and the release workflow publishes no desktop app. The update
+  check only says a newer Raphie exists and links to its release page.
+  Without an app bundle, macOS may ask to allow Keychain access the first
+  time.
 - No local runtime management: the app connects to a host that is already
   running.
 - One message in flight at a time from the composer.

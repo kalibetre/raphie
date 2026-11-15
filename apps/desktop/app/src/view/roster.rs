@@ -15,7 +15,7 @@ use crate::icons;
 use crate::sections::Page;
 use crate::state::Ui;
 use crate::theme::font;
-use crate::widgets::{count_badge, icon_button, one_line, pressable, status_dot};
+use crate::widgets::{count_badge, dev_badge, icon_button, one_line, pressable, status_dot};
 
 /// The roster's width, the web's default.
 const WIDTH: f32 = 264.0;
@@ -55,7 +55,10 @@ pub fn roster(s: &Ui, look: &Look) -> El {
                     text("raphie")
                         .font(font(17.0, 650.0).tracking(-0.2))
                         .color(t.foreground),
-                ),
+                )
+                // `then` turns a true into `Some(badge)`. An `Option` is
+                // a list of none or one, which is what `children` takes.
+                .children(s.flavor.is_dev().then(|| dev_badge(t))),
         )
         .child(
             row()

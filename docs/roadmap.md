@@ -162,8 +162,9 @@ Delivered capabilities and remaining work are labelled below. See the
   settings page is native.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
 - **Desktop — planned:** image previews on attachments, listing and revoking session approvals,
-  opening a conversation from its system notification, packaging/signing
-  and updates, Windows and Linux
+  opening a conversation from its system notification, distributable
+  packaging (Developer ID signing, notarisation, a desktop asset in releases)
+  and installing updates, Windows and Linux
   verification, generated contract types, and local runtime packaging,
   discovery and single-owner lifecycle. Later, a _desktop host_ role that offers
   this machine's capabilities to the runtime: local speech-to-text, computer use
