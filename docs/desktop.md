@@ -312,6 +312,8 @@ Where the two differ on purpose:
   ([Authentication](authentication.md#connect-a-native-device)), so the page
   links to the browser for them. Changing that is a decision about the web
   host's security, not about this app.
+- The bar over a Settings page is 44 pt tall, not the web's 60, so its
+  breadcrumb sits level with the window's buttons.
 - Providers opens one connection form at a time; the web can have several
   open. That keeps at most one typed key in memory.
 - Memory lists only the back ends that can be chosen (the web also shows
