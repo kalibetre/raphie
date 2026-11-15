@@ -154,6 +154,15 @@ impl Item {
             .or(self.session.as_ref().map(|session| session.id.as_str()))
     }
 
+    /// Where a click on this item's notification leads.
+    pub fn target(&self) -> Target {
+        Target {
+            bot_id: self.bot_id.clone(),
+            session_id: self.session_id().map(str::to_owned),
+            run_id: self.run.as_ref().map(|run| run.id.clone()),
+        }
+    }
+
     /// The headline: "Needs your approval", "2 new replies", "Your
     /// scheduled reply is ready", "Scheduled job failed".
     pub fn title(&self) -> String {
@@ -288,6 +297,21 @@ pub struct Announcement {
     pub title: String,
     /// What happened: "2 new replies".
     pub body: String,
+    /// What a click on the notification opens.
+    pub target: Target,
+}
+
+/// Where a notification leads. It is kept apart from the [`Item`], which
+/// may be gone by the time the owner clicks (read, decided, dismissed):
+/// the conversation is still worth opening then.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Target {
+    pub bot_id: String,
+    /// The conversation to open; `None` for a job run without one, which
+    /// opens the inbox instead.
+    pub session_id: Option<String>,
+    /// The job run to dismiss on opening, as a click in the inbox does.
+    pub run_id: Option<String>,
 }
 
 /// Which notifications the owner has already been told about, so each is
@@ -318,6 +342,7 @@ impl Announcements {
                     news.push(Announcement {
                         title: format!("{} · {}", item.bot_name, item.subject()),
                         body: item.title(),
+                        target: item.target(),
                     });
                 }
             }
@@ -426,6 +451,15 @@ mod tests {
         assert_eq!(list[0].title(), "Your scheduled reply is ready");
         assert_eq!(list[0].session_id(), Some("s-1"));
         assert_eq!(list[0].time, 60, "when the job finished");
+        // Its notification opens the conversation and dismisses the run.
+        assert_eq!(
+            list[0].target(),
+            Target {
+                bot_id: "default".into(),
+                session_id: Some("s-1".into()),
+                run_id: Some("r-1".into()),
+            }
+        );
 
         // With two new replies the conversation gets its own line too.
         let (list, merged) = items(&bots, |_| sessions.iter().collect(), |_, _| 2, &jobs);
@@ -481,6 +515,11 @@ mod tests {
             [Announcement {
                 title: "Raphie · Session s-1".into(),
                 body: "2 new replies".into(),
+                target: Target {
+                    bot_id: "default".into(),
+                    session_id: Some("s-1".into()),
+                    run_id: None,
+                },
             }]
         );
         // Read, then a new reply: news again. The approval never left, so

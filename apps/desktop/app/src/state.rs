@@ -16,7 +16,7 @@ use raphie_core::contracts::{
 };
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
-use raphie_core::inbox::{self, Announcement, Announcements, Item};
+use raphie_core::inbox::{self, Announcement, Announcements, Item, Target};
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
@@ -733,13 +733,31 @@ impl Ui {
     /// Opens a notification's conversation. A job update is dismissed on
     /// the way, as on the web.
     pub fn open_notification(&mut self, item: &Item) {
-        let Some(session_id) = item.session_id().map(str::to_owned) else {
-            return;
-        };
-        if let Some(run) = &item.run {
-            self.dismiss_run(&item.bot_id, &run.id);
+        // A row without a conversation has nothing to open from the inbox.
+        if item.session_id().is_some() {
+            self.open_target(&item.target());
         }
-        self.open_conversation(&item.bot_id, &session_id);
+    }
+
+    /// Opens what a notification leads to, from the inbox or from the
+    /// system's banner: its conversation, dismissing a job run on the way
+    /// as the inbox does. A job run with no conversation, or a bot that is
+    /// gone, opens the inbox instead.
+    pub fn open_target(&mut self, target: &Target) {
+        if self.model.auth != AuthState::SignedIn {
+            return;
+        }
+        let bot_exists = self.model.bots.iter().any(|bot| bot.id == target.bot_id);
+        if let (true, Some(run_id)) = (bot_exists, &target.run_id) {
+            self.dismiss_run(&target.bot_id, run_id);
+        }
+        match (bot_exists, &target.session_id) {
+            (true, Some(session_id)) => self.open_conversation(&target.bot_id, session_id),
+            _ => {
+                self.close_settings();
+                self.inbox_open = true;
+            }
+        }
     }
 
     /// Dismisses one job update from the inbox.
