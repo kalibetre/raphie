@@ -25,6 +25,7 @@ mod conversation;
 mod header;
 mod model_picker;
 mod panel;
+mod permissions;
 mod roster;
 mod settings;
 mod sign_in;

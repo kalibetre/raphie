@@ -5,6 +5,7 @@
 //! paste real conversations here.
 
 use raphie_core::auth::DeviceCode;
+use raphie_core::contracts::ApprovalMode;
 use raphie_core::contracts::{
     Account, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection, MemoryEvidence,
     MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionObservation,
@@ -35,6 +36,7 @@ pub const SCENES: &[Scene] = &[
     ("conversations", conversations),
     ("conversation", conversation),
     ("attachments", attachments),
+    ("permissions", permissions),
     ("model-picker", model_picker),
     ("model-picker-favorites", model_picker_favorites),
     ("tools", tools),
@@ -1133,6 +1135,21 @@ pub fn conversation(ui: &mut Ui) {
             finished_activity(),
         ),
     );
+}
+
+/// The conversation with the composer's command permissions open, set
+/// to run commands without asking.
+pub fn permissions(ui: &mut Ui) {
+    conversation(ui);
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(model_settings()),
+    });
+    ui.model.command_mode.open("s-1");
+    ui.model
+        .command_mode
+        .loaded("s-1", ApprovalMode::FullAccess);
+    ui.permissions_open = true;
 }
 
 /// The conversation with the composer's model picker open.

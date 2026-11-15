@@ -6,6 +6,7 @@
 use raphie_core::attachments::{TOO_MANY, Upload};
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome};
+use raphie_core::contracts::ApprovalMode;
 use raphie_core::contracts::{
     BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, ModelSelection,
     SandboxProvider, Scope, TelegramPairingCode,
@@ -1448,6 +1449,7 @@ fn the_composer_sends_what_was_typed() {
             text: "Thanks!".into(),
             attachments: Vec::new(),
             model: None,
+            approval_mode: None,
         })
     );
     assert!(rt.state.model.sending, "the button waits for the receipt");
@@ -3083,6 +3085,7 @@ fn files_wait_in_the_composer_and_go_with_the_message() {
             text: String::new(),
             attachments: vec![d.clone()],
             model: None,
+            approval_mode: None,
         })
     );
     // The file stays until the runtime admits the message, then leaves.
@@ -3335,6 +3338,8 @@ fn a_new_conversation_starts_with_the_model_picked_for_it() {
                 provider: "c-direct".into(),
                 model_id: "claude-haiku".into(),
             }),
+            // A new conversation asks before commands unless told otherwise.
+            approval_mode: Some(ApprovalMode::Ask),
         })
     );
 }
@@ -3364,4 +3369,155 @@ fn starred_models_are_listed_under_favorites() {
             ..
         })
     ));
+}
+
+#[test]
+fn command_permissions_load_and_change_for_an_open_conversation() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::conversation, dark);
+        // The first event after a conversation opens asks for its mode.
+        deliver(
+            &mut rt,
+            Event::BotSettings {
+                bot_id: "default".into(),
+                settings: Box::new(scenes::model_settings()),
+            },
+        );
+        assert!(rt.state.sent.contains(&Command::LoadApprovalMode {
+            session_id: "s-1".into()
+        }));
+        assert_eq!(
+            element(&rt, "rd-permissions").label.as_deref(),
+            Some("Command permissions: Loading")
+        );
+        click(&mut rt, "rd-permissions");
+        assert!(screen_text(&rt).contains("Loading Command permissions…"));
+        // Nothing can be chosen until the mode is known: the options are
+        // disabled, and choosing sends nothing.
+        let before = rt.state.sent.len();
+        rt.update(|ui, _| ui.set_command_mode(ApprovalMode::FullAccess));
+        settle(&mut rt);
+        assert_eq!(rt.state.sent.len(), before);
+
+        deliver(
+            &mut rt,
+            Event::ApprovalMode {
+                session_id: "s-1".into(),
+                mode: ApprovalMode::Ask,
+            },
+        );
+        assert_eq!(
+            element(&rt, "rd-permissions").label.as_deref(),
+            Some("Command permissions: Ask")
+        );
+        assert_eq!(rt.state.shown_command_mode(), Some(ApprovalMode::Ask));
+        click(&mut rt, "rd-permissions-full");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SetApprovalMode {
+                session_id: "s-1".into(),
+                mode: ApprovalMode::FullAccess,
+            })
+        );
+        deliver(
+            &mut rt,
+            Event::ApprovalModeSaved {
+                session_id: "s-1".into(),
+                mode: ApprovalMode::FullAccess,
+            },
+        );
+        assert_eq!(
+            element(&rt, "rd-permissions").label.as_deref(),
+            Some("Command permissions: Full access")
+        );
+        assert_eq!(
+            rt.state.shown_command_mode(),
+            Some(ApprovalMode::FullAccess)
+        );
+
+        // A refused change says so and leaves the mode as it was.
+        click(&mut rt, "rd-permissions-ask");
+        deliver(
+            &mut rt,
+            Event::ApprovalModeSaveFailed {
+                session_id: "s-1".into(),
+            },
+        );
+        assert_eq!(
+            element(&rt, "rd-permissions-save-error").text.as_deref(),
+            Some("Could not save Command permissions. Please retry.")
+        );
+        assert_eq!(
+            rt.state.shown_command_mode(),
+            Some(ApprovalMode::FullAccess)
+        );
+    }
+}
+
+#[test]
+fn a_failed_load_of_command_permissions_can_be_retried() {
+    let mut rt = render(scenes::conversation, false);
+    deliver(
+        &mut rt,
+        Event::ApprovalModeFailed {
+            session_id: "s-1".into(),
+        },
+    );
+    // That first event asked for the mode; now the load fails.
+    deliver(
+        &mut rt,
+        Event::ApprovalModeFailed {
+            session_id: "s-1".into(),
+        },
+    );
+    click(&mut rt, "rd-permissions");
+    assert!(screen_text(&rt).contains("Could not load Command permissions."));
+    let loads = |rt: &Runtime<Ui>| {
+        rt.state
+            .sent
+            .iter()
+            .filter(|command| matches!(command, Command::LoadApprovalMode { .. }))
+            .count()
+    };
+    let before = loads(&rt);
+    click(&mut rt, "rd-permissions-retry");
+    assert_eq!(loads(&rt), before + 1);
+    assert!(screen_text(&rt).contains("Loading Command permissions…"));
+}
+
+#[test]
+fn a_new_conversation_starts_with_the_command_mode_chosen_for_it() {
+    let mut rt = render(scenes::new_conversation, false);
+    // No session yet, so the mode is this client's and starts at Ask.
+    assert_eq!(
+        element(&rt, "rd-permissions").label.as_deref(),
+        Some("Command permissions: Ask")
+    );
+    click(&mut rt, "rd-permissions");
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-permissions-full");
+    assert_eq!(rt.state.sent.len(), before, "nothing to tell the host yet");
+    assert_eq!(
+        rt.state.shown_command_mode(),
+        Some(ApprovalMode::FullAccess)
+    );
+    // A press on the page closes the list.
+    rt.pointer_down(1200.0, 120.0);
+    rt.pointer_up(1200.0, 120.0);
+    settle(&mut rt);
+    assert!(rt.find("rd-permissions-list").is_none());
+
+    click(&mut rt, "rd-composer");
+    rt.paste("Tidy the downloads folder");
+    settle(&mut rt);
+    click(&mut rt, "rd-send");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Send {
+            text: "Tidy the downloads folder".into(),
+            attachments: Vec::new(),
+            model: None,
+            approval_mode: Some(ApprovalMode::FullAccess),
+        })
+    );
 }
