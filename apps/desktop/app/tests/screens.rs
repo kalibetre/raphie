@@ -3521,3 +3521,94 @@ fn a_new_conversation_starts_with_the_command_mode_chosen_for_it() {
         })
     );
 }
+
+#[test]
+fn replies_not_read_yet_are_marked_counted_and_filtered() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::unread, dark);
+        let shown = screen_text(&rt);
+        assert!(shown.contains("2 new replies"));
+        assert!(rt.find("rd-session-s-1-dot").is_some());
+        // A conversation read to its end has no marker.
+        assert!(rt.find("rd-session-s-3-dot").is_none());
+        // Two conversations have something for the owner: one with new
+        // replies, one waiting for approval.
+        assert!(shown.contains("2 conversations need you"));
+
+        click(&mut rt, "rd-filter-new");
+        assert_eq!(rt.state.filter, Filter::NewReplies);
+        assert!(rt.find("rd-session-s-1").is_some());
+        assert!(rt.find("rd-session-s-2").is_none());
+        assert!(rt.find("rd-session-s-3").is_none());
+        assert!(screen_text(&rt).contains("1 conversation · Most recent first"));
+    }
+}
+
+#[test]
+fn opening_a_conversation_reads_its_replies_only_at_its_end_in_the_front_window() {
+    let mut rt = render(scenes::unread, false);
+    let unread = |rt: &Runtime<Ui>| {
+        let session = rt
+            .state
+            .model
+            .session_list()
+            .find(|session| session.id == "s-1")
+            .cloned()
+            .unwrap();
+        rt.state.unread(&session)
+    };
+    assert_eq!(unread(&rt), 2);
+    click(&mut rt, "rd-session-s-1");
+    // The next news from the engine finds the conversation on screen.
+    deliver(
+        &mut rt,
+        Event::BotSettings {
+            bot_id: "default".into(),
+            settings: Box::new(scenes::model_settings()),
+        },
+    );
+    assert_eq!(unread(&rt), 0);
+    assert!(rt.find("rd-session-s-1-dot").is_none());
+    click(&mut rt, "rd-filter-new");
+    assert!(screen_text(&rt).contains("You’re all caught up."));
+
+    // A reply that arrives while another app is in front stays new...
+    let arrive = |rt: &mut Runtime<Ui>, count: u32| {
+        rt.update(|ui, _| {
+            for session in &mut ui.model.sessions {
+                if session.id == "s-1" {
+                    session.reply_count = Some(count);
+                }
+            }
+            ui.mark_read();
+        });
+        settle(rt);
+    };
+    rt.update(|ui, _| ui.window_focused = false);
+    arrive(&mut rt, 4);
+    assert_eq!(unread(&rt), 1);
+    assert!(screen_text(&rt).contains("1 new reply"));
+    // ...until the window is looked at again.
+    rt.update(|ui, _| {
+        ui.window_focused = true;
+        ui.mark_read();
+    });
+    settle(&mut rt);
+    assert_eq!(unread(&rt), 0);
+
+    // So does one that arrives while the owner has scrolled up to read.
+    rt.update(|ui, _| ui.at_bottom = false);
+    arrive(&mut rt, 5);
+    assert_eq!(unread(&rt), 1);
+    rt.update(|ui, _| {
+        ui.at_bottom = true;
+        ui.mark_read();
+    });
+    settle(&mut rt);
+    assert_eq!(unread(&rt), 0);
+
+    // Settings in front of the conversation does not read it either.
+    rt.update(|ui, _| ui.open_settings(None));
+    arrive(&mut rt, 6);
+    assert_eq!(unread(&rt), 1);
+}

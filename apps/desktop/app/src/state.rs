@@ -9,6 +9,7 @@ use raphie_core::attachments::Upload;
 use raphie_core::auth::KeychainStore;
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome, is_telegram_token};
+use raphie_core::contracts::SessionSummary;
 use raphie_core::contracts::{
     ApprovalMode, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
     RuntimeSettings, Scope, TurnStatus,
@@ -20,6 +21,7 @@ use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
 use raphie_core::model::{AuthState, Effect, Event, Model};
 use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
+use raphie_core::replies::ReadReplies;
 use raphie_core::settings::{Settings, ThemeChoice};
 use raphie_core::workspace::{self, ROOT};
 use rune::{ClipboardContent, FileDialogOptions, TextEdit, Tx, Waker};
@@ -40,6 +42,8 @@ pub const DEFAULT_ORIGIN: &str = "http://127.0.0.1:4321";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Filter {
     All,
+    /// Only conversations with replies not read yet on this computer.
+    NewReplies,
     /// Only conversations with an action waiting for approval.
     Approvals,
 }
@@ -282,6 +286,12 @@ pub struct Ui {
     /// The model chosen for a conversation that has not started yet. It
     /// goes with the first message.
     pub new_model: Option<ModelSelection>,
+    /// How many of each conversation's replies were read on this computer.
+    pub read_replies: ReadReplies,
+    /// The conversation on screen is scrolled to its end.
+    pub at_bottom: bool,
+    /// This window is the one in front.
+    pub window_focused: bool,
     /// Whether the composer's command permissions list shows.
     pub permissions_open: bool,
     /// The command mode chosen for a conversation that has not started
@@ -365,6 +375,9 @@ impl Ui {
         let mut ui = Ui::with_origin(saved.origin.as_deref().unwrap_or(DEFAULT_ORIGIN));
         ui.theme = saved.theme;
         ui.favorites = saved.model_favorites;
+        ui.read_replies = ReadReplies::default_path()
+            .map(|path| ReadReplies::load(&path))
+            .unwrap_or_default();
         ui
     }
 
@@ -389,6 +402,10 @@ impl Ui {
             model_picker: ModelPicker::default(),
             favorites: Vec::new(),
             new_model: None,
+            read_replies: ReadReplies::default(),
+            // A conversation opens at its end, in a window in front.
+            at_bottom: true,
+            window_focused: true,
             permissions_open: false,
             draft_mode: ApprovalMode::Ask,
             models_asked: None,
@@ -460,6 +477,8 @@ impl Ui {
     pub fn select_session(&mut self, session_id: Option<&str>) {
         self.new_model = None;
         self.model_picker.open = false;
+        // A conversation opens at its end.
+        self.at_bottom = true;
         // Each conversation starts by asking, as on the web.
         self.draft_mode = ApprovalMode::Ask;
         self.permissions_open = false;
@@ -558,6 +577,59 @@ impl Ui {
             if !self.model.settings.contains_key(&bot_id) {
                 self.command(Command::LoadSettings { bot_id });
             }
+        }
+    }
+
+    /// How many of a conversation's replies have not been read on this
+    /// computer. Only the selected bot's conversations are on hand.
+    pub fn unread(&self, session: &SessionSummary) -> u32 {
+        match (&self.model.origin, &self.model.bot_id) {
+            (Some(origin), Some(bot_id)) => {
+                self.read_replies.unread(origin.as_str(), bot_id, session)
+            }
+            _ => 0,
+        }
+    }
+
+    /// True for a conversation with something for the owner: a reply not
+    /// read yet, or an action waiting for approval.
+    pub fn needs_attention(&self, session: &SessionSummary) -> bool {
+        session.waiting || self.unread(session) > 0
+    }
+
+    /// Records the open conversation's replies as read, when the owner can
+    /// be taken to have seen them: it is on screen, scrolled to its end,
+    /// in the window in front. The web's rule (`conversation.tsx`).
+    pub fn mark_read(&mut self) {
+        if !self.at_bottom || !self.window_focused || !matches!(self.screen, Screen::Workspace) {
+            return;
+        }
+        let (Some(origin), Some(bot_id)) = (&self.model.origin, &self.model.bot_id) else {
+            return;
+        };
+        let Some(open) = &self.model.conversation else {
+            return;
+        };
+        // The stream's own summary is the freshest; the list covers the
+        // moment before the stream's first event.
+        let observed = open.observation.as_ref().map(|seen| &seen.session);
+        let listed = self
+            .model
+            .session_list()
+            .find(|session| session.id == open.session_id);
+        let Some(count) = observed.or(listed).and_then(|session| session.reply_count) else {
+            return;
+        };
+        let changed = self
+            .read_replies
+            .read(origin.as_str(), bot_id, &open.session_id, count);
+        // Tests and headless runs have no engine and must not write files.
+        if changed
+            && self.client.is_some()
+            && let Some(path) = ReadReplies::default_path()
+        {
+            // Forgetting is harmless: the replies show as new once more.
+            let _ = self.read_replies.save(&path);
         }
     }
 
@@ -2293,5 +2365,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_sandbox();
     ui.ensure_models();
     ui.ensure_command_mode();
+    // A reply that arrived while its conversation is on screen is read.
+    ui.mark_read();
     true
 }

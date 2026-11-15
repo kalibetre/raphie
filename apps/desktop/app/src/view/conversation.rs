@@ -38,6 +38,11 @@ pub fn conversation(s: &Ui, conversation: &Conversation, look: &Look) -> El {
         // Follow the end while the reply streams in, unless the owner
         // scrolled up to read.
         .scroll(ScrollSpec { stick_bottom: true })
+        // Replies count as read only at the end of the conversation.
+        .on_at_bottom(|s: &mut Ui, at: bool| {
+            s.at_bottom = at;
+            s.mark_read();
+        })
         .child(
             col().w_full().items_center().child(
                 col()

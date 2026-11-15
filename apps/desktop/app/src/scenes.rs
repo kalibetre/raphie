@@ -34,6 +34,7 @@ pub const SCENES: &[Scene] = &[
     ("device-code", device_code),
     ("new-conversation", new_conversation),
     ("conversations", conversations),
+    ("unread", unread),
     ("conversation", conversation),
     ("attachments", attachments),
     ("permissions", permissions),
@@ -1105,6 +1106,30 @@ pub fn model_settings() -> RuntimeSettings {
 pub fn conversations(ui: &mut Ui) {
     new_conversation(ui);
     ui.panel_open = true;
+}
+
+/// The conversations panel with replies not read yet: two new in one
+/// conversation, and one that was read to its end.
+pub fn unread(ui: &mut Ui) {
+    conversations(ui);
+    for session in &mut ui.model.sessions {
+        session.reply_count = match session.id.as_str() {
+            "s-1" => Some(3),
+            "s-3" => Some(1),
+            _ => None,
+        };
+    }
+    // One of "Plan the week"'s three replies was read here; "Tea
+    // preferences" was read to its end.
+    let origin = ui
+        .model
+        .origin
+        .as_ref()
+        .map(|origin| origin.as_str().to_owned());
+    if let Some(origin) = origin {
+        ui.read_replies.read(&origin, "default", "s-1", 1);
+        ui.read_replies.read(&origin, "default", "s-3", 1);
+    }
 }
 
 pub fn conversation(ui: &mut Ui) {

@@ -7,7 +7,7 @@
 
 use raphie_core::contracts::SessionSummary;
 use raphie_core::engine::Command;
-use rune::{El, ScrollSpec, Tx, col, icon, row, text, text_input};
+use rune::{Color, El, ScrollSpec, Tx, col, icon, row, text, text_input};
 
 use super::Look;
 use super::roster::plain;
@@ -32,8 +32,21 @@ pub fn panel(s: &Ui, look: &Look) -> El {
     let shown: Vec<&SessionSummary> = model
         .session_list()
         .filter(|session| session.title.to_lowercase().contains(&query))
-        .filter(|session| s.filter == Filter::All || session.waiting)
+        .filter(|session| match s.filter {
+            Filter::All => true,
+            Filter::NewReplies => s.unread(session) > 0,
+            Filter::Approvals => session.waiting,
+        })
         .collect();
+    let unread = model
+        .session_list()
+        .filter(|session| s.unread(session) > 0)
+        .count();
+    // The tab's badge counts both kinds, as the header's does.
+    let attention = model
+        .session_list()
+        .filter(|session| s.needs_attention(session))
+        .count();
 
     let selected = model.conversation.as_ref().map(|c| c.session_id.as_str());
     let now = format::now_ms();
@@ -47,6 +60,7 @@ pub fn panel(s: &Ui, look: &Look) -> El {
         list = list.child(session_row(
             session,
             selected == Some(session.id.as_str()),
+            s.unread(session),
             now,
             t,
         ));
@@ -79,6 +93,14 @@ pub fn panel(s: &Ui, look: &Look) -> El {
                     None,
                     s.filter == Filter::All,
                     Filter::All,
+                ))
+                .child(chip(
+                    t,
+                    "rd-filter-new",
+                    "New replies",
+                    Some(unread).filter(|count| *count > 0),
+                    s.filter == Filter::NewReplies,
+                    Filter::NewReplies,
                 ))
                 .child(chip(
                     t,
@@ -133,7 +155,7 @@ pub fn panel(s: &Ui, look: &Look) -> El {
         .h_full()
         .fill(t.sidebar)
         .border_sides([0.0, 0.0, 0.0, 1.0], t.border)
-        .child(tab_strip(waiting, look))
+        .child(tab_strip(attention, look))
         .child(
             col()
                 .w_full()
@@ -156,7 +178,7 @@ fn conversations(count: usize) -> String {
 
 /// The strip of panel tabs. The web has room for more tabs here; the only
 /// one so far is Conversations, so it is always the selected one.
-fn tab_strip(waiting: usize, look: &Look) -> El {
+fn tab_strip(attention: usize, look: &Look) -> El {
     let t = &look.theme;
     let mut tab = row()
         .w(176.0)
@@ -173,8 +195,8 @@ fn tab_strip(waiting: usize, look: &Look) -> El {
                 .a11y_hidden(),
         )
         .child(one_line("Conversations", font(10.5, 500.0), t.accent).grow(1.0));
-    if waiting > 0 {
-        tab = tab.child(count_badge(t, waiting));
+    if attention > 0 {
+        tab = tab.child(count_badge(t, attention));
     }
     row()
         .w_full()
@@ -270,17 +292,34 @@ fn chip(t: &Theme, key: &str, label: &str, count: Option<usize>, on: bool, filte
 
 /// One conversation: title and age, the last thing said, and what it is
 /// doing if anything (the web's `SessionCard`).
-fn session_row(session: &SessionSummary, selected: bool, now: i64, t: &Theme) -> El {
+fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, t: &Theme) -> El {
     // The most urgent status only; none when nothing needs saying.
-    let status = if session.waiting {
-        Some(("Needs approval", t.attention))
+    let status: Option<(String, Color)> = if session.waiting {
+        Some(("Needs approval".into(), t.attention))
     } else if session.working {
-        Some(("Working…", t.accent))
+        Some(("Working…".into(), t.accent))
     } else if session.failed {
-        Some(("Failed", t.error))
+        Some(("Failed".into(), t.error))
+    } else if unread == 1 {
+        Some(("1 new reply".into(), t.accent))
+    } else if unread > 1 {
+        Some((format!("{unread} new replies"), t.accent))
     } else {
         None
     };
+    // A dot before the title and a bolder title mark replies not read yet.
+    let mut top = row().w_full().gap(6.0).center_y();
+    if unread > 0 {
+        top = top.child(
+            row()
+                .key(format!("rd-session-{}-dot", session.id))
+                .size(6.0, 6.0)
+                .radius(3.0)
+                .fill(t.accent)
+                .a11y_hidden(),
+        );
+    }
+    let weight = if unread > 0 { 650.0 } else { 500.0 };
     let mut entry = col()
         .key(format!("rd-session-{}", session.id))
         .role("button")
@@ -291,20 +330,16 @@ fn session_row(session: &SessionSummary, selected: bool, now: i64, t: &Theme) ->
         .gap(2.0)
         .radius(8.0)
         .child(
-            row()
-                .w_full()
-                .gap(6.0)
-                .center_y()
-                .child(
-                    one_line(session.title.clone(), font(13.0, 500.0), t.foreground)
-                        .grow(1.0)
-                        .min_w(0.0),
-                )
-                .child(
-                    text(format::ago(session.last_at, now))
-                        .font(font(11.0, 400.0))
-                        .color(t.faint),
-                ),
+            top.child(
+                one_line(session.title.clone(), font(13.0, weight), t.foreground)
+                    .grow(1.0)
+                    .min_w(0.0),
+            )
+            .child(
+                text(format::ago(session.last_at, now))
+                    .font(font(11.0, 400.0))
+                    .color(t.faint),
+            ),
         )
         .child(one_line(
             plain(&session.preview),
