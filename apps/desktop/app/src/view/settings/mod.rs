@@ -17,6 +17,7 @@ mod nav;
 mod parts;
 mod profile;
 mod providers;
+mod sandbox;
 
 use rune::{El, Icon, ScrollSpec, col, icon, row, text};
 
@@ -51,6 +52,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
         } => memory::memory(s, bot_id, look, overlays),
         Page::Bot {
             bot_id,
+            section: BotSection::Sandbox,
+        } => sandbox::sandbox(s, bot_id, look, overlays),
+        Page::Bot {
+            bot_id,
             section: BotSection::Channels,
         } => channels::channels(s, bot_id, look),
         Page::Bot {
@@ -73,6 +78,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             section: BotSection::Memory,
             ..
         } => memory::memory_save_bar(s, look),
+        Page::Bot {
+            section: BotSection::Sandbox,
+            ..
+        } => sandbox::sandbox_save_bar(s, look),
         _ => None,
     };
     let mut main = col()

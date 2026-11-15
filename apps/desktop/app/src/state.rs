@@ -24,6 +24,7 @@ use crate::channels::{DiscordForm, TelegramForm, UNSAVED};
 use crate::mcp::McpForm;
 use crate::memory::MemoryDraft;
 use crate::profile::ProfileDraft;
+use crate::sandbox::SandboxDraft;
 use crate::sections::{BotSection, Page};
 
 /// The fixture's web host: the default for a first launch from a checkout.
@@ -144,6 +145,10 @@ const MCP_REFRESH: f64 = 5.0;
 /// How often the Channels page asks again for the home channel, and, while
 /// a Telegram pairing code is out, for the channels (the web's intervals).
 const HOME_REFRESH: f64 = 5.0;
+
+/// How often the Sandbox page asks again for its details (the web's
+/// interval): usage and running operations change on their own.
+const SANDBOX_REFRESH: f64 = 5.0;
 const PAIRING_REFRESH: f64 = 2.0;
 
 /// "Browse memory": the search box, and the one memory being changed. The
@@ -232,6 +237,10 @@ pub struct Ui {
     pub memory: MemoryDraft,
     /// Settings → Memory → Browse memory.
     pub memories: MemoriesView,
+    /// Settings → Sandbox: its form.
+    pub sandbox: SandboxDraft,
+    /// The frame clock when the Sandbox page last asked for its details.
+    sandbox_asked_at: f64,
     /// Settings → Channels: the Discord form and the Telegram panel.
     pub discord: DiscordForm,
     pub telegram: TelegramForm,
@@ -290,6 +299,8 @@ impl Ui {
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
             memories: MemoriesView::new(),
+            sandbox: SandboxDraft::empty(),
+            sandbox_asked_at: 0.0,
             discord: DiscordForm::new(),
             telegram: TelegramForm::new(),
             channels_asked_at: (0.0, 0.0),
@@ -451,6 +462,13 @@ impl Ui {
                 self.model.memory_message = None;
                 // Notice settings saved in another client.
                 self.command(Command::LoadMemory {
+                    bot_id: bot_id.clone(),
+                });
+            }
+            if *section == BotSection::Sandbox {
+                self.show_sandbox(bot_id);
+                self.model.sandbox_message = None;
+                self.command(Command::LoadSandbox {
                     bot_id: bot_id.clone(),
                 });
             }
@@ -896,6 +914,109 @@ impl Ui {
         }
     }
 
+    /// Puts `bot_id`'s sandbox settings in the form. Unsaved edits for the
+    /// same bot stay; edits for another bot are dropped.
+    fn show_sandbox(&mut self, bot_id: &str) {
+        if self.sandbox.bot_id() == Some(bot_id) && self.sandbox.is_dirty() {
+            return;
+        }
+        self.model.sandbox_save_error = None;
+        self.sandbox = match self.model.sandbox.get(bot_id) {
+            Some(info) => SandboxDraft::of(bot_id, &info.settings),
+            None => SandboxDraft::empty(),
+        };
+    }
+
+    /// The sandbox settings of the form's bot, as the host has them now.
+    pub fn sandbox_latest(&self) -> Option<&raphie_core::contracts::SandboxSettings> {
+        let info = self.model.sandbox.get(self.sandbox.bot_id()?)?;
+        Some(&info.settings)
+    }
+
+    /// After news from the host: a Sandbox form with no edits shows what
+    /// the host has now; a form with edits keeps them, and the save bar
+    /// says the settings changed elsewhere.
+    fn follow_sandbox(&mut self) {
+        let Screen::Settings(Page::Bot {
+            bot_id,
+            section: BotSection::Sandbox,
+        }) = &self.screen
+        else {
+            return;
+        };
+        let Some(info) = self.model.sandbox.get(bot_id) else {
+            return;
+        };
+        let shown = self
+            .sandbox
+            .saved
+            .as_ref()
+            .is_some_and(|(id, saved)| id == bot_id && *saved == info.settings);
+        if !shown && !self.sandbox.is_dirty() && !self.model.saving_sandbox {
+            self.sandbox = SandboxDraft::of(bot_id, &info.settings);
+        }
+    }
+
+    /// Whether the Sandbox form may be saved now: it has edits, they are
+    /// valid, and they started from the settings the host still has.
+    pub fn can_save_sandbox(&self) -> bool {
+        let current = self
+            .sandbox_latest()
+            .is_some_and(|latest| !self.sandbox.changed_elsewhere(latest));
+        current
+            && self.sandbox.is_dirty()
+            && self.sandbox.problem().is_none()
+            && !self.model.saving_sandbox
+    }
+
+    pub fn save_sandbox(&mut self) {
+        if !self.can_save_sandbox() {
+            return;
+        }
+        let (Some(bot_id), Some(update)) = (
+            self.sandbox.bot_id().map(str::to_owned),
+            self.sandbox.update(),
+        ) else {
+            return;
+        };
+        if self.model.begin_save_sandbox() {
+            self.command(Command::SaveSandbox { bot_id, update });
+        }
+    }
+
+    /// Throws the edits away and shows the settings the host has now.
+    pub fn discard_sandbox(&mut self) {
+        let latest = self
+            .sandbox
+            .bot_id()
+            .and_then(|bot_id| Some((bot_id.to_owned(), self.sandbox_latest()?.clone())));
+        if let Some((bot_id, settings)) = latest {
+            self.sandbox = SandboxDraft::of(&bot_id, &settings);
+        }
+        self.model.sandbox_save_error = None;
+        self.model.sandbox_message = None;
+    }
+
+    /// While the Sandbox page shows, asks for its details again every few
+    /// seconds; `clock` is the frame clock in seconds. Returns true while
+    /// the page shows.
+    pub fn refresh_sandbox(&mut self, clock: f64) -> bool {
+        let Screen::Settings(Page::Bot {
+            bot_id,
+            section: BotSection::Sandbox,
+        }) = &self.screen
+        else {
+            return false;
+        };
+        // Not while a save is on its way: its answer is the newer state.
+        if clock - self.sandbox_asked_at >= SANDBOX_REFRESH && !self.model.saving_sandbox {
+            let bot_id = bot_id.clone();
+            self.sandbox_asked_at = clock;
+            self.command(Command::LoadSandbox { bot_id });
+        }
+        true
+    }
+
     /// The bot whose Channels page is on screen.
     fn channels_bot(&self) -> Option<String> {
         match &self.screen {
@@ -1236,7 +1357,7 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         tx.wake_after(Duration::from_millis(300));
     }
     // `|` rather than `||`: both pages get their look at the clock.
-    if ui.refresh_mcp(clock) | ui.refresh_channels(clock) {
+    if ui.refresh_mcp(clock) | ui.refresh_channels(clock) | ui.refresh_sandbox(clock) {
         tx.wake_after(Duration::from_secs(1));
     }
     // While Raphie works, wake up every second so "12s elapsed" keeps
@@ -1280,6 +1401,14 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                         ui.memory = MemoryDraft::of(&bot_id, &status.configuration);
                     }
                 }
+                Effect::SandboxSaved(bot_id) => {
+                    // Show what was saved, at its new revision.
+                    if ui.sandbox.bot_id() == Some(bot_id.as_str())
+                        && let Some(info) = ui.model.sandbox.get(&bot_id)
+                    {
+                        ui.sandbox = SandboxDraft::of(&bot_id, &info.settings);
+                    }
+                }
                 Effect::ChannelChanged(outcome) => match outcome {
                     // Replacing a form drops its typed token, which wipes it.
                     ChannelOutcome::DiscordSaved | ChannelOutcome::DiscordRemoved => {
@@ -1318,5 +1447,6 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_profile();
     ui.follow_memory();
     ui.follow_memories();
+    ui.follow_sandbox();
     true
 }

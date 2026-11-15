@@ -7,8 +7,8 @@
 use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::{
     Account, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection, MemoryEvidence,
-    MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SessionObservation, SessionSummary,
-    TelegramPairingCode,
+    MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionObservation,
+    SessionSummary, TelegramPairingCode,
 };
 use raphie_core::engine::Command;
 use raphie_core::mcp::McpTransport;
@@ -53,6 +53,9 @@ pub const SCENES: &[Scene] = &[
     ("settings-memories-editing", settings_memories_editing),
     ("settings-memories-search", settings_memories_search),
     ("settings-memories-empty", settings_memories_empty),
+    ("settings-sandbox", settings_sandbox),
+    ("settings-sandbox-container", settings_sandbox_container),
+    ("settings-sandbox-loading", settings_sandbox_loading),
     ("settings-channels", settings_channels),
     ("settings-channels-discord", settings_channels_discord),
     ("settings-channels-telegram", settings_channels_telegram),
@@ -169,12 +172,12 @@ pub fn settings_profile_edited(ui: &mut Ui) {
     ui.profile.color = Some("#83bcb4".into());
 }
 
-/// A bot's settings page that is not native yet (Research → Sandbox).
+/// A bot's settings page that is not native yet (Research → Workspace).
 pub fn settings_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Bot {
         bot_id: "b-research".into(),
-        section: BotSection::Sandbox,
+        section: BotSection::Workspace,
     }));
 }
 
@@ -237,6 +240,75 @@ pub fn settings_memory_hindsight(ui: &mut Ui) {
     ui.memory.bank_id = TextEdit::new("raphie-work");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
+}
+
+/// Made-up sandbox details: just-bash as first installed, or a container
+/// the owner has acknowledged.
+pub fn sandbox_info(container: bool) -> SandboxInfo {
+    let (id, name) = if container {
+        ("container", "Container")
+    } else {
+        ("just-bash", "just-bash")
+    };
+    serde_json::from_value(json!({
+        "settings": {
+            "provider": id, "idleMinutes": 30,
+            "diskQuotaMiB": if container { json!(4096) } else { Value::Null },
+            "hostNetworkAcknowledged": container, "revision": 3,
+        },
+        "providers": [
+            { "id": "just-bash", "name": "just-bash", "available": true, "reason": null },
+            { "id": "container", "name": "Container", "available": true, "reason": null },
+        ],
+        "provider": { "id": id, "name": name, "version": "2.9.0" },
+        "isolation": if container { "container" } else { "virtual-filesystem" },
+        "capabilities": { "network": container, "hostFiles": false, "nativeCode": container },
+        "root": "/workspace", "revision": 41,
+        "executions": { "admitted": 1, "capacity": 8, "runtimeConcurrency": 4 },
+        "usage": {
+            "fileBytes": 18_874_368,
+            "entries": if container { Value::Null } else { json!(1284) },
+            "receiptBytes": if container { Value::Null } else { json!(412_672) },
+        },
+        "limits": {
+            "timeoutMs": 120_000, "sourceBytes": 65_536, "outputBytes": 1_048_576,
+            "fileBytes": if container { json!(4_294_967_296_u64) } else { json!(104_857_600) },
+            "entries": if container { Value::Null } else { json!(10_000) },
+            "receiptsBytes": if container { Value::Null } else { json!(10_485_760) },
+        },
+    }))
+    .expect("the scene's sandbox details match the contract")
+}
+
+fn open_sandbox(ui: &mut Ui, info: Option<SandboxInfo>) {
+    settings_account(ui);
+    if let Some(info) = info {
+        ui.model.apply(Event::Sandbox {
+            bot_id: "default".into(),
+            info: Box::new(info),
+        });
+    }
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Sandbox,
+    }));
+}
+
+/// Settings → Sandbox on just-bash, nothing edited.
+pub fn settings_sandbox(ui: &mut Ui) {
+    open_sandbox(ui, Some(sandbox_info(false)));
+}
+
+/// Sandbox on a container, with the idle minutes edited so the save bar
+/// shows.
+pub fn settings_sandbox_container(ui: &mut Ui) {
+    open_sandbox(ui, Some(sandbox_info(true)));
+    ui.sandbox.idle = TextEdit::new("90");
+}
+
+/// Sandbox before the details have arrived.
+pub fn settings_sandbox_loading(ui: &mut Ui) {
+    open_sandbox(ui, None);
 }
 
 /// Made-up channels: Discord connected for two users, Telegram connected

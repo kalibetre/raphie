@@ -8,12 +8,14 @@ use std::sync::Arc;
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
 use raphie_core::contracts::{
-    ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, Scope, UpdateBotProfile,
+    ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
+    UpdateBotProfile,
 };
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::mcp::{McpAction, NewMcpConnection, summary};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
+use raphie_core::sandbox::{SandboxUpdate, files_summary};
 use support::{Driver, FakeHost, TOKEN, observation_json, sessions_json, turn_json};
 
 fn signed_in(host: &FakeHost) -> (Driver, MemoryStore) {
@@ -596,6 +598,92 @@ fn memory_settings_load_save_and_test() {
     host.with(|h| h.memory_unreachable = true);
     let said = test(&mut driver);
     assert!(said.contains("did not answer"), "{said}");
+}
+
+#[test]
+fn sandbox_settings_load_save_and_notice_a_change_elsewhere() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::LoadSandbox {
+        bot_id: "default".into(),
+    });
+    driver.until("the sandbox", |m, _| m.sandbox.contains_key("default"));
+    let info = driver.model.sandbox["default"].clone();
+    assert_eq!(info.settings.provider, SandboxProvider::JustBash);
+    assert_eq!(info.settings.disk_quota_mib, None);
+    assert_eq!(
+        files_summary(&info),
+        "1.5 KiB used of 100.0 MiB · 12 of 10,000 checkpoint entries"
+    );
+
+    let save = |driver: &mut Driver, update: SandboxUpdate| {
+        assert!(driver.model.begin_save_sandbox());
+        driver.send(Command::SaveSandbox {
+            bot_id: "default".into(),
+            update,
+        });
+        driver.until("the save", |m, _| !m.saving_sandbox);
+    };
+    let container = |acknowledged: bool, revision: u64| SandboxUpdate {
+        provider: SandboxProvider::Container,
+        host_network_acknowledged: acknowledged,
+        idle_minutes: 45,
+        disk_quota_mib: Some(2048),
+        revision,
+    };
+
+    // What the runtime refuses is reported and leaves the settings alone.
+    save(&mut driver, container(false, 1));
+    let error = driver.model.sandbox_save_error.clone().unwrap_or_default();
+    assert!(error.contains("Acknowledge host"), "{error}");
+    assert_eq!(driver.model.sandbox["default"].settings.revision, 1);
+
+    save(&mut driver, container(true, 1));
+    let saved = driver.model.sandbox["default"].settings.clone();
+    assert_eq!(saved.provider, SandboxProvider::Container);
+    assert_eq!((saved.idle_minutes, saved.disk_quota_mib), (45, Some(2048)));
+    assert_eq!(saved.revision, 2);
+    assert_eq!(
+        driver.model.sandbox_message.as_deref(),
+        Some("Saved revision 2.")
+    );
+    host.with(|h| {
+        let body = h.sandbox_saves.last().unwrap();
+        assert_eq!(body["provider"], "container");
+        assert_eq!(body["diskQuotaMiB"], 2048);
+    });
+
+    // "No limit" is sent as null, not left out.
+    save(
+        &mut driver,
+        SandboxUpdate {
+            disk_quota_mib: None,
+            ..container(true, 2)
+        },
+    );
+    host.with(|h| {
+        let body = h.sandbox_saves.last().unwrap();
+        assert!(
+            body.get("diskQuotaMiB")
+                .is_some_and(serde_json::Value::is_null)
+        );
+    });
+
+    // A save from an old revision conflicts, and the settings are read
+    // again so the form can show what changed.
+    host.with(|h| {
+        if let Some(settings) = h.sandbox.as_mut() {
+            settings["revision"] = serde_json::json!(9);
+            settings["idleMinutes"] = serde_json::json!(5);
+        }
+    });
+    save(&mut driver, container(true, 3));
+    let error = driver.model.sandbox_save_error.clone().unwrap_or_default();
+    assert!(error.contains("changed elsewhere"), "{error}");
+    driver.until("the reload", |m, _| {
+        m.sandbox["default"].settings.revision == 9
+    });
+    assert_eq!(driver.model.sandbox["default"].settings.idle_minutes, 5);
 }
 
 #[test]

@@ -25,6 +25,7 @@ pub mod icons;
 pub mod mcp;
 pub mod memory;
 pub mod profile;
+pub mod sandbox;
 pub mod scenes;
 pub mod sections;
 pub mod state;

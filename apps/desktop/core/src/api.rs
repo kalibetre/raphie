@@ -21,14 +21,15 @@ use crate::contracts::{
     ChannelHomeSettings, ChannelSettings, ControlAction, ControlBody, Decision, DecisionBody,
     DecisionResult, DefaultModelBody, DeviceCodeResponse, DeviceTokenResponse, EditConnectionBody,
     ErrorBody, McpActionBody, McpConnection, McpList, MemoryPage, MemoryRecall, MemoryStatus, Page,
-    RecallBody, Receipt, ReviseMemoryBody, RuntimeSettings, SaveDiscordBody, SaveMcpBody,
-    SaveMemoryBody, SaveTelegramBody, Scope, SelectHomeBody, SessionObservation, SessionSummary,
-    SessionTurn, SubmitMessage, TelegramPairingCode, TestConnectionBody, UnpairTelegramBody,
-    UpdateBotProfile,
+    RecallBody, Receipt, ReviseMemoryBody, RuntimeSettings, SandboxInfo, SandboxSettings,
+    SaveDiscordBody, SaveMcpBody, SaveMemoryBody, SaveSandboxBody, SaveTelegramBody, Scope,
+    SelectHomeBody, SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
+    TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
 };
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::{KeyChange, MemoryUpdate};
 use crate::origin::Origin;
+use crate::sandbox::SandboxUpdate;
 
 /// Ordinary requests give up after this long. Event streams have no overall
 /// timeout (they stay open for as long as the conversation is on screen).
@@ -367,6 +368,31 @@ impl ApiClient {
             )
             .await?;
         Ok(())
+    }
+
+    /// A bot's sandbox: its settings, the provider running its commands,
+    /// and that provider's limits and usage.
+    pub async fn sandbox(&self, bot_id: &str) -> Result<SandboxInfo, ApiError> {
+        self.get_json(&bot_path(bot_id, "/api/workspace")).await
+    }
+
+    /// Saves a bot's sandbox settings and returns them at their new
+    /// revision. Fails with [`ApiError::Conflict`] when they changed since
+    /// `update.revision`.
+    pub async fn save_sandbox(
+        &self,
+        bot_id: &str,
+        update: &SandboxUpdate,
+    ) -> Result<SandboxSettings, ApiError> {
+        let body = SaveSandboxBody {
+            provider: update.provider,
+            host_network_acknowledged: update.host_network_acknowledged,
+            idle_minutes: update.idle_minutes,
+            disk_quota_mib: update.disk_quota_mib,
+            revision: update.revision,
+        };
+        self.post_json(&bot_path(bot_id, "/api/workspace/settings"), &body)
+            .await
     }
 
     /// A bot's Discord and Telegram connections.
