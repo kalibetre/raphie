@@ -694,8 +694,9 @@ fn traces_load_filter_unfold_and_switch_window() {
     let text = screen_text(&rt);
     for expected in [
         "Latest 500 spans",
-        "Error · 804.0 ms",
-        "3120.4 ms",
+        // Each span says whose it is, by the bot's name.
+        "Research · Error · 804.0 ms",
+        "Raphie · 3120.4 ms",
         "Trace export is disabled. Showing retained traces only.",
     ] {
         assert!(text.contains(expected), "missing {expected:?}");
@@ -706,7 +707,11 @@ fn traces_load_filter_unfold_and_switch_window() {
     assert!(rt.find(&format!("{failed}-detail")).is_none());
     click(&mut rt, failed);
     let text = screen_text(&rt);
-    for expected in ["00f067aa0ba902b7", "\"error\": \"timeout\"", "Started"] {
+    for expected in [
+        "00f067aa0ba902b7",
+        "\"execution.outcome\": \"timeout\"",
+        "Started",
+    ] {
         assert!(text.contains(expected), "missing {expected:?}");
     }
     click(&mut rt, failed);
@@ -714,6 +719,13 @@ fn traces_load_filter_unfold_and_switch_window() {
 
     // The filter looks in names, ids, status and attributes.
     rt.update(|ui, _| ui.spans.filter = TextEdit::new("claude"));
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-traces-count").text.as_deref(),
+        Some("1 spans · OTLP")
+    );
+    // A bot's name finds its spans.
+    rt.update(|ui, _| ui.spans.filter = TextEdit::new("research"));
     settle(&mut rt);
     assert_eq!(
         element(&rt, "rd-traces-count").text.as_deref(),
