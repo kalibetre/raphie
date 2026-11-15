@@ -24,7 +24,7 @@ const message = z.object({
 export function conversationRoutes(
   conversations: Pick<
     Sessions,
-    "submit" | "submitLegacy" | "chooseModel" | "control"
+    "submit" | "submitLegacy" | "chooseModel" | "control" | "markRead"
   >,
   actor: ActorContext,
 ) {
@@ -63,6 +63,19 @@ export function conversationRoutes(
         );
         return c.json({ model: c.req.valid("json") });
       },
+    )
+    .post(
+      "/sessions/:id/read",
+      limitBody(1024),
+      jsonInput(z.object({ replyCount: z.number().int().min(0) }).strict()),
+      async (c) =>
+        c.json({
+          readReplyCount: await conversations.markRead(
+            actor,
+            c.req.param("id"),
+            c.req.valid("json").replyCount,
+          ),
+        }),
     )
     .post(
       "/sessions/messages",

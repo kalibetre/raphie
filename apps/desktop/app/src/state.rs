@@ -401,6 +401,9 @@ pub struct Ui {
     pictures: HashMap<(String, String), Image>,
     /// The picture shown enlarged over the window, if one is.
     pub viewer: Option<Viewer>,
+    /// The highest read count sent to the runtime per bot and session, so
+    /// each is shared once.
+    reported_reads: HashMap<(String, String), u32>,
 }
 
 /// An image attachment shown enlarged: whose file it is, and its name.
@@ -540,6 +543,7 @@ impl Ui {
             images: None,
             pictures: HashMap::new(),
             viewer: None,
+            reported_reads: HashMap::new(),
         }
     }
 
@@ -938,12 +942,29 @@ impl Ui {
             .model
             .session_list()
             .find(|session| session.id == open.session_id);
-        let Some(count) = observed.or(listed).and_then(|session| session.reply_count) else {
+        let summary = observed.or(listed);
+        let Some(count) = summary.and_then(|session| session.reply_count) else {
             return;
         };
+        // What the runtime already knows, from this or another client.
+        let shared = summary.and_then(|session| session.read_reply_count);
         let changed = self
             .read_replies
             .read(origin.as_str(), bot_id, &open.session_id, count);
+        // Share it when the runtime knows less, once per count. A runtime
+        // too old to keep read counts (`None`) is not asked.
+        if let Some(shared) = shared {
+            let key = (bot_id.clone(), open.session_id.clone());
+            let sent = self.reported_reads.get(&key).copied().unwrap_or(0);
+            if count > shared.max(sent) {
+                self.reported_reads.insert(key, count);
+                self.command(Command::MarkRead {
+                    bot_id: bot_id.clone(),
+                    session_id: open.session_id.clone(),
+                    reply_count: count,
+                });
+            }
+        }
         // Tests and headless runs have no engine and must not write files.
         if changed
             && self.client.is_some()

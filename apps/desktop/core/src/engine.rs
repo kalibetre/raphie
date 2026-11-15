@@ -110,6 +110,12 @@ pub enum Command {
         bot_id: String,
         run_id: String,
     },
+    /// Share that the owner has read `reply_count` of a session's replies.
+    MarkRead {
+        bot_id: String,
+        session_id: String,
+        reply_count: u32,
+    },
     /// Fetch the picture of an image attachment, to preview it.
     LoadPreview {
         bot_id: String,
@@ -562,6 +568,11 @@ impl Engine {
             Command::AcknowledgeRun { bot_id, run_id } => self.acknowledge_run(bot_id, run_id),
             Command::CheckForUpdates => self.check_for_updates(),
             Command::LoadPreview { bot_id, id } => self.load_preview(bot_id, id),
+            Command::MarkRead {
+                bot_id,
+                session_id,
+                reply_count,
+            } => self.mark_read(bot_id, session_id, reply_count),
             Command::LoadApprovalMode { session_id } => self.load_approval_mode(session_id),
             Command::SetApprovalMode { session_id, mode } => {
                 self.set_approval_mode(session_id, mode);
@@ -953,6 +964,22 @@ impl Engine {
                     let _ = inbox.send(Input::Expired);
                 }
                 Err(_) => emit.emit(Event::RunAcknowledgeFailed),
+            }
+        });
+    }
+
+    fn mark_read(&mut self, bot_id: String, session_id: String, reply_count: u32) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            // A failure is harmless: this computer's own record still has
+            // it, and the next read sends again.
+            if let Err(ApiError::Unauthenticated) =
+                api.mark_read(&bot_id, &session_id, reply_count).await
+            {
+                let _ = inbox.send(Input::Expired);
             }
         });
     }

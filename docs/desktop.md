@@ -53,9 +53,11 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   bot's row in the roster count the conversations that need you (new
   replies or an approval). Replies count as read when their
   conversation is on screen, scrolled to its end, in the window in front,
-  as on the web. What was read is remembered on this computer
-  (`read-replies.json` beside the settings), per Raphie and per bot; it is
-  not shared with the web workspace or another computer.
+  as on the web. What was read is shared through Raphie
+  (`POST /api/sessions/<id>/read`), so a reply read on the web, or on
+  another computer, is read here too; the furthest any client has read
+  wins. It is also kept on this computer (`read-replies.json` beside the
+  settings), per Raphie and per bot, for a Raphie too old to share it.
 - **Notifications**: the bell in the bar counts what waits across every bot
   and opens the inbox in place of the conversation: new replies, actions
   waiting for approval and scheduled-job runs, newest first, under Today and

@@ -5,6 +5,7 @@ import type { SessionSummary } from "@raphie/contracts";
 import {
   mergeReplyLedgers,
   parseReplyLedger,
+  readCount,
   readReplies,
   unreadReplies,
 } from "../src/domains/conversations/application/reply-ledger";
@@ -36,4 +37,16 @@ test("stored reply cursors reject corrupt values and cannot create negative unre
   );
   expect(ledger).toEqual({ default: { "same-id": 4 } });
   expect(unreadReplies(ledger, "default", session)).toBe(0);
+});
+test("replies read in another client count as read here too", () => {
+  const ledger = readReplies({}, "default", session.sessionId, 1);
+  // Another client read two; the runtime says so.
+  const shared = { ...session, readReplyCount: 2 };
+  expect(readCount(ledger, "default", shared)).toBe(2);
+  expect(unreadReplies(ledger, "default", shared)).toBe(1);
+  // Reading further here wins over a runtime that has heard less.
+  const ahead = readReplies(ledger, "default", session.sessionId, 3);
+  expect(unreadReplies(ahead, "default", shared)).toBe(0);
+  // An older runtime without the field leaves this browser's cursor alone.
+  expect(readCount(ledger, "default", session)).toBe(1);
 });

@@ -4208,3 +4208,64 @@ fn up_and_down_move_between_the_model_picker_rows() {
     settle(&mut rt);
     assert!(element(&rt, &rows[0]).focused);
 }
+
+#[test]
+fn reading_is_shared_with_the_runtime_once_and_its_count_reads_here() {
+    let mut rt = render(scenes::unread, false);
+    let shared_reads = |rt: &Runtime<Ui>| -> Vec<u32> {
+        rt.state
+            .sent
+            .iter()
+            .filter_map(|command| match command {
+                Command::MarkRead { reply_count, .. } => Some(*reply_count),
+                _ => None,
+            })
+            .collect()
+    };
+    // A runtime that keeps read counts says nothing was read of "Tea
+    // preferences" (s-3) yet; another client then reads its one reply.
+    rt.update(|ui, _| {
+        for session in &mut ui.model.sessions {
+            if session.id == "s-3" {
+                session.reply_count = Some(2);
+                session.read_reply_count = Some(2);
+            }
+        }
+    });
+    settle(&mut rt);
+    let unread = |rt: &Runtime<Ui>| {
+        let session = rt
+            .state
+            .model
+            .sessions
+            .iter()
+            .find(|s| s.id == "s-3")
+            .cloned()
+            .unwrap();
+        rt.state.unread(&session)
+    };
+    // This computer had read one of two, but another client read both.
+    assert_eq!(unread(&rt), 0);
+
+    // Reading "Plan the week" here (3 replies, the runtime knows of none)
+    // is shared once, however often the view looks.
+    rt.update(|ui, _| {
+        for session in &mut ui.model.sessions {
+            if session.id == "s-1" {
+                session.read_reply_count = Some(0);
+            }
+        }
+    });
+    click(&mut rt, "rd-session-s-1");
+    rt.update(|ui, _| {
+        ui.mark_read();
+        ui.mark_read();
+    });
+    assert_eq!(shared_reads(&rt), [3]);
+
+    // A runtime too old to keep read counts is not asked.
+    let mut rt = render(scenes::unread, false);
+    click(&mut rt, "rd-session-s-1");
+    rt.update(|ui, _| ui.mark_read());
+    assert!(shared_reads(&rt).is_empty());
+}

@@ -1,6 +1,6 @@
 import type { Page, SessionSummary } from "@raphie/contracts";
 import { useQueries } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   mergeReplyLedgers,
@@ -66,8 +66,27 @@ export function useBotInbox(currentSessions?: SessionSummary[]) {
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, [key]);
+  // The highest count already sent per bot and session, so each read is
+  // reported to the runtime once.
+  const reported = useRef(new Map<string, number>());
   const markRead = useCallback(
     (botId: string, sessionId: string, count: number) => {
+      const shared =
+        backend.queries
+          .getQueryData<Page<SessionSummary>>(["bot-inbox", botId])
+          ?.items.find((s) => s.sessionId === sessionId)?.readReplyCount ?? 0;
+      const sent = reported.current.get(`${botId}:${sessionId}`) ?? 0;
+      if (count > Math.max(shared, sent)) {
+        reported.current.set(`${botId}:${sessionId}`, count);
+        // Shared with the other clients; the local cursor below already
+        // holds it if the runtime cannot be reached.
+        void backend
+          .api(
+            `/api/bots/${encodeURIComponent(botId)}/sessions/${encodeURIComponent(sessionId)}/read`,
+            { replyCount: count },
+          )
+          .catch(() => reported.current.delete(`${botId}:${sessionId}`));
+      }
       setLedger((current) => {
         const next = mergeReplyLedgers(
           readReplies(current, botId, sessionId, count),
@@ -78,7 +97,7 @@ export function useBotInbox(currentSessions?: SessionSummary[]) {
         return next;
       });
     },
-    [key],
+    [key, backend],
   );
   const byBot = new Map(
     ids.map((id, i) => [

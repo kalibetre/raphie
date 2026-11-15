@@ -884,6 +884,24 @@ impl ApiClient {
         Ok(())
     }
 
+    /// Tells the runtime the owner has read `reply_count` of a session's
+    /// replies, so the other clients count them as read too.
+    pub async fn mark_read(
+        &self,
+        bot_id: &str,
+        session_id: &str,
+        reply_count: u32,
+    ) -> Result<(), ApiError> {
+        let path = bot_path(
+            bot_id,
+            &format!("/api/sessions/{}/read", encode(session_id)),
+        );
+        let body = serde_json::json!({ "replyCount": reply_count });
+        // The answer is the stored count; the session stream brings it too.
+        let _: serde_json::Value = self.post_json(&path, &body).await?;
+        Ok(())
+    }
+
     /// How a session treats commands.
     pub async fn approval_mode(
         &self,

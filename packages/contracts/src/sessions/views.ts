@@ -22,6 +22,8 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   replyPreview?: string;
   /** Identifier of the latest completed reply, when supported by the runtime. */
   replyTurnId?: string;
+  /** Completed replies the owner has read in any client; optional for older runtimes. */
+  readReplyCount?: number;
   waiting: boolean;
 };
 

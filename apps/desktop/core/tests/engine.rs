@@ -1936,3 +1936,36 @@ fn an_image_preview_is_fetched_once_and_a_missing_one_fails() {
         m.previews.get("default", "gone") == Some(&Preview::Failed)
     });
 }
+
+#[test]
+fn a_read_count_is_shared_with_the_runtime_for_any_bot() {
+    let host = FakeHost::start();
+    let (mut driver, _store) = signed_in(&host);
+    driver.send(Command::MarkRead {
+        bot_id: "default".into(),
+        session_id: "s-1".into(),
+        reply_count: 2,
+    });
+    driver.send(Command::MarkRead {
+        bot_id: "research".into(),
+        session_id: "s-9".into(),
+        reply_count: 1,
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while host.with(|h| h.reads.len()) < 2 {
+        assert!(std::time::Instant::now() < deadline, "the reads arrive");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let mut reads = host.with(|h| h.reads.clone());
+    reads.sort();
+    assert_eq!(
+        reads,
+        [
+            ("/api/bots/research/sessions/s-9/read".to_owned(), 1),
+            ("/api/sessions/s-1/read".to_owned(), 2),
+        ]
+    );
+    // Sent as a client change: with the marker the runtime requires.
+    let seen = host.requests("/api/sessions/s-1/read");
+    assert_eq!(seen[0].client_marker.as_deref(), Some("web"));
+}

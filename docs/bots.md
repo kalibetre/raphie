@@ -37,9 +37,11 @@ The bell beside New conversation opens Notifications, bringing replies, approval
 and finished jobs from all bots together. Its badge counts conversation items and unread
 job runs, combining a job with its matching latest reply when it is the only unread reply.
 Approvals remain until decided; opening a job update acknowledges it.
-Read cursors are browser-local, scoped by backend, bot and session. A completed
-reply is marked read when its conversation is visible and scrolled to the bottom.
-Historical replies with no saved cursor count as unread in this browser.
+Read cursors are shared through the runtime, per bot and session, so a reply read
+in the desktop client or another browser is read here too: the furthest any
+client has read wins, and reading never moves backwards. A completed reply is
+marked read when its conversation is visible and scrolled to the bottom. Each
+browser also keeps its own cursor, for a runtime too old to share them.
 
 The selected bot’s session summaries use the existing live stream. Other bot
 badges poll their latest 100 sessions every 15 seconds while this browser is

@@ -33,7 +33,9 @@ impl ReplyLedger {
             .get(bot_id)
             .and_then(|sessions| sessions.get(&session.id))
             .copied()
-            .unwrap_or(0);
+            .unwrap_or(0)
+            // Read in another client counts too: the furthest wins.
+            .max(session.read_reply_count.unwrap_or(0));
         // `saturating_sub` stops at zero instead of wrapping below it.
         session.reply_count.unwrap_or(0).saturating_sub(read)
     }
@@ -94,7 +96,10 @@ impl ReadReplies {
     pub fn unread(&self, origin: &str, bot_id: &str, session: &SessionSummary) -> u32 {
         match self.of(origin) {
             Some(ledger) => ledger.unread(bot_id, session),
-            None => session.reply_count.unwrap_or(0),
+            None => session
+                .reply_count
+                .unwrap_or(0)
+                .saturating_sub(session.read_reply_count.unwrap_or(0)),
         }
     }
 
@@ -132,6 +137,21 @@ mod tests {
         // An older count (a stale list, say) does not unread anything.
         assert!(!ledger.read("default", "s-1", 1));
         assert_eq!(ledger.unread("default", &session("s-1", Some(3))), 0);
+    }
+
+    #[test]
+    fn replies_read_in_another_client_count_as_read_here() {
+        let mut ledger = ReplyLedger::default();
+        let mut shared = session("s-1", Some(3));
+        shared.read_reply_count = Some(2);
+        // Another client read two; this computer read none.
+        assert_eq!(ledger.unread("default", &shared), 1);
+        // Reading further here wins over a runtime that has heard less.
+        ledger.read("default", "s-1", 3);
+        assert_eq!(ledger.unread("default", &shared), 0);
+        // With no ledger for this Raphie yet, the runtime's count still holds.
+        let book = ReadReplies::default();
+        assert_eq!(book.unread("https://h", "default", &shared), 1);
     }
 
     #[test]

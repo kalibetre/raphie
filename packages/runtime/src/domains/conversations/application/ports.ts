@@ -25,6 +25,8 @@ export interface ConversationCommands {
     turnId?: string,
   ): Promise<void>;
   chooseModel(sessionId: string, model: ModelSelection): Promise<void>;
+  /** Records that `replyCount` replies were read; returns the stored count. */
+  markRead(sessionId: string, replyCount: number): Promise<number>;
   send(
     input: SendMessage,
   ): Promise<{ id: string; conversationId: number; sessionId: string }>;

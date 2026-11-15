@@ -232,6 +232,10 @@ pub struct SessionSummary {
     /// The turn the latest finished reply answers, when the runtime says.
     #[serde(default)]
     pub reply_turn_id: Option<String>,
+    /// Finished replies the owner has read in any client; `None` from a
+    /// runtime too old to share them.
+    #[serde(default)]
+    pub read_reply_count: Option<u32>,
     /// The model chosen for this session; `None` uses the bot's default.
     #[serde(default)]
     pub model: Option<ModelSelection>,
