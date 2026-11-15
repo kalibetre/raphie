@@ -546,9 +546,13 @@ pub enum Reflection {
 /// is mirrored; serde skips the other fields.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct MemoryCapabilities {
+    /// Whether every saved memory can be listed, not only searched.
+    pub browse: bool,
     pub reflect: Reflection,
-    /// Whether memories can be corrected and forgotten through Raphie.
+    /// Whether memories can be corrected through Raphie.
     pub revise: bool,
+    /// Whether memories can be forgotten through Raphie.
+    pub forget: bool,
 }
 
 /// `MemoryStatus`: what `GET /api/memory` answers.
@@ -556,6 +560,57 @@ pub struct MemoryCapabilities {
 pub struct MemoryStatus {
     pub configuration: MemoryConfiguration,
     pub capabilities: MemoryCapabilities,
+}
+
+/// What kind of thing a memory records.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MemoryKind {
+    Fact,
+    Experience,
+}
+
+/// `MemoryEvidence`: one saved memory, with where it came from.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryEvidence {
+    pub id: String,
+    pub content: String,
+    pub kind: MemoryKind,
+    /// Where the memory came from, such as `session:<id>/turn:<id>`.
+    pub source: String,
+    /// When what it records happened, in milliseconds since the Unix epoch;
+    /// zero when the back end did not say.
+    pub event_time: i64,
+    /// Counts up with each correction.
+    pub revision: u32,
+}
+
+/// `MemoryRecall`: what a search answers.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct MemoryRecall {
+    pub evidence: Vec<MemoryEvidence>,
+}
+
+/// `MemoryPage`: one page of every saved memory, newest first. `next` is
+/// the cursor for the page after it, when there is one.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct MemoryPage {
+    pub evidence: Vec<MemoryEvidence>,
+    pub next: Option<String>,
+    pub total: u64,
+}
+
+/// The body of `POST /api/memory/recall`.
+#[derive(Serialize)]
+pub(crate) struct RecallBody<'a> {
+    pub query: &'a str,
+}
+
+/// The body of `POST /api/memory/evidence/:id`: a correction.
+#[derive(Serialize)]
+pub(crate) struct ReviseMemoryBody<'a> {
+    pub content: &'a str,
 }
 
 /// The body of `POST /api/memory` (`SaveMemoryConfiguration`).

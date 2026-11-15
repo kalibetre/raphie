@@ -119,6 +119,31 @@ pub enum Command {
     TestMemory {
         bot_id: String,
     },
+    /// Load a page of a bot's saved memories: the first, or the one after
+    /// the cursor `after`. `ticket` comes from `MemoryBrowser::begin_load`
+    /// and returns with the answer.
+    BrowseMemory {
+        bot_id: String,
+        after: Option<String>,
+        ticket: u64,
+    },
+    /// Search a bot's saved memories.
+    SearchMemory {
+        bot_id: String,
+        query: String,
+        ticket: u64,
+    },
+    /// Replace what one memory says.
+    ReviseMemory {
+        bot_id: String,
+        id: String,
+        content: String,
+    },
+    /// Remove one memory from what the bot remembers.
+    ForgetMemory {
+        bot_id: String,
+        id: String,
+    },
     /// Stop a session's run, or steer or re-queue one of its queued messages.
     Control {
         session_id: String,
@@ -361,6 +386,22 @@ impl Engine {
             Command::LoadMemory { bot_id } => self.load_memory(bot_id),
             Command::SaveMemory { bot_id, update } => self.save_memory(bot_id, update),
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
+            Command::BrowseMemory {
+                bot_id,
+                after,
+                ticket,
+            } => self.browse_memory(bot_id, after, ticket),
+            Command::SearchMemory {
+                bot_id,
+                query,
+                ticket,
+            } => self.search_memory(bot_id, query, ticket),
+            Command::ReviseMemory {
+                bot_id,
+                id,
+                content,
+            } => self.change_memory(bot_id, id, Some(content)),
+            Command::ForgetMemory { bot_id, id } => self.change_memory(bot_id, id, None),
             Command::SetDefaultModel {
                 bot_id,
                 model_id,
@@ -785,6 +826,78 @@ impl Engine {
                 Err(error) => error.to_string(),
             };
             emit.emit(Event::MemoryTested { message });
+        });
+    }
+
+    fn browse_memory(&mut self, bot_id: String, after: Option<String>, ticket: u64) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let more = after.is_some();
+            match api.memory_evidence(&bot_id, after.as_deref()).await {
+                Ok(page) => emit.emit(Event::MemoryListed { ticket, more, page }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::MemoryLoadFailed {
+                    ticket,
+                    more,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn search_memory(&mut self, bot_id: String, query: String, ticket: u64) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.recall_memory(&bot_id, &query).await {
+                Ok(recall) => emit.emit(Event::MemoryRecalled {
+                    ticket,
+                    evidence: recall.evidence,
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::MemoryLoadFailed {
+                    ticket,
+                    more: false,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    /// Corrects a memory (`content` is what it should say) or forgets it
+    /// (`None`).
+    fn change_memory(&mut self, bot_id: String, id: String, content: Option<String>) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let result = match &content {
+                Some(content) => api.revise_memory(&bot_id, &id, content).await,
+                None => api.forget_memory(&bot_id, &id).await,
+            };
+            match (result, content) {
+                (Ok(()), Some(content)) => emit.emit(Event::MemoryRevised { id, content }),
+                (Ok(()), None) => emit.emit(Event::MemoryForgotten { id }),
+                (Err(ApiError::Unauthenticated), _) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                (Err(error), _) => emit.emit(Event::MemoryChangeFailed {
+                    message: error.to_string(),
+                }),
+            }
         });
     }
 

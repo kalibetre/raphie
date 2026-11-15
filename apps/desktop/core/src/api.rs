@@ -18,9 +18,10 @@ use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::contracts::{
     Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction,
     ControlBody, Decision, DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse,
-    DeviceTokenResponse, EditConnectionBody, ErrorBody, MemoryStatus, Page, Receipt,
-    RuntimeSettings, SaveMemoryBody, Scope, SessionObservation, SessionSummary, SessionTurn,
-    SubmitMessage, TestConnectionBody, UpdateBotProfile,
+    DeviceTokenResponse, EditConnectionBody, ErrorBody, MemoryPage, MemoryRecall, MemoryStatus,
+    Page, RecallBody, Receipt, ReviseMemoryBody, RuntimeSettings, SaveMemoryBody, Scope,
+    SessionObservation, SessionSummary, SessionTurn, SubmitMessage, TestConnectionBody,
+    UpdateBotProfile,
 };
 use crate::memory::{KeyChange, MemoryUpdate};
 use crate::origin::Origin;
@@ -349,6 +350,54 @@ impl ApiClient {
                 &bot_path(bot_id, "/api/memory/test"),
                 &serde_json::json!({}),
             )
+            .await?;
+        Ok(())
+    }
+
+    /// One page of a bot's saved memories, newest first; `after` is the
+    /// cursor the page before it gave.
+    pub async fn memory_evidence(
+        &self,
+        bot_id: &str,
+        after: Option<&str>,
+    ) -> Result<MemoryPage, ApiError> {
+        let path = match after {
+            Some(cursor) => format!("/api/memory/evidence?after={}", encode(cursor)),
+            None => "/api/memory/evidence".to_owned(),
+        };
+        self.get_json(&bot_path(bot_id, &path)).await
+    }
+
+    /// The saved memories that best match `query`.
+    pub async fn recall_memory(&self, bot_id: &str, query: &str) -> Result<MemoryRecall, ApiError> {
+        self.post_json(
+            &bot_path(bot_id, "/api/memory/recall"),
+            &RecallBody { query },
+        )
+        .await
+    }
+
+    /// Replaces what one memory says.
+    pub async fn revise_memory(
+        &self,
+        bot_id: &str,
+        id: &str,
+        content: &str,
+    ) -> Result<(), ApiError> {
+        let path = format!("/api/memory/evidence/{}", encode(id));
+        // The answer is `{ "updated": true }`; a failure is an error.
+        let _: serde_json::Value = self
+            .post_json(&bot_path(bot_id, &path), &ReviseMemoryBody { content })
+            .await?;
+        Ok(())
+    }
+
+    /// Removes one memory from what the bot remembers.
+    pub async fn forget_memory(&self, bot_id: &str, id: &str) -> Result<(), ApiError> {
+        let path = format!("/api/memory/evidence/{}/forget", encode(id));
+        // The answer is `{ "forgotten": true }`; a failure is an error.
+        let _: serde_json::Value = self
+            .post_json(&bot_path(bot_id, &path), &serde_json::json!({}))
             .await?;
         Ok(())
     }

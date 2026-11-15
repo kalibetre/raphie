@@ -597,6 +597,91 @@ fn memory_settings_load_save_and_test() {
 }
 
 #[test]
+fn saved_memories_page_search_correct_and_forget() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.memories = vec![
+            ("m-3".into(), "Prefers tea in the morning".into()),
+            ("m-2".into(), "Works from Addis on Fridays".into()),
+            ("m-1".into(), "Allergic to peanuts".into()),
+        ];
+    });
+    let (mut driver, _) = signed_in(&host);
+    let ids = |driver: &Driver| -> Vec<String> {
+        let shown = driver.model.memories.evidence.clone().unwrap_or_default();
+        shown.into_iter().map(|item| item.id).collect()
+    };
+    let bot_id = || "default".to_owned();
+
+    // The first page, then the one after its cursor.
+    let ticket = driver.model.memories.begin_load();
+    driver.send(Command::BrowseMemory {
+        bot_id: bot_id(),
+        after: None,
+        ticket,
+    });
+    driver.until("the first page", |m, _| !m.memories.loading);
+    assert_eq!(ids(&driver), ["m-3", "m-2"]);
+    assert_eq!(driver.model.memories.total, Some(3));
+    let after = driver.model.memories.next.clone();
+    assert!(after.is_some());
+    let ticket = driver.model.memories.begin_load();
+    driver.send(Command::BrowseMemory {
+        bot_id: bot_id(),
+        after,
+        ticket,
+    });
+    driver.until("the second page", |m, _| !m.memories.loading);
+    assert_eq!(ids(&driver), ["m-3", "m-2", "m-1"]);
+    assert_eq!(driver.model.memories.next, None);
+
+    // A search replaces the list with its matches.
+    let ticket = driver.model.memories.begin_load();
+    driver.send(Command::SearchMemory {
+        bot_id: bot_id(),
+        query: "peanuts".into(),
+        ticket,
+    });
+    driver.until("the search", |m, _| !m.memories.loading);
+    assert_eq!(ids(&driver), ["m-1"]);
+
+    // A correction changes what the memory says, here and on the host.
+    assert!(driver.model.memories.begin_change());
+    driver.send(Command::ReviseMemory {
+        bot_id: bot_id(),
+        id: "m-1".into(),
+        content: "Allergic to peanuts and cashews".into(),
+    });
+    driver.until("the correction", |m, _| !m.memories.changing);
+    let corrected = &driver.model.memories.evidence.as_ref().unwrap()[0];
+    assert_eq!(corrected.content, "Allergic to peanuts and cashews");
+    assert_eq!(corrected.revision, 2);
+    host.with(|h| assert_eq!(h.memories[2].1, "Allergic to peanuts and cashews"));
+
+    // What the runtime refuses is reported and changes nothing.
+    host.with(|h| h.memory_busy = true);
+    assert!(driver.model.memories.begin_change());
+    driver.send(Command::ForgetMemory {
+        bot_id: bot_id(),
+        id: "m-1".into(),
+    });
+    driver.until("the refusal", |m, _| !m.memories.changing);
+    let error = driver.model.memories.error.clone().unwrap_or_default();
+    assert!(error.contains("active turns"), "{error}");
+    assert_eq!(ids(&driver), ["m-1"]);
+
+    host.with(|h| h.memory_busy = false);
+    assert!(driver.model.memories.begin_change());
+    driver.send(Command::ForgetMemory {
+        bot_id: bot_id(),
+        id: "m-1".into(),
+    });
+    driver.until("the forget", |m, _| !m.memories.changing);
+    assert!(ids(&driver).is_empty());
+    host.with(|h| assert_eq!(h.memories.len(), 2));
+}
+
+#[test]
 fn a_session_scoped_approval_carries_its_scope() {
     let host = FakeHost::start();
     host.with(|h| {

@@ -65,6 +65,10 @@ pub struct Host {
     pub memory_saves: Vec<Value>,
     /// Answer memory tests with a failure, as an unreachable server would.
     pub memory_unreachable: bool,
+    /// The saved memories, newest first: `(id, content)`.
+    pub memories: Vec<(String, String)>,
+    /// Answer corrections and forgets with 409, as while a turn is running.
+    pub memory_busy: bool,
     /// Every request: method, path, and the headers that matter.
     pub requests: Vec<Seen>,
 }
@@ -163,6 +167,10 @@ fn router(fake: Fake) -> Router {
         )
         .route("/api/memory", get(memory).post(save_memory))
         .route("/api/memory/test", post(test_memory))
+        .route("/api/memory/evidence", get(memory_evidence))
+        .route("/api/memory/recall", post(recall_memory))
+        .route("/api/memory/evidence/{id}", post(change_memory))
+        .route("/api/memory/evidence/{id}/{action}", post(change_memory))
         .with_state(fake)
 }
 
@@ -237,6 +245,100 @@ async fn save_memory(
         }));
     }
     Json(memory_json(&fake)).into_response()
+}
+
+fn evidence_json(id: &str, content: &str) -> Value {
+    json!({
+        "id": id, "content": content, "kind": "fact",
+        "source": "session:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b/turn:t-1",
+        "eventTime": 1_700_000_000_000_i64, "revision": 1,
+    })
+}
+
+/// Saved memories two to a page; the cursor is the index to go on from.
+async fn memory_evidence(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", uri.to_string(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let from: usize = uri
+        .query()
+        .and_then(|query| query.strip_prefix("after="))
+        .and_then(|cursor| cursor.parse().ok())
+        .unwrap_or(0);
+    let host = fake.host.lock().unwrap();
+    let total = host.memories.len();
+    let page: Vec<Value> = host
+        .memories
+        .iter()
+        .skip(from)
+        .take(2)
+        .map(|(id, content)| evidence_json(id, content))
+        .collect();
+    let next = (from + 2 < total).then(|| (from + 2).to_string());
+    Json(json!({ "evidence": page, "next": next, "total": total })).into_response()
+}
+
+/// The memories whose words contain the query.
+async fn recall_memory(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let query = body["query"].as_str().unwrap_or("").to_lowercase();
+    let host = fake.host.lock().unwrap();
+    let matches: Vec<Value> = host
+        .memories
+        .iter()
+        .filter(|(_, content)| content.to_lowercase().contains(&query))
+        .map(|(id, content)| evidence_json(id, content))
+        .collect();
+    Json(json!({ "evidence": matches })).into_response()
+}
+
+/// A correction (`/evidence/<id>`) or a forget (`/evidence/<id>/forget`).
+async fn change_memory(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    if host.memory_busy {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Wait for active turns to finish before changing memory." })),
+        )
+            .into_response();
+    }
+    let tail = uri
+        .path()
+        .rsplit_once("/evidence/")
+        .map_or("", |(_, tail)| tail);
+    if let Some(id) = tail.strip_suffix("/forget") {
+        host.memories.retain(|(known, _)| known != id);
+        return Json(json!({ "forgotten": true })).into_response();
+    }
+    let content = body["content"].as_str().unwrap_or("").to_owned();
+    for (id, saved) in &mut host.memories {
+        if id == tail {
+            *saved = content.clone();
+        }
+    }
+    Json(json!({ "updated": true })).into_response()
 }
 
 async fn test_memory(
