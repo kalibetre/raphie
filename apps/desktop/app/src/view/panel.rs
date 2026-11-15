@@ -178,10 +178,12 @@ fn tab_strip(waiting: usize, look: &Look) -> El {
     }
     row()
         .w_full()
-        .h(49.0)
+        // As tall as the bar over the conversation beside it, so the tab
+        // sits level with that bar's buttons. No line under it: with one
+        // tab there is nothing to separate.
+        .h(44.0)
         .px(10.5)
         .center_y()
-        .border_sides([0.0, 0.0, 1.0, 0.0], t.border)
         // Empty parts of the strip move the window, like the header's.
         .window_drag()
         .child(tab)
