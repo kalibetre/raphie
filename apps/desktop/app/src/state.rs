@@ -15,7 +15,7 @@ use raphie_core::contracts::{
     RuntimeSettings, Scope, TurnStatus,
 };
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
-use raphie_core::inbox::{self, Item};
+use raphie_core::inbox::{self, Announcement, Announcements, Item};
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
@@ -32,6 +32,7 @@ use crate::format::now_ms;
 use crate::jobs::JobForm;
 use crate::mcp::McpForm;
 use crate::memory::MemoryDraft;
+use crate::notify;
 use crate::profile::{NEW_BOT, ProfileDraft};
 use crate::sandbox::SandboxDraft;
 use crate::sections::{BotSection, Page};
@@ -308,6 +309,11 @@ pub struct Ui {
     /// When the inbox was last asked for, on `poll`'s clock; negative
     /// until the first time.
     inbox_asked_at: f64,
+    /// Which updates the owner has been told about by the system.
+    announced: Announcements,
+    /// System notifications that would have been posted, kept while there
+    /// is no engine (for tests).
+    pub posted: Vec<Announcement>,
     /// How many of each conversation's replies were read on this computer.
     pub read_replies: ReadReplies,
     /// The conversation on screen is scrolled to its end.
@@ -427,6 +433,8 @@ impl Ui {
             inbox_open: false,
             inbox_filter: InboxFilter::All,
             inbox_asked_at: -INBOX_REFRESH,
+            announced: Announcements::default(),
+            posted: Vec::new(),
             read_replies: ReadReplies::default(),
             // A conversation opens at its end, in a window in front.
             at_bottom: true,
@@ -660,6 +668,25 @@ impl Ui {
         );
         let count = inbox::count(list.len(), self.model.inbox.job_total(), jobs.len());
         (list, count)
+    }
+
+    /// Tells the owner, through the system, about updates that are new
+    /// since the last look. Only while this window is not in front: in
+    /// front, the bell and its count already show them.
+    pub fn announce(&mut self) {
+        let (items, _) = self.notifications();
+        // Always look, so what was seen in front is not announced later.
+        let news = self.announced.news(&items);
+        if self.window_focused {
+            return;
+        }
+        for announcement in news {
+            match &self.client {
+                Some(_) => notify::post(announcement),
+                // Tests and headless runs post nothing to the system.
+                None => self.posted.push(announcement),
+            }
+        }
     }
 
     /// Asks for the other bots' conversations and every bot's job updates
@@ -2493,5 +2520,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.ensure_command_mode();
     // A reply that arrived while its conversation is on screen is read.
     ui.mark_read();
+    // Whatever is still new after that is worth a system notification.
+    ui.announce();
     true
 }

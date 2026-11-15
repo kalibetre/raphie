@@ -41,13 +41,24 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   filters to conversations with new replies or that need an approval. ⌘B
   hides the roster.
 - **New replies**: a conversation with replies you have not read shows a dot,
-  a bolder title and "2 new replies"; the panel's button, its tab and the
-  selected bot's row in the roster count the conversations that need you
-  (new replies or an approval). Replies count as read when their
+  a bolder title and "2 new replies"; the panel's button, its tab and each
+  bot's row in the roster count the conversations that need you (new
+  replies or an approval). Replies count as read when their
   conversation is on screen, scrolled to its end, in the window in front,
   as on the web. What was read is remembered on this computer
   (`read-replies.json` beside the settings), per Raphie and per bot; it is
   not shared with the web workspace or another computer.
+- **Notifications**: the bell in the bar counts what waits across every bot
+  and opens the inbox in place of the conversation: new replies, actions
+  waiting for approval and scheduled-job runs, newest first, under Today and
+  Earlier, with All, Replies, Approvals and Jobs tabs. Selecting an update
+  opens its conversation (in whichever bot it belongs to); a job update can
+  be dismissed with its ✕. The selected bot's conversations come from its
+  live list; the other bots' first page of conversations and every bot's
+  job updates are asked for every 15 seconds.
+  An update that arrives while this window is not in front is also posted
+  as a system notification, once; in front, the bell is enough. Nothing is
+  announced for what already waited when the app started.
 - **Conversations** from the session event stream (`/api/sessions/<id>/events`):
   history with "Show earlier messages" paging, the reply streaming in as it is
   written, Markdown with syntax-coloured code blocks, selectable text, run
@@ -269,6 +280,7 @@ apps/desktop/
     src/attachments.rs    the files waiting in the composer and their limits
     src/permissions.rs    a session's command mode: what is known, what may change
     src/replies.rs        which replies were read on this computer, and its file
+    src/inbox.rs          notifications across bots, and which were announced
     src/settings.rs       last origin, appearance, starred models (non-secret)
     tests/                fake web host (axum) and engine/model tests
     examples/live.rs      live check against a running web host
@@ -288,11 +300,13 @@ apps/desktop/
       composer.rs           the message box
       attachments.rs        one attached file as a card
       model_picker.rs       the composer's model button and its list
+      inbox.rs              the inbox of notifications
       permissions.rs        the composer's command permissions
       welcome.rs            a new conversation
       settings/             Settings: shell, navigation, page parts,
                             Account, Appearance, bot pages
     src/sections.rs       the pages of Settings, named as the web names them
+    src/notify.rs         hands an announcement to the system's notifications
     src/profile.rs        the Profile form's edits and saving rules, for
                           a saved bot and for one being created
     src/scenes.rs         synthetic states for snapshots and tests
@@ -372,10 +386,11 @@ render with `scripts/snapshots.sh` and put the PNGs beside the web workspace at
 Where the two differ on purpose:
 
 - Controls for features this app lacks are left out rather than shown dead:
-  usage and notifications.
-- Only the selected bot's row in the roster counts conversations that need
-  you; the web counts every bot's. The web's "conversations with updates"
-  card over the composer is not here.
+  usage.
+- The web's "conversations with updates" card over the composer is not
+  here; the bell's count and the inbox cover it.
+- System notifications are this client's own; the web has none. Selecting
+  one does not open its conversation yet.
 - The model picker has no "model family" drop-down; typing the family
   ("anthropic") in its search finds the same models. The Up and Down keys
   do not move between its rows as they do on the web.
@@ -431,7 +446,10 @@ current.
 - Built and checked on macOS (Apple silicon). The code builds for Windows and
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
-- No notifications. Use the web workspace for those.
+- System notifications come from an unpackaged build. macOS may show them
+  under another app's name and icon, or not at all if notifications are off
+  for that app; this has not been checked by eye. Posting them as Raphie
+  needs a packaged, signed app.
 - Approvals given "for session" cannot be listed or revoked here (nor on
   the web).
 - Image attachments have no picture preview yet.

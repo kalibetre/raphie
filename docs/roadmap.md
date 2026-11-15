@@ -153,7 +153,8 @@ Delivered capabilities and remaining work are labelled below. See the
   for the session for commands) with stale decisions reported, and attachments
   (file picker, drag and drop, paste; download from a sent message),
   choosing the model for a conversation, its command mode (Ask or Full
-  access), and unread markers with the "New replies" filter. It follows the
+  access), unread markers with the "New replies" filter, and an inbox of
+  notifications across bots with system notifications. It follows the
   web workspace's design, and light and dark follow the OS or the
   choice in Settings. Settings open in the app with native Account,
   Appearance, bot Profile (with revision history, creating and deleting a bot), Providers, Models and Memory settings pages, and Browse memory (list, search, correct,
@@ -161,7 +162,7 @@ Delivered capabilities and remaining work are labelled below. See the
   settings page is native.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
 - **Desktop — planned:** image previews on attachments, listing and revoking session approvals,
-  notifications (with unread counts for every bot), packaging/signing
+  system notifications posted as Raphie (they need a packaged app), packaging/signing
   and updates, Windows and Linux
   verification, generated contract types, and local runtime packaging,
   discovery and single-owner lifecycle. Later, a _desktop host_ role that offers

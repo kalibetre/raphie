@@ -3757,3 +3757,39 @@ fn the_inbox_is_asked_for_every_fifteen_seconds_for_the_right_bots() {
     });
     assert_eq!(loads(&rt).len(), 2);
 }
+
+#[test]
+fn updates_that_arrive_behind_another_app_are_announced_by_the_system_once() {
+    let mut rt = render(scenes::unread, false);
+    let arrive = |rt: &mut Runtime<Ui>, replies: u32| {
+        rt.update(|ui, _| {
+            for session in &mut ui.model.sessions {
+                if session.id == "s-3" {
+                    session.reply_count = Some(replies);
+                }
+            }
+            ui.announce();
+        });
+    };
+    // What already waited when the app started is not news.
+    rt.update(|ui, _| ui.announce());
+    assert!(rt.state.posted.is_empty());
+
+    // In front, a new reply shows on the bell and is not announced...
+    arrive(&mut rt, 2);
+    assert!(rt.state.posted.is_empty());
+    // ...nor announced later for having been seen there.
+    rt.update(|ui, _| {
+        ui.window_focused = false;
+        ui.announce();
+    });
+    assert!(rt.state.posted.is_empty());
+
+    // Behind another app, the next reply is announced, once.
+    arrive(&mut rt, 3);
+    rt.update(|ui, _| ui.announce());
+    let posted = &rt.state.posted;
+    assert_eq!(posted.len(), 1);
+    assert_eq!(posted[0].title, "Raphie · Tea preferences");
+    assert_eq!(posted[0].body, "2 new replies");
+}

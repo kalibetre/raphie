@@ -281,6 +281,58 @@ pub fn items<'a>(
     (list, merged)
 }
 
+/// One thing to tell the owner about through the system's notifications.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Announcement {
+    /// Whose it is and where: "Raphie · Plan the week".
+    pub title: String,
+    /// What happened: "2 new replies".
+    pub body: String,
+}
+
+/// Which notifications the owner has already been told about, so each is
+/// announced once.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Announcements {
+    /// Each item's key and how much of it was announced (a conversation's
+    /// count of new replies; 1 for an approval or a job).
+    seen: HashMap<String, u32>,
+    /// False until the first look, which announces nothing: what waited
+    /// before the app started is in the inbox, not news.
+    primed: bool,
+}
+
+impl Announcements {
+    /// What is new in `items` since the last look: an item that was not
+    /// there, or a conversation with more new replies than before.
+    pub fn news(&mut self, items: &[Item]) -> Vec<Announcement> {
+        let amount = |item: &Item| match item.kind {
+            Kind::Reply => item.unread,
+            Kind::Approval | Kind::Job => 1,
+        };
+        let mut news = Vec::new();
+        if self.primed {
+            for item in items {
+                let before = self.seen.get(&item.key).copied().unwrap_or(0);
+                if amount(item) > before {
+                    news.push(Announcement {
+                        title: format!("{} · {}", item.bot_name, item.subject()),
+                        body: item.title(),
+                    });
+                }
+            }
+        }
+        // Remember exactly what is there now: something that goes away
+        // (read, decided, dismissed) is news again if it comes back.
+        self.seen = items
+            .iter()
+            .map(|item| (item.key.clone(), amount(item)))
+            .collect();
+        self.primed = true;
+        news
+    }
+}
+
 /// How many updates the bell counts: every line, plus job updates on
 /// pages not loaded.
 pub fn count(items: usize, job_total: usize, job_entries: usize) -> usize {
@@ -411,6 +463,32 @@ mod tests {
         assert!(inbox.begin_acknowledge());
         inbox.acknowledge_failed();
         assert!(inbox.acknowledge_failed && !inbox.acknowledging);
+    }
+
+    #[test]
+    fn each_update_is_announced_once_and_again_only_if_it_grows_or_returns() {
+        let bots = [bot("default", "Raphie")];
+        let sessions = [session("s-1", 100, true, None)];
+        let list = |unread: u32| items(&bots, |_| sessions.iter().collect(), |_, _| unread, &[]).0;
+        let mut announced = Announcements::default();
+        // What waited at launch is not news.
+        assert!(announced.news(&list(1)).is_empty());
+        assert!(announced.news(&list(1)).is_empty());
+        // Another reply in the same conversation is.
+        let news = announced.news(&list(2));
+        assert_eq!(
+            news,
+            [Announcement {
+                title: "Raphie · Session s-1".into(),
+                body: "2 new replies".into(),
+            }]
+        );
+        // Read, then a new reply: news again. The approval never left, so
+        // it is not repeated.
+        assert!(announced.news(&list(0)).is_empty());
+        let news = announced.news(&list(1));
+        assert_eq!(news.len(), 1);
+        assert_eq!(news[0].body, "1 new reply");
     }
 
     #[test]
