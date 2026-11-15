@@ -2354,6 +2354,8 @@ pub fn setup(ui: &mut Ui, waker: Waker) {
         waker,
     );
     ui.client = Some(client);
+    // Ask, the first time, whether updates may be shown as notifications.
+    notify::prepare();
     // `raphie-desktop --origin https://…` signs in to that origin at once;
     // otherwise reuse the last origin's stored token, if there is one.
     if let Some(origin) = origin_argument(rune::extra_args()) {

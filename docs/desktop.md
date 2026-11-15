@@ -58,7 +58,9 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   job updates are asked for every 15 seconds.
   An update that arrives while this window is not in front is also posted
   as a system notification, once; in front, the bell is enough. Nothing is
-  announced for what already waited when the app started.
+  announced for what already waited when the app started. On macOS this
+  needs the app bundle (see "Run it as a macOS app" below): macOS asks once
+  whether Raphie may send notifications, and a bare `cargo run` posts none.
 - **Conversations** from the session event stream (`/api/sessions/<id>/events`):
   history with "Show earlier messages" paging, the reply streaming in as it is
   written, Markdown with syntax-coloured code blocks, selectable text, run
@@ -214,6 +216,22 @@ The first build compiles Rune and its GPU stack and takes several minutes.
 `cargo run --release -p raphie-desktop -- --origin http://127.0.0.1:4321`;
 otherwise the app reuses the last origin's stored token, or shows sign-in.
 
+### Run it as a macOS app
+
+```sh
+cd apps/desktop
+scripts/bundle.sh                 # or: scripts/bundle.sh --release
+open target/bundle/Raphie.app     # add: --args --origin http://127.0.0.1:4321
+```
+
+`scripts/bundle.sh` wraps the binary in `target/bundle/Raphie.app` with an
+`Info.plist` (identifier `dev.raphie.desktop`, the one the Keychain entry
+already uses) and signs it ad hoc. macOS gives system notifications only to
+an app with a bundle identifier, so this is the way to get them: the first
+launch asks whether Raphie may send notifications. It is a development
+bundle for this machine, not a release: no icon, no notarisation, no
+updater.
+
 ### Connect to the test fixture
 
 Use the isolated fixture, never the real app on 4316/4320 or `.data/`:
@@ -312,6 +330,7 @@ apps/desktop/
     src/scenes.rs         synthetic states for snapshots and tests
     tests/screens.rs      headless element-tree checks, light and dark
   scripts/snapshots.sh    renders every scene to PNGs under target/snapshots
+  scripts/bundle.sh       wraps the binary in target/bundle/Raphie.app (macOS)
 ```
 
 The crate split is the boundary for later work: the core owns the API client,
@@ -446,10 +465,10 @@ current.
 - Built and checked on macOS (Apple silicon). The code builds for Windows and
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
-- System notifications come from an unpackaged build. macOS may show them
-  under another app's name and icon, or not at all if notifications are off
-  for that app; this has not been checked by eye. Posting them as Raphie
-  needs a packaged, signed app.
+- System notifications on macOS need the app bundle from
+  `scripts/bundle.sh`; a bare `cargo run` posts none. The bundle is signed
+  ad hoc and has no icon. Notifications on Windows and Linux are compiled
+  in but have not been run.
 - Approvals given "for session" cannot be listed or revoked here (nor on
   the web).
 - Image attachments have no picture preview yet.

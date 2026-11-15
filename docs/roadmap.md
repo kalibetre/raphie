@@ -162,7 +162,7 @@ Delivered capabilities and remaining work are labelled below. See the
   settings page is native.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
 - **Desktop — planned:** image previews on attachments, listing and revoking session approvals,
-  system notifications posted as Raphie (they need a packaged app), packaging/signing
+  opening a conversation from its system notification, packaging/signing
   and updates, Windows and Linux
   verification, generated contract types, and local runtime packaging,
   discovery and single-owner lifecycle. Later, a _desktop host_ role that offers
