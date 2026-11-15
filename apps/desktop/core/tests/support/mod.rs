@@ -65,6 +65,10 @@ pub struct Host {
     pub memory_saves: Vec<Value>,
     /// Answer memory tests with a failure, as an unreachable server would.
     pub memory_unreachable: bool,
+    /// The workspace's files: `(path, bytes)`. Folders are implied by the
+    /// paths. `workspace_revision` is the listing revision downloads name.
+    pub workspace: Vec<(String, Vec<u8>)>,
+    pub workspace_revision: u64,
     /// The sandbox settings, once a test saved some.
     pub sandbox: Option<Value>,
     /// Sandbox saves, as received.
@@ -185,6 +189,8 @@ fn router(fake: Fake) -> Router {
         .route("/api/memory/test", post(test_memory))
         .route("/api/workspace", get(sandbox))
         .route("/api/workspace/settings", post(save_sandbox))
+        .route("/api/workspace/files", get(workspace_files))
+        .route("/api/workspace/download", get(workspace_download))
         .route("/api/channels", get(channels))
         .route("/api/channels/home", get(channel_home).post(channel_home))
         .route("/api/channels/{channel}", post(change_channel))
@@ -269,6 +275,84 @@ async fn save_memory(
         }));
     }
     Json(memory_json(&fake)).into_response()
+}
+
+/// One query value from a request's address, percent-decoded.
+fn query_value(uri: &axum::http::Uri, key: &str) -> Option<String> {
+    let pairs = url::form_urlencoded::parse(uri.query()?.as_bytes());
+    pairs
+        .into_owned()
+        .find(|(name, _)| name == key)
+        .map(|(_, value)| value)
+}
+
+/// Lists the files and folders directly inside the asked-for folder.
+async fn workspace_files(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let folder = query_value(&uri, "path").unwrap_or_else(|| "/workspace".into());
+    let host = fake.host.lock().unwrap();
+    let prefix = format!("{folder}/");
+    let mut items: Vec<Value> = Vec::new();
+    for (path, bytes) in &host.workspace {
+        let Some(rest) = path.strip_prefix(&prefix) else {
+            continue;
+        };
+        let (name, kind, size) = match rest.split_once('/') {
+            Some((child, _)) => (child, "directory", 0),
+            None => (rest, "file", bytes.len()),
+        };
+        let seen = items.iter().any(|item| item["name"] == name);
+        if !seen {
+            items.push(json!({
+                "path": format!("{prefix}{name}"), "name": name, "kind": kind,
+                "bytes": size, "modifiedAt": 1_700_000_000_000_i64,
+            }));
+        }
+    }
+    if items.is_empty() && folder != "/workspace" {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Workspace folder not found." })),
+        )
+            .into_response();
+    }
+    Json(json!({ "path": folder, "revision": host.workspace_revision, "items": items }))
+        .into_response()
+}
+
+/// A file's bytes, as long as the request names the current revision.
+async fn workspace_download(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let host = fake.host.lock().unwrap();
+    let refused = |status: StatusCode, message: &str| {
+        (status, Json(json!({ "error": message }))).into_response()
+    };
+    let revision = query_value(&uri, "revision").and_then(|raw| raw.parse::<u64>().ok());
+    if revision != Some(host.workspace_revision) {
+        return refused(
+            StatusCode::CONFLICT,
+            "The workspace changed. Refresh and try again.",
+        );
+    }
+    let wanted = query_value(&uri, "path").unwrap_or_default();
+    match host.workspace.iter().find(|(path, _)| *path == wanted) {
+        Some((_, bytes)) => bytes.clone().into_response(),
+        None => refused(StatusCode::NOT_FOUND, "Workspace file not found."),
+    }
 }
 
 /// The sandbox settings as the runtime holds them: just-bash at revision 1
@@ -1138,6 +1222,8 @@ pub fn observation_json(turns: &[Value], live: Option<&str>, phase: &str) -> Str
 pub fn fast_config() -> EngineConfig {
     let mut config = EngineConfig {
         settings_path: None,
+        // Tests never write to the real Downloads folder.
+        downloads: None,
         reconnect_min: Duration::from_millis(20),
         reconnect_max: Duration::from_millis(100),
         send_retries: vec![Duration::from_millis(10), Duration::from_millis(10)],
@@ -1157,8 +1243,17 @@ pub struct Driver {
 
 impl Driver {
     pub fn new(store: Arc<dyn raphie_core::auth::TokenStore>) -> Driver {
+        Driver::with_config(store, fast_config())
+    }
+
+    /// A driver whose engine uses `config`, for tests that need a setting
+    /// of their own (a folder to download into, say).
+    pub fn with_config(
+        store: Arc<dyn raphie_core::auth::TokenStore>,
+        config: EngineConfig,
+    ) -> Driver {
         Driver {
-            client: Client::start(store, fast_config(), Arc::new(|| {})),
+            client: Client::start(store, config, Arc::new(|| {})),
             model: Model::new(),
             seen: Vec::new(),
         }

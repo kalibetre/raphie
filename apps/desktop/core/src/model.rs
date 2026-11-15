@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::auth::DeviceCode;
 use crate::channels::{Channel, ChannelOutcome};
+use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection,
     MemoryEvidence, MemoryPage, MemoryStatus, Page, Receipt, RuntimeSettings, SandboxInfo,
@@ -18,6 +19,7 @@ use crate::contracts::{
 };
 use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
+use crate::workspace::WorkspaceBrowser;
 
 /// News from the engine. Events about a bot or session carry its id, so news
 /// that arrives after the owner moved on is recognised and dropped.
@@ -100,6 +102,24 @@ pub enum Event {
         settings: SandboxSettings,
     },
     SandboxSaveFailed {
+        message: String,
+    },
+    /// What one folder of a bot's workspace holds.
+    WorkspaceFiles {
+        bot_id: String,
+        listing: WorkspaceListing,
+    },
+    WorkspaceFilesFailed {
+        bot_id: String,
+        path: String,
+        message: String,
+    },
+    /// A workspace file was saved to this machine; `saved_as` is the name
+    /// it was given there.
+    FileDownloaded {
+        saved_as: String,
+    },
+    FileDownloadFailed {
         message: String,
     },
     /// A bot's Discord and Telegram connections.
@@ -444,6 +464,8 @@ pub struct Model {
     pub sandbox_save_error: Option<String>,
     /// What the last save of sandbox settings said.
     pub sandbox_message: Option<String>,
+    /// The workspace folder on screen and what it holds.
+    pub files: WorkspaceBrowser,
     /// Each bot's Discord and Telegram connections, once loaded.
     pub channels: HashMap<String, ChannelSettings>,
     /// The bot whose channels could not be loaded, and why.
@@ -515,6 +537,7 @@ impl Default for Model {
             saving_sandbox: false,
             sandbox_save_error: None,
             sandbox_message: None,
+            files: WorkspaceBrowser::default(),
             channels: HashMap::new(),
             channels_error: None,
             channel_home: HashMap::new(),
@@ -656,6 +679,14 @@ impl Model {
                 self.saving_sandbox = false;
                 self.sandbox_save_error = Some(message);
             }
+            Event::WorkspaceFiles { bot_id, listing } => self.files.listed(&bot_id, listing),
+            Event::WorkspaceFilesFailed {
+                bot_id,
+                path,
+                message,
+            } => self.files.failed(&bot_id, &path, message),
+            Event::FileDownloaded { saved_as } => self.files.downloaded(saved_as),
+            Event::FileDownloadFailed { message } => self.files.download_failed(message),
             Event::Channels { bot_id, settings } => {
                 self.channels_error = None;
                 self.channels.insert(bot_id, settings);

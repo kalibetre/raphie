@@ -43,6 +43,7 @@ use crate::origin::Origin;
 use crate::sandbox::SandboxUpdate;
 use crate::settings::Settings;
 use crate::sse::SseParser;
+use crate::workspace::save_download;
 
 /// Called after events are queued, from an engine thread. In the app this is
 /// Rune's `Waker`, which schedules the UI's `poll`. Same shape as
@@ -130,6 +131,19 @@ pub enum Command {
     SaveSandbox {
         bot_id: String,
         update: SandboxUpdate,
+    },
+    /// Load what one folder of a bot's workspace holds.
+    LoadWorkspaceFiles {
+        bot_id: String,
+        path: String,
+    },
+    /// Save one workspace file to this machine's Downloads folder. `name`
+    /// is what to call it; `revision` is the listing it was chosen from.
+    DownloadWorkspaceFile {
+        bot_id: String,
+        path: String,
+        name: String,
+        revision: u64,
     },
     /// Load a bot's Discord and Telegram connections.
     LoadChannels {
@@ -228,6 +242,8 @@ pub struct EngineConfig {
     pub send_retries: Vec<Duration>,
     /// Where to remember the last origin; `None` remembers nothing.
     pub settings_path: Option<PathBuf>,
+    /// Where downloaded workspace files are saved; `None` saves nothing.
+    pub downloads: Option<PathBuf>,
 }
 
 impl Default for EngineConfig {
@@ -238,6 +254,7 @@ impl Default for EngineConfig {
             reconnect_max: Duration::from_secs(15),
             send_retries: vec![Duration::from_secs(1), Duration::from_secs(3)],
             settings_path: Settings::default_path(),
+            downloads: dirs::download_dir(),
         }
     }
 }
@@ -428,6 +445,13 @@ impl Engine {
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
             Command::LoadSandbox { bot_id } => self.load_sandbox(bot_id),
             Command::SaveSandbox { bot_id, update } => self.save_sandbox(bot_id, update),
+            Command::LoadWorkspaceFiles { bot_id, path } => self.load_workspace_files(bot_id, path),
+            Command::DownloadWorkspaceFile {
+                bot_id,
+                path,
+                name,
+                revision,
+            } => self.download_workspace_file(bot_id, path, name, revision),
             Command::LoadChannels { bot_id } => self.load_channels(bot_id),
             Command::LoadChannelHome { bot_id } => self.load_channel_home(bot_id),
             Command::ChangeChannel { bot_id, change } => self.change_channel(bot_id, change),
@@ -925,6 +949,74 @@ impl Engine {
                         });
                     }
                 }
+            }
+        });
+    }
+
+    fn load_workspace_files(&mut self, bot_id: String, path: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.workspace_files(&bot_id, &path).await {
+                Ok(listing) => emit.emit(Event::WorkspaceFiles { bot_id, listing }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::WorkspaceFilesFailed {
+                    bot_id,
+                    path,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn download_workspace_file(
+        &mut self,
+        bot_id: String,
+        path: String,
+        name: String,
+        revision: u64,
+    ) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        let folder = self.config.downloads.clone();
+        tokio::spawn(async move {
+            let failed = |message: String| emit.emit(Event::FileDownloadFailed { message });
+            let Some(folder) = folder else {
+                failed("This machine has no Downloads folder to save to.".into());
+                return;
+            };
+            let bytes = match api.download_workspace_file(&bot_id, &path, revision).await {
+                Ok(bytes) => bytes,
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                    return;
+                }
+                Err(error) => {
+                    failed(error.to_string());
+                    return;
+                }
+            };
+            // Writing a file blocks, so it runs on Tokio's thread pool for
+            // blocking work instead of holding up the engine.
+            let written =
+                tokio::task::spawn_blocking(move || save_download(&folder, &name, &bytes)).await;
+            match written {
+                Ok(Ok(saved)) => {
+                    let saved_as = saved
+                        .file_name()
+                        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+                    emit.emit(Event::FileDownloaded { saved_as });
+                }
+                Ok(Err(error)) => failed(format!("Could not save the file: {error}.")),
+                Err(_) => failed("Could not save the file.".into()),
             }
         });
     }

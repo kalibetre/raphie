@@ -9,9 +9,9 @@ use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
 use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
-    UpdateBotProfile,
+    UpdateBotProfile, WorkspaceKind,
 };
-use raphie_core::engine::{Command, ConnectionChange};
+use raphie_core::engine::{Command, ConnectionChange, EngineConfig};
 use raphie_core::mcp::{McpAction, NewMcpConnection, summary};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
@@ -598,6 +598,104 @@ fn memory_settings_load_save_and_test() {
     host.with(|h| h.memory_unreachable = true);
     let said = test(&mut driver);
     assert!(said.contains("did not answer"), "{said}");
+}
+
+#[test]
+fn workspace_folders_are_listed_and_a_file_is_saved_without_replacing_one() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.workspace_revision = 7;
+        h.workspace = vec![
+            ("/workspace/README.md".into(), b"# Notes".to_vec()),
+            (
+                "/workspace/reports/q3 summary.csv".into(),
+                b"a,b\n1,2\n".to_vec(),
+            ),
+        ];
+    });
+    // Downloads go to a folder of this test's own, never the real one.
+    let folder =
+        std::env::temp_dir().join(format!("raphie-engine-downloads-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let config = EngineConfig {
+        downloads: Some(folder.clone()),
+        ..support::fast_config()
+    };
+    let mut driver = Driver::with_config(Arc::new(MemoryStore::new()), config);
+    driver.send(Command::Connect {
+        origin: host.origin.clone(),
+    });
+    driver.until("the session list", |m, _| !m.sessions.is_empty());
+
+    let open = |driver: &mut Driver, path: &str| {
+        driver.model.files.open("default", path);
+        driver.send(Command::LoadWorkspaceFiles {
+            bot_id: "default".into(),
+            path: path.into(),
+        });
+        driver.until("the listing", |m, _| !m.files.loading);
+    };
+    open(&mut driver, "/workspace");
+    let listing = driver.model.files.listing.clone().unwrap();
+    assert_eq!(listing.revision, 7);
+    let kinds: Vec<_> = listing
+        .items
+        .iter()
+        .map(|item| (item.name.as_str(), item.kind))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("README.md", WorkspaceKind::File),
+            ("reports", WorkspaceKind::Directory)
+        ]
+    );
+
+    // A folder with a space in a file's name: the path is escaped on the way.
+    open(&mut driver, "/workspace/reports");
+    let listing = driver.model.files.listing.clone().unwrap();
+    let file = listing.items[0].clone();
+    assert_eq!(file.name, "q3 summary.csv");
+
+    let download = |driver: &mut Driver, revision: u64| {
+        assert!(driver.model.files.begin_download(&file.path));
+        driver.send(Command::DownloadWorkspaceFile {
+            bot_id: "default".into(),
+            path: file.path.clone(),
+            name: file.name.clone(),
+            revision,
+        });
+        driver.until("the download", |m, _| m.files.downloading.is_none());
+    };
+    download(&mut driver, 7);
+    assert_eq!(driver.model.files.saved.as_deref(), Some("q3 summary.csv"));
+    assert_eq!(
+        std::fs::read(folder.join("q3 summary.csv")).unwrap(),
+        b"a,b\n1,2\n"
+    );
+    // A second download keeps the first file and takes another name.
+    download(&mut driver, 7);
+    assert_eq!(
+        driver.model.files.saved.as_deref(),
+        Some("q3 summary (1).csv")
+    );
+
+    // A listing that is out of date is refused, and nothing is written.
+    download(&mut driver, 6);
+    let error = driver
+        .model
+        .files
+        .download_error
+        .clone()
+        .unwrap_or_default();
+    assert!(error.contains("workspace changed"), "{error}");
+    assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 2);
+
+    // A folder that is gone is reported, not shown as empty.
+    open(&mut driver, "/workspace/missing");
+    let error = driver.model.files.error.clone().unwrap_or_default();
+    assert!(error.contains("not found"), "{error}");
+    std::fs::remove_dir_all(&folder).unwrap();
 }
 
 #[test]
