@@ -95,6 +95,9 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   once (`GET /api/files/<id>`) when the image is in the composer or the open
   conversation, and decoded off the UI thread; the latest 24 are kept, and
   until one arrives, or if it cannot be shown, the card shows the image icon.
+  Pressing a picture shows it enlarged over the window, whole, on a dark
+  backdrop; a press anywhere, its close button or Escape closes it. The web
+  has no such view yet.
 - **Model**: the button beside the paperclip names the model the next
   message will be answered with, and opens a list of the bot's models to
   choose another: search by name, id or connection, and star models to keep

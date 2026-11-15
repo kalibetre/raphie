@@ -142,7 +142,7 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
             .flex_wrap();
         for file in files {
             let key = format!("rd-attachment-{}", file.id);
-            let picture = bot_id.and_then(|bot| s.picture(bot, &file.id));
+            let picture = bot_id.and_then(|bot| Some((bot, s.picture(bot, &file.id)?)));
             chips = chips.child(file_card(t, &key, file, picture, &Action::Remove, !locked));
         }
         card = card.child(chips);

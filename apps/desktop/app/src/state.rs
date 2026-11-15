@@ -392,6 +392,16 @@ pub struct Ui {
     images: Option<ImageCache>,
     /// Image attachments' pictures, decoded or decoding, by bot and file id.
     pictures: HashMap<(String, String), Image>,
+    /// The picture shown enlarged over the window, if one is.
+    pub viewer: Option<Viewer>,
+}
+
+/// An image attachment shown enlarged: whose file it is, and its name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Viewer {
+    pub bot_id: String,
+    pub id: String,
+    pub name: String,
 }
 
 /// The composer's model picker: whether it is open, and how its list is
@@ -487,6 +497,7 @@ impl Ui {
             ticked_at: 0.0,
             images: None,
             pictures: HashMap::new(),
+            viewer: None,
         }
     }
 
@@ -2414,6 +2425,30 @@ impl Ui {
         changed
     }
 
+    /// Gives this UI a decoder for pictures: `setup` does in a window; a
+    /// test passes its own.
+    pub fn use_images(&mut self, images: ImageCache) {
+        self.images = Some(images);
+    }
+
+    /// Waits until every picture handed to the decoder is decoded. For
+    /// tests, which need a picture on screen before they can press it.
+    pub fn wait_for_pictures(&self) {
+        for picture in self.pictures.values() {
+            // A picture that fails to decode is done too.
+            let _ = picture.wait();
+        }
+    }
+
+    /// Shows a picture enlarged over the window.
+    pub fn open_viewer(&mut self, bot_id: &str, id: &str, name: &str) {
+        self.viewer = Some(Viewer {
+            bot_id: bot_id.to_owned(),
+            id: id.to_owned(),
+            name: name.to_owned(),
+        });
+    }
+
     /// The decoded picture of `bot_id`'s file `id`, once it can be drawn.
     pub fn picture(&self, bot_id: &str, id: &str) -> Option<&Image> {
         let picture = self.pictures.get(&(bot_id.to_owned(), id.to_owned()))?;
@@ -2458,7 +2493,7 @@ impl Default for Ui {
 pub fn setup(ui: &mut Ui, waker: Waker) {
     // Headless snapshots draw pictures too, so this comes first. A decode
     // finishing wakes the app with `waker`.
-    ui.images = Some(ImageCache::new(waker.clone()));
+    ui.use_images(ImageCache::new(waker.clone()));
     // Headless runs (`--snap`, `--tree`, `--script`) render scenes; they must
     // never touch the network or the Keychain.
     if rune::tooling::headless_run().is_some() {

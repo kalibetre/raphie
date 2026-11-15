@@ -38,7 +38,7 @@ pub mod view;
 pub mod widgets;
 
 use raphie_core::flavor::Flavor;
-use rune::{AppSpec, KeyEvent, Tx};
+use rune::{AppSpec, Key, KeyEvent, Tx};
 
 pub use state::Ui;
 
@@ -63,6 +63,11 @@ pub fn spec() -> AppSpec<Ui> {
 /// Window-wide keys, as in the web workspace: ⌘B shows and hides the
 /// sidebar, and ⌘, opens Settings as Mac apps do (Ctrl off macOS).
 fn on_key(ui: &mut Ui, ev: &KeyEvent, _: &mut Tx) -> bool {
+    // Escape closes an enlarged picture.
+    if ev.key == Key::Escape && ui.viewer.is_some() {
+        ui.viewer = None;
+        return true;
+    }
     if ev.mods.shift || ev.mods.alt {
         return false;
     }

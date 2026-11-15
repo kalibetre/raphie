@@ -43,6 +43,7 @@ pub const SCENES: &[Scene] = &[
     ("inbox-empty", inbox_empty),
     ("conversation", conversation),
     ("attachments", attachments),
+    ("image-viewer", image_viewer),
     ("permissions", permissions),
     ("model-picker", model_picker),
     ("model-picker-favorites", model_picker_favorites),
@@ -1329,6 +1330,13 @@ pub fn attachments(ui: &mut Ui) {
         let bytes = FileBytes::from(picture.as_bytes().to_vec());
         ui.model.previews.loaded(&bot_id, &id, bytes);
     }
+}
+
+/// The floor plan from `attachments`, shown enlarged.
+pub fn image_viewer(ui: &mut Ui) {
+    attachments(ui);
+    let bot_id = ui.model.bot_id.clone().unwrap_or_else(|| "default".into());
+    ui.open_viewer(&bot_id, &"a".repeat(64), "floor-plan.png");
 }
 
 /// A made-up floor plan: walls on paper. No text: the SVG renderer has

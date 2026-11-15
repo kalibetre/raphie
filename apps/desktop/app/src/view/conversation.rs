@@ -252,7 +252,7 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, t: &Theme) -> El {
                 .model
                 .bot_id
                 .as_deref()
-                .and_then(|bot| s.picture(bot, &file.id));
+                .and_then(|bot| Some((bot, s.picture(bot, &file.id)?)));
             files = files.child(file_card(
                 t,
                 &key,

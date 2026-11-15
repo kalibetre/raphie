@@ -25,12 +25,13 @@ pub enum Action {
 
 /// `key` names the card; its button is `{key}-action`. `enabled` is false
 /// while the button could not do anything (a send or a save in progress).
-/// `picture` is the image's decoded picture, once there is one.
+/// `picture` is the image's decoded picture once there is one, with the bot
+/// whose file it is; pressing it shows it enlarged.
 pub fn file_card(
     t: &Theme,
     key: &str,
     file: &Attachment,
-    picture: Option<&Image>,
+    picture: Option<(&str, &Image)>,
     action: &Action,
     enabled: bool,
 ) -> El {
@@ -78,17 +79,28 @@ pub fn file_card(
             .center()
             .radius(6.0)
             .clip_rounded(6.0)
-            .fill(t.muted)
-            .a11y_hidden();
+            .fill(t.muted);
         match picture {
             // `Fill` covers the box and crops the overflow, like the web's
             // `object-fit: cover`.
-            Some(picture) => shape.child(
-                el().w_full()
-                    .h_full()
-                    .pixels_fit(picture.pixels(), SurfaceFit::Fill),
-            ),
-            None => shape.child(icon(kind, 20.0).color(t.muted_foreground)),
+            Some((bot_id, picture)) => {
+                let (bot_id, id, name) = (bot_id.to_owned(), file.id.clone(), file.name.clone());
+                shape
+                    .child(
+                        el().w_full()
+                            .h_full()
+                            .pixels_fit(picture.pixels(), SurfaceFit::Fill),
+                    )
+                    .role("button")
+                    .label(format!("View {}", file.name))
+                    .help("View larger")
+                    .focus_ring(2.0, 1.0, t.accent)
+                    .on_press(move |s: &mut Ui| s.open_viewer(&bot_id, &id, &name))
+            }
+            // Only a picture of the kind: the name beside it says it all.
+            None => shape
+                .child(icon(kind, 20.0).color(t.muted_foreground))
+                .a11y_hidden(),
         }
     };
     let info = col()

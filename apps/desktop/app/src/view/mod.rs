@@ -31,6 +31,7 @@ mod roster;
 mod settings;
 mod sign_in;
 mod steps;
+mod viewer;
 mod welcome;
 
 use std::path::PathBuf;
@@ -86,6 +87,12 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
         },
         _ => sign_in::sign_in(s, &look),
     };
+    // An enlarged picture covers everything else, drop-down lists included.
+    if let (AuthState::SignedIn, Some(shown)) = (&s.model.auth, &s.viewer)
+        && let Some(viewer) = viewer::viewer(s, shown, &look)
+    {
+        overlays.push(viewer);
+    }
     // Replies that arrive while another app is in front stay new until
     // this window is looked at again.
     rune_kit::root(base, overlays).on_window_focus(|s: &mut Ui, focused: bool, _: &mut Tx| {
