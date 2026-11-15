@@ -14,11 +14,13 @@ use raphie_core::contracts::{
 use raphie_core::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use raphie_core::contracts::{JobRun, ScheduledJob};
 use raphie_core::engine::Command;
+use raphie_core::flavor::Flavor;
 use raphie_core::inbox::JobUpdates;
 use raphie_core::mcp::McpTransport;
 use raphie_core::model::{AuthState, Event};
 use raphie_core::model_library::PickerFilter;
 use raphie_core::origin::Origin;
+use raphie_core::updates::{Update, UpdateStatus};
 use rune::TextEdit;
 use serde_json::{Value, json};
 
@@ -50,6 +52,8 @@ pub const SCENES: &[Scene] = &[
     ("command-approval", command_approval),
     ("settings-account", settings_account),
     ("settings-appearance", settings_appearance),
+    ("settings-appearance-update", settings_appearance_update),
+    ("dev-build", dev_build),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
     ("settings-history", settings_history),
@@ -184,6 +188,21 @@ pub fn settings_account(ui: &mut Ui) {
 pub fn settings_appearance(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Appearance));
+}
+
+/// Settings → Appearance once a check has found a newer release.
+pub fn settings_appearance_update(ui: &mut Ui) {
+    settings_appearance(ui);
+    ui.model.update = UpdateStatus::Available(Update {
+        version: "v0.0.5".into(),
+        url: "https://github.com/kalibetre/raphie/releases/tag/v0.0.5".into(),
+    });
+}
+
+/// The conversation list as the dev build draws it, with its badge.
+pub fn dev_build(ui: &mut Ui) {
+    conversations(ui);
+    ui.flavor = Flavor::Dev;
 }
 
 /// Settings → Profile, as opened.

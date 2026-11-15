@@ -29,6 +29,7 @@ use crate::jobs::RunHistory;
 use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
 use crate::permissions::CommandMode;
+use crate::updates::{Update, UpdateStatus};
 use crate::workspace::WorkspaceBrowser;
 
 /// News from the engine. Events about a bot or session carry its id, so news
@@ -372,6 +373,9 @@ pub enum Event {
         run_id: String,
     },
     RunAcknowledgeFailed,
+    /// What a check for a newer release found: the newer release, none,
+    /// or why the check failed.
+    UpdateChecked(Result<Option<Update>, String>),
     /// How a session treats commands.
     ApprovalMode {
         session_id: String,
@@ -719,6 +723,8 @@ pub struct Model {
     /// What was last heard from the bots that are not on screen, and
     /// every bot's job updates.
     pub inbox: Inbox,
+    /// Whether a newer Raphie has been released.
+    pub update: UpdateStatus,
     /// How the open session treats commands.
     pub command_mode: CommandMode,
     /// A change of the open session's model is on its way.
@@ -802,6 +808,7 @@ impl Default for Model {
             conversation: None,
             sending: false,
             inbox: Inbox::default(),
+            update: UpdateStatus::default(),
             command_mode: CommandMode::default(),
             choosing_model: false,
             model_error: None,
@@ -1204,6 +1211,13 @@ impl Model {
                 self.inbox.acknowledged(&bot_id, &run_id);
             }
             Event::RunAcknowledgeFailed => self.inbox.acknowledge_failed(),
+            Event::UpdateChecked(result) => {
+                self.update = match result {
+                    Ok(Some(update)) => UpdateStatus::Available(update),
+                    Ok(None) => UpdateStatus::UpToDate,
+                    Err(why) => UpdateStatus::Failed(why),
+                };
+            }
             Event::ApprovalMode { session_id, mode } => {
                 self.command_mode.loaded(&session_id, mode);
             }

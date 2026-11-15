@@ -21,7 +21,7 @@ for scene in sign-in device-code new-conversation conversations unread inbox inb
   settings-sandbox settings-sandbox-container \
   settings-workspace settings-workspace-folder \
   settings-jobs settings-jobs-create \
-  settings-diagnostics settings-activity \
+  settings-diagnostics settings-activity settings-appearance-update dev-build \
   settings-history settings-new-bot settings-delete-bot; do
   for theme in light dark; do
     "$bin" --snap "$out/$scene-$theme.png" --scene "$scene" --theme "$theme" \

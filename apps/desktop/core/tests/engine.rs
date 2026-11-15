@@ -20,6 +20,7 @@ use raphie_core::mcp::{McpAction, NewMcpConnection, summary};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
 use raphie_core::sandbox::{SandboxUpdate, files_summary};
+use raphie_core::updates::UpdateStatus;
 use support::{Driver, FakeHost, TOKEN, observation_json, sessions_json, turn_json};
 
 fn signed_in(host: &FakeHost) -> (Driver, MemoryStore) {
@@ -1863,4 +1864,43 @@ fn other_bots_conversations_and_job_updates_are_loaded_and_a_job_is_dismissed() 
     load(&mut driver);
     driver.until("the failure", |m, _| m.inbox.jobs_failed.len() == 2);
     assert_eq!(driver.model.inbox.jobs["default"].runs.len(), 1);
+}
+
+#[test]
+fn an_update_check_offers_the_newest_release_and_sends_no_token() {
+    let host = FakeHost::start();
+    let config = EngineConfig {
+        releases_url: Some(host.origin.url("/github/releases")),
+        ..support::fast_config()
+    };
+    let mut driver = Driver::with_config(Arc::new(MemoryStore::new()), config);
+    // Signed in first, so a token exists that must not be sent.
+    driver.send(Command::Connect {
+        origin: host.origin.clone(),
+    });
+    driver.until("signed in", |m, _| m.auth == AuthState::SignedIn);
+    driver.send(Command::CheckForUpdates);
+    driver.until("the check's answer", |m, _| {
+        matches!(m.update, UpdateStatus::Available(_))
+    });
+    let UpdateStatus::Available(update) = &driver.model.update else {
+        unreachable!()
+    };
+    // The draft v100 is skipped.
+    assert_eq!(update.version, "v99.0.0");
+    let requests = host.requests("/github/releases");
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0].authorization, None,
+        "the host's token went to the release list"
+    );
+}
+
+#[test]
+fn an_update_check_with_nowhere_to_ask_says_so() {
+    let mut driver = Driver::new(Arc::new(MemoryStore::new()));
+    driver.send(Command::CheckForUpdates);
+    driver.until("the check's answer", |m, _| {
+        matches!(m.update, UpdateStatus::Failed(_))
+    });
 }

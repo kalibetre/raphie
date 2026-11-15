@@ -49,6 +49,7 @@ use crate::origin::Origin;
 use crate::sandbox::SandboxUpdate;
 use crate::settings::Settings;
 use crate::sse::SseParser;
+use crate::updates;
 use crate::workspace::save_download;
 
 /// Called after events are queued, from an engine thread. In the app this is
@@ -109,6 +110,9 @@ pub enum Command {
         bot_id: String,
         run_id: String,
     },
+    /// Ask GitHub whether a newer Raphie has been released. Works signed
+    /// in or not: it does not involve the host.
+    CheckForUpdates,
     /// Ask how a session treats commands.
     LoadApprovalMode {
         session_id: String,
@@ -355,6 +359,8 @@ pub struct EngineConfig {
     pub settings_path: Option<PathBuf>,
     /// Where downloaded workspace files are saved; `None` saves nothing.
     pub downloads: Option<PathBuf>,
+    /// The list of releases to check for updates; `None` checks nothing.
+    pub releases_url: Option<String>,
 }
 
 impl Default for EngineConfig {
@@ -366,6 +372,7 @@ impl Default for EngineConfig {
             send_retries: vec![Duration::from_secs(1), Duration::from_secs(3)],
             settings_path: Settings::default_path(),
             downloads: dirs::download_dir(),
+            releases_url: Some(updates::RELEASES_URL.to_owned()),
         }
     }
 }
@@ -548,6 +555,7 @@ impl Engine {
                 job_bots,
             } => self.load_inbox(session_bots, job_bots),
             Command::AcknowledgeRun { bot_id, run_id } => self.acknowledge_run(bot_id, run_id),
+            Command::CheckForUpdates => self.check_for_updates(),
             Command::LoadApprovalMode { session_id } => self.load_approval_mode(session_id),
             Command::SetApprovalMode { session_id, mode } => {
                 self.set_approval_mode(session_id, mode);
@@ -940,6 +948,19 @@ impl Engine {
                 }
                 Err(_) => emit.emit(Event::RunAcknowledgeFailed),
             }
+        });
+    }
+
+    fn check_for_updates(&mut self) {
+        let emit = self.emit.clone();
+        let Some(url) = self.config.releases_url.clone() else {
+            emit.emit(Event::UpdateChecked(Err(
+                "Update checks are off in this build.".into(),
+            )));
+            return;
+        };
+        tokio::spawn(async move {
+            emit.emit(Event::UpdateChecked(updates::check(&url).await));
         });
     }
 

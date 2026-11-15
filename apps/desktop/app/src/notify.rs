@@ -7,8 +7,9 @@
 //! On macOS the system shows notifications only for an app bundle with its
 //! own identifier, and only once the owner has allowed them. A bare binary
 //! (`cargo run`) has no bundle, so there both functions do nothing;
-//! `scripts/bundle.sh` builds `Raphie.app`, which has one.
+//! `scripts/bundle.sh` builds an app bundle, which has one.
 
+use raphie_core::flavor::Flavor;
 use raphie_core::inbox::Announcement;
 
 /// True when the system will take notifications from this process.
@@ -51,7 +52,7 @@ pub fn post(announcement: Announcement) {
             return;
         }
         let _ = notify_rust::Notification::new()
-            .appname("Raphie")
+            .appname(Flavor::current().app_name())
             .summary(&announcement.title)
             .body(&announcement.body)
             .show();

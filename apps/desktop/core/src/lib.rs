@@ -12,6 +12,8 @@
 //! - [`memory`]: what a save of a bot's memory settings carries, and its checks.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
 //! - [`settings`]: non-secret preferences.
+//! - [`flavor`]: the dev build and the release build, kept apart.
+//! - [`updates`]: this app's version, and whether a newer one is released.
 //!
 //! A UI (today the Rune app in `../app`) owns a [`model::Model`], sends
 //! [`engine::Command`]s through an [`engine::Client`] and applies the
@@ -25,6 +27,7 @@ pub mod auth;
 pub mod channels;
 pub mod contracts;
 pub mod engine;
+pub mod flavor;
 pub mod inbox;
 pub mod inspection;
 pub mod jobs;
@@ -39,4 +42,5 @@ pub mod replies;
 pub mod sandbox;
 pub mod settings;
 pub mod sse;
+pub mod updates;
 pub mod workspace;

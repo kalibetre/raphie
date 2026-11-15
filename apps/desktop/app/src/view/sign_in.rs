@@ -15,7 +15,7 @@ use super::Look;
 use crate::avatar::bot_avatar;
 use crate::state::Ui;
 use crate::theme::{Theme, font, mono};
-use crate::widgets::{Field, Kind, Size, button, labelled, pressable, text_field};
+use crate::widgets::{Field, Kind, Size, button, dev_badge, labelled, pressable, text_field};
 
 pub fn sign_in(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
@@ -55,7 +55,8 @@ pub fn sign_in(s: &Ui, look: &Look) -> El {
                     text("raphie")
                         .font(font(15.75, 600.0).tracking(-0.4))
                         .color(t.foreground),
-                ),
+                )
+                .children(s.flavor.is_dev().then(|| dev_badge(t))),
         )
         .child(
             col()

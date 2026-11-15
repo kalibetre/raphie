@@ -15,6 +15,7 @@ use raphie_core::contracts::{
     RuntimeSettings, Scope, TurnStatus,
 };
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
+use raphie_core::flavor::Flavor;
 use raphie_core::inbox::{self, Announcement, Announcements, Item};
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::McpAction;
@@ -24,6 +25,7 @@ use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
 use raphie_core::replies::ReadReplies;
 use raphie_core::settings::{Settings, ThemeChoice};
+use raphie_core::updates::UpdateStatus;
 use raphie_core::workspace::{self, ROOT};
 use rune::{ClipboardContent, FileDialogOptions, TextEdit, Tx, Waker};
 
@@ -270,6 +272,8 @@ pub enum Screen {
 pub struct Ui {
     /// Everything the core knows. The view only reads it.
     pub model: Model,
+    /// Which build this is. The dev build says so beside the brand.
+    pub flavor: Flavor,
     /// The running engine. `None` in headless runs and tests, where commands
     /// are recorded in `sent` instead of going to a network.
     client: Option<Client>,
@@ -406,6 +410,12 @@ impl Ui {
         ui.read_replies = ReadReplies::default_path()
             .map(|path| ReadReplies::load(&path))
             .unwrap_or_default();
+        // Snapshots (`--snap`) only run in debug builds, but they show the
+        // app as people get it, so they draw the release look. The
+        // `dev-build` scene shows the dev one.
+        if rune::tooling::headless_run().is_some() {
+            ui.flavor = Flavor::Release;
+        }
         ui
     }
 
@@ -413,6 +423,7 @@ impl Ui {
     pub fn with_origin(origin: &str) -> Ui {
         Ui {
             model: Model::new(),
+            flavor: Flavor::current(),
             client: None,
             sent: Vec::new(),
             opened: Vec::new(),
@@ -2322,6 +2333,23 @@ impl Ui {
         self.open_url(url.to_owned(), tx);
     }
 
+    /// Asks whether a newer Raphie has been released, unless a check is
+    /// already on its way.
+    pub fn check_for_updates(&mut self) {
+        if self.model.update.begin() {
+            self.command(Command::CheckForUpdates);
+        }
+    }
+
+    /// Opens the newer release's page on GitHub. The core only keeps
+    /// pages under Raphie's releases, so this cannot open anything else.
+    pub fn open_release(&mut self, tx: &mut Tx) {
+        if let UpdateStatus::Available(update) = &self.model.update {
+            let url = update.url.clone();
+            self.open_url(url, tx);
+        }
+    }
+
     fn open_url(&mut self, url: String, tx: &mut Tx) {
         if self.client.is_none() {
             // Tests and headless runs: note it instead of opening a browser.
@@ -2356,6 +2384,8 @@ pub fn setup(ui: &mut Ui, waker: Waker) {
     ui.client = Some(client);
     // Ask, the first time, whether updates may be shown as notifications.
     notify::prepare();
+    // Once per launch; Settings → Appearance can ask again.
+    ui.check_for_updates();
     // `raphie-desktop --origin https://…` signs in to that origin at once;
     // otherwise reuse the last origin's stored token, if there is one.
     if let Some(origin) = origin_argument(rune::extra_args()) {

@@ -198,6 +198,23 @@ pub fn count_badge(t: &Theme, count: usize) -> El {
         )
 }
 
+/// The "DEV" mark beside the brand in a dev build, so it is never taken
+/// for the release app.
+pub fn dev_badge(t: &Theme) -> El {
+    row()
+        .key("rd-dev-badge")
+        .px(5.0)
+        .py(1.0)
+        .center()
+        .radius(5.0)
+        .fill(t.attention_soft)
+        .child(
+            text("DEV")
+                .font(font(9.0, 650.0).tracking(0.6))
+                .color(t.attention),
+        )
+}
+
 /// The green "connected" dot with its soft ring (`.status-dot`), amber when
 /// `online` is false.
 pub fn status_dot(t: &Theme, online: bool) -> El {

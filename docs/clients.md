@@ -95,12 +95,13 @@ web workspace.
 
 ### The app itself
 
-| Capability                        | Web | Desktop | Mobile  | Notes                             |
-| --------------------------------- | --- | ------- | ------- | --------------------------------- |
-| Appearance (light, dark, system)  | Yes | Yes     | Planned | Each client keeps its own choice. |
-| UI plugins                        | Yes | No      | No      | Rule 2.                           |
-| Local speech-to-text              | No  | Planned | No      | Rule 5.                           |
-| Computer use, the owner's browser | No  | Planned | No      | Rule 5.                           |
+| Capability                        | Web | Desktop | Mobile  | Notes                                                                                    |
+| --------------------------------- | --- | ------- | ------- | ---------------------------------------------------------------------------------------- |
+| Appearance (light, dark, system)  | Yes | Yes     | Planned | Each client keeps its own choice.                                                        |
+| Version and update check          | Yes | Yes     | Planned | The web shows its version. Desktop also checks GitHub releases and links to a newer one. |
+| UI plugins                        | Yes | No      | No      | Rule 2.                                                                                  |
+| Local speech-to-text              | No  | Planned | No      | Rule 5.                                                                                  |
+| Computer use, the owner's browser | No  | Planned | No      | Rule 5.                                                                                  |
 
 ## What enforces this
 
