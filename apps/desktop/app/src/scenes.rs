@@ -8,7 +8,7 @@ use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::{
     Account, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection, MemoryEvidence,
     MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionObservation,
-    SessionSummary, TelegramPairingCode,
+    SessionSummary, TelegramPairingCode, WorkspaceListing,
 };
 use raphie_core::engine::Command;
 use raphie_core::mcp::McpTransport;
@@ -53,6 +53,10 @@ pub const SCENES: &[Scene] = &[
     ("settings-memories-editing", settings_memories_editing),
     ("settings-memories-search", settings_memories_search),
     ("settings-memories-empty", settings_memories_empty),
+    ("settings-workspace", settings_workspace),
+    ("settings-workspace-folder", settings_workspace_folder),
+    ("settings-workspace-empty", settings_workspace_empty),
+    ("settings-workspace-loading", settings_workspace_loading),
     ("settings-sandbox", settings_sandbox),
     ("settings-sandbox-container", settings_sandbox_container),
     ("settings-sandbox-loading", settings_sandbox_loading),
@@ -172,12 +176,13 @@ pub fn settings_profile_edited(ui: &mut Ui) {
     ui.profile.color = Some("#83bcb4".into());
 }
 
-/// A bot's settings page that is not native yet (Research → Workspace).
+/// A bot's settings page that is not native yet (Research → Scheduled
+/// jobs).
 pub fn settings_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::Bot {
         bot_id: "b-research".into(),
-        section: BotSection::Workspace,
+        section: BotSection::Jobs,
     }));
 }
 
@@ -240,6 +245,90 @@ pub fn settings_memory_hindsight(ui: &mut Ui) {
     ui.memory.bank_id = TextEdit::new("raphie-work");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.memory.key = TextEdit::new("hs-not-a-real-key").secure();
+}
+
+/// A made-up listing of the top of a workspace, or of its `reports` folder.
+pub fn workspace_listing(folder: bool) -> WorkspaceListing {
+    let items = if folder {
+        json!([
+            {
+                "path": "/workspace/reports/q3-summary.csv", "name": "q3-summary.csv",
+                "kind": "file", "bytes": 48_211, "modifiedAt": 1_794_563_700_000_i64,
+            },
+            {
+                "path": "/workspace/reports/q3-summary.md", "name": "q3-summary.md",
+                "kind": "file", "bytes": 6_402, "modifiedAt": 1_794_563_760_000_i64,
+            },
+        ])
+    } else {
+        json!([
+            {
+                "path": "/workspace/reports", "name": "reports",
+                "kind": "directory", "bytes": 0, "modifiedAt": 1_794_563_760_000_i64,
+            },
+            {
+                "path": "/workspace/README.md", "name": "README.md",
+                "kind": "file", "bytes": 1_180, "modifiedAt": 1_794_300_000_000_i64,
+            },
+            {
+                "path": "/workspace/latest", "name": "latest",
+                "kind": "symlink", "bytes": 0, "modifiedAt": 1_794_563_760_000_i64,
+            },
+            {
+                "path": "/workspace/plan-2027.xlsx", "name": "plan-2027.xlsx",
+                "kind": "file", "bytes": 2_411_724, "modifiedAt": 1_794_650_100_000_i64,
+            },
+        ])
+    };
+    serde_json::from_value(json!({
+        "path": if folder { "/workspace/reports" } else { "/workspace" },
+        "revision": 41,
+        "items": items,
+    }))
+    .expect("the scene's workspace listing matches the contract")
+}
+
+fn open_workspace(ui: &mut Ui, listing: Option<WorkspaceListing>) {
+    settings_account(ui);
+    ui.model.apply(Event::Sandbox {
+        bot_id: "default".into(),
+        info: Box::new(sandbox_info(false)),
+    });
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Workspace,
+    }));
+    if let Some(listing) = listing {
+        // A listing of a folder below the top means the owner opened it.
+        ui.model.files.open("default", &listing.path);
+        ui.model.apply(Event::WorkspaceFiles {
+            bot_id: "default".into(),
+            listing,
+        });
+    }
+}
+
+/// Settings → Workspace at the top of the workspace.
+pub fn settings_workspace(ui: &mut Ui) {
+    open_workspace(ui, Some(workspace_listing(false)));
+}
+
+/// Workspace inside a folder, just after a file was downloaded.
+pub fn settings_workspace_folder(ui: &mut Ui) {
+    open_workspace(ui, Some(workspace_listing(true)));
+    ui.model.files.saved = Some("q3-summary.csv".into());
+}
+
+/// Workspace before the bot wrote any file.
+pub fn settings_workspace_empty(ui: &mut Ui) {
+    let mut listing = workspace_listing(false);
+    listing.items.clear();
+    open_workspace(ui, Some(listing));
+}
+
+/// Workspace before the listing has arrived.
+pub fn settings_workspace_loading(ui: &mut Ui) {
+    open_workspace(ui, None);
 }
 
 /// Made-up sandbox details: just-bash as first installed, or a container

@@ -116,7 +116,14 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     a number is out of range or the settings changed elsewhere. Below the
     form the page describes the active provider, what the workspace keeps,
     and the execution limits and usage, re-read every five seconds.
-  - **A bot's other pages** (Workspace, Scheduled jobs, ...) are not built yet: each
+  - **Workspace** browses a bot's files a folder at a time, with each
+    entry's kind, size and when it changed, and re-reads the folder every
+    five seconds. A file's download button saves it into this machine's
+    Downloads folder and says what it was saved as. A download never
+    replaces a file already there (a second `notes.md` becomes
+    `notes (1).md`), and a name from the runtime can never place a file
+    outside that folder.
+  - **A bot's other pages** (Scheduled jobs, Diagnostics, Activity) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
