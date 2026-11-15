@@ -46,6 +46,10 @@ All routes below are prefixed `/api`. The web host proxies them to the runtime.
 | GET    | `/sessions/<uuid>/grants`                            | List active session grants                                                     |
 | DELETE | `/sessions/<uuid>/grants/<id>`                       | Revoke a session grant                                                         |
 | POST   | `/sessions/<uuid>/read`                              | `{ replyCount }`: replies read so far; answers `{ readReplyCount }`            |
+| POST   | `/settings/sign-ins`                                 | `{ provider, name, connectionId? }`: start a subscription sign-in              |
+| GET    | `/settings/sign-ins/<id>`                            | Its events (page to open, device code, progress) and pending question          |
+| POST   | `/settings/sign-ins/<id>/answer`                     | `{ promptId, value }`: answer the pending question (a secret)                  |
+| POST   | `/settings/sign-ins/<id>/cancel`                     | Stop a waiting sign-in                                                         |
 | GET    | `/sessions/<uuid>/events`                            | Authoritative selected-session observations over SSE                           |
 | POST   | `/tool-approvals/<id>`                               | Shared explicit approval decision                                              |
 | GET    | `/inspection/activity?before=<event-id>&limit=100`   | Optional bounded diagnostic page                                               |

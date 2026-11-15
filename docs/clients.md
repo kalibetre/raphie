@@ -72,23 +72,23 @@ A new feature is placed by asking these questions in order.
 
 ### Bot settings
 
-| Page                                       | Web | Desktop | Mobile  | Notes                                                                           |
-| ------------------------------------------ | --- | ------- | ------- | ------------------------------------------------------------------------------- |
-| Profile: name, description, colour         | Yes | Yes     | Planned |                                                                                 |
-| Personality (SOUL.md)                      | Yes | Yes     | No      | Long-form editing. Saved with the profile.                                      |
-| Personality revision history               | Yes | Yes     | No      |                                                                                 |
-| Create a bot, delete a bot                 | Yes | Yes     | No      | Rare, and deleting cannot be undone.                                            |
-| Providers (model connections and keys)     | Yes | Yes     | No      | Setup. Keys are typed into a masked field and sent once; the client keeps none. |
-| Models (compare, pick the default)         | Yes | Yes     | Planned |                                                                                 |
-| Memory settings                            | Yes | Yes     | No      | Setup. A Hindsight key is handled like a provider key.                          |
-| Browse, correct or forget memory           | Yes | Yes     | Planned |                                                                                 |
-| MCP tools                                  | Yes | Yes     | No      | Setup. OAuth authorization opens the browser.                                   |
-| Channels (Discord, Telegram, home channel) | Yes | Yes     | No      | Setup.                                                                          |
-| Sandbox                                    | Yes | Yes     | No      | Setup, and it decides how commands run.                                         |
-| Workspace files: browse, download          | Yes | Yes     | Planned |                                                                                 |
-| Scheduled jobs and their run history       | Yes | Yes     | Planned |                                                                                 |
-| Diagnostics, telemetry switch              | Yes | Yes     | No      |                                                                                 |
-| Activity                                   | Yes | Yes     | Planned |                                                                                 |
+| Page                                       | Web | Desktop | Mobile  | Notes                                                                                                                                 |
+| ------------------------------------------ | --- | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Profile: name, description, colour         | Yes | Yes     | Planned |                                                                                                                                       |
+| Personality (SOUL.md)                      | Yes | Yes     | No      | Long-form editing. Saved with the profile.                                                                                            |
+| Personality revision history               | Yes | Yes     | No      |                                                                                                                                       |
+| Create a bot, delete a bot                 | Yes | Yes     | No      | Rare, and deleting cannot be undone.                                                                                                  |
+| Providers (model connections and keys)     | Yes | Yes     | No      | Setup. Keys are typed into a masked field and sent once; the client keeps none. Subscriptions (ChatGPT) sign in through the provider. |
+| Models (compare, pick the default)         | Yes | Yes     | Planned |                                                                                                                                       |
+| Memory settings                            | Yes | Yes     | No      | Setup. A Hindsight key is handled like a provider key.                                                                                |
+| Browse, correct or forget memory           | Yes | Yes     | Planned |                                                                                                                                       |
+| MCP tools                                  | Yes | Yes     | No      | Setup. OAuth authorization opens the browser.                                                                                         |
+| Channels (Discord, Telegram, home channel) | Yes | Yes     | No      | Setup.                                                                                                                                |
+| Sandbox                                    | Yes | Yes     | No      | Setup, and it decides how commands run.                                                                                               |
+| Workspace files: browse, download          | Yes | Yes     | Planned |                                                                                                                                       |
+| Scheduled jobs and their run history       | Yes | Yes     | Planned |                                                                                                                                       |
+| Diagnostics, telemetry switch              | Yes | Yes     | No      |                                                                                                                                       |
+| Activity                                   | Yes | Yes     | Planned |                                                                                                                                       |
 
 Every settings page above is native in the desktop client; none opens the
 web workspace.

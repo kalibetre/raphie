@@ -66,6 +66,50 @@
     background: var(--accent-soft);
     margin-left: auto;
   }
+  .catalog-badge.provider-badge-sign-in {
+    color: var(--attention);
+    background: var(--attention-soft);
+    margin-left: auto;
+  }
+  /* A subscription sign-in in progress. */
+  .sign-in-steps {
+    display: grid;
+    gap: 14px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--background);
+  }
+  .sign-in-step {
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+  }
+  .sign-in-code {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--muted);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+  }
+  .sign-in-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sign-in-answer {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+  .sign-in-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
   .provider-card-details {
     display: flex;
     flex-wrap: wrap;

@@ -1,7 +1,9 @@
 import type {
   EditProviderConnection,
+  ProviderSignIn,
   RuntimeSettings,
   SaveProviderConnection,
+  StartProviderSignIn,
   UpdateRuntimeSettings,
 } from "@raphie/contracts";
 
@@ -16,4 +18,9 @@ export interface SettingsService {
   ): Promise<RuntimeSettings>;
   removeConnection(id: string): Promise<RuntimeSettings>;
   testConnection(id: string, apiKey?: string): Promise<void>;
+  /** Subscription sign-in: started here, then read, answered or cancelled. */
+  startSignIn(input: StartProviderSignIn): ProviderSignIn;
+  readSignIn(id: string): ProviderSignIn;
+  answerSignIn(id: string, promptId: string, value: string): ProviderSignIn;
+  cancelSignIn(id: string): ProviderSignIn;
 }

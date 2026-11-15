@@ -22,7 +22,8 @@ color. A bot's blob shape and gaze still derive from its stable ID.
 
 **New bot** in the sidebar (the plus icon on mobile) creates an assistant and
 opens its own provider setup. Add its provider
-under **Providers**, choose a default under **Models**, and configure its memory
+under **Providers**, with an API key or, for a subscription such as ChatGPT, by
+signing in; choose a default under **Models**, and configure its memory
 backend/scope under **Memory**.
 
 The title bar contains the current conversation title and an icon-only **New

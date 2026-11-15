@@ -2,11 +2,14 @@ import { Database } from "bun:sqlite";
 import { chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import type { OAuthCredential } from "@earendil-works/pi-ai";
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import type {
   EditProviderConnection,
+  ProviderSignIn,
   RuntimeSettings,
   SaveProviderConnection,
+  StartProviderSignIn,
   UpdateRuntimeSettings,
 } from "@raphie/contracts";
 
@@ -21,9 +24,15 @@ import {
   type EncryptedCredential,
 } from "./credential-cipher.ts";
 import {
+  connectionReady,
   PiProviderConnections,
   type StoredConnection,
 } from "./pi-provider-connections.ts";
+import {
+  type SignedIn,
+  type SubscriptionProvider,
+  SubscriptionSignIns,
+} from "./subscription-sign-ins.ts";
 
 type Stored = {
   version: 3;
@@ -31,17 +40,37 @@ type Stored = {
   modelId: string;
   connectionId: string;
   connections: StoredConnection[];
+  /** This installation's id, which some subscription sign-ins send. */
+  deviceId?: string;
 };
 
 type PreviousStored = Omit<Stored, "version"> & { version: 2 };
 
-type EncryptedStored = Omit<Stored, "version" | "connections"> & {
+/** v4: every connection an encrypted API key. */
+type EncryptedStoredV4 = Omit<Stored, "version" | "connections"> & {
   version: 4;
   keyId: string;
-  connections: (Omit<StoredConnection, "apiKey"> & {
+  connections: (Omit<StoredConnection, "apiKey" | "oauth" | "auth"> & {
     credential: EncryptedCredential | null;
   })[];
 };
+
+/**
+ * v5: a connection's `credential` is its encrypted API key, or for a
+ * subscription its encrypted token set as JSON. A runtime that only knows
+ * v4 refuses v5 rather than mistaking tokens for a key.
+ */
+type EncryptedStored = Omit<Stored, "version" | "connections"> & {
+  version: 5;
+  keyId: string;
+  connections: (Omit<StoredConnection, "apiKey" | "oauth"> & {
+    auth: "api_key" | "oauth";
+    credential: EncryptedCredential | null;
+  })[];
+};
+
+/** Renew a subscription's tokens this long before they expire. */
+const REFRESH_EARLY_MS = 5 * 60 * 1000;
 
 type LegacyStored = {
   telemetryEnabled: boolean;
@@ -50,13 +79,16 @@ type LegacyStored = {
   apiKey: string | null;
 };
 
-type SavedSettings = Stored | PreviousStored | EncryptedStored | LegacyStored;
+type SavedSettings =
+  Stored | PreviousStored | EncryptedStoredV4 | EncryptedStored | LegacyStored;
 
 type Options = {
   models: MutableModels;
   defaultModel: string;
   verifyKey?: (key: string) => Promise<void>;
   credentialKeyStore?: CredentialKeyStore;
+  /** The subscriptions offered; tests pass stand-ins. */
+  subscriptionProviders?: SubscriptionProvider[];
 };
 
 /** Private credentials never enter Pi documents, session APIs or browser storage. */
@@ -66,6 +98,11 @@ export class BackendSettings implements SettingsService {
   private options: Options;
   private providers: PiProviderConnections;
   private cipher: CredentialCipher;
+  private signIns: SubscriptionSignIns;
+  /** Subscriptions whose tokens could not be renewed: sign in again. */
+  private needsSignIn = new Set<string>();
+  /** Renewals in flight, so concurrent requests renew once. */
+  private refreshing = new Map<string, Promise<OAuthCredential>>();
   readonly connectionGate = new ModelConnectionGate();
   onChange: () => void = () => {};
   isBusy: () => Promise<boolean> = async () => false;
@@ -81,7 +118,19 @@ export class BackendSettings implements SettingsService {
     this.state = state;
     this.options = options;
     this.providers = new PiProviderConnections(options.models);
-    this.providers.publish(state.connections);
+    this.signIns = new SubscriptionSignIns({
+      providers: options.subscriptionProviders,
+      deviceId: () => this.state.deviceId ?? "",
+    });
+    this.publish(state.connections);
+  }
+
+  private publish(connections: StoredConnection[]) {
+    this.providers.publish(
+      connections,
+      (id) => this.signIns.provider(id),
+      (id) => this.subscriptionAuth(id),
+    );
   }
 
   static async open(path: string, options: Options) {
@@ -105,21 +154,23 @@ export class BackendSettings implements SettingsService {
         .query<{ value: string }, []>("SELECT value FROM settings WHERE id = 1")
         .get();
       const saved = row ? (JSON.parse(row.value) as SavedSettings) : undefined;
-      if (saved && "version" in saved && ![2, 3, 4].includes(saved.version))
+      if (saved && "version" in saved && ![2, 3, 4, 5].includes(saved.version))
         throw new Error();
-      if (
+      const encrypted =
         saved &&
         "version" in saved &&
-        saved.version === 4 &&
-        (typeof saved.keyId !== "string" ||
-          !/^[0-9a-f-]{36}$/.test(saved.keyId))
+        (saved.version === 4 || saved.version === 5)
+          ? saved
+          : undefined;
+      if (
+        encrypted &&
+        (typeof encrypted.keyId !== "string" ||
+          !/^[0-9a-f-]{36}$/.test(encrypted.keyId))
       )
         throw new Error();
       cipher = await CredentialCipher.open(
         options.credentialKeyStore ?? configuredCredentialKeyStore(),
-        saved && "version" in saved && saved.version === 4
-          ? saved.keyId
-          : undefined,
+        encrypted?.keyId,
       );
       const connections = BackendSettings.decodeConnections(saved, cipher);
       const state: Stored = {
@@ -132,9 +183,15 @@ export class BackendSettings implements SettingsService {
           id: c.id,
           provider: c.provider,
           name: c.name,
+          auth: c.auth ?? "api_key",
           apiKey: c.apiKey,
+          ...(c.oauth ? { oauth: c.oauth } : {}),
           enabled: c.enabled,
         })),
+        deviceId:
+          saved && "deviceId" in saved && typeof saved.deviceId === "string"
+            ? saved.deviceId
+            : crypto.randomUUID(),
       };
       db.query(
         "INSERT INTO settings (id,value) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
@@ -181,24 +238,63 @@ export class BackendSettings implements SettingsService {
       case 4:
         return saved.connections.map(({ credential, ...connection }) => ({
           ...connection,
+          auth: "api_key" as const,
           apiKey: cipher.decrypt(
             credential,
             connection.id,
             connection.provider,
           ),
         }));
+      case 5:
+        return saved.connections.map(({ credential, ...connection }) => {
+          const secret = cipher.decrypt(
+            credential,
+            connection.id,
+            connection.provider,
+          );
+          if (connection.auth !== "oauth")
+            return { ...connection, apiKey: secret };
+          return {
+            ...connection,
+            apiKey: null,
+            oauth: secret ? BackendSettings.parseOAuth(secret) : null,
+          };
+        });
     }
+  }
+
+  /** A saved token set, checked, or an error that keeps the file intact. */
+  private static parseOAuth(secret: string): OAuthCredential {
+    const value = JSON.parse(secret) as Partial<OAuthCredential>;
+    if (
+      value.type !== "oauth" ||
+      typeof value.access !== "string" ||
+      typeof value.refresh !== "string" ||
+      typeof value.expires !== "number"
+    )
+      throw new Error();
+    for (const token of [value.access, value.refresh])
+      registerRedactionSecret(token);
+    return value as OAuthCredential;
   }
 
   private static encode(state: Stored, cipher: CredentialCipher) {
     const saved: EncryptedStored = {
       ...state,
-      version: 4,
+      version: 5,
       keyId: cipher.keyId,
-      connections: state.connections.map(({ apiKey, ...connection }) => ({
-        ...connection,
-        credential: cipher.encrypt(apiKey, connection.id, connection.provider),
-      })),
+      connections: state.connections.map(({ apiKey, oauth, ...connection }) => {
+        const auth = connection.auth ?? "api_key";
+        return {
+          ...connection,
+          auth,
+          credential: cipher.encrypt(
+            auth === "oauth" ? (oauth ? JSON.stringify(oauth) : null) : apiKey,
+            connection.id,
+            connection.provider,
+          ),
+        };
+      }),
     };
     return JSON.stringify(saved);
   }
@@ -222,9 +318,82 @@ export class BackendSettings implements SettingsService {
   }
 
   get model() {
-    return this.selectedConnection?.enabled && this.key
+    const selected = this.selectedConnection;
+    return selected?.enabled && connectionReady(selected)
       ? { provider: this.state.connectionId, modelId: this.state.modelId }
       : undefined;
+  }
+
+  /** The chat models `connection` offers, as Pi lists them. */
+  private catalog(connection: StoredConnection | undefined) {
+    if (connection?.auth === "oauth") {
+      const stock = this.signIns.provider(connection.provider);
+      return stock ? PiProviderConnections.chatModels(stock, connection) : [];
+    }
+    return this.providers.provider.getModels();
+  }
+
+  /**
+   * A subscription's request auth: its tokens, renewed first when they are
+   * near expiry. Renewed tokens are saved, since the refresh token rotates.
+   */
+  private async subscriptionAuth(connectionId: string) {
+    const connection = this.state.connections.find(
+      (c) => c.id === connectionId,
+    );
+    const oauth = connection && this.signIns.oauth(connection.provider);
+    if (!connection?.oauth || !oauth)
+      throw new InputError("Sign in to this subscription again.", 401);
+    let credential = connection.oauth;
+    if (credential.expires - Date.now() < REFRESH_EARLY_MS)
+      credential = await this.renew(connection.id);
+    return oauth.toAuth(credential);
+  }
+
+  private renew(connectionId: string) {
+    const pending = this.refreshing.get(connectionId);
+    if (pending) return pending;
+    const run = (async () => {
+      const connection = this.state.connections.find(
+        (c) => c.id === connectionId,
+      );
+      const oauth = connection && this.signIns.oauth(connection.provider);
+      if (!connection?.oauth || !oauth)
+        throw new InputError("Sign in to this subscription again.", 401);
+      let renewed: OAuthCredential;
+      try {
+        renewed = await oauth.refresh(
+          connection.oauth,
+          AbortSignal.timeout(15_000),
+        );
+      } catch {
+        this.needsSignIn.add(connectionId);
+        this.onChange();
+        throw new InputError(
+          `${connection.name} needs you to sign in again.`,
+          401,
+        );
+      }
+      for (const token of [renewed.access, renewed.refresh])
+        registerRedactionSecret(token);
+      this.needsSignIn.delete(connectionId);
+      // Saved without re-registering providers: requests are using them.
+      await this.persist(
+        {
+          ...this.state,
+          connections: this.state.connections.map((c) =>
+            c.id === connectionId ? { ...c, oauth: renewed } : c,
+          ),
+        },
+        false,
+      );
+      return renewed;
+    })();
+    this.refreshing.set(connectionId, run);
+    void run
+      .finally(() => this.refreshing.delete(connectionId))
+      .catch(() => {});
+    return run;
   }
 
   get telemetryEnabled() {
@@ -233,11 +402,11 @@ export class BackendSettings implements SettingsService {
 
   async read(): Promise<RuntimeSettings> {
     const active = this.state.connections.filter(
-      (c) => c.enabled && this.providers.key(c),
+      (c) => c.enabled && connectionReady(c),
     );
     const models = active
       .flatMap((connection) =>
-        this.providers.provider.getModels().map((m) => ({
+        this.catalog(connection).map((m) => ({
           id: m.id,
           name: m.name,
           provider: connection.provider,
@@ -259,14 +428,25 @@ export class BackendSettings implements SettingsService {
       telemetryEnabled: this.state.telemetryEnabled,
       provider: this.state.connectionId,
       providerEnabled: this.selectedConnection?.enabled ?? false,
-      credentialSource: this.key ? "saved" : null,
+      credentialSource:
+        this.selectedConnection && connectionReady(this.selectedConnection)
+          ? "saved"
+          : null,
       modelId: this.state.modelId,
-      providers: [{ id: "openrouter", name: "OpenRouter" }],
+      providers: [
+        { id: "openrouter", name: "OpenRouter", auth: ["api_key"] },
+        ...this.signIns.offered().map((p) => ({
+          ...p,
+          auth: ["subscription" as const],
+        })),
+      ],
       connections: active.map((c) => ({
         id: c.id,
         provider: c.provider,
         name: c.name,
         credentialSource: "saved" as const,
+        auth: c.auth === "oauth" ? "subscription" : "api_key",
+        ...(this.needsSignIn.has(c.id) ? { needsSignIn: true } : {}),
       })),
       models,
     };
@@ -286,7 +466,7 @@ export class BackendSettings implements SettingsService {
       );
     }
     this.state = next;
-    if (publishConnections) this.providers.publish(next.connections);
+    if (publishConnections) this.publish(next.connections);
     this.onChange();
     return this.read();
   }
@@ -302,9 +482,12 @@ export class BackendSettings implements SettingsService {
   async update(input: UpdateRuntimeSettings) {
     if (input.provider !== undefined && input.provider !== "openrouter")
       throw new InputError("Choose an available provider.");
+    const target = this.state.connections.find(
+      (c) => c.id === (input.connectionId ?? this.state.connectionId),
+    );
     if (
       input.modelId !== undefined &&
-      !this.providers.provider.getModels().some((m) => m.id === input.modelId)
+      !this.catalog(target).some((m) => m.id === input.modelId)
     )
       throw new InputError("Choose a model from the available catalog.");
     const changesConnection =
@@ -317,7 +500,7 @@ export class BackendSettings implements SettingsService {
       if (
         input.connectionId &&
         !this.state.connections.some(
-          (c) => c.id === connectionId && c.enabled && this.providers.key(c),
+          (c) => c.id === connectionId && c.enabled && connectionReady(c),
         )
       )
         throw new InputError("Choose a connected provider connection.");
@@ -387,6 +570,10 @@ export class BackendSettings implements SettingsService {
   async editConnection(id: string, input: EditProviderConnection) {
     const connection = this.state.connections.find((c) => c.id === id);
     if (!connection) throw new InputError("Connection not found.", 404);
+    if (input.apiKey && connection.auth === "oauth")
+      throw new InputError(
+        "A subscription has no API key; sign in again instead.",
+      );
     await this.checkIdle();
     if (input.apiKey) await this.testProvider(input.apiKey);
     return this.connectionGate.run(async () => {
@@ -415,7 +602,7 @@ export class BackendSettings implements SettingsService {
         throw new InputError("Connection not found.", 404);
       const connections = this.state.connections.filter((c) => c.id !== id);
       const replacement = connections.find(
-        (c) => c.enabled && this.providers.key(c),
+        (c) => c.enabled && connectionReady(c),
       );
       return this.persist({
         ...this.state,
@@ -431,7 +618,80 @@ export class BackendSettings implements SettingsService {
   async testConnection(id: string, apiKey?: string) {
     const connection = this.state.connections.find((c) => c.id === id);
     if (!connection) throw new InputError("Connection not found.", 404);
+    // A subscription is working when its tokens are, renewed if need be.
+    if (connection.auth === "oauth") {
+      await this.subscriptionAuth(id);
+      return;
+    }
     await this.testProvider(apiKey ?? this.providers.key(connection));
+  }
+
+  /** Starts signing in to a subscription, for a new connection or to renew one. */
+  startSignIn(input: StartProviderSignIn): ProviderSignIn {
+    if (input.connectionId) {
+      const existing = this.state.connections.find(
+        (c) => c.id === input.connectionId,
+      );
+      if (!existing) throw new InputError("Connection not found.", 404);
+      if (existing.auth !== "oauth" || existing.provider !== input.provider)
+        throw new InputError("Only a subscription can be signed in again.");
+    }
+    return this.signIns.start(input, (signedIn) => this.saveSignIn(signedIn));
+  }
+
+  readSignIn(id: string) {
+    return this.signIns.read(id);
+  }
+
+  answerSignIn(id: string, promptId: string, value: string) {
+    return this.signIns.answer(id, promptId, value);
+  }
+
+  cancelSignIn(id: string) {
+    return this.signIns.cancel(id);
+  }
+
+  /** Saves a finished sign-in; returns the connection it went to. */
+  private async saveSignIn(signedIn: SignedIn) {
+    return this.connectionGate.run(async () => {
+      await this.checkIdle();
+      const renewing = signedIn.connectionId
+        ? this.state.connections.find((c) => c.id === signedIn.connectionId)
+        : undefined;
+      if (signedIn.connectionId && !renewing)
+        throw new InputError("Connection not found.", 404);
+      const connection: StoredConnection = renewing
+        ? { ...renewing, oauth: signedIn.credential }
+        : {
+            id: `${signedIn.provider}_${crypto.randomUUID()}`,
+            provider: signedIn.provider,
+            name: signedIn.name,
+            auth: "oauth",
+            apiKey: null,
+            oauth: signedIn.credential,
+            enabled: true,
+          };
+      this.needsSignIn.delete(connection.id);
+      // With no working default yet, this connection becomes it, with a
+      // model it actually offers.
+      const becomesDefault = !this.model;
+      const offered = this.catalog(connection);
+      const modelId =
+        !becomesDefault || offered.some((m) => m.id === this.state.modelId)
+          ? this.state.modelId
+          : (offered[0]?.id ?? this.state.modelId);
+      await this.persist({
+        ...this.state,
+        modelId,
+        connectionId: becomesDefault ? connection.id : this.state.connectionId,
+        connections: renewing
+          ? this.state.connections.map((c) =>
+              c.id === connection.id ? connection : c,
+            )
+          : [...this.state.connections, connection],
+      });
+      return connection.id;
+    });
   }
 
   async testProvider(apiKey = this.key) {
@@ -457,6 +717,7 @@ export class BackendSettings implements SettingsService {
   }
 
   close() {
+    this.signIns.close();
     this.db.close();
     this.cipher.close();
   }

@@ -9,7 +9,12 @@ Provider keys are entered only in Settings; environment keys are ignored.
 
 ## Decision and boundary
 
-Settings schema v4 encrypts each provider key using AES-256-GCM. A random 256-bit
+Settings schema v5 encrypts each connection's credential using AES-256-GCM: a
+provider key, or for a subscription connection its sign-in tokens (access token,
+refresh token and expiry) as JSON. Each connection records which (`auth`:
+`api_key` or `oauth`); v4 files are read as all API keys and rewritten as v5, and
+code that knows only v4 refuses a v5 file rather than mistaking tokens for a
+key. A random 256-bit
 master key lives in the OS credential store by default, under service
 `com.raphie.provider-credentials`, account/name equal to the database's random
 `keyId`. Explicit headless mode instead uses a private master-key file outside
@@ -107,7 +112,7 @@ then VACUUMs the settings database before publishing credentials. Failure to obt
 the lock, commit, or clean up aborts startup. Cleanup runs on every startup, so an
 interruption after commit retries it against the already encrypted state. Disk-full
 or permission failures require fixing storage and restarting. Never downgrade a
-v4 database to older code that expects plaintext.
+v4 or v5 database to older code that expects plaintext or API keys only.
 
 Editing replaces the encrypted value without changing connection identity.
 Removing/clearing a key removes its ciphertext from current settings and active
@@ -165,3 +170,28 @@ in-memory store; it is never a production fallback.
 - [SQLite secure_delete](https://sqlite.org/pragma.html#pragma_secure_delete),
   [journal_mode](https://sqlite.org/pragma.html#pragma_journal_mode) and
   [VACUUM](https://sqlite.org/lang_vacuum.html)
+
+## Subscription connections
+
+A subscription connection (Settings → Providers → a provider offered by sign-in,
+such as OpenAI's "Sign in with ChatGPT") is made by the provider's own sign-in,
+which Pi runs on the runtime. Which of Pi's subscription providers are offered is
+an allow-list in `subscription-sign-ins.ts`; adding one is an entry there.
+
+- **Sign-in sessions** live in memory on the runtime and are driven over
+  `/api/settings/sign-ins` (see [headless interface](headless-interface.md)): the
+  client shows what the sign-in reports (a page to open, a device code, progress)
+  and answers what it asks. Answers, such as a pasted redirect address carrying an
+  authorization code, are registered as secrets so they are never logged, and are
+  never returned in a response. An unfinished sign-in is abandoned after 15 minutes.
+  Only one sign-in runs on a runtime at a time, because OpenAI's browser sign-in
+  needs port 1455 on the runtime's machine.
+- **Remote runtimes.** A browser sign-in returns to `127.0.0.1` on the runtime's
+  machine. When the runtime is elsewhere, that last page does not load in the
+  owner's browser; the owner pastes its address back into Raphie instead.
+- **Tokens** are stored like keys, encrypted in the bot's settings database, and
+  never reach a browser, a conversation document or a log. Before a request, a
+  token within five minutes of expiry is renewed (one renewal at a time per
+  connection) and the renewed tokens are saved, since the refresh token rotates.
+  If renewal fails, the connection reports `needsSignIn` and the owner signs in
+  again from the same connection, which keeps its identity.

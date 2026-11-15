@@ -66,6 +66,46 @@ export function settingsRoutes(settings: SettingsService) {
       },
     )
     .post(
+      "/sign-ins",
+      limitBody(8192),
+      jsonInput(
+        z
+          .object({
+            provider: z.string().max(80),
+            name,
+            connectionId: z.string().max(120).optional(),
+          })
+          .strict(),
+      ),
+      (c) => c.json(settings.startSignIn(c.req.valid("json")), 201),
+    )
+    .get("/sign-ins/:id", (c) => c.json(settings.readSignIn(c.req.param("id"))))
+    .post(
+      "/sign-ins/:id/answer",
+      limitBody(16_384),
+      jsonInput(
+        z
+          .object({
+            promptId: z.string().max(80),
+            // A pasted redirect address or code; never logged or returned.
+            value: z.string().min(1).max(8192),
+          })
+          .strict(),
+      ),
+      (c) => {
+        const input = c.req.valid("json");
+        return c.json(
+          settings.answerSignIn(c.req.param("id"), input.promptId, input.value),
+        );
+      },
+    )
+    .post(
+      "/sign-ins/:id/cancel",
+      limitBody(1024),
+      jsonInput(z.object({}).strict()),
+      (c) => c.json(settings.cancelSignIn(c.req.param("id"))),
+    )
+    .post(
       "/provider/test",
       limitBody(8192),
       jsonInput(z.object({ apiKey: key.optional() }).strict()),

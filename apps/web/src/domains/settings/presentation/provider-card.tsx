@@ -1,5 +1,13 @@
 import type { ProviderConnection } from "@raphie/contracts";
-import { ArrowUpRight, Check, KeyRound, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  KeyRound,
+  LogIn,
+  Pencil,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 
 import { Button } from "../../../shared/ui/button";
 
@@ -31,22 +39,36 @@ export function ProviderCard({
           <h3>{connection.name}</h3>
           <p>{providerName}</p>
         </div>
-        <span className="catalog-badge connected">
-          <Check size={12} />
-          Connected
-        </span>
+        {connection.needsSignIn ? (
+          <span className="catalog-badge provider-badge-sign-in">
+            <TriangleAlert size={12} />
+            Sign in again
+          </span>
+        ) : (
+          <span className="catalog-badge connected">
+            <Check size={12} />
+            Connected
+          </span>
+        )}
       </div>
       <div className="provider-card-details">
-        <span>
-          <KeyRound size={14} />
-          Saved API key
-        </span>
+        {connection.auth === "subscription" ? (
+          <span>
+            <LogIn size={14} />
+            Subscription sign-in
+          </span>
+        ) : (
+          <span>
+            <KeyRound size={14} />
+            Saved API key
+          </span>
+        )}
         <span>{modelCount} models</span>
       </div>
       <footer>
         <Button variant="outline" size="sm" disabled={busy} onClick={onEdit}>
-          <Pencil />
-          Edit connection
+          {connection.needsSignIn ? <LogIn /> : <Pencil />}
+          {connection.needsSignIn ? "Sign in again" : "Edit connection"}
         </Button>
         <Button variant="ghost" size="sm" disabled={busy} onClick={onRemove}>
           <Trash2 />
