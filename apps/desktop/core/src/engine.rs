@@ -40,6 +40,7 @@ use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::MemoryUpdate;
 use crate::model::{DecisionOutcome, Event, StreamStatus};
 use crate::origin::Origin;
+use crate::sandbox::SandboxUpdate;
 use crate::settings::Settings;
 use crate::sse::SseParser;
 
@@ -120,6 +121,15 @@ pub enum Command {
     /// Ask the runtime to reach the bot's saved memory back end.
     TestMemory {
         bot_id: String,
+    },
+    /// Load a bot's sandbox settings, provider, limits and usage.
+    LoadSandbox {
+        bot_id: String,
+    },
+    /// Save a bot's sandbox settings.
+    SaveSandbox {
+        bot_id: String,
+        update: SandboxUpdate,
     },
     /// Load a bot's Discord and Telegram connections.
     LoadChannels {
@@ -416,6 +426,8 @@ impl Engine {
             Command::LoadMemory { bot_id } => self.load_memory(bot_id),
             Command::SaveMemory { bot_id, update } => self.save_memory(bot_id, update),
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
+            Command::LoadSandbox { bot_id } => self.load_sandbox(bot_id),
+            Command::SaveSandbox { bot_id, update } => self.save_sandbox(bot_id, update),
             Command::LoadChannels { bot_id } => self.load_channels(bot_id),
             Command::LoadChannelHome { bot_id } => self.load_channel_home(bot_id),
             Command::ChangeChannel { bot_id, change } => self.change_channel(bot_id, change),
@@ -862,6 +874,58 @@ impl Engine {
                 Err(error) => error.to_string(),
             };
             emit.emit(Event::MemoryTested { message });
+        });
+    }
+
+    fn load_sandbox(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.sandbox(&bot_id).await {
+                Ok(info) => emit.emit(Event::Sandbox {
+                    bot_id,
+                    info: Box::new(info),
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::SandboxFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn save_sandbox(&mut self, bot_id: String, update: SandboxUpdate) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.save_sandbox(&bot_id, &update).await {
+                Ok(settings) => emit.emit(Event::SandboxSaved { bot_id, settings }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => {
+                    emit.emit(Event::SandboxSaveFailed {
+                        message: error.to_string(),
+                    });
+                    // A refusal often means the settings changed elsewhere:
+                    // read them again so the form can say so.
+                    if let Ok(info) = api.sandbox(&bot_id).await {
+                        emit.emit(Event::Sandbox {
+                            bot_id,
+                            info: Box::new(info),
+                        });
+                    }
+                }
+            }
         });
     }
 

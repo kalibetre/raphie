@@ -12,8 +12,9 @@ use crate::auth::DeviceCode;
 use crate::channels::{Channel, ChannelOutcome};
 use crate::contracts::{
     Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection,
-    MemoryEvidence, MemoryPage, MemoryStatus, Page, Receipt, RuntimeSettings, SessionApproval,
-    SessionObservation, SessionSummary, SessionTurn, TelegramPairingCode,
+    MemoryEvidence, MemoryPage, MemoryStatus, Page, Receipt, RuntimeSettings, SandboxInfo,
+    SandboxSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
+    TelegramPairingCode,
 };
 use crate::memory::MemoryBrowser;
 use crate::origin::Origin;
@@ -82,6 +83,23 @@ pub enum Event {
     },
     /// A test of the saved memory back end ended; `message` says how.
     MemoryTested {
+        message: String,
+    },
+    /// A bot's sandbox settings, provider, limits and usage.
+    Sandbox {
+        bot_id: String,
+        info: Box<SandboxInfo>,
+    },
+    SandboxFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// Sandbox settings were saved; these are they at their new revision.
+    SandboxSaved {
+        bot_id: String,
+        settings: SandboxSettings,
+    },
+    SandboxSaveFailed {
         message: String,
     },
     /// A bot's Discord and Telegram connections.
@@ -264,6 +282,8 @@ pub enum Effect {
     /// This bot's memory settings were saved: its form should show them and
     /// forget any typed key.
     MemorySaved(String),
+    /// This bot's sandbox settings were saved: its form should show them.
+    SandboxSaved(String),
     /// A change to a bot's channels was made: forget what was typed for
     /// it, and close its form where the web does.
     ChannelChanged(ChannelOutcome),
@@ -413,6 +433,17 @@ pub struct Model {
     pub memory_message: Option<String>,
     /// The saved memories on "Browse memory".
     pub memories: MemoryBrowser,
+    /// Each bot's sandbox details, once loaded.
+    pub sandbox: HashMap<String, SandboxInfo>,
+    /// The bot whose sandbox details could not be loaded, and why. Details
+    /// loaded before stay on screen, marked as not refreshed.
+    pub sandbox_error: Option<(String, String)>,
+    /// A save of sandbox settings is on its way.
+    pub saving_sandbox: bool,
+    /// Why the last save of sandbox settings failed, until the next attempt.
+    pub sandbox_save_error: Option<String>,
+    /// What the last save of sandbox settings said.
+    pub sandbox_message: Option<String>,
     /// Each bot's Discord and Telegram connections, once loaded.
     pub channels: HashMap<String, ChannelSettings>,
     /// The bot whose channels could not be loaded, and why.
@@ -479,6 +510,11 @@ impl Default for Model {
             testing_memory: false,
             memory_message: None,
             memories: MemoryBrowser::default(),
+            sandbox: HashMap::new(),
+            sandbox_error: None,
+            saving_sandbox: false,
+            sandbox_save_error: None,
+            sandbox_message: None,
             channels: HashMap::new(),
             channels_error: None,
             channel_home: HashMap::new(),
@@ -598,6 +634,27 @@ impl Model {
             Event::MemoryTested { message } => {
                 self.testing_memory = false;
                 self.memory_message = Some(message);
+            }
+            Event::Sandbox { bot_id, info } => {
+                self.sandbox_error = None;
+                // `*info` moves the details out of their `Box`.
+                self.sandbox.insert(bot_id, *info);
+            }
+            Event::SandboxFailed { bot_id, message } => {
+                self.sandbox_error = Some((bot_id, message));
+            }
+            Event::SandboxSaved { bot_id, settings } => {
+                self.saving_sandbox = false;
+                self.sandbox_save_error = None;
+                self.sandbox_message = Some(format!("Saved revision {}.", settings.revision));
+                if let Some(info) = self.sandbox.get_mut(&bot_id) {
+                    info.settings = settings;
+                }
+                return vec![Effect::SandboxSaved(bot_id)];
+            }
+            Event::SandboxSaveFailed { message } => {
+                self.saving_sandbox = false;
+                self.sandbox_save_error = Some(message);
             }
             Event::Channels { bot_id, settings } => {
                 self.channels_error = None;
@@ -824,6 +881,18 @@ impl Model {
         self.saving_memory = true;
         self.memory_save_error = None;
         self.memory_message = None;
+        true
+    }
+
+    /// The owner saved sandbox settings. Returns false while a save is
+    /// already on its way.
+    pub fn begin_save_sandbox(&mut self) -> bool {
+        if self.saving_sandbox {
+            return false;
+        }
+        self.saving_sandbox = true;
+        self.sandbox_save_error = None;
+        self.sandbox_message = None;
         true
     }
 

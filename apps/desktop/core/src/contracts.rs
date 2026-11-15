@@ -816,3 +816,110 @@ pub(crate) struct UnpairTelegramBody<'a> {
 pub(crate) struct SelectHomeBody<'a> {
     pub id: Option<&'a str>,
 }
+
+/// `SandboxProvider` in `packages/contracts/src/workspaces/views.ts`: what
+/// runs a bot's commands.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SandboxProvider {
+    /// Shell commands over a virtual filesystem, with no network.
+    JustBash,
+    /// Native programs in a container of the bot's own.
+    Container,
+}
+
+/// `SandboxSettings`: what the owner chose for one bot.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxSettings {
+    pub provider: SandboxProvider,
+    /// How long an idle container is kept before it is stopped.
+    pub idle_minutes: u32,
+    /// The container's disk limit in MiB; `None` is no limit.
+    #[serde(rename = "diskQuotaMiB")]
+    pub disk_quota_mib: Option<u64>,
+    /// The owner accepted that a container can reach host and LAN services.
+    pub host_network_acknowledged: bool,
+    /// Counts up with each save.
+    pub revision: u64,
+}
+
+/// `SandboxProviderInfo`: a provider the runtime knows, and whether this
+/// machine can run it.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct SandboxProviderInfo {
+    pub id: SandboxProvider,
+    pub name: String,
+    pub available: bool,
+    /// Why it is unavailable, when it is.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// The provider that is running the bot's commands now.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct ActiveSandbox {
+    pub id: SandboxProvider,
+    pub name: String,
+    pub version: String,
+}
+
+/// How busy the bot's workspace is.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxExecutions {
+    /// Operations running or waiting.
+    pub admitted: u32,
+    /// The most a bot may have admitted at once.
+    pub capacity: u32,
+    /// Workers running at once across every bot.
+    pub runtime_concurrency: u32,
+}
+
+/// What the workspace holds; `None` where the provider does not measure.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxUsage {
+    pub file_bytes: Option<u64>,
+    pub entries: Option<u64>,
+    pub receipt_bytes: Option<u64>,
+}
+
+/// The limits on one execution and on the workspace; `None` is no limit.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxLimits {
+    pub timeout_ms: u64,
+    pub source_bytes: u64,
+    pub output_bytes: u64,
+    pub file_bytes: Option<u64>,
+    pub entries: Option<u64>,
+    pub receipts_bytes: Option<u64>,
+}
+
+/// `SandboxInfo`: what `GET /api/workspace` answers.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct SandboxInfo {
+    pub settings: SandboxSettings,
+    /// Every provider the runtime knows.
+    pub providers: Vec<SandboxProviderInfo>,
+    pub provider: ActiveSandbox,
+    /// Where the bot's files appear to its commands (`/workspace`).
+    pub root: String,
+    pub executions: SandboxExecutions,
+    pub usage: SandboxUsage,
+    pub limits: SandboxLimits,
+}
+
+/// The body of `POST /api/workspace/settings` (`SaveSandboxSettings`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveSandboxBody {
+    pub provider: SandboxProvider,
+    pub host_network_acknowledged: bool,
+    pub idle_minutes: u32,
+    /// Always written: `null` is how "no limit" is said.
+    #[serde(rename = "diskQuotaMiB")]
+    pub disk_quota_mib: Option<u64>,
+    pub revision: u64,
+}

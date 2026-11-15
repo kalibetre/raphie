@@ -65,6 +65,10 @@ pub struct Host {
     pub memory_saves: Vec<Value>,
     /// Answer memory tests with a failure, as an unreachable server would.
     pub memory_unreachable: bool,
+    /// The sandbox settings, once a test saved some.
+    pub sandbox: Option<Value>,
+    /// Sandbox saves, as received.
+    pub sandbox_saves: Vec<Value>,
     /// The Discord and Telegram settings, as the runtime answers them.
     pub discord: Option<Value>,
     pub telegram: Option<Value>,
@@ -179,6 +183,8 @@ fn router(fake: Fake) -> Router {
         )
         .route("/api/memory", get(memory).post(save_memory))
         .route("/api/memory/test", post(test_memory))
+        .route("/api/workspace", get(sandbox))
+        .route("/api/workspace/settings", post(save_sandbox))
         .route("/api/channels", get(channels))
         .route("/api/channels/home", get(channel_home).post(channel_home))
         .route("/api/channels/{channel}", post(change_channel))
@@ -263,6 +269,85 @@ async fn save_memory(
         }));
     }
     Json(memory_json(&fake)).into_response()
+}
+
+/// The sandbox settings as the runtime holds them: just-bash at revision 1
+/// until a test saves something else.
+fn sandbox_settings(host: &Host) -> Value {
+    host.sandbox.clone().unwrap_or_else(|| {
+        json!({
+            "provider": "just-bash", "idleMinutes": 30, "diskQuotaMiB": null,
+            "hostNetworkAcknowledged": false, "revision": 1,
+        })
+    })
+}
+
+async fn sandbox(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let settings = sandbox_settings(&fake.host.lock().unwrap());
+    let container = settings["provider"] == "container";
+    Json(json!({
+        "settings": settings,
+        "providers": [
+            { "id": "just-bash", "name": "just-bash", "available": true, "reason": null },
+            { "id": "container", "name": "Container", "available": true, "reason": null },
+        ],
+        "provider": {
+            "id": settings["provider"],
+            "name": if container { "Container" } else { "just-bash" },
+            "version": "2.9.0",
+        },
+        "isolation": if container { "container" } else { "virtual-filesystem" },
+        "capabilities": { "network": container, "hostFiles": false, "nativeCode": container },
+        "root": "/workspace", "revision": 7,
+        "executions": { "admitted": 0, "capacity": 8, "runtimeConcurrency": 4 },
+        "usage": { "fileBytes": 1536, "entries": 12, "receiptBytes": 2048 },
+        "limits": {
+            "timeoutMs": 120_000, "sourceBytes": 65_536, "outputBytes": 1_048_576,
+            "fileBytes": 104_857_600, "entries": 10_000, "receiptsBytes": 10_485_760,
+        },
+    }))
+    .into_response()
+}
+
+/// Saves the settings at the next revision, as long as the save started
+/// from the current one and a container is acknowledged.
+async fn save_sandbox(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    let current = sandbox_settings(&host);
+    host.sandbox_saves.push(body.clone());
+    let refused = |status: StatusCode, message: &str| {
+        (status, Json(json!({ "error": message }))).into_response()
+    };
+    if body["revision"] != current["revision"] {
+        return refused(StatusCode::CONFLICT, "Sandbox settings changed elsewhere.");
+    }
+    if body["provider"] == "container" && body["hostNetworkAcknowledged"] != true {
+        return refused(
+            StatusCode::BAD_REQUEST,
+            "Acknowledge host and local network access to enable Container.",
+        );
+    }
+    let saved = json!({
+        "provider": body["provider"], "idleMinutes": body["idleMinutes"],
+        "diskQuotaMiB": body["diskQuotaMiB"],
+        "hostNetworkAcknowledged": body["hostNetworkAcknowledged"],
+        "revision": current["revision"].as_u64().unwrap_or(0) + 1,
+    });
+    host.sandbox = Some(saved.clone());
+    Json(saved).into_response()
 }
 
 fn channels_json(fake: &Fake) -> Value {
