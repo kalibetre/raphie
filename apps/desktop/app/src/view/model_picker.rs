@@ -4,16 +4,13 @@
 //! Mirrors `model-picker.tsx`, `model-results.tsx`, `model-choices.tsx`
 //! and `model-picker.css`. What the list shows for a search, and how a
 //! model is named, are in the core (`raphie_core::model_library`).
-//!
-//! One part of the web's picker is not here: the "model family" drop-down.
-//! Typing the family ("anthropic") in the search finds the same models.
 
 use raphie_core::contracts::{LibraryModel, ModelSelection, RuntimeSettings};
 use raphie_core::model_library::{
-    PickerFilter, favorite_key, pick_models, selected, selection_name, short_price,
+    PickerFilter, families, favorite_key, pick_models, selected, selection_name, short_price,
 };
 use rune::{El, Icon, Tx, col, icon, row, text, text_input};
-use rune_kit::{Placement, popover, scrim};
+use rune_kit::{Placement, Select, SelectAppearance, popover, scrim};
 
 use super::Look;
 use crate::icons;
@@ -63,9 +60,13 @@ pub fn model_picker(s: &Ui, enabled: bool, look: &Look, overlays: &mut Vec<El>) 
         }));
         // The 1-point padding keeps the rail's own background off the
         // surface's border, which it would otherwise paint over.
-        let inside = col()
-            .padding(1.0)
-            .child(panel(s, settings, active.as_ref(), t));
+        // The family drop-down's list must draw above the picker, so it
+        // is collected here and added after it.
+        let mut lists = Vec::new();
+        let inside =
+            col()
+                .padding(1.0)
+                .child(panel(s, settings, active.as_ref(), look, &mut lists));
         let surface = popover::raised(&look.kit, inside, 14.0)
             .fill(t.card)
             .border(1.0, t.border);
@@ -76,21 +77,24 @@ pub fn model_picker(s: &Ui, enabled: bool, look: &Look, overlays: &mut Vec<El>) 
             Placement::TopStart,
             10.0,
         ));
+        overlays.extend(lists);
     }
     trigger
 }
 
-/// The list: a rail of two filters, then the search, the models and a
-/// footer.
+/// The list: a rail of two filters, then the search, the family drop-down,
+/// the models and a footer.
 fn panel(
     s: &Ui,
     settings: Option<&RuntimeSettings>,
     active: Option<&ModelSelection>,
-    t: &Theme,
+    look: &Look,
+    overlays: &mut Vec<El>,
 ) -> El {
+    let t = &look.theme;
     let picker = &s.model_picker;
     let models: &[LibraryModel] = settings.map_or(&[], |settings| &settings.models);
-    let matching = pick_models(models, &picker.search.text, picker.filter, &s.favorites);
+    let matching = pick_models(models, &picker.search.text, &picker.filter, &s.favorites);
     let current = active.and_then(|active| selected(models, active));
 
     let rail = col()
@@ -108,7 +112,7 @@ fn panel(
             &icons::STAR,
             "Favorite models",
             PickerFilter::Favorites,
-            picker.filter,
+            &picker.filter,
         ))
         .child(rail_button(
             t,
@@ -116,7 +120,7 @@ fn panel(
             &icons::LAYERS,
             "All models",
             PickerFilter::All,
-            picker.filter,
+            &picker.filter,
         ));
 
     let search = row()
@@ -211,6 +215,7 @@ fn panel(
         .min_h(0.0)
         .padding(10.0)
         .child(search)
+        .children(family_select(s, models, look, overlays))
         .child(heading)
         // The models scroll when they are taller than the list has room
         // for; `fit_scroll` shrinks with the surface.
@@ -250,9 +255,9 @@ fn rail_button(
     glyph: &'static Icon,
     label: &str,
     filter: PickerFilter,
-    chosen: PickerFilter,
+    chosen: &PickerFilter,
 ) -> El {
-    let on = filter == chosen;
+    let on = filter == *chosen;
     let button = row()
         .key(key.to_owned())
         .role("button")
@@ -270,13 +275,58 @@ fn rail_button(
                 .color(if on { t.accent } else { t.muted_foreground })
                 .a11y_hidden(),
         )
-        .on_press(move |s: &mut Ui| s.model_picker.filter = filter);
+        .on_press(move |s: &mut Ui| s.model_picker.filter = filter.clone());
     if on {
         button.fill(t.accent_soft)
     } else {
         button
     }
 }
+
+/// Shown above the list when the models come from more than one family:
+/// "All model families", then each family, as on the web.
+fn family_select(
+    s: &Ui,
+    models: &[LibraryModel],
+    look: &Look,
+    overlays: &mut Vec<El>,
+) -> Option<El> {
+    let found = families(models);
+    if found.len() < 2 {
+        return None;
+    }
+    let mut names = vec![ALL_FAMILIES.to_owned()];
+    names.extend(found);
+    let shown = match &s.model_picker.filter {
+        PickerFilter::Family(name) => name.as_str(),
+        // Favorites and All both read "All model families", as on the web.
+        _ => ALL_FAMILIES,
+    };
+    let select = Select::new("rd-model-family", &names)
+        .label("Model family")
+        .appearance(SelectAppearance::Field)
+        .width(FAMILY_WIDTH)
+        .current(Some(shown))
+        .open(s.model_picker.family_open)
+        .on_toggle(|s: &mut Ui| s.model_picker.family_open = !s.model_picker.family_open)
+        .on_close(|s: &mut Ui| s.model_picker.family_open = false)
+        .on_choose(|s: &mut Ui, name: &str, _: &mut Tx| {
+            s.model_picker.filter = if name == ALL_FAMILIES {
+                PickerFilter::All
+            } else {
+                PickerFilter::Family(name.to_owned())
+            };
+            s.model_picker.family_open = false;
+        })
+        .build(&look.kit, overlays);
+    Some(row().w_full().pt(10.0).child(select))
+}
+
+/// The drop-down's first choice.
+const ALL_FAMILIES: &str = "All model families";
+
+/// The list's width less the rail and padding: the drop-down spans it.
+const FAMILY_WIDTH: f32 = 346.0;
 
 /// A line of explanation in the list (loading, nothing found, an error).
 fn message(t: &Theme, content: &str) -> El {
@@ -429,6 +479,9 @@ fn choice(
                         .wrap(),
                 ),
         );
+    // Rows take keyboard focus, as the web's buttons do, so Tab and the
+    // arrow keys reach them and Return picks one.
+    let pick = pick.focusable(!s.model.choosing_model);
     let pick = pressable(pick, !s.model.choosing_model, move |s: &mut Ui| {
         s.choose_model(selection.clone());
     });
@@ -447,6 +500,7 @@ fn choice(
         .center()
         .radius(6.0)
         .focus_ring(1.0, 1.0, t.accent)
+        .focusable(true)
         .child(
             icon(
                 if favorite {

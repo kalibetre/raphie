@@ -47,6 +47,7 @@ pub const SCENES: &[Scene] = &[
     ("permissions", permissions),
     ("model-picker", model_picker),
     ("model-picker-favorites", model_picker_favorites),
+    ("model-picker-family", model_picker_family),
     ("tools", tools),
     ("streaming", streaming),
     ("working", working),
@@ -1276,6 +1277,13 @@ pub fn model_picker(ui: &mut Ui) {
 pub fn model_picker_favorites(ui: &mut Ui) {
     model_picker(ui);
     ui.model_picker.filter = PickerFilter::Favorites;
+}
+
+/// The picker narrowed to one family, with the family list open.
+pub fn model_picker_family(ui: &mut Ui) {
+    model_picker(ui);
+    ui.model_picker.filter = PickerFilter::Family("anthropic".into());
+    ui.model_picker.family_open = true;
 }
 
 /// A message sent with two files, and two more waiting in the composer.

@@ -107,8 +107,10 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   has no such view yet.
 - **Model**: the button beside the paperclip names the model the next
   message will be answered with, and opens a list of the bot's models to
-  choose another: search by name, id or connection, and star models to keep
-  them under Favorites. For an open conversation the choice is saved on the
+  choose another: search by name, id or connection, narrow the list to one
+  model family (the part of the id before `/`, as on the web), and star
+  models to keep them under Favorites. Up and Down move between the models
+  from the search box, and Return picks one. For an open conversation the choice is saved on the
   host at once; for a new one it goes with the first message. Without a
   choice, a conversation uses the bot's default for new sessions. Stars are
   kept on this computer. The model cannot be changed while Raphie works.
@@ -469,9 +471,6 @@ Where the two differ on purpose:
 - System notifications are this client's own; the web has none. Clicking
   one has been checked on macOS; on Windows and Linux it is compiled in but
   not run.
-- The model picker has no "model family" drop-down; typing the family
-  ("anthropic") in its search finds the same models. The Up and Down keys
-  do not move between its rows as they do on the web.
 - Attachments: the paperclip picks one file at a time (the web's picker
   takes several); drag several onto the conversation instead. Cards in the
   composer wrap onto new rows where the web scrolls them sideways. Pasting an image or

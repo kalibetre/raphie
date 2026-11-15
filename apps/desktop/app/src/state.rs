@@ -438,6 +438,8 @@ pub struct ModelPicker {
     pub open: bool,
     pub search: TextEdit,
     pub filter: PickerFilter,
+    /// Whether the "Model family" drop-down's list shows.
+    pub family_open: bool,
 }
 
 impl Ui {
@@ -1014,6 +1016,48 @@ impl Ui {
             ..ModelPicker::default()
         };
         self.model.model_error = None;
+    }
+
+    /// The keys of the picker's model rows, top to bottom, as the view
+    /// draws them: what Up and Down move between.
+    pub fn picker_rows(&self) -> Vec<String> {
+        let models = self
+            .bot_models()
+            .map_or(&[][..], |settings| &settings.models);
+        model_library::pick_models(
+            models,
+            &self.model_picker.search.text,
+            &self.model_picker.filter,
+            &self.favorites,
+        )
+        .into_iter()
+        .map(|model| format!("rd-model-choice-{}", model_library::favorite_key(model)))
+        .collect()
+    }
+
+    /// Where Up (`step` -1) or Down (+1) moves from `focused` in the model
+    /// list, as on the web: from the search box to the first row (Down) or
+    /// the last (Up), and around at the ends. `None` when focus is
+    /// elsewhere or there is nothing to move to.
+    pub fn picker_step(&self, focused: Option<&str>, step: isize) -> Option<String> {
+        let rows = self.picker_rows();
+        if rows.is_empty() {
+            return None;
+        }
+        let count = rows.len() as isize;
+        let next = match rows.iter().position(|row| Some(row.as_str()) == focused) {
+            // `rem_euclid` keeps the result in 0..count, so -1 becomes the last.
+            Some(at) => (at as isize + step).rem_euclid(count),
+            None if focused == Some("rd-model-search") => {
+                if step > 0 {
+                    0
+                } else {
+                    count - 1
+                }
+            }
+            None => return None,
+        };
+        rows.into_iter().nth(next as usize)
     }
 
     /// Asks again for the selected bot's models after a failed load.
