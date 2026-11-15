@@ -117,6 +117,54 @@ containerTest(
 );
 
 containerTest(
+  "a leftover container whose folder is gone does not block bot deletion",
+  async () => {
+    await fixture(async (provider, directory) => {
+      await shell(provider.env(), "echo owned > marker");
+      const db = new Database(
+        join(directory, "workspace", "container.sqlite"),
+        { readonly: true },
+      );
+      const lease = db
+        .query<{ scope: string; workspace_id: string }, []>(
+          "SELECT scope, workspace_id FROM lease",
+        )
+        .get()!;
+      db.close();
+      await Bun.write(
+        join(directory, "workspace-identity.json"),
+        JSON.stringify({ id: lease.workspace_id }),
+      );
+      // Another bot's container from the same installation, whose folder
+      // was removed without removing the container.
+      const gone = await mkdtemp(join(tmpdir(), "raphie-test-gone-"));
+      const leftover = cli
+        .run([
+          "create",
+          "--label",
+          `raphie.workspace=${lease.workspace_id}`,
+          "--label",
+          "raphie.scope=leftover-scope",
+          "--mount",
+          `type=bind,source=${gone},target=/workspace`,
+          process.env.RAPHIE_CONTAINER_IMAGE ?? "raphie-workspace:slice2",
+          "true",
+        ])
+        .trim();
+      try {
+        await rm(gone, { recursive: true, force: true });
+        await ContainerWorkspace.reapForDeletion(directory);
+        expect(cli.owned(lease.workspace_id, lease.scope)).toEqual([]);
+        expect(cli.owned(lease.workspace_id, "leftover-scope")).toHaveLength(1);
+      } finally {
+        cli.run(["rm", "-f", leftover]);
+      }
+    });
+  },
+  30000,
+);
+
+containerTest(
   "document reader sees the selected container workspace",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "raphie-test-document-"));
