@@ -99,7 +99,17 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     the app never stores or shows them. "Authorize" opens the server's
     sign-in page in your browser. While the page shows it asks the host
     again every five seconds, so a finished authorization appears by itself.
-  - **A bot's other pages** (Channels, Sandbox, ...) are not built yet: each
+  - **Channels** connects a bot to Discord and Telegram and chooses its home
+    channel. Discord takes a bot token, the user IDs allowed to message the
+    bot, and an optional channel ID. Telegram takes a bot token, then pairs
+    your account with a one-time code, lists and revokes verified accounts,
+    and pauses receiving without losing either. Bot tokens are typed into
+    masked fields, sent once, and dropped; the app never stores or shows
+    them. While a pairing code is out the page asks the host again every
+    two seconds, so your account shows as verified by itself. The home
+    channel is where scheduled results go: web only, or a known Discord or
+    Telegram conversation.
+  - **A bot's other pages** (Sandbox, Workspace, ...) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.

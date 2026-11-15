@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use raphie_core::auth::KeychainStore;
 use raphie_core::auth::Secret;
+use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome, is_telegram_token};
 use raphie_core::contracts::{
     ControlAction, Decision, MemoryProvider, MemoryStatus, Scope, TurnStatus,
 };
@@ -19,6 +20,7 @@ use raphie_core::origin::Origin;
 use raphie_core::settings::{Settings, ThemeChoice};
 use rune::{TextEdit, Tx, Waker};
 
+use crate::channels::{DiscordForm, TelegramForm, UNSAVED};
 use crate::mcp::McpForm;
 use crate::memory::MemoryDraft;
 use crate::profile::ProfileDraft;
@@ -139,6 +141,11 @@ const SEARCH_PAUSE: f64 = 0.3;
 /// own: an authorization finishes in the browser, a server drops.
 const MCP_REFRESH: f64 = 5.0;
 
+/// How often the Channels page asks again for the home channel, and, while
+/// a Telegram pairing code is out, for the channels (the web's intervals).
+const HOME_REFRESH: f64 = 5.0;
+const PAIRING_REFRESH: f64 = 2.0;
+
 /// "Browse memory": the search box, and the one memory being changed. The
 /// list itself is in the core (`Model::memories`).
 pub struct MemoriesView {
@@ -225,6 +232,12 @@ pub struct Ui {
     pub memory: MemoryDraft,
     /// Settings → Memory → Browse memory.
     pub memories: MemoriesView,
+    /// Settings → Channels: the Discord form and the Telegram panel.
+    pub discord: DiscordForm,
+    pub telegram: TelegramForm,
+    /// The frame clock when the Channels page last asked for the home
+    /// channel, and for the channels.
+    channels_asked_at: (f64, f64),
     /// Settings → MCP tools: the "Add a connection" form.
     pub mcp: McpForm,
     /// The frame clock when the MCP tools page last asked for its
@@ -277,6 +290,9 @@ impl Ui {
             providers: ProvidersView::new(),
             memory: MemoryDraft::empty(),
             memories: MemoriesView::new(),
+            discord: DiscordForm::new(),
+            telegram: TelegramForm::new(),
+            channels_asked_at: (0.0, 0.0),
             mcp: McpForm::new(),
             mcp_asked_at: 0.0,
             profile: ProfileDraft::empty(),
@@ -435,6 +451,20 @@ impl Ui {
                 self.model.memory_message = None;
                 // Notice settings saved in another client.
                 self.command(Command::LoadMemory {
+                    bot_id: bot_id.clone(),
+                });
+            }
+            if *section == BotSection::Channels {
+                // Folded forms each time: a typed token is never kept for
+                // a page that is not on screen.
+                self.discord = DiscordForm::new();
+                self.telegram = TelegramForm::new();
+                self.model.channel_messages.clear();
+                self.model.channel_errors.clear();
+                self.command(Command::LoadChannels {
+                    bot_id: bot_id.clone(),
+                });
+                self.command(Command::LoadChannelHome {
                     bot_id: bot_id.clone(),
                 });
             }
@@ -866,6 +896,129 @@ impl Ui {
         }
     }
 
+    /// The bot whose Channels page is on screen.
+    fn channels_bot(&self) -> Option<String> {
+        match &self.screen {
+            Screen::Settings(Page::Bot {
+                bot_id,
+                section: BotSection::Channels,
+            }) => Some(bot_id.clone()),
+            _ => None,
+        }
+    }
+
+    /// Makes one change to the channels of the bot on screen.
+    pub fn change_channel(&mut self, change: ChannelChange) {
+        let Some(bot_id) = self.channels_bot() else {
+            return;
+        };
+        if self.model.begin_change_channel(change.outcome().channel()) {
+            self.command(Command::ChangeChannel { bot_id, change });
+        }
+    }
+
+    /// The Discord row's button: unfolds the form on the saved settings, or
+    /// folds it. A form with edits stays open and says how to leave it.
+    pub fn toggle_discord(&mut self) {
+        let Some(bot_id) = self.channels_bot() else {
+            return;
+        };
+        if !self.discord.open {
+            let saved = self.model.channels.get(&bot_id);
+            self.discord = DiscordForm::of(saved.and_then(|c| c.discord.as_ref()));
+            self.model.channel_messages.remove(&Channel::Discord);
+        } else if self.discord.is_dirty() {
+            self.discord.error = Some(UNSAVED);
+        } else {
+            self.discord = DiscordForm::new();
+        }
+    }
+
+    /// Sends the Discord form, or says what is wrong with it.
+    pub fn save_discord(&mut self) {
+        let Some(bot_id) = self.channels_bot() else {
+            return;
+        };
+        let saved = self
+            .model
+            .channels
+            .get(&bot_id)
+            .is_some_and(|c| c.discord.is_some());
+        let update = self.discord.update();
+        self.discord.error = update.problem(saved);
+        if self.discord.error.is_none() {
+            self.change_channel(ChannelChange::SaveDiscord(update));
+        }
+    }
+
+    /// Folds the Discord form and drops its edits, typed token included.
+    pub fn cancel_discord(&mut self) {
+        self.discord = DiscordForm::new();
+        self.model.channel_errors.remove(&Channel::Discord);
+    }
+
+    /// The Telegram row's button: unfolds or folds its panel. A typed
+    /// token keeps it open.
+    pub fn toggle_telegram(&mut self) {
+        if self.telegram.open && !self.telegram.token.text.is_empty() {
+            self.telegram.error = Some(UNSAVED);
+            return;
+        }
+        self.telegram.error = None;
+        self.telegram.open = !self.telegram.open;
+        self.model.channel_messages.remove(&Channel::Telegram);
+        self.model.channel_errors.remove(&Channel::Telegram);
+    }
+
+    /// Connects Telegram with the typed bot token, or says it is not one.
+    pub fn save_telegram(&mut self) {
+        let token = self.telegram.token.text.trim().to_owned();
+        if token.is_empty() {
+            return;
+        }
+        if is_telegram_token(&token) {
+            self.telegram.error = None;
+            self.change_channel(ChannelChange::SaveTelegram(Secret::new(token.as_str())));
+        } else {
+            self.telegram.error = Some("Enter a valid bot token.");
+        }
+    }
+
+    /// Folds the Telegram panel and drops a typed token.
+    pub fn cancel_telegram(&mut self) {
+        self.telegram = TelegramForm::new();
+        self.model.channel_errors.remove(&Channel::Telegram);
+    }
+
+    /// While the Channels page shows, asks again for the home channel every
+    /// few seconds and, while a pairing code is out, for the channels, so
+    /// the owner's account shows as verified by itself. `clock` is the
+    /// frame clock in seconds. Returns true while the page shows.
+    pub fn refresh_channels(&mut self, clock: f64) -> bool {
+        let Some(bot_id) = self.channels_bot() else {
+            return false;
+        };
+        let (home_at, channels_at) = self.channels_asked_at;
+        if clock - home_at >= HOME_REFRESH {
+            self.channels_asked_at.0 = clock;
+            self.command(Command::LoadChannelHome {
+                bot_id: bot_id.clone(),
+            });
+        }
+        let pairing = self
+            .model
+            .channels
+            .get(&bot_id)
+            .and_then(|c| c.telegram.as_ref())
+            .is_some_and(|t| t.pairing_expires_at.is_some());
+        // Not while a change is on its way: its answer is the newer state.
+        if pairing && !self.model.changing_channel && clock - channels_at >= PAIRING_REFRESH {
+            self.channels_asked_at.1 = clock;
+            self.command(Command::LoadChannels { bot_id });
+        }
+        true
+    }
+
     /// Sends the "Add a connection" form, or says what is wrong with it.
     pub fn add_mcp(&mut self) {
         // The form belongs to the page on screen, so that names the bot.
@@ -1016,6 +1169,12 @@ impl Ui {
         self.open_url(url, tx);
     }
 
+    /// Opens a fixed, known web page (a provider's console, say) in the
+    /// owner's browser.
+    pub fn open_page(&mut self, url: &'static str, tx: &mut Tx) {
+        self.open_url(url.to_owned(), tx);
+    }
+
     fn open_url(&mut self, url: String, tx: &mut Tx) {
         if self.client.is_none() {
             // Tests and headless runs: note it instead of opening a browser.
@@ -1076,7 +1235,8 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     if ui.memories.search_pending() {
         tx.wake_after(Duration::from_millis(300));
     }
-    if ui.refresh_mcp(clock) {
+    // `|` rather than `||`: both pages get their look at the clock.
+    if ui.refresh_mcp(clock) | ui.refresh_channels(clock) {
         tx.wake_after(Duration::from_secs(1));
     }
     // While Raphie works, wake up every second so "12s elapsed" keeps
@@ -1120,6 +1280,15 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                         ui.memory = MemoryDraft::of(&bot_id, &status.configuration);
                     }
                 }
+                Effect::ChannelChanged(outcome) => match outcome {
+                    // Replacing a form drops its typed token, which wipes it.
+                    ChannelOutcome::DiscordSaved | ChannelOutcome::DiscordRemoved => {
+                        ui.discord = DiscordForm::new();
+                    }
+                    ChannelOutcome::TelegramSaved => ui.telegram.token.clear(),
+                    ChannelOutcome::TelegramRemoved => ui.telegram = TelegramForm::new(),
+                    _ => {}
+                },
                 Effect::McpAdded => {
                     // Replacing the form drops what was typed, which wipes
                     // the token and the environment.

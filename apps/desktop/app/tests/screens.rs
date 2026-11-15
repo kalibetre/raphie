@@ -4,8 +4,9 @@
 //! `scripts/snapshots.sh` (they need a GPU); these checks run in CI.
 
 use raphie_core::auth::Secret;
+use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome};
 use raphie_core::contracts::{
-    BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, Scope,
+    BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, Scope, TelegramPairingCode,
 };
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::mcp::{McpAction, NewMcpConnection};
@@ -636,21 +637,18 @@ fn a_bots_page_names_the_bot_and_offers_the_web_page() {
     let mut rt = render(scenes::settings_bot, false);
     let text = screen_text(&rt);
     assert!(text.contains("Research only"), "{text}");
-    assert!(
-        text.contains("Connect Research to messaging channels."),
-        "{text}"
-    );
+    assert!(text.contains("How Research runs commands"), "{text}");
     click(&mut rt, "rd-bot-page-web");
     assert_eq!(
         rt.state.opened,
-        ["https://raphie.example.ts.net/?view=settings&section=channels&bot=b-research"]
+        ["https://raphie.example.ts.net/?view=settings&section=sandbox&bot=b-research"]
     );
     // Folding a bot hides its pages without leaving the page.
     click(&mut rt, "rd-nav-bot-b-research");
-    assert!(rt.find("rd-nav-b-research-channels").is_none());
+    assert!(rt.find("rd-nav-b-research-sandbox").is_none());
     assert_eq!(
         element(&rt, "rd-settings-page-name").text.as_deref(),
-        Some("Channels")
+        Some("Sandbox")
     );
 }
 
@@ -1156,6 +1154,284 @@ fn a_bad_scope_cannot_be_saved() {
     click(&mut rt, "rd-memory-discard");
     assert_eq!(rt.state.memory.scope.text, "owner");
     assert!(rt.find("rd-save-bar").is_none());
+}
+
+fn changes(rt: &Runtime<Ui>) -> Vec<&ChannelChange> {
+    let sent = rt.state.sent.iter();
+    sent.filter_map(|command| match command {
+        Command::ChangeChannel { change, .. } => Some(change),
+        _ => None,
+    })
+    .collect()
+}
+
+#[test]
+fn channels_load_and_describe_each_connection() {
+    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 1600.0));
+    click(&mut rt, "rd-nav-default-channels");
+    let asked = |rt: &Runtime<Ui>, wanted: &Command| rt.state.sent.contains(wanted);
+    assert!(asked(
+        &rt,
+        &Command::LoadChannels {
+            bot_id: "default".into()
+        }
+    ));
+    assert!(asked(
+        &rt,
+        &Command::LoadChannelHome {
+            bot_id: "default".into()
+        }
+    ));
+    assert!(screen_text(&rt).contains("Loading channels…"));
+    deliver(
+        &mut rt,
+        Event::Channels {
+            bot_id: "default".into(),
+            settings: scenes::channel_settings(false),
+        },
+    );
+    let text = screen_text(&rt);
+    for expected in [
+        "Connected",
+        "Connected as @raphie_example_bot · 1 verified account",
+        "Loading home channel…",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+    assert!(
+        rt.find("rd-discord-settings").is_none(),
+        "forms start folded"
+    );
+
+    // The home channel arrives separately and is chosen by a button.
+    deliver(
+        &mut rt,
+        Event::ChannelHome {
+            bot_id: "default".into(),
+            home: scenes::channel_home(false),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-home-web").label.as_deref(),
+        Some("Selected")
+    );
+    click(&mut rt, "rd-home-telegram:7300112233");
+    assert_eq!(
+        changes(&rt),
+        [&ChannelChange::SelectHome(Some(
+            "telegram:7300112233".into()
+        ))]
+    );
+    deliver(
+        &mut rt,
+        Event::ChannelChangeFailed {
+            channel: Channel::Home,
+            message: "That conversation is no longer verified.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-home-error").text.as_deref(),
+        Some("That conversation is no longer verified.")
+    );
+    assert!(rt.find("rd-discord-alert").is_none(), "not Discord's error");
+}
+
+#[test]
+fn the_discord_form_checks_ids_and_never_shows_the_token() {
+    let mut rt = render_sized(scenes::settings_channels, false, (1280.0, 1800.0));
+    click(&mut rt, "rd-discord-toggle");
+    assert_eq!(rt.state.discord.user_ids.len(), 2);
+    // Closing a clean form is fine; a form with edits says how to leave.
+    click(&mut rt, "rd-discord-toggle");
+    assert!(rt.find("rd-discord-settings").is_none());
+    click(&mut rt, "rd-discord-toggle");
+    click(&mut rt, "rd-discord-add-user");
+    assert_eq!(rt.state.discord.user_ids.len(), 3);
+    click(&mut rt, "rd-discord-toggle");
+    assert_eq!(
+        element(&rt, "rd-discord-alert-message").text.as_deref(),
+        Some("Save your changes or choose Cancel to discard them.")
+    );
+
+    // A repeated id is caught here, before anything is sent.
+    rt.update(|ui, _| {
+        ui.discord.user_ids[2] = TextEdit::new("318274650912345678");
+        ui.discord.token = TextEdit::new("discord-not-a-real-token").secure();
+    });
+    settle(&mut rt);
+    assert!(!screen_text(&rt).contains("discord-not-a-real-token"));
+    click(&mut rt, "rd-discord-save");
+    assert_eq!(
+        element(&rt, "rd-discord-alert-message").text.as_deref(),
+        Some("User IDs must be unique.")
+    );
+    assert!(changes(&rt).is_empty());
+
+    // Removing the row fixes it; the save carries the token once.
+    click(&mut rt, "rd-discord-user-2-remove");
+    click(&mut rt, "rd-discord-save");
+    let [ChannelChange::SaveDiscord(update)] = changes(&rt)[..] else {
+        panic!("one Discord save");
+    };
+    assert_eq!(update.allowed_user_ids.len(), 2);
+    assert_eq!(
+        update.token.as_ref().map(|token| token.expose()),
+        Some("discord-not-a-real-token")
+    );
+    assert!(!format!("{:?}", rt.state.sent).contains("discord-not-a-real-token"));
+
+    // A refusal keeps the form; success folds it and forgets the token.
+    deliver(
+        &mut rt,
+        Event::ChannelChangeFailed {
+            channel: Channel::Discord,
+            message: "Discord rejected the bot token.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-discord-alert-message").text.as_deref(),
+        Some("Discord rejected the bot token.")
+    );
+    click(&mut rt, "rd-discord-save");
+    deliver(
+        &mut rt,
+        Event::ChannelChanged {
+            bot_id: "default".into(),
+            outcome: ChannelOutcome::DiscordSaved,
+            settings: Some(scenes::channel_settings(false)),
+            pairing: None,
+        },
+    );
+    assert!(rt.find("rd-discord-settings").is_none());
+    assert!(rt.state.discord.token.text.is_empty());
+    assert_eq!(
+        element(&rt, "rd-discord-message").text.as_deref(),
+        Some("Discord settings saved.")
+    );
+}
+
+#[test]
+fn a_discord_conflict_is_explained_and_the_portal_opens_in_the_browser() {
+    let mut rt = render_sized(scenes::settings_channels_discord, false, (1280.0, 1800.0));
+    let text = screen_text(&rt);
+    assert!(text.contains("Disconnected · application used by another bot"));
+    assert!(text.contains("Discord application already in use"));
+    click(&mut rt, "rd-discord-portal");
+    assert_eq!(
+        rt.state.opened,
+        ["https://discord.com/developers/applications"]
+    );
+    click(&mut rt, "rd-discord-remove");
+    assert_eq!(changes(&rt), [&ChannelChange::RemoveDiscord]);
+}
+
+#[test]
+fn telegram_connects_pairs_revokes_and_pauses() {
+    let mut rt = render_sized(scenes::settings_channels_empty, false, (1280.0, 1800.0));
+    click(&mut rt, "rd-telegram-toggle");
+    assert!(
+        rt.find("rd-telegram-enabled").is_none(),
+        "nothing saved yet"
+    );
+    // Something that is not a bot token is caught before it is sent.
+    rt.update(|ui, _| ui.telegram.token = TextEdit::new("hello").secure());
+    settle(&mut rt);
+    click(&mut rt, "rd-telegram-save");
+    assert_eq!(
+        element(&rt, "rd-telegram-alert-message").text.as_deref(),
+        Some("Enter a valid bot token.")
+    );
+    assert!(changes(&rt).is_empty());
+    rt.update(|ui, _| {
+        ui.telegram.token = TextEdit::new("123456:telegram-not-a-real-token").secure();
+    });
+    settle(&mut rt);
+    assert!(!screen_text(&rt).contains("telegram-not-a-real-token"));
+    click(&mut rt, "rd-telegram-save");
+    assert!(matches!(changes(&rt)[..], [ChannelChange::SaveTelegram(_)]));
+    deliver(
+        &mut rt,
+        Event::ChannelChanged {
+            bot_id: "default".into(),
+            outcome: ChannelOutcome::TelegramSaved,
+            settings: Some(scenes::channel_settings(false)),
+            pairing: None,
+        },
+    );
+    // The panel stays open for pairing; the token is gone.
+    assert!(rt.state.telegram.token.text.is_empty());
+    assert_eq!(
+        element(&rt, "rd-telegram-message").text.as_deref(),
+        Some("Telegram connected.")
+    );
+
+    // A pairing code shows only while the runtime says it is still live.
+    click(&mut rt, "rd-telegram-pair");
+    deliver(
+        &mut rt,
+        Event::ChannelChanged {
+            bot_id: "default".into(),
+            outcome: ChannelOutcome::TelegramPairing,
+            settings: Some(scenes::channel_settings(true)),
+            pairing: Some(TelegramPairingCode {
+                code: "K7Q2-M9XD".into(),
+                expires_at: 1_794_650_400_000,
+            }),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-telegram-code").text.as_deref(),
+        Some("K7Q2-M9XD")
+    );
+    assert!(screen_text(&rt).contains("send /pair K7Q2-M9XD"));
+    // While the code is out the page asks every two seconds.
+    let loads = |rt: &Runtime<Ui>| {
+        let sent = rt.state.sent.iter();
+        sent.filter(|c| matches!(c, Command::LoadChannels { .. }))
+            .count()
+    };
+    let before = loads(&rt);
+    rt.update(|ui, _| {
+        ui.refresh_channels(50.0);
+        ui.refresh_channels(51.0);
+        ui.refresh_channels(52.5);
+    });
+    assert_eq!(loads(&rt), before + 2);
+    // The account verified, so the code is used up and leaves the screen.
+    deliver(
+        &mut rt,
+        Event::Channels {
+            bot_id: "default".into(),
+            settings: scenes::channel_settings(false),
+        },
+    );
+    assert!(rt.find("rd-telegram-code").is_none());
+    rt.update(|ui, _| {
+        ui.refresh_channels(60.0);
+    });
+    assert_eq!(loads(&rt), before + 2, "no code out, no polling");
+
+    click(&mut rt, "rd-telegram-revoke-7300112233");
+    click(&mut rt, "rd-telegram-enabled");
+    assert_eq!(
+        changes(&rt).last(),
+        Some(&&ChannelChange::UnpairTelegram("7300112233".into())),
+        "one change at a time: the switch waits for the answer"
+    );
+    deliver(
+        &mut rt,
+        Event::ChannelChanged {
+            bot_id: "default".into(),
+            outcome: ChannelOutcome::TelegramUnpaired,
+            settings: Some(scenes::channel_settings(false)),
+            pairing: None,
+        },
+    );
+    click(&mut rt, "rd-telegram-enabled");
+    assert_eq!(
+        changes(&rt).last(),
+        Some(&&ChannelChange::EnableTelegram(false))
+    );
 }
 
 #[test]

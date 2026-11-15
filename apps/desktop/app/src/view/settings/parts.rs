@@ -177,6 +177,8 @@ pub fn group_with(t: &Theme, title: &str, note: &str, action: Option<El>, rows: 
         .fill(t.card)
         .border(1.0, t.border)
         .border_layout()
+        // Rows with a fill of their own are cut to the card's corners.
+        .clip_rounded(13.0)
         .shadow(1.0, 2.0, t.shadow[0].color);
     for (index, row) in rows.into_iter().enumerate() {
         // A hairline between rows, not above the first.
