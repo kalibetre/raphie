@@ -27,8 +27,10 @@ backend/scope under **Memory**.
 
 The title bar contains the current conversation title and an icon-only **New
 conversation** action. The right panel opens from the panel icon and starts with a **Conversations** tab: a searchable
-list with filters for new replies and approval requests. On mobile it opens as a
-sheet and closes when you select a conversation. Switching assistants
+list with filters for new replies and approval requests. On mobile, and in a
+window too narrow to keep the conversation at least 560 px wide beside it, it
+opens as a sheet over the conversation and closes when you select a
+conversation. Switching assistants
 resumes their last opened conversation in this browser when available.
 
 The bell beside New conversation opens Notifications, bringing replies, approval requests

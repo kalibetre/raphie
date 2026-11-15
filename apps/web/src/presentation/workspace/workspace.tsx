@@ -117,6 +117,7 @@ export function Workspace({
     visibleActivityWidth,
     navigationMax,
     activityMax,
+    overlayActivity,
   } = useWorkspaceLayout(view, workspace.botId);
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
   const [enabled, setEnabled] = useEnabledPlugins();
@@ -203,7 +204,8 @@ export function Workspace({
 
   function select(id?: string, nextView?: "settings") {
     setSuggestion(undefined);
-    if (mobile) setInspector(false);
+    // A sheet, on a phone or a narrow window, closes once a pick is made.
+    if (mobile || overlayActivity) setInspector(false);
     const selected = summaries.find((c) => c.id === id);
     if (selected)
       void navigate({
@@ -522,6 +524,7 @@ export function Workspace({
         {!view && (
           <WorkspacePanel
             open={inspector}
+            overlay={overlayActivity}
             onOpenChange={setInspector}
             width={visibleActivityWidth}
             maxWidth={activityMax}

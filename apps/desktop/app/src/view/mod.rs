@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use raphie_core::attachments::Upload;
 use raphie_core::model::AuthState;
 use raphie_core::settings::ThemeChoice;
-use rune::{Cx, El, LiveRegion, Tx, col, row, text};
+use rune::{Color, Cursor, Cx, Drag, El, LiveRegion, Phase, Tx, col, el, row, text};
 use rune_kit::Kit;
 
 use crate::avatar::Tones;
@@ -144,9 +144,102 @@ fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     }
     shell = shell.child(main);
     if s.panel_open {
-        shell = shell.child(panel::panel(s, look));
+        if s.panel_floats() {
+            overlays.push(floating_panel(s, look));
+        } else {
+            shell = shell.child(panel::panel(s, look, false));
+        }
     }
-    shell
+    // Handles on the inner edges resize the columns. They lie in the
+    // overlay layer, so the conversation beside them cannot cover them.
+    if s.workspace_width > 0.0 {
+        if s.roster_open {
+            overlays.push(resize_handle(Edge::Roster, s.visible_roster_width(), t));
+        }
+        if s.panel_open && !s.panel_floats() {
+            let x = s.workspace_width - s.visible_panel_width();
+            overlays.push(resize_handle(Edge::Panel, x, t));
+        }
+    }
+    // The width decides whether the panel docks (`Ui::panel_floats`).
+    shell.on_layout(|s: &mut Ui, rect: [f32; 4]| s.workspace_width = rect[2])
+}
+
+/// Which column a resize handle widens.
+#[derive(Clone, Copy)]
+enum Edge {
+    Roster,
+    Panel,
+}
+
+/// An 8-point strip over the edge at `x` that resizes its column while
+/// dragged, as the web's `PanelResizeHandle` does: a 2-point accent line
+/// shows along the edge while the pointer is over it.
+fn resize_handle(edge: Edge, x: f32, t: &Theme) -> El {
+    let (key, label) = match edge {
+        Edge::Roster => ("rd-roster-resize", "Resize the bots column"),
+        Edge::Panel => ("rd-panel-resize", "Resize the conversations panel"),
+    };
+    el().key(key)
+        .label(label)
+        .absolute(x - 4.0, 0.0)
+        .w(8.0)
+        .h_full()
+        .cursor(Cursor::ResizeColumn)
+        .center()
+        .hover_group()
+        .child(el().w(2.0).h_full().fill(t.accent).group_opacity(0.0, 1.0))
+        .on_drag(move |s: &mut Ui, drag: &mut Drag, _: &mut Tx| {
+            // `data` keeps the width the drag started from.
+            let start = match drag.phase {
+                Phase::Down => {
+                    drag.data = match edge {
+                        Edge::Roster => s.roster_width,
+                        Edge::Panel => s.panel_width,
+                    };
+                    return;
+                }
+                _ => drag.data,
+            };
+            // A cancelled drag (Escape) puts the width back.
+            let width = if drag.phase == Phase::Up && drag.cancelled() {
+                start
+            } else {
+                match edge {
+                    // The roster grows to the right, the panel to the left.
+                    Edge::Roster => start + drag.dx,
+                    Edge::Panel => start - drag.dx,
+                }
+            };
+            match edge {
+                Edge::Roster => s.resize_roster(width),
+                Edge::Panel => s.resize_panel(width),
+            }
+            if drag.phase == Phase::Up {
+                s.save_layout();
+            }
+        })
+}
+
+/// The conversations panel over the right of the conversation, for a window
+/// too narrow to dock it: a dimmed backdrop that closes it when pressed,
+/// and the panel with a shadow along its edge and a close button.
+fn floating_panel(s: &Ui, look: &Look) -> El {
+    row()
+        .key("rd-panel-float")
+        .absolute(0.0, 0.0)
+        .w_full()
+        .h_full()
+        .child(
+            el().key("rd-panel-scrim")
+                .grow(1.0)
+                .h_full()
+                // Dimmed and blurred, as behind the web's sheet.
+                .fill(Color::BLACK.alpha(0.1))
+                .backdrop_blur(4.0)
+                .on_press(|s: &mut Ui| s.panel_open = false),
+        )
+        .child(panel::panel(s, look, true).box_shadow(look.theme.composer_shadow[1]))
 }
 
 /// A message for the owner (a stale approval, a failed send), styled like

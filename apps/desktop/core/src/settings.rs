@@ -23,6 +23,13 @@ pub struct Settings {
     /// the web keeps its own in the browser.
     #[serde(default)]
     pub model_favorites: Vec<String>,
+    /// The bot roster's and the conversations panel's widths in points,
+    /// once dragged. Whole points, so the settings stay comparable (`Eq`);
+    /// `None` keeps the defaults.
+    #[serde(default)]
+    pub roster_width: Option<u32>,
+    #[serde(default)]
+    pub panel_width: Option<u32>,
 }
 
 /// The appearance chosen in Settings → Appearance.
@@ -79,6 +86,8 @@ mod tests {
             origin: Some("http://127.0.0.1:4321".into()),
             theme: ThemeChoice::Dark,
             model_favorites: vec!["openrouter-1:anthropic/claude".into()],
+            roster_width: Some(300),
+            panel_width: Some(420),
         };
         settings.save(&path).unwrap();
         assert_eq!(Settings::load(&path), settings);
@@ -90,5 +99,8 @@ mod tests {
         let old: Settings = serde_json::from_str(r#"{"origin":"https://raphie.example"}"#).unwrap();
         assert_eq!(old.theme, ThemeChoice::System);
         assert_eq!(old.origin.as_deref(), Some("https://raphie.example"));
+        // Nor had the column widths: the defaults apply.
+        assert_eq!(old.roster_width, None);
+        assert_eq!(old.panel_width, None);
     }
 }

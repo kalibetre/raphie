@@ -25,6 +25,7 @@ export type PanelTab = {
  */
 export function WorkspacePanel({
   open,
+  overlay = false,
   onOpenChange,
   tabs,
   width,
@@ -32,6 +33,8 @@ export function WorkspacePanel({
   onResize,
 }: {
   open: boolean;
+  /** Float as a sheet even on a wide screen: too narrow to dock. */
+  overlay?: boolean;
   onOpenChange: (open: boolean) => void;
   tabs: PanelTab[];
   width: number;
@@ -71,7 +74,7 @@ export function WorkspacePanel({
       ))}
     </Tabs>
   );
-  if (mobile)
+  if (mobile || overlay)
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="gap-0 bg-sidebar p-0 pt-10 data-[side=right]:w-[min(360px,100%)] sm:max-w-none">

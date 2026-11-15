@@ -17,9 +17,6 @@ use crate::state::Ui;
 use crate::theme::font;
 use crate::widgets::{count_badge, dev_badge, icon_button, one_line, pressable, status_dot};
 
-/// The roster's width, the web's default.
-const WIDTH: f32 = 264.0;
-
 pub fn roster(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     // The brand starts right of the window's own buttons when there are any.
@@ -31,7 +28,7 @@ pub fn roster(s: &Ui, look: &Look) -> El {
     }
     col()
         .key("rd-roster")
-        .w(WIDTH)
+        .w(s.visible_roster_width())
         .h_full()
         .pb(16.0)
         .fill(t.sidebar)

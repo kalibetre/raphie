@@ -4020,3 +4020,131 @@ fn a_picture_that_is_not_ready_cannot_be_opened_and_shows_nothing() {
     settle(&mut rt);
     assert!(rt.find("rd-viewer").is_none());
 }
+
+#[test]
+fn a_narrow_window_floats_the_conversations_panel_over_the_conversation() {
+    // 1280 wide leaves the conversation 676 points beside both columns.
+    let rt = render(scenes::conversations, false);
+    assert!(rt.state.panel_open);
+    assert!(!rt.state.panel_floats());
+    assert!(rt.find("rd-panel").is_some());
+    assert!(rt.find("rd-panel-float").is_none());
+    assert!(rt.find("rd-panel-close").is_none());
+
+    // 960 would leave it 356: the panel floats instead.
+    let mut rt = render_sized(scenes::conversations, false, (960.0, 640.0));
+    assert!(rt.state.panel_floats());
+    assert!(rt.find("rd-panel-float").is_some());
+    // The conversation keeps the window's width beside the roster.
+    let main = element(&rt, "rd-main");
+    assert!(main.rect[2] > 600.0, "{:?}", main.rect);
+
+    // Picking a conversation closes it.
+    // The key is read first: `click` needs `rt` to itself.
+    let row = element_with_label(&rt, "Tea preferences");
+    click(&mut rt, &row);
+    assert!(!rt.state.panel_open);
+    assert!(rt.find("rd-panel-float").is_none());
+
+    // So does a press outside it.
+    rt.update(|ui, _| ui.panel_open = true);
+    settle(&mut rt);
+    click(&mut rt, "rd-panel-scrim");
+    assert!(!rt.state.panel_open);
+
+    // And its close button, which only a floating panel has.
+    rt.update(|ui, _| ui.panel_open = true);
+    settle(&mut rt);
+    click(&mut rt, "rd-panel-close");
+    assert!(!rt.state.panel_open);
+
+    // Hiding the roster makes room: at 960 the panel docks again.
+    rt.update(|ui, _| {
+        ui.roster_open = false;
+        ui.panel_open = true;
+    });
+    settle(&mut rt);
+    assert!(!rt.state.panel_floats());
+    assert!(rt.find("rd-panel-float").is_none());
+}
+
+#[test]
+fn escape_closes_a_floating_panel_but_not_a_docked_one() {
+    let on_key = raphie_desktop::spec().on_key.expect("window keys");
+    let escape = KeyEvent {
+        key: Key::Escape,
+        mods: Default::default(),
+    };
+    let mut rt = render_sized(scenes::conversations, false, (960.0, 640.0));
+    rt.update(|ui, tx| {
+        assert!(on_key(ui, &escape, tx));
+    });
+    assert!(!rt.state.panel_open);
+
+    let mut rt = render(scenes::conversations, false);
+    rt.update(|ui, tx| {
+        assert!(!on_key(ui, &escape, tx));
+    });
+    assert!(rt.state.panel_open);
+}
+
+/// Drags the handle keyed `key` sideways by `dx` points.
+fn drag(rt: &mut Runtime<Ui>, key: &str, dx: f32) {
+    let (x, y) = rt
+        .find(key)
+        .unwrap_or_else(|| panic!("no element keyed {key}"));
+    rt.pointer_down(x, y);
+    for step in 1..=4 {
+        rt.pointer_move(x + dx * step as f32 / 4.0, y);
+        rt.frame(1.0 / 60.0);
+    }
+    rt.pointer_up(x + dx, y);
+    settle(rt);
+}
+
+#[test]
+fn the_side_columns_resize_by_their_edges_within_the_webs_limits() {
+    let mut rt = render(scenes::conversations, false);
+    assert_eq!(rt.state.roster_width, 264.0);
+    assert_eq!(rt.state.panel_width, 340.0);
+
+    // The roster's edge moves right to widen it.
+    drag(&mut rt, "rd-roster-resize", 60.0);
+    assert!(
+        (rt.state.roster_width - 324.0).abs() < 1.0,
+        "{}",
+        rt.state.roster_width
+    );
+    assert!((element(&rt, "rd-roster").rect[2] - 324.0).abs() < 1.0);
+    // The panel's edge moves left to widen it.
+    drag(&mut rt, "rd-panel-resize", -40.0);
+    assert!(
+        (rt.state.panel_width - 380.0).abs() < 1.0,
+        "{}",
+        rt.state.panel_width
+    );
+    assert!((element(&rt, "rd-panel").rect[2] - 380.0).abs() < 1.0);
+
+    // Never past the limits: 220 to 480, and 280 to 640.
+    drag(&mut rt, "rd-roster-resize", -400.0);
+    assert_eq!(rt.state.roster_width, 220.0);
+    drag(&mut rt, "rd-panel-resize", 400.0);
+    assert_eq!(rt.state.panel_width, 280.0);
+}
+
+#[test]
+fn a_window_too_small_for_the_chosen_widths_draws_them_narrower() {
+    let mut rt = render_sized(scenes::conversations, false, (1100.0, 700.0));
+    rt.update(|ui, _| {
+        ui.roster_width = 480.0;
+        ui.roster_open = true;
+        ui.panel_open = false;
+    });
+    settle(&mut rt);
+    // 1100 less the conversation's 320 leaves 780: 480 fits.
+    assert_eq!(rt.state.visible_roster_width(), 480.0);
+    // The chosen width is kept while a narrower window draws less.
+    rt.update(|ui, _| ui.workspace_width = 700.0);
+    assert_eq!(rt.state.visible_roster_width(), 380.0);
+    assert_eq!(rt.state.roster_width, 480.0);
+}

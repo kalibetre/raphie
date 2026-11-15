@@ -6,6 +6,23 @@ import {
   writeLocal,
 } from "../../infrastructure/preferences/storage";
 
+// The narrowest the conversation may be with the panel docked beside it;
+// narrower, and the panel opens as a sheet over it instead.
+const MIN_CONVERSATION = 560;
+
+/** True when the panel must float: docking it would leave the conversation
+ * narrower than {@link MIN_CONVERSATION}. Phones always use the sheet. */
+export function panelFloats(
+  viewportWidth: number,
+  navigationWidth: number,
+  activityWidth: number,
+) {
+  return (
+    viewportWidth >= 768 &&
+    viewportWidth - navigationWidth - activityWidth < MIN_CONVERSATION
+  );
+}
+
 // The conversations panel stays open per bot: switching bots remounts the
 // workspace, so the open state lives in storage rather than component state.
 const inspectorKey = (botId: string) => `raphie:inspector-open:${botId}`;
@@ -80,7 +97,15 @@ export function useWorkspaceLayout(
   useEffect(() => {
     setCollapsed(readLocal("raphie:sidebar-collapsed") === "true");
   }, []);
-  const dockedActivity = inspector && !view && viewportWidth >= 768;
+  // Too narrow to dock both the roster and the panel beside a readable
+  // conversation: the panel floats as a sheet, as it does on a phone.
+  const overlayActivity = panelFloats(
+    viewportWidth,
+    collapsed ? 0 : navigationWidth,
+    activityWidth,
+  );
+  const dockedActivity =
+    inspector && !view && viewportWidth >= 768 && !overlayActivity;
   const visibleNavigationWidth = Math.min(
     navigationWidth,
     Math.max(220, viewportWidth - 320 - (dockedActivity ? 280 : 0)),
@@ -123,5 +148,6 @@ export function useWorkspaceLayout(
     visibleActivityWidth,
     navigationMax,
     activityMax,
+    overlayActivity,
   };
 }
