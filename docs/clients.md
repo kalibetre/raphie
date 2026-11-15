@@ -56,18 +56,19 @@ A new feature is placed by asking these questions in order.
 
 ### Conversations
 
-| Capability                                    | Web | Desktop | Mobile  | Notes                                                                             |
-| --------------------------------------------- | --- | ------- | ------- | --------------------------------------------------------------------------------- |
-| Bots and conversations, search                | Yes | Yes     | Planned |                                                                                   |
-| Read, streamed replies, earlier messages      | Yes | Yes     | Planned |                                                                                   |
-| Send, Stop, queue or steer a message          | Yes | Yes     | Planned |                                                                                   |
-| Tool steps, reply time, tokens and cost       | Yes | Yes     | Planned |                                                                                   |
-| Approve or reject; approve for session        | Yes | Yes     | Planned |                                                                                   |
-| Attachments                                   | Yes | Yes     | Planned |                                                                                   |
-| Choose the model for a conversation           | Yes | Yes     | Planned |                                                                                   |
-| Command mode (Ask or Full access), grant list | Yes | Planned | Planned |                                                                                   |
-| Unread markers and the "New replies" filter   | Yes | Planned | Planned | Read state is kept per client today, not shared.                                  |
-| Notifications                                 | Yes | Planned | Planned | In-app on web. System notifications on desktop. Push on mobile needs server work. |
+| Capability                                   | Web     | Desktop | Mobile  | Notes                                                                             |
+| -------------------------------------------- | ------- | ------- | ------- | --------------------------------------------------------------------------------- |
+| Bots and conversations, search               | Yes     | Yes     | Planned |                                                                                   |
+| Read, streamed replies, earlier messages     | Yes     | Yes     | Planned |                                                                                   |
+| Send, Stop, queue or steer a message         | Yes     | Yes     | Planned |                                                                                   |
+| Tool steps, reply time, tokens and cost      | Yes     | Yes     | Planned |                                                                                   |
+| Approve or reject; approve for session       | Yes     | Yes     | Planned |                                                                                   |
+| Attachments                                  | Yes     | Yes     | Planned |                                                                                   |
+| Choose the model for a conversation          | Yes     | Yes     | Planned |                                                                                   |
+| Command mode (Ask or Full access)            | Yes     | Yes     | Planned |                                                                                   |
+| List and revoke "approve for session" grants | Planned | Planned | Planned | The runtime has the routes; no client shows them yet.                             |
+| Unread markers and the "New replies" filter  | Yes     | Planned | Planned | Read state is kept per client today, not shared.                                  |
+| Notifications                                | Yes     | Planned | Planned | In-app on web. System notifications on desktop. Push on mobile needs server work. |
 
 ### Bot settings
 

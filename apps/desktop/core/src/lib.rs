@@ -32,6 +32,7 @@ pub mod memory;
 pub mod model;
 pub mod model_library;
 pub mod origin;
+pub mod permissions;
 pub mod projections;
 pub mod sandbox;
 pub mod settings;

@@ -70,6 +70,12 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   host at once; for a new one it goes with the first message. Without a
   choice, a conversation uses the bot's default for new sessions. Stars are
   kept on this computer. The model cannot be changed while Raphie works.
+- **Command permissions**: the button beside the model names how this
+  conversation treats commands, **Ask** (review each command before it runs)
+  or **Full access** (run them without asking in this conversation; sandbox
+  restrictions and external approvals still apply). An open conversation's
+  mode is read from and saved on the host; a new one starts at Ask and sends
+  its choice with the first message.
 - **Approvals**: pending actions show their server, tool and exact arguments,
   when they expire, and **Reject** and **Approve once**; command approvals
   also offer **Approve for session**. A decision that arrives after the
@@ -252,6 +258,7 @@ apps/desktop/
     src/model_library.rs  grouping, filtering and labelling models
     src/engine.rs         Tokio runtime: sign-in, streams, commands → events
     src/attachments.rs    the files waiting in the composer and their limits
+    src/permissions.rs    a session's command mode: what is known, what may change
     src/settings.rs       last origin, appearance, starred models (non-secret)
     tests/                fake web host (axum) and engine/model tests
     examples/live.rs      live check against a running web host
@@ -271,6 +278,7 @@ apps/desktop/
       composer.rs           the message box
       attachments.rs        one attached file as a card
       model_picker.rs       the composer's model button and its list
+      permissions.rs        the composer's command permissions
       welcome.rs            a new conversation
       settings/             Settings: shell, navigation, page parts,
                             Account, Appearance, bot pages
@@ -354,8 +362,8 @@ render with `scripts/snapshots.sh` and put the PNGs beside the web workspace at
 Where the two differ on purpose:
 
 - Controls for features this app lacks are left out rather than shown dead:
-  command-permission mode, usage, notifications and the "New replies"
-  filter (there is no read tracking).
+  usage, notifications and the "New replies" filter (there is no read
+  tracking).
 - The model picker has no "model family" drop-down; typing the family
   ("anthropic") in its search finds the same models. The Up and Down keys
   do not move between its rows as they do on the web.
@@ -369,8 +377,10 @@ Where the two differ on purpose:
   ([Authentication](authentication.md#connect-a-native-device)), so the page
   links to the browser for them. Changing that is a decision about the web
   host's security, not about this app.
-- The bar over a Settings page is 44 pt tall, not the web's 60, so its
-  breadcrumb sits level with the window's buttons.
+- The bar over a conversation shows the bot's name on one line, as on the
+  web; the bot's description is its tooltip here. That bar and the one over
+  a Settings page are 44 tall in both clients, level with the window's
+  buttons in this one.
 - Providers opens one connection form at a time; the web can have several
   open. That keeps at most one typed key in memory.
 - Memory lists only the back ends that can be chosen (the web also shows
@@ -388,8 +398,8 @@ Where the two differ on purpose:
 - A working run's label is plain text; the web's moves a shimmer across it.
 - A message's sent time is its tooltip; the web fades it in beside the bubble.
 - Numbered lists show their numbers.
-- The "raphie" brand sits level with the macOS traffic lights, to their right,
-  with less space above and below it than on the web, like a compact title bar.
+- The "raphie" brand sits to the right of the macOS traffic lights, level
+  with them.
 
 ## Keeping contracts in sync
 
@@ -409,8 +419,9 @@ current.
 - Built and checked on macOS (Apple silicon). The code builds for Windows and
   Linux (Rune supports both; the token store uses Credential Manager and the
   Secret Service), but they have not been run by hand.
-- No command-permission mode, grant list, notifications or unread markers.
-  Use the web workspace for those.
+- No notifications or unread markers. Use the web workspace for those.
+- Approvals given "for session" cannot be listed or revoked here (nor on
+  the web).
 - Image attachments have no picture preview yet.
 - Tool steps come from the session's latest 200 journal entries, as on the
   web: turns older than that show their reply without steps or usage.

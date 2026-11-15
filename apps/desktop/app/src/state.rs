@@ -10,8 +10,8 @@ use raphie_core::auth::KeychainStore;
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome, is_telegram_token};
 use raphie_core::contracts::{
-    ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection, RuntimeSettings, Scope,
-    TurnStatus,
+    ApprovalMode, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
+    RuntimeSettings, Scope, TurnStatus,
 };
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::jobs::JobAction;
@@ -282,6 +282,11 @@ pub struct Ui {
     /// The model chosen for a conversation that has not started yet. It
     /// goes with the first message.
     pub new_model: Option<ModelSelection>,
+    /// Whether the composer's command permissions list shows.
+    pub permissions_open: bool,
+    /// The command mode chosen for a conversation that has not started
+    /// yet. It goes with the first message.
+    pub draft_mode: ApprovalMode,
     /// The bot whose models were last asked for, so they are asked for
     /// once and not on every event.
     models_asked: Option<String>,
@@ -384,6 +389,8 @@ impl Ui {
             model_picker: ModelPicker::default(),
             favorites: Vec::new(),
             new_model: None,
+            permissions_open: false,
+            draft_mode: ApprovalMode::Ask,
             models_asked: None,
             models: ModelsView::new(),
             providers: ProvidersView::new(),
@@ -442,6 +449,8 @@ impl Ui {
         // A model chosen for one bot's new conversation is not another's.
         self.new_model = None;
         self.model_picker.open = false;
+        self.draft_mode = ApprovalMode::Ask;
+        self.permissions_open = false;
         self.model.select_bot(bot_id.to_owned());
         self.command(Command::SelectBot {
             bot_id: bot_id.to_owned(),
@@ -451,6 +460,9 @@ impl Ui {
     pub fn select_session(&mut self, session_id: Option<&str>) {
         self.new_model = None;
         self.model_picker.open = false;
+        // Each conversation starts by asking, as on the web.
+        self.draft_mode = ApprovalMode::Ask;
+        self.permissions_open = false;
         self.model.select_session(session_id.map(str::to_owned));
         self.command(Command::SelectSession {
             session_id: session_id.map(str::to_owned),
@@ -495,16 +507,17 @@ impl Ui {
             Some(bot_id) => self.model.attachments.take_for_send(bot_id),
             None => Vec::new(),
         };
-        // Only a conversation that has not started takes a model from
-        // its first message.
-        let model = match self.model.conversation {
-            Some(_) => None,
-            None => self.new_model.clone(),
+        // Only a conversation that has not started takes a model and a
+        // command mode from its first message.
+        let (model, approval_mode) = match self.model.conversation {
+            Some(_) => (None, None),
+            None => (self.new_model.clone(), Some(self.draft_mode)),
         };
         self.command(Command::Send {
             text,
             attachments,
             model,
+            approval_mode,
         });
     }
 
@@ -545,6 +558,64 @@ impl Ui {
             if !self.model.settings.contains_key(&bot_id) {
                 self.command(Command::LoadSettings { bot_id });
             }
+        }
+    }
+
+    /// The open conversation's session, if one is open.
+    fn open_session(&self) -> Option<String> {
+        let open = self.model.conversation.as_ref()?;
+        Some(open.session_id.clone())
+    }
+
+    /// Asks how the open conversation treats commands, once each time a
+    /// conversation is opened.
+    fn ensure_command_mode(&mut self) {
+        if !matches!(self.model.auth, AuthState::SignedIn)
+            || !matches!(self.screen, Screen::Workspace)
+        {
+            return;
+        }
+        match self.open_session() {
+            Some(session_id) => {
+                if self.model.command_mode.session_id.as_deref() != Some(session_id.as_str()) {
+                    self.load_command_mode(session_id);
+                }
+            }
+            None => self.model.command_mode.close(),
+        }
+    }
+
+    fn load_command_mode(&mut self, session_id: String) {
+        self.model.command_mode.open(&session_id);
+        self.command(Command::LoadApprovalMode { session_id });
+    }
+
+    /// Asks again after a failed load.
+    pub fn retry_command_mode(&mut self) {
+        if let Some(session_id) = self.open_session() {
+            self.load_command_mode(session_id);
+        }
+    }
+
+    /// How commands are treated in the conversation on screen: the
+    /// session's mode once known, or the one chosen for a new conversation.
+    pub fn shown_command_mode(&self) -> Option<ApprovalMode> {
+        match self.model.conversation {
+            Some(_) => self.model.command_mode.mode,
+            None => Some(self.draft_mode),
+        }
+    }
+
+    /// The owner chose a command mode. An open conversation is changed on
+    /// the host; a new one remembers the choice for its first message.
+    pub fn set_command_mode(&mut self, mode: ApprovalMode) {
+        match self.open_session() {
+            Some(session_id) => {
+                if self.model.command_mode.begin_save() {
+                    self.command(Command::SetApprovalMode { session_id, mode });
+                }
+            }
+            None => self.draft_mode = mode,
         }
     }
 
@@ -2221,5 +2292,6 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_memories();
     ui.follow_sandbox();
     ui.ensure_models();
+    ui.ensure_command_mode();
     true
 }

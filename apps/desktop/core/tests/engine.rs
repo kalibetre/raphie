@@ -8,11 +8,11 @@ use std::sync::Arc;
 use raphie_core::attachments::{FileBytes, TOO_LARGE, Upload};
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
+use raphie_core::contracts::{ApprovalMode, ModelSelection, NewBot, TraceState};
 use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
     UpdateBotProfile, WorkspaceKind,
 };
-use raphie_core::contracts::{ModelSelection, NewBot, TraceState};
 use raphie_core::engine::{Command, ConnectionChange, EngineConfig};
 use raphie_core::inspection::{pretty_json, span_matches};
 use raphie_core::jobs::{JobAction, NewJob, job_badge, job_interval, run_description};
@@ -235,6 +235,7 @@ fn a_first_message_creates_and_opens_a_session() {
         text: "Hello".into(),
         attachments: Vec::new(),
         model: None,
+        approval_mode: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     assert!(driver.seen.contains(&Event::SessionCreated {
@@ -1560,6 +1561,7 @@ fn files_are_uploaded_sent_with_a_message_and_saved_back() {
         text: String::new(),
         attachments: ids.clone(),
         model: None,
+        approval_mode: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     assert!(driver.model.attachments.files.is_empty());
@@ -1665,6 +1667,7 @@ fn a_sessions_model_is_changed_and_a_new_session_starts_with_the_one_chosen() {
         text: "Again".into(),
         attachments: Vec::new(),
         model: Some(pick("openai/gpt-x")),
+        approval_mode: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     host.with(|h| assert!(h.submits.last().unwrap().get("model").is_none()));
@@ -1677,6 +1680,7 @@ fn a_sessions_model_is_changed_and_a_new_session_starts_with_the_one_chosen() {
         text: "Hello".into(),
         attachments: Vec::new(),
         model: Some(pick("openai/gpt-x")),
+        approval_mode: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     host.with(|h| {
@@ -1685,4 +1689,94 @@ fn a_sessions_model_is_changed_and_a_new_session_starts_with_the_one_chosen() {
             serde_json::json!({ "provider": "openrouter-1", "modelId": "openai/gpt-x" })
         );
     });
+}
+
+#[test]
+fn a_sessions_command_mode_is_read_changed_and_sent_with_a_new_session() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.model.select_session(Some("s-1".into()));
+    driver.send(Command::SelectSession {
+        session_id: Some("s-1".into()),
+    });
+    let load = |driver: &mut Driver| {
+        driver.model.command_mode.open("s-1");
+        driver.send(Command::LoadApprovalMode {
+            session_id: "s-1".into(),
+        });
+        driver.until("the mode", |m, _| !m.command_mode.loading);
+    };
+
+    // A session asks before each command until told otherwise.
+    load(&mut driver);
+    assert_eq!(driver.model.command_mode.mode, Some(ApprovalMode::Ask));
+    assert!(driver.model.command_mode.begin_save());
+    driver.send(Command::SetApprovalMode {
+        session_id: "s-1".into(),
+        mode: ApprovalMode::FullAccess,
+    });
+    driver.until("the change", |m, _| !m.command_mode.saving);
+    assert_eq!(
+        driver.model.command_mode.mode,
+        Some(ApprovalMode::FullAccess)
+    );
+    host.with(|h| {
+        assert_eq!(h.approval_modes["s-1"], "full-access");
+        let put = h
+            .requests
+            .iter()
+            .find(|seen| seen.method == "PUT")
+            .expect("a PUT");
+        assert_eq!(put.path, "/api/sessions/s-1/approval-mode");
+        assert_eq!(put.client_marker.as_deref(), Some("web"));
+    });
+    // Asked again, the runtime remembers.
+    load(&mut driver);
+    assert_eq!(
+        driver.model.command_mode.mode,
+        Some(ApprovalMode::FullAccess)
+    );
+
+    // A refused change leaves the mode as it was and says so.
+    host.with(|h| h.approval_mode_down = true);
+    assert!(driver.model.command_mode.begin_save());
+    driver.send(Command::SetApprovalMode {
+        session_id: "s-1".into(),
+        mode: ApprovalMode::Ask,
+    });
+    driver.until("the refusal", |m, _| !m.command_mode.saving);
+    assert!(driver.model.command_mode.save_failed);
+    assert_eq!(
+        driver.model.command_mode.mode,
+        Some(ApprovalMode::FullAccess)
+    );
+    // A failed load leaves the mode unknown.
+    load(&mut driver);
+    assert!(driver.model.command_mode.load_failed);
+    assert_eq!(driver.model.command_mode.mode, None);
+    host.with(|h| h.approval_mode_down = false);
+
+    // A message to an existing session never carries a mode.
+    assert!(driver.model.begin_send());
+    driver.send(Command::Send {
+        text: "Again".into(),
+        attachments: Vec::new(),
+        model: None,
+        approval_mode: Some(ApprovalMode::FullAccess),
+    });
+    driver.until("acceptance", |m, _| !m.sending);
+    host.with(|h| assert!(h.submits.last().unwrap().get("approvalMode").is_none()));
+
+    // A new session starts with the mode chosen for it.
+    driver.model.select_session(None);
+    driver.send(Command::SelectSession { session_id: None });
+    assert!(driver.model.begin_send());
+    driver.send(Command::Send {
+        text: "Hello".into(),
+        attachments: Vec::new(),
+        model: None,
+        approval_mode: Some(ApprovalMode::FullAccess),
+    });
+    driver.until("acceptance", |m, _| !m.sending);
+    host.with(|h| assert_eq!(h.submits.last().unwrap()["approvalMode"], "full-access"));
 }

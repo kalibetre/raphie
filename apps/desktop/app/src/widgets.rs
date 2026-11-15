@@ -143,6 +143,45 @@ pub fn pressable(e: El, enabled: bool, action: impl Fn(&mut Ui) + 'static) -> El
     }
 }
 
+/// A tinted chip in the composer's toolbar that opens a list: a glyph, a
+/// name and a chevron (the web's `.composer-model-trigger`). `label` is
+/// what a screen reader calls it; `open` says whether its list shows.
+pub fn toolbar_chip(
+    t: &Theme,
+    key: &str,
+    glyph: &'static Icon,
+    label: String,
+    name: impl Into<String>,
+    open: bool,
+) -> El {
+    row()
+        .key(key.to_owned())
+        .role("button")
+        .label(label)
+        .expanded(open)
+        .min_h(32.0)
+        .max_w(280.0)
+        // May be narrower than its name, which is then cut with "…", so a
+        // small window never pushes it under the send button.
+        .shrink()
+        .px(10.0)
+        .py(4.0)
+        .gap(6.0)
+        .center_y()
+        .radius(8.0)
+        .fill(t.accent_soft)
+        .hover(t.hover.alpha(0.5))
+        .press(t.hover)
+        .focus_ring(1.0, 1.0, t.accent)
+        .child(icon(glyph, 13.0).color(t.accent).a11y_hidden())
+        .child(one_line(name, font(12.0, 400.0), t.foreground).shrink())
+        .child(
+            icon(&crate::icons::CHEVRON_DOWN, 12.0)
+                .color(t.accent)
+                .a11y_hidden(),
+        )
+}
+
 /// A small rounded count, like the web's `.reply-count`.
 pub fn count_badge(t: &Theme, count: usize) -> El {
     row()

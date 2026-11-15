@@ -20,7 +20,7 @@ use crate::icons;
 use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
-use crate::widgets::{one_line, pressable};
+use crate::widgets::{one_line, pressable, toolbar_chip};
 
 /// The element the list hangs from.
 const TRIGGER: &str = "rd-model";
@@ -37,32 +37,14 @@ pub fn model_picker(s: &Ui, enabled: bool, look: &Look, overlays: &mut Vec<El>) 
     // also waits while a choice is being saved, but the list stays open
     // then, to say so.
     let can_open = enabled && !s.model.choosing_model;
-    let trigger = row()
-        .key(TRIGGER)
-        .role("button")
-        .label(format!("Choose model: {name}"))
-        .expanded(s.model_picker.open)
-        .min_h(32.0)
-        .max_w(280.0)
-        // May be narrower than its name, which is then cut with "…", so a
-        // small window never pushes it under the send button.
-        .shrink()
-        .px(10.0)
-        .py(4.0)
-        .gap(6.0)
-        .center_y()
-        .radius(8.0)
-        .fill(t.accent_soft)
-        .hover(t.hover.alpha(0.5))
-        .press(t.hover)
-        .focus_ring(1.0, 1.0, t.accent)
-        .child(icon(&icons::SPARKLES, 13.0).color(t.accent).a11y_hidden())
-        .child(one_line(name, font(12.0, 400.0), t.foreground).shrink())
-        .child(
-            icon(&icons::CHEVRON_DOWN, 12.0)
-                .color(t.accent)
-                .a11y_hidden(),
-        );
+    let trigger = toolbar_chip(
+        t,
+        TRIGGER,
+        &icons::SPARKLES,
+        format!("Choose model: {name}"),
+        name,
+        s.model_picker.open,
+    );
     let trigger = if can_open {
         // Opening also puts the caret in the search, so typing narrows
         // the list at once.

@@ -31,6 +31,7 @@ use crate::contracts::{
     TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
 };
 use crate::contracts::{ActivityEvent, TelemetryBody, TraceDiagnostics};
+use crate::contracts::{ApprovalMode, ApprovalModeBody};
 use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
 use crate::jobs::{JobAction, NewJob};
@@ -868,6 +869,35 @@ impl ApiClient {
         Ok(())
     }
 
+    /// How a session treats commands.
+    pub async fn approval_mode(
+        &self,
+        bot_id: &str,
+        session_id: &str,
+    ) -> Result<ApprovalMode, ApiError> {
+        let answer: ApprovalModeBody = self
+            .get_json(&approval_mode_path(bot_id, session_id))
+            .await?;
+        Ok(answer.mode)
+    }
+
+    /// Changes how a session treats commands, and returns the mode now in
+    /// force.
+    pub async fn set_approval_mode(
+        &self,
+        bot_id: &str,
+        session_id: &str,
+        mode: ApprovalMode,
+    ) -> Result<ApprovalMode, ApiError> {
+        let path = approval_mode_path(bot_id, session_id);
+        let request = self
+            .authorized(self.http.put(self.origin.url(&path)))
+            .header("x-raphie-client", "web")
+            .json(&ApprovalModeBody { mode });
+        let answer: ApprovalModeBody = read_json(send(request).await?).await?;
+        Ok(answer.mode)
+    }
+
     // ----- Plumbing -----
 
     fn authorized(&self, request: RequestBuilder) -> RequestBuilder {
@@ -893,6 +923,13 @@ impl ApiClient {
             .json(body);
         read_json(send(request).await?).await
     }
+}
+
+fn approval_mode_path(bot_id: &str, session_id: &str) -> String {
+    bot_path(
+        bot_id,
+        &format!("/api/sessions/{}/approval-mode", encode(session_id)),
+    )
 }
 
 async fn send(request: RequestBuilder) -> Result<Response, ApiError> {

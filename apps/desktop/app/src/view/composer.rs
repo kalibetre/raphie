@@ -2,8 +2,7 @@
 //! becomes Stop while Raphie works.
 //!
 //! Mirrors `apps/web/src/domains/conversations/presentation/composer.tsx`
-//! and the `.composer` rules in `chat.css`. The web's permission control
-//! is not here because this app does not have that feature yet.
+//! and the `.composer` rules in `chat.css`.
 //!
 //! Files join a message three ways: the paperclip (the system's file
 //! picker, one file at a time), dragging them onto the conversation, or
@@ -16,6 +15,7 @@ use super::Look;
 use super::attachments::{Action, file_card};
 use super::conversation::READING_WIDTH;
 use super::model_picker::model_picker;
+use super::permissions::permissions;
 use crate::icons;
 use crate::state::Ui;
 use crate::theme::font;
@@ -149,26 +149,26 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         // The text grows from one line to ten, then scrolls.
         .child(auto_grow(input, 1, 10))
         .child(
+            // The toolbar wraps, as the web's does: in a narrow window the
+            // chips keep their names and the send button moves to a second
+            // row instead of squeezing them.
             row()
                 .w_full()
                 .mt(10.0)
                 .min_h(32.0)
-                .justify_between()
+                .gap(6.0)
                 .center_y()
+                .flex_wrap()
                 // The paperclip sits 6 left of the text's edge so its
                 // glyph, not its hover square, lines up with the text.
-                .child(
-                    row()
-                        .gap(6.0)
-                        .center_y()
-                        .min_w(0.0)
-                        .shrink()
-                        .child(attach.ml(-6.0))
-                        // The model cannot change while Raphie works or a
-                        // message is on its way.
-                        .child(model_picker(s, !busy && !locked, look, overlays)),
-                )
-                .child(actions),
+                .child(attach.ml(-6.0))
+                // The model cannot change while Raphie works or a message
+                // is on its way.
+                .child(model_picker(s, !busy && !locked, look, overlays))
+                .child(permissions(s, look, overlays))
+                // Takes the room that is left and puts the buttons at its
+                // right end, on whichever row they land.
+                .child(row().grow(1.0).justify_end().child(actions)),
         )
         // A press anywhere on the card puts the caret in the text.
         .on_press_tx(|_: &mut Ui, tx: &mut Tx| tx.focus("rd-composer", false));

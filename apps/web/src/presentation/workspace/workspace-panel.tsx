@@ -44,7 +44,7 @@ export function WorkspacePanel({
       <TabsList
         aria-label="Workspace tools"
         variant="line"
-        className="workspace-panel-tab-list h-auto! min-h-14 w-full justify-start gap-2 border-b border-border px-3 py-2"
+        className="workspace-panel-tab-list h-[44px]! w-full justify-start gap-2 px-3 py-0"
       >
         {tabs.map((tab) => (
           <TabsTrigger

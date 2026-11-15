@@ -453,6 +453,10 @@ pub struct SubmitMessage {
     /// that exists; that one is changed with its own route.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelSelection>,
+    /// The command mode for a new session; later it is changed with the
+    /// session's own route.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_mode: Option<ApprovalMode>,
 }
 
 /// The runtime's receipt for an admitted message. Admission, not completion.
@@ -470,6 +474,25 @@ pub struct Receipt {
 pub enum Decision {
     Approved,
     Rejected,
+}
+
+/// How a session treats commands: `"ask"` or `"full-access"` on the wire.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ApprovalMode {
+    /// Each command waits for the owner's approval.
+    #[default]
+    Ask,
+    /// Commands run without asking in this conversation. Sandbox
+    /// restrictions and external approvals still apply.
+    FullAccess,
+}
+
+/// The answer of `GET /api/sessions/:id/approval-mode` and the body and
+/// answer of its `PUT`.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ApprovalModeBody {
+    pub mode: ApprovalMode,
 }
 
 /// How far an approval reaches.

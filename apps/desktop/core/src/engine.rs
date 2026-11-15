@@ -33,6 +33,7 @@ use crate::api::{ApiClient, ApiError, ChannelAnswer, bot_path};
 use crate::attachments::{FileBytes, MAX_BYTES, TOO_LARGE, Upload, upload_name};
 use crate::auth::{AccessToken, DevicePolicy, DevicePoll, Secret, TokenStore};
 use crate::channels::{Channel, ChannelChange};
+use crate::contracts::ApprovalMode;
 use crate::contracts::ModelSelection;
 use crate::contracts::NewBot;
 use crate::contracts::{
@@ -92,6 +93,17 @@ pub enum Command {
         /// The model to start a new session with; `None` for the bot's
         /// default, and for a session that exists.
         model: Option<ModelSelection>,
+        /// The command mode to start a new session with.
+        approval_mode: Option<ApprovalMode>,
+    },
+    /// Ask how a session treats commands.
+    LoadApprovalMode {
+        session_id: String,
+    },
+    /// Change how a session treats commands.
+    SetApprovalMode {
+        session_id: String,
+        mode: ApprovalMode,
     },
     /// Change the model an existing session answers with.
     ChooseModel {
@@ -516,7 +528,12 @@ impl Engine {
                 text,
                 attachments,
                 model,
-            } => self.send(text, attachments, model),
+                approval_mode,
+            } => self.send(text, attachments, model, approval_mode),
+            Command::LoadApprovalMode { session_id } => self.load_approval_mode(session_id),
+            Command::SetApprovalMode { session_id, mode } => {
+                self.set_approval_mode(session_id, mode);
+            }
             Command::ChooseModel { session_id, model } => self.choose_model(session_id, model),
             Command::Attach { bot_id, uploads } => self.attach(bot_id, uploads),
             Command::DownloadAttachment { bot_id, id, name } => {
@@ -788,7 +805,13 @@ impl Engine {
 
     // ----- Messages and approvals -----
 
-    fn send(&mut self, text: String, attachments: Vec<String>, model: Option<ModelSelection>) {
+    fn send(
+        &mut self,
+        text: String,
+        attachments: Vec<String>,
+        model: Option<ModelSelection>,
+        approval_mode: Option<ApprovalMode>,
+    ) {
         let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
             self.emit.emit(Event::MessageFailed {
                 message: "Choose a bot before sending.".into(),
@@ -801,12 +824,10 @@ impl Engine {
             event_id: uuid::Uuid::new_v4().to_string(),
             session_id: self.session_id.clone(),
             attachments,
-            // Only a new session takes its model from the message.
-            model: if self.session_id.is_none() {
-                model
-            } else {
-                None
-            },
+            // Only a new session takes its model and command mode from
+            // the message. `filter` keeps a value only when the test holds.
+            model: model.filter(|_| self.session_id.is_none()),
+            approval_mode: approval_mode.filter(|_| self.session_id.is_none()),
         };
         let new_session = message.session_id.is_none();
         let retries = self.config.send_retries.clone();
@@ -839,6 +860,41 @@ impl Engine {
                 Err(error) => emit.emit(Event::MessageFailed {
                     message: error.to_string(),
                 }),
+            }
+        });
+    }
+
+    fn load_approval_mode(&mut self, session_id: String) {
+        let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.approval_mode(&bot_id, &session_id).await {
+                Ok(mode) => emit.emit(Event::ApprovalMode { session_id, mode }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(_) => emit.emit(Event::ApprovalModeFailed { session_id }),
+            }
+        });
+    }
+
+    fn set_approval_mode(&mut self, session_id: String, mode: ApprovalMode) {
+        let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.set_approval_mode(&bot_id, &session_id, mode).await {
+                // The runtime's answer is the mode now in force.
+                Ok(mode) => emit.emit(Event::ApprovalModeSaved { session_id, mode }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(_) => emit.emit(Event::ApprovalModeSaveFailed { session_id }),
             }
         });
     }

@@ -62,9 +62,9 @@ export function WorkspaceHeader({
           className="header-bot"
           onClick={onBotSettings}
           aria-label={`Settings for ${breadcrumb}`}
+          title={description || undefined}
         >
           <strong>{breadcrumb}</strong>
-          <small>{description}</small>
         </button>
       </div>
       <h1 className="header-conversation-title">{title}</h1>
