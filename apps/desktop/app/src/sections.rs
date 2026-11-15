@@ -15,6 +15,9 @@ pub enum Page {
     NewBot,
     /// Light or dark.
     Appearance,
+    /// This app's version and updates. Desktop only: the web shows its
+    /// version under Appearance.
+    About,
     /// The switch that collects diagnostic traces, and recent traces. They
     /// belong to the whole Raphie backend, not to one bot.
     Diagnostics,
@@ -153,6 +156,7 @@ impl Page {
             Page::Account => "Account",
             Page::NewBot => "Create a bot",
             Page::Appearance => "Appearance",
+            Page::About => "About",
             Page::Diagnostics => "Diagnostics",
         }
     }
@@ -162,7 +166,8 @@ impl Page {
         match self {
             Page::Account => "view=settings&section=account".to_owned(),
             Page::NewBot => "view=settings&section=new-bot".to_owned(),
-            Page::Appearance => "view=settings&section=general".to_owned(),
+            // The web's version sits under Appearance (`general`).
+            Page::Appearance | Page::About => "view=settings&section=general".to_owned(),
             Page::Diagnostics => "view=settings&section=telemetry".to_owned(),
             Page::Bot { bot_id, section } => {
                 // Bot ids are letters, digits and dashes, so they need no

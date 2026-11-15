@@ -52,7 +52,8 @@ pub const SCENES: &[Scene] = &[
     ("command-approval", command_approval),
     ("settings-account", settings_account),
     ("settings-appearance", settings_appearance),
-    ("settings-appearance-update", settings_appearance_update),
+    ("settings-about", settings_about),
+    ("settings-about-update", settings_about_update),
     ("dev-build", dev_build),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
@@ -190,9 +191,15 @@ pub fn settings_appearance(ui: &mut Ui) {
     ui.open_settings(Some(Page::Appearance));
 }
 
-/// Settings → Appearance once a check has found a newer release.
-pub fn settings_appearance_update(ui: &mut Ui) {
-    settings_appearance(ui);
+/// Settings → About, before any check.
+pub fn settings_about(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::About));
+}
+
+/// Settings → About once a check has found a newer release.
+pub fn settings_about_update(ui: &mut Ui) {
+    settings_about(ui);
     ui.model.update = UpdateStatus::Available(Update {
         version: "v0.0.5".into(),
         url: "https://github.com/kalibetre/raphie/releases/tag/v0.0.5".into(),

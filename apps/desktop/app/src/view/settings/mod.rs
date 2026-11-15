@@ -5,6 +5,7 @@
 //! `settings-main.tsx` and the `.settings-topbar` rules in
 //! `shared/styles/settings/bot.css`. Each page is its own module here.
 
+mod about;
 mod account;
 mod activity;
 mod appearance;
@@ -39,6 +40,7 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
     let content = match page {
         Page::Account => account::account(s, look),
         Page::Appearance => appearance::appearance(s, look),
+        Page::About => about::about(s, look),
         Page::NewBot => profile::new_bot(s, look),
         Page::Diagnostics => diagnostics::diagnostics(s, look),
         Page::Bot {
@@ -266,6 +268,7 @@ pub fn page_icon(page: &Page) -> &'static Icon {
     match page {
         Page::Account => &icons::LOG_OUT,
         Page::Appearance => &icons::PALETTE,
+        Page::About => &icons::INFO,
         Page::NewBot => &icons::BOT,
         Page::Diagnostics => &icons::RADIO,
         Page::Bot { section, .. } => match section {

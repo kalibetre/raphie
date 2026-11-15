@@ -486,7 +486,11 @@ fn only_the_dev_build_says_dev_beside_the_brand() {
 
 #[test]
 fn about_shows_the_version_and_checks_for_updates() {
+    // About has its own page in the navigation.
     let mut rt = render(scenes::settings_appearance, false);
+    assert!(!screen_text(&rt).contains("Raphie Desktop version"));
+    click(&mut rt, "rd-nav-about");
+    assert_eq!(rt.state.screen, Screen::Settings(Page::About));
     let text = screen_text(&rt);
     assert!(text.contains(current_version()), "{text}");
     assert!(text.contains("Not checked yet."), "{text}");
@@ -509,7 +513,7 @@ fn about_shows_the_version_and_checks_for_updates() {
 
 #[test]
 fn a_newer_release_opens_its_page() {
-    let mut rt = render(scenes::settings_appearance_update, false);
+    let mut rt = render(scenes::settings_about_update, false);
     assert!(screen_text(&rt).contains("Raphie v0.0.5 is available."));
     click(&mut rt, "rd-view-release");
     assert_eq!(
