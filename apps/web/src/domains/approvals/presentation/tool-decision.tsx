@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
+import { Check, ShieldCheck, X } from "lucide-react";
 
 import { type Approval } from "../../../infrastructure/http/api-client";
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -56,7 +56,7 @@ export function ToolDecision({ approval }: { approval: Approval }) {
               decision.mutate({ decision: "approved", scope: "session" })
             }
           >
-            Approve for session
+            <ShieldCheck /> Approve for session
           </Button>
         )}
       {decision.isError && (

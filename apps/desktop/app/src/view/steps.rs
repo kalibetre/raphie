@@ -375,12 +375,18 @@ fn decision(approval: &SessionApproval, deciding: bool, t: &Theme) -> El {
     if approval.allows_session_scope() {
         let session_id = approval.id.clone();
         bar = bar.child(pressable(
-            button(t, Kind::Outline, Size::Small, None, "Approve for session")
-                .key(format!("rd-approve-session-{}", approval.id))
-                .help(format!(
-                    "Allow these exact arguments for {} in this bot conversation: {}",
-                    approval.tool, approval.arguments_json
-                )),
+            button(
+                t,
+                Kind::Outline,
+                Size::Small,
+                Some(&icons::SHIELD_CHECK),
+                "Approve for session",
+            )
+            .key(format!("rd-approve-session-{}", approval.id))
+            .help(format!(
+                "Allow these exact arguments for {} in this bot conversation: {}",
+                approval.tool, approval.arguments_json
+            )),
             !deciding,
             move |s: &mut Ui| s.decide(&session_id, Decision::Approved, Scope::Session),
         ));
