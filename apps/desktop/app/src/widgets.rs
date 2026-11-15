@@ -166,6 +166,60 @@ pub fn status_dot(t: &Theme, online: bool) -> El {
         .a11y_hidden()
 }
 
+/// An on/off switch, like the web's shadcn `Switch` (`h-5 w-9` at its 14 px
+/// root). `label` names it for screen readers. Give it a handler with
+/// [`pressable`].
+pub fn switch(t: &Theme, on: bool, label: &str) -> El {
+    let track = row()
+        .role("switch")
+        .label(label)
+        .checked(on)
+        .focusable(true)
+        .size(31.5, 17.5)
+        .padding(1.75)
+        .center_y()
+        .radius(8.75)
+        .fill(if on { t.primary } else { t.border })
+        .focus_ring(2.0, 2.0, t.accent);
+    // The thumb sits at one end. It keeps its key, so Rune slides it across
+    // when the switch flips instead of redrawing it at the other end.
+    let track = if on { track.justify_end() } else { track };
+    track.child(
+        el().key(format!("{label}-thumb"))
+            .size(14.0, 14.0)
+            .radius(7.0)
+            .fill(t.background)
+            .a11y_hidden(),
+    )
+}
+
+/// A check box with its caption, like the web form's native one.
+pub fn checkbox(t: &Theme, checked: bool, label: &str) -> El {
+    let mut box_ = row().size(14.0, 14.0).center().radius(3.5).a11y_hidden();
+    box_ = if checked {
+        box_.fill(t.primary)
+            .child(icon(&crate::icons::CHECK, 10.0).color(t.primary_foreground))
+    } else {
+        box_.border(1.0, outline_border(t))
+    };
+    row()
+        .role("checkbox")
+        .label(label)
+        .checked(checked)
+        .focusable(true)
+        .gap(8.0)
+        .center_y()
+        .radius(4.0)
+        .focus_ring(2.0, 2.0, t.accent)
+        .child(box_)
+        .child(
+            text(label)
+                .font(font(12.5, 400.0))
+                .color(t.foreground)
+                .a11y_hidden(),
+        )
+}
+
 /// What a [`text_field`] shows. A struct rather than five more arguments, so
 /// the call site names each one. `<'a>` says the struct only borrows these
 /// values, for as long as the borrow called `'a` lasts.

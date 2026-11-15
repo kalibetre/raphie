@@ -17,19 +17,20 @@ icons and layout, in light and dark.
 
 ![Approval, light](images/desktop/approval-light.png)
 
-|                                | Light                                             | Dark                                                 |
-| ------------------------------ | ------------------------------------------------- | ---------------------------------------------------- |
-| Sign in                        | ![](images/desktop/sign-in-light.png)             | ![](images/desktop/device-code-dark.png)             |
-| New conversation, panel open   | ![](images/desktop/conversations-light.png)       | ![](images/desktop/conversations-dark.png)           |
-| Conversation                   | ![](images/desktop/conversation-light.png)        | ![](images/desktop/conversation-dark.png)            |
-| Reply streaming in             | ![](images/desktop/streaming-light.png)           | ![](images/desktop/streaming-dark.png)               |
-| Tools a run used               | ![](images/desktop/tools-light.png)               | ![](images/desktop/tools-dark.png)                   |
-| Working, with a queued message | ![](images/desktop/working-light.png)             | ![](images/desktop/working-dark.png)                 |
-| Settings: Account              | ![](images/desktop/settings-account-light.png)    | ![](images/desktop/settings-account-dark.png)        |
-| Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png)     |
-| Settings: Profile              | ![](images/desktop/settings-profile-light.png)    | ![](images/desktop/settings-profile-edited-dark.png) |
-| Settings: Models               | ![](images/desktop/settings-models-light.png)     | ![](images/desktop/settings-models-filter-dark.png)  |
-| Settings: Providers            | ![](images/desktop/settings-providers-light.png)  | ![](images/desktop/settings-providers-add-dark.png)  |
+|                                | Light                                             | Dark                                                   |
+| ------------------------------ | ------------------------------------------------- | ------------------------------------------------------ |
+| Sign in                        | ![](images/desktop/sign-in-light.png)             | ![](images/desktop/device-code-dark.png)               |
+| New conversation, panel open   | ![](images/desktop/conversations-light.png)       | ![](images/desktop/conversations-dark.png)             |
+| Conversation                   | ![](images/desktop/conversation-light.png)        | ![](images/desktop/conversation-dark.png)              |
+| Reply streaming in             | ![](images/desktop/streaming-light.png)           | ![](images/desktop/streaming-dark.png)                 |
+| Tools a run used               | ![](images/desktop/tools-light.png)               | ![](images/desktop/tools-dark.png)                     |
+| Working, with a queued message | ![](images/desktop/working-light.png)             | ![](images/desktop/working-dark.png)                   |
+| Settings: Account              | ![](images/desktop/settings-account-light.png)    | ![](images/desktop/settings-account-dark.png)          |
+| Settings: Appearance           | ![](images/desktop/settings-appearance-light.png) | ![](images/desktop/settings-appearance-dark.png)       |
+| Settings: Profile              | ![](images/desktop/settings-profile-light.png)    | ![](images/desktop/settings-profile-edited-dark.png)   |
+| Settings: Models               | ![](images/desktop/settings-models-light.png)     | ![](images/desktop/settings-models-filter-dark.png)    |
+| Settings: Providers            | ![](images/desktop/settings-providers-light.png)  | ![](images/desktop/settings-providers-add-dark.png)    |
+| Settings: Memory               | ![](images/desktop/settings-memory-light.png)     | ![](images/desktop/settings-memory-hindsight-dark.png) |
 
 ## What works
 
@@ -91,7 +92,12 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     tests and removes them. An API key is typed into a masked field, sent to
     the host once, and forgotten when the form closes: the app never stores a
     provider key and never shows or logs one.
-  - **A bot's other pages** (Memory, MCP tools, ...) are not built yet: each
+  - **Memory** switches a bot's memory on or off, chooses its back end
+    (built-in or Hindsight) and scope, and tests the saved setup. A Hindsight
+    API key is typed into a masked field and sent once, or cleared; the app
+    never stores or shows it. Edits are saved from a bar under the page, and
+    the runtime refuses a change while the bot is working.
+  - **A bot's other pages** (MCP tools, Channels, ...) are not built yet: each
     offers the same page of the web workspace in your browser.
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
@@ -282,6 +288,10 @@ Where the two differ on purpose:
   host's security, not about this app.
 - Providers opens one connection form at a time; the web can have several
   open. That keeps at most one typed key in memory.
+- Memory lists only the back ends that can be chosen (the web also shows
+  the planned ones, greyed out), and "Browse memories" opens the web
+  workspace. Unsaved Memory edits are dropped when you open another bot's
+  Memory page, so a typed key is never kept off screen.
 - Profile takes a custom colour as typed hex digits; the web opens the
   browser's colour picker. It has no revision history or Delete yet.
 - Settings has no "UI plugins" page (this app has no plugins) and no "Create a

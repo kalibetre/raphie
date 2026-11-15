@@ -18,10 +18,11 @@ use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::contracts::{
     Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile, ControlAction,
     ControlBody, Decision, DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse,
-    DeviceTokenResponse, EditConnectionBody, ErrorBody, Page, Receipt, RuntimeSettings, Scope,
-    SessionObservation, SessionSummary, SessionTurn, SubmitMessage, TestConnectionBody,
-    UpdateBotProfile,
+    DeviceTokenResponse, EditConnectionBody, ErrorBody, MemoryStatus, Page, Receipt,
+    RuntimeSettings, SaveMemoryBody, Scope, SessionObservation, SessionSummary, SessionTurn,
+    SubmitMessage, TestConnectionBody, UpdateBotProfile,
 };
+use crate::memory::{KeyChange, MemoryUpdate};
 use crate::origin::Origin;
 
 /// Ordinary requests give up after this long. Event streams have no overall
@@ -309,6 +310,46 @@ impl ApiClient {
         };
         // The answer is `{ "connected": true }`; a failure is an error.
         let _: serde_json::Value = self.post_json(&path, &body).await?;
+        Ok(())
+    }
+
+    /// One bot's memory settings and what its back end can do.
+    pub async fn memory(&self, bot_id: &str) -> Result<MemoryStatus, ApiError> {
+        self.get_json(&bot_path(bot_id, "/api/memory")).await
+    }
+
+    /// Saves a bot's memory settings and returns them as the runtime now
+    /// has them (it tidies the endpoint, for one).
+    pub async fn save_memory(
+        &self,
+        bot_id: &str,
+        update: &MemoryUpdate,
+    ) -> Result<MemoryStatus, ApiError> {
+        let body = SaveMemoryBody {
+            enabled: update.enabled,
+            provider: update.provider,
+            scope: &update.scope,
+            endpoint: &update.endpoint,
+            bank_id: &update.bank_id,
+            api_key: match &update.key {
+                KeyChange::Keep => None,
+                KeyChange::Clear => Some(None),
+                KeyChange::Replace(key) => Some(Some(key.expose())),
+            },
+        };
+        self.post_json(&bot_path(bot_id, "/api/memory"), &body)
+            .await
+    }
+
+    /// Asks the runtime to reach the saved memory back end.
+    pub async fn test_memory(&self, bot_id: &str) -> Result<(), ApiError> {
+        // The answer is `{ "connected": true }`; a failure is an error.
+        let _: serde_json::Value = self
+            .post_json(
+                &bot_path(bot_id, "/api/memory/test"),
+                &serde_json::json!({}),
+            )
+            .await?;
         Ok(())
     }
 

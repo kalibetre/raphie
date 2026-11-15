@@ -35,6 +35,7 @@ use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
 };
+use crate::memory::MemoryUpdate;
 use crate::model::{DecisionOutcome, Event, StreamStatus};
 use crate::origin::Origin;
 use crate::settings::Settings;
@@ -104,6 +105,19 @@ pub enum Command {
     ChangeConnection {
         bot_id: String,
         change: ConnectionChange,
+    },
+    /// Load a bot's memory settings.
+    LoadMemory {
+        bot_id: String,
+    },
+    /// Save a bot's memory settings.
+    SaveMemory {
+        bot_id: String,
+        update: MemoryUpdate,
+    },
+    /// Ask the runtime to reach the bot's saved memory back end.
+    TestMemory {
+        bot_id: String,
     },
     /// Stop a session's run, or steer or re-queue one of its queued messages.
     Control {
@@ -344,6 +358,9 @@ impl Engine {
             Command::RefreshBots => self.refresh_bots(),
             Command::ChangeConnection { bot_id, change } => self.change_connection(bot_id, change),
             Command::LoadSettings { bot_id } => self.load_settings(bot_id),
+            Command::LoadMemory { bot_id } => self.load_memory(bot_id),
+            Command::SaveMemory { bot_id, update } => self.save_memory(bot_id, update),
+            Command::TestMemory { bot_id } => self.test_memory(bot_id),
             Command::SetDefaultModel {
                 bot_id,
                 model_id,
@@ -709,6 +726,65 @@ impl Engine {
                     message: error.to_string(),
                 }),
             }
+        });
+    }
+
+    fn load_memory(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.memory(&bot_id).await {
+                Ok(status) => emit.emit(Event::Memory { bot_id, status }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::MemoryFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn save_memory(&mut self, bot_id: String, update: MemoryUpdate) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.save_memory(&bot_id, &update).await {
+                Ok(status) => emit.emit(Event::MemorySaved { bot_id, status }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::MemorySaveFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn test_memory(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            // Either way the owner gets one line saying how it went.
+            let message = match api.test_memory(&bot_id).await {
+                Ok(()) => "Connection successful.".to_owned(),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                    return;
+                }
+                Err(error) => error.to_string(),
+            };
+            emit.emit(Event::MemoryTested { message });
         });
     }
 

@@ -153,7 +153,7 @@ Delivered capabilities and remaining work are labelled below. See the
   for the session for commands) with stale decisions reported. It follows the
   web workspace's design, and light and dark follow the OS or the
   choice in Settings. Settings open in the app with native Account,
-  Appearance, bot Profile, Providers and Models pages; a bot's other settings pages still link to
+  Appearance, bot Profile, Providers, Models and Memory settings pages; a bot's other settings pages still link to
   the web workspace.
   Closing the window only disconnects its viewer. See [Desktop client](desktop.md).
 - **Desktop — planned:** attachments, model and command-permission controls,

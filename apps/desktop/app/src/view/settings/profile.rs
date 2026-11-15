@@ -8,9 +8,9 @@
 
 use raphie_core::contracts::BotProfile;
 use rune::color::hex;
-use rune::{Color, El, Shadow, Tx, col, el, icon, row, text, text_input};
+use rune::{Color, El, Tx, col, el, icon, row, text, text_input};
 
-use super::parts::{Scope, page};
+use super::parts::{SaveBar, Scope, page, save_bar as save_bar_of};
 use crate::avatar::{PALETTE_NAMES, Tones, bot_avatar, tone_of};
 use crate::icons;
 use crate::state::Ui;
@@ -369,48 +369,18 @@ pub fn save_bar(s: &Ui, look: &Look) -> Option<El> {
         _ if dirty => "Unsaved changes".to_owned(),
         _ => format!("Revision {} · Saved to this bot.", saved.revision),
     };
-    let line =
-        |content: String, color: Color| text(content).font(font(12.5, 500.0)).color(color).wrap();
-    let mut copy = col().grow(1.0).min_w(0.0).gap(2.0);
-    if let Some(error) = error {
-        copy = copy.child(line(error, t.error).key("rd-profile-error"));
-    }
-    copy = copy.child(
-        row()
-            .gap(8.0)
-            .center_y()
-            .child(el().size(6.0, 6.0).radius(3.0).fill(t.accent).a11y_hidden())
-            .child(line(status, t.foreground).key("rd-profile-status").shrink()),
-    );
     let save_label = if saving { "Saving…" } else { "Save changes" };
-    Some(
-        row()
-            .key("rd-save-bar")
-            .w_full()
-            .px(44.0)
-            .py(14.0)
-            .gap(12.0)
-            .center_y()
-            .fill(t.card)
-            .border_sides([1.0, 0.0, 0.0, 0.0], t.border)
-            // A soft shadow upwards, so the page seems to slide under it.
-            .box_shadow(Shadow {
-                y: -12.0,
-                blur: 28.0,
-                spread: -20.0,
-                color: Color::BLACK.alpha(0.3),
-                ..Shadow::default()
-            })
-            .child(copy)
-            .child(pressable(
-                button(t, Kind::Ghost, Size::Regular, None, "Discard").key("rd-profile-discard"),
-                dirty && !saving,
-                |s: &mut Ui| s.discard_profile(),
-            ))
-            .child(pressable(
-                button(t, Kind::Primary, Size::Regular, None, save_label).key("rd-profile-save"),
-                s.can_save_profile(),
-                |s: &mut Ui| s.save_profile(),
-            )),
-    )
+    Some(save_bar_of(
+        t,
+        SaveBar {
+            key: "rd-profile",
+            error,
+            status,
+            save_label,
+            can_save: s.can_save_profile(),
+            can_discard: dirty && !saving,
+        },
+        |s: &mut Ui| s.discard_profile(),
+        |s: &mut Ui| s.save_profile(),
+    ))
 }

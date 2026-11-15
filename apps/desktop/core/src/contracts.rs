@@ -501,3 +501,75 @@ pub(crate) struct ErrorBody {
     pub error: Option<String>,
     pub code: Option<String>,
 }
+
+/// `MemoryProvider` in `packages/contracts/src/memory/views.ts`: where a
+/// bot's memories are kept.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MemoryProvider {
+    /// In the runtime's own database, on the Raphie machine.
+    Builtin,
+    /// On a Hindsight server the owner runs or rents.
+    Hindsight,
+}
+
+/// `MemoryConfiguration` in the same file: one bot's memory settings.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryConfiguration {
+    pub enabled: bool,
+    pub provider: MemoryProvider,
+    /// The namespace the bot's memories live in.
+    pub scope: String,
+    /// The Hindsight server's address; empty until one is set.
+    #[serde(default)]
+    pub endpoint: String,
+    #[serde(default)]
+    pub bank_id: String,
+    /// Whether the runtime holds a Hindsight API key. The key itself never
+    /// leaves the Raphie machine.
+    #[serde(default)]
+    pub has_credential: bool,
+}
+
+/// How the active back end answers "what do you know about …".
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reflection {
+    /// The conversation model reasons over the evidence it recalls.
+    ModelAssisted,
+    /// The back end reasons itself (Hindsight).
+    Provider,
+}
+
+/// What the active memory back end can do. Only what the Memory page reads
+/// is mirrored; serde skips the other fields.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct MemoryCapabilities {
+    pub reflect: Reflection,
+    /// Whether memories can be corrected and forgotten through Raphie.
+    pub revise: bool,
+}
+
+/// `MemoryStatus`: what `GET /api/memory` answers.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct MemoryStatus {
+    pub configuration: MemoryConfiguration,
+    pub capabilities: MemoryCapabilities,
+}
+
+/// The body of `POST /api/memory` (`SaveMemoryConfiguration`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveMemoryBody<'a> {
+    pub enabled: bool,
+    pub provider: MemoryProvider,
+    pub scope: &'a str,
+    pub endpoint: &'a str,
+    pub bank_id: &'a str,
+    /// Three cases, as the runtime reads them: the field left out keeps the
+    /// saved key (`None`), `null` clears it (`Some(None)`), and a string
+    /// replaces it (`Some(Some(key))`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<Option<&'a str>>,
+}

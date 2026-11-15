@@ -6,8 +6,11 @@ mod support;
 use std::sync::Arc;
 
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
-use raphie_core::contracts::{ApprovalStatus, ControlAction, Decision, Scope, UpdateBotProfile};
+use raphie_core::contracts::{
+    ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, Scope, UpdateBotProfile,
+};
 use raphie_core::engine::{Command, ConnectionChange};
+use raphie_core::memory::{KeyChange, MemoryUpdate};
 use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
 use support::{Driver, FakeHost, TOKEN, observation_json, sessions_json, turn_json};
 
@@ -505,6 +508,92 @@ fn connections_are_added_edited_tested_and_removed() {
         }
     );
     assert!(!printed.contains("sk-test-key"), "{printed}");
+}
+
+#[test]
+fn memory_settings_load_save_and_test() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::LoadMemory {
+        bot_id: "default".into(),
+    });
+    driver.until("memory settings", |m, _| m.memory.contains_key("default"));
+    let loaded = &driver.model.memory["default"];
+    assert_eq!(loaded.configuration.provider, MemoryProvider::Builtin);
+    assert_eq!(loaded.capabilities.reflect, Reflection::ModelAssisted);
+    assert!(loaded.capabilities.revise);
+
+    let hindsight = |key: KeyChange| MemoryUpdate {
+        enabled: true,
+        provider: MemoryProvider::Hindsight,
+        scope: "owner".into(),
+        endpoint: "http://127.0.0.1:8888/".into(),
+        bank_id: "raphie".into(),
+        key,
+    };
+    let save = |driver: &mut Driver, update: MemoryUpdate| {
+        assert!(driver.model.begin_save_memory());
+        driver.send(Command::SaveMemory {
+            bot_id: "default".into(),
+            update,
+        });
+        driver.until("the save", |m, _| !m.saving_memory);
+    };
+
+    // A typed key is sent once; the answer only says that one is held.
+    save(
+        &mut driver,
+        hindsight(KeyChange::Replace(Secret::new("hs-test-key"))),
+    );
+    let saved = driver.model.memory["default"].clone();
+    assert!(saved.configuration.has_credential);
+    assert_eq!(saved.configuration.endpoint, "http://127.0.0.1:8888");
+    assert_eq!(saved.capabilities.reflect, Reflection::Provider);
+    assert!(!saved.capabilities.revise);
+    assert_eq!(
+        driver.model.memory_message.as_deref(),
+        Some("Memory settings saved.")
+    );
+
+    // Keeping the key leaves the field out; clearing it sends null.
+    save(&mut driver, hindsight(KeyChange::Keep));
+    assert!(driver.model.memory["default"].configuration.has_credential);
+    save(&mut driver, hindsight(KeyChange::Clear));
+    assert!(!driver.model.memory["default"].configuration.has_credential);
+    host.with(|h| {
+        assert_eq!(h.memory_saves[0]["apiKey"], "hs-test-key");
+        assert!(h.memory_saves[1].get("apiKey").is_none());
+        assert!(h.memory_saves[2]["apiKey"].is_null());
+        assert!(h.memory_saves[2].get("apiKey").is_some());
+    });
+
+    // What the runtime refuses is reported and leaves the settings alone.
+    save(
+        &mut driver,
+        MemoryUpdate {
+            endpoint: "not a url".into(),
+            ..hindsight(KeyChange::Keep)
+        },
+    );
+    let error = driver.model.memory_save_error.clone().unwrap_or_default();
+    assert!(error.contains("valid Hindsight endpoint"), "{error}");
+    assert_eq!(
+        driver.model.memory["default"].configuration.endpoint,
+        "http://127.0.0.1:8888"
+    );
+
+    let test = |driver: &mut Driver| {
+        assert!(driver.model.begin_test_memory());
+        driver.send(Command::TestMemory {
+            bot_id: "default".into(),
+        });
+        driver.until("the test", |m, _| !m.testing_memory);
+        driver.model.memory_message.clone().unwrap_or_default()
+    };
+    assert_eq!(test(&mut driver), "Connection successful.");
+    host.with(|h| h.memory_unreachable = true);
+    let said = test(&mut driver);
+    assert!(said.contains("did not answer"), "{said}");
 }
 
 #[test]
