@@ -1,0 +1,192 @@
+---
+title: Desktop development
+description: Build and run the desktop app from source, package the disk image, find your way around its crates, and keep it in step with the web workspace.
+sidebar:
+  order: 4
+---
+
+import { FileTree, Steps } from "@astrojs/starlight/components";
+
+The desktop app in `apps/desktop` is a Rust app built on [Rune](https://github.com/anomalyco/rune), a GPU-rendered UI framework. It is a client of the web host's authenticated API, never of the runtime directly (its only other request is the update check against GitHub's public releases API), and it copies the web workspace's look by value. Any change to the web design or to `@raphie/contracts` that the app reads must be mirrored here.
+
+## Run it from source
+
+You need [rustup](https://rustup.rs). `apps/desktop/rust-toolchain.toml` pins Rust 1.99.1 to match Rune, and installs it on first use. The first build compiles Rune's GPU stack and takes several minutes.
+
+```sh
+cd apps/desktop
+cargo run -p raphie-desktop                              # Raphie Dev
+cargo run -p raphie-desktop -- --origin http://127.0.0.1:4321
+cargo run --release -p raphie-desktop                    # Raphie
+scripts/bundle.sh                                        # target/bundle/Raphie Dev.app
+scripts/bundle.sh --release                              # target/bundle/Raphie.app
+```
+
+`--origin URL` signs in to that address at launch; without it the app reuses the last address's stored token or shows sign-in. `scripts/bundle.sh` wraps the binary in an app bundle with an `Info.plist`, an icon the app draws itself, and an ad hoc signature, signed only for this machine.
+
+A debug build is **Raphie Dev** and a release build (`--release`) is **Raphie**. They are separate apps that can be signed in side by side, so trying a change never disturbs the one you use daily.
+
+|                                 | Raphie Dev                         | Raphie                         |
+| ------------------------------- | ---------------------------------- | ------------------------------ |
+| Identifier and Keychain service | `dev.raphie.desktop.dev`           | `dev.raphie.desktop`           |
+| Settings folder                 | `<config dir>/raphie-desktop-dev/` | `<config dir>/raphie-desktop/` |
+| Look                            | Amber icon and a "DEV" badge       | Sage icon, no badge            |
+
+The split lives in `Flavor` in `core/src/flavor.rs`. macOS posts system notifications only for a bundled app, so use `scripts/bundle.sh` when working on notifications.
+
+## Build the disk image
+
+`scripts/dmg.sh` builds what users install: the release app packed into a disk image with a link to `/Applications`.
+
+```sh
+cd apps/desktop
+RAPHIE_VERSION=v0.0.5 scripts/dmg.sh     # target/dist/Raphie-macos-arm64.dmg
+```
+
+| Step           | What it does                                                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Platform check | Stops unless it runs on an Apple Silicon Mac. There is no Intel build.                                                     |
+| Build          | Runs `scripts/bundle.sh --release` for `target/bundle/Raphie.app`.                                                         |
+| Bundle checks  | Refuses to pack unless the signature verifies, `Info.plist` is valid, the icon exists and the binary is built for `arm64`. |
+| Pack           | Writes a compressed, read-only image to `target/dist/Raphie-macos-arm64.dmg` and verifies it.                              |
+
+`RAPHIE_VERSION` (for example `v0.0.5` or a nightly tag) stamps the version the app shows in **About** and compares in its update check. The image is signed ad hoc only, with no Developer ID or notarisation, which is why users need **Open Anyway** on first launch; see [desktop app](/guides/desktop/#install).
+
+| Workflow                            | When                                                                                             | What it does with the image                                                                                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Desktop app** (`desktop-app.yml`) | Pull requests touching `apps/desktop/**`, `VERSION` or the workflow itself                       | Runs `scripts/dmg.sh` on a macOS runner and keeps the image as a run artifact for seven days, for trying out.                                                       |
+| **Release** (`release.yml`)         | A pushed `vX.Y.Z` tag (a draft stable release) or a manual run on `main` (a nightly pre-release) | Runs `scripts/dmg.sh` with the release's `RAPHIE_VERSION`, attests its provenance, and publishes `Raphie-macos-arm64.dmg` with the release, listed in `SHA256SUMS`. |
+
+## Use the fixture
+
+Never point the app at a real Raphie (4316/4320 in a checkout, 24316/24320 for a user install) or at `.data/`. Use the disposable fixture:
+
+<Steps>
+
+1. Start the runtime and web host on temporary data:
+
+   ```sh
+   bun run dev:fixture        # runtime on 4317
+   bun run dev:web:fixture    # web host on 4321
+   ```
+
+2. The fixture's web host keeps its sign-in store in the checkout's data directory (the main checkout's `.data/`) unless `DATA_DIRECTORY` is set, and approving the app's device writes to that store. To keep the test device out of `.data/`, start `bun run dev:web:fixture` with a throwaway `DATA_DIRECTORY` and create the administrator in the same one with `DATA_DIRECTORY=… bun run raphie auth setup`.
+3. Start the app, enter `http://127.0.0.1:4321`, choose **Connect** and approve the device in the browser.
+4. Send a message. The fixture's `acceptance` model streams a canned reply; a message containing "tool" or "approval" proposes an action that needs approval. No paid model is called.
+5. When done, disconnect the test device in the web's **Settings → Account**.
+
+</Steps>
+
+The core also has a live check without the UI. `--exercise` sends messages, approves the fixture's action and checks that a second decision is reported as stale; use it only with the fixture.
+
+```sh
+cargo run -p raphie-desktop-core --example live -- http://127.0.0.1:4321 --exercise
+```
+
+## Layout
+
+The crate split is the boundary: the core owns the API client, auth, event streams and state; the app only presents them. The core never depends on Rune.
+
+<FileTree>
+
+- apps/desktop/
+  - Cargo.toml workspace; Rune pinned to one rev, plus its patches
+  - rust-toolchain.toml
+  - core/ `raphie-desktop-core`, no UI framework
+    - src/
+      - contracts.rs Rust mirrors of the contracts the app reads
+      - api.rs HTTP client for the web host
+      - sse.rs event-stream parser
+      - auth.rs device sign-in, Keychain and in-memory token stores
+      - engine.rs Tokio runtime: sign-in, streams, commands to events
+      - model.rs client state and how events change it (pure)
+      - projections.rs tool steps, usage and labels from the journal
+      - …
+    - tests/ fake web host (axum) and engine tests
+    - examples/live.rs
+  - app/ `raphie-desktop`, the Rune UI
+    - src/
+      - state.rs UI state and the engine bridge
+      - theme.rs the web's colours and type
+      - widgets.rs buttons and fields drawn like the web's
+      - view/ one module per screen region, plus settings/
+      - scenes.rs synthetic states for snapshots and tests
+      - …
+    - tests/screens.rs headless element-tree checks
+  - scripts/
+    - bundle.sh macOS app bundle
+    - dmg.sh release disk image, Apple Silicon only
+    - snapshots.sh every scene to PNG
+
+</FileTree>
+
+## Check your changes
+
+CI runs these in a `desktop` job beside `validate`:
+
+```sh
+cd apps/desktop
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+```
+
+On Linux, install `libxkbcommon-dev`, `libwayland-dev`, `libdbus-1-dev` and `pkg-config` first. Tests make no model calls and no network calls beyond loopback: the core runs the real engine against a fake web host, and the app drives Rune's headless runtime through each screen in light and dark.
+
+### Headless snapshots
+
+Debug builds render any scene without a window, the Keychain or a connection:
+
+```sh
+cargo build -p raphie-desktop
+B=target/debug/raphie-desktop
+$B --list-scenes
+$B --snap out.png --scene approval --theme dark --size 1280x800 --scale 2 --chrome
+$B --tree tree.json --scene conversation
+scripts/snapshots.sh            # every scene, both themes, into target/snapshots
+```
+
+Snapshots are for comparing by eye and attaching to a pull request. Do not commit them.
+
+## Keep the look in sync
+
+Each file names its web source at the top. When you change the web side, change the desktop side in the same pull request.
+
+| Desktop                     | Web source                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| `app/src/theme.rs`          | `apps/web/src/shared/styles/tokens.css`                                                 |
+| `app/src/avatar.rs`         | `bot-glance.ts` and `bot-tone.ts` in `domains/settings/application`                     |
+| `app/src/icons.rs`          | the Lucide icons the web components import                                              |
+| `app/src/sections.rs`       | `settings-sections.ts` and `settings-nav.tsx`                                           |
+| `app/src/widgets.rs`        | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                           |
+| `core/src/projections.rs`   | `packages/contracts/src/sessions/projections.ts`                                        |
+| `core/src/model_library.rs` | `domains/settings/application/model-library.ts`                                         |
+| `app/src/view/*.rs`         | the matching component and its rules in `chat.css`, `sessions.css`, `bot-workspace.css` |
+
+The web's root font size is 14 px, so its Tailwind rem sizes are 14/16 of their usual pixels: `h-8` is 28 pt here and `text-sm` is 12.25 pt.
+
+Tests catch silent drift: `avatar.rs`, `projections.rs` and `model_library.rs` compare against values printed by the web's TypeScript, and `tests/screens.rs` checks page colours against the tokens in both themes. To compare by eye, put `scripts/snapshots.sh` output beside the web workspace at 1280×800.
+
+The app differs from the web on purpose where a control would be dead (no UI plugins page), where security calls for it (one provider form open at a time, so at most one typed key is in memory), and where the platform helps (system notifications, pasting files).
+
+## Keep the contracts in sync
+
+`core/src/contracts.rs` mirrors only the fields the app reads from `@raphie/contracts` and the runtime's request bodies. Unknown fields are ignored, and enums that may grow decode unknown values to `Unknown`, so additive runtime changes do not break the app. Renaming or removing a field the app reads must update this file in the same change.
+
+## Rune notes
+
+Things that will save you time, at the pinned Rune rev:
+
+| Topic           | Note                                                                                                                                                                                                                             |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Patches         | A dependency's `[patch.crates-io]` does not apply to the app. `Cargo.toml` repeats Rune's patches (winit, parley_engine, wgpu-hal, accesskit_windows); recheck them on every Rune bump, or the build silently uses stock crates. |
+| Toolchain       | Keep `rust-toolchain.toml` in step with Rune's own when bumping the rev.                                                                                                                                                         |
+| Text fields     | Kit `TextInput` and `TextArea` default to 280 pt wide; use `.width(None)` to fill the container.                                                                                                                                 |
+| Keys            | rune-kit keys its own parts (`label`, `value`, …). Prefix app keys with `rd-`.                                                                                                                                                   |
+| `AppSpec`       | Takes `fn` pointers, not closures. Pass configuration through `App::init`, `rune::extra_args()` or state.                                                                                                                        |
+| Background work | `AppSpec::setup` hands over a waker the core accepts as a plain callback; `poll` drains its events.                                                                                                                              |
+| Borders         | A border takes no layout room by default. Use `border_layout()` to make it behave like CSS.                                                                                                                                      |
+| Line height     | Text defaults to 1.25; the web uses 1.5. Set line heights explicitly through `theme::font`.                                                                                                                                      |
+| Window chrome   | `Cx::titlebar_inset` is the horizontal space taken by the traffic lights, and headless runs report it too.                                                                                                                       |
+| Redraws         | A covered window does not redraw, so a screen capture of it shows a stale frame.                                                                                                                                                 |
+| Look            | The kit's look is its own design system. The app replaces its shell, buttons and fields with plain functions in `widgets.rs`, keeping the kit's `Markdown`, `Loader`, `Select`, `Dialog` and popovers.                           |

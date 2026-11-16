@@ -1,0 +1,151 @@
+---
+// Home hero: Raphie's mascot beside the pitch, with the actions from frontmatter.
+import { LinkButton } from "@astrojs/starlight/components";
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero ?? {};
+---
+
+<div class="raphie-hero">
+  <div class="raphie-hero-copy">
+    <h1 id="_top" set:html={title} />
+    {tagline && <p class="raphie-hero-tagline" set:html={tagline} />}
+    {
+      actions.length > 0 && (
+        <div class="raphie-hero-actions">
+          {actions.map(({ attrs = {}, icon, link, text, variant }) => (
+            <LinkButton
+              href={link}
+              variant={variant}
+              icon={icon?.name}
+              {...attrs}
+            >
+              {text}
+            </LinkButton>
+          ))}
+        </div>
+      )
+    }
+  </div>
+  <div class="raphie-hero-art" aria-hidden="true">
+    <div class="raphie-hero-halo"></div>
+    <svg class="raphie-mascot" viewBox="0 0 100 100">
+      <path
+        class="raphie-mascot-body"
+        d="M74.8 69.7Q59.2 86.7 38.8 78.3Q18.4 69.8 18.5 46.8Q18.6 23.7 43.2 14.7Q67.8 5.6 79.1 29.2Q90.4 52.7 74.8 69.7Z"
+      ></path>
+      <g class="raphie-mascot-eyes">
+        <circle cx="44.6" cy="49" r="6.5"></circle>
+        <circle cx="66.6" cy="49" r="6.5"></circle>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<style>
+  .raphie-hero {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+    padding-block: clamp(2rem, 6vw, 5rem) clamp(1.5rem, 4vw, 3rem);
+  }
+
+  @media (min-width: 50rem) {
+    .raphie-hero {
+      grid-template-columns: 7fr 4fr;
+    }
+  }
+
+  h1 {
+    margin: 0;
+    font-family: var(--raphie-brand-font);
+    font-size: clamp(3rem, 2rem + 5vw, 5.25rem);
+    font-weight: 600;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    color: var(--sl-color-white);
+  }
+
+  .raphie-hero-tagline {
+    max-width: 34rem;
+    margin: 1.5rem 0 0;
+    font-size: clamp(1.1rem, 1rem + 0.4vw, 1.3rem);
+    line-height: 1.6;
+    color: var(--sl-color-gray-2);
+    text-wrap: pretty;
+  }
+
+  .raphie-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+    align-items: center;
+    margin-top: 2rem;
+  }
+
+  .raphie-hero-art {
+    position: relative;
+    display: grid;
+    place-items: center;
+    order: -1;
+  }
+
+  @media (min-width: 50rem) {
+    .raphie-hero-art {
+      order: 0;
+    }
+  }
+
+  .raphie-hero-halo {
+    position: absolute;
+    inset: 8%;
+    border-radius: 999px;
+    background: radial-gradient(
+      circle,
+      var(--sl-color-accent-low) 0%,
+      transparent 70%
+    );
+  }
+
+  .raphie-mascot {
+    position: relative;
+    width: min(22rem, 60vw);
+    animation: raphie-float 6s ease-in-out infinite;
+  }
+
+  .raphie-mascot-body {
+    fill: #b5c99b;
+  }
+
+  .raphie-mascot-eyes {
+    fill: #273329;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: raphie-blink 5s infinite;
+  }
+
+  @keyframes raphie-float {
+    50% {
+      transform: translateY(-10px) rotate(-2deg);
+    }
+  }
+
+  @keyframes raphie-blink {
+    0%,
+    92%,
+    100% {
+      transform: scaleY(1);
+    }
+
+    95% {
+      transform: scaleY(0.1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .raphie-mascot,
+    .raphie-mascot-eyes {
+      animation: none;
+    }
+  }
+</style>

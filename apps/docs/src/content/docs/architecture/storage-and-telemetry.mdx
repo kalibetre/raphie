@@ -1,0 +1,141 @@
+---
+title: Storage and telemetry
+description: The single data directory and the one runtime that owns it, every SQLite store and file in it, and why durable state and operational traces are kept in separate planes.
+sidebar:
+  order: 6
+---
+
+import { FileTree } from "@astrojs/starlight/components";
+
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
+All of Raphie's state lives in one data directory, owned by exactly one runtime at a time. It holds SQLite databases and plain files only; there is no external database, broker or cache. Durable state (what the agent did) and telemetry (how the process performed) are stored separately, and nothing durable depends on telemetry.
+
+## One data directory, one owner
+
+| Mode                 | Default location                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| From source          | `.data/` at the root of the Git checkout (shared by its worktrees)                                    |
+| Installed on macOS   | `~/Library/Application Support/Raphie`                                                                |
+| Installed on Linux   | `$XDG_DATA_HOME/raphie` when it is absolute, otherwise `~/.local/share/raphie`                        |
+| Linux system service | `/var/lib/raphie/data`                                                                                |
+| Any mode             | `DATA_DIRECTORY` (must be absolute for an installed binary), or `--data-dir` on the `raphie` launcher |
+
+The directory is created with mode `0700`; the ownership lock, installation ID, `auth.secret` and most databases are `0600`. Raphie never moves, merges or resets an existing directory: if a source checkout finds two candidate locations, it refuses to start and asks you to set `DATA_DIRECTORY`.
+
+<Flow>
+  <Box title="Runtime starts" />
+  <Arrow />
+  <Row>
+    <Box title="Owner lock" tone="accent">
+      does `runtime-owner.sqlite` name a live process?
+    </Box>
+    <Arrow right label="yes" />
+    <Box title="Refuse to start" tone="attention">
+      no store opened
+    </Box>
+  </Row>
+  <Arrow label="no: record own PID and token" />
+  <Row>
+    <Box title="Credential store">available? (after `traces.sqlite` opens)</Box>
+    <Arrow right label="no" />
+    <Box title="Exit">fail closed</Box>
+  </Row>
+  <Arrow label="yes" />
+  <Box title="Open stores">recover, attach every bot, resume</Box>
+</Flow>
+
+Ownership is taken before any product store is opened, which is what prevents two executors writing the same journal. The web host is a second process on the same directory, but it opens only its own `auth.sqlite`.
+
+## What is in it
+
+<FileTree>
+
+- DATA_DIRECTORY/
+  - runtime-owner.sqlite
+  - workspace-identity.json
+  - bots.sqlite
+  - traces.sqlite
+  - auth.sqlite
+  - auth.secret
+  - gateway.sqlite default bot
+  - settings.sqlite
+  - memory.sqlite
+  - mcp.sqlite
+  - channels.sqlite
+  - telegram.sqlite
+  - files/
+  - workspace/
+    - checkpoint.sqlite
+    - container.sqlite
+    - files/
+  - bots/
+    - bot-id/ same layout as the default bot
+
+</FileTree>
+
+| Store                                | Scope    | Contents                                                                                     | Notes                                                      |
+| ------------------------------------ | -------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `runtime-owner.sqlite`               | Host     | Owning process ID and token                                                                  | Liveness-checked ownership lock                            |
+| `workspace-identity.json`            | Host     | Stable installation ID                                                                       | Restore it from backup; never reset it                     |
+| `bots.sqlite`                        | Host     | Bot registry and profile revisions                                                           | `synchronous=FULL`                                         |
+| `traces.sqlite`                      | Host     | OTLP trace spans                                                                             | Best-effort; may be lost                                   |
+| `auth.sqlite`, `auth.secret`         | Web host | Administrator, sessions, passkeys, devices; the session signing secret                       | Only the web host opens these                              |
+| `gateway.sqlite`                     | Per bot  | Pi Durable journal and every `raphie.*` document                                             | One writer connection, WAL                                 |
+| `settings.sqlite`                    | Per bot  | Provider connections, default model, encrypted keys; the telemetry switch (default bot only) | `secure_delete` on, rollback journal (not WAL)             |
+| `memory.sqlite`                      | Per bot  | Memory configuration, built-in evidence, FTS5 indexes                                        | `secure_delete` on, WAL                                    |
+| `mcp.sqlite`                         | Per bot  | Encrypted MCP connections, tokens and OAuth grants                                           | `secure_delete` on                                         |
+| `channels.sqlite`, `telegram.sqlite` | Per bot  | Encrypted Discord and Telegram configuration; Telegram's polling position                    |                                                            |
+| `files/`                             | Per bot  | Content-addressed upload originals (SHA-256 IDs)                                             | Originals stay downloadable after the working copy changes |
+| `workspace/checkpoint.sqlite`        | Per bot  | Sandbox settings, just-bash checkpoint, execution receipts                                   | Outside the container mount                                |
+| `workspace/container.sqlite`         | Per bot  | Container lease and command journal                                                          | Outside the container mount                                |
+| `workspace/files/`                   | Per bot  | The disk view of the bot's `/workspace`                                                      | The only path a container sees                             |
+
+Provider keys, channel configuration and MCP credentials are encrypted with AES-256-GCM under a master key held in the OS credential store or, when `RAPHIE_CREDENTIAL_KEY_FILE` is set, in an owner-only (`0600`, in a `0700` folder) key file. Keep that file outside the data directory; Raphie does not check where it is. See [credentials](/operate/credentials/) and [security](/architecture/security/).
+
+### Evolving the layout
+
+Durable document kinds stay at version 1. New fields are additive, and older records are backfilled inside the startup recovery transaction, preserving every public ID. An older executable is not a supported reader of a newer layout: to downgrade, restore a backup taken before the upgrade, or roll forward.
+
+:::caution
+Back up with the SQLite backup API or with the runtime stopped. Copying a live database file can miss content still in its write-ahead log. See [backup and recovery](/operate/backup-and-recovery/).
+:::
+
+## State plane and telemetry plane
+
+<Flow>
+  <Box title="State change">turn · tool · delivery</Box>
+  <Arrow />
+  <Row>
+    <Box title="State plane" tone="accent">
+      durable, per bot · same commit → `raphie.activity`, a redacted 5,000-event
+      ring → Activity view
+    </Box>
+    <Box title="Telemetry plane" tone="muted">
+      best-effort, per host · span → OTLP exporter → loopback receiver →
+      `traces.sqlite` → Diagnostics view
+    </Box>
+  </Row>
+</Flow>
+
+|                | Activity (state plane)                                                                                                                             | Diagnostics (telemetry plane)                                                                                                                          |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Written        | In the same transaction as the change it describes                                                                                                 | Exported asynchronously by Effect's OTLP exporter to a loopback receiver                                                                               |
+| Stored in      | Each bot's `gateway.sqlite`                                                                                                                        | The host's `traces.sqlite`                                                                                                                             |
+| Retention      | The latest 5,000 events per bot                                                                                                                    | 48 hours, at most 100,000 spans                                                                                                                        |
+| Authority      | Authoritative record of what the agent did; recovery reads it                                                                                      | Operational and expendable; may be lost                                                                                                                |
+| Contents       | Events such as `run.accepted`, `run.recovered`, `approval.requested`, `action.claimed`, `action.uncertain`, `grant.revoked`, with redacted details | Spans such as `http.request`, `session.submit`, `approval.decide`, `tool.call`, `delivery.send`, `agent.run`, `model.generate`, tagged with the bot ID |
+| Never contains | Known secrets: secret-named fields and registered keys are redacted before storage                                                                 | Request text, tool arguments or attachment names: span attributes come from a fixed list                                                               |
+
+Trace collection is on by default. It is one switch for the whole host, **Collect diagnostic traces** under Settings → Diagnostics, and it takes effect for the next span. Polling the Diagnostics routes does not create spans, so the view does not feed itself. See [observability](/operate/observability/) for using both views.
+
+## Limits
+
+- Traces are best-effort. Activity and recovery never depend on them.
+- The activity journal is a ring: events older than the newest 5,000 per bot are gone, and a paging anchor that has rolled out returns 409.
+- One data directory supports one runtime. Running a second runtime on it is refused.
+
+## Related
+
+- [State](/architecture/state/) for what each per-bot store is for
+- [Backup and recovery](/operate/backup-and-recovery/) for procedures

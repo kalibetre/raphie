@@ -1,0 +1,192 @@
+---
+title: State and isolation
+description: How each bot keeps separate durable state inside one process, how memory stores evidence rather than transcripts, and how workspaces keep files while compute is replaceable.
+sidebar:
+  order: 4
+---
+
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
+A bot is the ownership boundary for configuration, sessions, memory, tools and files. Every bot runs in the same runtime process, but each has its own harness, stores and credentials, and no model tool can address another bot. This is logical separation inside a trusted host, not operating-system isolation.
+
+## Bots: separate state, shared process
+
+`BotHost` composes one bot runtime per bot and owns the bot registry in `bots.sqlite`. Each bot runtime repeats the same stack against its own files.
+
+<Flow>
+  <Row>
+    <Box title="BotHost router" tone="accent">
+      `/api/bots/:botId/*` reaches exactly one bot
+    </Box>
+    <Arrow right both />
+    <Box title="bots.sqlite" tone="store">
+      profiles · revisions
+    </Box>
+  </Row>
+  <Arrow />
+  <Row>
+    <Box title="Default bot">
+      data directory root · harness, settings, memory, MCP, channels, jobs,
+      workspace
+    </Box>
+    <Box title="Named bot">its own folder under `bots/` · the same stack</Box>
+  </Row>
+</Flow>
+
+| Part        | How it works                                                                                                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Default bot | Built first. It keeps the original flat data layout at the data directory root, and it cannot be deleted (409). Unprefixed `/api/*` routes address it.                                                        |
+| Named bots  | Get runtime-issued UUIDs and a private directory under `bots/<id>/`. They start with no inherited tools, keys or channels.                                                                                    |
+| Routing     | `/api/bots/:botId/*` resolves exactly one bot and rewrites to that bot's route table. Each route factory receives one bot's runtime and cannot resolve its peers. An unavailable bot returns 503.             |
+| Actors      | Each bot has its own actor authority. A request context is a frozen object registered with that authority, so it cannot be forged, rebuilt from JSON or reused for another bot.                               |
+| Personality | Name, description and SOUL.md are stored with optimistic revisions; the last 50 are retrievable. Edits are refused (409) while the bot has pending turns. Each turn snapshots the personality at admission.   |
+| Startup     | All bots attach before any harness resumes, so recovered tasks always find their tools. A deleted bot's directory is removed only after its work is idle; an interrupted deletion finishes on the next start. |
+
+### What is and isn't isolated
+
+| Property                                                    | Holds?  | Mechanism                                                                                                                                      |
+| ----------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Separate sessions, approvals, activity                      | Yes     | One `gateway.sqlite` and harness per bot                                                                                                       |
+| Separate provider keys, memory, MCP grants, channel config  | Yes     | Per-bot stores; each ciphertext is bound to its record                                                                                         |
+| Model cannot select another bot                             | Yes     | Tools close over their bot when they are built; bot identity never comes from tool arguments                                                   |
+| A Discord application or Telegram bot serves one Raphie bot | Yes     | The host reserves it before connecting. In older data with duplicates, the first bot to attach (the default bot, then profile order) keeps it. |
+| Concurrency                                                 | Per bot | Each bot has its own configuration gate and workspace queue; different bots run in parallel                                                    |
+| Process and OS isolation                                    | No      | Same process, OS user, filesystem permissions and network. A bug in shared code, or the owner, crosses bots.                                   |
+
+Bot management (create, edit, delete) is an owner HTTP surface only. No model tool can change a bot profile. See [security](/architecture/security/) for the trust boundaries around this.
+
+## Memory: evidence, not transcripts
+
+Memory holds selected facts and confirmed experiences that outlast a session. The model decides what to retain through tools; the host supplies the scope and provenance, so a prompt injection cannot forge either.
+
+<Flow>
+  <Box title="Model tools">retain · recall · reflect · revise · forget</Box>
+  <Arrow />
+  <Box title="Host injects" tone="accent">
+    scope from bot config · source = session and turn · time = turn start
+  </Box>
+  <Arrow />
+  <Box title="Memory port">one backend at a time</Box>
+  <Arrow />
+  <Row>
+    <Box title="Built-in" tone="store">
+      `memory.sqlite` + FTS5
+    </Box>
+    <Box title="Hindsight" tone="store">
+      over HTTP
+    </Box>
+  </Row>
+</Flow>
+
+| Tool                             | Behaviour                                                                                                                                                             |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory_retain`                  | Content up to 8,000 characters, kind `fact` or `experience`. Needs an active turn. The evidence ID is derived from the session and tool call, so a replay is a no-op. |
+| `memory_recall`                  | Query up to 2,000 characters; returns at most 8 pieces of evidence                                                                                                    |
+| `memory_reflect`                 | Built-in returns evidence for the conversation model to reason over; Hindsight returns its own reflection                                                             |
+| `memory_revise`, `memory_forget` | Built-in only. They change current evidence, never historical transcripts.                                                                                            |
+
+All memory tools are `replay: "unsafe"`: after a crash they are never re-run, so a corrected or forgotten record cannot come back and an external write is never repeated.
+
+| Backend                | How it stores and searches                                                                                                                                                                                                                                 |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Built-in** (default) | `memory.sqlite` with a receipts table (a seen ID is a no-op) and two FTS5 indexes. Recall queries exact terms first, then fills remaining slots from a Porter-stemmed index. Runs with `secure_delete` on.                                                 |
+| **Hindsight**          | Writes are synchronous and must be confirmed, or they count as failed (outcome unknown, not retried). Evidence is tagged per scope. A saved key is only ever sent to the endpoint and bank it was saved for. Revise and forget happen in Hindsight itself. |
+
+Configuration is one row per bot: enabled (default on), backend, and scope (default `owner`). Named bots' scopes are prefixed with their bot ID. Changing configuration waits for idle and is refused while turns are pending; memory reads and writes run outside that gate, so a slow backend never blocks chat. Switching backend never migrates data and never falls back silently.
+
+## Workspaces: files durable, compute replaceable
+
+Each bot owns one persistent `/workspace`, shared by all its sessions. Compute is separate from files: a sandbox provider runs commands against the workspace and can be replaced without losing them. Switching provider moves files, never processes or memory.
+
+### just-bash (default)
+
+<Flow>
+  <Row>
+    <Box title="workspace_exec">after the approval gate</Box>
+    <Arrow right />
+    <Box title="Bot queue">serial · 16 admitted</Box>
+    <Arrow right />
+    <Box title="Worker thread">empty env · no network · 5 s</Box>
+  </Row>
+  <Arrow label="exit 0 and within limits?" />
+  <Row>
+    <Box title="Yes: commit" tone="accent">
+      checkpoint and receipt in one transaction
+    </Box>
+    <Box title="No: discard">every change is dropped</Box>
+  </Row>
+</Flow>
+
+A command runs in a throwaway worker that gets only the checkpoint and the command: no database paths, host mounts, network, native binaries, Node, Python or `sqlite3`. Every run stores a receipt; only a zero exit also replaces the checkpoint, in the same transaction as that receipt. That is why `workspace_exec` is replay-safe: after a crash, either both exist (the stored result is returned) or neither does (it runs again from the old checkpoint).
+
+| Limit                                 | Value                                                    |
+| ------------------------------------- | -------------------------------------------------------- |
+| Wall time                             | 5 s (a host timer kills the worker)                      |
+| Command source / output               | 16 KiB / 32 KiB                                          |
+| Files in total / checkpoint / entries | 8 MiB / 12 MiB / 1,024                                   |
+| Receipts                              | 16 MiB per bot                                           |
+| Concurrency                           | Serial per bot, 16 queued per bot, 4 workers per process |
+
+Only `/workspace` persists. `/tmp` and shell state last one command.
+
+### Container (opt-in)
+
+<Flow>
+  <Row label="Runtime process">
+    <Box title="Container environment">epoch fence · idle reaper</Box>
+    <Arrow right both />
+    <Box title="container.sqlite" tone="store">
+      lease · command journal
+    </Box>
+  </Row>
+  <Arrow label="docker exec · stdio RPC" />
+  <Row label="Container · read-only root" accent>
+    <Box title="Pi execution env">read · write · edit · bash</Box>
+    <Box title="/workspace" />
+  </Row>
+  <Arrow both label="bind mount" />
+  <Box title="workspace/files/" tone="store" />
+</Flow>
+
+| Control    | Value                                                                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mounts     | Only the bot's `workspace/files` at `/workspace`. No home directory, data directory, credentials or container socket.                         |
+| Privileges | Host UID and GID, all capabilities dropped, `no-new-privileges`, read-only root, `/tmp` as a 64 MiB tmpfs                                     |
+| Resources  | 512 MiB memory, 1 CPU, 128 processes; 30 s per command                                                                                        |
+| Budgets    | 4 containers and 4 active operations per process; 16 admitted per bot                                                                         |
+| Network    | Bridge networking: the internet, the host and the LAN are reachable. The owner must acknowledge this per bot before choosing the provider.    |
+| Lifetime   | One container per bot, created on first use, removed after the idle period (1 to 1,440 minutes, default 10). Files persist; processes do not. |
+
+Control state lives on the host, outside the mount. Opening a provider increments an epoch and removes containers from earlier epochs before the new one is published, so a stale provider can never act again. Every command that can change files is journalled before dispatch; an interrupted one is reported as an unknown outcome and not rerun. There is no rollback: the working tree is the state.
+
+### Switching provider
+
+Saving sandbox settings runs under the workspace gate and is refused (409) while the bot has pending turns or admitted work. It first fences every native writer by taking a newer epoch, then moves files between the checkpoint and `workspace/files/` in a crash-recoverable way, then saves the setting.
+
+## What each bot stores
+
+| Store                         | Contents                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `gateway.sqlite`              | Pi Durable journal and every `raphie.*` document: sessions, turns, approvals, activity, deliveries, bindings, schedules |
+| `settings.sqlite`             | Provider connections, default model, encrypted keys; the default bot's copy also holds the host-wide telemetry switch   |
+| `memory.sqlite`               | Memory configuration, built-in evidence and search indexes                                                              |
+| `mcp.sqlite`                  | Encrypted MCP connections, including tokens and OAuth grants                                                            |
+| `channels.sqlite`             | Encrypted Discord configuration, including its token                                                                    |
+| `telegram.sqlite`             | Encrypted Telegram configuration and the durable polling position                                                       |
+| `files/`                      | Content-addressed uploaded originals                                                                                    |
+| `workspace/checkpoint.sqlite` | Sandbox settings, the just-bash checkpoint and execution receipts                                                       |
+| `workspace/container.sqlite`  | Container lease and command journal                                                                                     |
+| `workspace/files/`            | The disk view of `/workspace`                                                                                           |
+
+The default bot keeps these at the root of the data directory; each named bot has the same layout under `bots/<id>/`. See [storage](/architecture/storage-and-telemetry/) for host-level stores.
+
+## Limits
+
+- Bots share one process, OS user and network; a container sandbox shares the host kernel and can reach host and LAN services.
+- Built-in memory has no background consolidation; reflection is synthesis by the conversation model. Hindsight consolidates and reflects on its own side.
+- There is no cross-bot file or memory sharing operation.
+
+## Related
+
+- [Bots](/guides/bots/), [memory](/guides/memory/) and [workspaces](/guides/workspaces/) for the owner's view
+- [Execution](/architecture/execution/) for approvals and replay rules

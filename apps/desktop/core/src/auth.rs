@@ -1,7 +1,7 @@
 //! Device sign-in and where its token is kept.
 //!
 //! Raphie's web host signs native clients in with the OAuth device flow
-//! (`docs/authentication.md`, "Connect a native device"): the app asks for a
+//! (`apps/docs/src/content/docs/operate/authentication.mdx`, device sign-in): the app asks for a
 //! code, the owner approves it in a browser where they are already signed in,
 //! and the app polls until it receives its own revocable bearer token.
 
