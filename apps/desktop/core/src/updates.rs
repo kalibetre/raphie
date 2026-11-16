@@ -21,7 +21,9 @@ pub const RELEASES_URL: &str = "https://api.github.com/repos/kalibetre/raphie/re
 /// browser elsewhere.
 const RELEASE_PAGES: &str = "https://github.com/kalibetre/raphie/releases/";
 
-const CHECK_TIMEOUT: Duration = Duration::from_secs(15);
+/// How long a check may take, reading included. Twenty releases with their
+/// assets come to over 100 KB, which takes half a minute on a slow link.
+const CHECK_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// This build's version, without a leading "v": "0.0.4", or what
 /// `RAPHIE_VERSION` said when it was compiled.
@@ -216,10 +218,14 @@ impl UpdateStatus {
 
 /// Reads the releases at `url` and picks the newest after this build.
 pub async fn check(url: &str) -> Result<Option<Update>, String> {
+    check_within(url, CHECK_TIMEOUT).await
+}
+
+async fn check_within(url: &str, timeout: Duration) -> Result<Option<Update>, String> {
     let http = reqwest::Client::builder()
         // GitHub refuses requests that do not name their client.
         .user_agent(concat!("Raphie Desktop/", env!("CARGO_PKG_VERSION")))
-        .timeout(CHECK_TIMEOUT)
+        .timeout(timeout)
         .build()
         .map_err(|e| e.to_string())?;
     let response = http
@@ -231,9 +237,13 @@ pub async fn check(url: &str) -> Result<Option<Update>, String> {
     if !response.status().is_success() {
         return Err(format!("GitHub answered {}.", response.status().as_u16()));
     }
-    let releases: Vec<Release> = response
-        .json()
+    // Read the whole answer first, so one that broke off is reported as
+    // that, not as an answer of the wrong shape.
+    let body = response
+        .bytes()
         .await
+        .map_err(|_| "GitHub's answer was cut off. Try again.".to_owned())?;
+    let releases: Vec<Release> = serde_json::from_slice(&body)
         .map_err(|_| "GitHub's answer was not a list of releases.".to_owned())?;
     Ok(newest_after(current_version(), &releases))
 }
@@ -241,6 +251,34 @@ pub async fn check(url: &str) -> Result<Option<Update>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Serves one answer that starts a list of releases and then stalls.
+    async fn stalling_server() -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 1024];
+            let _ = socket.read(&mut request).await;
+            let half = "[{\"tag_name\": \"v9.0.0\", ";
+            let head = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 4096\r\n\r\n{half}"
+            );
+            socket.write_all(head.as_bytes()).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        });
+        format!("http://{address}/releases")
+    }
+
+    #[tokio::test]
+    async fn an_answer_cut_off_is_reported_as_cut_off() {
+        let url = stalling_server().await;
+        let error = check_within(&url, Duration::from_millis(2000))
+            .await
+            .unwrap_err();
+        assert_eq!(error, "GitHub's answer was cut off. Try again.");
+    }
 
     fn v(text: &str) -> Version {
         Version::parse(text).unwrap()
