@@ -487,6 +487,67 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       ),
       /PORT|4316|4320/,
     );
+    // An update stops the running service. launchctl bootout returns before
+    // it has exited, so the update waits for its ports instead of failing.
+    const updateHome = join(temp, "update-home");
+    const updateInstall = join(updateHome, ".local/lib/raphie");
+    await mkdir(updateInstall, { recursive: true });
+    await mkdir(join(updateHome, ".local/bin"), { recursive: true });
+    await mkdir(join(updateHome, "Library/LaunchAgents"), { recursive: true });
+    const held = freePorts();
+    await writeFile(
+      join(updateInstall, ".raphie-user-install"),
+      "nightly-11-1\n",
+    );
+    await writeFile(join(updateInstall, ".channel"), "nightly\n");
+    await writeFile(
+      join(updateInstall, ".data-directory"),
+      join(updateHome, "Library/Application Support/Raphie") + "\n",
+    );
+    await writeFile(
+      join(updateInstall, ".ports"),
+      `runtime=${held.runtime}\nweb=${held.web}\n`,
+    );
+    await symlink(
+      join(updateInstall, "raphie"),
+      join(updateHome, ".local/bin/raphie"),
+    );
+    await writeFile(
+      join(updateHome, "Library/LaunchAgents/com.raphie.user.plist"),
+      "<plist/>\n",
+    );
+    // The stopped service keeps the runtime port for two seconds.
+    await writeFile(
+      join(bin, "launchctl"),
+      `#!/bin/sh
+case "$1" in
+  print) exit 0 ;;
+  bootout)
+    python3 -c 'import socket, sys, time
+s = socket.socket(); s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen()
+open(sys.argv[2], "w").close(); time.sleep(2)' "$HOLD_PORT" "$FIXTURE/held" >/dev/null 2>&1 &
+    while [ ! -e "$FIXTURE/held" ]; do :; done ;;
+  bootstrap) touch "$FIXTURE/bootstrapped" ;;
+esac
+exit 0
+`,
+      { mode: 0o755 },
+    );
+    const macUpdate = run([], {
+      HOME: updateHome,
+      HOLD_PORT: String(held.runtime),
+    });
+    assert.equal(macUpdate.exitCode, 0, macUpdate.stderr.toString());
+    assert.equal(
+      (
+        await readFile(join(updateInstall, ".raphie-user-install"), "utf8")
+      ).trim(),
+      "nightly-12-1",
+    );
+    assert.ok(existsSync(join(temp, "bootstrapped")));
+    await writeFile(join(bin, "launchctl"), "#!/bin/sh\nexit 0\n", {
+      mode: 0o755,
+    });
     // Intel Macs are not supported, and nothing is installed on one.
     const intelHome = join(temp, "intel-home");
     await mkdir(intelHome);

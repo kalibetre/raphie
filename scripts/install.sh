@@ -353,30 +353,48 @@ with tarfile.open(sys.argv[1], 'r:gz') as archive:
             shutil.copyfileobj(source, target)
         os.chmod(os.path.join(sys.argv[2], member.name), 0o755)
 PY
+stopped_service=
 if [ "$updating" = true ]; then
   if [ "$platform" = Linux ] && [ -f "$HOME/.config/systemd/user/raphie.service" ]; then
     systemctl --user stop raphie.service || { echo 'Could not stop the user service; no update was performed.' >&2; exit 1; }
+    stopped_service=systemd
   elif [ "$platform" = Darwin ] && launchctl print "gui/$(id -u)/com.raphie.user" >/dev/null 2>&1; then
     launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.raphie.user.plist" || { echo 'Could not stop the user service; no update was performed.' >&2; exit 1; }
+    stopped_service=launchd
   fi
 fi
 # A foreground or another installation may still hold either port. Never copy a live database.
+# launchctl bootout returns before the service has exited, so an update
+# waits for the ports to free up before giving up.
 if ! python3 - "$runtime_port" "$web_port" "$updating" <<'PY_PORT'
-import socket, sys
+import socket, sys, time
 runtime, web, updating = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3] == 'true'
+deadline = time.monotonic() + (30 if updating else 0)
 for port in (runtime, web):
-    sock = socket.socket()
-    try:
-        sock.bind(('127.0.0.1', port))
-    except OSError:
-        if updating:
-            sys.exit(f'Port {port} is in use. Stop the other Raphie or process holding it and retry; no data was changed.')
-        flag = '--runtime-port' if port == runtime else '--port'
-        sys.exit(f'Port {port} is in use by another program; nothing was installed. Run the installer again with a free port, for example:\n  curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- {flag} {port + 100}')
-    finally:
-        sock.close()
+    while True:
+        sock = socket.socket()
+        try:
+            sock.bind(('127.0.0.1', port))
+            break
+        except OSError:
+            if time.monotonic() < deadline:
+                time.sleep(0.25)
+                continue
+            if updating:
+                sys.exit(f'Port {port} is in use. Stop the other Raphie or process holding it and retry; no data was changed.')
+            flag = '--runtime-port' if port == runtime else '--port'
+            sys.exit(f'Port {port} is in use by another program; nothing was installed. Run the installer again with a free port, for example:\n  curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- {flag} {port + 100}')
+        finally:
+            sock.close()
 PY_PORT
-then exit 1; fi
+then
+  # Leave the installed Raphie running as it was found.
+  case "$stopped_service" in
+    systemd) systemctl --user start raphie.service || true ;;
+    launchd) launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.raphie.user.plist" || true ;;
+  esac
+  exit 1
+fi
 if [ "$updating" = true ] && [ -d "$data_dir" ]; then
   backup_root="$HOME/.local/share/raphie-backups"
   mkdir -p -m 700 "$backup_root"
