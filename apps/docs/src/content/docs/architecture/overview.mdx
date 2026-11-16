@@ -38,15 +38,17 @@ Raphie is a single-owner, self-hosted assistant platform. One long-running **run
   </Row>
 </Flow>
 
-| Part                           | What it owns                                                                                   | What it does not own                                                                   |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **Runtime** (`raphie-runtime`) | Every SQLite store except `auth.sqlite`, model calls, tools, approvals, channels, schedules    | Sign-in, browser sessions                                                              |
-| **Web host** (`raphie-web`)    | `auth.sqlite` (the administrator, sessions, passkeys, devices), the React UI, the `/api` proxy | Conversations, model calls                                                             |
-| **Launcher** (`raphie`)        | Starting both processes, `auth setup` and `auth recover`, status, health, ports                | Runtime or session state; a user install keeps only its saved ports and update channel |
-| **Desktop app**                | Its sign-in token (in the OS credential store) and local preferences such as appearance        | Anything durable: it talks to the web host like the browser does                       |
-| **Channel bridges**            | Their connection settings; they run inside the runtime, one per bot connection                 | Session state, which stays in the bot's store                                          |
+| Part                    | What it owns                                                                                   | What it does not own                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Runtime**             | Every SQLite store except `auth.sqlite`, model calls, tools, approvals, channels, schedules    | Sign-in, browser sessions                                                              |
+| **Web host**            | `auth.sqlite` (the administrator, sessions, passkeys, devices), the React UI, the `/api` proxy | Conversations, model calls                                                             |
+| **Launcher** (`raphie`) | Starting both processes, `auth setup` and `auth recover`, status, health, ports                | Runtime or session state; a user install keeps only its saved ports and update channel |
+| **Desktop app**         | Its sign-in token (in the OS credential store) and local preferences such as appearance        | Anything durable: it talks to the web host like the browser does                       |
+| **Channel bridges**     | Their connection settings; they run inside the runtime, one per bot connection                 | Session state, which stays in the bot's store                                          |
 
 The two server processes share one [data directory](/architecture/storage-and-telemetry/) and talk only over loopback HTTP. Runtime work, including Discord, Telegram and schedules, continues when every client disconnects. They are not independent in an installed copy, though: `raphie start` runs both, and when either process exits it stops the other.
+
+A release is one executable, `raphie`. The runtime and the web host are built into it, and `raphie start` runs each as a process of that same file, so a release carries one copy of Bun instead of three. On Linux, the archive also has two small scripts, `raphie-runtime` and `raphie-web`, that hand over to it, because a system service installed before this layout checks that an update contains them.
 
 ### Ports
 

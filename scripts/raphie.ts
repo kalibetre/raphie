@@ -2,6 +2,7 @@
 import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { openAuthService } from "../apps/web/src/infrastructure/auth/auth-service.ts";
 import {
@@ -326,8 +327,37 @@ async function authCommand(action: string | undefined) {
   }
 }
 
+/** Set by `bun build --define` in tests, to stand-in roles on disk. */
+declare const __RAPHIE_ROLE_ROOT__: string | undefined;
+
+/**
+ * A release is one executable: `raphie start` runs the runtime and the web
+ * host as two processes of this same file, each told its role by a first
+ * argument no one types. They are further entry points built into it, found
+ * from its root and loaded by address, so the CLI's own commands start
+ * neither and the bundler keeps their module order as it is when each is
+ * built alone.
+ */
+const ROLES = {
+  __runtime: "packages/runtime/src/main.js",
+  __web: "apps/web/server.js",
+} as const;
+
+const roleRoot = () =>
+  typeof __RAPHIE_ROLE_ROOT__ === "string"
+    ? __RAPHIE_ROLE_ROOT__
+    : pathToFileURL(`${dirname(Bun.main)}/`).href;
+
 async function main() {
   const args = process.argv.slice(2);
+  const role = args[0];
+  if (
+    Bun.isStandaloneExecutable &&
+    (role === "__runtime" || role === "__web")
+  ) {
+    await import(new URL(ROLES[role], roleRoot()).href);
+    return;
+  }
   const flag = args.indexOf("--data-dir");
   if (flag !== -1) {
     const value = args[flag + 1];
@@ -387,7 +417,6 @@ async function main() {
   }
   if (command === "start") {
     if (Bun.isStandaloneExecutable) {
-      const directory = dirname(process.execPath);
       const children: ReturnType<typeof Bun.spawn>[] = [];
       let stopping = false;
       const stop = () => {
@@ -397,9 +426,9 @@ async function main() {
       process.once("SIGINT", stop);
       process.once("SIGTERM", stop);
       try {
-        for (const executable of ["raphie-runtime", "raphie-web"])
+        for (const role of Object.keys(ROLES))
           children.push(
-            Bun.spawn([join(directory, executable)], {
+            Bun.spawn([process.execPath, role], {
               stdin: "inherit",
               stdout: "inherit",
               stderr: "inherit",

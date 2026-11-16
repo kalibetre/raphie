@@ -1,5 +1,6 @@
 import { Worker } from "node:worker_threads";
 
+import { embeddedFile } from "./embedded-file.ts";
 import {
   type ComputeRequest,
   type ComputeResponse,
@@ -16,12 +17,11 @@ export function computeWorkspace(
     signal?.throwIfAborted();
     // The standalone builder registers this worker as a second entrypoint.
     const worker = new Worker(
-      new URL(
-        Bun.isStandaloneExecutable
-          ? "./packages/runtime/src/domains/workspaces/infrastructure/workspace-worker.js"
-          : "./workspace-worker.ts",
-        import.meta.url,
-      ),
+      Bun.isStandaloneExecutable
+        ? embeddedFile(
+            "./packages/runtime/src/domains/workspaces/infrastructure/workspace-worker.js",
+          )
+        : new URL("./workspace-worker.ts", import.meta.url),
       {
         workerData: request,
         env: {},

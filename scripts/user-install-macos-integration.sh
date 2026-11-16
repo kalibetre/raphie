@@ -20,7 +20,7 @@ trap cleanup EXIT
 /usr/bin/security default-keychain -d user -s "$keychain"
 mkdir -p "$work/home" "$work/bin" "$work/fixtures"
 asset="raphie-darwin-$(uname -m).tar.gz"
-COPYFILE_DISABLE=1 tar -czf "$work/fixtures/archive.tar.gz" -C "$binaries" raphie raphie-runtime raphie-web
+COPYFILE_DISABLE=1 tar -czf "$work/fixtures/archive.tar.gz" -C "$binaries" raphie
 python3 - "$work/fixtures" "$asset" <<'PY'
 import hashlib, json, os, sys
 path, asset = sys.argv[1:]

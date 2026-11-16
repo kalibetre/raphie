@@ -4,6 +4,7 @@ import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { int, obj, opt, str } from "@earendil-works/pi-schema";
 
 import { InputError } from "../../../shared/application/input-error.ts";
+import { embeddedFile } from "./embedded-file.ts";
 import type { RuntimeWorkspace } from "./runtime-workspace.ts";
 import { workspacePath } from "./workspace-reader.ts";
 
@@ -41,12 +42,9 @@ export function createDocumentTools(
             const result = await new Promise<DocumentResult>(
               (resolve, reject) => {
                 const worker = new Worker(
-                  new URL(
-                    Bun.isStandaloneExecutable
-                      ? "./raphie-document-worker.js"
-                      : "./document-worker.ts",
-                    import.meta.url,
-                  ),
+                  Bun.isStandaloneExecutable
+                    ? embeddedFile("./raphie-document-worker.js")
+                    : new URL("./document-worker.ts", import.meta.url),
                   {
                     workerData: {
                       bytes: file.bytes,

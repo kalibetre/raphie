@@ -54,18 +54,13 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
         join(bundle, name),
         `#!/bin/sh\n# fixture-${name}\nexit 0\n`,
       );
-    const archive = () =>
+    // A release is one executable; one from before also has the runtime and
+    // web host as executables of their own.
+    const single = ["raphie"];
+    const separate = ["raphie", "raphie-runtime", "raphie-web"];
+    const archive = (names = single) =>
       Bun.spawnSync(
-        [
-          "tar",
-          "-czf",
-          join(temp, "archive.tar.gz"),
-          "-C",
-          bundle,
-          "raphie",
-          "raphie-runtime",
-          "raphie-web",
-        ],
+        ["tar", "-czf", join(temp, "archive.tar.gz"), "-C", bundle, ...names],
         { env: { ...process.env, COPYFILE_DISABLE: "1" } },
       );
     assert.equal(archive().exitCode, 0);
@@ -326,9 +321,18 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-11-1");
     assert.equal((await readFile(channel, "utf8")).trim(), "stable");
     await compare("ahead");
+    // A stable release from before the single executable keeps all three.
+    const installed = (name: string) =>
+      existsSync(join(home, ".local/lib/raphie", name));
+    assert.ok(installed("raphie") && !installed("raphie-runtime"));
+    assert.equal(archive(separate).exitCode, 0);
+    await checksum();
     const promote = run();
     assert.equal(promote.exitCode, 0, promote.stderr.toString());
     assert.equal((await readFile(marker, "utf8")).trim(), "v0.0.4");
+    assert.ok(installed("raphie-runtime") && installed("raphie-web"));
+    assert.equal(archive().exitCode, 0);
+    await checksum();
     assert.equal((await readFile(channel, "utf8")).trim(), "stable");
     assert.equal(
       await readFile(join(data, "saved.txt"), "utf8"),
@@ -350,6 +354,8 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     const followNightly = run();
     assert.equal(followNightly.exitCode, 0, followNightly.stderr.toString());
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-12-1");
+    // Back to a single executable: the separate two go with the old release.
+    assert.ok(installed("raphie") && !installed("raphie-runtime"));
     await compare("behind");
     const switchBack = run(["--channel", "stable"]);
     assert.equal(switchBack.exitCode, 0, switchBack.stderr.toString());
