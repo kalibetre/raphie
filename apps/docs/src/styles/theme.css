@@ -4,7 +4,7 @@
 :root {
   --sl-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --sl-font-mono: "SF Mono", ui-monospace, Menlo, monospace;
-  --raphie-heading-font: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --raphie-brand-font: Georgia, "Iowan Old Style", "Times New Roman", serif;
   --sl-content-width: 46rem;
   --sl-sidebar-width: 17.5rem;
 
@@ -40,7 +40,6 @@
   --sl-color-purple-high: #e2d6f1;
 
   --raphie-card: #24231f;
-  --raphie-paper-grain: 0.035;
 }
 
 :root[data-theme="light"] {
@@ -77,29 +76,17 @@
   --sl-color-purple-high: #45306a;
 
   --raphie-card: #fdfcf8;
-  --raphie-paper-grain: 0.05;
 }
 
-/* A faint paper grain under everything, like the web workspace's surfaces. */
-body::before {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  content: "";
-  opacity: var(--raphie-paper-grain);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-/* Header and site title */
+/* Header. The wordmark keeps the web workspace's serif; everything else is
+   the interface sans. */
 .header {
   border-bottom-color: var(--sl-color-hairline);
-  backdrop-filter: saturate(1.2) blur(8px);
 }
 
 .site-title {
   gap: 0.6rem;
-  font-family: var(--raphie-heading-font);
+  font-family: var(--raphie-brand-font);
   font-size: 1.3rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -107,126 +94,118 @@ body::before {
 }
 
 .site-title img {
-  height: 1.9rem;
+  height: 1.75rem;
 }
 
-/* Sidebar: quiet section labels, links on a rail, the current page marked
-   with the accent rather than a filled pill. */
+/* Sidebar: plain group names, the current page as a soft accent pill. */
 .sidebar-pane {
   border-inline-end-color: var(--sl-color-hairline);
 }
 
 .sidebar-content .top-level > li > details > summary .large {
-  font-family: var(--sl-font-mono);
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--sl-color-gray-3);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--sl-color-white);
 }
 
-.sidebar-content ul ul {
-  border-inline-start-color: var(--sl-color-hairline);
+.sidebar-content ul ul li {
+  margin-inline-start: 0;
+  padding-inline-start: 0;
+  border-inline-start: 0;
 }
 
 .sidebar-content a {
   border-radius: 0.5rem;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
+  color: var(--sl-color-gray-2);
+}
+
+.sidebar-content a:hover {
+  color: var(--sl-color-white);
+  background: var(--sl-color-gray-6);
 }
 
 .sidebar-content a[aria-current="page"],
 .sidebar-content a[aria-current="page"]:hover,
 .sidebar-content a[aria-current="page"]:focus {
-  position: relative;
   font-weight: 600;
   color: var(--sl-color-accent-high);
   background: var(--sl-color-accent-low);
 }
 
-.sidebar-content a[aria-current="page"]::before {
-  position: absolute;
-  inset-block: 0.45rem;
-  inset-inline-start: calc(-1 * var(--sl-sidebar-item-padding-inline) - 1px);
-  width: 2px;
-  content: "";
-  border-radius: 2px;
-  background: var(--sl-color-accent);
-}
-
 /* Content typography */
 .sl-markdown-content {
   font-size: 1rem;
-  line-height: 1.75;
+  line-height: 1.7;
 }
 
-.sl-markdown-content :is(h2, h3) {
-  font-family: var(--raphie-heading-font);
-  font-weight: 600;
-  letter-spacing: -0.015em;
+.sl-markdown-content :is(h2, h3, h4) {
+  font-weight: 650;
+  letter-spacing: -0.02em;
   color: var(--sl-color-white);
 }
 
 .sl-markdown-content h2 {
-  font-size: 1.75rem;
+  font-size: 1.6rem;
 }
 
 .sl-markdown-content .sl-heading-wrapper.level-h2 {
-  margin-top: 3rem;
-  padding-top: 1.75rem;
-  border-top: 1px solid var(--sl-color-hairline);
+  margin-top: 3.25rem;
 }
 
 .sl-markdown-content h3 {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
 }
 
 .sl-markdown-content h4 {
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--sl-color-gray-3);
+  font-size: 1rem;
 }
 
-.sl-markdown-content a:not(.card, .sl-link-card a, .sl-link-button) {
+.sl-markdown-content a:not(.sl-link-button, .raphie-tile) {
+  font-weight: 500;
   text-decoration-color: color-mix(
     in srgb,
-    var(--sl-color-accent) 45%,
+    var(--sl-color-accent) 35%,
     transparent
   );
-  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.sl-markdown-content a:not(.sl-link-button, .raphie-tile):hover {
+  text-decoration-color: currentColor;
 }
 
 .sl-markdown-content :not(pre) > code {
   padding: 0.1em 0.35em;
-  border: 1px solid var(--sl-color-hairline);
+  border: 0;
   border-radius: 0.375rem;
-  background: var(--raphie-card);
+  font-size: 0.875em;
+  background: var(--sl-color-gray-6);
 }
 
-/* Tables as cards */
+/* Tables: open rows on the page, a quiet header. */
 .sl-markdown-content table {
   display: table;
   width: 100%;
-  overflow: hidden;
-  border: 1px solid var(--sl-color-hairline);
-  border-collapse: separate;
-  border-spacing: 0;
-  border-radius: 0.75rem;
+  border-collapse: collapse;
   font-size: 0.92rem;
 }
 
 .sl-markdown-content :is(th, td) {
-  padding: 0.6rem 0.9rem;
+  padding: 0.65rem 0.9rem 0.65rem 0;
   border: 0;
   border-bottom: 1px solid var(--sl-color-hairline);
 }
 
 .sl-markdown-content th {
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: var(--sl-color-gray-3);
-  background: var(--sl-color-bg-sidebar);
+  background: none;
+}
+
+.sl-markdown-content thead th {
+  border-bottom-color: var(--sl-color-hairline-light);
 }
 
 .sl-markdown-content tr:last-child td {
@@ -245,52 +224,59 @@ body::before {
   }
 }
 
-/* Asides: soft tinted cards with a strong edge. */
+/* Asides: a tinted panel, no heavy rule. */
 .starlight-aside {
-  border: 1px solid
-    color-mix(in srgb, var(--sl-color-asides-border) 35%, transparent);
-  border-inline-start: 3px solid var(--sl-color-asides-border);
+  border: 0;
   border-radius: 0.75rem;
+  background: color-mix(
+    in srgb,
+    var(--sl-color-asides-border) 12%,
+    transparent
+  );
 }
 
 .starlight-aside__title {
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 0.9rem;
+  font-weight: 650;
 }
 
-/* Cards and link cards */
-.sl-markdown-content .card-grid .card:nth-child(n) {
-  --sl-card-border: var(--sl-color-accent);
-  --sl-card-bg: var(--sl-color-accent-low);
-}
-
-.sl-markdown-content .card,
-.sl-markdown-content .sl-link-card {
-  border-color: var(--sl-color-hairline-light);
-  border-radius: 0.9rem;
+/* Starlight cards, where pages still use them: flat, icon without a frame. */
+.sl-markdown-content .card {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 1rem;
   background: var(--raphie-card);
-  box-shadow: 0 1px 2px #2a24140a;
-  transition:
-    border-color 0.15s,
-    transform 0.15s;
+  box-shadow: none;
 }
 
-.sl-markdown-content .sl-link-card:hover {
-  border-color: var(--sl-color-accent);
-  transform: translateY(-1px);
+.sl-markdown-content .card .icon {
+  border: 0;
+  background: none;
+  color: var(--sl-color-accent);
 }
 
 .sl-markdown-content .card .title {
-  font-family: var(--raphie-heading-font);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.sl-markdown-content .sl-link-card {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 1rem;
+  background: var(--raphie-card);
+  box-shadow: none;
+}
+
+.sl-markdown-content .sl-link-card:hover {
+  border-color: var(--sl-color-hairline-light);
+  background: var(--sl-color-gray-6);
 }
 
 /* Steps: numbered with the accent. */
 .sl-markdown-content .sl-steps > li::before {
-  font-family: var(--sl-font-mono);
+  font-weight: 600;
   color: var(--sl-color-accent-high);
   background: var(--sl-color-accent-low);
-  box-shadow: inset 0 0 0 1px var(--sl-color-accent);
+  box-shadow: none;
 }
 
 .sl-markdown-content .sl-steps > li::after {
@@ -299,11 +285,12 @@ body::before {
 
 /* Table of contents */
 starlight-toc nav h2 {
-  font-family: var(--sl-font-mono);
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--sl-color-white);
+}
+
+starlight-toc a {
   color: var(--sl-color-gray-3);
 }
 
@@ -314,24 +301,31 @@ starlight-toc a[aria-current="true"]:hover {
 
 /* Footer pagination */
 .pagination-links a {
-  border-color: var(--sl-color-hairline-light);
-  border-radius: 0.9rem;
-  background: var(--raphie-card);
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 1rem;
+  background: none;
   box-shadow: none;
 }
 
 .pagination-links a:hover {
-  border-color: var(--sl-color-accent);
+  background: var(--sl-color-gray-6);
 }
 
 .pagination-links .link-title {
-  font-family: var(--raphie-heading-font);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* Visible keyboard focus everywhere. */
+:is(a, button, summary, select):focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
 }
 
 /* Home: copy beside an illustration, stacked on narrow screens. */
 .raphie-split {
   display: grid;
-  gap: 2rem;
+  gap: 2.5rem;
   align-items: center;
 }
 
@@ -351,7 +345,7 @@ starlight-toc a[aria-current="true"]:hover {
 
 .sl-markdown-content .raphie-split-note {
   margin-top: 0.75rem;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   color: var(--sl-color-gray-3);
 }
 

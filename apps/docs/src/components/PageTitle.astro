@@ -22,10 +22,7 @@ const section = route.sidebar.find(
 <header class="raphie-page-header">
   {
     section && (
-      <p class="raphie-eyebrow">
-        <span class="raphie-eyebrow-dot" aria-hidden="true" />
-        {section}
-      </p>
+      <p class="raphie-eyebrow">{section}</p>
     )
   }
   <h1 id="_top">{title}</h1>
@@ -38,33 +35,18 @@ const section = route.sidebar.find(
   }
 
   .raphie-eyebrow {
-    display: inline-flex;
-    gap: 0.5rem;
-    align-items: center;
-    margin: 0 0 0.85rem;
-    font-family: var(--sl-font-mono);
-    font-size: 0.72rem;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    margin: 0 0 0.6rem;
+    font-size: 0.875rem;
+    font-weight: 600;
     color: var(--sl-color-accent);
-  }
-
-  .raphie-eyebrow-dot {
-    width: 0.45rem;
-    height: 0.45rem;
-    border-radius: 999px;
-    background: var(--sl-color-accent);
-    box-shadow: 0 0 0 3px var(--sl-color-accent-low);
   }
 
   h1 {
     margin: 0;
-    font-family: var(--raphie-heading-font);
-    font-size: clamp(2rem, 1.4rem + 2.2vw, 2.85rem);
-    font-weight: 600;
+    font-size: clamp(2rem, 1.5rem + 1.8vw, 2.6rem);
+    font-weight: 700;
     line-height: 1.1;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
     color: var(--sl-color-white);
     text-wrap: balance;
   }
@@ -72,8 +54,8 @@ const section = route.sidebar.find(
   .raphie-lede {
     max-width: 40rem;
     margin: 1rem 0 0;
-    font-size: 1.15rem;
-    line-height: 1.6;
+    font-size: 1.125rem;
+    line-height: 1.55;
     color: var(--sl-color-gray-2);
     text-wrap: pretty;
   }

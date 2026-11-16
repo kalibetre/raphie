@@ -8,7 +8,6 @@ const { title = data.title, tagline, actions = [] } = data.hero ?? {};
 
 <div class="raphie-hero">
   <div class="raphie-hero-copy">
-    <p class="raphie-hero-kicker">Self-hosted · Persistent bots · Yours</p>
     <h1 id="_top" set:html={title} />
     {tagline && <p class="raphie-hero-tagline" set:html={tagline} />}
     {
@@ -57,18 +56,9 @@ const { title = data.title, tagline, actions = [] } = data.hero ?? {};
     }
   }
 
-  .raphie-hero-kicker {
-    margin: 0 0 1.25rem;
-    font-family: var(--sl-font-mono);
-    font-size: 0.75rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--sl-color-accent);
-  }
-
   h1 {
     margin: 0;
-    font-family: var(--raphie-heading-font);
+    font-family: var(--raphie-brand-font);
     font-size: clamp(3rem, 2rem + 5vw, 5.25rem);
     font-weight: 600;
     line-height: 0.95;

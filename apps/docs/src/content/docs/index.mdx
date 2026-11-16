@@ -15,14 +15,11 @@ hero:
       variant: minimal
 ---
 
-import {
-  Card,
-  CardGrid,
-  LinkButton,
-  LinkCard,
-} from "@astrojs/starlight/components";
+import { LinkButton } from "@astrojs/starlight/components";
 
 import DesktopPreview from "~/components/DesktopPreview.astro";
+import Feature from "~/components/Feature.astro";
+import Features from "~/components/Features.astro";
 
 ## Up and running in a minute
 
@@ -63,46 +60,34 @@ Then open `http://127.0.0.1:24320`, sign in and connect a model provider. [First
 
 ## What a bot has
 
-<CardGrid>
-  <Card title="A personality" icon="star">
+<Features>
+  <Feature title="A personality" icon="star" href="/guides/bots/">
     A name, a description and a revisioned SOUL.md you write.
-    [Bots](/guides/bots/)
-  </Card>
-  <Card title="Memory it can correct" icon="document">
-    It remembers across sessions; you can browse, fix and forget.
-    [Memory](/guides/memory/)
-  </Card>
-  <Card title="A workspace" icon="laptop">
-    Files that persist, run in a bounded shell or a container.
-    [Workspaces](/guides/workspaces/)
-  </Card>
-  <Card title="Tools and schedules" icon="puzzle">
+  </Feature>
+  <Feature title="Memory it can correct" icon="document" href="/guides/memory/">
+    It remembers across sessions. You can browse, fix and forget.
+  </Feature>
+  <Feature title="A workspace" icon="laptop" href="/guides/workspaces/">
+    Files that persist, worked on in a bounded shell or a container.
+  </Feature>
+  <Feature title="Tools and schedules" icon="puzzle" href="/guides/tools/">
     MCP servers per bot, and prompts that run on a timer.
-    [Tools](/guides/tools/) · [Schedules](/guides/schedules/)
-  </Card>
-</CardGrid>
+  </Feature>
+</Features>
 
 ## Find your way
 
-<CardGrid>
-  <LinkCard
-    title="Use it"
-    description="Conversations, bots, memory, workspaces, tools, Telegram and the Mac app."
-    href="/guides/conversations/"
-  />
-  <LinkCard
-    title="Run it"
-    description="The raphie command, the background service, remote access, backups and recovery."
-    href="/operate/commands/"
-  />
-  <LinkCard
-    title="Secure it"
-    description="Administrator sign-in, devices, credential storage and what each layer protects."
-    href="/operate/authentication/"
-  />
-  <LinkCard
-    title="Understand it"
-    description="Durable turns, approvals, isolation between bots, storage and the HTTP API."
-    href="/architecture/overview/"
-  />
-</CardGrid>
+<Features outlined>
+  <Feature title="Use it" href="/guides/conversations/">
+    Conversations, bots, memory, workspaces, tools, Telegram and the Mac app.
+  </Feature>
+  <Feature title="Run it" href="/operate/commands/">
+    The raphie command, the background service, remote access and backups.
+  </Feature>
+  <Feature title="Secure it" href="/operate/authentication/">
+    Sign-in, devices, credential storage and what each layer protects.
+  </Feature>
+  <Feature title="Understand it" href="/architecture/overview/">
+    Durable turns, approvals, isolation between bots and the HTTP API.
+  </Feature>
+</Features>
