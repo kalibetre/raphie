@@ -258,6 +258,20 @@ test("a browser explicitly approves a native device and can revoke it independen
     headers: { authorization: `Bearer ${token}` },
   });
   expect(admission).not.toBeInstanceOf(Response);
+  // The desktop app reads which release the host runs with the same token.
+  expect(
+    await check("/_raphie/version", {
+      headers: { authorization: `Bearer ${token}` },
+    }),
+  ).not.toBeInstanceOf(Response);
+  expect(
+    (
+      (await check("/_raphie/version", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      })) as Response
+    ).status,
+  ).toBe(403);
   if (admission instanceof Response)
     throw new Error("Expected device admission.");
   let cancelled = false;

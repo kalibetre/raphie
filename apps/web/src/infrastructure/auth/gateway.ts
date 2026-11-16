@@ -202,9 +202,11 @@ export function createGateway(options: {
           path === "/api/auth/device/token"
         )
           return await nativeDeviceRequest(request, publicUrl);
+        // A device's token reaches the API, and the release the host runs,
+        // which the desktop app shows under About.
         const native =
-          path.startsWith("/api/") &&
-          !path.startsWith("/api/auth/") &&
+          ((path.startsWith("/api/") && !path.startsWith("/api/auth/")) ||
+            (path === "/_raphie/version" && request.method === "GET")) &&
           !request.headers.has("origin") &&
           !request.headers.has("cookie") &&
           !request.headers.has("sec-fetch-site") &&
