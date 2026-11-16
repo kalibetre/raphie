@@ -11,7 +11,8 @@ const section = (label, directory, collapsed = false) => ({
 
 export default defineConfig({
   // Set DOCS_SITE_URL to the deployed origin for canonical URLs and the sitemap.
-  site: process.env.DOCS_SITE_URL,
+  // CI passes an unset repository variable as an empty string.
+  site: process.env.DOCS_SITE_URL || undefined,
   integrations: [
     starlight({
       title: "Raphie",
