@@ -70,7 +70,7 @@ Never point the app at a real Raphie (4316/4320 in a checkout, 24316/24320 for a
    bun run dev:web:fixture    # web host on 4321
    ```
 
-2. The fixture's web host keeps its sign-in store in the checkout's data directory (the main checkout's `.data/`) unless `DATA_DIRECTORY` is set, and approving the app's device writes to that store. To keep the test device out of `.data/`, start `bun run dev:web:fixture` with a throwaway `DATA_DIRECTORY` and create the administrator in the same one with `DATA_DIRECTORY=… bun run raphie auth setup`.
+2. The first time, create the fixture's administrator with `bun run fixture:auth`. The fixture's web host keeps its sign-in store, including the app's approved device, in `.fixture-data/` at the checkout root, separate from `.data/`.
 3. Start the app, enter `http://127.0.0.1:4321`, choose **Connect** and approve the device in the browser.
 4. Send a message. The fixture's `acceptance` model streams a canned reply; a message containing "tool" or "approval" proposes an action that needs approval. No paid model is called.
 5. When done, disconnect the test device in the web's **Settings → Account**.
