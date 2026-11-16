@@ -103,7 +103,7 @@ export function SandboxForm({
     >
       <Group
         title="Sandbox settings"
-        note="Saved for this bot across restarts. Providers keep separate files; switching does not move or delete them."
+        note="Saved for this bot across restarts. Both providers work on the same workspace files, so switching keeps them."
       >
         <Row
           title="Provider"
