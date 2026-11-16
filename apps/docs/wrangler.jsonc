@@ -3,6 +3,8 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "raphie-docs",
   "compatibility_date": "2026-11-01",
+  // The public address; the workers.dev address stays available too.
+  "routes": [{ "pattern": "raphie-docs.kalibetre.dev", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page",

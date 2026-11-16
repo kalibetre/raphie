@@ -12,6 +12,7 @@ const appRoot = resolve(import.meta.dir, "..");
 const repositoryRoot = resolve(appRoot, "../..");
 const contentPrefix = "apps/docs/src/content/docs/";
 const repository = "https://github.com/kalibetre/raphie";
+const siteUrl = "https://raphie-docs.kalibetre.dev";
 
 const pages = [
   {
@@ -41,6 +42,8 @@ const pages = [
 
 /** Rewrites one link target found in a root document. */
 export function rewriteTarget(target: string) {
+  // Links to the live site stay on whichever copy of the site renders them.
+  if (target.startsWith(`${siteUrl}/`)) return target.slice(siteUrl.length);
   if (/^([a-z]+:|#|\/)/i.test(target)) return target;
   const [path = "", hash] = target.split("#", 2);
   const anchor = hash === undefined ? "" : `#${hash}`;

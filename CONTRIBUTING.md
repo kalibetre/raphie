@@ -39,7 +39,7 @@ configuration are excluded. Vite generates
 
 ## Organizing code
 
-Both applications follow domain boundaries. See [the architecture overview](apps/docs/src/content/docs/architecture/overview.mdx)
+Both applications follow domain boundaries. See [the architecture overview](https://raphie-docs.kalibetre.dev/architecture/overview/)
 and [CONTEXT.md](CONTEXT.md) for the shared language.
 
 - `domains/<context>/domain` holds framework-free models and business policies.
@@ -117,4 +117,4 @@ to the transcript viewport and content refs instead of adding another scroller.
 The composer floats inside `chat-stage`. Its measured height supplies transcript
 bottom padding and the jump-button offset, including multiline drafts and errors.
 Preserve last-message clearance while letting older messages scroll underneath.
-See [UI conventions](apps/docs/src/content/docs/contribute/ui-conventions.mdx) for the long-history fixture and browser probe.
+See [UI conventions](https://raphie-docs.kalibetre.dev/contribute/ui-conventions/) for the long-history fixture and browser probe.
