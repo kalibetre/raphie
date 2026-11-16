@@ -49,6 +49,19 @@ change that changes the behavior.
 - [Bun migration](bun-migration.md)
 - [Repository cleanup record](repository-cleanup.md)
 
+## The documentation site
+
+`apps/docs` builds these guides into a Starlight site and deploys it to
+Cloudflare Workers from `main`. Guides stay plain Markdown here: each needs a
+single `# ` title, and links between guides use relative `.md` paths. The site
+sidebar lives in `apps/docs/astro.config.mjs`, so add new guides there too.
+
+- `bun run --filter @raphie/docs dev` previews the site on port 4330.
+- `bun run --filter @raphie/docs build` writes it to `apps/docs/dist`.
+- Deploys need the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
+  repository secrets. Set the `DOCS_SITE_URL` variable for canonical URLs and
+  the sitemap.
+
 For a new feature guide, link it here and from the relevant section of the root
 README. Keep defaults, Settings controls, persistence, failure/recovery behavior,
 provider differences and verification instructions aligned with the code. Describe

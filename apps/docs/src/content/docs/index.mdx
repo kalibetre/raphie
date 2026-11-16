@@ -1,0 +1,70 @@
+---
+title: Documentation
+description: A self-hosted assistant platform where each bot has its own instructions, memory, workspace and scheduled work.
+template: splash
+editUrl: false
+hero:
+  title: Raphie
+  tagline: A self-hosted assistant platform. Each persistent bot keeps its own instructions, memory, workspace and scheduled work, on hardware you control.
+  image:
+    file: ../../assets/raphie.svg
+  actions:
+    - text: Run from source
+      link: /source-setup/
+      icon: right-arrow
+    - text: Install on a server
+      link: /user-installation/
+      variant: minimal
+    - text: View on GitHub
+      link: https://github.com/kalibetre/raphie
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+## What a bot has
+
+<CardGrid>
+  <Card title="Its own personality" icon="star">
+    Owner-managed names, descriptions and revisioned SOUL.md documents define
+    who each bot is. [Bots and personality](/bots/)
+  </Card>
+  <Card title="Memory it can correct" icon="document">
+    Bots remember across sessions, and you can inspect, correct and forget what
+    they keep. [Memory](/memory/)
+  </Card>
+  <Card title="A workspace to work in" icon="laptop">
+    Files, an in-memory shell or an opt-in container sandbox, scoped to one bot.
+    [Workspaces and sandboxes](/bot-workspaces/)
+  </Card>
+  <Card title="Scheduled work and tools" icon="puzzle">
+    Per-bot MCP servers with encrypted configuration, plus recurring prompts.
+    [Bot automation](/bot-automation/)
+  </Card>
+</CardGrid>
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Using Raphie"
+    description="Conversations, settings, storage and features in the web workspace."
+    href="/using-raphie/"
+  />
+  <LinkCard
+    title="Desktop client"
+    description="The native Rust app, device sign-in and tailnet connections."
+    href="/desktop/"
+  />
+  <LinkCard
+    title="Telegram channel"
+    description="Talk to a bot from Telegram: setup, pairing and limits."
+    href="/telegram/"
+  />
+  <LinkCard
+    title="Architecture"
+    description="How the headless runtime, durable turns and clients fit together."
+    href="/architecture/"
+  />
+</CardGrid>
