@@ -1,0 +1,73 @@
+---
+title: Clients compared
+description: Which of the web workspace, the desktop app and Telegram can do what, and why managing access stays in the browser.
+sidebar:
+  order: 10
+---
+
+The web workspace can do everything. The [desktop app](/guides/desktop/) for Apple Silicon Macs, installed from each release's disk image, can do almost everything natively, and hands the few access-management steps to your browser. Telegram is for talking to a bot on the go: text conversations and approvals, with setup done elsewhere.
+
+All of them reach the same runtime as the same owner, so a session, approval or memory looks the same whichever you use.
+
+## Conversations
+
+| Capability                                          | Web workspace | Desktop                                | Telegram                                                 |
+| --------------------------------------------------- | ------------- | -------------------------------------- | -------------------------------------------------------- |
+| Talk to any bot, browse and search sessions         | Yes           | Yes                                    | One session per Telegram chat                            |
+| Streamed replies, tool steps, time, tokens and cost | Yes           | Yes                                    | Final replies only                                       |
+| Queue, steer or stop a turn                         | Yes           | Yes                                    | Messages wait their turn; no steer or stop               |
+| Approve or reject tool requests                     | Yes           | Yes                                    | Private chats only; group approvals go to web or desktop |
+| Approve a command for the whole session             | Yes           | Yes                                    | No                                                       |
+| Attachments                                         | Yes           | Yes                                    | No, text only                                            |
+| Choose a session's model                            | Yes           | Yes                                    | No                                                       |
+| Command permissions (Ask or Full access)            | Yes           | Yes                                    | No                                                       |
+| Unread markers                                      | Yes           | Yes                                    | Not applicable                                           |
+| Notifications                                       | In the app    | In the app and as system notifications | Telegram's own                                           |
+| Scheduled job updates                               | Yes           | Yes                                    | In the [home channel](/guides/schedules/)                |
+
+Read state is shared through the runtime: whatever any client has read counts as read everywhere.
+
+## Bot settings
+
+| Page                                     | Web workspace | Desktop                        | Telegram |
+| ---------------------------------------- | ------------- | ------------------------------ | -------- |
+| Profile, personality and revisions       | Yes           | Yes                            | No       |
+| Create or delete a bot                   | Yes           | Yes                            | No       |
+| Providers and models                     | Yes           | Yes, sign-in opens the browser | No       |
+| Memory settings; browse, correct, forget | Yes           | Yes                            | No       |
+| MCP tools                                | Yes           | Yes, OAuth opens the browser   | No       |
+| Channels                                 | Yes           | Yes                            | No       |
+| Sandbox and workspace files              | Yes           | Yes                            | No       |
+| Scheduled jobs and run history           | Yes           | Yes                            | No       |
+| Activity and Diagnostics                 | Yes           | Yes                            | No       |
+
+## Access and the app
+
+| Capability                       | Web workspace            | Desktop                                    | Telegram                     |
+| -------------------------------- | ------------------------ | ------------------------------------------ | ---------------------------- |
+| Sign in                          | Password or passkey      | Device code, approved in the browser       | [Pairing](/guides/telegram/) |
+| Approve a new device             | Yes                      | Opens the browser                          | No                           |
+| List or disconnect devices       | Yes                      | Opens the browser                          | No                           |
+| Register or remove passkeys      | Yes                      | Opens the browser                          | No                           |
+| Sign this client out             | Yes                      | Yes                                        | No                           |
+| Appearance (light, dark, system) | Yes, per browser         | Yes, per device                            | No                           |
+| Version and update check         | Version under Appearance | About page, checks GitHub for new releases | No                           |
+| UI plugins                       | Yes                      | No                                         | No                           |
+
+Recovering a lost admin password is not done from any client: run `raphie auth recover` on the Raphie machine. See [authentication](/operate/authentication/).
+
+Discord behaves like Telegram here: text conversations and approvals, configured under **Channels**.
+
+## Why access management stays in the browser
+
+Anything that grants or removes access to Raphie (signing in with a password or passkey, approving a device, listing or disconnecting devices) answers only to a signed-in browser. The web host refuses those requests from a device token outright, rather than leaving it to each client to hide the buttons.
+
+That way a lost or stolen laptop with the desktop app cannot lock you out, disconnect your other devices, or approve a new one. Disconnect it from the browser and its token stops working.
+
+Everything else is safe to offer natively: an approved device already has your full authority over conversations and bot settings, so a native page adds no new access.
+
+## Related
+
+- [Desktop app](/guides/desktop/)
+- [Telegram](/guides/telegram/)
+- [Remote access](/operate/remote-access/)

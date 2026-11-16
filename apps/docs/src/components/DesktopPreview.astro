@@ -1,0 +1,260 @@
+---
+// An illustration of the desktop app, drawn in HTML so it follows the theme.
+// Not a screenshot: the content is representative, not live.
+---
+
+<div class="raphie-app not-content" aria-hidden="true">
+  <div class="raphie-app-titlebar">
+    <span class="raphie-app-lights"><i></i><i></i><i></i></span>
+    <span class="raphie-app-title">Raphie</span>
+  </div>
+  <div class="raphie-app-body">
+    <aside class="raphie-app-roster">
+      <p class="raphie-app-heading">Bots</p>
+      <p class="raphie-app-bot raphie-app-bot--current">
+        <i style="background: #7fb08b"></i>Raphie
+      </p>
+      <p class="raphie-app-bot"><i style="background: #d49a5c"></i>Research</p>
+      <p class="raphie-app-bot"><i style="background: #8fa6c9"></i>Home ops</p>
+      <p class="raphie-app-heading">Conversations</p>
+      <p class="raphie-app-session raphie-app-session--current">
+        Weekly plan
+      </p>
+      <p class="raphie-app-session">Tea preferences</p>
+      <p class="raphie-app-session">
+        Release notes <span class="raphie-app-badge">1</span>
+      </p>
+    </aside>
+    <main class="raphie-app-chat">
+      <p class="raphie-app-msg raphie-app-msg--owner">
+        Pull the latest notes repo and summarise what changed this week.
+      </p>
+      <div class="raphie-app-msg raphie-app-msg--bot">
+        <p class="raphie-app-step">✓ Recalled 2 memories</p>
+        <div class="raphie-app-approval">
+          <p class="raphie-app-approval-title">Run a command?</p>
+          <code>git pull --ff-only</code>
+          <span class="raphie-app-buttons">
+            <span class="raphie-app-button raphie-app-button--primary"
+              >Approve once</span
+            >
+            <span class="raphie-app-button">Reject</span>
+          </span>
+        </div>
+      </div>
+      <div class="raphie-app-composer">
+        <span>Message Raphie…</span>
+        <span class="raphie-app-send">↑</span>
+      </div>
+    </main>
+  </div>
+</div>
+
+<style>
+  .raphie-app {
+    overflow: hidden;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.9rem;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--sl-color-white);
+    background: var(--sl-color-black);
+    box-shadow:
+      0 1px 2px #2a24140f,
+      0 24px 60px -20px #2a241440;
+  }
+
+  .raphie-app p {
+    margin: 0;
+  }
+
+  .raphie-app-titlebar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 2.1rem;
+    padding-inline: 0.8rem;
+    border-bottom: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+  }
+
+  .raphie-app-lights {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .raphie-app-lights i {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    background: var(--sl-color-gray-5);
+  }
+
+  .raphie-app-title {
+    position: absolute;
+    inset-inline: 0;
+    font-weight: 600;
+    text-align: center;
+    color: var(--sl-color-gray-3);
+    pointer-events: none;
+  }
+
+  .raphie-app-body {
+    display: grid;
+    grid-template-columns: 11rem 1fr;
+    min-height: 17rem;
+  }
+
+  .raphie-app-roster {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.75rem 0.6rem;
+    border-right: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+  }
+
+  .raphie-app-heading {
+    margin: 0.5rem 0.4rem 0.2rem !important;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--sl-color-gray-3);
+  }
+
+  .raphie-app-heading:first-child {
+    margin-top: 0 !important;
+  }
+
+  .raphie-app-bot,
+  .raphie-app-session {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.3rem 0.45rem;
+    border-radius: 0.45rem;
+    color: var(--sl-color-gray-2);
+  }
+
+  .raphie-app-bot i {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 999px;
+  }
+
+  .raphie-app-bot--current,
+  .raphie-app-session--current {
+    font-weight: 600;
+    color: var(--sl-color-white);
+    background: var(--sl-color-gray-6);
+  }
+
+  .raphie-app-badge {
+    margin-left: auto;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    color: var(--sl-color-black);
+    background: var(--sl-color-accent);
+  }
+
+  .raphie-app-chat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .raphie-app-msg--owner {
+    align-self: flex-end;
+    max-width: 80%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.8rem 0.8rem 0.2rem;
+    background: var(--sl-color-gray-6);
+  }
+
+  .raphie-app-msg--bot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 85%;
+  }
+
+  .raphie-app-step {
+    font-size: 0.72rem;
+    color: var(--sl-color-accent);
+  }
+
+  .raphie-app-approval {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--sl-color-orange);
+    border-radius: 0.65rem;
+    background: var(--sl-color-orange-low);
+  }
+
+  .raphie-app-approval-title {
+    font-weight: 600;
+    color: var(--sl-color-orange-high);
+  }
+
+  .raphie-app-approval code {
+    align-self: flex-start;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.3rem;
+    font-size: 0.72rem;
+    background: var(--sl-color-black);
+  }
+
+  .raphie-app-buttons {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .raphie-app-button {
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.4rem;
+    font-size: 0.72rem;
+    background: var(--sl-color-black);
+  }
+
+  .raphie-app-button--primary {
+    border-color: transparent;
+    color: var(--sl-color-black);
+    background: var(--sl-color-white);
+  }
+
+  .raphie-app-composer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+    padding: 0.55rem 0.55rem 0.55rem 0.8rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.8rem;
+    color: var(--sl-color-gray-3);
+    background: var(--raphie-card);
+  }
+
+  .raphie-app-send {
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    color: var(--sl-color-black);
+    background: var(--sl-color-white);
+  }
+
+  @media (max-width: 34rem) {
+    .raphie-app-body {
+      grid-template-columns: 1fr;
+    }
+
+    .raphie-app-roster {
+      display: none;
+    }
+  }
+</style>

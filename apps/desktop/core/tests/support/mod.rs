@@ -1,7 +1,7 @@
 //! A fake Raphie web host for tests: just enough of the authenticated API,
 //! device sign-in and event streams, on a random loopback port. It mirrors the
-//! behaviour documented in `docs/authentication.md` and
-//! `docs/headless-interface.md`; it makes no model calls.
+//! behaviour documented in `apps/docs/src/content/docs/operate/authentication.mdx` and
+//! `apps/docs/src/content/docs/architecture/http-api.mdx`; it makes no model calls.
 
 #![allow(dead_code)] // each test file uses a different part of it
 

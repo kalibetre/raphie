@@ -1,0 +1,137 @@
+---
+title: Desktop app
+description: Install Raphie's native Mac app, sign it in to your Raphie, and use it for conversations, approvals and bot settings.
+sidebar:
+  order: 9
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
+Raphie Desktop is a native Mac app for working with your bots: pick a bot and a conversation, send messages, watch replies stream in, approve tool actions and change bot settings, without a browser tab. Download it from the releases page, drag it to Applications and sign it in to your Raphie with a device code.
+
+It is written in Rust on [Rune](https://github.com/anomalyco/rune), a GPU-rendered UI framework, and looks like the web workspace in light and dark. It runs on Macs with Apple Silicon (M1 and later) and macOS 12 or later.
+
+<Flow>
+  <Row>
+    <Box title="Raphie Desktop" tone="accent">
+      this Mac
+    </Box>
+    <Box title="Browser" />
+  </Row>
+  <Arrow label="HTTPS (plain HTTP only on loopback) + device token" />
+  <Box title="Web host">same API for both</Box>
+  <Arrow />
+  <Box title="Runtime">bots · sessions · turns</Box>
+</Flow>
+
+The app talks to the web host, the same one your browser uses, never to the runtime directly. So it works the same whether Raphie runs on this Mac or on a server in your tailnet. Its only other connection is the update check, which reads Raphie's public releases on GitHub without your token.
+
+## What you can do
+
+| Area           | What you can do                                                                                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Conversations  | Pick a bot and browse its sessions, search titles, filter to new replies or pending approvals, read history, send with Return (Shift-Return for a new line).                                                                                           |
+| Replies        | Streamed Markdown with highlighted code; the tools each run used, with their arguments, results, timing, tokens and cost.                                                                                                                              |
+| While it works | **Stop** a run, or queue a message and switch it to steer after the current step.                                                                                                                                                                      |
+| Approvals      | **Approve once** or **Reject** with the exact arguments; **Approve for session** for commands.                                                                                                                                                         |
+| Composer       | Choose the model and the command permission mode (**Ask** or **Full access**); attach up to four files of 8 MiB each by picker, drag and drop or paste.                                                                                                |
+| Notifications  | A bell with new replies, approvals and scheduled job runs across all bots, plus macOS notifications when the window is in the background.                                                                                                              |
+| Settings       | Profile (with personality and revision history), Providers, Models, Memory, MCP tools, Channels, Sandbox, Workspace, Scheduled jobs and Activity for each bot, plus Account, Create a bot, Appearance, About and Diagnostics. UI plugins are web only. |
+| Updates        | **Settings → About** checks whether a newer Raphie release, nightly pre-releases included, exists and links to it.                                                                                                                                     |
+
+What you read is shared with the web: a reply read in one client counts as read in the other. Secrets you type (provider keys, bot tokens, MCP tokens) are sent to Raphie and not saved by the app.
+
+For a side-by-side view with the web workspace and Telegram, see [clients compared](/guides/clients/).
+
+## Install
+
+Each Raphie release carries the app as `Raphie-macos-arm64.dmg`, built from the same commit as the rest of the release. The latest stable one is always at:
+
+```text
+https://github.com/kalibetre/raphie/releases/latest/download/Raphie-macos-arm64.dmg
+```
+
+Nightly builds, made on demand from `main`, are pre-releases on the [releases page](https://github.com/kalibetre/raphie/releases). Each release also lists the image in its `SHA256SUMS` file.
+
+<Steps>
+
+1. Open the disk image and drag **Raphie** onto **Applications**.
+2. Open Raphie from Applications. macOS blocks the first launch, because the app is signed only ad hoc, not with an Apple Developer ID, and is not notarised. Dismiss the dialog.
+3. Open **System Settings → Privacy & Security**, scroll to **Security**, and choose **Open Anyway** beside the message about Raphie. Confirm with your password, then choose **Open**.
+
+   Or, in Terminal:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Raphie.app
+   ```
+
+</Steps>
+
+macOS remembers the choice, so later launches open normally until an update replaces the app. macOS also asks once whether Raphie may send notifications.
+
+## Connect and sign in
+
+The app signs in with a device code, so your password never goes into it.
+
+<Steps>
+
+1. Enter the address of your Raphie web host:
+   - Raphie on this Mac: the app finds it by itself. It reads the web port the installer saved in `~/.local/lib/raphie/.ports` (`24320` when none was saved) and checks that Raphie answers there. A new app starts with that address, and when the field holds another one, for example an address that no longer answers, the sign-in card offers **Raphie is running on this Mac**: choose **Use it**. Run `raphie port` to see the address yourself.
+   - Raphie on another machine: its `https://` tailnet address, for example `https://raphie.your-tailnet.ts.net`. See [the next section](#connect-to-raphie-on-another-machine).
+2. Choose **Connect**, then **Open approval page**.
+3. Sign in to Raphie in the browser, check that the code matches the one in the app, and approve the device.
+
+</Steps>
+
+The token is saved in the macOS login Keychain, one per address, and reused at the next launch. See [authentication](/operate/authentication/) for how device sign-in works on the Raphie side.
+
+## Connect to Raphie on another machine
+
+<Steps>
+
+1. On the Raphie machine, give the web host an HTTPS tailnet address. See [remote access](/operate/remote-access/).
+2. Check that this Mac is on the same tailnet and that the address opens Raphie in a browser.
+3. Enter that `https://` address in the app and sign in as above.
+
+</Steps>
+
+The app accepts plain `http://` only for `127.0.0.1`, `localhost` and `[::1]`, so a token never crosses a network unencrypted. It follows no redirects. If you later change Raphie's web port with `raphie set-port`, update the tailnet address (or `tailscale serve`) and sign the app in to the new address.
+
+## Update
+
+The app checks for a newer release at launch, and **Settings → About → Check for updates** checks again. It compares against every published release, including nightly pre-releases, so a stable install can be offered a nightly. It never downloads or installs anything itself.
+
+<Steps>
+
+1. When **About** says a newer release exists, choose **View release** and download `Raphie-macos-arm64.dmg`.
+2. Quit Raphie, then drag the new **Raphie** onto **Applications** and replace the old one.
+3. Open it and allow it once more with **Open Anyway**.
+
+</Steps>
+
+Your sign-in and settings are kept.
+
+## Sign out or disconnect
+
+| Action                                                           | What happens                                                                                     |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Sign out** (bottom of the bot list, or **Settings → Account**) | Forgets the token on this Mac. The device stays listed in the web workspace.                     |
+| **Disconnect** in the web workspace's **Settings → Account**     | Revokes the device's token on the server. Use this for a lost Mac or a device you no longer use. |
+
+If Raphie rejects the token, for example because you disconnected the device, the app deletes it and returns to sign-in with an explanation.
+
+## Limits
+
+- Apple Silicon Macs only. There is no Intel, Windows or Linux build.
+- Not signed with an Apple Developer ID or notarised, so each new copy needs **Open Anyway** once.
+- No automatic updates: **About** tells you, you replace the app.
+- It connects to a Raphie that is already running; it does not install, start or manage one.
+- Approving devices, listing or disconnecting them, and passkeys stay in the browser. See [why](/guides/clients/#why-access-management-stays-in-the-browser).
+- Approvals given for a session cannot be listed or revoked here, nor in the web workspace; only the HTTP API lists and revokes them.
+- One message in flight at a time from the composer.
+- Tool steps come from a session's latest 200 events, so older turns show their reply without steps.
+- The window is at least 960 by 560 points.
+
+To build the app yourself or work on it, see [desktop development](/contribute/desktop-development/).

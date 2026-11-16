@@ -1,0 +1,38 @@
+---
+// A responsive grid of Feature links. `outlined` draws tile borders, for
+// navigation; without it the items sit directly on the page.
+interface Props {
+  outlined?: boolean;
+}
+
+const { outlined = false } = Astro.props;
+---
+
+<div
+  class:list={[
+    "raphie-features not-content",
+    { "raphie-features--outlined": outlined },
+  ]}
+>
+  <slot />
+</div>
+
+<style>
+  .raphie-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+
+  /* Pull plain items out so their text lines up with the page's. */
+  @media (min-width: 50rem) {
+    .raphie-features:not(.raphie-features--outlined) {
+      margin-inline: -1.15rem;
+    }
+  }
+
+  .raphie-features--outlined {
+    gap: 0.75rem;
+  }
+</style>
