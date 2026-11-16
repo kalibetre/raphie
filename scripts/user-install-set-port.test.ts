@@ -46,7 +46,10 @@ test("a user installation runs on its saved ports, and set-port changes them and
     for (const name of ["raphie-runtime", "raphie-web"]) {
       await writeFile(
         join(install, name),
-        `#!/bin/sh\nprintf "%s %s %s %s" "$PORT" "$RAPHIE_WEB_PORT" "$RAPHIE_RUNTIME_URL" "$RAPHIE_WEB_ORIGIN" > "$TEST_DIR/${name}"\n`,
+        `#!/bin/sh\nprintf "%s %s %s %s" "$PORT" "$RAPHIE_WEB_PORT" "$RAPHIE_RUNTIME_URL" "$RAPHIE_WEB_ORIGIN" > "$TEST_DIR/${name}"\n` +
+          // Neither exits before both have noted theirs: start stops the
+          // other as soon as one exits.
+          'until [ -e "$TEST_DIR/raphie-runtime" ] && [ -e "$TEST_DIR/raphie-web" ]; do sleep 0.05; done\n',
       );
       await chmod(join(install, name), 0o755);
     }

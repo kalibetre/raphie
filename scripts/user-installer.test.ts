@@ -407,6 +407,26 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       ),
       /PORT|4316|4320/,
     );
+    // Intel Macs are not supported, and nothing is installed on one.
+    const intelHome = join(temp, "intel-home");
+    await mkdir(intelHome);
+    await writeFile(
+      join(bin, "uname"),
+      '#!/bin/sh\nif [ "$1" = -s ]; then echo Darwin; else echo x86_64; fi\n',
+      { mode: 0o755 },
+    );
+    await writeFile(join(bin, "sysctl"), "#!/bin/sh\necho 0\n", {
+      mode: 0o755,
+    });
+    const intel = run(["--channel", "nightly"], { HOME: intelHome });
+    assert.notEqual(intel.exitCode, 0);
+    assert.match(intel.stderr.toString(), /Apple Silicon Macs only/);
+    assert.equal(existsSync(join(intelHome, ".local/lib/raphie")), false);
+    await writeFile(
+      join(bin, "uname"),
+      '#!/bin/sh\nif [ "$1" = -s ]; then echo Darwin; else echo arm64; fi\n',
+      { mode: 0o755 },
+    );
     const badHome = join(temp, "bad-home");
     await mkdir(badHome);
     await symlink("raphie", join(bundle, "unsafe-link"));
@@ -435,4 +455,5 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
-}, 30000);
+  // Each case runs the whole installer; together they take about 30 s.
+}, 90_000);

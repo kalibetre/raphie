@@ -84,7 +84,7 @@ case "$os:$arch" in
   Linux:x86_64) platform=Linux; asset=raphie-linux-x64.tar.gz ;;
   Linux:aarch64|Linux:arm64) platform=Linux; asset=raphie-linux-arm64.tar.gz ;;
   Darwin:arm64) platform=Darwin; asset=raphie-darwin-arm64.tar.gz ;;
-  Darwin:x86_64) platform=Darwin; asset=raphie-darwin-x64.tar.gz ;;
+  Darwin:x86_64) echo 'Raphie supports Apple Silicon Macs only; Intel Macs are not supported.' >&2; exit 1 ;;
   *) echo 'This platform is not supported by the Raphie installer.' >&2; exit 1 ;;
 esac
 if [ "$headless" = true ]; then

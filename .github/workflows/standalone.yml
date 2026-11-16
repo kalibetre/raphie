@@ -75,10 +75,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Apple Silicon only: Intel Macs are not supported.
           - runner: macos-15
             target: bun-darwin-arm64
-          - runner: macos-15-intel
-            target: bun-darwin-x64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4

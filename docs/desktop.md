@@ -239,6 +239,33 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
 - **Light and dark** follow the OS appearance, live, unless Appearance pins
   one.
 
+## Install it
+
+Each release on the [releases page](https://github.com/kalibetre/raphie/releases)
+carries the app as `Raphie-macos-arm64.dmg`, built from the same commit as the
+runtime beside it. It runs on Apple Silicon Macs (M1 and later) only; there is
+no Intel build. The latest stable release is always at
+`https://github.com/kalibetre/raphie/releases/latest/download/Raphie-macos-arm64.dmg`.
+Nightlies are pre-releases on the same page.
+
+1. Open the disk image and drag **Raphie** onto **Applications**.
+2. Open Raphie from Applications. The app is not signed with an Apple
+   Developer ID yet, so macOS stops the first launch with "“Raphie” Not
+   Opened". Choose **Done**.
+3. Open **System Settings → Privacy & Security**, scroll to **Security**, and
+   choose **Open Anyway** beside the message about Raphie. Confirm with your
+   password, then **Open**. macOS remembers this; later launches open
+   normally, until an update replaces the app.
+
+   Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Raphie.app`.
+
+4. Enter the address of your Raphie web host: `http://127.0.0.1:24320` when
+   Raphie is installed on this Mac ([ports](user-installation.md#ports)), or
+   its `https://` address on a server ([tailnet](#connect-over-a-tailnet)).
+
+To update, download the newer image when **Settings → About** says one exists,
+and replace the app in Applications. The sign-in and settings are kept.
+
 ## Run it
 
 Prerequisites: a Rust toolchain via [rustup](https://rustup.rs). The pinned
@@ -296,8 +323,17 @@ kept in the repository: the script runs the debug binary with
 `sips` and `iconutil` turn it into `AppIcon.icns`. Release builds leave out
 Rune's `--snap`, which is why the debug binary draws both.
 
-Both bundles are for this machine, not for distribution: no Developer ID
-signature and no notarisation.
+Both bundles are signed ad hoc, with no Developer ID signature and no
+notarisation, which is why a downloaded copy needs **Open Anyway** once.
+
+`scripts/dmg.sh` builds the release app and packs it, with a link to
+`/Applications`, into `target/dist/Raphie-macos-arm64.dmg`, on an Apple Silicon
+Mac only. It checks the bundle's signature, `Info.plist`, icon and
+architecture before packing. `RAPHIE_VERSION` stamps the version the app
+shows and compares in its update check. The release workflow runs it on an
+Apple Silicon runner, and the **Desktop app** workflow runs it on
+pull requests that touch `apps/desktop`, keeping the image as a run artifact
+for a week.
 
 ### Connect to the test fixture
 
@@ -398,6 +434,7 @@ apps/desktop/
     tests/screens.rs      headless element-tree checks, light and dark
   scripts/snapshots.sh    renders every scene to PNGs under target/snapshots
   scripts/bundle.sh       wraps the binary in target/bundle/Raphie.app (macOS)
+  scripts/dmg.sh          packs the release app into target/dist/*.dmg
 ```
 
 The crate split is the boundary for later work: the core owns the API client,
@@ -539,8 +576,8 @@ current.
   web: turns older than that show their reply without steps or usage.
 - The roster's and the panel's open state is not remembered between
   launches. The window is at least 960×560.
-- No distributable package: no Developer ID signing, notarisation or
-  installer, and the release workflow publishes no desktop app. The update
+- Not signed with a Developer ID or notarised, so the first launch of a
+  downloaded copy needs **Open Anyway**. No automatic updates: the update
   check only says a newer Raphie exists and links to its release page.
   Without an app bundle, macOS may ask to allow Keychain access the first
   time.

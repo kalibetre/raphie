@@ -13,7 +13,7 @@ change that changes the behavior.
 - [Installed service commands](commands.md): status, ports, origins, updates and recovery.
 - [Standalone builds and operations](standalone-build.md): detailed deployment and recovery notes.
 - [Using Raphie](using-raphie.md): conversations, settings, storage and features.
-- [Desktop client](desktop.md): the native Rust app, device sign-in, fixture and tailnet connections, limits and Rune notes.
+- [Desktop client](desktop.md): the native Rust app, installing it from a release, device sign-in, fixture and tailnet connections, limits and Rune notes.
 - [Clients: what each one can do](clients.md): which capabilities the web workspace, the desktop client and a later mobile client offer, and why access management stays in the browser.
 - [General attachments](general-attachments.md): composer uploads, workspace paths, original versions and model input limits.
 - [Bots and personality](bots.md): default identity, isolated configuration, SOUL.md, APIs and recovery limits.
