@@ -32,7 +32,20 @@ A debug build is **Raphie Dev** and a release build (`--release`) is **Raphie**.
 | Settings folder                 | `<config dir>/raphie-desktop-dev/` | `<config dir>/raphie-desktop/` |
 | Look                            | Amber icon and a "DEV" badge       | Sage icon, no badge            |
 
-The split lives in `Flavor` in `core/src/flavor.rs`. macOS posts system notifications only for a bundled app, so use `scripts/bundle.sh` when working on notifications.
+The split lives in `Flavor` in `core/src/flavor.rs`.
+
+A release build also knows its **release channel** from the version built into it (`ReleaseChannel` in `core/src/updates.rs`). A nightly (`v0.0.5-nightly.…`) is the same app as a stable release, with the same identifier, settings and sign-in, but it shows it:
+
+|               | Stable                 | Nightly                                                         |
+| ------------- | ---------------------- | --------------------------------------------------------------- |
+| Icon          | The brand face in sage | The sage face under a night sky: indigo, a crescent moon, stars |
+| In the window | Nothing extra          | A "NIGHTLY" pill with a moon beside the brand                   |
+| About         | Release channel Stable | Release channel Nightly                                         |
+| Updates       | Stable releases only   | Any newer release, nightlies included                           |
+
+`scripts/bundle.sh` draws the night-sky icon when `RAPHIE_VERSION` names a nightly. The `nightly-build` and `settings-about-nightly` scenes show the pill and the About page.
+
+macOS posts system notifications only for a bundled app, so use `scripts/bundle.sh` when working on notifications.
 
 ## Build the disk image
 

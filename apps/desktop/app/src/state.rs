@@ -28,6 +28,7 @@ use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
 use raphie_core::replies::ReadReplies;
 use raphie_core::settings::{Settings, ThemeChoice};
+use raphie_core::updates::ReleaseChannel;
 use raphie_core::updates::UpdateStatus;
 use raphie_core::workspace::{self, ROOT};
 use rune::{ClipboardContent, FileDialogOptions, Image, ImageCache, TextEdit, Tx, Waker};
@@ -293,6 +294,8 @@ pub struct Ui {
     pub model: Model,
     /// Which build this is. The dev build says so beside the brand.
     pub flavor: Flavor,
+    /// Which releases this build follows. A nightly says so beside the brand.
+    pub release_channel: ReleaseChannel,
     /// The running engine. `None` in headless runs and tests, where commands
     /// are recorded in `sent` instead of going to a network.
     client: Option<Client>,
@@ -478,6 +481,7 @@ impl Ui {
         if rune::tooling::headless_run().is_some() {
             let mut ui = Ui::with_origin(&first_origin(Flavor::Release, None));
             ui.flavor = Flavor::Release;
+            ui.release_channel = ReleaseChannel::Stable;
             return ui;
         }
         let saved = Settings::default_path()
@@ -505,6 +509,7 @@ impl Ui {
         Ui {
             model: Model::new(),
             flavor: Flavor::current(),
+            release_channel: ReleaseChannel::current(),
             client: None,
             sent: Vec::new(),
             opened: Vec::new(),

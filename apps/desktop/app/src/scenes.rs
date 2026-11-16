@@ -21,7 +21,7 @@ use raphie_core::mcp::McpTransport;
 use raphie_core::model::{AuthState, Event};
 use raphie_core::model_library::PickerFilter;
 use raphie_core::origin::Origin;
-use raphie_core::updates::{Update, UpdateStatus};
+use raphie_core::updates::{ReleaseChannel, Update, UpdateStatus};
 use rune::TextEdit;
 use serde_json::{Value, json};
 
@@ -59,6 +59,8 @@ pub const SCENES: &[Scene] = &[
     ("settings-about", settings_about),
     ("settings-about-update", settings_about_update),
     ("dev-build", dev_build),
+    ("nightly-build", nightly_build),
+    ("settings-about-nightly", settings_about_nightly),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
     ("settings-history", settings_history),
@@ -229,6 +231,20 @@ pub fn settings_about_update(ui: &mut Ui) {
 pub fn dev_build(ui: &mut Ui) {
     conversations(ui);
     ui.flavor = Flavor::Dev;
+}
+
+/// A nightly release: the "NIGHTLY" pill beside the brand.
+pub fn nightly_build(ui: &mut Ui) {
+    conversations(ui);
+    ui.flavor = Flavor::Release;
+    ui.release_channel = ReleaseChannel::Nightly;
+}
+
+/// Settings → About in a nightly release.
+pub fn settings_about_nightly(ui: &mut Ui) {
+    settings_about(ui);
+    ui.flavor = Flavor::Release;
+    ui.release_channel = ReleaseChannel::Nightly;
 }
 
 /// Settings → Profile, as opened.

@@ -23,7 +23,7 @@ use raphie_core::model::{AuthState, Event};
 use raphie_core::model_library::PickerFilter;
 use raphie_core::sandbox::SandboxUpdate;
 use raphie_core::settings::ThemeChoice;
-use raphie_core::updates::current_version;
+use raphie_core::updates::{ReleaseChannel, current_version};
 use raphie_desktop::sections::{BotSection, Page};
 use raphie_desktop::state::{self, Filter, InboxFilter, Screen};
 use raphie_desktop::{Ui, scenes, view::view};
@@ -510,6 +510,45 @@ fn only_the_dev_build_says_dev_beside_the_brand() {
     rt.update(|ui, _| ui.flavor = Flavor::Dev);
     settle(&mut rt);
     assert!(has_badge(&rt));
+}
+
+#[test]
+fn a_nightly_says_nightly_beside_the_brand_and_on_about() {
+    let has =
+        |rt: &Runtime<Ui>, key: &str| rt.elements().iter().any(|e| e.key.as_deref() == Some(key));
+    let mut rt = render(scenes::nightly_build, false);
+    assert!(has(&rt, "rd-nightly-badge"));
+    assert!(screen_text(&rt).contains("NIGHTLY"));
+    // A stable release says nothing; a dev build says DEV, not NIGHTLY.
+    rt.update(|ui, _| ui.release_channel = ReleaseChannel::Stable);
+    settle(&mut rt);
+    assert!(!has(&rt, "rd-nightly-badge") && !has(&rt, "rd-dev-badge"));
+    rt.update(|ui, _| {
+        ui.release_channel = ReleaseChannel::Nightly;
+        ui.flavor = Flavor::Dev;
+    });
+    settle(&mut rt);
+    assert!(has(&rt, "rd-dev-badge") && !has(&rt, "rd-nightly-badge"));
+    // The sign-in screen too.
+    let mut rt = render(scenes::sign_in, false);
+    rt.update(|ui, _| {
+        ui.flavor = Flavor::Release;
+        ui.release_channel = ReleaseChannel::Nightly;
+    });
+    settle(&mut rt);
+    assert!(has(&rt, "rd-nightly-badge"));
+
+    // About names the channel.
+    let channel = |rt: &Runtime<Ui>| element(rt, "rd-release-channel").text.unwrap_or_default();
+    let mut rt = render(scenes::settings_about_nightly, false);
+    assert_eq!(channel(&rt), "Nightly");
+    assert!(screen_text(&rt).contains("Built from the latest main."));
+    rt.update(|ui, _| ui.release_channel = ReleaseChannel::Stable);
+    settle(&mut rt);
+    assert_eq!(channel(&rt), "Stable");
+    rt.update(|ui, _| ui.flavor = Flavor::Dev);
+    settle(&mut rt);
+    assert_eq!(channel(&rt), "Dev build");
 }
 
 #[test]

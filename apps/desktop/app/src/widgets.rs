@@ -10,6 +10,8 @@
 //! function can return a half-finished element and the caller can keep going
 //! (`.key("rd-send")`, a press handler).
 
+use raphie_core::flavor::Flavor;
+use raphie_core::updates::ReleaseChannel;
 use rune::{Align, Color, El, Icon, TextEdit, Tx, col, el, icon, row, text, text_input};
 
 use crate::state::Ui;
@@ -200,6 +202,36 @@ pub fn count_badge(t: &Theme, count: usize) -> El {
 
 /// The "DEV" mark beside the brand in a dev build, so it is never taken
 /// for the release app.
+/// The pill beside the brand that says which build this is: "DEV" for the
+/// dev build, "NIGHTLY" with a moon for a nightly release, none for stable.
+pub fn build_badge(t: &Theme, flavor: Flavor, channel: ReleaseChannel) -> Option<El> {
+    if flavor.is_dev() {
+        Some(dev_badge(t))
+    } else if channel.is_nightly() {
+        Some(nightly_badge(t))
+    } else {
+        None
+    }
+}
+
+/// "NIGHTLY" with a moon, in night-sky indigo.
+pub fn nightly_badge(t: &Theme) -> El {
+    row()
+        .key("rd-nightly-badge")
+        .px(5.0)
+        .py(1.0)
+        .gap(3.0)
+        .center()
+        .radius(5.0)
+        .fill(t.night_soft)
+        .child(icon(&crate::icons::MOON, 9.0).color(t.night).a11y_hidden())
+        .child(
+            text("NIGHTLY")
+                .font(font(9.0, 650.0).tracking(0.6))
+                .color(t.night),
+        )
+}
+
 pub fn dev_badge(t: &Theme) -> El {
     row()
         .key("rd-dev-badge")

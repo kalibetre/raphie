@@ -38,6 +38,11 @@ bin="target/$profile/raphie-desktop"
 # else the repository's VERSION file. macOS wants only "1.2.3" here, so a
 # leading "v" and any "-nightly…" part are cut off.
 version="${RAPHIE_VERSION:-$(cat ../../VERSION)}"
+# A nightly release gets the night-sky icon (app/src/app_icon.rs).
+icon=$flavor
+if [[ "$flavor" == release && "$version" == *-nightly* ]]; then
+  icon=nightly
+fi
 version="${version#v}"
 version="${version%%-*}"
 app="target/bundle/$name.app"
@@ -54,7 +59,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 iconset="$work/AppIcon.iconset"
 mkdir -p "$iconset"
-RAPHIE_ICON=$flavor target/debug/raphie-desktop --snap "$work/icon.png" --size 1024x1024 --scale 1 >/dev/null 2>&1
+RAPHIE_ICON=$icon target/debug/raphie-desktop --snap "$work/icon.png" --size 1024x1024 --scale 1 >/dev/null 2>&1
 for size in 16 32 128 256 512; do
   sips -z "$size" "$size" "$work/icon.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
   sips -z $((size * 2)) $((size * 2)) "$work/icon.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null

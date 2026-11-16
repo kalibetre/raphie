@@ -37,6 +37,9 @@ pub struct Theme {
     /// Amber: something is waiting for the owner.
     pub attention: Color,
     pub attention_soft: Color,
+    /// Night-sky indigo: the nightly build's pill.
+    pub night: Color,
+    pub night_soft: Color,
     pub error: Color,
     /// `--shadow`: cards.
     pub shadow: [Shadow; 2],
@@ -67,6 +70,8 @@ impl Theme {
             accent_soft: color("#dfe8dc"),
             attention: color("#a2670f"),
             attention_soft: color("#f6e8cc"),
+            night: color("#454a9c"),
+            night_soft: color("#e2e3f3"),
             error: color("#b13e32"),
             shadow: [drop(1.0, 2.0, "#2a24140a"), drop(8.0, 24.0, "#2a24140d")],
             composer_shadow: [drop(2.0, 4.0, "#2a24141a"), drop(12.0, 32.0, "#2a24142e")],
@@ -91,6 +96,8 @@ impl Theme {
             accent_soft: color("#263228"),
             attention: color("#e0a54a"),
             attention_soft: color("#3a2f1b"),
+            night: color("#aeb3f2"),
+            night_soft: color("#262842"),
             error: color("#e07a6e"),
             shadow: [drop(1.0, 2.0, "#00000066"), drop(8.0, 24.0, "#00000055")],
             composer_shadow: [drop(2.0, 4.0, "#00000099"), drop(12.0, 32.0, "#000000aa")],

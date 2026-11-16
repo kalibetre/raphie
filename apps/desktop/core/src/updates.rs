@@ -38,6 +38,36 @@ pub fn current_version() -> &'static str {
     raw.strip_prefix('v').unwrap_or(raw)
 }
 
+/// The channel this build shows, from its version: a nightly
+/// (`0.0.5-nightly.20261116.1.1`) is built from `main`; any other release
+/// is stable. Which updates it is offered is `newest_after`'s rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReleaseChannel {
+    Stable,
+    Nightly,
+}
+
+impl ReleaseChannel {
+    /// The channel of a version string.
+    pub fn of(version: &str) -> ReleaseChannel {
+        let pre = version.split_once('-').map(|(_, pre)| pre).unwrap_or("");
+        if pre.split('.').next() == Some("nightly") {
+            ReleaseChannel::Nightly
+        } else {
+            ReleaseChannel::Stable
+        }
+    }
+
+    /// This build's channel.
+    pub fn current() -> ReleaseChannel {
+        ReleaseChannel::of(current_version())
+    }
+
+    pub fn is_nightly(self) -> bool {
+        self == ReleaseChannel::Nightly
+    }
+}
+
 /// A version as Semantic Versioning orders them: `1.2.3`, or a pre-release
 /// such as `1.2.3-alpha.2`, which comes before `1.2.3`. Build metadata
 /// (`+…`) is ignored, as the standard says.
@@ -277,6 +307,20 @@ mod tests {
         let update = newest_after("0.0.4", &releases).unwrap();
         assert_eq!(update.version, "v0.0.5");
         assert!(update.url.ends_with("/tag/v0.0.5"));
+    }
+
+    #[test]
+    fn a_stable_build_is_offered_stable_releases_and_a_nightly_everything_newer() {
+        let releases = [release("v0.0.5"), release("v0.0.6-nightly.20261201.7.1")];
+        assert_eq!(newest_after("0.0.5", &releases), None);
+        let nightly = newest_after("0.0.5-nightly.20261120.5.1", &releases).unwrap();
+        assert_eq!(nightly.version, "v0.0.6-nightly.20261201.7.1");
+        assert_eq!(ReleaseChannel::of("0.0.5"), ReleaseChannel::Stable);
+        assert_eq!(ReleaseChannel::of("v0.0.5-alpha.1"), ReleaseChannel::Stable);
+        assert_eq!(
+            ReleaseChannel::of("0.0.4-nightly.20261116.43833326564.1"),
+            ReleaseChannel::Nightly
+        );
     }
 
     #[test]
