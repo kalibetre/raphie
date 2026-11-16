@@ -9,6 +9,109 @@ import {
 } from "../apps/web/src/infrastructure/auth/auth-storage.ts";
 import { installationHealthy } from "./linux-install/health-check.ts";
 import { userInstallChannel } from "./user-install-channel.ts";
+import {
+  DEFAULT_PORTS,
+  LEGACY_PORTS,
+  parsePort,
+  portEnvironment,
+  portFree,
+  type Ports,
+  readUserInstallPorts,
+  writeUserInstallPorts,
+} from "./user-install-ports.ts";
+
+/** A user installation's folder, or `undefined` for any other copy. */
+function userInstall() {
+  if (!Bun.isStandaloneExecutable) return undefined;
+  const directory = dirname(process.execPath);
+  try {
+    if (!statSync(join(directory, ".raphie-user-install")).isFile())
+      return undefined;
+  } catch {
+    return undefined;
+  }
+  return directory;
+}
+
+/** The ports a user installation runs on: saved, or the old fixed pair. */
+function installedPorts(directory: string): Ports {
+  return readUserInstallPorts(directory) ?? LEGACY_PORTS;
+}
+
+const run = (command: string[]) =>
+  Bun.spawnSync(command, { stdout: "ignore", stderr: "ignore" }).exitCode === 0;
+
+/** The background service, when the installer set one up and it is loaded. */
+function service() {
+  if (process.platform === "darwin") {
+    const label = `gui/${process.getuid?.()}/com.raphie.user`;
+    if (!run(["launchctl", "print", label])) return undefined;
+    return () => run(["launchctl", "kickstart", "-k", label]);
+  }
+  if (!run(["systemctl", "--user", "is-active", "--quiet", "raphie.service"]))
+    return undefined;
+  return () => run(["systemctl", "--user", "restart", "raphie.service"]);
+}
+
+async function healthyWithin(seconds: number) {
+  for (let attempt = 0; attempt < seconds; attempt++) {
+    if (await installationHealthy(process.env)) return true;
+    await Bun.sleep(1000);
+  }
+  return false;
+}
+
+/** `raphie set-port WEB [--runtime PORT]`: saves the ports and restarts. */
+async function setPort(args: string[]) {
+  const directory = userInstall();
+  if (!directory)
+    throw new Error(
+      "raphie set-port changes a user installation. For a system installation use sudo raphie set-port.",
+    );
+  const [web, flag, runtime, ...rest] = args;
+  if (!web || rest.length || (flag !== undefined && flag !== "--runtime"))
+    throw new Error("Usage: raphie set-port WEB_PORT [--runtime PORT]");
+  const current = installedPorts(directory);
+  const next: Ports = {
+    web: parsePort(web, "The web port"),
+    runtime:
+      flag === undefined
+        ? current.runtime
+        : parsePort(runtime, "The runtime port"),
+  };
+  if (next.web === next.runtime)
+    throw new Error("The web and runtime ports must differ.");
+  for (const port of [next.web, next.runtime]) {
+    const ours = port === current.web || port === current.runtime;
+    if (!ours && !(await portFree(port)))
+      throw new Error(`Port ${port} is in use. Choose another.`);
+  }
+  writeUserInstallPorts(directory, next);
+  const restart = service();
+  if (!restart) {
+    console.log(
+      `Saved. Raphie will use http://127.0.0.1:${next.web} (runtime ${next.runtime}) the next time it starts.`,
+    );
+    return;
+  }
+  Object.assign(process.env, portEnvironment(next));
+  if (restart() && (await healthyWithin(15))) {
+    console.log(
+      `Raphie restarted on http://127.0.0.1:${next.web} (runtime ${next.runtime}).`,
+    );
+    console.log(
+      "Update anything that points at the old port, such as tailscale serve or the desktop app.",
+    );
+    return;
+  }
+  // Put the old ports back so Raphie keeps working.
+  writeUserInstallPorts(directory, current);
+  Object.assign(process.env, portEnvironment(current));
+  restart();
+  throw new Error(
+    `Raphie did not start on the new ports, so the old ones (web ${current.web}, runtime ${current.runtime}) were put back.`,
+  );
+}
 
 /** Reads one line from the terminal; hidden input never reaches arguments, logs or history. */
 function readLine(label: string, hidden: boolean) {
@@ -108,11 +211,22 @@ async function main() {
     args.splice(flag, 2);
   }
   const [command, action] = args;
+  // A user installation runs on the ports it saved, whatever else is set.
+  const install = userInstall();
+  if (install)
+    Object.assign(process.env, portEnvironment(installedPorts(install)));
+  if (command === "set-port") return setPort(args.slice(1));
   if (
     ((command === "auth" || command === "channel") && args.length > 2) ||
     (command !== "auth" && command !== "channel" && args.length > 1)
   )
     throw new Error("Unexpected argument. Run raphie --help.");
+  if (command === "port") {
+    const web = process.env.RAPHIE_WEB_PORT ?? String(LEGACY_PORTS.web);
+    console.log(`Web: http://127.0.0.1:${web}`);
+    console.log(`Runtime: ${process.env.PORT ?? LEGACY_PORTS.runtime}`);
+    return;
+  }
   if (command === "start")
     process.env.DATA_DIRECTORY = authDirectory(
       resolve(import.meta.dir, ".."),
@@ -205,7 +319,7 @@ async function main() {
   }
   if (!command || command === "help" || command === "--help") {
     console.log(
-      "Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n\nUse --data-dir PATH to select the data directory for start or auth commands.",
+      `Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
     );
     return;
   }

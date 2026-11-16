@@ -103,7 +103,8 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
         stderr: "pipe",
       });
     const marker = join(home, ".local/lib/raphie/.raphie-user-install"),
-      channel = join(home, ".local/lib/raphie/.channel");
+      channel = join(home, ".local/lib/raphie/.channel"),
+      ports = join(home, ".local/lib/raphie/.ports");
     await releases([
       { tag_name: "nightly-10-1", prerelease: true },
       { tag_name: "v0.0.4-alpha.3", prerelease: true },
@@ -142,6 +143,14 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     assert.match(await readFile(join(home, ".profile"), "utf8"), /Raphie PATH/);
     assert.equal((await readFile(channel, "utf8")).trim(), "nightly");
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-10-1");
+    // A new installation gets the high default ports, and says so.
+    assert.equal(await readFile(ports, "utf8"), "runtime=24316\nweb=24320\n");
+    assert.match(nightly.stdout.toString(), /open http:\/\/127\.0\.0\.1:24320/);
+    // An existing one changes ports with raphie set-port, not the installer.
+    const reinstallOnPort = run(["--port", "25020"]);
+    assert.notEqual(reinstallOnPort.exitCode, 0);
+    assert.match(reinstallOnPort.stderr.toString(), /raphie set-port/);
+    assert.equal(await readFile(ports, "utf8"), "runtime=24316\nweb=24320\n");
     await releases([
       { tag_name: "nightly-10-1", prerelease: true },
       { tag_name: "v0.0.4-nightly.20261103.20.1", prerelease: true },
@@ -157,6 +166,8 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       (await readFile(marker, "utf8")).trim(),
       "v0.0.4-nightly.20261103.21.1",
     );
+    // An update keeps the saved ports.
+    assert.equal(await readFile(ports, "utf8"), "runtime=24316\nweb=24320\n");
     await releases([{ tag_name: "nightly-10-1", prerelease: true }]);
     await writeFile(marker, "nightly-10-1\n");
     const sameVersion = run();
@@ -289,6 +300,52 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       ).trim(),
       "v0.0.4",
     );
+    // An installation from before saved ports keeps the ports it had.
+    assert.equal(
+      await readFile(join(legacyInstall, ".ports"), "utf8"),
+      "runtime=4316\nweb=4320\n",
+    );
+    // Ports can be chosen for a new installation...
+    const chosenHome = join(temp, "chosen-home");
+    await mkdir(chosenHome);
+    const chosen = run(["--port", "25020", "--runtime-port", "25016"], {
+      HOME: chosenHome,
+    });
+    assert.equal(chosen.exitCode, 0, chosen.stderr.toString());
+    assert.equal(
+      await readFile(join(chosenHome, ".local/lib/raphie/.ports"), "utf8"),
+      "runtime=25016\nweb=25020\n",
+    );
+    assert.match(chosen.stdout.toString(), /127\.0\.0\.1:25020/);
+    // ...and a port another program holds stops it before anything is
+    // installed, naming the flag to use instead.
+    const busy = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: { data() {} },
+    });
+    try {
+      const takenHome = join(temp, "taken-home");
+      await mkdir(takenHome);
+      const taken = run(["--port", String(busy.port)], { HOME: takenHome });
+      assert.notEqual(taken.exitCode, 0);
+      assert.match(
+        taken.stderr.toString(),
+        new RegExp(`Port ${busy.port} is in use by another program`),
+      );
+      assert.match(taken.stderr.toString(), /bash -s -- --port \d+/);
+      assert.equal(existsSync(join(takenHome, ".local/lib/raphie")), false);
+      for (const [flags, message] of [
+        [["--port", "80"], /1024 to 65535/],
+        [["--port", "25020", "--runtime-port", "25020"], /must differ/],
+      ] as const) {
+        const refused = run([...flags], { HOME: takenHome });
+        assert.notEqual(refused.exitCode, 0);
+        assert.match(refused.stderr.toString(), message);
+      }
+    } finally {
+      busy.stop(true);
+    }
     await releases([{ tag_name: "nightly-12-1", prerelease: true }]);
     const checksumHome = join(temp, "checksum-home");
     await mkdir(checksumHome);
@@ -341,6 +398,14 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
         "utf8",
       ),
       /com\.raphie\.user/,
+    );
+    // The service reads the saved ports at start, so none are written here.
+    assert.doesNotMatch(
+      await readFile(
+        join(macHome, "Library/LaunchAgents/com.raphie.user.plist"),
+        "utf8",
+      ),
+      /PORT|4316|4320/,
     );
     const badHome = join(temp, "bad-home");
     await mkdir(badHome);
