@@ -1,3 +1,4 @@
+import hashlib
 import json, os, pathlib, pty, re, select, shutil, socket, subprocess, tarfile, time, urllib.request
 
 if os.environ.get('RAPHIE_DISPOSABLE_TEST') != '1' or not pathlib.Path('/.dockerenv').exists():
@@ -153,12 +154,15 @@ alpha_archive = pathlib.Path('/tmp/raphie-public-alpha.tar.gz')
 with tarfile.open(alpha_archive, 'w:gz') as archive:
     for path in pathlib.Path('/binaries').iterdir():
         if path.is_file() and path.name != 'raphie-smoke': archive.add(path, arcname=path.name)
+alpha_digest = hashlib.sha256(alpha_archive.read_bytes()).hexdigest()
+pathlib.Path('/tmp/raphie-alpha-sums').write_text(f'{alpha_digest}  raphie-linux-x64.tar.gz\n{alpha_digest}  raphie-linux-arm64.tar.gz\n')
 pathlib.Path('/tmp/raphie-alpha-release.json').write_text(json.dumps({'tag_name':'v0.0.4-alpha.1','draft':False,'prerelease':True}))
 (stub / 'apt-get').write_text('#!/bin/sh\nexit 0\n')
 (stub / 'gh').write_text('#!/bin/sh\nexit 99\n')
 (stub / 'curl').write_text('''#!/bin/sh
 case "$2" in
   *api.github.com*) cp /tmp/raphie-alpha-release.json "$4";;
+  */SHA256SUMS) cp /tmp/raphie-alpha-sums "$4";;
   *) cp /tmp/raphie-public-alpha.tar.gz "$4";;
 esac
 ''')

@@ -49,7 +49,9 @@ test("binary download supports explicit public alphas and extracts only safe arc
     );
     await writeFile(
       join(bin, "curl"),
-      `#!/bin/sh\ncase "$2" in *api.github.com*) cp "$FIXTURE/release.json" "$4" ;; *) cp "$FIXTURE/bundle.tar.gz" "$4" ;; esac\n`,
+      // SHA256SUMS is computed from the archive as served, unless the test
+      // asks for a wrong one.
+      `#!/bin/sh\ncase "$2" in *api.github.com*) cp "$FIXTURE/release.json" "$4" ;; */SHA256SUMS) if [ -f "$FIXTURE/bad-sums" ]; then cp "$FIXTURE/bad-sums" "$4"; else python3 -c 'import hashlib,sys; h=hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest(); print(f"{h}  raphie-linux-x64.tar.gz\\n{h}  raphie-linux-arm64.tar.gz")' "$FIXTURE/bundle.tar.gz" > "$4"; fi ;; *) cp "$FIXTURE/bundle.tar.gz" "$4" ;; esac\n`,
       { mode: 0o755 },
     );
     await writeFile(join(bin, "gh"), "#!/bin/sh\nexit 99\n", { mode: 0o755 });
@@ -142,6 +144,16 @@ test("binary download supports explicit public alphas and extracts only safe arc
       }),
     );
     assert.notEqual(run("").exitCode, 0);
+    // A checksum that does not match the archive stops before extraction.
+    await writeFile(
+      join(dir, "bad-sums"),
+      `${"0".repeat(64)}  raphie-linux-x64.tar.gz\n${"0".repeat(64)}  raphie-linux-arm64.tar.gz\n`,
+    );
+    const tampered = run("v1.2.3-alpha.1");
+    assert.notEqual(tampered.exitCode, 0);
+    assert.match(tampered.stderr.toString(), /checksum does not match/);
+    assert.equal((await readdir(out)).length, 0);
+    await unlink(join(dir, "bad-sums"));
     const success = run("v1.2.3-alpha.1");
     assert.equal(success.exitCode, 0, success.stderr.toString());
     assert.equal(await readFile(join(out, "raphie"), "utf8"), "raphie");

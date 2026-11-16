@@ -1,6 +1,13 @@
-import { constants } from "node:fs";
+import { constants, realpathSync } from "node:fs";
 import { lstat, mkdir, open } from "node:fs/promises";
-import { dirname, isAbsolute } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 
 import type { CredentialKeyStore } from "./credential-cipher.ts";
 
@@ -82,4 +89,32 @@ export function fileCredentialKeyStore(path: string): CredentialKeyStore {
       }
     },
   };
+}
+
+/** A path with its existing part's symbolic links resolved. */
+function realPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    const parent = dirname(path);
+    return parent === path ? path : join(realPath(parent), basename(path));
+  }
+}
+
+/**
+ * Refuses a headless key file inside the data directory: backups of the data
+ * would then carry the key beside the ciphertext it protects.
+ */
+export function assertKeyFileOutsideData(
+  keyFile: string,
+  dataDirectory: string,
+) {
+  const inside = relative(
+    realPath(resolve(dataDirectory)),
+    realPath(resolve(keyFile)),
+  );
+  if (inside === "" || (!inside.startsWith("..") && !isAbsolute(inside)))
+    throw new Error(
+      "RAPHIE_CREDENTIAL_KEY_FILE must be outside the data directory, so backups of the data never carry the key. Move the key file and its folder elsewhere, then update the setting.",
+    );
 }

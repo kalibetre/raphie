@@ -4,6 +4,7 @@ import type {
   OAuthAuth,
   OAuthCredential,
 } from "@earendil-works/pi-ai";
+import { registerBunOAuthFlows } from "@earendil-works/pi-ai/bun-oauth";
 import type { Provider } from "@earendil-works/pi-ai/models";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import type {
@@ -26,6 +27,12 @@ export type SubscriptionProvider = {
   /** Pi's provider, holding `auth.oauth` and the models. */
   create: () => Provider;
 };
+
+// Pi loads each sign-in flow by a module name built at run time, which
+// `bun build --compile` cannot follow: the release binaries would have no
+// flow to run. Registering the flows here bundles them, and is harmless when
+// running from source.
+registerBunOAuthFlows();
 
 export const subscriptionProviders: SubscriptionProvider[] = [
   // Sign in with ChatGPT. Its browser sign-in returns to 127.0.0.1:1455 on
@@ -169,11 +176,16 @@ export class SubscriptionSignIns {
         session.status = session.controller.signal.aborted
           ? "cancelled"
           : "failed";
-        if (session.status === "failed")
+        if (session.status === "failed") {
           session.error =
             error instanceof InputError
               ? error.message
               : "Sign-in did not finish. Try again.";
+          // The owner sees the short message; the log keeps the reason.
+          console.error(
+            `Sign-in to ${input.provider} failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
     } finally {
       session.prompt = undefined;
