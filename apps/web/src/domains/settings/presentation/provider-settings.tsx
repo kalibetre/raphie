@@ -28,6 +28,12 @@ export function ProviderSettings() {
       />
     );
 
+  // "OpenRouter 2", "OpenAI 1": the provider's name and the next number.
+  const suggestName = (provider: string) =>
+    `${data.providers.find((p) => p.id === provider)?.name ?? provider} ${
+      data.connections.filter((c) => c.provider === provider).length + 1
+    }`;
+
   function add() {
     setAdding(true);
     setMessage("");
@@ -50,7 +56,8 @@ export function ProviderSettings() {
       {adding && (
         <ProviderConnection
           providers={data.providers}
-          suggestedName={`OpenRouter ${data.connections.filter((c) => c.provider === "openrouter").length + 1}`}
+          suggestedName={suggestName(data.providers[0]?.id ?? "openrouter")}
+          suggestName={suggestName}
           onClose={() => {
             setAdding(false);
             setMessage("");

@@ -69,6 +69,11 @@ pub const SCENES: &[Scene] = &[
     ("settings-providers-add", settings_providers_add),
     ("settings-providers-empty", settings_providers_empty),
     ("settings-providers-edit", settings_providers_edit),
+    ("settings-providers-sign-in", settings_providers_sign_in),
+    (
+        "settings-providers-subscription",
+        settings_providers_subscription,
+    ),
     ("settings-memory", settings_memory),
     ("settings-memory-hindsight", settings_memory_hindsight),
     ("settings-memory-loading", settings_memory_loading),
@@ -1079,6 +1084,56 @@ pub fn settings_providers_add(ui: &mut Ui) {
     ui.providers.name = TextEdit::new("Side project");
     // A made-up key. The field is secure, so the snapshot shows dots.
     ui.providers.key = TextEdit::new("sk-not-a-real-key").secure();
+}
+
+/// Settings with an OpenAI subscription offered next to the API-key
+/// providers, as a runtime with subscriptions lists them.
+fn subscription_settings() -> RuntimeSettings {
+    let mut settings = model_settings();
+    settings.providers = from_json(json!([
+        { "id": "anthropic", "name": "Anthropic", "auth": ["api_key"] },
+        { "id": "openrouter", "name": "OpenRouter", "auth": ["api_key"] },
+        { "id": "openai", "name": "OpenAI", "auth": ["subscription"], "signInLabel": "Sign in with ChatGPT" }
+    ]));
+    settings
+}
+
+/// Settings → Providers adding an OpenAI subscription, waiting for the
+/// owner: the page to open and the redirect address to paste, as Pi's
+/// "Sign in with ChatGPT" asks.
+pub fn settings_providers_sign_in(ui: &mut Ui) {
+    settings_providers(ui);
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(subscription_settings()),
+    });
+    ui.add_connection("default");
+    ui.choose_connection_provider("openai");
+    ui.model.apply(Event::ProviderSignIn {
+        bot_id: "default".into(),
+        sign_in: from_json(json!({
+            "id": "sign-in-1", "provider": "openai", "name": "OpenAI 1", "status": "waiting",
+            "events": [{ "type": "auth_url", "url": "https://auth.openai.com/oauth/authorize?state=x",
+                         "instructions": "Complete sign-in in your browser." }],
+            "prompt": { "id": "p-1", "type": "manual_code",
+                        "message": "Complete login in your browser, or paste the final redirect URL here:",
+                        "placeholder": "http://127.0.0.1:1455/auth/callback" }
+        })),
+    });
+}
+
+/// Settings → Providers with an OpenAI subscription whose sign-in expired.
+pub fn settings_providers_subscription(ui: &mut Ui) {
+    settings_providers(ui);
+    let mut settings = subscription_settings();
+    settings.connections.push(from_json(json!({
+        "id": "openai_1", "provider": "openai", "name": "ChatGPT",
+        "auth": "subscription", "needsSignIn": true
+    })));
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(settings),
+    });
 }
 
 /// Settings → Models, with a catalogue loaded.

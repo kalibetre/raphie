@@ -4269,3 +4269,126 @@ fn reading_is_shared_with_the_runtime_once_and_its_count_reads_here() {
     rt.update(|ui, _| ui.mark_read());
     assert!(shared_reads(&rt).is_empty());
 }
+
+#[test]
+fn a_subscription_signs_in_through_the_providers_form() {
+    let mut rt = render(scenes::settings_providers_sign_in, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Connect OpenAI"), "{text}");
+    assert!(text.contains("Open it again"));
+    // The page opens by itself when the runtime reports it, once however
+    // often the sign-in is reported.
+    let waiting = || {
+        Event::ProviderSignIn {
+        bot_id: "default".into(),
+        sign_in: serde_json::from_value(serde_json::json!({
+            "id": "sign-in-1", "provider": "openai", "name": "OpenAI 1",
+            "status": "waiting",
+            "events": [{"type": "auth_url", "url": "https://auth.openai.com/oauth/authorize?state=x"}],
+            "prompt": {"id": "p-1", "type": "manual_code", "message": "Paste the final redirect URL here:"}
+        }))
+        .unwrap(),
+    }
+    };
+    deliver(&mut rt, waiting());
+    deliver(&mut rt, waiting());
+    assert_eq!(
+        rt.state.opened,
+        ["https://auth.openai.com/oauth/authorize?state=x"]
+    );
+    // No key field: a subscription signs in instead.
+    assert!(rt.find("rd-connection-key").is_none());
+    assert!(rt.find("rd-connection-save").is_none());
+
+    // The pasted address goes as the answer to the question asked, and
+    // the field forgets it.
+    rt.update(|ui, _| {
+        ui.providers.answer =
+            TextEdit::new("http://127.0.0.1:1455/auth/callback?code=c&state=x").secure();
+    });
+    settle(&mut rt);
+    click(&mut rt, "rd-sign-in-continue");
+    let answered = rt.state.sent.iter().find_map(|command| match command {
+        Command::AnswerProviderSignIn {
+            id,
+            prompt_id,
+            value,
+            ..
+        } => Some((id.clone(), prompt_id.clone(), value.expose().to_owned())),
+        _ => None,
+    });
+    assert_eq!(
+        answered,
+        Some((
+            "sign-in-1".into(),
+            "p-1".into(),
+            "http://127.0.0.1:1455/auth/callback?code=c&state=x".into()
+        ))
+    );
+    assert!(rt.state.providers.answer.text.is_empty());
+
+    // Connected: the form closes and the settings are loaded again.
+    deliver(
+        &mut rt,
+        Event::ProviderSignIn {
+            bot_id: "default".into(),
+            sign_in: serde_json::from_value(serde_json::json!({
+                "id": "sign-in-1", "provider": "openai", "name": "OpenAI 1",
+                "status": "connected", "events": [], "connectionId": "openai_1"
+            }))
+            .unwrap(),
+        },
+    );
+    assert!(rt.state.providers.open.is_none());
+    assert!(rt.state.sent.contains(&Command::LoadSettings {
+        bot_id: "default".into()
+    }));
+    assert!(screen_text(&rt).contains("Signed in."));
+}
+
+#[test]
+fn closing_a_sign_in_form_cancels_it_and_a_new_one_starts_with_its_name() {
+    let mut rt = render(scenes::settings_providers_sign_in, false);
+    click(&mut rt, "rd-connection-close");
+    assert!(rt.state.sent.contains(&Command::CancelProviderSignIn {
+        bot_id: "default".into(),
+        id: "sign-in-1".into()
+    }));
+    assert!(rt.state.model.sign_in.is_none());
+
+    // Again: choosing OpenAI renames the suggestion and the button starts.
+    rt.update(|ui, _| {
+        ui.add_connection("default");
+        ui.choose_connection_provider("openai");
+    });
+    settle(&mut rt);
+    assert_eq!(rt.state.providers.name.text, "OpenAI 1");
+    assert!(screen_text(&rt).contains("Sign in with ChatGPT"));
+    click(&mut rt, "rd-sign-in-start");
+    assert!(rt.state.sent.contains(&Command::StartProviderSignIn {
+        bot_id: "default".into(),
+        provider: "openai".into(),
+        name: "OpenAI 1".into(),
+        connection_id: None
+    }));
+}
+
+#[test]
+fn an_expired_subscription_asks_to_sign_in_again() {
+    // Tall enough for the third card and its form.
+    let mut rt = render_sized(
+        scenes::settings_providers_subscription,
+        false,
+        (1280.0, 1800.0),
+    );
+    assert!(rt.find("rd-connection-sign-in-badge-openai_1").is_some());
+    click(&mut rt, "rd-connection-edit-openai_1");
+    assert!(rt.find("rd-sign-in-expired").is_some());
+    click(&mut rt, "rd-sign-in-start");
+    assert!(rt.state.sent.contains(&Command::StartProviderSignIn {
+        bot_id: "default".into(),
+        provider: "openai".into(),
+        name: "ChatGPT".into(),
+        connection_id: Some("openai_1".into())
+    }));
+}

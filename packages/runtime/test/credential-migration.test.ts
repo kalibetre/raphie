@@ -94,7 +94,12 @@ test("v3 migration preserves IDs, disabled/empty entries and per-connection auth
       assert.equal(auth?.auth.apiKey, credentials[index]);
     }
     const disk = JSON.parse(saved(path));
-    assert.equal(disk.version, 4);
+    // v5 records how each connection authenticates; these are all API keys.
+    assert.equal(disk.version, 5);
+    assert.deepEqual(
+      disk.connections.map((c: { auth: string }) => c.auth),
+      ["api_key", "api_key", "api_key"],
+    );
     assert.deepEqual(
       disk.connections.map((c: { id: string }) => c.id),
       ["stable_personal", "stable_work", "stable_empty"],
@@ -210,7 +215,7 @@ test("interruption after encrypted commit retries cleanup and retains connection
     failure.mockRestore();
   }
   try {
-    assert.equal(JSON.parse(saved(path)).version, 4);
+    assert.equal(JSON.parse(saved(path)).version, 5);
     const settings = await BackendSettings.open(path, config);
     assert.equal(settings.key, credentials[1]);
     assert.equal(settings.model!.provider, "stable_work");

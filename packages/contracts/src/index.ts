@@ -141,6 +141,12 @@ export type {
   ProviderConnection,
   SaveProviderConnection,
   EditProviderConnection,
+  ConnectionAuth,
+  ConnectionProvider,
+  SignInPrompt,
+  SignInEvent,
+  ProviderSignIn,
+  StartProviderSignIn,
 } from "./settings/views.ts";
 
 export type {

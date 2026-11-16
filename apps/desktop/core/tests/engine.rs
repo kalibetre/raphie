@@ -1969,3 +1969,62 @@ fn a_read_count_is_shared_with_the_runtime_for_any_bot() {
     let seen = host.requests("/api/sessions/s-1/read");
     assert_eq!(seen[0].client_marker.as_deref(), Some("web"));
 }
+
+#[test]
+fn a_subscription_sign_in_is_started_followed_answered_and_cancelled() {
+    use raphie_core::contracts::SignInStatus;
+    let host = FakeHost::start();
+    let (mut driver, _store) = signed_in(&host);
+    let status = |driver: &Driver| driver.model.sign_in.as_ref().map(|(_, s)| s.status);
+    driver.send(Command::StartProviderSignIn {
+        bot_id: "default".into(),
+        provider: "openai".into(),
+        name: "OpenAI 1".into(),
+        connection_id: None,
+    });
+    driver.until("the sign-in started", |m, _| m.sign_in.is_some());
+    assert_eq!(status(&driver), Some(SignInStatus::Waiting));
+    let (_, sign_in) = driver.model.sign_in.clone().unwrap();
+    assert_eq!(sign_in.prompt.as_ref().map(|p| p.id.as_str()), Some("p-1"));
+    host.with(|h| {
+        assert_eq!(
+            h.sign_in_starts,
+            [serde_json::json!({ "provider": "openai", "name": "OpenAI 1" })]
+        );
+    });
+
+    driver.send(Command::PollProviderSignIn {
+        bot_id: "default".into(),
+        id: "sign-in-1".into(),
+    });
+    driver.send(Command::AnswerProviderSignIn {
+        bot_id: "default".into(),
+        id: "sign-in-1".into(),
+        prompt_id: "p-1".into(),
+        value: Secret::new("http://127.0.0.1:1455/auth/callback?code=c"),
+    });
+    driver.until("connected", |m, _| {
+        m.sign_in
+            .as_ref()
+            .is_some_and(|(_, s)| s.status == SignInStatus::Connected)
+    });
+    host.with(|h| {
+        assert_eq!(
+            h.sign_in_answers,
+            [serde_json::json!({ "promptId": "p-1", "value": "http://127.0.0.1:1455/auth/callback?code=c" })]
+        );
+    });
+    // Sent as client changes, with the marker the runtime requires.
+    let answer = host.requests("/api/settings/sign-ins/sign-in-1/answer");
+    assert_eq!(answer[0].client_marker.as_deref(), Some("web"));
+
+    driver.send(Command::CancelProviderSignIn {
+        bot_id: "default".into(),
+        id: "sign-in-1".into(),
+    });
+    driver.until("cancelled", |m, _| {
+        m.sign_in
+            .as_ref()
+            .is_some_and(|(_, s)| s.status == SignInStatus::Cancelled)
+    });
+}

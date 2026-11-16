@@ -86,6 +86,9 @@ pub struct Host {
     pub uploads_down: bool,
     /// Read counts shared by the client: the request path and `replyCount`.
     pub reads: Vec<(String, u64)>,
+    /// Subscription sign-ins: the start bodies and the answers given.
+    pub sign_in_starts: Vec<Value>,
+    pub sign_in_answers: Vec<Value>,
     /// Trace collection is switched off.
     pub telemetry_off: bool,
     /// The exported spans, and the bot's durable events oldest first, as
@@ -254,6 +257,10 @@ fn router(fake: Fake) -> Router {
         .route("/api/bots/{bot}/jobs/notifications", get(job_updates))
         .route("/api/jobs/runs/{id}/read", post(acknowledge_run))
         .route("/api/sessions/{id}/read", post(mark_read))
+        .route("/api/settings/sign-ins", post(start_sign_in))
+        .route("/api/settings/sign-ins/{id}", get(read_sign_in))
+        .route("/api/settings/sign-ins/{id}/answer", post(answer_sign_in))
+        .route("/api/settings/sign-ins/{id}/cancel", post(cancel_sign_in))
         .route("/api/bots/{bot}/sessions/{id}/read", post(mark_read))
         .route("/api/bots/{bot}/jobs/runs/{id}/read", post(acknowledge_run))
         .route("/api/jobs/{id}", post(change_job))
@@ -551,6 +558,82 @@ async fn job_updates(
     let items: Vec<&Value> = all.iter().take(2).collect();
     let next = (all.len() > 2).then(|| "2".to_owned());
     Json(json!({ "items": items, "next": next, "total": all.len() })).into_response()
+}
+
+/// A sign-in as the runtime reports it: waiting on a pasted address, or
+/// in another state.
+fn sign_in_json(status: &str) -> Value {
+    let mut value = json!({
+        "id": "sign-in-1", "provider": "openai", "name": "OpenAI 1", "status": status,
+        "events": [{ "type": "auth_url", "url": "https://auth.example.test/authorize" }],
+    });
+    match status {
+        "waiting" => {
+            value["prompt"] = json!({
+                "id": "p-1", "type": "manual_code", "message": "Paste the final redirect URL here:"
+            });
+        }
+        "connected" => value["connectionId"] = json!("openai_1"),
+        _ => {}
+    }
+    value
+}
+
+async fn start_sign_in(
+    State(fake): State<Fake>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", "/api/settings/sign-ins".into(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    fake.host.lock().unwrap().sign_in_starts.push(body);
+    (StatusCode::CREATED, Json(sign_in_json("waiting"))).into_response()
+}
+
+async fn read_sign_in(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(
+        &fake,
+        "GET",
+        "/api/settings/sign-ins/sign-in-1".into(),
+        &headers,
+    );
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    Json(sign_in_json("waiting")).into_response()
+}
+
+async fn answer_sign_in(
+    State(fake): State<Fake>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(
+        &fake,
+        "POST",
+        "/api/settings/sign-ins/sign-in-1/answer".into(),
+        &headers,
+    );
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    fake.host.lock().unwrap().sign_in_answers.push(body);
+    Json(sign_in_json("connected")).into_response()
+}
+
+async fn cancel_sign_in(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(
+        &fake,
+        "POST",
+        "/api/settings/sign-ins/sign-in-1/cancel".into(),
+        &headers,
+    );
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    Json(sign_in_json("cancelled")).into_response()
 }
 
 /// Keeps what a client says it read; answers as the runtime does.
