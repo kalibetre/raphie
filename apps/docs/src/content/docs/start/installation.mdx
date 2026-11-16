@@ -1,0 +1,266 @@
+---
+title: Installation
+description: Install Raphie on your Mac or Linux machine, and the desktop app on the Mac you use to talk to it.
+sidebar:
+  order: 2
+---
+
+import {
+  LinkButton,
+  Steps,
+  TabItem,
+  Tabs,
+} from "@astrojs/starlight/components";
+
+Raphie comes in two pieces. **Raphie itself** runs your bots: install it on the machine where they should live, whether that is your Mac, a Linux desktop or a server. The **desktop app** is how you talk to them from a Mac. You can also use the web workspace in any browser, so the app is optional, but it is the everyday way in on a Mac.
+
+| Piece       | What it does                                                         | Where it runs                                   | Get it                            |
+| ----------- | -------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------- |
+| Raphie      | Runs bots, stores their data, serves the web workspace on a web port | A Mac with Apple Silicon, or a glibc Linux host | [Install Raphie](#install-raphie) |
+| Desktop app | A native Mac app for conversations, approvals and settings           | A Mac with Apple Silicon, here or anywhere else | [Desktop app](#desktop-app)       |
+
+The two do not have to be on the same machine: the app connects to Raphie's web address, locally or over a tailnet.
+
+## Install Raphie
+
+Most people should use the **user install**: one command, no `sudo`, prebuilt binaries, and a background service that starts with your session. Pick the **system service** for a dedicated Debian or Ubuntu server, or run **from source** to work on Raphie itself.
+
+| Install        | Runs as                     | Platforms                                          | Web address              | Updates              |
+| -------------- | --------------------------- | -------------------------------------------------- | ------------------------ | -------------------- |
+| User install   | Your account                | macOS on Apple Silicon; glibc Linux, x64 and ARM64 | `http://127.0.0.1:24320` | Rerun the installer  |
+| System service | A dedicated `raphie` user   | Debian or Ubuntu with systemd, x64 and ARM64       | `http://127.0.0.1:41837` | `sudo raphie update` |
+| From source    | Your account, in a terminal | macOS or Linux with Bun                            | `http://127.0.0.1:4320`  | `git pull`           |
+
+The installers do not support Intel Macs, Alpine (musl) or Windows. Each web address is the default; `raphie port` prints the one your install uses.
+
+<Tabs syncKey="install">
+<TabItem label="User install">
+
+**You need:** `curl`, `python3`, and an OS credential store Raphie can use for provider keys:
+
+- **macOS:** your login Keychain, unlocked.
+- **Linux desktop:** libsecret and an unlocked Secret Service provider, such as GNOME Keyring or KWallet.
+- **Linux server without a desktop:** a systemd user manager, then install with `--headless` (below).
+
+Install the latest stable release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
+```
+
+To follow nightly builds instead, which are pre-releases built from `main` when a maintainer runs the release workflow, after the same checks as a stable release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --channel nightly
+```
+
+On a Linux host with no desktop session, add `--headless`. It needs a systemd user manager. Raphie then keeps its credential master key in an owner-only file, `~/.local/share/raphie-headless/master-key`, instead of the OS store; back it up separately from your data. The installer also tries to enable user lingering so the service starts at boot:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --headless
+```
+
+| Installer flag              | Effect                                                                     |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `--channel stable\|nightly` | Release channel to install and follow. Default `stable`.                   |
+| `--port WEB_PORT`           | Web port for a new install. Default `24320`. See [ports](#ports).          |
+| `--runtime-port PORT`       | Runtime port for a new install. Default `24316`.                           |
+| `--headless`                | Linux only. Use a master-key file instead of the OS credential store.      |
+| `--no-modify-path`          | Leave your shell startup files alone; add `~/.local/bin` to PATH yourself. |
+
+The installer:
+
+- checks the archive's SHA-256 hash against the `SHA256SUMS` file from the same release, and stops on a mismatch. This catches a corrupted or incomplete download, not a tampered release, since both files come from the same release; the installer does not check the release's GitHub attestations ([check one by hand](#check-a-release-by-hand));
+- puts the binaries in `~/.local/lib/raphie` and links `~/.local/bin/raphie`;
+- adds `~/.local/bin` to PATH for new Bash and Zsh terminals;
+- saves the web and runtime ports in `~/.local/lib/raphie/.ports`;
+- creates and starts a background service when it can: a systemd user unit on Linux (if a user manager is running), a LaunchAgent on macOS.
+
+A new install refuses to overwrite an existing `raphie` command or service, or to adopt an existing data directory, so it never migrates data you did not ask it to touch.
+
+:::tip[Inspect before you run]
+Piping to `bash` runs downloaded code immediately. To read it first, download it with `curl -fsSLo install-raphie.sh <url>`, review it, then run `bash install-raphie.sh`.
+:::
+
+Open a new terminal so `raphie` is on your PATH, or run the `export PATH=...` line the installer prints. The installer ends by printing your web address and ports.
+
+</TabItem>
+<TabItem label="Linux system service">
+
+**You need:** Debian or Ubuntu with systemd, `sudo`, an internet connection and a free local web port. The installer adds the OS packages it needs (D-Bus, GNOME Keyring, libsecret, Python 3, curl). You do not need Bun.
+
+:::caution
+This installer is experimental and runs as root. `download-release.sh` fetches the release archive over HTTPS and checks only which files it contains; it does not check the archive against `SHA256SUMS` or its GitHub attestation, and `bootstrap.sh` then runs the archive's `install.sh` as root. `sudo raphie update` uses the same downloader. Read both scripts, use a machine you are comfortable experimenting on, and to verify what you install, [check a release by hand](#check-a-release-by-hand).
+:::
+
+Download the two scripts into an empty directory and read them:
+
+```sh
+mkdir raphie-install && cd raphie-install
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/linux-binary/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/linux-binary/download-release.sh
+less bootstrap.sh download-release.sh
+```
+
+Install the latest stable release, or pass a version such as `v1.2.3`:
+
+```sh
+sudo sh bootstrap.sh
+```
+
+| Option             | Default                 | Notes                                                                                                                                                 |
+| ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VERSION`          | latest stable           | `vX.Y.Z`, or an explicit `vX.Y.Z-alpha.N`. Nightly releases are not accepted.                                                                         |
+| `--web-port PORT`  | `41837`                 | 1024 to 65535, free, and not `4316`.                                                                                                                  |
+| `--web-origin URL` | `http://127.0.0.1:PORT` | The address browsers use. Non-loopback origins must be HTTPS, and a loopback one must use the web port; see [remote access](/operate/remote-access/). |
+| `--data-dir PATH`  | `/var/lib/raphie/data`  | Absolute, must not exist yet, no symlinks, outside Raphie's program and backup folders; existing parents root-owned and not group- or world-writable. |
+
+The installer creates a `raphie` service user, installs the release under `/opt/raphie` and the `raphie` command at `/usr/local/bin/raphie`, writes `/etc/raphie/raphie.conf` and a host-bound keyring credential, and enables and starts `raphie.service`. The runtime port is `4316`. It refuses to run if any earlier installation, service user or data directory exists.
+
+#### Check a release by hand
+
+Releases publish a `SHA256SUMS` file, and each `raphie-*.tar.gz` archive and the Mac disk image carries a GitHub build attestation from the release workflow. To install the system service from an archive you have verified, download it with `SHA256SUMS` (use `raphie-linux-arm64.tar.gz` on ARM64, and your version for `v1.2.3`), then check both:
+
+```sh
+curl -fsSLO https://github.com/kalibetre/raphie/releases/download/v1.2.3/raphie-linux-x64.tar.gz
+curl -fsSLO https://github.com/kalibetre/raphie/releases/download/v1.2.3/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS
+gh attestation verify raphie-linux-x64.tar.gz --repo kalibetre/raphie \
+  --signer-workflow kalibetre/raphie/.github/workflows/release.yml
+```
+
+Then install the OS packages `bootstrap.sh` would (`ca-certificates curl python3 dbus gnome-keyring libsecret-1-0`), unpack the archive into an empty directory and run its installer, which takes the same options except the version:
+
+```sh
+mkdir bundle && tar -xzf raphie-linux-x64.tar.gz -C bundle
+sudo sh bundle/install.sh
+```
+
+To update to a verified archive the same way, unpack it into a new empty directory and run `sudo raphie update /path/to/bundle`.
+
+</TabItem>
+<TabItem label="From source">
+
+**You need:** [Bun](https://bun.sh) at the version pinned in `.bun-version`, Git, and an available OS credential store (as for the user install).
+
+```sh
+git clone https://github.com/kalibetre/raphie.git
+cd raphie
+bun install --frozen-lockfile
+bun run dev
+```
+
+`bun run dev` starts the runtime on port 4316 and the web workspace on 4320 (the defaults in `.env.schema`), so a checkout can run beside a user install. Data lives in `.data/` at the main checkout root. Run the CLI through Bun, for example `bun run raphie auth setup`.
+
+For a production web bundle, run `bun run build`, then `bun run start` (or `bun run raphie start`), under a process supervisor of your choice. Configuration, tests and the fixture app are covered in [contributing](/contribute/contributing/).
+
+</TabItem>
+</Tabs>
+
+### Ports
+
+A user install listens on two ports, both on `127.0.0.1` only:
+
+| Port    | Default | Used by                                                       |
+| ------- | ------- | ------------------------------------------------------------- |
+| Web     | `24320` | The web workspace and the desktop app. The only one you open. |
+| Runtime | `24316` | The web host, locally. Never forward or expose it.            |
+
+If either port is taken, a new install stops before installing anything and prints the command to rerun with a free one, for example:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --port 24420
+```
+
+Pass both `--port` and `--runtime-port` if you want to choose both.
+
+Updates keep the saved ports. An install made before ports were saved keeps `4320` (web) and `4316` (runtime). To see or change them:
+
+```sh
+raphie port                              # show the web address and runtime port
+raphie set-port 24420 --runtime 24416    # change them; --runtime is optional
+```
+
+`set-port` checks the new ports are free, saves them, restarts the background service and waits up to 15 seconds for it to answer; if it does not, the old ports are put back. With no service running, the new ports apply the next time Raphie starts. Afterwards, point anything that used the old web port, such as `tailscale serve` or the desktop app, at the new one. The system service changes its web port with `sudo raphie set-port PORT`; see [commands](/operate/commands/#ports-and-origins).
+
+## Check it worked
+
+```sh
+raphie health && echo ok
+```
+
+`raphie health` prints nothing and exits `0` when both the runtime and the web host answer. A web host with no administrator yet counts as healthy. On the system service, run `sudo raphie health`.
+
+`raphie status` checks only the runtime and prints its data directory:
+
+```text
+Raphie runtime is responding.
+Data: /home/you/.local/share/raphie
+Workspace: <id>
+```
+
+If the check fails:
+
+- **No background service** (for example, no systemd user manager): run `raphie start` in a terminal and leave it open.
+- **Service did not become healthy:** the installer stops and disables it and prints where to look. See [restarting and logs](/operate/service/#logs) and the [recovery table](/operate/backup-and-recovery/#common-failures).
+
+## Desktop app
+
+Raphie for Mac is a native app for the daily loop: pick a bot and a conversation, send messages, watch replies stream in and approve tool actions. Each Raphie release ships it as `Raphie-macos-arm64.dmg`, built from the same commit as the runtime. It needs a Mac with Apple Silicon (M1 or later) and macOS 12 or later.
+
+<LinkButton
+  href="https://github.com/kalibetre/raphie/releases/latest/download/Raphie-macos-arm64.dmg"
+  icon="download"
+>
+  Download Raphie for Mac
+</LinkButton>
+
+That link is always the latest stable release. Nightly builds are pre-releases on the [releases page](https://github.com/kalibetre/raphie/releases).
+
+### Install and open it
+
+<Steps>
+
+1. **Copy it to Applications.** Open the disk image and drag **Raphie** onto **Applications**.
+
+2. **Open it the first time.** The app is signed ad hoc, not with an Apple Developer ID, so macOS refuses the first launch. Dismiss the message.
+
+3. **Allow it.** Open **System Settings → Privacy & Security**, scroll to **Security** and choose **Open Anyway** beside the message about Raphie. Confirm with your password, then choose **Open**. Later launches open normally until an update replaces the app.
+
+   Or, in Terminal:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Raphie.app
+   ```
+
+</Steps>
+
+### Connect it to Raphie
+
+Point the app at Raphie's web address, never at the runtime port. It accepts `https://` addresses, and `http://` only for `127.0.0.1` or `localhost`. It signs in with a device code, so you need the administrator and a signed-in browser first; see [first run](/start/first-run/).
+
+<Steps>
+
+1. **Enter the web address.**
+
+   | Raphie runs                       | Address                                                                    |
+   | --------------------------------- | -------------------------------------------------------------------------- |
+   | On this Mac (user install)        | Found by itself; or `http://127.0.0.1:24320`, or what `raphie port` prints |
+   | On a server in your tailnet       | Its `https://` address; see [remote access](/operate/remote-access/)       |
+   | On a server through an SSH tunnel | `http://127.0.0.1:PORT`, the local end of the tunnel                       |
+
+2. **Approve the device.** The app shows a short code. Choose **Open approval page** to open it in your browser, signed in to Raphie, check the code matches, and choose **Approve device**. See [connect a native device](/operate/authentication/#connect-a-native-device).
+
+</Steps>
+
+The app keeps its sign-in in your login Keychain and reconnects at the next launch. If Raphie's web address changes, choose **Sign out** at the bottom of the roster, or in **Settings → Account**, and sign in at the new address.
+
+### Update it
+
+The app does not update itself. When **Settings → About** says a newer release is available (the check counts nightly pre-releases too), download the image again and replace Raphie in Applications. Your sign-in and settings are kept. A replaced app needs **Open Anyway** once more.
+
+What the app can do, and how it compares with the web workspace, is in [desktop app](/guides/desktop/) and [clients](/guides/clients/).
+
+## Next
+
+[Create the administrator and connect a model](/start/first-run/), then sign in from a browser or the desktop app.

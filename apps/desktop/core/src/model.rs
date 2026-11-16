@@ -397,6 +397,9 @@ pub enum Event {
     /// What a check for a newer release found: the newer release, none,
     /// or why the check failed.
     UpdateChecked(Result<Option<Update>, String>),
+    /// The address of a Raphie installed on this computer that answered,
+    /// or `None` when none did.
+    LocalInstall(Option<Origin>),
     /// How a session treats commands.
     ApprovalMode {
         session_id: String,
@@ -749,10 +752,16 @@ pub struct Model {
     pub inbox: Inbox,
     /// Whether a newer Raphie has been released.
     pub update: UpdateStatus,
+    /// A Raphie installed on this computer that answered when last looked
+    /// for, offered on the sign-in screen.
+    pub local_install: Option<Origin>,
     /// The subscription sign-in on screen, and whose bot it is for.
     pub sign_in: Option<(String, ProviderSignIn)>,
     /// A sign-in step waiting for the runtime's answer.
     pub sign_in_busy: bool,
+    /// The last subscription sign-in that connected, failed or was
+    /// cancelled, so a late "waiting" answer for it is ignored.
+    pub finished_sign_in: Option<String>,
     /// Why the last sign-in step was refused.
     pub sign_in_error: Option<String>,
     /// The pictures of image attachments.
@@ -841,6 +850,8 @@ impl Default for Model {
             sending: false,
             inbox: Inbox::default(),
             update: UpdateStatus::default(),
+            finished_sign_in: None,
+            local_install: None,
             sign_in: None,
             sign_in_busy: false,
             sign_in_error: None,
@@ -875,11 +886,17 @@ impl Model {
                 self.notice = None;
             }
             Event::SignedOut { notice } => {
-                // Keep the origin so the sign-in screen offers it again; drop
-                // everything that belonged to the signed-in host.
+                // Keep the origin so the sign-in screen offers it again, and
+                // what belongs to this app rather than the host: whether a
+                // newer release is out, and a Raphie found on this computer.
+                // Drop everything that belonged to the signed-in host.
                 let origin = self.origin.take();
+                let update = std::mem::take(&mut self.update);
+                let local_install = self.local_install.take();
                 *self = Model {
                     origin,
+                    update,
+                    local_install,
                     auth: AuthState::SignedOut { notice },
                     ..Model::default()
                 };
@@ -1252,6 +1269,16 @@ impl Model {
             }
             Event::PreviewFailed { bot_id, id } => self.previews.failed(&bot_id, &id),
             Event::ProviderSignIn { bot_id, sign_in } => {
+                // A sign-in that ended stays ended: a poll answered before
+                // it connected can arrive after, and must not bring it back.
+                if sign_in.status == SignInStatus::Waiting
+                    && self.finished_sign_in.as_deref() == Some(sign_in.id.as_str())
+                {
+                    return Vec::new();
+                }
+                if sign_in.status != SignInStatus::Waiting {
+                    self.finished_sign_in = Some(sign_in.id.clone());
+                }
                 self.sign_in_busy = false;
                 self.sign_in_error = None;
                 let connected = sign_in.status == SignInStatus::Connected;
@@ -1264,6 +1291,7 @@ impl Model {
                 self.sign_in_busy = false;
                 self.sign_in_error = Some(message);
             }
+            Event::LocalInstall(found) => self.local_install = found,
             Event::UpdateChecked(result) => {
                 self.update = match result {
                     Ok(Some(update)) => UpdateStatus::Available(update),

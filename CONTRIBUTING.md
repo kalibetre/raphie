@@ -12,8 +12,8 @@ bun run lint:fix
 bun run validate
 ```
 
-`validate` checks formatting, linting, TypeScript, tests, and the production
-build. CI runs the same command on a GitHub-hosted Linux x64 runner with the
+`validate` checks formatting, architecture rules, linting, TypeScript, tests,
+and the production build. CI runs the same command on a GitHub-hosted Linux x64 runner with the
 pinned Bun version and builds the container test fixture first. It does not
 require model credentials or connected integrations.
 
@@ -39,7 +39,7 @@ configuration are excluded. Vite generates
 
 ## Organizing code
 
-Both applications follow domain boundaries. See [the architecture decision](docs/architecture.md)
+Both applications follow domain boundaries. See [the architecture overview](https://raphie-docs.kalibetre.dev/architecture/overview/)
 and [CONTEXT.md](CONTEXT.md) for the shared language.
 
 - `domains/<context>/domain` holds framework-free models and business policies.
@@ -80,14 +80,16 @@ bun run dev:web:fixture
 
 Sign-in is always required, including for the fixture. Create the administrator
 once with `bun run raphie auth setup` and sign in at the fixture URL; there is no
-bypass flag. Browser check scripts run in a tab that is already signed in.
+bypass flag. The fixture's web host uses the same sign-in store as the normal app
+(in `.data/`) unless you start it and `auth setup` with the same throwaway
+`DATA_DIRECTORY`. Browser check scripts run in a tab that is already signed in.
 
 The normal application uses ports 4316/4320 and persists to `.data/`. The fixture
-uses 4317/4321 and removes its temporary database on shutdown. Never replace the
+uses 4317/4321; its runtime removes its temporary data on shutdown. Never replace the
 normal runtime with the fixture or use production conversations as test data.
 
 Tests use `bun:test` and temporary databases. The root test script explicitly
-selects the project test directories explicitly. Keep test
+selects the project test directories. Keep test
 assertions unchanged during pure code moves and formatting; add regression
 tests when observable behavior changes.
 
@@ -95,26 +97,14 @@ Keep credentials in private configuration, load them through Varlock, and
 never print their values. Use `bun --bun run varlock load --agent` for masked
 validation. Preserve `.data/`, including its private legacy archive, during cleanup.
 
-## Feature documentation
+## Documentation
 
-Keep [the documentation index](docs/README.md) and feature guides current in the
-same change that changes product behavior. Update defaults, Settings controls,
-storage, API/tool contracts, recovery behavior, provider differences and relevant
-verification instructions. Describe model-dependent behavior accurately and keep
-planned capabilities visibly separate from delivered ones. For memory changes,
-update [the memory guide](docs/memory.md); update the architecture guide and roadmap
-when the architectural boundary or delivery status changes. Link new feature
-guides from the docs index and the relevant root README section.
-
-## Visual architecture documentation
-
-`docs/architecture.html` is the standalone visual field guide. Keep its current
-implementation labels, proposed interfaces, capability map, and migration phases
-in sync with `docs/architecture.md`, `docs/headless-runtime.md`, and
-`docs/roadmap.md`. Future capabilities must stay visibly marked as planned.
-Use inline styles, scripts, and SVG so the guide works offline without a CDN or
-a build step. Check both themes, narrow layouts, keyboard controls, and browser
-console output when changing it.
+The documentation site lives in `apps/docs`; its pages are the only copy of the
+guides. Update the matching page in the same change that changes product
+behavior: defaults, Settings controls, storage, API or tool contracts, recovery
+behavior and provider differences. Describe model-dependent behavior as such,
+and keep planned work out of guides. Diagrams use the HTML components in `apps/docs/src/components/diagram`.
+[Writing docs](apps/docs/WRITING.md) covers the structure, voice and checks.
 
 ## Scrolling and the composer
 
@@ -127,4 +117,4 @@ to the transcript viewport and content refs instead of adding another scroller.
 The composer floats inside `chat-stage`. Its measured height supplies transcript
 bottom padding and the jump-button offset, including multiline drafts and errors.
 Preserve last-message clearance while letting older messages scroll underneath.
-See [UI scrolling](docs/ui-scrolling.md) for the long-history fixture and browser probe.
+See [UI conventions](https://raphie-docs.kalibetre.dev/contribute/ui-conventions/) for the long-history fixture and browser probe.

@@ -1,0 +1,80 @@
+---
+title: Introduction
+description: What Raphie is, how its parts fit together, and the words the rest of these docs use.
+sidebar:
+  order: 1
+---
+
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+import Feature from "~/components/Feature.astro";
+import Features from "~/components/Features.astro";
+
+Raphie is a self-hosted assistant you run on your own machine. It hosts one or more persistent **bots**, each with its own instructions, memory, workspace and scheduled work, and you talk to them from a browser, the Raphie desktop app for Mac or a messaging channel.
+
+Raphie runs as two local processes on a machine you own: a runtime and a web host. Model calls go to the provider you connect; your conversations, memory and files stay in Raphie's data directory.
+
+## How it fits together
+
+<Flow>
+  <Box title="Owner" tone="person" />
+  <Arrow />
+  <Row label="Clients and channels">
+    <Box title="Web workspace">any browser</Box>
+    <Box title="Desktop app">macOS</Box>
+    <Box title="Channels">Telegram or Discord</Box>
+  </Row>
+  <Arrow />
+  <Box title="Raphie" tone="accent">
+    web host and runtime
+  </Box>
+  <Arrow />
+  <Row label="Each bot">
+    <Box title="Sessions" />
+    <Box title="Memory" tone="store" />
+    <Box title="Workspace" tone="store" />
+  </Row>
+  <Arrow />
+  <Box title="Model provider" tone="muted" />
+</Flow>
+
+You are the **owner**: the one person with authority over every bot. Clients and channels are only ways in; the same session, approval or memory record looks the same whichever one you use.
+
+## Core concepts
+
+| Term            | What it means                                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Bot**         | A persistent assistant identity with its own personality, model connections, sessions, memory and workspace. Raphie starts with one, named Raphie.     |
+| **Personality** | The bot's voice, values and style, written by you in its `SOUL.md`. It shapes behaviour but grants no capabilities.                                    |
+| **Session**     | A durable conversation with its own history, belonging to one bot. It is the same session whether you reach it from the browser, desktop or a channel. |
+| **Turn**        | One message you send plus all the agent work that answers it: possibly several model responses and tool actions.                                       |
+| **Workspace**   | A bot's persistent working files, shared by all its sessions. Not the same as the **web workspace**, which is the browser app.                         |
+| **Sandbox**     | The replaceable environment that runs commands against a bot's workspace, within limits you set.                                                       |
+| **Memory**      | Selected facts and preferences a bot keeps across sessions, each with a source. Not a copy of every transcript.                                        |
+| **Channel**     | An external messaging platform you can talk to a bot through, such as Telegram or Discord.                                                             |
+| **Client**      | An app you use to work with Raphie: the web workspace or the desktop app.                                                                              |
+| **Approval**    | Your decision about one exact proposed action and its arguments. Approving does not prove the action succeeded.                                        |
+
+The full glossary is on the [glossary](/contribute/glossary/) page.
+
+## Where to next
+
+<Features outlined>
+  <Feature title="Install Raphie" href="/start/installation/">
+    Raphie on your Mac or Linux machine, plus the desktop app.
+  </Feature>
+  <Feature title="First run" href="/start/first-run/">
+    Sign in, connect a model provider and start a conversation.
+  </Feature>
+  <Feature title="Desktop app" href="/guides/desktop/">
+    Use Raphie from a native Mac app.
+  </Feature>
+  <Feature title="Remote access" href="/operate/remote-access/">
+    Reach Raphie from your laptop or phone.
+  </Feature>
+  <Feature title="Conversations" href="/guides/conversations/">
+    Find your way around the web workspace.
+  </Feature>
+  <Feature title="Bots" href="/guides/bots/">
+    Create bots and give each its own personality.
+  </Feature>
+</Features>

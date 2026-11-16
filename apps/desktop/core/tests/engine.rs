@@ -1897,6 +1897,42 @@ fn an_update_check_offers_the_newest_release_and_sends_no_token() {
 }
 
 #[test]
+fn raphie_on_this_computer_is_found_at_the_port_its_installer_saved() {
+    let host = FakeHost::start();
+    let folder = std::env::temp_dir().join(format!("raphie-local-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let ports = folder.join(".ports");
+    let port = host.origin.as_str().rsplit(':').next().unwrap().to_owned();
+    std::fs::write(&ports, format!("runtime=1\nweb={port}\n")).unwrap();
+    let find = |file: &std::path::Path| {
+        let config = EngineConfig {
+            local_ports_file: Some(file.to_owned()),
+            ..support::fast_config()
+        };
+        let mut driver = Driver::with_config(Arc::new(MemoryStore::new()), config);
+        // Something that answers, then nothing: the event says which.
+        driver.model.local_install = Some(host.origin.clone());
+        driver.send(Command::FindLocalInstall);
+        driver
+    };
+    let mut driver = find(&ports);
+    driver.model.local_install = None;
+    driver.until("found", |m, _| m.local_install.is_some());
+    assert_eq!(driver.model.local_install.as_ref(), Some(&host.origin));
+    assert_eq!(host.requests("/_raphie/health").len(), 1);
+    assert_eq!(host.requests("/_raphie/health")[0].authorization, None);
+
+    // A port where nothing answers finds nothing.
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let closed_port = closed.local_addr().unwrap().port();
+    drop(closed);
+    std::fs::write(&ports, format!("web={closed_port}\n")).unwrap();
+    let mut driver = find(&ports);
+    driver.until("nothing found", |m, _| m.local_install.is_none());
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
 fn an_update_check_with_nowhere_to_ask_says_so() {
     let mut driver = Driver::new(Arc::new(MemoryStore::new()));
     driver.send(Command::CheckForUpdates);

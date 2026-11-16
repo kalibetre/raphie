@@ -1,0 +1,40 @@
+---
+// A layered diagram drawn in HTML: rows of boxes joined by arrows, top to
+// bottom. Text stays at reading size and rows wrap on narrow screens.
+interface Props {
+  /** Short caption under the diagram. */
+  caption?: string;
+}
+
+const { caption } = Astro.props;
+---
+
+<figure class="raphie-figure not-content">
+  <div class="raphie-flow"><slot /></div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style is:global>
+  .raphie-figure {
+    margin: 1.75rem 0;
+    padding: clamp(1rem, 3vw, 1.75rem);
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 1rem;
+    background: var(--raphie-card);
+  }
+
+  .raphie-figure figcaption {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    text-align: center;
+    color: var(--sl-color-gray-3);
+  }
+
+  .raphie-flow {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: center;
+  }
+</style>

@@ -1,0 +1,67 @@
+---
+// One linked item in a Features grid: the whole item is the link.
+import { Icon } from "@astrojs/starlight/components";
+import type { ComponentProps } from "astro/types";
+
+interface Props {
+  title: string;
+  href: string;
+  icon?: ComponentProps<typeof Icon>["name"];
+}
+
+const { title, href, icon } = Astro.props;
+---
+
+<a class="raphie-tile" href={href}>
+  {icon && <Icon name={icon} class="raphie-tile-icon" size="1.25rem" />}
+  <span class="raphie-tile-title">{title}</span>
+  <span class="raphie-tile-text"><slot /></span>
+</a>
+
+<style is:global>
+  .raphie-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 1.1rem 1.15rem;
+    border-radius: 0.9rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background-color 0.15s ease-out;
+  }
+
+  .raphie-tile:hover {
+    background: var(--sl-color-gray-6);
+  }
+
+  .raphie-tile-icon {
+    margin-bottom: 0.5rem;
+    color: var(--sl-color-accent);
+  }
+
+  .raphie-tile-title {
+    font-size: 1rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--sl-color-white);
+  }
+
+  .raphie-tile-text {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--sl-color-gray-3);
+  }
+
+  .raphie-tile-text > p {
+    margin: 0;
+  }
+
+  /* Bordered variant, for navigation between sections. */
+  .raphie-features--outlined .raphie-tile {
+    border: 1px solid var(--sl-color-hairline);
+  }
+
+  .raphie-features--outlined .raphie-tile:hover {
+    border-color: var(--sl-color-hairline-light);
+  }
+</style>

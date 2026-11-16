@@ -1,0 +1,124 @@
+---
+title: Telegram
+description: Talk to a bot from Telegram in a private chat or a group, pair your account, and know what Telegram can and cannot carry.
+sidebar:
+  order: 8
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+import { Sequence } from "~/components/diagram";
+
+You can reach a bot through your own Telegram bot, in a private chat or in a group where you mention it. Raphie long-polls Telegram, so nothing on your machine needs to be reachable from the internet.
+
+Only Telegram accounts you pair with a one-time code can talk to the bot. Anyone else gets a short refusal in a private chat and is ignored in groups.
+
+## Set up
+
+<Steps>
+
+1. In Telegram, open [@BotFather](https://t.me/BotFather), send `/newbot`, and copy the bot token. Anyone with the token can act as that bot, so keep it secret.
+2. In Raphie, open **Settings**, choose the bot, then **Channels**. Under **Telegram**, choose **Connect**, paste the token, and choose **Save and connect**.
+3. Once it shows as connected, choose **Create pairing code**. The code looks like `ABCDE-FGHJK`.
+4. Open a **private** chat with your Telegram bot and send `/pair ABCDE-FGHJK`. The chat confirms, and your numeric Telegram user ID appears under **Verified accounts**.
+5. Send a message. It starts a conversation, marked with a chat icon in the web workspace's conversation list.
+
+</Steps>
+
+Raphie checks the token with Telegram, encrypts it, and registers the command menu: `/ask`, `/pair`, `/home`, `/help` and `/start` in private chats, and `/ask`, `/home` and `/help` in groups. Commands you set by hand in BotFather for those scopes are replaced.
+
+One Telegram bot can serve one Raphie bot. Connecting it to a second one is refused.
+
+| Control              | Effect                                                                         |
+| -------------------- | ------------------------------------------------------------------------------ |
+| **Receive messages** | Turns polling off or on, keeping the token and verified accounts.              |
+| **Revoke**           | Removes one verified account, effective from its next message or button press. |
+| **Remove Telegram**  | Deletes the token, verified accounts and polling position for this bot.        |
+
+## Pairing
+
+Telegram usernames can change hands, so Raphie trusts only the numeric user ID Telegram reports for a private chat.
+
+- A pairing code is 10 characters, works once, and expires after **10 minutes**. Five wrong guesses cancel it; create another.
+- Only one code is live at a time. It is kept in memory as a hash, so restarting Raphie cancels it.
+- Pair only in a private chat. Codes sent in groups are never accepted.
+- An unpaired private chat gets a refusal explaining how to pair, at most once every ten minutes per chat. Its messages never reach a model, memory or the workspace.
+
+You can verify several accounts. Each gets its own private chat, binding and session.
+
+## Groups and supergroups
+
+<Steps>
+
+1. Pair your account in a private chat first.
+2. Add the Telegram bot to a group or supergroup.
+3. Address it: mention `@YourBotName` in a message, or send `/ask@YourBotName your question`.
+
+</Steps>
+
+- Raphie answers only verified owners who address it. Other members and unaddressed messages are ignored, even if the bot is an administrator.
+- With Telegram's privacy mode on (the default), use `/ask@YourBotName`; Telegram may not deliver plain mentions. Raphie does not change privacy mode or ask for admin rights. See [Telegram's privacy mode](https://core.telegram.org/bots/features#privacy-mode).
+- Each group has its own session, shared by every verified owner in it. Only addressed prompts are stored, never the surrounding chat.
+- Tool approvals for group turns happen only in the web workspace. The group gets a notice to review the request in the web workspace, without details or buttons, and the bot's answer, possibly including tool results, comes back to the group.
+- After the bot is removed from a group, a verified owner must address it there again before it can be home for [scheduled jobs](/guides/schedules/). A group that Telegram migrates to a supergroup needs the same.
+
+:::caution[A group shares the bot's memory]
+A group session is separate, but the bot's memory and tools are shared across all its sessions. Treat everything the bot says in a group, including scheduled output, as visible to every member.
+:::
+
+## What happens to a message
+
+<Sequence
+  actors={["Owner", "Telegram", "Raphie", "Model"]}
+  steps={[
+    ["Raphie", "Telegram", "Long-poll for updates"],
+    ["Telegram", "Raphie", "Message from verified owner", "reply"],
+    ["Raphie", "Raphie", "Bind chat to session, admit turn"],
+    ["Raphie", "Model", "Run the turn"],
+    ["Model", "Raphie", "Tool call proposed", "reply"],
+    ["Raphie", "Telegram", "Approval prompt with exact arguments"],
+    ["Owner", "Telegram", "Approve once"],
+    ["Telegram", "Raphie", "Button press", "reply"],
+    ["Raphie", "Raphie", "Run the tool, finish the turn"],
+    ["Raphie", "Raphie", "Save reply as delivery plan"],
+    ["Raphie", "Telegram", "Send reply in chunks"],
+  ]}
+/>
+
+Every update is handled once, in order. Raphie saves its polling position after each update, and duplicates after a crash are rejected. The reply destination is fixed when the turn starts, so later settings changes cannot redirect it.
+
+A tool approval in a private chat shows the server, tool and exact arguments with **Approve once** and **Decline** buttons. Only the account that started the turn can decide in Telegram; you can always decide in the web workspace instead. The first decision wins: a repeated, stale or opposite press only reports the current state.
+
+## Delivery limits and recovery
+
+| Topic                     | Behaviour                                                                                                                                     |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Message length            | Replies are split into chunks of up to 4,000 characters, at a line or word break when one is near.                                            |
+| Formatting                | Replies are plain text. Markdown and Mermaid are not rendered.                                                                                |
+| Long arguments            | If an approval's arguments do not fit the message, the full JSON follows as a file (up to 8 MiB). Larger ones point you to the web workspace. |
+| Rate limits               | Raphie waits as long as Telegram asks (at most 60 seconds) and retries the same call, up to four times.                                       |
+| Other send failures       | A timeout or error leaves that chunk **uncertain**; it is not resent, in case it arrived. Later chunks still go out.                          |
+| Crash while sending       | On restart, the chunk in flight is marked uncertain and only the remaining chunks are sent.                                                   |
+| Telegram unreachable      | Raphie starts anyway and keeps retrying with a backoff of 1 to 30 seconds. Settings shows the problem.                                        |
+| Webhook or another poller | Polling fails with a conflict. Remove the webhook with Telegram's `deleteWebhook`, or use a bot dedicated to Raphie.                          |
+
+## Not supported
+
+| Not supported                                        | What you see                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------ |
+| Photos, files, voice, stickers and other attachments | A reply saying only text is supported                        |
+| Edited messages                                      | A notice; the edit is not resubmitted, so send a new message |
+| Markdown in replies                                  | Plain text                                                   |
+| Forum topics                                         | A notice in the topic; no turn starts                        |
+| Broadcast channels and anonymous admin posts         | Ignored                                                      |
+| Webhooks                                             | Raphie uses long polling only                                |
+| Linking a Telegram chat to an existing web session   | Each chat has its own session                                |
+
+## Security notes
+
+- **The token is the bot.** It is encrypted at rest and never shown again, but anyone with the Raphie host account and its credential key can use it. See [credentials](/operate/credentials/).
+- **Telegram sees your messages.** Bot chats are not end-to-end encrypted. Prompts, replies and approval arguments pass through Telegram's servers.
+- **A verified Telegram account can approve actions.** Turn on Telegram's two-step verification, and revoke the account in Settings if you lose the device.
+- **Anyone who can open Settings can create a pairing code.** Protect your Raphie sign-in; see [authentication](/operate/authentication/).
+- **Traffic is outbound only.** Raphie connects to `api.telegram.org` over HTTPS and follows no redirects.
+- **Replies cannot inject markup.** Model text is sent as plain text, and approval prompts escape every value.
