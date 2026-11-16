@@ -19,7 +19,7 @@ pub fn about(s: &Ui, look: &Look) -> El {
         t,
         "This app",
         "Information about this installation.",
-        vec![version_row(s, t), updates_row(s, t)],
+        vec![version_row(t), channel_row(s, t), updates_row(s, t)],
     );
     page(
         "rd-page-about",
@@ -31,20 +31,49 @@ pub fn about(s: &Ui, look: &Look) -> El {
     )
 }
 
-/// Raphie's version, and which build this is.
-fn version_row(s: &Ui, t: &Theme) -> El {
-    let version = current_version();
-    let shown = if s.flavor.is_dev() {
-        format!("{version} · Dev build")
-    } else {
-        version.to_owned()
-    };
+/// Raphie Desktop's version.
+fn version_row(t: &Theme) -> El {
+    let shown = current_version().to_owned();
     setting(
         t,
         Some(&icons::INFO),
         "Raphie Desktop version",
         "The version of this app.",
         Some(value(shown, t.muted_foreground).key("rd-version")),
+    )
+}
+
+/// Which releases this copy follows: stable, nightly, or none for a dev
+/// build made on this computer.
+fn channel_row(s: &Ui, t: &Theme) -> El {
+    let (glyph, shown, color, description) = if s.flavor.is_dev() {
+        (
+            &icons::WRENCH,
+            "Dev build",
+            t.attention,
+            "Built from this computer's checkout. It is not updated from releases.",
+        )
+    } else if s.release_channel.is_nightly() {
+        (
+            &icons::MOON,
+            "Nightly",
+            t.night,
+            "Built from the latest main. Newer features, tested less than stable releases.",
+        )
+    } else {
+        (
+            &icons::SHIELD_CHECK,
+            "Stable",
+            t.muted_foreground,
+            "Stable releases only.",
+        )
+    };
+    setting(
+        t,
+        Some(glyph),
+        "Release channel",
+        description,
+        Some(value(shown, color).key("rd-release-channel")),
     )
 }
 

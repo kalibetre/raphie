@@ -38,6 +38,36 @@ pub fn current_version() -> &'static str {
     raw.strip_prefix('v').unwrap_or(raw)
 }
 
+/// Which releases this build follows, from its version: a nightly
+/// (`0.0.5-nightly.20261116.1.1`) follows every build from `main`; any
+/// other release follows stable releases only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReleaseChannel {
+    Stable,
+    Nightly,
+}
+
+impl ReleaseChannel {
+    /// The channel of a version string.
+    pub fn of(version: &str) -> ReleaseChannel {
+        let pre = version.split_once('-').map(|(_, pre)| pre).unwrap_or("");
+        if pre.split('.').next() == Some("nightly") {
+            ReleaseChannel::Nightly
+        } else {
+            ReleaseChannel::Stable
+        }
+    }
+
+    /// This build's channel.
+    pub fn current() -> ReleaseChannel {
+        ReleaseChannel::of(current_version())
+    }
+
+    pub fn is_nightly(self) -> bool {
+        self == ReleaseChannel::Nightly
+    }
+}
+
 /// A version as Semantic Versioning orders them: `1.2.3`, or a pre-release
 /// such as `1.2.3-alpha.2`, which comes before `1.2.3`. Build metadata
 /// (`+…`) is ignored, as the standard says.
@@ -137,8 +167,11 @@ pub struct Update {
 }
 
 /// The newest release after `current`, if there is one. Drafts, tags that
-/// are not versions and pages outside Raphie's releases are skipped.
+/// are not versions and pages outside Raphie's releases are skipped, and a
+/// stable build is offered stable releases only: a nightly is offered to
+/// nightlies.
 pub fn newest_after(current: &str, releases: &[Release]) -> Option<Update> {
+    let stable_only = ReleaseChannel::of(current) == ReleaseChannel::Stable;
     let current = Version::parse(current)?;
     releases
         .iter()
@@ -146,6 +179,7 @@ pub fn newest_after(current: &str, releases: &[Release]) -> Option<Update> {
         // `filter_map` keeps the `Some`s: here, releases whose tag parses.
         .filter_map(|release| Some((Version::parse(&release.tag_name)?, release)))
         .filter(|(version, _)| *version > current)
+        .filter(|(version, _)| !stable_only || version.pre.is_empty())
         .max_by(|(a, _), (b, _)| a.cmp(b))
         .map(|(_, release)| Update {
             version: release.tag_name.clone(),
@@ -268,6 +302,20 @@ mod tests {
         let update = newest_after("0.0.4", &releases).unwrap();
         assert_eq!(update.version, "v0.0.5");
         assert!(update.url.ends_with("/tag/v0.0.5"));
+    }
+
+    #[test]
+    fn a_stable_build_is_offered_stable_releases_and_a_nightly_everything_newer() {
+        let releases = [release("v0.0.5"), release("v0.0.6-nightly.20261201.7.1")];
+        assert_eq!(newest_after("0.0.5", &releases), None);
+        let nightly = newest_after("0.0.5-nightly.20261120.5.1", &releases).unwrap();
+        assert_eq!(nightly.version, "v0.0.6-nightly.20261201.7.1");
+        assert_eq!(ReleaseChannel::of("0.0.5"), ReleaseChannel::Stable);
+        assert_eq!(ReleaseChannel::of("v0.0.5-alpha.1"), ReleaseChannel::Stable);
+        assert_eq!(
+            ReleaseChannel::of("0.0.4-nightly.20261116.43833326564.1"),
+            ReleaseChannel::Nightly
+        );
     }
 
     #[test]

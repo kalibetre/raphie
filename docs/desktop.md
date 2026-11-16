@@ -136,7 +136,10 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   - **About** (desktop only; the web shows its version under Appearance)
     shows Raphie's version (from
     the repository's `VERSION` file, or `RAPHIE_VERSION` at compile time, as
-    the web does) and whether a newer release exists. The app checks once at
+    the web does), its release channel (Stable, Nightly, or Dev build; see
+    [Dev and release builds](#dev-and-release-builds)) and whether a newer
+    release exists. A stable build is offered stable releases only. The app
+    checks once at
     launch, and **Check for updates** checks again: it reads Raphie's public
     releases on GitHub with its own HTTP client, never the signed-in one, so
     the host's token is never sent there. A newer release offers **View
@@ -301,6 +304,22 @@ and sign-in carry over; the dev build starts signed out. The theme is the
 same in both. Headless snapshots draw the release look even though they come
 from a debug build; the `dev-build` scene shows the badge. The split is
 `Flavor` in `core/src/flavor.rs`.
+
+A release build also knows its **release channel** from the version built
+into it (`ReleaseChannel` in `core/src/updates.rs`). A nightly
+(`v0.0.5-nightly.…`) is the same app as a stable release, with the same
+identifier, settings and sign-in, but it shows it:
+
+|               | Stable                 | Nightly                                                         |
+| ------------- | ---------------------- | --------------------------------------------------------------- |
+| Icon          | The brand face in sage | The sage face under a night sky: indigo, a crescent moon, stars |
+| In the window | Nothing extra          | A "NIGHTLY" pill with a moon beside the brand                   |
+| About         | Release channel Stable | Release channel Nightly                                         |
+| Updates       | Stable releases only   | Any newer release, nightlies included                           |
+
+`scripts/bundle.sh` draws the night-sky icon when `RAPHIE_VERSION` names a
+nightly. The `nightly-build` and `settings-about-nightly` scenes show the
+pill and the About page.
 
 ### Run it as a macOS app
 

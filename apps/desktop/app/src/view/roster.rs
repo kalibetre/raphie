@@ -15,7 +15,7 @@ use crate::icons;
 use crate::sections::Page;
 use crate::state::Ui;
 use crate::theme::font;
-use crate::widgets::{count_badge, dev_badge, icon_button, one_line, pressable, status_dot};
+use crate::widgets::{build_badge, count_badge, icon_button, one_line, pressable, status_dot};
 
 pub fn roster(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
@@ -55,7 +55,7 @@ pub fn roster(s: &Ui, look: &Look) -> El {
                 )
                 // `then` turns a true into `Some(badge)`. An `Option` is
                 // a list of none or one, which is what `children` takes.
-                .children(s.flavor.is_dev().then(|| dev_badge(t))),
+                .children(build_badge(t, s.flavor, s.release_channel)),
         )
         .child(
             row()
