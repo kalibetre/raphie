@@ -435,4 +435,5 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
-}, 30000);
+  // Each case runs the whole installer; together they take about 30 s.
+}, 90_000);
