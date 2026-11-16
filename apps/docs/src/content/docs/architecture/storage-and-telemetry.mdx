@@ -91,7 +91,7 @@ Ownership is taken before any product store is opened, which is what prevents tw
 | `workspace/container.sqlite`         | Per bot  | Container lease and command journal                                                          | Outside the container mount                                |
 | `workspace/files/`                   | Per bot  | The disk view of the bot's `/workspace`                                                      | The only path a container sees                             |
 
-Provider keys, channel configuration and MCP credentials are encrypted with AES-256-GCM under a master key held in the OS credential store or, when `RAPHIE_CREDENTIAL_KEY_FILE` is set, in an owner-only (`0600`, in a `0700` folder) key file. Keep that file outside the data directory; Raphie does not check where it is. See [credentials](/operate/credentials/) and [security](/architecture/security/).
+Provider keys, channel configuration and MCP credentials are encrypted with AES-256-GCM under a master key held in the OS credential store or, when `RAPHIE_CREDENTIAL_KEY_FILE` is set, in an owner-only (`0600`, in a `0700` folder) key file. The runtime refuses to start if that file is inside the data directory. See [credentials](/operate/credentials/) and [security](/architecture/security/).
 
 ### Evolving the layout
 

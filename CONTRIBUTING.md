@@ -78,14 +78,15 @@ bun run dev:fixture
 bun run dev:web:fixture
 ```
 
-Sign-in is always required, including for the fixture. Create the administrator
-once with `bun run raphie auth setup` and sign in at the fixture URL; there is no
-bypass flag. The fixture's web host uses the same sign-in store as the normal app
-(in `.data/`) unless you start it and `auth setup` with the same throwaway
-`DATA_DIRECTORY`. Browser check scripts run in a tab that is already signed in.
+Sign-in is always required, including for the fixture; there is no bypass flag.
+The fixture's web host keeps its own sign-in store in `.fixture-data/` at the
+checkout root, never in `.data/`. Create its administrator once with
+`bun run fixture:auth` and sign in at the fixture URL. Browser check scripts run
+in a tab that is already signed in.
 
 The normal application uses ports 4316/4320 and persists to `.data/`. The fixture
-uses 4317/4321; its runtime removes its temporary data on shutdown. Never replace the
+uses 4317/4321; its runtime removes its temporary data on shutdown, and its sign-in
+store stays in `.fixture-data/` until you delete it. Never replace the
 normal runtime with the fixture or use production conversations as test data.
 
 Tests use `bun:test` and temporary databases. The root test script explicitly

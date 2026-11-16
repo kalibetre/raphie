@@ -15,7 +15,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { CredentialCipher } from "../src/domains/settings/infrastructure/credential-cipher.ts";
-import { fileCredentialKeyStore } from "../src/domains/settings/infrastructure/file-credential-key-store.ts";
+import {
+  assertKeyFileOutsideData,
+  fileCredentialKeyStore,
+} from "../src/domains/settings/infrastructure/file-credential-key-store.ts";
 
 test("production store selection restores provider, MCP, and Discord credentials for default and named bots in a fresh process", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-file-process-"));
@@ -167,3 +170,69 @@ test("file store rejects exposed, linked, malformed, and relative key paths with
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a key file inside the data directory is refused, wherever its path points", async () => {
+  const root = await mkdtemp(join(tmpdir(), "raphie-key-location-"));
+  try {
+    const data = join(root, "data");
+    await mkdir(join(data, "nested"), { recursive: true });
+    await mkdir(join(root, "keys"));
+    await symlink(data, join(root, "data-link"));
+    await symlink(join(data, "nested"), join(root, "keys", "into-data"));
+    for (const inside of [
+      join(data, "master-key"),
+      join(data, "nested", "not-yet", "master-key"),
+      join(root, "data-link", "master-key"),
+      join(root, "keys", "into-data", "master-key"),
+      data,
+    ])
+      assert.throws(
+        () => assertKeyFileOutsideData(inside, data),
+        /must be outside the data directory/,
+        inside,
+      );
+    for (const outside of [
+      join(root, "keys", "master-key"),
+      join(root, "data-2", "master-key"),
+      join(root, "master-key"),
+    ])
+      assert.doesNotThrow(() => assertKeyFileOutsideData(outside, data));
+    // The data directory may be given through a link as well.
+    assert.throws(() =>
+      assertKeyFileOutsideData(
+        join(data, "master-key"),
+        join(root, "data-link"),
+      ),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the runtime will not start with its key file inside the data directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "raphie-key-inside-"));
+  try {
+    const data = join(root, "data");
+    const result = Bun.spawnSync(
+      [process.execPath, resolve("packages/runtime/src/main.ts")],
+      {
+        env: {
+          ...process.env,
+          DATA_DIRECTORY: data,
+          RAPHIE_CREDENTIAL_KEY_FILE: join(data, "private", "master-key"),
+          PORT: "0",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 15000,
+      },
+    );
+    assert.notEqual(result.exitCode, 0);
+    assert.match(
+      result.stderr.toString(),
+      /RAPHIE_CREDENTIAL_KEY_FILE must be outside the data directory/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 20000);
