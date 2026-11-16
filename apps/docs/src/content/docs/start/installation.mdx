@@ -90,7 +90,7 @@ Open a new terminal so `raphie` is on your PATH, or run the `export PATH=...` li
 **You need:** Debian or Ubuntu with systemd, `sudo`, an internet connection and a free local web port. The installer adds the OS packages it needs (D-Bus, GNOME Keyring, libsecret, Python 3, curl). You do not need Bun.
 
 :::caution
-This installer is experimental and runs as root. `download-release.sh` fetches the release archive over HTTPS and checks only which files it contains; it does not check the archive against `SHA256SUMS` or its GitHub attestation, and `bootstrap.sh` then runs the archive's `install.sh` as root. `sudo raphie update` uses the same downloader. Read both scripts, use a machine you are comfortable experimenting on, and to verify what you install, [check a release by hand](#check-a-release-by-hand).
+This installer is experimental and runs as root. `download-release.sh` fetches the release archive over HTTPS, stops unless its SHA-256 hash matches the release's `SHA256SUMS` file, and checks which files it contains; `bootstrap.sh` then runs the archive's `install.sh` as root. `sudo raphie update` uses the same downloader. The checksum catches a corrupted or swapped download, not a tampered release, since both files come from the same release, and the GitHub attestation is not checked. Read both scripts, use a machine you are comfortable experimenting on, and to verify who built what you install, [check a release by hand](#check-a-release-by-hand).
 :::
 
 Download the two scripts into an empty directory and read them:
@@ -257,7 +257,7 @@ The app keeps its sign-in in your login Keychain and reconnects at the next laun
 
 ### Update it
 
-The app does not update itself. When **Settings → About** says a newer release is available (the check counts nightly pre-releases too), download the image again and replace Raphie in Applications. Your sign-in and settings are kept. A replaced app needs **Open Anyway** once more.
+The app does not update itself. When **Settings → About** says a newer release is available (a stable app is only offered stable releases), download the image again and replace Raphie in Applications. Your sign-in and settings are kept. A replaced app needs **Open Anyway** once more.
 
 What the app can do, and how it compares with the web workspace, is in [desktop app](/guides/desktop/) and [clients](/guides/clients/).
 

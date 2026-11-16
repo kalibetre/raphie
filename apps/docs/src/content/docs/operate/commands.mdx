@@ -63,7 +63,7 @@ Both need an interactive terminal and must run as the account that owns the data
 | `sudo raphie uninstall`                                                  | System   | Remove the service and programs; keep data, configuration, keyrings, backups and the service user. Asks you to type `UNINSTALL`. |
 | `sudo raphie uninstall --purge`                                          | System   | Also delete data, configuration, keyrings, backups and the service user. Asks you to type `PURGE`.                               |
 
-The user install updates by rerunning the installer; see [updates](/operate/service/#updates-and-release-channels). `sudo raphie update` does not compare versions, so check the target before updating: running older binaries against newer data is unsafe. It also does not verify the download's checksum or attestation; see [check a release by hand](/start/installation/#check-a-release-by-hand). `sudo raphie restore` needs the backup's matching release still under `/opt/raphie/releases/`.
+The user install updates by rerunning the installer; see [updates](/operate/service/#updates-and-release-channels). `sudo raphie update` does not compare versions, so check the target before updating: running older binaries against newer data is unsafe. It checks the download against the release's `SHA256SUMS` but not its attestation; see [check a release by hand](/start/installation/#check-a-release-by-hand). `sudo raphie restore` needs the backup's matching release still under `/opt/raphie/releases/`.
 
 ## Ports and origins
 

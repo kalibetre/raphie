@@ -37,6 +37,20 @@ print(tag)
 PY
 )
 curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$tag/$asset" -o "$tmp/$asset"
+# The archive must match the release's published checksum before anything in
+# it is unpacked or run. This catches corrupted or swapped downloads; it does
+# not prove who built the release (see the docs for `gh attestation verify`).
+curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$tag/SHA256SUMS" -o "$tmp/SHA256SUMS" || { echo "Could not download release checksums for $tag." >&2; exit 1; }
+python3 - "$tmp/$asset" "$tmp/SHA256SUMS" "$asset" <<'PY'
+import hashlib, re, sys
+with open(sys.argv[2], encoding='ascii') as source: lines = source.read().splitlines()
+matches = [m.group(1).lower() for line in lines if (m := re.fullmatch(r'([a-fA-F0-9]{64}) [ *](.+)', line)) and m.group(2) == sys.argv[3]]
+if len(matches) != 1: raise SystemExit('Release checksum is missing or ambiguous.')
+digest = hashlib.sha256()
+with open(sys.argv[1], 'rb') as source:
+    for block in iter(lambda: source.read(1024 * 1024), b''): digest.update(block)
+if digest.hexdigest() != matches[0]: raise SystemExit('Release checksum does not match; nothing was installed.')
+PY
 python3 - "$tmp/$asset" "$destination" <<'PY'
 import os, re, sys, tarfile
 expected = {'raphie', 'raphie-runtime', 'raphie-web', 'install.sh', 'raphie.service', 'raphie-admin', 'keyring-session.sh', 'update.sh', 'restore.sh', 'uninstall.sh', 'recovery-key.py', 'bundle-id.sh', 'download-release.sh'}
