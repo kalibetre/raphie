@@ -78,7 +78,7 @@ The app signs in with a device code, so your password never goes into it.
 <Steps>
 
 1. Enter the address of your Raphie web host:
-   - Raphie on this Mac: `http://127.0.0.1:24320` for a user install. Run `raphie port` if you chose another port or installed before ports were saved (then it is `4320`).
+   - Raphie on this Mac: the app finds it by itself. It reads the web port the installer saved in `~/.local/lib/raphie/.ports` (`24320` when none was saved) and checks that Raphie answers there. A new app starts with that address, and when the field holds another one, for example an address that no longer answers, the sign-in card offers **Raphie is running on this Mac**: choose **Use it**. Run `raphie port` to see the address yourself.
    - Raphie on another machine: its `https://` tailnet address, for example `https://raphie.your-tailnet.ts.net`. See [the next section](#connect-to-raphie-on-another-machine).
 2. Choose **Connect**, then **Open approval page**.
 3. Sign in to Raphie in the browser, check that the code matches the one in the app, and approve the device.

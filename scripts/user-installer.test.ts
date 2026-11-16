@@ -14,6 +14,34 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+/** Two loopback ports that are free now, as the installer's flags. */
+function freePorts() {
+  const listeners = [0, 1].map(() =>
+    Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } }),
+  );
+  const [runtime, web] = listeners.map((listener) => listener.port);
+  for (const listener of listeners) listener.stop(true);
+  return {
+    runtime: runtime!,
+    web: web!,
+    flags: ["--port", String(web), "--runtime-port", String(runtime)],
+  };
+}
+
+/** Whether nothing listens on any of `ports` on loopback. */
+function allFree(...ports: number[]) {
+  return ports.every((port) => {
+    try {
+      Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } }).stop(
+        true,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 test("installer persists stable/nightly channels and waits for a safe stable promotion", async () => {
   const temp = await mkdtemp(join(tmpdir(), "raphie-user-install-"));
   const bin = join(temp, "bin"),
@@ -112,7 +140,13 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     const headlessHome = join(temp, "fresh-headless-home");
     await mkdir(headlessHome);
     const freshHeadless = run(
-      ["--headless", "--channel", "nightly", "--no-modify-path"],
+      [
+        "--headless",
+        "--channel",
+        "nightly",
+        "--no-modify-path",
+        ...freePorts().flags,
+      ],
       {
         HOME: headlessHome,
       },
@@ -136,21 +170,28 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     assert.notEqual(defaultInstall.exitCode, 0);
     assert.match(defaultInstall.stdout.toString(), /No stable release/);
     assert.equal(existsSync(marker), false);
-    const nightly = run(["--channel", "nightly"]);
+    // Fresh installations here take free ports, since this computer may
+    // run Raphie on the default ones; the defaults are checked below.
+    const main = freePorts();
+    const nightly = run(["--channel", "nightly", ...main.flags]);
     assert.equal(nightly.exitCode, 0, nightly.stderr.toString());
     const bashrc = await readFile(join(home, ".bashrc"), "utf8");
     assert.match(bashrc, /Raphie PATH/);
     assert.match(await readFile(join(home, ".profile"), "utf8"), /Raphie PATH/);
     assert.equal((await readFile(channel, "utf8")).trim(), "nightly");
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-10-1");
-    // A new installation gets the high default ports, and says so.
-    assert.equal(await readFile(ports, "utf8"), "runtime=24316\nweb=24320\n");
-    assert.match(nightly.stdout.toString(), /open http:\/\/127\.0\.0\.1:24320/);
+    // A new installation saves its ports, and says where to open it.
+    const saved = `runtime=${main.runtime}\nweb=${main.web}\n`;
+    assert.equal(await readFile(ports, "utf8"), saved);
+    assert.match(
+      nightly.stdout.toString(),
+      new RegExp(`open http://127\\.0\\.0\\.1:${main.web}`),
+    );
     // An existing one changes ports with raphie set-port, not the installer.
     const reinstallOnPort = run(["--port", "25020"]);
     assert.notEqual(reinstallOnPort.exitCode, 0);
     assert.match(reinstallOnPort.stderr.toString(), /raphie set-port/);
-    assert.equal(await readFile(ports, "utf8"), "runtime=24316\nweb=24320\n");
+    assert.equal(await readFile(ports, "utf8"), saved);
     await releases([
       { tag_name: "nightly-10-1", prerelease: true },
       { tag_name: "v0.0.4-nightly.20261103.20.1", prerelease: true },
@@ -167,7 +208,28 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       "v0.0.4-nightly.20261103.21.1",
     );
     // An update keeps the saved ports.
-    assert.equal(await readFile(ports, "utf8"), "runtime=24316\nweb=24320\n");
+    assert.equal(await readFile(ports, "utf8"), saved);
+    // Without flags, a new installation takes the high defaults when they
+    // are free, and stops with the rerun command when they are taken (as
+    // on a computer already running Raphie).
+    const defaultsHome = join(temp, "defaults-home");
+    await mkdir(defaultsHome);
+    const defaults = run(["--channel", "nightly"], { HOME: defaultsHome });
+    if (allFree(24316, 24320)) {
+      assert.equal(defaults.exitCode, 0, defaults.stderr.toString());
+      assert.equal(
+        await readFile(join(defaultsHome, ".local/lib/raphie/.ports"), "utf8"),
+        "runtime=24316\nweb=24320\n",
+      );
+      assert.match(defaults.stdout.toString(), /127\.0\.0\.1:24320/);
+    } else {
+      assert.notEqual(defaults.exitCode, 0);
+      assert.match(
+        defaults.stderr.toString(),
+        /Port 243(16|20) is in use by another program/,
+      );
+      assert.equal(existsSync(join(defaultsHome, ".local/lib/raphie")), false);
+    }
     await releases([{ tag_name: "nightly-10-1", prerelease: true }]);
     await writeFile(marker, "nightly-10-1\n");
     const sameVersion = run();
@@ -289,22 +351,28 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     );
     await symlink(join(legacyInstall, "raphie"), join(legacyBin, "raphie"));
     const migrate = run([], { HOME: legacyHome });
-    assert.equal(migrate.exitCode, 0, migrate.stderr.toString());
-    assert.equal(
-      (await readFile(join(legacyInstall, ".channel"), "utf8")).trim(),
-      "stable",
-    );
-    assert.equal(
-      (
-        await readFile(join(legacyInstall, ".raphie-user-install"), "utf8")
-      ).trim(),
-      "v0.0.4",
-    );
-    // An installation from before saved ports keeps the ports it had.
-    assert.equal(
-      await readFile(join(legacyInstall, ".ports"), "utf8"),
-      "runtime=4316\nweb=4320\n",
-    );
+    // It keeps the ports it had, 4316 and 4320, which a source checkout
+    // running on this computer may hold; then it waits for them.
+    if (allFree(4316, 4320)) {
+      assert.equal(migrate.exitCode, 0, migrate.stderr.toString());
+      assert.equal(
+        (await readFile(join(legacyInstall, ".channel"), "utf8")).trim(),
+        "stable",
+      );
+      assert.equal(
+        (
+          await readFile(join(legacyInstall, ".raphie-user-install"), "utf8")
+        ).trim(),
+        "v0.0.4",
+      );
+      assert.equal(
+        await readFile(join(legacyInstall, ".ports"), "utf8"),
+        "runtime=4316\nweb=4320\n",
+      );
+    } else {
+      assert.notEqual(migrate.exitCode, 0);
+      assert.match(migrate.stderr.toString(), /Port 43(16|20) is in use/);
+    }
     // Ports can be chosen for a new installation...
     const chosenHome = join(temp, "chosen-home");
     await mkdir(chosenHome);
@@ -327,7 +395,15 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     try {
       const takenHome = join(temp, "taken-home");
       await mkdir(takenHome);
-      const taken = run(["--port", String(busy.port)], { HOME: takenHome });
+      const taken = run(
+        [
+          "--port",
+          String(busy.port),
+          "--runtime-port",
+          String(freePorts().runtime),
+        ],
+        { HOME: takenHome },
+      );
       assert.notEqual(taken.exitCode, 0);
       assert.match(
         taken.stderr.toString(),
@@ -374,7 +450,9 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     await writeFile(join(bundle, "raphie"), "#!/bin/sh\nexit 1\n");
     assert.equal(archive().exitCode, 0);
     await checksum();
-    const unhealthy = run(["--channel", "nightly"], { HOME: failureHome });
+    const unhealthy = run(["--channel", "nightly", ...freePorts().flags], {
+      HOME: failureHome,
+    });
     assert.notEqual(unhealthy.exitCode, 0);
     assert.match(unhealthy.stderr.toString(), /did not become healthy/);
     const macHome = join(temp, "mac-home");
@@ -390,7 +468,9 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     await writeFile(join(bin, "launchctl"), "#!/bin/sh\nexit 0\n", {
       mode: 0o755,
     });
-    const mac = run(["--channel", "nightly"], { HOME: macHome });
+    const mac = run(["--channel", "nightly", ...freePorts().flags], {
+      HOME: macHome,
+    });
     assert.equal(mac.exitCode, 0, mac.stderr.toString());
     assert.match(
       await readFile(
