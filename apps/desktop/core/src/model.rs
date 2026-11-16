@@ -886,11 +886,17 @@ impl Model {
                 self.notice = None;
             }
             Event::SignedOut { notice } => {
-                // Keep the origin so the sign-in screen offers it again; drop
-                // everything that belonged to the signed-in host.
+                // Keep the origin so the sign-in screen offers it again, and
+                // what belongs to this app rather than the host: whether a
+                // newer release is out, and a Raphie found on this computer.
+                // Drop everything that belonged to the signed-in host.
                 let origin = self.origin.take();
+                let update = std::mem::take(&mut self.update);
+                let local_install = self.local_install.take();
                 *self = Model {
                     origin,
+                    update,
+                    local_install,
                     auth: AuthState::SignedOut { notice },
                     ..Model::default()
                 };

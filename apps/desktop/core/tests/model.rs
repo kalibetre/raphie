@@ -5,6 +5,7 @@ mod support;
 use raphie_core::contracts::{ApprovalStatus, Page, SessionObservation, SessionTurn, SignInStatus};
 use raphie_core::model::{AuthState, DecisionOutcome, Effect, Event, Model};
 use raphie_core::origin::Origin;
+use raphie_core::updates::UpdateStatus;
 use serde_json::json;
 use support::{observation_json, turn_json};
 
@@ -222,4 +223,18 @@ fn a_finished_sign_in_is_not_brought_back_by_a_late_poll() {
     assert!(model.apply(sign_in("waiting")).is_empty());
     let (_, current) = model.sign_in.as_ref().unwrap();
     assert_eq!(current.status, SignInStatus::Connected);
+}
+
+#[test]
+fn signing_out_keeps_what_belongs_to_the_app() {
+    let mut model = Model::new();
+    let local = Origin::parse("http://127.0.0.1:24320").unwrap();
+    model.apply(Event::UpdateChecked(Ok(None)));
+    model.apply(Event::LocalInstall(Some(local.clone())));
+    // A remembered address that no longer answers.
+    model.apply(Event::SignedOut {
+        notice: Some("Could not reach Raphie".into()),
+    });
+    assert_eq!(model.update, UpdateStatus::UpToDate);
+    assert_eq!(model.local_install, Some(local));
 }
