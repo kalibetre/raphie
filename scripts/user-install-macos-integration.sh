@@ -48,7 +48,11 @@ test -x "$HOME/.local/bin/raphie"
 "$HOME/.local/bin/raphie" channel stable
 ports=$(python3 -c 'import socket; s=[socket.socket(),socket.socket()]; [x.bind(("127.0.0.1",0)) for x in s]; print(*[x.getsockname()[1] for x in s])')
 read -r PORT RAPHIE_WEB_PORT <<< "$ports"
-export PORT RAPHIE_WEB_PORT DATA_DIRECTORY="$work/data" RAPHIE_WEB_ORIGIN="http://127.0.0.1:$RAPHIE_WEB_PORT" RAPHIE_RUNTIME_URL="http://127.0.0.1:$PORT"
+# A user installation runs on its saved ports; with no service loaded,
+# set-port only saves them for the next start.
+"$HOME/.local/bin/raphie" set-port "$RAPHIE_WEB_PORT" --runtime "$PORT"
+"$HOME/.local/bin/raphie" port | grep -q "127.0.0.1:$RAPHIE_WEB_PORT"
+export DATA_DIRECTORY="$work/data"
 "$HOME/.local/bin/raphie" start >"$work/service.log" 2>&1 &
 pid=$!
 for attempt in {1..30}; do

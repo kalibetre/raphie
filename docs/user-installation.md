@@ -44,7 +44,7 @@ With Raphie running, create the administrator in a second terminal:
 raphie auth setup
 ```
 
-Sign in at http://127.0.0.1:4320. Configure a model provider and a default model under your bot in Settings. For later checks, `raphie status` checks the local runtime; `raphie auth recover` resets the password and signs out all sessions.
+Sign in at http://127.0.0.1:24320, or at the address the installer printed if you chose another [port](#ports). Configure a model provider and a default model under your bot in Settings. For later checks, `raphie status` checks the local runtime; `raphie auth recover` resets the password and signs out all sessions.
 
 By default, Raphie stores provider credentials using the current user's OS credential store. On macOS, unlock the login Keychain and allow access if prompted. Linux desktop mode needs libsecret and an unlocked Secret Service provider in the user's D-Bus session. For unattended Linux hosts, use the [headless setup](#headless-linux). See [credential storage](provider-credential-storage.md) for backend details. The installer does not install system packages.
 
@@ -60,6 +60,25 @@ Omit `--channel nightly` for a stable installation. On an existing user installa
 
 The random master key lives in `~/.local/share/raphie-headless/master-key` (mode `0600`), in a private directory (mode `0700`) separate from Raphie data. The service selects it through `RAPHIE_CREDENTIAL_KEY_FILE`; only the path is in the environment. It starts without an unlock prompt and preserves the key across updates. Anyone who can read both the key and encrypted databases can decrypt credentials. Protect and back up the key separately from Raphie data. Losing it makes saved credentials unrecoverable; startup fails rather than replacing it. Restore the matching file with its original ownership and permissions before restarting. Provider, memory, MCP and channel credentials for every bot use this backend. No sudo is required for setup. The installer tries to enable user lingering so the service can start at boot and stay running after logout. Some hosts require administrator authorization for `loginctl enable-linger "$USER"`; if that attempt fails, the installer prints a warning and boot-time startup is not enabled.
 
+## Ports
+
+A new installation uses port **24320** for the web workspace and the desktop app, and **24316** for the runtime. Both listen on `127.0.0.1` only. They are high enough to stay clear of common development servers, and below 32768, where Linux and macOS hand out temporary ports. A source checkout keeps 4320 and 4316, so it can run beside an installation.
+
+If either port is taken, the installer stops before installing anything and prints the command to rerun with a free one:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --port 24420 --runtime-port 24416
+```
+
+The ports are saved in `~/.local/lib/raphie/.ports`, and updates keep them. An installation made before ports were saved keeps 4320 and 4316. To see or change them later:
+
+```sh
+raphie port
+raphie set-port 24420 --runtime 24416
+```
+
+`set-port` checks that the new ports are free, saves them, restarts the background service and waits for it to answer. If it doesn't, the old ports are put back. Without a running service, the new ports apply the next time Raphie starts. Afterwards, update anything that points at the old web port, such as `tailscale serve` or the desktop app. `--runtime` is optional; without it only the web port changes.
+
 ## Background service
 
 On Linux, if a systemd user manager is available, installation creates and starts `~/.config/systemd/user/raphie.service`. Manage it with `systemctl --user status raphie`, `systemctl --user restart raphie`, and `journalctl --user -u raphie -e`. User services may stop when you log out. Headless installation attempts to enable lingering; otherwise, ask your host administrator to enable it if the service must remain available after logout.
@@ -68,7 +87,7 @@ For the desktop credential-store backend, the user manager must have access to `
 
 On macOS, installation creates a per-user LaunchAgent at `~/Library/LaunchAgents/com.raphie.user.plist` when a GUI launchd session is available. Logs are under `~/Library/Logs/Raphie`. A login Keychain may need to be unlocked before the service can use provider credentials. If the installer disabled an unhealthy agent, re-enable it with `launchctl enable "gui/$(id -u)/com.raphie.user"`, then run `launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.raphie.user.plist"`. If launchd is unavailable, run `~/.local/bin/raphie start` in a terminal.
 
-Data defaults to `~/.local/share/raphie` on Linux (or `$XDG_DATA_HOME/raphie` when set to an absolute path) and `~/Library/Application Support/Raphie` on macOS. Browser access and the runtime bind to loopback. For remote use, run `ssh -L 4320:127.0.0.1:4320 you@your-server` on your computer and open `http://127.0.0.1:4320`, or configure a trusted HTTPS proxy and allowed origin; the runtime port must stay local. See [remote access](standalone-build.md#tailnet-access) for the concepts; its `sudo raphie` commands apply to the separate system installation, not this user installer.
+Data defaults to `~/.local/share/raphie` on Linux (or `$XDG_DATA_HOME/raphie` when set to an absolute path) and `~/Library/Application Support/Raphie` on macOS. Browser access and the runtime bind to loopback. For remote use, run `ssh -L 24320:127.0.0.1:24320 you@your-server` on your computer and open `http://127.0.0.1:24320` (use your installation's web port; `raphie port` shows it), or configure a trusted HTTPS proxy and allowed origin; the runtime port must stay local. See [remote access](standalone-build.md#tailnet-access) for the concepts; its `sudo raphie` commands apply to the separate system installation, not this user installer.
 
 ## Updates and recovery
 

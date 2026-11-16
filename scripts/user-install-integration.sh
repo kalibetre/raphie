@@ -31,7 +31,7 @@ runuser -u fixture -- dbus-run-session -- sh -eu -c '
   pid=$!
   trap '\''kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true'\'' EXIT HUP INT TERM
   count=0
-  until /usr/bin/curl -fsS http://127.0.0.1:4320/_raphie/health >/dev/null 2>&1; do
+  until /usr/bin/curl -fsS http://127.0.0.1:24320/_raphie/health >/dev/null 2>&1; do
     if ! kill -0 "$pid" 2>/dev/null || [ "$count" -ge 20 ]; then cat $HOME/service.log; exit 1; fi
     count=$((count+1)); sleep 1
   done

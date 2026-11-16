@@ -4,17 +4,26 @@ set -euo pipefail
 main() {
 
 requested_channel=
+requested_web_port=
+requested_runtime_port=
 headless=false
 modify_path=true
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --headless) headless=true; shift ;;
     --no-modify-path) modify_path=false; shift ;;
-    --channel) [ "$#" -ge 2 ] || { echo 'Usage: bash install.sh [--channel stable|nightly] [--headless] [--no-modify-path]' >&2; exit 1; }; [ -z "$requested_channel" ] || { echo 'Specify one channel.' >&2; exit 1; }; requested_channel=$2; shift 2 ;;
-    *) echo 'Usage: bash install.sh [--channel stable|nightly] [--headless] [--no-modify-path]' >&2; exit 1 ;;
+    --port) [ "$#" -ge 2 ] || { echo "Usage: bash install.sh [--channel stable|nightly] [--port WEB_PORT] [--runtime-port PORT] [--headless] [--no-modify-path]" >&2; exit 1; }; requested_web_port=$2; shift 2 ;;
+    --runtime-port) [ "$#" -ge 2 ] || { echo "Usage: bash install.sh [--channel stable|nightly] [--port WEB_PORT] [--runtime-port PORT] [--headless] [--no-modify-path]" >&2; exit 1; }; requested_runtime_port=$2; shift 2 ;;
+    --channel) [ "$#" -ge 2 ] || { echo 'Usage: bash install.sh [--channel stable|nightly] [--port WEB_PORT] [--runtime-port PORT] [--headless] [--no-modify-path]' >&2; exit 1; }; [ -z "$requested_channel" ] || { echo 'Specify one channel.' >&2; exit 1; }; requested_channel=$2; shift 2 ;;
+    *) echo 'Usage: bash install.sh [--channel stable|nightly] [--port WEB_PORT] [--runtime-port PORT] [--headless] [--no-modify-path]' >&2; exit 1 ;;
   esac
 done
 case "$requested_channel" in ''|stable|nightly) ;; *) echo 'Choose either stable or nightly.' >&2; exit 1;; esac
+for value in "$requested_web_port" "$requested_runtime_port"; do
+  case "$value" in '') ;; *[!0-9]*) echo 'Ports must be numbers from 1024 to 65535.' >&2; exit 1 ;;
+    *) if [ "${#value}" -gt 5 ] || [ "$value" -lt 1024 ] || [ "$value" -gt 65535 ]; then echo 'Ports must be numbers from 1024 to 65535.' >&2; exit 1; fi ;;
+  esac
+done
 configure_path() {
   if [ "$modify_path" = true ]; then
     python3 - "$HOME" "${SHELL:-}" "${ZDOTDIR:-$HOME}" <<'PY_PATH'
@@ -138,6 +147,24 @@ if [ -n "$requested_channel" ]; then
     echo "Release channel set to $channel."
   fi
 fi
+# New installations get high, uncommon ports; an existing one keeps its own.
+# Installations from before ports were saved used 4316 and 4320.
+if [ "$updating" = true ]; then
+  if [ -n "$requested_web_port$requested_runtime_port" ]; then
+    echo 'Raphie is already installed. Change its ports with: raphie set-port WEB_PORT [--runtime PORT]' >&2; exit 1
+  fi
+  if [ -f "$install_dir/.ports" ]; then
+    runtime_port=$(sed -n 's/^runtime=//p' "$install_dir/.ports")
+    web_port=$(sed -n 's/^web=//p' "$install_dir/.ports")
+  else
+    runtime_port=4316; web_port=4320
+  fi
+else
+  runtime_port=${requested_runtime_port:-24316}
+  web_port=${requested_web_port:-24320}
+fi
+case "$runtime_port:$web_port" in *[!0-9:]*|:*|*:) echo "Saved ports in $install_dir/.ports are not valid. Fix them with raphie set-port." >&2; exit 1 ;; esac
+if [ "$runtime_port" = "$web_port" ]; then echo 'The web and runtime ports must differ.' >&2; exit 1; fi
 api='https://api.github.com/repos/kalibetre/raphie/releases?per_page=100'
 if [ "$channel" = stable ]; then
   # The latest stable may be older than 100 nightly releases.
@@ -267,7 +294,7 @@ if [ -n "$current_version" ] && [ "$current_version" = "$version" ]; then
     systemctl --user restart raphie.service
     ready=false
     for attempt in {1..15}; do
-      if PORT=4316 RAPHIE_WEB_PORT=4320 "$install_dir/raphie" health >/dev/null 2>&1; then echo "User service is healthy."; ready=true; break; fi
+      if "$install_dir/raphie" health >/dev/null 2>&1; then echo "User service is healthy."; ready=true; break; fi
       sleep 1
     done
     if [ "$ready" != true ]; then
@@ -334,16 +361,20 @@ if [ "$updating" = true ]; then
   fi
 fi
 # A foreground or another installation may still hold either port. Never copy a live database.
-if ! python3 - <<'PY_PORT'
+if ! python3 - "$runtime_port" "$web_port" "$updating" <<'PY_PORT'
 import socket, sys
-sockets = []
-try:
-    for port in (4316, 4320):
-        sock = socket.socket(); sockets.append(sock); sock.bind(('127.0.0.1', port))
-except OSError:
-    sys.exit('Raphie ports are in use. Stop the other process and retry; no data was changed.')
-finally:
-    for sock in sockets: sock.close()
+runtime, web, updating = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3] == 'true'
+for port in (runtime, web):
+    sock = socket.socket()
+    try:
+        sock.bind(('127.0.0.1', port))
+    except OSError:
+        if updating:
+            sys.exit(f'Port {port} is in use. Stop the other Raphie or process holding it and retry; no data was changed.')
+        flag = '--runtime-port' if port == runtime else '--port'
+        sys.exit(f'Port {port} is in use by another program; nothing was installed. Run the installer again with a free port, for example:\n  curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- {flag} {port + 100}')
+    finally:
+        sock.close()
 PY_PORT
 then exit 1; fi
 if [ "$updating" = true ] && [ -d "$data_dir" ]; then
@@ -358,6 +389,7 @@ cp "$work/bundle/raphie" "$work/bundle/raphie-runtime" "$work/bundle/raphie-web"
 printf '%s\n' "$version" > "$stage/.raphie-user-install"
 printf '%s\n' "$data_dir" > "$stage/.data-directory"
 printf '%s\n' "$channel" > "$stage/.channel"
+printf 'runtime=%s\nweb=%s\n' "$runtime_port" "$web_port" > "$stage/.ports"
 if [ "$updating" = true ]; then
   old=$(mktemp -d "$HOME/.local/lib/.raphie-previous.XXXXXXXX")
   rmdir "$old"
@@ -369,7 +401,7 @@ else
   mkdir -m 700 "$install_dir" || { echo 'Installation directory already exists.' >&2; exit 1; }
   claimed=true
   cp "$stage/"* "$install_dir/"
-  cp "$stage/.raphie-user-install" "$stage/.data-directory" "$stage/.channel" "$install_dir/"
+  cp "$stage/.raphie-user-install" "$stage/.data-directory" "$stage/.channel" "$stage/.ports" "$install_dir/"
   if ! ln -s "$install_dir/raphie" "$bin_dir/raphie"; then
     echo "Could not create $bin_dir/raphie; installation was not completed." >&2; exit 1
   fi
@@ -392,7 +424,8 @@ def quote(value): return value.replace('%', '%%').replace('$', '$$').replace('\\
 exe = quote(sys.argv[1])
 data = quote(sys.argv[3])
 with open(sys.argv[2], 'x', encoding='utf-8') as unit:
-    unit.write('[Unit]\nDescription=Raphie assistant\n\n[Service]\nEnvironment=PORT=4316 RAPHIE_WEB_PORT=4320 RAPHIE_RUNTIME_URL=http://127.0.0.1:4316 RAPHIE_WEB_ORIGIN=http://127.0.0.1:4320\nExecStart="' + exe + '" start --data-dir "' + data + '"\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n')
+    # Ports are read from the installation's .ports by raphie start.
+    unit.write('[Unit]\nDescription=Raphie assistant\n\n[Service]\nExecStart="' + exe + '" start --data-dir "' + data + '"\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n')
 PY_SERVICE
       service_attempted=true
       if [ "$headless" = true ]; then configure_headless; fi
@@ -409,7 +442,7 @@ PY_SERVICE
       mkdir -p "$agent_dir" "$HOME/Library/Logs/Raphie"
       python3 - "$install_dir/raphie" "$agent" "$HOME/Library/Logs/Raphie" "$data_dir" <<'PY_SERVICE'
 import os, plistlib, sys
-payload = {'Label': 'com.raphie.user', 'ProgramArguments': [sys.argv[1], 'start', '--data-dir', sys.argv[4]], 'EnvironmentVariables': {'PORT': '4316', 'RAPHIE_WEB_PORT': '4320', 'RAPHIE_RUNTIME_URL': 'http://127.0.0.1:4316', 'RAPHIE_WEB_ORIGIN': 'http://127.0.0.1:4320'}, 'RunAtLoad': True, 'KeepAlive': {'SuccessfulExit': False}, 'StandardOutPath': os.path.join(sys.argv[3], 'service.log'), 'StandardErrorPath': os.path.join(sys.argv[3], 'service-error.log')}
+payload = {'Label': 'com.raphie.user', 'ProgramArguments': [sys.argv[1], 'start', '--data-dir', sys.argv[4]], 'RunAtLoad': True, 'KeepAlive': {'SuccessfulExit': False}, 'StandardOutPath': os.path.join(sys.argv[3], 'service.log'), 'StandardErrorPath': os.path.join(sys.argv[3], 'service-error.log')}
 with open(sys.argv[2], 'xb') as out: plistlib.dump(payload, out)
 PY_SERVICE
       service_attempted=true
@@ -423,7 +456,7 @@ service_failed=false
 if [ "$service_started" = true ]; then
   ready=false
   for attempt in {1..15}; do
-    if PORT=4316 RAPHIE_WEB_PORT=4320 "$install_dir/raphie" health >/dev/null 2>&1; then ready=true; break; fi
+    if "$install_dir/raphie" health >/dev/null 2>&1; then ready=true; break; fi
     sleep 1
   done
   if [ "$ready" = true ]; then
@@ -442,7 +475,8 @@ elif [ "$service_attempted" = true ]; then
 else
   printf 'User service was not started. Run %s start in a terminal.\n' "$bin_dir/raphie"
 fi
-printf 'Run "%s" auth setup --data-dir "%s", then open http://127.0.0.1:4320.\n' "$bin_dir/raphie" "$data_dir"
+printf 'Run "%s" auth setup --data-dir "%s", then open http://127.0.0.1:%s.\n' "$bin_dir/raphie" "$data_dir" "$web_port"
+printf 'Raphie listens on port %s (web) and %s (runtime). Change them with: raphie set-port WEB_PORT [--runtime PORT]\n' "$web_port" "$runtime_port"
 printf 'Desktop mode needs an available OS credential store; headless mode needs its preserved master-key file.\n'
 [ "$service_failed" = false ] || return 1
 }
