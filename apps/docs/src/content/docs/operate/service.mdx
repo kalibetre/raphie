@@ -53,9 +53,9 @@ A source checkout and a user install with the default ports can run side by side
 A systemd user unit at `~/.config/systemd/user/raphie.service`, enabled at install when a user manager is available.
 
 ```sh
+raphie restart                         # restart, or start a stopped service
+raphie stop
 systemctl --user status raphie
-systemctl --user restart raphie
-systemctl --user stop raphie
 systemctl --user enable --now raphie   # after fixing a failed start
 ```
 
@@ -69,17 +69,12 @@ The desktop credential store needs the user manager to see `DBUS_SESSION_BUS_ADD
 A LaunchAgent at `~/Library/LaunchAgents/com.raphie.user.plist`, loaded at login and restarted if it exits with an error.
 
 ```sh
-launchctl print gui/$(id -u)/com.raphie.user              # status
-launchctl kickstart -k gui/$(id -u)/com.raphie.user       # restart
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.raphie.user.plist   # stop
+raphie restart                                  # restart, or start a stopped agent
+raphie stop                                     # until your next login
+launchctl print gui/$(id -u)/com.raphie.user    # status
 ```
 
-If the installer stopped and disabled an unhealthy agent, fix the cause, then:
-
-```sh
-launchctl enable gui/$(id -u)/com.raphie.user
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.raphie.user.plist
-```
+If the installer stopped and disabled an unhealthy agent, fix the cause, then run `raphie restart`.
 
 Unlock your login Keychain before the service starts, or it cannot read provider credentials.
 
@@ -122,7 +117,12 @@ For what bots did, rather than whether the service is up, use Activity and Diagn
 <Tabs syncKey="service">
 <TabItem label="User install, Linux">
 
-Rerun the installer:
+```sh
+raphie update                     # newest release on your channel
+raphie update --channel nightly   # switch channel and update
+```
+
+`raphie update` downloads and runs the installer below, which you can also run yourself:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
@@ -131,7 +131,12 @@ curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/insta
 </TabItem>
 <TabItem label="User install, macOS">
 
-Rerun the installer:
+```sh
+raphie update                     # newest release on your channel
+raphie update --channel nightly   # switch channel and update
+```
+
+`raphie update` downloads and runs the installer below, which you can also run yourself:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
@@ -167,7 +172,7 @@ The user install follows a **release channel**:
 | `stable`  | Stable releases (`vX.Y.Z`). The default.                                                                                          |
 | `nightly` | Pre-releases built from `main` (`vX.Y.Z-nightly.*`) when a maintainer runs the release workflow, after the same checks as stable. |
 
-Change it with `raphie channel nightly` (or `stable`), then rerun the installer; or pass `--channel` to the installer to switch and update in one step. When you rerun it, the installer:
+Change it with `raphie channel nightly` (or `stable`), then run `raphie update`; or switch and update in one step with `raphie update --channel nightly`. On each update, the installer:
 
 1. finds the newest release on your channel that has your platform's archive, downloads it and checks it against that release's `SHA256SUMS`;
 2. refuses to move backwards: if that release does not contain your installed version, nothing changes until one does;

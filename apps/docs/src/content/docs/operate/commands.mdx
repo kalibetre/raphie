@@ -17,17 +17,13 @@ Run `raphie --help` for the installed version's summary, and `sudo raphie <comma
 
 ## Lifecycle
 
-| Command        | Installs     | What it does                                                                                                                                                                      |
-| -------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `raphie start` | User, source | Start the runtime and web host in the foreground. `Ctrl+C` stops both. Use it when no background service runs. From source it runs `bun run start`, so run `bun run build` first. |
+| Command          | Installs     | What it does                                                                                                                                                                      |
+| ---------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raphie start`   | User, source | Start the runtime and web host in the foreground. `Ctrl+C` stops both. Use it when no background service runs. From source it runs `bun run start`, so run `bun run build` first. |
+| `raphie stop`    | User         | Stop the background service and wait until its web and runtime ports are free. It starts again at your next login, or with `raphie restart`.                                      |
+| `raphie restart` | User         | Restart the background service, or start it if it was stopped, and wait up to 15 seconds for Raphie to answer.                                                                    |
 
-The background services are managed with the OS tools, not the CLI:
-
-| Install             | Start, stop, restart                                            |
-| ------------------- | --------------------------------------------------------------- |
-| User install, Linux | `systemctl --user start\|stop\|restart raphie`                  |
-| User install, macOS | `launchctl kickstart -k gui/$(id -u)/com.raphie.user` (restart) |
-| System service      | `sudo systemctl start\|stop\|restart raphie`                    |
+The system service is managed with `sudo systemctl start|stop|restart raphie`.
 
 See [service](/operate/service/) for logs and the full set of service commands.
 
@@ -53,7 +49,9 @@ Both need an interactive terminal and must run as the account that owns the data
 | Command                                                                  | Installs | What it does                                                                                                                     |
 | ------------------------------------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `raphie channel`                                                         | User     | Show the release channel.                                                                                                        |
-| `raphie channel stable\|nightly`                                         | User     | Change the channel. Takes effect the next time you run the installer.                                                            |
+| `raphie channel stable\|nightly`                                         | User     | Change the channel. Takes effect at the next update.                                                                             |
+| `raphie update`                                                          | User     | Update to the newest release on your channel, by running the installer from `main`.                                              |
+| `raphie update --channel stable\|nightly`                                | User     | Switch channel and update in one step.                                                                                           |
 | `sudo raphie update`                                                     | System   | Update to the latest stable release. Nightly releases are not accepted.                                                          |
 | `sudo raphie update vX.Y.Z`                                              | System   | Update to an explicit version, including `vX.Y.Z-alpha.N`.                                                                       |
 | `sudo raphie update /path/to/bundle`                                     | System   | Update from a trusted local bundle directory.                                                                                    |
@@ -63,7 +61,7 @@ Both need an interactive terminal and must run as the account that owns the data
 | `sudo raphie uninstall`                                                  | System   | Remove the service and programs; keep data, configuration, keyrings, backups and the service user. Asks you to type `UNINSTALL`. |
 | `sudo raphie uninstall --purge`                                          | System   | Also delete data, configuration, keyrings, backups and the service user. Asks you to type `PURGE`.                               |
 
-The user install updates by rerunning the installer; see [updates](/operate/service/#updates-and-release-channels). `sudo raphie update` does not compare versions, so check the target before updating: running older binaries against newer data is unsafe. It checks the download against the release's `SHA256SUMS` but not its attestation; see [check a release by hand](/start/installation/#check-a-release-by-hand). `sudo raphie restore` needs the backup's matching release still under `/opt/raphie/releases/`.
+`raphie update` runs the same installer as the install command, so an update checks the release, backs up the data and restarts the service as described in [updates](/operate/service/#updates-and-release-channels). `sudo raphie update` does not compare versions, so check the target before updating: running older binaries against newer data is unsafe. It checks the download against the release's `SHA256SUMS` but not its attestation; see [check a release by hand](/start/installation/#check-a-release-by-hand). `sudo raphie restore` needs the backup's matching release still under `/opt/raphie/releases/`.
 
 ## Ports and origins
 

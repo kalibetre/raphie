@@ -61,10 +61,20 @@ test("a user installation runs on its saved ports, and set-port changes them and
       await writeFile(join(stubs, name), stub);
       await chmod(join(stubs, name), 0o755);
     }
+    // The service files the installer writes, in a home of the test's own.
+    const home = join(root, "home");
+    await mkdir(join(home, "Library/LaunchAgents"), { recursive: true });
+    await writeFile(
+      join(home, "Library/LaunchAgents/com.raphie.user.plist"),
+      "<plist/>\n",
+    );
+    await mkdir(join(home, ".config/systemd/user"), { recursive: true });
+    await writeFile(join(home, ".config/systemd/user/raphie.service"), "");
     const raphie = (args: string[], service: "on" | "off" = "off") =>
       Bun.spawn([binary, ...args], {
         env: {
           ...process.env,
+          HOME: home,
           PATH: `${stubs}:${process.env.PATH}`,
           TEST_DIR: root,
           SERVICE: service,
