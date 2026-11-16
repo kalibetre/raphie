@@ -5,7 +5,9 @@ sidebar:
   order: 5
 ---
 
-import { Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { Steps } from "@astrojs/starlight/components";
+
+import { Sequence } from "~/components/diagram";
 
 Raphie has one administrator, created from a terminal on the machine that runs it. Every page, API call, download and event stream in the web workspace requires that administrator to be signed in. Creating the account and resetting its password only work locally; neither is reachable over HTTP.
 
@@ -21,18 +23,17 @@ Until an administrator exists, the web host is **locked**. The sign-in page expl
 
 2. On the same machine, run the setup command for your install:
 
-   <Tabs>
-     <TabItem label="User install">```sh raphie auth setup ```</TabItem>
-     <TabItem label="Linux system service">
-       ```sh sudo raphie auth setup ``` The command runs as the `raphie` service
-       user, so the files it creates stay readable by the service.
-     </TabItem>
-     <TabItem label="From source">```sh bun run raphie auth setup ```</TabItem>
-   </Tabs>
+   ```sh
+   raphie auth setup              # user install
+   sudo raphie auth setup         # Linux system service
+   bun run raphie auth setup      # source checkout
+   ```
+
+   On the system service, the command runs as the `raphie` service user, so the files it creates stay readable by the service.
 
 3. Enter an email, then a password of at least 12 characters, twice. The password is never echoed, logged or accepted as an argument or environment variable.
 
-4. Open your Raphie address (by default `http://127.0.0.1:4320`) and sign in.
+4. Open your Raphie address and sign in. By default that is `http://127.0.0.1:24320` for a user install, `http://127.0.0.1:41837` for the system service and `http://127.0.0.1:4320` for a source checkout; `raphie port` prints yours.
 
 </Steps>
 
@@ -71,24 +72,24 @@ Register passkeys in **Settings → Account**. Password sign-in keeps working al
 
 ## Connect a native device
 
-The [desktop client](/guides/desktop/) signs in with a device code: the device shows a short code and a link, and you approve it in a browser where you are already signed in.
+The [desktop app](/guides/desktop/) signs in with a device code: the device shows a short code and a link, and you approve it in a browser where you are already signed in.
 
-```mermaid
-sequenceDiagram
-  participant D as Device
-  participant W as Web host
-  participant B as Your browser
-  D->>W: Request a device code
-  W-->>D: User code and approval link
-  D->>D: Show code and link
-  B->>W: Open link (signed in)
-  W-->>B: Approval page with the code
-  B->>W: Approve or deny
-  loop Every 5 seconds or more
-    D->>W: Poll for a token
-  end
-  W-->>D: Device session token (30 days)
-```
+<Sequence
+  actors={["Device", "Web host", "Your browser"]}
+  steps={[
+    ["Device", "Web host", "Request a device code"],
+    ["Web host", "Device", "User code and approval link", "reply"],
+    ["Device", "Device", "Show code and link"],
+    ["Your browser", "Web host", "Open link (signed in)"],
+    ["Web host", "Your browser", "Approval page with the code", "reply"],
+    ["Your browser", "Web host", "Approve or deny"],
+    {
+      group: "Every 5 seconds or more",
+      steps: [["Device", "Web host", "Poll for a token"]],
+    },
+    ["Web host", "Device", "Device session token (30 days)", "reply"],
+  ]}
+/>
 
 <Steps>
 
@@ -112,7 +113,7 @@ An approved device gets full access to the web workspace. A device's name is a c
 | Where it is listed       | **Settings → Account**, by name; tokens are never shown  |
 | Disconnecting            | Takes effect on the next request and closes open streams |
 
-The desktop client keeps its token in the operating system's credential store.
+The desktop app keeps its token in the operating system's credential store.
 
 ## Sessions
 
@@ -159,6 +160,6 @@ Both live in the data directory, so your normal [backups](/operate/backup-and-re
 ## Limits
 
 - **One administrator.** Multiple users are not supported.
-- **The runtime port is not authenticated.** Sign-in protects the web host. The runtime on port `4316` trusts any local process that reaches it; see [security](/architecture/security/).
+- **The runtime port is not authenticated.** Sign-in protects the web host. The runtime port (`24316` on a user install, `4316` otherwise by default) trusts any local process that reaches it; see [security](/architecture/security/).
 - **Duplicate-guess throttling only.** Each email and password pair gets five attempts per minute; other authentication calls share a limit of 60 per minute. This does not stop distributed or varied-password guessing. Limit who can reach Raphie with tailnet access rules.
 - **Forwarded headers are ignored.** Raphie never trusts client-address headers. The web host listens on loopback only; reach it remotely through a TLS proxy that preserves the configured host. See [remote access](/operate/remote-access/).

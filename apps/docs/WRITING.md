@@ -52,11 +52,8 @@ Then:
    - **Tabs** (`<Tabs>`/`<TabItem>`) for alternatives such as macOS vs Linux.
    - **Asides** (`:::note`, `:::tip`, `:::caution`, `:::danger`) for the one
      thing a reader must not miss; at most two or three per page.
-   - **Mermaid** diagrams (a fenced `mermaid` block) whenever a flow, sequence,
-     state machine or topology is being described. Keep them small (under
-     about 12 nodes); split big ones. Diagrams scale down to the content
-     width, so prefer `flowchart TB` when a left-to-right chart would be more
-     than four nodes wide.
+   - **Diagrams** (see below) whenever a flow, sequence, state change or
+     topology is being described.
 4. End with a short "Related" list of links only when it helps.
 
 Import components at the top of MDX files:
@@ -76,20 +73,65 @@ import {
 
 ## Diagrams
 
-Use Mermaid only; no images or standalone HTML. Diagrams are recoloured by the
-site theme, so do not set colours or `%%{init}%%` themes in them. Two optional
-node classes are available:
+Diagrams are HTML components, not images or Mermaid, so their text stays at
+reading size, they reflow on phones and they follow the light and dark theme.
+Import them from `~/components/diagram`:
 
-```mermaid
-flowchart LR
-  owner([Owner]) --> runtime[Runtime]
-  runtime --> model[(Model provider)]
-  class runtime accent
-  class owner attention
+```mdx
+import { Arrow, Box, Flow, Row, Sequence } from "~/components/diagram";
 ```
 
-`accent` marks the thing the diagram is about; `attention` marks where the
-owner must act. Use `subgraph` for boundaries (a process, a machine, a bot).
+**`Flow`** draws layers top to bottom. A `Row` holds boxes side by side (they
+wrap on narrow screens); give it a `label` to draw a boundary such as a
+process, a machine or a bot, and `accent` to highlight it. An `Arrow` between
+rows connects them, with an optional `label` for what crosses. `Arrow right`
+sits between boxes inside a row.
+
+```mdx
+<Flow>
+  <Box title="You" tone="person" />
+  <Arrow label="HTTPS" />
+  <Row label="Your machine" accent>
+    <Box title="Web host">sign-in · UI</Box>
+    <Arrow right label="/api" />
+    <Box title="Runtime" tone="accent">
+      sessions · turns
+    </Box>
+  </Row>
+  <Arrow />
+  <Box title="Data directory" tone="store" />
+</Flow>
+```
+
+`Box` takes a `title` and an optional line of detail as its content. Tones:
+`accent` (the subject of the diagram), `attention` (where the owner acts),
+`store` (persistent data), `person` (a human) and `muted` (something outside
+Raphie). `Arrow` also takes `dashed` (optional, asynchronous or a reply) and
+`both`.
+
+**`Sequence`** draws messages between actors over time. Each step is an
+array `[from, to, label]`, with `"reply"` as a fourth item for a dashed reply.
+A step from an actor to itself is something that actor does alone.
+`{ note: "..." }` spans every actor; `{ group: "...", steps: [...] }` frames a
+loop or a condition and can nest once.
+
+```mdx
+<Sequence
+  actors={["Owner", "Runtime", "Model"]}
+  steps={[
+    ["Owner", "Runtime", "Send a message"],
+    ["Runtime", "Runtime", "Admit the turn"],
+    ["Runtime", "Owner", "Receipt", "reply"],
+    {
+      group: "Until no tool call",
+      steps: [["Runtime", "Model", "Prompt and tools"]],
+    },
+  ]}
+/>
+```
+
+Keep a diagram to what one glance can hold: about ten boxes, or five actors
+and a dozen steps. Split bigger ones. Both take an optional `caption`.
 
 ## Links
 

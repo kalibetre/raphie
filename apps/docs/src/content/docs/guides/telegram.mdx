@@ -7,6 +7,8 @@ sidebar:
 
 import { Steps } from "@astrojs/starlight/components";
 
+import { Sequence } from "~/components/diagram";
+
 You can reach a bot through your own Telegram bot, in a private chat or in a group where you mention it. Raphie long-polls Telegram, so nothing on your machine needs to be reachable from the internet.
 
 Only Telegram accounts you pair with a one-time code can talk to the bot. Everyone else gets one short refusal.
@@ -66,24 +68,22 @@ A group session is separate, but the bot's memory and tools are shared across al
 
 ## What happens to a message
 
-```mermaid
-sequenceDiagram
-  actor O as Owner
-  participant T as Telegram
-  participant R as Raphie
-  participant M as Model
-  R->>T: Long-poll for updates
-  T-->>R: Message from verified owner
-  R->>R: Bind chat to session, admit turn
-  R->>M: Run the turn
-  M-->>R: Tool call proposed
-  R->>T: Approval prompt with exact arguments
-  O->>T: Approve once
-  T-->>R: Button press
-  R->>R: Run the tool, finish the turn
-  R->>R: Save reply as delivery plan
-  R->>T: Send reply in chunks
-```
+<Sequence
+  actors={["Owner", "Telegram", "Raphie", "Model"]}
+  steps={[
+    ["Raphie", "Telegram", "Long-poll for updates"],
+    ["Telegram", "Raphie", "Message from verified owner", "reply"],
+    ["Raphie", "Raphie", "Bind chat to session, admit turn"],
+    ["Raphie", "Model", "Run the turn"],
+    ["Model", "Raphie", "Tool call proposed", "reply"],
+    ["Raphie", "Telegram", "Approval prompt with exact arguments"],
+    ["Owner", "Telegram", "Approve once"],
+    ["Telegram", "Raphie", "Button press", "reply"],
+    ["Raphie", "Raphie", "Run the tool, finish the turn"],
+    ["Raphie", "Raphie", "Save reply as delivery plan"],
+    ["Raphie", "Telegram", "Send reply in chunks"],
+  ]}
+/>
 
 Every update is handled once, in order. Raphie saves its polling position after each update, and duplicates after a crash are rejected. The reply destination is fixed when the turn starts, so later settings changes cannot redirect it.
 

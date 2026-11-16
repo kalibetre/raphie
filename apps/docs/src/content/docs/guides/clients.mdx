@@ -1,11 +1,11 @@
 ---
 title: Clients compared
-description: Which of the web workspace, the desktop client and Telegram can do what, and why managing access stays in the browser.
+description: Which of the web workspace, the desktop app and Telegram can do what, and why managing access stays in the browser.
 sidebar:
   order: 10
 ---
 
-The web workspace can do everything. The desktop client can do almost everything natively, and hands the few access-management steps to your browser. Telegram is for talking to a bot on the go: text conversations and approvals, with setup done elsewhere.
+The web workspace can do everything. The [desktop app](/guides/desktop/) for Apple Silicon Macs, installed from each release's disk image, can do almost everything natively, and hands the few access-management steps to your browser. Telegram is for talking to a bot on the go: text conversations and approvals, with setup done elsewhere.
 
 All of them reach the same runtime as the same owner, so a session, approval or memory looks the same whichever you use.
 
@@ -62,12 +62,12 @@ Discord behaves like Telegram here: text conversations and approvals, configured
 
 Anything that grants or removes access to Raphie (signing in with a password or passkey, approving a device, listing or disconnecting devices) answers only to a signed-in browser. The web host refuses those requests from a device token outright, rather than leaving it to each client to hide the buttons.
 
-That way a lost or stolen laptop with the desktop client cannot lock you out, disconnect your other devices, or approve a new one. Disconnect it from the browser and its token stops working.
+That way a lost or stolen laptop with the desktop app cannot lock you out, disconnect your other devices, or approve a new one. Disconnect it from the browser and its token stops working.
 
 Everything else is safe to offer natively: an approved device already has your full authority over conversations and bot settings, so a native page adds no new access.
 
 ## Related
 
-- [Desktop client](/guides/desktop/)
+- [Desktop app](/guides/desktop/)
 - [Telegram](/guides/telegram/)
 - [Remote access](/operate/remote-access/)

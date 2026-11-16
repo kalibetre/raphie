@@ -5,28 +5,32 @@ sidebar:
   order: 2
 ---
 
+import { Arrow, Box, Flow, Row, Sequence } from "~/components/diagram";
+
 Every change in Raphie commits through Pi Durable, a transactional agent harness over SQLite. A turn has two halves: **admission** (one synchronous transaction that returns a receipt) and **execution** (a durable task that runs the agent loop). Admission is not completion, and approval is not proof that an action ran.
 
 ## Durable execution
 
 Raphie has no job queue or state-machine runner of its own. Each bot runtime is a thin set of services over one Pi Durable harness, which stores everything in that bot's `gateway.sqlite`.
 
-```mermaid
-flowchart TB
-  subgraph bot [Bot runtime]
-    services["Chat · Approvals · Delivery<br/>Observations · Queries · Jobs · MCP"]
-  end
-  subgraph pi [Pi Durable harness]
-    conv["Conversations<br/>model · instructions · inbox"]
-    docs["Documents<br/>typed JSON, many per commit"]
-    tasks["Tasks<br/>phases · checkpoints · sleep"]
-    tools["Tool registry<br/>replay safe or unsafe"]
-  end
-  db[("gateway.sqlite<br/>one writer · WAL")]
-  services -->|"commit(tx)"| pi
-  pi --> db
-  class pi accent
-```
+<Flow>
+  <Row label="Bot runtime">
+    <Box title="Services">
+      Chat · Approvals · Delivery · Observations · Queries · Jobs · MCP
+    </Box>
+  </Row>
+  <Arrow label="commit(tx)" />
+  <Row label="Pi Durable harness" accent>
+    <Box title="Conversations">model · instructions · inbox</Box>
+    <Box title="Documents">typed JSON, many per commit</Box>
+    <Box title="Tasks">phases · checkpoints · sleep</Box>
+    <Box title="Tool registry">replay safe or unsafe</Box>
+  </Row>
+  <Arrow />
+  <Box title="gateway.sqlite" tone="store">
+    one writer · WAL
+  </Box>
+</Flow>
 
 | Primitive     | What Raphie relies on                                                                                                                                                                                                               |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,34 +57,37 @@ A domain policy, such as "expiry wins over a late decision", is applied inside t
 
 ## The turn lifecycle
 
-```mermaid
-sequenceDiagram
-  participant C as Client
-  participant R as Runtime
-  participant T as chat-reply task
-  participant M as Model
-  participant G as Tool gate
-  C->>R: POST /api/sessions/messages
-  R->>R: one commit: dedupe, turn, task
-  R-->>C: receipt (id, sessionId)
-  Note over C,R: Admission ends here. Execution is asynchronous.
-  T->>M: instructions, history, tools
-  loop until the model makes no tool call
-    M-->>T: tool call
-    T->>G: execute(args)
-    alt tool needs owner consent
-      G-->>C: approval card (SSE)
-      C->>R: POST /api/tool-approvals/:id
-      R->>G: approved
-    end
-    G->>G: claim, perform effect, record result
-    G-->>T: tool result
-    T->>M: continue
-  end
-  M-->>T: final text
-  T->>R: settle: answer, activity, delivery
-  R-->>C: updated observation (SSE)
-```
+<Sequence
+  actors={["Client", "Runtime", "chat-reply task", "Model", "Tool gate"]}
+  steps={[
+    ["Client", "Runtime", "POST /api/sessions/messages"],
+    ["Runtime", "Runtime", "One commit: dedupe, turn, task"],
+    ["Runtime", "Client", "Receipt (id, sessionId)", "reply"],
+    { note: "Admission ends here. Execution is asynchronous." },
+    ["chat-reply task", "Model", "Instructions, history, tools"],
+    {
+      group: "Loop until the model makes no tool call",
+      steps: [
+        ["Model", "chat-reply task", "Tool call", "reply"],
+        ["chat-reply task", "Tool gate", "execute(args)"],
+        {
+          group: "If the tool needs owner consent",
+          steps: [
+            ["Tool gate", "Client", "Approval card (SSE)", "reply"],
+            ["Client", "Runtime", "POST /api/tool-approvals/:id"],
+            ["Runtime", "Tool gate", "Approved"],
+          ],
+        },
+        ["Tool gate", "Tool gate", "Claim, perform effect, record result"],
+        ["Tool gate", "chat-reply task", "Tool result", "reply"],
+        ["chat-reply task", "Model", "Continue"],
+      ],
+    },
+    ["Model", "chat-reply task", "Final text", "reply"],
+    ["chat-reply task", "Runtime", "Settle: answer, activity, delivery"],
+    ["Runtime", "Client", "Updated observation (SSE)", "reply"],
+  ]}
+/>
 
 ### Admission
 
@@ -123,22 +130,25 @@ Reads are separate from writes. The runtime watches each active conversation for
 
 Every tool with an effect outside the model follows the same pattern: **ensure → wait → claim → execute → record**. The approval record is both the unit of consent and the idempotency ledger for the effect. It holds two state machines that never move backwards.
 
-```mermaid
-stateDiagram-v2
-  direction LR
-  state "Consent (status)" as consent {
-    [*] --> pending
-    pending --> approved: owner approves
-    pending --> rejected: owner rejects
-    pending --> expired: deadline or stop
-  }
-  state "Effect (execution)" as effect {
-    [*] --> waiting
-    waiting --> running: claim
-    running --> done: result stored
-    running --> uncertain: error or crash
-  }
-```
+<Flow caption="Consent and effect are tracked separately, and neither moves backwards.">
+  <Row label="Consent · status">
+    <Box title="pending" />
+    <Arrow right label="owner or deadline" />
+    <Box title="approved · rejected · expired">
+      expired when the deadline passes or the turn is stopped
+    </Box>
+  </Row>
+  <Arrow dashed label="only if approved" />
+  <Row label="Effect · execution" accent>
+    <Box title="waiting" />
+    <Arrow right label="claim" />
+    <Box title="running" />
+    <Arrow right />
+    <Box title="done · uncertain">
+      done when the result is stored; uncertain on an error or crash
+    </Box>
+  </Row>
+</Flow>
 
 | Rule            | Detail                                                                                                                                                                                                                                          |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

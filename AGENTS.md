@@ -43,4 +43,4 @@ Both the runtime and the web app are organised by domain, with layers (`domain`,
 
 ## Documentation
 
-Docs are part of the change. When behaviour, defaults, settings, storage or API contracts change, update the matching page of the docs site in `apps/docs/src/content/docs/` in the same change. Guides describe current behavior only. Follow [apps/docs/WRITING.md](apps/docs/WRITING.md), use Mermaid for diagrams, and check with `bun run --filter @raphie/docs build`.
+Docs are part of the change. When behaviour, defaults, settings, storage or API contracts change, update the matching page of the docs site in `apps/docs/src/content/docs/` in the same change. Guides describe current behavior only. Follow [apps/docs/WRITING.md](apps/docs/WRITING.md), draw diagrams with the components in `apps/docs/src/components/diagram`, and check with `bun run --filter @raphie/docs build`.

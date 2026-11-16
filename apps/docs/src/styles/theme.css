@@ -328,112 +328,34 @@ starlight-toc a[aria-current="true"]:hover {
   font-family: var(--raphie-heading-font);
 }
 
-/* Mermaid diagrams: rendered with Mermaid's neutral base theme, recoloured
-   here so they follow the light/dark switch without re-rendering. */
-.sl-markdown-content pre.mermaid {
+/* Home: copy beside an illustration, stacked on narrow screens. */
+.raphie-split {
+  display: grid;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (min-width: 60rem) {
+  .raphie-split {
+    grid-template-columns: 5fr 6fr;
+  }
+}
+
+.raphie-split-actions {
   display: flex;
-  justify-content: center;
-  margin-block: 1.75rem;
-  padding: 1.5rem 1rem;
-  overflow-x: auto;
-  border: 1px solid var(--sl-color-hairline);
-  border-radius: 0.9rem;
-  background-color: var(--raphie-card);
-  background-image: radial-gradient(
-    var(--sl-color-hairline-light) 1px,
-    transparent 1px
-  );
-  background-size: 18px 18px;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  margin-top: 1.5rem;
 }
 
-.sl-markdown-content pre.mermaid svg {
-  max-width: 100%;
-  height: auto;
+.sl-markdown-content .raphie-split-note {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--sl-color-gray-3);
 }
 
-/* Sequence diagrams keep their natural size and scroll sideways, so their
-   labels stay readable instead of shrinking to fit. */
-.sl-markdown-content pre.mermaid {
-  justify-content: safe center;
-}
-
-.sl-markdown-content pre.mermaid svg[aria-roledescription="sequence"] {
-  flex-shrink: 0;
-  max-width: none !important;
-}
-
-.mermaid svg :is(.node, .cluster) :is(rect, circle, ellipse, polygon, path),
-.mermaid svg rect.actor,
-.mermaid svg rect.note,
-.mermaid svg .labelBox,
-.mermaid svg .stateGroup rect,
-.mermaid svg .statediagram-state :is(rect, path) {
-  fill: var(--raphie-card) !important;
-  stroke: var(--sl-color-gray-4) !important;
-}
-
-.mermaid svg .cluster :is(rect, path) {
-  fill: color-mix(
-    in srgb,
-    var(--sl-color-accent-low) 55%,
-    transparent
-  ) !important;
-  stroke: var(--sl-color-accent) !important;
-  stroke-dasharray: 4 3;
-}
-
-.mermaid svg .node.accent :is(rect, circle, polygon, path) {
-  fill: var(--sl-color-accent-low) !important;
-  stroke: var(--sl-color-accent) !important;
-}
-
-.mermaid svg .node.attention :is(rect, circle, polygon, path) {
-  fill: var(--sl-color-orange-low) !important;
-  stroke: var(--sl-color-orange) !important;
-}
-
-.mermaid
-  svg
-  :is(
-    .flowchart-link,
-    .edgePath path,
-    .messageLine0,
-    .messageLine1,
-    .transition,
-    .relation,
-    line
-  ) {
-  stroke: var(--sl-color-gray-3) !important;
-}
-
-.mermaid
-  svg
-  :is(marker path, .arrowheadPath, #arrowhead path, .arrowMarkerPath) {
-  fill: var(--sl-color-gray-3) !important;
-  stroke: var(--sl-color-gray-3) !important;
-}
-
-.mermaid
-  svg
-  :is(text, tspan, .label, .nodeLabel, .edgeLabel, .cluster-label, span, p) {
-  color: var(--sl-color-white) !important;
-  fill: var(--sl-color-white) !important;
-  stroke: none !important;
-  font-family: var(--sl-font) !important;
-}
-
-.mermaid svg :is(.edgeLabel, .edgeLabel *, .edgeLabel rect, .labelBkg) {
-  background-color: var(--raphie-card) !important;
-  fill: var(--raphie-card) !important;
-}
-
-.mermaid svg .cluster-label :is(span, p, text, tspan) {
-  color: var(--sl-color-accent) !important;
-  fill: var(--sl-color-accent) !important;
-}
-
-.mermaid svg .activation0,
-.mermaid svg .activation1 {
-  fill: var(--sl-color-accent-low) !important;
-  stroke: var(--sl-color-accent) !important;
+/* Formatted MDX may wrap a box's detail in a paragraph. */
+.raphie-box-detail > p {
+  margin: 0;
 }

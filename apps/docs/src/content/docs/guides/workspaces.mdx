@@ -7,20 +7,27 @@ sidebar:
 
 import { Steps } from "@astrojs/starlight/components";
 
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
 Every bot has one persistent workspace at `/workspace`, shared by all of its sessions. Commands run in a sandbox: a replaceable execution environment that works on those files. You choose the sandbox per bot: **just-bash** (the default, no network) or **Container** (real processes with open network).
 
 Switching sandboxes keeps the files. Processes, shell variables and memory never carry over.
 
-```mermaid
-flowchart TB
-  subgraph bot[Bot]
-    s1[Session A] & s2[Session B] --> ws[(Workspace /workspace)]
-  end
-  ws --> jb[just-bash sandbox]
-  ws --> ct[Container sandbox]
-  jb -. replaceable .- ct
-  class ws accent
-```
+<Flow>
+  <Row label="Bot">
+    <Box title="Session A" />
+    <Box title="Session B" />
+  </Row>
+  <Arrow />
+  <Box title="Workspace" tone="accent">
+    `/workspace`, kept on disk
+  </Box>
+  <Arrow label="one sandbox at a time, replaceable" />
+  <Row>
+    <Box title="just-bash sandbox" />
+    <Box title="Container sandbox" />
+  </Row>
+</Flow>
 
 ## Choose a sandbox
 
@@ -147,4 +154,3 @@ Open **Settings**, choose the bot, then **Workspace**. You can open folders, go 
 
 - [Bots](/guides/bots/)
 - [How bots and workspaces are stored](/architecture/state/)
-- [Decision: native bot sandbox](/decisions/0003-native-bot-sandbox/)

@@ -37,7 +37,7 @@ See [service](/operate/service/) for logs and the full set of service commands.
 | --------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `raphie status` | All      | Check the runtime on loopback. Prints its data directory; exits `1` if it does not answer.                                                   |
 | `raphie health` | All      | Check both the runtime and the web host. Silent; exits `0` when healthy, `1` otherwise. A locked web host (no administrator yet) is healthy. |
-| `raphie port`   | System   | Print the local web port. Works without `sudo` while the service runs.                                                                       |
+| `raphie port`   | All      | User install and source: print the web address and runtime port. System service: print the web port; works without `sudo` while it runs.     |
 
 ## Administrator
 
@@ -67,13 +67,17 @@ The user install updates by rerunning the installer; see [updates](/operate/serv
 
 ## Ports and origins
 
-These apply to the system service. For the user install and source checkout, set the equivalent environment variables below.
+| Command                                   | Installs | What it does                                                                                        |
+| ----------------------------------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `raphie set-port WEB_PORT`                | User     | Change the web port, keeping the runtime port. Ports are 1024 to 65535 and must differ.             |
+| `raphie set-port WEB_PORT --runtime PORT` | User     | Change both ports.                                                                                  |
+| `sudo raphie set-port PORT`               | System   | Change the local web port (1024 to 65535, not `4316`) and restart. Rolls back if the restart fails. |
+| `sudo raphie origins`                     | System   | Show the primary, local and additional browser origins.                                             |
+| `sudo raphie set-origins "A,B"`           | System   | Replace the additional origins and restart. `""` clears them; primary and local origins stay.       |
 
-| Command                         | What it does                                                                                        |
-| ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `sudo raphie origins`           | Show the primary, local and additional browser origins.                                             |
-| `sudo raphie set-origins "A,B"` | Replace the additional origins and restart. `""` clears them; primary and local origins stay.       |
-| `sudo raphie set-port PORT`     | Change the local web port (1024 to 65535, not `4316`) and restart. Rolls back if the restart fails. |
+On a user install, `raphie set-port` checks the new ports are free, saves them to `~/.local/lib/raphie/.ports`, restarts the background service and waits up to 15 seconds for it to answer. If it does not, the old ports are put back and the service restarted on them. With no service running, the new ports apply the next time Raphie starts. Afterwards, update anything that points at the old web port, such as `tailscale serve` or the desktop app. See [ports](/start/installation/#ports).
+
+A user install and a source checkout set extra origins through `RAPHIE_WEB_ALLOWED_ORIGINS`; see [remote access](/operate/remote-access/#add-an-origin).
 
 Origins are exact, lowercase, with scheme and any non-default port, and no path. Non-loopback origins must be HTTPS. See [remote access](/operate/remote-access/).
 
@@ -88,15 +92,15 @@ Pass the same directory to `auth` commands that the running Raphie uses, or the 
 
 ## Environment
 
-The CLI reads these when checking or configuring a running Raphie. The background services set them for you.
+The CLI reads these when checking or configuring a running Raphie. The background services set them for you. On a user install the `raphie` command always uses the saved ports, whatever `PORT` and `RAPHIE_WEB_PORT` say.
 
-| Variable                     | Default                 | Used by                                |
-| ---------------------------- | ----------------------- | -------------------------------------- |
-| `PORT`                       | `4316`                  | Runtime port for `status` and `health` |
-| `RAPHIE_WEB_PORT`            | `4320`                  | Web port for `health`                  |
-| `RAPHIE_WEB_ORIGIN`          | `http://127.0.0.1:4320` | Primary browser origin                 |
-| `RAPHIE_WEB_ALLOWED_ORIGINS` | empty                   | Extra browser origins, comma-separated |
-| `RAPHIE_CREDENTIAL_KEY_FILE` | unset (OS store)        | Headless master-key file path          |
+| Variable                     | Default (source checkout) | Used by                                |
+| ---------------------------- | ------------------------- | -------------------------------------- |
+| `PORT`                       | `4316`                    | Runtime port for `status` and `health` |
+| `RAPHIE_WEB_PORT`            | `4320`                    | Web port for `health`                  |
+| `RAPHIE_WEB_ORIGIN`          | `http://127.0.0.1:4320`   | Primary browser origin                 |
+| `RAPHIE_WEB_ALLOWED_ORIGINS` | empty                     | Extra browser origins, comma-separated |
+| `RAPHIE_CREDENTIAL_KEY_FILE` | unset (OS store)          | Headless master-key file path          |
 
 ## Installer flags
 
@@ -105,6 +109,8 @@ The user installer (`scripts/install.sh`) takes:
 | Flag                        | What it does                                                                      |
 | --------------------------- | --------------------------------------------------------------------------------- |
 | `--channel stable\|nightly` | Install or switch to this channel. Default: the saved channel, else `stable`.     |
+| `--port WEB_PORT`           | Web port for a new install. Default `24320`. Refused on an existing install.      |
+| `--runtime-port PORT`       | Runtime port for a new install. Default `24316`. Refused on an existing install.  |
 | `--headless`                | Linux only. Use an owner-only master-key file instead of the OS credential store. |
 | `--no-modify-path`          | Do not edit shell startup files.                                                  |
 

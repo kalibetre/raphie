@@ -5,39 +5,38 @@ sidebar:
   order: 3
 ---
 
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
 Raphie is a single-owner system. Authority comes from trusted adapters (a signed-in web session, a paired channel account) and never from what a request claims about itself. Every external effect a model proposes goes through an approval record that separates the owner's consent from the effect itself.
 
 ## Trust boundaries
 
-```mermaid
-flowchart TB
-  subgraph clients[Clients and channels]
-    browser([Browser])
-    desktop([Desktop client])
-    telegram([Telegram / Discord])
-  end
-  web[Web host: sign-in gate and proxy]
-  bridge[Channel bridge: verified owner]
-  runtime[Runtime on loopback]
-  subgraph effects[Effects]
-    model[(Model provider)]
-    mcp[MCP servers]
-    sandbox[Bot sandbox]
-  end
-  browser --> web
-  desktop --> web
-  telegram --> bridge
-  web --> runtime
-  bridge --> runtime
-  runtime --> model
-  runtime -->|approval gate| mcp
-  runtime -->|approval gate| sandbox
-  class runtime accent
-```
+<Flow>
+  <Row label="Clients and channels">
+    <Box title="Browser" tone="person" />
+    <Box title="Desktop app" tone="person" />
+    <Box title="Telegram · Discord" tone="person" />
+  </Row>
+  <Arrow />
+  <Row>
+    <Box title="Web host">sign-in gate and proxy</Box>
+    <Box title="Channel bridge">verified owner</Box>
+  </Row>
+  <Arrow />
+  <Box title="Runtime" tone="accent">
+    on loopback
+  </Box>
+  <Arrow label="approval gate for MCP and the sandbox" />
+  <Row label="Effects">
+    <Box title="Model provider" tone="store" />
+    <Box title="MCP servers" />
+    <Box title="Bot sandbox" />
+  </Row>
+</Flow>
 
 | Boundary                           | What crosses it                       | What guards it                                                           |
 | ---------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
-| Network to web host                | Browser and desktop requests          | Configured host, signed-in session, matching `Origin`                    |
+| Network to web host                | Browser and desktop app requests      | Configured host, signed-in session, matching `Origin`                    |
 | Web host to runtime                | Proxied `/api/*` requests             | Loopback bind, `Host` and `Origin` checks, a client marker               |
 | Messaging platform to runtime      | Channel messages and approval buttons | Paired or allow-listed owner accounts, verified per message              |
 | Runtime to MCP servers and sandbox | Tool calls proposed by the model      | Per-call owner approval, or an explicit permission mode or grant         |
@@ -67,33 +66,43 @@ The runtime also sets a strict Content Security Policy, sends `Cache-Control: no
 
 Every tool that has an effect outside the model follows the same five steps, all recorded on one approval record.
 
-```mermaid
-flowchart LR
-  ensure[Ensure] --> wait[Wait for decision]
-  wait --> claim[Claim in a commit]
-  claim --> execute[Execute once]
-  execute --> record[Record result]
-  class claim accent
-```
+<Flow>
+  <Row>
+    <Box title="Ensure">record the request</Box>
+    <Arrow right />
+    <Box title="Wait">for the owner's decision</Box>
+  </Row>
+  <Arrow />
+  <Row>
+    <Box title="Claim" tone="accent">
+      re-check in a commit
+    </Box>
+    <Arrow right />
+    <Box title="Execute">once</Box>
+    <Arrow right />
+    <Box title="Record">the result</Box>
+  </Row>
+</Flow>
 
 The record holds the exact arguments shown to the owner and a fingerprint of the connection, tool and arguments. If any of them change between approval and execution, the call fails. Approval and execution are tracked separately:
 
-```mermaid
-stateDiagram-v2
-  direction LR
-  state "Consent" as consent {
-    [*] --> pending
-    pending --> approved
-    pending --> rejected
-    pending --> expired
-  }
-  state "Effect" as effect {
-    [*] --> waiting
-    waiting --> running: claim
-    running --> done
-    running --> uncertain: crash or error
-  }
-```
+<Flow caption="Consent and effect are tracked separately, and neither moves backwards.">
+  <Row label="Consent · status">
+    <Box title="pending" />
+    <Arrow right label="owner or deadline" />
+    <Box title="approved · rejected · expired">expired after 10 minutes</Box>
+  </Row>
+  <Arrow dashed label="only if approved" />
+  <Row label="Effect · execution" accent>
+    <Box title="waiting" />
+    <Arrow right label="claim" />
+    <Box title="running" />
+    <Arrow right />
+    <Box title="done · uncertain">
+      done when the result is stored; uncertain on an error or crash
+    </Box>
+  </Row>
+</Flow>
 
 - **Expiry wins.** A request expires after 10 minutes. A decision that arrives after the deadline records `expired`, whatever was clicked.
 - **Claiming re-checks everything.** Before the effect starts, a transaction confirms the approval is still valid for this exact call, permission mode and grant.
@@ -135,14 +144,14 @@ MCP connections are hardened in the runtime:
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | Provider keys, subscription tokens, MCP and channel secrets | Encrypted per connection; the master key is in the OS credential store or an owner-only file |
 | Admin password, sessions                                    | Better Auth in `auth.sqlite`, mode `0600`; cookies are `HttpOnly`                            |
-| Device tokens                                               | Stored by the desktop client in the OS credential store; revocable from Settings             |
+| Device tokens                                               | Stored by the desktop app in the OS credential store; revocable from Settings                |
 
 Secrets are write-only through the API: no read response, conversation, Activity entry or trace contains them. Prompts tell the model that personality never grants capabilities and that chat text is not an approval. Details are on [credentials](/operate/credentials/) and [observability](/operate/observability/#what-is-recorded-and-what-is-not).
 
 ## Known non-goals
 
 :::danger[Do not expose the runtime port]
-The runtime has no authentication of its own. It relies on its loopback bind and the web host in front of it. Any local process that can open `127.0.0.1:4316` with the right `Host` header acts as the owner. The `x-raphie-client` header is a cross-site request marker, not a credential.
+The runtime has no authentication of its own. It relies on its loopback bind and the web host in front of it. Any local process that can open the runtime port on `127.0.0.1` with the right `Host` header acts as the owner. The port values are listed in [ports](/architecture/overview/#ports). The `x-raphie-client` header is a cross-site request marker, not a credential.
 :::
 
 - **Same-user processes are trusted.** Anything running as Raphie's user can use its credential store, call the runtime or read its memory.

@@ -1,0 +1,185 @@
+---
+// Connects the rows (or, with `right`, the boxes) of a Flow.
+interface Props {
+  /** What crosses the arrow. */
+  label?: string;
+  /** Point sideways, between boxes inside a Row. */
+  right?: boolean;
+  /** Both directions. */
+  both?: boolean;
+  /** Dashed: optional, asynchronous or a reply. */
+  dashed?: boolean;
+}
+
+const { label, right = false, both = false, dashed = false } = Astro.props;
+---
+
+<div
+  class:list={[
+    "raphie-arrow",
+    right ? "raphie-arrow--right" : "raphie-arrow--down",
+    { "raphie-arrow--both": both, "raphie-arrow--dashed": dashed },
+  ]}
+  aria-hidden={label ? undefined : "true"}
+>
+  <span class="raphie-arrow-line"></span>
+  {label && <span class="raphie-arrow-label">{label}</span>}
+</div>
+
+<style is:global>
+  .raphie-arrow {
+    --raphie-arrow-color: var(--sl-color-gray-4);
+
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .raphie-arrow--down {
+    min-height: 2.75rem;
+    padding-block: 0.35rem;
+  }
+
+  .raphie-arrow--right {
+    align-self: center;
+    min-width: 2.5rem;
+  }
+
+  .raphie-arrow-line {
+    position: absolute;
+    background: var(--raphie-arrow-color);
+  }
+
+  .raphie-arrow--down .raphie-arrow-line {
+    inset-block: 0 6px;
+    left: 50%;
+    width: 1.5px;
+  }
+
+  .raphie-arrow--right .raphie-arrow-line {
+    inset-inline: 0 6px;
+    top: 50%;
+    height: 1.5px;
+  }
+
+  .raphie-arrow--dashed .raphie-arrow-line {
+    background: none;
+  }
+
+  .raphie-arrow--down.raphie-arrow--dashed .raphie-arrow-line {
+    border-left: 1.5px dashed var(--raphie-arrow-color);
+  }
+
+  .raphie-arrow--right.raphie-arrow--dashed .raphie-arrow-line {
+    border-top: 1.5px dashed var(--raphie-arrow-color);
+  }
+
+  /* Arrow heads */
+  .raphie-arrow::after,
+  .raphie-arrow--both::before {
+    position: absolute;
+    width: 0;
+    height: 0;
+    content: "";
+    border: 5px solid transparent;
+  }
+
+  .raphie-arrow--down::after {
+    bottom: 0;
+    left: calc(50% - 4.25px);
+    border-top: 7px solid var(--raphie-arrow-color);
+    border-bottom-width: 0;
+  }
+
+  .raphie-arrow--down.raphie-arrow--both::before {
+    top: 0;
+    left: calc(50% - 4.25px);
+    border-bottom: 7px solid var(--raphie-arrow-color);
+    border-top-width: 0;
+  }
+
+  .raphie-arrow--down.raphie-arrow--both .raphie-arrow-line {
+    inset-block: 6px;
+  }
+
+  .raphie-arrow--right::after {
+    right: 0;
+    top: calc(50% - 4.25px);
+    border-left: 7px solid var(--raphie-arrow-color);
+    border-right-width: 0;
+  }
+
+  .raphie-arrow--right.raphie-arrow--both::before {
+    left: 0;
+    top: calc(50% - 4.25px);
+    border-right: 7px solid var(--raphie-arrow-color);
+    border-left-width: 0;
+  }
+
+  .raphie-arrow--right.raphie-arrow--both .raphie-arrow-line {
+    inset-inline: 6px;
+  }
+
+  /* Stacked chains (see Row): sideways arrows point down instead. */
+  @container (max-width: 34rem) {
+    .raphie-arrow--right {
+      align-self: stretch;
+      min-width: 0;
+      min-height: 2.75rem;
+      padding-block: 0.35rem;
+    }
+
+    .raphie-arrow--right .raphie-arrow-line {
+      inset: 0 auto 6px 50%;
+      width: 1.5px;
+      height: auto;
+    }
+
+    .raphie-arrow--right.raphie-arrow--dashed .raphie-arrow-line {
+      border-top: 0;
+      border-left: 1.5px dashed var(--raphie-arrow-color);
+    }
+
+    .raphie-arrow--right::after {
+      top: auto;
+      right: auto;
+      bottom: 0;
+      left: calc(50% - 4.25px);
+      border: 5px solid transparent;
+      border-top: 7px solid var(--raphie-arrow-color);
+      border-bottom-width: 0;
+    }
+
+    .raphie-arrow--right .raphie-arrow-label {
+      margin-bottom: 0;
+      border: 1px solid var(--sl-color-hairline-light);
+      background: var(--raphie-card);
+    }
+  }
+
+  .raphie-arrow-label {
+    position: relative;
+    z-index: 1;
+    padding: 0.1rem 0.55rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 999px;
+    font-family: var(--sl-font-mono);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    white-space: nowrap;
+    color: var(--sl-color-gray-2);
+    background: var(--raphie-card);
+  }
+
+  .raphie-arrow--right .raphie-arrow-label {
+    margin-bottom: 1.9rem;
+    border: 0;
+    background: none;
+  }
+
+  .raphie-arrow--right:has(.raphie-arrow-label) {
+    min-width: 6rem;
+  }
+</style>

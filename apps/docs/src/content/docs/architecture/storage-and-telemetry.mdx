@@ -7,6 +7,8 @@ sidebar:
 
 import { FileTree } from "@astrojs/starlight/components";
 
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
 All of Raphie's state lives in one data directory, owned by exactly one runtime at a time. It holds SQLite databases and plain files only; there is no external database, broker or cache. Durable state (what the agent did) and telemetry (how the process performed) are stored separately, and nothing durable depends on telemetry.
 
 ## One data directory, one owner
@@ -20,28 +22,55 @@ All of Raphie's state lives in one data directory, owned by exactly one runtime 
 
 The directory is created with mode `0700`; secrets and lock files are `0600`. Raphie never moves, merges or resets an existing directory: if a source checkout finds two candidate locations, it refuses to start and asks you to set `DATA_DIRECTORY`.
 
-```mermaid
-flowchart TB
-  start([Runtime starts]) --> lock{"runtime-owner.sqlite<br/>names a live process?"}
-  lock -->|yes| refuse["Refuse to start<br/>no store opened"]
-  lock -->|no| own["Record own PID and token"]
-  own --> keys{"Credential store<br/>available?"}
-  keys -->|no| fail["Exit: fail closed"]
-  keys -->|yes| open["Open stores, recover,<br/>attach every bot, resume"]
-  class lock accent
-  class refuse attention
-```
+<Flow>
+  <Box title="Runtime starts" />
+  <Arrow />
+  <Row>
+    <Box title="Owner lock" tone="accent">
+      does `runtime-owner.sqlite` name a live process?
+    </Box>
+    <Arrow right label="yes" />
+    <Box title="Refuse to start" tone="attention">
+      no store opened
+    </Box>
+  </Row>
+  <Arrow label="no: record own PID and token" />
+  <Row>
+    <Box title="Credential store">available?</Box>
+    <Arrow right label="no" />
+    <Box title="Exit">fail closed</Box>
+  </Row>
+  <Arrow label="yes" />
+  <Box title="Open stores">recover, attach every bot, resume</Box>
+</Flow>
 
 Ownership is taken before any product store is opened, which is what prevents two executors writing the same journal. The web host is a second process on the same directory, but it opens only its own `auth.sqlite`.
 
 ## What is in it
 
 <FileTree>
-  - DATA_DIRECTORY/ - runtime-owner.sqlite - workspace-identity.json -
-  bots.sqlite - traces.sqlite - auth.sqlite - auth.secret - gateway.sqlite
-  default bot - settings.sqlite - memory.sqlite - mcp.sqlite - channels.sqlite -
-  telegram.sqlite - files/ - workspace/ - checkpoint.sqlite - container.sqlite -
-  files/ - bots/ - bot-id/ same layout as the default bot
+
+- DATA_DIRECTORY/
+  - runtime-owner.sqlite
+  - workspace-identity.json
+  - bots.sqlite
+  - traces.sqlite
+  - auth.sqlite
+  - auth.secret
+  - gateway.sqlite default bot
+  - settings.sqlite
+  - memory.sqlite
+  - mcp.sqlite
+  - channels.sqlite
+  - telegram.sqlite
+  - files/
+  - workspace/
+    - checkpoint.sqlite
+    - container.sqlite
+    - files/
+  - bots/
+    - bot-id/ same layout as the default bot
+
 </FileTree>
 
 | Store                                | Scope    | Contents                                                                  | Notes                                                      |
@@ -73,22 +102,20 @@ Back up with the SQLite backup API or with the runtime stopped. Copying a live d
 
 ## State plane and telemetry plane
 
-```mermaid
-flowchart TB
-  change["State change<br/>turn · tool · delivery"]
-  subgraph state [State plane · durable, per bot]
-    journal[("raphie.activity<br/>5,000-event ring, redacted")]
-    activity["Activity view"]
-  end
-  subgraph telemetry [Telemetry plane · best-effort, per host]
-    exporter["OTLP exporter<br/>Settings switch"]
-    receiver[("traces.sqlite<br/>via loopback receiver")]
-    diagnostics["Diagnostics view"]
-  end
-  change -->|same commit| journal --> activity
-  change -.->|span| exporter --> receiver --> diagnostics
-  class journal accent
-```
+<Flow>
+  <Box title="State change">turn · tool · delivery</Box>
+  <Arrow />
+  <Row>
+    <Box title="State plane" tone="accent">
+      durable, per bot · same commit → `raphie.activity`, a redacted 5,000-event
+      ring → Activity view
+    </Box>
+    <Box title="Telemetry plane" tone="muted">
+      best-effort, per host · span → OTLP exporter → loopback receiver →
+      `traces.sqlite` → Diagnostics view
+    </Box>
+  </Row>
+</Flow>
 
 |                | Activity (state plane)                                                                                                                             | Diagnostics (telemetry plane)                                                                                                                          |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |

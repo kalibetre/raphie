@@ -7,7 +7,7 @@ sidebar:
 
 import { Steps } from "@astrojs/starlight/components";
 
-A new Raphie has no account and no model. You create the single administrator from a terminal on the machine running Raphie, sign in from a browser, connect a provider to the default bot, and start talking. It takes about five minutes.
+A new Raphie has no account and no model. You create the single administrator from a terminal on the machine running Raphie, sign in from a browser, connect a provider to the default bot, and start talking. After that you can use the browser, the [desktop app](/start/installation/#desktop-app) or both. It takes about five minutes.
 
 ## Set up Raphie
 
@@ -33,13 +33,13 @@ A new Raphie has no account and no model. You create the single administrator fr
 
 3. **Sign in.** Open the web workspace and sign in with that email and password.
 
-   | Install        | Address                                                                   |
-   | -------------- | ------------------------------------------------------------------------- |
-   | User install   | `http://127.0.0.1:4320`                                                   |
-   | System service | `http://127.0.0.1:41837` (or the port you chose; `raphie port` prints it) |
-   | Source         | `http://127.0.0.1:4320`                                                   |
+   | Install        | Default address                                                             |
+   | -------------- | --------------------------------------------------------------------------- |
+   | User install   | `http://127.0.0.1:24320` (`4320` for installs made before ports were saved) |
+   | System service | `http://127.0.0.1:41837`                                                    |
+   | Source         | `http://127.0.0.1:4320`                                                     |
 
-   On a remote server, open an SSH tunnel first, for example `ssh -L 4320:127.0.0.1:4320 you@server`. See [remote access](/operate/remote-access/).
+   If you chose another port, `raphie port` prints the address. On a remote server, open an SSH tunnel to its web port first, for example `ssh -L 24320:127.0.0.1:24320 you@server`. See [remote access](/operate/remote-access/).
 
 4. **Connect a model provider.** Open **Settings** from the bot sidebar, then **Providers**, and choose **Add connection**. Pick one:
 
@@ -54,6 +54,22 @@ A new Raphie has no account and no model. You create the single administrator fr
 
 </Steps>
 
+## Use the desktop app
+
+On a Mac, the desktop app is an alternative to the browser for everyday use. Setup stays the same: you still create the administrator with `raphie auth setup`, and you approve each new device from a browser that is signed in.
+
+<Steps>
+
+1. [Install the app](/start/installation/#desktop-app) and open it.
+
+2. Enter the same address you signed in to above, or Raphie's `https://` tailnet address if it runs on another machine.
+
+3. Open the approval link the app shows in your signed-in browser, check the code matches, and choose **Approve**.
+
+</Steps>
+
+Conversations, approvals and settings are the same in both; a reply read in one counts as read in the other.
+
 :::tip[Forgot the password?]
 Run `raphie auth recover` on the server. It sets a new password and signs out every browser and device. See [authentication](/operate/authentication/).
 :::
@@ -63,6 +79,7 @@ Run `raphie auth recover` on the server. It sets a new password and signs out ev
 | To                                                 | Read                                                 |
 | -------------------------------------------------- | ---------------------------------------------------- |
 | Learn the workspace: sessions, approvals, settings | [Conversations](/guides/conversations/)              |
+| Learn what the desktop app can do                  | [Desktop app](/guides/desktop/)                      |
 | Give a bot its own identity, or create another bot | [Bots](/guides/bots/)                                |
 | Let a bot remember things across conversations     | [Memory](/guides/memory/)                            |
 | Connect tools                                      | [Tools](/guides/tools/)                              |

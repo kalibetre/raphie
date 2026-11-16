@@ -5,23 +5,23 @@ sidebar:
   order: 5
 ---
 
+import { Arrow, Box, Flow, Row, Sequence } from "~/components/diagram";
+
 Raphie has three extension surfaces, and none of them grants authority on its own: every effect still goes through the owner's approval rules. Channels deliver replies by persisting a send plan before any network call, so a crash can only produce an uncertain send, never a silent duplicate. Schedules are durable Pi tasks, so they survive restarts like any other work.
 
 ## Plugin surfaces
 
-```mermaid
-flowchart TB
-  subgraph browser [Browser · compiled in]
-    ui["UI plugins<br/>named slots, e.g. composer.footer"]
-  end
-  subgraph runtime [Runtime · one registry per bot]
-    ext["Runtime extensions<br/>tools · tasks · prompt sections"]
-    gate{{"Approval gate"}}
-  end
-  mcp[("MCP servers<br/>HTTP or stdio")]
-  mcp --> gate --> ext
-  class gate accent
-```
+<Flow caption="UI plugins are compiled into the browser bundle for a named slot, such as composer.footer, and never reach the runtime.">
+  <Box title="MCP servers" tone="store">
+    HTTP or stdio
+  </Box>
+  <Arrow label="every call" />
+  <Row label="Runtime · one registry per bot" accent>
+    <Box title="Approval gate" tone="accent" />
+    <Arrow right />
+    <Box title="Runtime extensions">tools · tasks · prompt sections</Box>
+  </Row>
+</Flow>
 
 | Surface               | Unit                                                         | Who writes it                                 | Can it act?                                                  |
 | --------------------- | ------------------------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------ |
@@ -87,34 +87,59 @@ A **channel binding** associates one external conversation with exactly one sess
 
 Replies and approval cards are recorded as delivery intents in the bot's durable documents. One worker per channel connection turns each intent into a persisted plan before any network call.
 
-```mermaid
-sequenceDiagram
-  participant T as chat-reply task
-  participant D as gateway.sqlite
-  participant W as Delivery worker
-  participant P as Platform API
-  T->>D: settle turn, add pending intent
-  W->>D: claim: render N payloads, save plan, op 1 = sending
-  loop each operation
-    W->>P: send or edit
-    alt platform returns a message ID
-      P-->>W: message ID
-      W->>D: settle operation: sent
-    else error or crash
-      W->>D: operation: uncertain
-    end
-  end
-  W->>D: intent sent only if every operation was sent
-```
+<Sequence
+  actors={[
+    "chat-reply task",
+    "gateway.sqlite",
+    "Delivery worker",
+    "Platform API",
+  ]}
+  steps={[
+    ["chat-reply task", "gateway.sqlite", "Settle turn, add pending intent"],
+    [
+      "Delivery worker",
+      "gateway.sqlite",
+      "Claim: render N payloads, save plan, op 1 = sending",
+    ],
+    {
+      group: "Each operation",
+      steps: [
+        ["Delivery worker", "Platform API", "Send or edit"],
+        {
+          group: "Platform returns a message ID",
+          steps: [
+            ["Platform API", "Delivery worker", "Message ID", "reply"],
+            ["Delivery worker", "gateway.sqlite", "Settle operation: sent"],
+          ],
+        },
+        {
+          group: "Error or crash",
+          steps: [
+            ["Delivery worker", "gateway.sqlite", "Operation: uncertain"],
+          ],
+        },
+      ],
+    },
+    [
+      "Delivery worker",
+      "gateway.sqlite",
+      "Intent sent only if every operation was sent",
+    ],
+  ]}
+/>
 
-```mermaid
-stateDiagram-v2
-  direction LR
-  [*] --> pending
-  pending --> sending: claim
-  sending --> sent: message ID returned
-  sending --> uncertain: error or crash
-```
+<Flow>
+  <Box title="pending" />
+  <Arrow label="claim" />
+  <Box title="sending" />
+  <Arrow />
+  <Row>
+    <Box title="sent">message ID returned</Box>
+    <Box title="uncertain" tone="attention">
+      error or crash
+    </Box>
+  </Row>
+</Flow>
 
 - Rendering (chunks, cards, files, edits) happens before any claim or send.
 - An uncertain chunk is never repeated, but later pending chunks of the same reply still send. The intent then ends uncertain, with a note to check the platform before retrying.
@@ -125,18 +150,14 @@ stateDiagram-v2
 
 Each enabled job is one `raphie.recurring-prompt` Pi task. Pi persists the sleep, so a restart resumes from the checkpoint instead of losing or doubling a run.
 
-```mermaid
-stateDiagram-v2
-  direction TB
-  [*] --> waiting
-  waiting --> checking: due time reached
-  checking --> waiting: bot busy, retry in 5 s
-  checking --> delivering: job current and bot idle
-  delivering --> waiting: recurring, next run
-  delivering --> finished: one-shot
-  checking --> finished: job disabled or replaced
-  finished --> [*]
-```
+| State        | Event                    | Next state                    |
+| ------------ | ------------------------ | ----------------------------- |
+| `waiting`    | Due time reached         | `checking`                    |
+| `checking`   | Bot busy                 | `waiting`, retry in 5 seconds |
+| `checking`   | Job disabled or replaced | `finished`                    |
+| `checking`   | Job current and bot idle | `delivering`                  |
+| `delivering` | Recurring job            | `waiting` for the next run    |
+| `delivering` | One-shot job             | `finished`                    |
 
 | Rule                  | Mechanism                                                                                                                                       |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |

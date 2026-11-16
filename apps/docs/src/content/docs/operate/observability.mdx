@@ -5,6 +5,8 @@ sidebar:
   order: 7
 ---
 
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
 Raphie records what it does in two separate places. **Activity** is the durable record of each bot's runs, used for recovery and for reviewing a session. **Diagnostics** shows operational traces: timings, token counts and errors, kept for 48 hours on the Raphie machine. Nothing is sent to an outside monitoring or analytics service.
 
 ## Which one to use
@@ -22,16 +24,21 @@ Neither shows private model reasoning. Activity and traces are independent: old 
 
 ## How traces are stored
 
-```mermaid
-flowchart LR
-  subgraph runtime[Runtime process]
-    ops[Instrumented operations] --> exporter[Trace exporter]
-    exporter --> receiver[Local trace receiver]
-  end
-  receiver --> db[(traces.sqlite)]
-  db --> diag[Settings → Diagnostics]
-  class receiver accent
-```
+<Flow>
+  <Row label="Runtime process">
+    <Box title="Instrumented operations" />
+    <Arrow right />
+    <Box title="Trace exporter" />
+    <Arrow right label="OTLP/HTTP" />
+    <Box title="Local trace receiver" tone="accent">
+      loopback only
+    </Box>
+  </Row>
+  <Arrow />
+  <Box title="traces.sqlite" tone="store" />
+  <Arrow />
+  <Box title="Settings → Diagnostics" />
+</Flow>
 
 The runtime starts its own small trace receiver on a loopback port the operating system picks. Spans are exported to it over OTLP/HTTP as JSON, checked, stripped down to approved fields and written to `traces.sqlite`. There is no collector, container or cloud service to run.
 

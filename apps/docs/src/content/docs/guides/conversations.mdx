@@ -5,9 +5,19 @@ sidebar:
   order: 1
 ---
 
-The web workspace is the browser app at `http://127.0.0.1:4320` where you talk to your bots. Pick a bot in the sidebar, type in the composer, and the reply streams in as the bot works; tool steps and approval requests appear inline in the same conversation.
+The web workspace is the browser app where you talk to your bots. Pick a bot in the sidebar, type in the composer, and the reply streams in as the bot works; tool steps and approval requests appear inline in the same conversation.
 
-Every conversation is a durable **session** stored by the runtime, not the browser. Closing the tab never cancels work, and the session looks the same from the desktop client or a channel.
+Every conversation is a durable **session** stored by the runtime, not the browser. Closing the tab never cancels work, and the session looks the same from the desktop app or a channel.
+
+Its address depends on how you installed Raphie:
+
+| Install                     | Web workspace                                              |
+| --------------------------- | ---------------------------------------------------------- |
+| User install (macOS, Linux) | `http://127.0.0.1:24320`, or the port you chose at install |
+| System service (Linux)      | `http://127.0.0.1:41837`, or the `--web-port` you chose    |
+| Source checkout             | `http://127.0.0.1:4320`                                    |
+
+`raphie port` prints the ports of the install on this machine. A user install made before ports were saved keeps `4320`. From another computer, use the `https://` address from [remote access](/operate/remote-access/).
 
 ## Sessions
 
@@ -20,7 +30,7 @@ Every conversation is a durable **session** stored by the runtime, not the brows
 
 Each session has its own link, `/sessions/<id>`. Links to a bot other than the default carry `?bot=<id>`, so a bookmarked session always opens with the right bot.
 
-Read state is shared through the runtime: a reply you read on the desktop client is marked read here too.
+Read state is shared through the runtime: a reply you read on the desktop app is marked read here too.
 
 ## The composer
 

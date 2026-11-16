@@ -1,0 +1,91 @@
+---
+// A node in a Flow. The slot is an optional second line of detail.
+interface Props {
+  title: string;
+  /**
+   * `accent` marks the subject of the diagram, `attention` where the owner
+   * acts, `store` persistent data, `person` a human, `muted` something outside.
+   */
+  tone?: "accent" | "attention" | "store" | "person" | "muted";
+}
+
+const { title, tone } = Astro.props;
+const hasDetail = Astro.slots.has("default");
+---
+
+<div class:list={["raphie-box", tone && `raphie-box--${tone}`]}>
+  <span class="raphie-box-title">{title}</span>
+  {
+    hasDetail && (
+      <span class="raphie-box-detail">
+        <slot />
+      </span>
+    )
+  }
+</div>
+
+<style is:global>
+  .raphie-box {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    gap: 0.15rem;
+    justify-content: center;
+    min-width: 7.5rem;
+    max-width: 15rem;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.65rem;
+    text-align: center;
+    background: var(--sl-color-black);
+    box-shadow: 0 1px 0 var(--sl-color-hairline);
+  }
+
+  .raphie-box-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--sl-color-white);
+  }
+
+  .raphie-box-detail {
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: var(--sl-color-gray-3);
+  }
+
+  .raphie-box-detail code {
+    font-size: 0.95em;
+  }
+
+  .raphie-box--accent {
+    border-color: var(--sl-color-accent);
+    background: var(--sl-color-accent-low);
+  }
+
+  .raphie-box--accent .raphie-box-title {
+    color: var(--sl-color-accent-high);
+  }
+
+  .raphie-box--attention {
+    border-color: var(--sl-color-orange);
+    background: var(--sl-color-orange-low);
+  }
+
+  .raphie-box--person {
+    border-radius: 999px;
+    padding-inline: 1.25rem;
+  }
+
+  .raphie-box--store {
+    border-radius: 0.65rem 0.65rem 1.4rem 1.4rem / 0.65rem 0.65rem 0.8rem 0.8rem;
+    border-top-width: 3px;
+    border-top-style: double;
+  }
+
+  .raphie-box--muted {
+    border-style: dashed;
+    background: transparent;
+    box-shadow: none;
+  }
+</style>

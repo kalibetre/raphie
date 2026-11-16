@@ -7,6 +7,8 @@ sidebar:
 
 import { Steps } from "@astrojs/starlight/components";
 
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
 Web UI in `apps/web` uses shadcn components built on Base UI, CSS scoped to explicit class names, and one shared scroll area for every scrolling region. Check every changed screen on the fixture in both themes before calling it done.
 
 ## Rules
@@ -17,7 +19,7 @@ Web UI in `apps/web` uses shadcn components built on Base UI, CSS scoped to expl
 | Scope CSS to explicit class names. Never use `> div` or bare element descendant selectors.                                    | Broad selectors have stretched unrelated controls before.                                                             |
 | Use the shared `ScrollArea` for anything that scrolls.                                                                        | One scrolling model, custom scrollbars, no competing native scrollers.                                                |
 | The browser imports `@raphie/contracts`, never runtime internals.                                                             | Keeps the web app a client of the HTTP API.                                                                           |
-| Any change to the web design is mirrored in the desktop client.                                                               | It copies the web's look by value; see [desktop development](/contribute/desktop-development/#keep-the-look-in-sync). |
+| Any change to the web design is mirrored in the desktop app.                                                                  | It copies the web's look by value; see [desktop development](/contribute/desktop-development/#keep-the-look-in-sync). |
 
 The shadcn configuration is `apps/web/components.json` (style `base-nova`); generated components land in `src/shared/ui`.
 
@@ -35,15 +37,21 @@ The transcript's `useStickToBottom` (from `use-stick-to-bottom`) points straight
 
 ## The floating composer
 
-```mermaid
-flowchart TB
-  stage[Chat stage] --> transcript[Transcript ScrollArea]
-  stage --> composer[Floating composer]
-  composer -- ResizeObserver --> cssvar["--composer-height"]
-  cssvar --> pad[Transcript bottom padding]
-  cssvar --> jump[Jump-to-latest position]
-  class composer accent
-```
+<Flow>
+  <Box title="Chat stage" />
+  <Arrow />
+  <Row>
+    <Box title="Transcript">`ScrollArea`</Box>
+    <Box title="Floating composer" tone="accent" />
+  </Row>
+  <Arrow label="ResizeObserver" />
+  <Box title="--composer-height">CSS variable</Box>
+  <Arrow />
+  <Row>
+    <Box title="Transcript bottom padding" />
+    <Box title="Jump-to-latest position" />
+  </Row>
+</Flow>
 
 The composer floats over the bottom of the chat stage, so messages scroll underneath it. `use-composer-layout.ts` watches the composer with a `ResizeObserver` and publishes its height as `--composer-height` on the stage. The transcript's bottom padding and the jump button use that variable, so the last message stays reachable above the card as drafts, errors and toolbars grow.
 

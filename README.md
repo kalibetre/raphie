@@ -35,7 +35,7 @@ With Raphie running, create your administrator in a second terminal:
 raphie auth setup
 ```
 
-Open **http://127.0.0.1:4320**, sign in, and connect a model provider in Settings. See [installation and service setup](apps/docs/src/content/docs/start/installation.mdx) for background service requirements, remote access and troubleshooting.
+Open **http://127.0.0.1:24320** (or the port the installer printed), sign in, and connect a model provider in Settings. See [installation and service setup](apps/docs/src/content/docs/start/installation.mdx) for background service requirements, remote access and troubleshooting.
 
 ## A little more room to think
 

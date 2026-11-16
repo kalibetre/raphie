@@ -101,7 +101,7 @@ The documentation site lives in `apps/docs`; its pages are the only copy of the
 guides. Update the matching page in the same change that changes product
 behavior: defaults, Settings controls, storage, API or tool contracts, recovery
 behavior and provider differences. Describe model-dependent behavior as such,
-and keep planned work out of guides. Diagrams are Mermaid blocks in the page.
+and keep planned work out of guides. Diagrams use the HTML components in `apps/docs/src/components/diagram`.
 [Writing docs](apps/docs/WRITING.md) covers the structure, voice and checks.
 
 ## Scrolling and the composer

@@ -10,12 +10,19 @@ hero:
     - text: Install Raphie
       link: /start/installation/
       icon: right-arrow
-    - text: What is Raphie?
-      link: /start/introduction/
+    - text: Get the Mac app
+      link: /guides/desktop/
       variant: minimal
 ---
 
-import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+import {
+  Card,
+  CardGrid,
+  LinkButton,
+  LinkCard,
+} from "@astrojs/starlight/components";
+
+import DesktopPreview from "~/components/DesktopPreview.astro";
 
 ## Up and running in a minute
 
@@ -25,7 +32,34 @@ raphie health        # in a new terminal
 raphie auth setup    # create your administrator
 ```
 
-Then open `http://127.0.0.1:4320`, sign in and connect a model provider. [First run](/start/first-run/) walks through it.
+Then open `http://127.0.0.1:24320`, sign in and connect a model provider. [First run](/start/first-run/) walks through it.
+
+## Raphie for Mac
+
+<div class="raphie-split">
+  <div>
+    A native app for the daily loop, written in Rust. Pick a bot, keep
+    conversations going, watch replies stream in and approve tool actions,
+    with notifications when a bot needs you. It connects to your Raphie on
+    this Mac or anywhere on your tailnet.
+
+    <div class="raphie-split-actions">
+      <LinkButton
+        href="https://github.com/kalibetre/raphie/releases/latest/download/Raphie-macos-arm64.dmg"
+        icon="download"
+        iconPlacement="start"
+      >
+        Download for Mac
+      </LinkButton>
+      <LinkButton href="/guides/desktop/" variant="minimal" icon="right-arrow">
+        Desktop guide
+      </LinkButton>
+    </div>
+    <p class="raphie-split-note">Apple Silicon (M1 or later) · Ships with every Raphie release</p>
+
+  </div>
+  <DesktopPreview />
+</div>
 
 ## What a bot has
 
@@ -48,35 +82,12 @@ Then open `http://127.0.0.1:4320`, sign in and connect a model provider. [First 
   </Card>
 </CardGrid>
 
-## How it fits together
-
-```mermaid
-flowchart TB
-  owner([You]) --> web[Web workspace]
-  owner --> desktop[Desktop client]
-  owner --> tg[Telegram]
-  subgraph host [Your machine]
-    runtime[Raphie runtime]
-    bots[Bots: sessions, memory, workspace]
-    data[(Data directory)]
-    runtime --> bots --> data
-  end
-  web --> runtime
-  desktop --> runtime
-  tg --> runtime
-  runtime --> models[(Model providers)]
-  class runtime accent
-  class owner attention
-```
-
-Everything runs in one runtime you own, with one data directory. Clients and channels are ways in; they never hold your data. [Architecture overview](/architecture/overview/)
-
 ## Find your way
 
 <CardGrid>
   <LinkCard
     title="Use it"
-    description="Conversations, bots, memory, workspaces, tools, Telegram and the desktop client."
+    description="Conversations, bots, memory, workspaces, tools, Telegram and the Mac app."
     href="/guides/conversations/"
   />
   <LinkCard

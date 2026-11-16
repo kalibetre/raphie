@@ -1,13 +1,13 @@
 ---
 title: Desktop development
-description: Run the desktop client from source against the fixture, find your way around its crates, and keep it in step with the web workspace.
+description: Build and run the desktop app from source, package the disk image, find your way around its crates, and keep it in step with the web workspace.
 sidebar:
   order: 4
 ---
 
 import { FileTree, Steps } from "@astrojs/starlight/components";
 
-The desktop client in `apps/desktop` is a Rust app built on [Rune](https://github.com/anomalyco/rune), a GPU-rendered UI framework. It is a client of the web host's authenticated API, never of the runtime directly, and it copies the web workspace's look by value. Any change to the web design or to `@raphie/contracts` that the app reads must be mirrored here.
+The desktop app in `apps/desktop` is a Rust app built on [Rune](https://github.com/anomalyco/rune), a GPU-rendered UI framework. It is a client of the web host's authenticated API, never of the runtime directly, and it copies the web workspace's look by value. Any change to the web design or to `@raphie/contracts` that the app reads must be mirrored here.
 
 ## Run it from source
 
@@ -17,8 +17,12 @@ You need [rustup](https://rustup.rs). `apps/desktop/rust-toolchain.toml` pins Ru
 cd apps/desktop
 cargo run -p raphie-desktop                              # Raphie Dev
 cargo run -p raphie-desktop -- --origin http://127.0.0.1:4321
+cargo run --release -p raphie-desktop                    # Raphie
 scripts/bundle.sh                                        # target/bundle/Raphie Dev.app
+scripts/bundle.sh --release                              # target/bundle/Raphie.app
 ```
+
+`--origin URL` signs in to that address at launch; without it the app reuses the last address's stored token or shows sign-in. `scripts/bundle.sh` wraps the binary in an app bundle with an `Info.plist`, an icon the app draws itself, and an ad hoc signature, signed only for this machine.
 
 A debug build is **Raphie Dev** and a release build (`--release`) is **Raphie**. They are separate apps that can be signed in side by side, so trying a change never disturbs the one you use daily.
 
@@ -30,9 +34,32 @@ A debug build is **Raphie Dev** and a release build (`--release`) is **Raphie**.
 
 The split lives in `Flavor` in `core/src/flavor.rs`. macOS posts system notifications only for a bundled app, so use `scripts/bundle.sh` when working on notifications.
 
+## Build the disk image
+
+`scripts/dmg.sh` builds what users install: the release app packed into a disk image with a link to `/Applications`.
+
+```sh
+cd apps/desktop
+RAPHIE_VERSION=v0.0.5 scripts/dmg.sh     # target/dist/Raphie-macos-arm64.dmg
+```
+
+| Step           | What it does                                                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Platform check | Stops unless it runs on an Apple Silicon Mac. There is no Intel build.                                                     |
+| Build          | Runs `scripts/bundle.sh --release` for `target/bundle/Raphie.app`.                                                         |
+| Bundle checks  | Refuses to pack unless the signature verifies, `Info.plist` is valid, the icon exists and the binary is built for `arm64`. |
+| Pack           | Writes a compressed, read-only image to `target/dist/Raphie-macos-arm64.dmg` and verifies it.                              |
+
+`RAPHIE_VERSION` (for example `v0.0.5` or a nightly tag) stamps the version the app shows in **About** and compares in its update check. The image is signed ad hoc only, with no Developer ID or notarisation, which is why users need **Open Anyway** on first launch; see [desktop app](/guides/desktop/#install).
+
+| Workflow                            | When                                                  | What it does with the image                                                                                                                                         |
+| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Desktop app** (`desktop-app.yml`) | Pull requests touching `apps/desktop/**` or `VERSION` | Runs `scripts/dmg.sh` on a macOS runner and keeps the image as a run artifact for seven days, for trying out.                                                       |
+| **Release** (`release.yml`)         | Every stable and nightly release                      | Runs `scripts/dmg.sh` with the release's `RAPHIE_VERSION`, attests its provenance, and publishes `Raphie-macos-arm64.dmg` with the release, listed in `SHA256SUMS`. |
+
 ## Use the fixture
 
-Never point the app at the real Raphie on 4316/4320 or at `.data/`. Use the disposable fixture:
+Never point the app at a real Raphie (4316/4320 in a checkout, 24316/24320 for a user install) or at `.data/`. Use the disposable fixture:
 
 <Steps>
 
@@ -88,6 +115,7 @@ The crate split is the boundary: the core owns the API client, auth, event strea
     - tests/screens.rs headless element-tree checks
   - scripts/
     - bundle.sh macOS app bundle
+    - dmg.sh release disk image, Apple Silicon only
     - snapshots.sh every scene to PNG
 
 </FileTree>

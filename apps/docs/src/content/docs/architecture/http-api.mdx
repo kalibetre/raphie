@@ -5,7 +5,9 @@ sidebar:
   order: 7
 ---
 
-The runtime is headless: it serves a JSON and server-sent events (SSE) API on `127.0.0.1:4316`, and every client, including the web workspace, is just a caller of that API. Remote callers reach it through the web host's authenticated `/api` proxy; the runtime port itself has no credential and must never be exposed.
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
+The runtime is headless: it serves a JSON and server-sent events (SSE) API on `127.0.0.1` at the runtime port (`4316` in a source checkout; see [ports](/architecture/overview/#ports)), and every client, including the web workspace, is just a caller of that API. Remote callers reach it through the web host's authenticated `/api` proxy; the runtime port itself has no credential and must never be exposed.
 
 ## Running without the web app
 
@@ -17,26 +19,36 @@ The runtime owns all durable work, so it runs fine with no web host and no brows
 | `bun run start:web`   | The built web host only (port 4320). It owns no conversation store and makes no model calls. |
 | `bun run start`       | Both                                                                                         |
 
-Installed copies run both processes through the `raphie` launcher and service; see [running as a service](/operate/service/).
+Installed copies run both processes through the `raphie` launcher and service, on the ports listed in [ports](/architecture/overview/#ports); see [running as a service](/operate/service/).
 
 ## How a request is authenticated
 
-```mermaid
-flowchart TB
-  browser([Browser · cookie session]) --> gate
-  native([Desktop client · bearer token]) --> gate
-  subgraph web [Web host · 4320]
-    gate["Sign-in gate<br/>host · session or device token"]
-    proxy["/api proxy<br/>origin · backend check"]
-  end
-  subgraph runtime [Runtime · 127.0.0.1:4316]
-    edge["Local access<br/>host · origin · client marker"]
-    actor["Route mints the owner actor"]
-    op["Application operation"]
-  end
-  gate --> proxy --> edge --> actor --> op
-  class edge attention
-```
+<Flow>
+  <Row>
+    <Box title="Browser" tone="person">
+      cookie session
+    </Box>
+    <Box title="Desktop app" tone="person">
+      bearer token
+    </Box>
+  </Row>
+  <Arrow />
+  <Row label="Web host · web port">
+    <Box title="Sign-in gate">host · session or device token</Box>
+    <Arrow right />
+    <Box title="/api proxy">origin · backend check</Box>
+  </Row>
+  <Arrow label="loopback HTTP" />
+  <Row label="Runtime · 127.0.0.1, runtime port" accent>
+    <Box title="Local access" tone="attention">
+      host · origin · client marker
+    </Box>
+    <Arrow right />
+    <Box title="Owner actor">minted by the route</Box>
+    <Arrow right />
+    <Box title="Application operation" />
+  </Row>
+</Flow>
 
 | Layer                 | Checks                                                                                                                                                                                                                                                         | Rejects with                                           |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |

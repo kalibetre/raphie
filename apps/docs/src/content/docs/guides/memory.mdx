@@ -5,6 +5,8 @@ sidebar:
   order: 3
 ---
 
+import { Sequence } from "~/components/diagram";
+
 Memory lets a bot carry lasting facts and preferences from one session to the next. It is on by default with built-in storage, needs no extra service, and keeps each saved item with a link back to the conversation it came from.
 
 Memory is a set of tools the model chooses to use, not a recording of everything you say. You can see, correct and delete every saved item under **Settings → [bot] → Memory → Browse memory**.
@@ -35,20 +37,19 @@ These work only if the model calls the matching memory tool. A bot saying "I'll 
 
 ## How built-in memory works
 
-```mermaid
-sequenceDiagram
-  actor Owner
-  participant Model
-  participant Memory as Built-in memory
-  Owner->>Model: I prefer jasmine tea
-  Model->>Memory: memory_retain(fact)
-  Memory-->>Model: Saved with ID, source and time
-  Note over Owner,Memory: Later, in another session
-  Owner->>Model: What tea do I like?
-  Model->>Memory: memory_recall(tea)
-  Memory-->>Model: Up to 8 matching records
-  Model-->>Owner: Answer citing the saved fact
-```
+<Sequence
+  actors={["Owner", "Model", "Built-in memory"]}
+  steps={[
+    ["Owner", "Model", "I prefer jasmine tea"],
+    ["Model", "Built-in memory", "memory_retain(fact)"],
+    ["Built-in memory", "Model", "Saved with ID, source and time", "reply"],
+    { note: "Later, in another session" },
+    ["Owner", "Model", "What tea do I like?"],
+    ["Model", "Built-in memory", "memory_recall(tea)"],
+    ["Built-in memory", "Model", "Up to 8 matching records", "reply"],
+    ["Model", "Owner", "Answer citing the saved fact", "reply"],
+  ]}
+/>
 
 1. **Save.** The model calls `memory_retain` with a fact or experience. The runtime stamps it with an ID, the session and turn it came from, and a timestamp.
 2. **Recall.** In any session of the same bot, the model calls `memory_recall` with a query. Full-text search returns up to eight records.

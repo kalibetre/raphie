@@ -7,34 +7,33 @@ sidebar:
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-Raphie is a self-hosted assistant you run on your own machine. It hosts one or more persistent **bots**, each with its own instructions, memory, workspace and scheduled work, and you talk to them from a browser, a desktop app or a messaging channel.
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
+Raphie is a self-hosted assistant you run on your own machine. It hosts one or more persistent **bots**, each with its own instructions, memory, workspace and scheduled work, and you talk to them from a browser, the Raphie desktop app for Mac or a messaging channel.
 
 Everything runs in one runtime process that you own. Model calls go to the provider you connect; your conversations, memory and files stay in Raphie's data directory.
 
 ## How it fits together
 
-```mermaid
-flowchart TB
-  owner([Owner])
-  subgraph clients[Clients and channels]
-    web[Web workspace]
-    desktop[Desktop client]
-    channel[Telegram or Discord]
-  end
-  runtime[Raphie runtime]
-  subgraph bot[Each bot]
-    sessions[Sessions]
-    memory[(Memory)]
-    workspace[(Workspace)]
-  end
-  provider[(Model provider)]
-  owner --> web & desktop & channel
-  web & desktop & channel --> runtime
-  runtime --> bot
-  bot --> provider
-  class runtime accent
-  class owner attention
-```
+<Flow>
+  <Box title="Owner" tone="person" />
+  <Arrow />
+  <Row label="Clients and channels">
+    <Box title="Web workspace">any browser</Box>
+    <Box title="Desktop app">macOS</Box>
+    <Box title="Channels">Telegram or Discord</Box>
+  </Row>
+  <Arrow />
+  <Box title="Raphie runtime" tone="accent" />
+  <Arrow />
+  <Row label="Each bot">
+    <Box title="Sessions" />
+    <Box title="Memory" tone="store" />
+    <Box title="Workspace" tone="store" />
+  </Row>
+  <Arrow />
+  <Box title="Model provider" tone="muted" />
+</Flow>
 
 You are the **owner**: the one person with authority over every bot. Clients and channels are only ways in; the same session, approval or memory record looks the same whichever one you use.
 
@@ -50,7 +49,7 @@ You are the **owner**: the one person with authority over every bot. Clients and
 | **Sandbox**     | The replaceable environment that runs commands against a bot's workspace, within limits you set.                                                       |
 | **Memory**      | Selected facts and preferences a bot keeps across sessions, each with a source. Not a copy of every transcript.                                        |
 | **Channel**     | An external messaging platform you can talk to a bot through, such as Telegram or Discord.                                                             |
-| **Client**      | An app you use to work with Raphie: the web workspace or the desktop client.                                                                           |
+| **Client**      | An app you use to work with Raphie: the web workspace or the desktop app.                                                                              |
 | **Approval**    | Your decision about one exact proposed action and its arguments. Approving does not prove the action succeeded.                                        |
 
 The full glossary is on the [glossary](/contribute/glossary/) page.
@@ -60,13 +59,23 @@ The full glossary is on the [glossary](/contribute/glossary/) page.
 <CardGrid>
   <LinkCard
     title="Install Raphie"
-    description="User install, Linux service or from source."
+    description="Raphie on your Mac or Linux machine, plus the desktop app."
     href="/start/installation/"
   />
   <LinkCard
     title="First run"
     description="Sign in, connect a model provider and start a conversation."
     href="/start/first-run/"
+  />
+  <LinkCard
+    title="Desktop app"
+    description="Use Raphie from a native Mac app."
+    href="/guides/desktop/"
+  />
+  <LinkCard
+    title="Remote access"
+    description="Reach Raphie from your laptop or phone."
+    href="/operate/remote-access/"
   />
   <LinkCard
     title="Conversations"

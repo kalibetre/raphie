@@ -7,7 +7,9 @@ sidebar:
 
 import { Steps } from "@astrojs/starlight/components";
 
-Attach up to four files, each up to 8 MiB, to a message in the web workspace or desktop client. Each file is saved into the bot's workspace, where its tools can read it, and images also go straight to the model when the model accepts images.
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
+Attach up to four files, each up to 8 MiB, to a message in the web workspace or desktop app. Each file is saved into the bot's workspace, where its tools can read it, and images also go straight to the model when the model accepts images.
 
 ## Attach files
 
@@ -25,14 +27,23 @@ If an upload or send fails, your text and the files that did upload stay in the 
 
 ## Where files go
 
-```mermaid
-flowchart LR
-  upload([Upload]) --> original[(Original, kept unchanged)]
-  upload --> working["/workspace/uploads/…"]
-  working --> tools[Bot's workspace tools]
-  original --> download[Download link in the conversation]
-  class working accent
-```
+<Flow>
+  <Box title="Upload" tone="person" />
+  <Arrow />
+  <Row>
+    <Box title="Original" tone="store">
+      kept unchanged
+    </Box>
+    <Box title="Working copy" tone="accent">
+      `/workspace/uploads/…`
+    </Box>
+  </Row>
+  <Arrow />
+  <Row>
+    <Box title="Download link">in the conversation, from the original</Box>
+    <Box title="Workspace tools">the bot reads the working copy</Box>
+  </Row>
+</Flow>
 
 | Copy         | Where                                                                          | Changes?                                                                  |
 | ------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |

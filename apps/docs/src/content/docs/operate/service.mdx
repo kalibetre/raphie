@@ -7,32 +7,43 @@ sidebar:
 
 import { TabItem, Tabs } from "@astrojs/starlight/components";
 
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
 Raphie is two processes: the **runtime**, which runs bots and stores data, and the **web host**, which serves the web workspace and proxies signed-in requests to the runtime. Both bind to `127.0.0.1` only. The installers wrap them in a background service so Raphie restarts on failure and, where possible, at boot.
 
-```mermaid
-flowchart LR
-  browser([Browser or desktop client]) -->|sign-in required| web[Web host<br/>127.0.0.1:4320]
-  web --> runtime[Runtime<br/>127.0.0.1:4316]
-  runtime --> data[(Data directory)]
-  class web accent
-```
+<Flow>
+  <Row>
+    <Box title="Browser" tone="person" />
+    <Box title="Desktop app" tone="person" />
+  </Row>
+  <Arrow label="sign-in required" />
+  <Box title="Web host" tone="accent">
+    `127.0.0.1`, web port
+  </Box>
+  <Arrow />
+  <Box title="Runtime">`127.0.0.1`, runtime port</Box>
+  <Arrow />
+  <Box title="Data directory" tone="store" />
+</Flow>
 
 ## Ports and origins
 
-| Setting                                      | User install, source    | System service          | Change it                                  |
-| -------------------------------------------- | ----------------------- | ----------------------- | ------------------------------------------ |
-| Runtime port (`PORT`)                        | `4316`                  | `4316`                  | Not on installed services; keep it private |
-| Web port (`RAPHIE_WEB_PORT`)                 | `4320`                  | `41837`                 | System: `sudo raphie set-port PORT`        |
-| Primary origin (`RAPHIE_WEB_ORIGIN`)         | `http://127.0.0.1:4320` | `http://127.0.0.1:PORT` | System: `--web-origin` at install          |
-| Extra origins (`RAPHIE_WEB_ALLOWED_ORIGINS`) | none                    | none                    | System: `sudo raphie set-origins`          |
+| Setting                                      | User install             | System service          | Source                  | Change it                                                             |
+| -------------------------------------------- | ------------------------ | ----------------------- | ----------------------- | --------------------------------------------------------------------- |
+| Runtime port (`PORT`)                        | `24316`                  | `4316`                  | `4316`                  | User: `raphie set-port WEB_PORT --runtime PORT`. Keep it private.     |
+| Web port (`RAPHIE_WEB_PORT`)                 | `24320`                  | `41837`                 | `4320`                  | User: `raphie set-port WEB_PORT`. System: `sudo raphie set-port PORT` |
+| Primary origin (`RAPHIE_WEB_ORIGIN`)         | `http://127.0.0.1:24320` | `http://127.0.0.1:PORT` | `http://127.0.0.1:4320` | System: `--web-origin` at install                                     |
+| Extra origins (`RAPHIE_WEB_ALLOWED_ORIGINS`) | none                     | none                    | none                    | System: `sudo raphie set-origins`; others: the variable               |
+
+`raphie port` shows the ports your install uses. A user install saves its ports in `~/.local/lib/raphie/.ports`; one made before ports were saved keeps `4320` and `4316`. New user installs can pick other ports with the installer's `--port` and `--runtime-port`; see [ports](/start/installation/#ports).
 
 An **origin** is an exact browser address (scheme, host and port) that Raphie accepts sign-ins and requests from. `127.0.0.1` and `localhost` on the web port always work locally. Any other origin must be HTTPS behind a TLS proxy; see [remote access](/operate/remote-access/).
 
 :::danger
-The runtime port has no authentication of its own and trusts every local process. Never forward, publish or proxy port `4316`.
+The runtime port has no authentication of its own and trusts every local process. Never forward, publish or proxy the runtime port.
 :::
 
-The user install and the system service use the same runtime port, so only one of them can run at a time on a machine.
+A source checkout and a user install with the default ports can run side by side. The system service and a source checkout both use runtime port `4316`, as does a user install made before ports were saved, so only one of those can run at a time on a machine.
 
 ## Manage the service
 
@@ -160,7 +171,7 @@ Change it with `raphie channel nightly` (or `stable`), then rerun the installer;
 
 1. finds the newest release on your channel for your platform;
 2. refuses to move backwards: if that release does not contain your installed version, nothing changes until one does;
-3. stops the service and refuses to continue if port 4316 or 4320 is still in use;
+3. stops the service and refuses to continue if its web or runtime port is still in use;
 4. copies the stopped data directory to `~/.local/share/raphie-backups/`;
 5. swaps in the new binaries, keeping the old ones in `~/.local/lib/.raphie-previous.*`;
 6. restarts the service and checks its health.

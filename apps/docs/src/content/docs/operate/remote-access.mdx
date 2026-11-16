@@ -7,38 +7,45 @@ sidebar:
 
 import { Steps, TabItem, Tabs } from "@astrojs/starlight/components";
 
-Raphie listens on `127.0.0.1` only, so nothing outside the machine can reach it until you add a path in. Use an **SSH tunnel** for occasional access, or a **tailnet with HTTPS** (such as Tailscale Serve) for everyday use from your other devices. Either way, only the web port is ever exposed, and only through something that encrypts it.
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
 
-```mermaid
-flowchart TB
-  subgraph devices[Your devices]
-    phone([Phone browser])
-    laptop([Laptop: browser or desktop client])
-  end
-  subgraph server[Raphie host]
-    proxy[TLS proxy<br/>e.g. Tailscale Serve]
-    web[Web host<br/>127.0.0.1 web port]
-    runtime[Runtime<br/>127.0.0.1:4316]
-  end
-  phone -->|HTTPS over tailnet| proxy
-  laptop -->|HTTPS over tailnet| proxy
-  laptop -.->|or SSH tunnel| web
-  proxy --> web
-  web --> runtime
-  class web accent
-  class runtime attention
-```
+Raphie listens on `127.0.0.1` only, so nothing outside the machine can reach it until you add a path in. Use an **SSH tunnel** for occasional access, or a **tailnet with HTTPS** (such as Tailscale Serve) for everyday use from your other devices. Either way, only the web port is ever exposed, and only through something that encrypts it. Run `raphie port` on the server to see which web port your install uses.
+
+<Flow>
+  <Row label="Your devices">
+    <Box title="Phone" tone="person">
+      browser
+    </Box>
+    <Box title="Laptop" tone="person">
+      browser or desktop app
+    </Box>
+  </Row>
+  <Arrow label="HTTPS over tailnet, or SSH tunnel" />
+  <Row label="Raphie host" accent>
+    <Box title="TLS proxy">e.g. Tailscale Serve</Box>
+    <Arrow right />
+    <Box title="Web host" tone="accent">
+      `127.0.0.1`, web port
+    </Box>
+    <Arrow right />
+    <Box title="Runtime" tone="attention">
+      `127.0.0.1`, never exposed
+    </Box>
+  </Row>
+</Flow>
+
+An SSH tunnel skips the proxy and reaches the web host directly.
 
 ## SSH tunnel
 
-The simplest option: no configuration on the server, and the browser still uses a loopback address.
+The simplest option: no configuration on the server, and the browser still uses a loopback address. Forward the server's web port, here the defaults:
 
 ```sh
-ssh -L 4320:127.0.0.1:4320 you@server     # user install
-ssh -L 41837:127.0.0.1:41837 you@server   # system service (or your chosen port)
+ssh -L 24320:127.0.0.1:24320 you@server   # user install
+ssh -L 41837:127.0.0.1:41837 you@server   # system service
 ```
 
-Leave it open and visit `http://127.0.0.1:4320` (or `:41837`) on your own computer.
+Leave it open and visit `http://127.0.0.1:24320` (or `:41837`) on your own computer, in a browser or the desktop app. If your install uses another port, put it on both sides of the `-L`.
 
 ## Tailnet with HTTPS
 
@@ -50,16 +57,16 @@ A tailnet gives every device you approve a private HTTPS address for Raphie. The
 
 2. **Tell Raphie its new origin.** Use the server's lowercase Tailscale name, with no trailing slash, for example `https://raphie-host.your-tailnet.ts.net`. See [add an origin](#add-an-origin) for your install.
 
-3. **Serve the web port over HTTPS.** Point Tailscale Serve at the web port, never at 4316:
+3. **Serve the web port over HTTPS.** Point Tailscale Serve at the web port that `raphie port` shows, never at the runtime port. With the default ports:
 
    ```sh
+   tailscale serve --bg http://127.0.0.1:24320        # user install
    sudo tailscale serve --bg http://127.0.0.1:41837   # system service
-   tailscale serve --bg http://127.0.0.1:4320         # user install
    ```
 
-   On Linux, `tailscale serve` needs `sudo` unless your user is the Tailscale operator.
+   On Linux, `tailscale serve` needs `sudo` unless your user is the Tailscale operator. If you later change the web port, point Tailscale Serve at the new one.
 
-4. **Sign in from another device** on the tailnet at the HTTPS address. Each origin has its own browser sign-in, so you sign in once per address. The [desktop client](/guides/desktop/) takes the same address and signs in with a device code.
+4. **Sign in from another device** on the tailnet at the HTTPS address. Each origin has its own browser sign-in, so you sign in once per address. The [desktop app](/start/installation/#desktop-app) takes the same address and signs in with a device code.
 
 </Steps>
 
@@ -128,7 +135,7 @@ Write origins exactly: lowercase, scheme, host, a non-default port if any, no pa
 | Web port through an SSH tunnel                                  | Yes.                                                                                     |
 | Web port over plain HTTP to a network                           | No. Raphie refuses non-loopback HTTP origins.                                            |
 | Web port to the public internet (for example, Tailscale Funnel) | No. Sign-in throttling stops repeated guesses of one password, not distributed guessing. |
-| Runtime port `4316`, by any route                               | Never. It has no authentication and trusts local processes.                              |
+| Runtime port (`24316` or `4316`), by any route                  | Never. It has no authentication and trusts local processes.                              |
 
 :::caution
 Keep the tailnet's access controls tight. Raphie's administrator sign-in protects the web workspace, but it is the only barrier once a device can reach the HTTPS address. Raphie ignores forwarded client-address headers and does not use Tailscale identity for sign-in.

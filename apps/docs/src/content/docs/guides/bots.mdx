@@ -7,24 +7,28 @@ sidebar:
 
 import { Steps } from "@astrojs/starlight/components";
 
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
 A bot is a persistent assistant with its own personality, model connections, sessions, memory and workspace. Raphie starts with one, the **default** bot named Raphie; add more when you want assistants that keep separate context, credentials or tools.
 
 All bots run in the same runtime and answer to you. Separation between them is logical, not an operating-system boundary.
 
 ## What a bot owns
 
-```mermaid
-flowchart TB
-  subgraph bot[A bot]
-    profile[Profile and SOUL.md]
-    providers[Providers and default model]
-    sessions[Sessions]
-    memory[(Memory)]
-    workspace[(Workspace and sandbox)]
-    automation[MCP tools, channels, scheduled jobs]
-  end
-  runtime[Runtime] --> bot
-```
+<Flow>
+  <Box title="Runtime" />
+  <Arrow />
+  <Row label="A bot" accent>
+    <Box title="Profile">and `SOUL.md`</Box>
+    <Box title="Providers">and default model</Box>
+    <Box title="Sessions" />
+    <Box title="Memory" tone="store" />
+    <Box title="Workspace" tone="store">
+      and sandbox
+    </Box>
+    <Box title="Automation">MCP tools · channels · scheduled jobs</Box>
+  </Row>
+</Flow>
 
 | Separate for each bot                                      | Shared by all bots                                   |
 | ---------------------------------------------------------- | ---------------------------------------------------- |

@@ -5,27 +5,33 @@ sidebar:
   order: 4
 ---
 
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
 A bot is the ownership boundary for configuration, sessions, memory, tools and files. Every bot runs in the same runtime process, but each has its own harness, stores and credentials, and the model can never reach another bot's state. This is logical separation inside a trusted host, not operating-system isolation.
 
 ## Bots: separate state, shared process
 
 `BotHost` composes one bot runtime per bot and owns the bot registry in `bots.sqlite`. Each bot runtime repeats the same stack against its own files.
 
-```mermaid
-flowchart TB
-  router["BotHost router<br/>/api/bots/:botId/* → exactly one bot"]
-  registry[("bots.sqlite<br/>profiles · revisions")]
-  subgraph defbot [Default bot · data directory root]
-    d1["Harness · settings · memory<br/>MCP · channels · jobs · workspace"]
-  end
-  subgraph named [Named bot · its own bots folder]
-    n1["Harness · settings · memory<br/>MCP · channels · jobs · workspace"]
-  end
-  router --> defbot
-  router --> named
-  router --- registry
-  class router accent
-```
+<Flow>
+  <Row>
+    <Box title="BotHost router" tone="accent">
+      `/api/bots/:botId/*` reaches exactly one bot
+    </Box>
+    <Arrow right both />
+    <Box title="bots.sqlite" tone="store">
+      profiles · revisions
+    </Box>
+  </Row>
+  <Arrow />
+  <Row>
+    <Box title="Default bot">
+      data directory root · harness, settings, memory, MCP, channels, jobs,
+      workspace
+    </Box>
+    <Box title="Named bot">its own folder under `bots/` · the same stack</Box>
+  </Row>
+</Flow>
 
 | Part        | How it works                                                                                                                                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,18 +59,24 @@ Bot management (create, edit, delete) is an owner HTTP surface only. No model to
 
 Memory holds selected facts and confirmed experiences that outlast a session. The model decides what to retain through tools; the host supplies the scope and provenance, so a prompt injection cannot forge either.
 
-```mermaid
-flowchart TB
-  tools["Model tools<br/>retain · recall · reflect · revise · forget"]
-  host["Host injects<br/>scope from bot config<br/>source = session and turn<br/>time = turn start"]
-  port["Memory port<br/>one backend at a time"]
-  builtin[("Built-in<br/>memory.sqlite + FTS5")]
-  hindsight[("Hindsight<br/>over HTTP")]
-  tools --> host --> port
-  port --> builtin
-  port --> hindsight
-  class host accent
-```
+<Flow>
+  <Box title="Model tools">retain · recall · reflect · revise · forget</Box>
+  <Arrow />
+  <Box title="Host injects" tone="accent">
+    scope from bot config · source = session and turn · time = turn start
+  </Box>
+  <Arrow />
+  <Box title="Memory port">one backend at a time</Box>
+  <Arrow />
+  <Row>
+    <Box title="Built-in" tone="store">
+      `memory.sqlite` + FTS5
+    </Box>
+    <Box title="Hindsight" tone="store">
+      over HTTP
+    </Box>
+  </Row>
+</Flow>
 
 | Tool                             | Behaviour                                                                                                                                                             |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -88,19 +100,22 @@ Each bot owns one persistent `/workspace`, shared by all its sessions. Compute i
 
 ### just-bash (default)
 
-```mermaid
-flowchart TB
-  tool["workspace_exec<br/>after the approval gate"]
-  queue["Bot queue<br/>serial · 16 admitted"]
-  worker["Worker thread<br/>empty env · no network · 5 s"]
-  check{"exit 0 and<br/>within limits?"}
-  commit[("checkpoint + receipt<br/>one transaction")]
-  discard["Discard every change"]
-  tool --> queue --> worker --> check
-  check -->|yes| commit
-  check -->|no| discard
-  class commit accent
-```
+<Flow>
+  <Row>
+    <Box title="workspace_exec">after the approval gate</Box>
+    <Arrow right />
+    <Box title="Bot queue">serial · 16 admitted</Box>
+    <Arrow right />
+    <Box title="Worker thread">empty env · no network · 5 s</Box>
+  </Row>
+  <Arrow label="exit 0 and within limits?" />
+  <Row>
+    <Box title="Yes: commit" tone="accent">
+      checkpoint and receipt in one transaction
+    </Box>
+    <Box title="No: discard">every change is dropped</Box>
+  </Row>
+</Flow>
 
 A command runs in a throwaway worker that gets only the checkpoint and the command: no database paths, host mounts, network, native binaries, Node, Python or `sqlite3`. Only a zero exit produces a new checkpoint, committed together with the tool receipt. That is why `workspace_exec` is replay-safe: after a crash, either both exist (the stored result is returned) or neither does (it runs again from the old checkpoint).
 
@@ -116,22 +131,22 @@ Only `/workspace` persists. `/tmp` and shell state last one command.
 
 ### Container (opt-in)
 
-```mermaid
-flowchart TB
-  subgraph runtime [Runtime process]
-    env["Container environment<br/>epoch fence · idle reaper"]
-    control[("container.sqlite<br/>lease · command journal")]
-  end
-  subgraph guest [Container · read-only root]
-    rpc["Pi execution env<br/>read · write · edit · bash"]
-    files["/workspace"]
-  end
-  disk[("workspace/files/")]
-  env -->|"docker exec · stdio RPC"| rpc
-  env --- control
-  files ---|bind mount| disk
-  class guest accent
-```
+<Flow>
+  <Row label="Runtime process">
+    <Box title="Container environment">epoch fence · idle reaper</Box>
+    <Arrow right both />
+    <Box title="container.sqlite" tone="store">
+      lease · command journal
+    </Box>
+  </Row>
+  <Arrow label="docker exec · stdio RPC" />
+  <Row label="Container · read-only root" accent>
+    <Box title="Pi execution env">read · write · edit · bash</Box>
+    <Box title="/workspace" />
+  </Row>
+  <Arrow both label="bind mount" />
+  <Box title="workspace/files/" tone="store" />
+</Flow>
 
 | Control    | Value                                                                                                                                         |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -142,7 +157,7 @@ flowchart TB
 | Network    | Bridge networking: the internet, the host and the LAN are reachable. The owner must acknowledge this per bot before choosing the provider.    |
 | Lifetime   | One container per bot, created on first use, removed after the idle period (1 to 1,440 minutes, default 10). Files persist; processes do not. |
 
-Control state lives on the host, outside the mount. Opening a provider increments an epoch and removes containers from earlier epochs before the new one is published, so a stale provider can never act again. Every command that can change files is journalled before dispatch; an interrupted one is reported as an unknown outcome and not rerun. There is no rollback: the working tree is the state. See [ADR 0003](/decisions/0003-native-bot-sandbox/).
+Control state lives on the host, outside the mount. Opening a provider increments an epoch and removes containers from earlier epochs before the new one is published, so a stale provider can never act again. Every command that can change files is journalled before dispatch; an interrupted one is reported as an unknown outcome and not rerun. There is no rollback: the working tree is the state.
 
 ### Switching provider
 

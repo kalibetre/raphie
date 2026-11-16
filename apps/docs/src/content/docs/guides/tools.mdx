@@ -7,6 +7,8 @@ sidebar:
 
 import { Steps, TabItem, Tabs } from "@astrojs/starlight/components";
 
+import { Sequence } from "~/components/diagram";
+
 A bot reaches outside services through MCP servers that you connect to that bot alone. Raphie encrypts each connection's configuration on disk, and every tool call waits for you to approve its exact arguments before anything is sent.
 
 Connections are per bot: another bot never sees them, their tools or their sign-ins.
@@ -63,26 +65,31 @@ To change a connection, remove it and add the replacement. Changes are refused w
 
 Connecting a server lets the bot see its tools; it does not let the bot run them. Each call the model proposes becomes an approval for that exact server, tool and arguments, even for tools that describe themselves as read-only.
 
-```mermaid
-sequenceDiagram
-  participant M as Model
-  participant R as Raphie
-  actor O as Owner
-  participant S as MCP server
-  M->>R: Propose tool call with arguments
-  R->>O: Approval request (exact arguments)
-  alt Approve once
-    O->>R: Approve
-    R->>S: Call tool
-    S-->>R: Result
-    R-->>M: Result
-  else Reject or no answer in 10 minutes
-    O-->>R: Reject / expires
-    R-->>M: No call was sent
-  end
-```
+<Sequence
+  actors={["Model", "Raphie", "Owner", "MCP server"]}
+  steps={[
+    ["Model", "Raphie", "Propose tool call with arguments"],
+    ["Raphie", "Owner", "Approval request (exact arguments)"],
+    {
+      group: "Approve once",
+      steps: [
+        ["Owner", "Raphie", "Approve"],
+        ["Raphie", "MCP server", "Call tool"],
+        ["MCP server", "Raphie", "Result", "reply"],
+        ["Raphie", "Model", "Result", "reply"],
+      ],
+    },
+    {
+      group: "Reject, or no answer in 10 minutes",
+      steps: [
+        ["Owner", "Raphie", "Reject or expires", "reply"],
+        ["Raphie", "Model", "No call was sent", "reply"],
+      ],
+    },
+  ]}
+/>
 
-- You decide in the web workspace or the desktop client (**Approve once** or **Reject**), or in a private Telegram chat for turns started there (**Approve once** or **Decline**).
+- You decide in the web workspace or the desktop app (**Approve once** or **Reject**), or in a private Telegram chat for turns started there (**Approve once** or **Decline**).
 - An approval expires after 10 minutes. The bot is told no call was sent.
 - Approvals are per call. There is no "always allow" for MCP tools, and a conversation's command permission mode (**Ask** or **Full access**) does not apply to them.
 - Arguments larger than 64 KiB are refused before an approval is created.
