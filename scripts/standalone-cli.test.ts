@@ -62,3 +62,40 @@ test("standalone launcher stops the other process when one exits", async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("raphie --version prints the release it was built as", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-version-test-"));
+  try {
+    const binary = join(directory, "raphie");
+    // As scripts/build-standalone.sh stamps a release.
+    const build = Bun.spawnSync([
+      process.execPath,
+      "build",
+      "--compile",
+      "--no-compile-autoload-dotenv",
+      "--no-compile-autoload-bunfig",
+      "--define",
+      '__RAPHIE_VERSION__="v0.0.5-nightly.20261116.1.1"',
+      "scripts/raphie.ts",
+      "--outfile",
+      binary,
+    ]);
+    assert.equal(build.exitCode, 0, build.stderr.toString());
+    const release = Bun.spawnSync([binary, "--version"]);
+    assert.equal(release.exitCode, 0);
+    assert.equal(
+      release.stdout.toString(),
+      "raphie v0.0.5-nightly.20261116.1.1\n",
+    );
+    const checkout = Bun.spawnSync([
+      process.execPath,
+      "scripts/raphie.ts",
+      "--version",
+    ]);
+    assert.equal(checkout.stdout.toString(), "raphie development\n");
+    const extra = Bun.spawnSync([binary, "--version", "now"]);
+    assert.notEqual(extra.exitCode, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

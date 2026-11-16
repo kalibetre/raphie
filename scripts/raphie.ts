@@ -21,6 +21,12 @@ import {
   writeUserInstallPorts,
 } from "./user-install-ports.ts";
 
+/** Set by `bun build --define` for a release; a source checkout has none. */
+declare const __RAPHIE_VERSION__: string | undefined;
+
+const VERSION =
+  typeof __RAPHIE_VERSION__ === "string" ? __RAPHIE_VERSION__ : "development";
+
 /** A user installation's folder, or `undefined` for any other copy. */
 function userInstall() {
   if (!Bun.isStandaloneExecutable) return undefined;
@@ -335,6 +341,10 @@ async function main() {
     args.splice(flag, 2);
   }
   const [command, action] = args;
+  if (command === "--version" && args.length === 1) {
+    console.log(`raphie ${VERSION}`);
+    return;
+  }
   // A user installation runs on the ports it saved, whatever else is set.
   const install = userInstall();
   if (install)
@@ -446,7 +456,7 @@ async function main() {
   }
   if (!command || command === "help" || command === "--help") {
     console.log(
-      `Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie stop                 Stop the background service\n  raphie restart              Restart (or start) the background service\n  raphie update [--channel stable|nightly]  Update to the newest release\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
+      `Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie stop                 Stop the background service\n  raphie restart              Restart (or start) the background service\n  raphie update [--channel stable|nightly]  Update to the newest release\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n  raphie --version            Show the installed version\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
     );
     return;
   }
