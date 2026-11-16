@@ -98,7 +98,7 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     await compare("ahead");
     await writeFile(
       join(bin, "curl"),
-      `#!/bin/sh\ncase "$2" in *api.github.com*/compare/*) cp "$FIXTURE/compare.json" "$4";; *api.github.com*) cp "$FIXTURE/release.json" "$4";; *SHA256SUMS) cp "$FIXTURE/SHA256SUMS" "$4";; *) cp "$FIXTURE/archive.tar.gz" "$4";; esac\n`,
+      `#!/bin/sh\ncase "$2" in *api.github.com*/compare/*) printf '%s' "$2" > "$FIXTURE/compare-url"; cp "$FIXTURE/compare.json" "$4";; *api.github.com*) cp "$FIXTURE/release.json" "$4";; *SHA256SUMS) cp "$FIXTURE/SHA256SUMS" "$4";; *) cp "$FIXTURE/archive.tar.gz" "$4";; esac\n`,
       { mode: 0o755 },
     );
     await writeFile(join(bin, "sudo"), "#!/bin/sh\nexit 99\n", { mode: 0o755 });
@@ -268,6 +268,11 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     const update = run();
     assert.equal(update.exitCode, 0, update.stderr.toString());
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-11-1");
+    // It asks for a comparison without file diffs, which can be megabytes.
+    assert.match(
+      await readFile(join(temp, "compare-url"), "utf8"),
+      /\/compare\/[^?]+\.\.\.nightly-11-1\?per_page=1&page=2$/,
+    );
     assert.deepEqual(
       await readFile(join(home, ".local/share/raphie-headless/master-key")),
       headlessKey,

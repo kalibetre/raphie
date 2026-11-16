@@ -308,7 +308,10 @@ if [ -n "$current_version" ] && [ "$current_version" = "$version" ]; then
   exit 0
 fi
 if [ -n "$current_version" ]; then
-  if ! curl -fsSL "https://api.github.com/repos/kalibetre/raphie/compare/$current_version...$version" -o "$work/compare.json"; then
+  # Only the status is needed. GitHub lists the changed files on the first
+  # page of a comparison only, and those diffs can run to megabytes, so ask
+  # for the second page of one commit each.
+  if ! curl -fsSL "https://api.github.com/repos/kalibetre/raphie/compare/$current_version...$version?per_page=1&page=2" -o "$work/compare.json" --retry 3; then
     echo 'Could not verify update ancestry. The current installation remains unchanged.' >&2; exit 1
   fi
   if ! python3 - "$work/compare.json" <<'PY_COMPARE'
