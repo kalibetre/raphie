@@ -9,6 +9,7 @@ use raphie_core::engine::Command;
 use rune::{Color, El, Icon, Shadow, col, el, icon, row, text};
 
 use crate::avatar::{Tone, bot_avatar};
+use crate::icons;
 use crate::state::Ui;
 use crate::theme::{Theme, font};
 use crate::view::Look;
@@ -394,4 +395,52 @@ pub fn save_bar(t: &Theme, bar: SaveBar, discard: fn(&mut Ui), save: fn(&mut Ui)
             bar.can_save,
             save,
         ))
+}
+
+/// The amber box that says something needs the owner (the web's
+/// `.channel-alert`).
+pub fn alert(t: &Theme, key: &str, title: &str, message: &str) -> El {
+    alert_with(t, key, title, message, None)
+}
+
+/// [`alert`] with buttons under its message.
+pub fn alert_with(t: &Theme, key: &str, title: &str, message: &str, actions: Option<El>) -> El {
+    let mut body = col()
+        .grow(1.0)
+        .min_w(0.0)
+        .gap(3.0)
+        .child(text(title).font(font(13.0, 600.0)).color(t.foreground))
+        .child(
+            text(message)
+                .key(format!("{key}-message"))
+                .font(font(13.0, 400.0).lh(19.5))
+                .color(t.foreground)
+                .wrap(),
+        );
+    if let Some(actions) = actions {
+        body = body.child(actions.mt(8.0));
+    }
+    row()
+        .key(key)
+        .role("alert")
+        .w_full()
+        .padding(14.0)
+        .gap(12.0)
+        .items_start()
+        .radius(10.0)
+        .fill(t.attention_soft)
+        .border(1.0, t.border.mix(t.attention, 0.35))
+        .child(
+            row()
+                .size(32.0, 32.0)
+                .center()
+                .radius(8.0)
+                .fill(t.attention.alpha(0.14))
+                .child(
+                    icon(&icons::TRIANGLE_ALERT, 18.0)
+                        .color(t.attention)
+                        .a11y_hidden(),
+                ),
+        )
+        .child(body)
 }

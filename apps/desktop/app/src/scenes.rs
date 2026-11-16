@@ -18,7 +18,7 @@ use raphie_core::engine::Command;
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::JobUpdates;
 use raphie_core::mcp::McpTransport;
-use raphie_core::model::{AuthState, Event};
+use raphie_core::model::{AuthState, Event, Reach};
 use raphie_core::model_library::PickerFilter;
 use raphie_core::origin::Origin;
 use raphie_core::updates::{ReleaseChannel, Update, UpdateStatus};
@@ -55,6 +55,11 @@ pub const SCENES: &[Scene] = &[
     ("approval", approval),
     ("command-approval", command_approval),
     ("settings-account", settings_account),
+    ("settings-account-unreachable", settings_account_unreachable),
+    (
+        "settings-account-runtime-down",
+        settings_account_runtime_down,
+    ),
     ("settings-appearance", settings_appearance),
     ("settings-about", settings_about),
     ("settings-about-update", settings_about_update),
@@ -204,6 +209,22 @@ pub fn settings_account(ui: &mut Ui) {
     })));
     ui.open_settings(Some(Page::Account));
     ui.expanded_bots.insert("default".into());
+}
+
+/// Settings → Account when nothing answers at the address.
+pub fn settings_account_unreachable(ui: &mut Ui) {
+    settings_account(ui);
+    ui.model.apply(Event::Reach(Reach::Unreachable(
+        "error sending request".into(),
+    )));
+}
+
+/// Settings → Account when the web host answers but the runtime does not.
+pub fn settings_account_runtime_down(ui: &mut Ui) {
+    settings_account(ui);
+    ui.model.apply(Event::Reach(Reach::RuntimeDown(
+        "The runtime is unavailable. Please retry.".into(),
+    )));
 }
 
 /// Settings → Appearance.

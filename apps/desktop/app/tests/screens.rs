@@ -19,7 +19,7 @@ use raphie_core::inbox::Target;
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::{McpAction, NewMcpConnection};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
-use raphie_core::model::{AuthState, Event};
+use raphie_core::model::{AuthState, Event, Reach};
 use raphie_core::model_library::PickerFilter;
 use raphie_core::sandbox::SandboxUpdate;
 use raphie_core::settings::ThemeChoice;
@@ -474,6 +474,48 @@ fn the_account_page_says_who_is_signed_in_and_signs_out() {
     click(&mut rt, "rd-account-sign-out");
     assert_eq!(rt.state.sent.last(), Some(&Command::SignOut));
     assert_eq!(rt.state.screen, Screen::Workspace);
+}
+
+#[test]
+fn account_warns_when_raphie_stops_answering_and_offers_another_address() {
+    let has =
+        |rt: &Runtime<Ui>, key: &str| rt.elements().iter().any(|e| e.key.as_deref() == Some(key));
+    // While Raphie answers: no warning, and the address can still change.
+    let rt = render(scenes::settings_account, false);
+    assert!(!has(&rt, "rd-account-unreachable"));
+    assert!(screen_text(&rt).contains("· Connected"));
+    assert!(has(&rt, "rd-account-change-address"));
+
+    let mut rt = render(scenes::settings_account_runtime_down, false);
+    assert!(has(&rt, "rd-account-unreachable"));
+    let text = screen_text(&rt);
+    assert!(text.contains("Raphie is not running"));
+    assert!(text.contains("· Not answering"));
+    // Trying again asks once, and says so until the answer comes.
+    click(&mut rt, "rd-account-check");
+    assert_eq!(rt.state.sent.last(), Some(&Command::CheckReach));
+    assert!(screen_text(&rt).contains("Checking…"));
+    let sent = rt.state.sent.len();
+    click(&mut rt, "rd-account-check");
+    assert_eq!(rt.state.sent.len(), sent);
+
+    let mut rt = render(scenes::settings_account_unreachable, false);
+    assert!(screen_text(&rt).contains("Can't reach Raphie"));
+    click(&mut rt, "rd-account-change-address");
+    assert_eq!(rt.state.sent.last(), Some(&Command::ChangeAddress));
+    assert_eq!(rt.state.screen, Screen::Workspace);
+
+    // The roster's status says so too, instead of "Connected".
+    let status = |rt: &Runtime<Ui>| element(rt, "rd-stream-status").text.unwrap_or_default();
+    let mut rt = render(scenes::conversations, false);
+    assert_eq!(status(&rt), "Connected");
+    rt.update(|ui, _| {
+        ui.model.apply(Event::Reach(Reach::Unreachable(
+            "error sending request".into(),
+        )));
+    });
+    settle(&mut rt);
+    assert_eq!(status(&rt), "Not answering");
 }
 
 #[test]

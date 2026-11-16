@@ -179,12 +179,15 @@ pub fn plain(preview: &str) -> String {
 /// right.
 fn footer(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
+    // "Not answering" when the last check found Raphie down, and
     // "Reconnecting…" while the open conversation's stream is down.
-    let online = s
+    let answering = s.model.reach.is_up();
+    let streaming = s
         .model
         .conversation
         .as_ref()
         .is_none_or(|c| c.stream != StreamStatus::Reconnecting);
+    let online = answering && streaming;
     let origin = s
         .model
         .origin
@@ -207,7 +210,9 @@ fn footer(s: &Ui, look: &Look) -> El {
                 .help(origin)
                 .child(status_dot(t, online))
                 .child(
-                    text(if online {
+                    text(if !answering {
+                        "Not answering"
+                    } else if streaming {
                         "Connected"
                     } else {
                         "Reconnecting…"

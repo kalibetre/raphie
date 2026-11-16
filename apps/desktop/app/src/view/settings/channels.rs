@@ -14,9 +14,9 @@ use raphie_core::contracts::{
     ChannelHomeSettings, ChannelPlatform, ChannelSettings, DiscordChannel, TelegramChannel,
 };
 use raphie_core::engine::Command;
-use rune::{El, Icon, Span, Tx, col, icon, row, text};
+use rune::{El, Icon, Span, Tx, col, row, text};
 
-use super::parts::{Scope, group, page, setting, status};
+use super::parts::{Scope, alert, group, page, setting, status};
 use crate::format::clock;
 use crate::icons;
 use crate::sections::BotSection;
@@ -114,46 +114,6 @@ fn field(children: Vec<El>) -> El {
 /// A row of buttons that wraps (`.automation-actions`).
 fn actions() -> El {
     row().w_full().gap(8.0).flex_wrap().center_y()
-}
-
-/// The amber box that says something needs the owner (`.channel-alert`).
-fn alert(t: &Theme, key: &str, title: &str, message: &str) -> El {
-    row()
-        .key(key)
-        .role("alert")
-        .w_full()
-        .padding(14.0)
-        .gap(12.0)
-        .items_start()
-        .radius(10.0)
-        .fill(t.attention_soft)
-        .border(1.0, t.border.mix(t.attention, 0.35))
-        .child(
-            row()
-                .size(32.0, 32.0)
-                .center()
-                .radius(8.0)
-                .fill(t.attention.alpha(0.14))
-                .child(
-                    icon(&icons::TRIANGLE_ALERT, 18.0)
-                        .color(t.attention)
-                        .a11y_hidden(),
-                ),
-        )
-        .child(
-            col()
-                .grow(1.0)
-                .min_w(0.0)
-                .gap(3.0)
-                .child(text(title).font(font(13.0, 600.0)).color(t.foreground))
-                .child(
-                    text(message)
-                        .key(format!("{key}-message"))
-                        .font(font(13.0, 400.0).lh(19.5))
-                        .color(t.foreground)
-                        .wrap(),
-                ),
-        )
 }
 
 /// A channel's row, the line its last change left under it, and its panel

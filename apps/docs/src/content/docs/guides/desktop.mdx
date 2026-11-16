@@ -97,7 +97,7 @@ The token is saved in the macOS login Keychain, one per address, and reused at t
 
 </Steps>
 
-The app accepts plain `http://` only for `127.0.0.1`, `localhost` and `[::1]`, so a token never crosses a network unencrypted. It follows no redirects. If you later change Raphie's web port with `raphie set-port`, update the tailnet address (or `tailscale serve`) and sign the app in to the new address.
+The app accepts plain `http://` only for `127.0.0.1`, `localhost` and `[::1]`, so a token never crosses a network unencrypted. It follows no redirects. If you later change Raphie's web port with `raphie set-port`, update the tailnet address (or `tailscale serve`) and [change the app's address](#change-the-address).
 
 ## Update
 
@@ -113,10 +113,26 @@ The app checks for a newer release at launch, and **Settings → About → Check
 
 Your sign-in and settings are kept.
 
+## When Raphie stops answering
+
+While signed in, the app asks Raphie every 10 seconds whether it is running, through the web host's `/api/runtime`, the same check `raphie status` makes. When the check fails, the bottom of the bot list says **Not answering** instead of **Connected**, and **Settings → Account** explains which part did not answer:
+
+| Warning                   | Meaning                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Raphie is not running** | The web host answered at the address, but the runtime behind it did not. Check it with `raphie status` on that computer. |
+| **Can't reach Raphie**    | Nothing answered at the address: Raphie is stopped, this Mac is offline or off the tailnet, or the address is wrong.     |
+
+**Try again** checks at once. The app stays signed in and the warning clears by itself when Raphie answers again.
+
+## Change the address
+
+**Settings → Account → Change address** returns to the sign-in screen with the current address filled in. Enter the new one and choose **Connect**. The old address's token stays in the Keychain, so connecting back to it later needs no new approval. Use this when Raphie's web port or tailnet name changes.
+
 ## Sign out or disconnect
 
 | Action                                                           | What happens                                                                                     |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Change address** (**Settings → Account**)                      | Returns to sign-in to connect elsewhere. Keeps the token for this address.                       |
 | **Sign out** (bottom of the bot list, or **Settings → Account**) | Forgets the token on this Mac. The device stays listed in the web workspace.                     |
 | **Disconnect** in the web workspace's **Settings → Account**     | Revokes the device's token on the server. Use this for a lost Mac or a device you no longer use. |
 

@@ -46,6 +46,8 @@ use crate::workspace::DOWNLOAD_LIMIT;
 /// Ordinary requests give up after this long. Event streams have no overall
 /// timeout (they stay open for as long as the conversation is on screen).
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long a connection check waits before calling Raphie unreachable.
+const REACH_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How long one file upload may take.
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
@@ -235,6 +237,16 @@ impl ApiClient {
     }
 
     // ----- Reads -----
+
+    /// Asks the runtime, through the web host, whether it is running: the
+    /// same `/api/runtime` that `raphie status` asks.
+    pub async fn reach(&self) -> Result<(), ApiError> {
+        let request = self
+            .authorized(self.http.get(self.origin.url("/api/runtime")))
+            .timeout(REACH_TIMEOUT);
+        check(request.send().await.map_err(network)?).await?;
+        Ok(())
+    }
 
     /// The signed-in administrator, if the host says who it is.
     pub async fn account(&self) -> Result<Option<Account>, ApiError> {

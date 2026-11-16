@@ -400,6 +400,8 @@ pub enum Event {
     /// The address of a Raphie installed on this computer that answered,
     /// or `None` when none did.
     LocalInstall(Option<Origin>),
+    /// Whether the signed-in Raphie answered its last check.
+    Reach(Reach),
     /// How a session treats commands.
     ApprovalMode {
         session_id: String,
@@ -472,6 +474,25 @@ pub enum StreamStatus {
     Live,
     /// The stream dropped; the engine is reconnecting.
     Reconnecting,
+}
+
+/// Whether the signed-in Raphie answers: the web host at its address, and
+/// the runtime behind it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Reach {
+    /// It answered the last check, or none has failed since signing in.
+    #[default]
+    Up,
+    /// The web host answered, but the runtime behind it did not.
+    RuntimeDown(String),
+    /// Nothing answered at the address (stopped, offline, wrong address).
+    Unreachable(String),
+}
+
+impl Reach {
+    pub fn is_up(&self) -> bool {
+        *self == Reach::Up
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -755,6 +776,10 @@ pub struct Model {
     /// A Raphie installed on this computer that answered when last looked
     /// for, offered on the sign-in screen.
     pub local_install: Option<Origin>,
+    /// Whether the signed-in Raphie answered its last check.
+    pub reach: Reach,
+    /// A check asked for from Settings → Account is on its way.
+    pub checking_reach: bool,
     /// The subscription sign-in on screen, and whose bot it is for.
     pub sign_in: Option<(String, ProviderSignIn)>,
     /// A sign-in step waiting for the runtime's answer.
@@ -852,6 +877,8 @@ impl Default for Model {
             update: UpdateStatus::default(),
             finished_sign_in: None,
             local_install: None,
+            reach: Reach::Up,
+            checking_reach: false,
             sign_in: None,
             sign_in_busy: false,
             sign_in_error: None,
@@ -883,6 +910,7 @@ impl Model {
             Event::SignedIn { origin } => {
                 self.origin = Some(origin);
                 self.auth = AuthState::SignedIn;
+                self.reach = Reach::Up;
                 self.notice = None;
             }
             Event::SignedOut { notice } => {
@@ -1292,6 +1320,10 @@ impl Model {
                 self.sign_in_error = Some(message);
             }
             Event::LocalInstall(found) => self.local_install = found,
+            Event::Reach(reach) => {
+                self.reach = reach;
+                self.checking_reach = false;
+            }
             Event::UpdateChecked(result) => {
                 self.update = match result {
                     Ok(Some(update)) => UpdateStatus::Available(update),
