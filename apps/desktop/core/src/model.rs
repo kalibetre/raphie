@@ -315,6 +315,8 @@ pub enum Event {
     },
     /// Who is signed in, when the host says.
     Account(Option<Account>),
+    /// The release the signed-in Raphie runs.
+    HostVersion(String),
     Bots(Vec<BotProfile>),
     BotSelected {
         bot_id: String,
@@ -651,6 +653,8 @@ pub struct Model {
     pub auth: AuthState,
     /// The signed-in administrator, once the host has said who it is.
     pub account: Option<Account>,
+    /// The release the signed-in Raphie runs, once it has said.
+    pub host_version: Option<String>,
     /// Each bot's model connections and models, once loaded.
     pub settings: HashMap<String, RuntimeSettings>,
     /// The bot whose settings could not be loaded, and why.
@@ -813,6 +817,7 @@ impl Default for Model {
             origin: None,
             auth: AuthState::SignedOut { notice: None },
             account: None,
+            host_version: None,
             settings: HashMap::new(),
             settings_error: None,
             setting_model: false,
@@ -911,6 +916,7 @@ impl Model {
                 self.origin = Some(origin);
                 self.auth = AuthState::SignedIn;
                 self.reach = Reach::Up;
+                self.host_version = None;
                 self.notice = None;
             }
             Event::SignedOut { notice } => {
@@ -930,6 +936,7 @@ impl Model {
                 };
             }
             Event::Account(account) => self.account = account,
+            Event::HostVersion(version) => self.host_version = Some(version),
             Event::ConnectionChanged {
                 bot_id,
                 settings,

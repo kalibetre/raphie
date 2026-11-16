@@ -338,6 +338,13 @@ pub(crate) struct AuthStatus {
     pub account: Option<Account>,
 }
 
+/// The body of `GET /_raphie/version`: the release the web host was built
+/// from, which the runtime beside it shares.
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct HostBuild {
+    pub version: String,
+}
+
 /// The body of `GET /api/bots`.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct BotList {

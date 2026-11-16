@@ -603,6 +603,13 @@ fn about_shows_the_version_and_checks_for_updates() {
     let text = screen_text(&rt);
     assert!(text.contains(current_version()), "{text}");
     assert!(text.contains("Not checked yet."), "{text}");
+    // Until the signed-in Raphie says which release it runs.
+    let host = |rt: &Runtime<Ui>| element(rt, "rd-host-version").text.unwrap_or_default();
+    assert_eq!(host(&rt), "Unknown");
+    deliver(&mut rt, Event::HostVersion("v0.0.5".into()));
+    assert_eq!(host(&rt), "0.0.5");
+    deliver(&mut rt, Event::HostVersion("development".into()));
+    assert_eq!(host(&rt), "Development");
 
     click(&mut rt, "rd-check-updates");
     assert_eq!(rt.state.sent, vec![Command::CheckForUpdates]);
