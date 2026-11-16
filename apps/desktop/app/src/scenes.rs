@@ -236,6 +236,7 @@ pub fn settings_appearance(ui: &mut Ui) {
 /// Settings → About, before any check.
 pub fn settings_about(ui: &mut Ui) {
     settings_account(ui);
+    ui.model.apply(Event::HostVersion("v0.0.4".into()));
     ui.open_settings(Some(Page::About));
 }
 
@@ -266,6 +267,9 @@ pub fn settings_about_nightly(ui: &mut Ui) {
     settings_about(ui);
     ui.flavor = Flavor::Release;
     ui.release_channel = ReleaseChannel::Nightly;
+    ui.model.apply(Event::HostVersion(
+        "v0.0.4-nightly.20261116.43884865813.1".into(),
+    ));
 }
 
 /// Settings → Profile, as opened.

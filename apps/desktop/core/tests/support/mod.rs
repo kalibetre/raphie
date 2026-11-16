@@ -39,6 +39,8 @@ pub struct Host {
     /// The runtime behind the web host is stopped: `/api/runtime` answers
     /// 503, as the web host's proxy does.
     pub runtime_down: bool,
+    /// The release `/_raphie/version` names, `v0.0.4` when unset.
+    pub version: Option<String>,
     /// Submissions answered 503 before succeeding.
     pub failing_submits: u32,
     pub submits: Vec<Value>,
@@ -218,6 +220,7 @@ fn router(fake: Fake) -> Router {
         .route("/auth/status", get(auth_status))
         .route("/_raphie/health", get(health))
         .route("/api/runtime", get(runtime_info))
+        .route("/_raphie/version", get(host_version))
         .route("/api/bots", get(bots).post(create_bot))
         .route("/api/bots/{id}", axum::routing::delete(delete_bot))
         .route("/api/bots/{id}/history", get(bot_history))
@@ -1273,6 +1276,18 @@ async fn runtime_info(State(fake): State<Fake>, headers: HeaderMap) -> Response 
             .into_response();
     }
     Json(json!({ "identity": { "id": "workspace-1" } })).into_response()
+}
+
+/// The release the web host was built from; sign-in required, as on the
+/// real web host.
+async fn host_version(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(&fake, "GET", "/_raphie/version".into(), &headers);
+    if let Some(refused) = refuse(&fake, &headers) {
+        return refused;
+    }
+    let version = fake.host.lock().unwrap().version.clone();
+    Json(json!({ "id": "abc123", "version": version.as_deref().unwrap_or("v0.0.4") }))
+        .into_response()
 }
 
 /// The web host's health check: up, without an administrator yet.

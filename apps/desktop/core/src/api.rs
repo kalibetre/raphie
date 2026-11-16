@@ -18,6 +18,7 @@ use crate::attachments::multipart;
 use crate::auth::{AccessToken, CLIENT_ID, DeviceCode, DevicePoll, Secret};
 use crate::channels::ChannelChange;
 use crate::contracts::Attachment;
+use crate::contracts::HostBuild;
 use crate::contracts::JobNotifications;
 use crate::contracts::ModelSelection;
 use crate::contracts::WorkspaceListing;
@@ -246,6 +247,13 @@ impl ApiClient {
             .timeout(REACH_TIMEOUT);
         check(request.send().await.map_err(network)?).await?;
         Ok(())
+    }
+
+    /// The release the signed-in Raphie runs, such as `v0.0.5`, or
+    /// `development` for one run from a checkout.
+    pub async fn host_version(&self) -> Result<String, ApiError> {
+        let build: HostBuild = self.get_json("/_raphie/version").await?;
+        Ok(build.version)
     }
 
     /// The signed-in administrator, if the host says who it is.

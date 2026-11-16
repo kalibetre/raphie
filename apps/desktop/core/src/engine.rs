@@ -813,6 +813,7 @@ impl Engine {
         self.bot_id = None;
         self.session_id = None;
         self.watch_reach(api.clone());
+        tell_host_version(&self.emit, &api);
         // Who is signed in, for Settings → Account. Nothing depends on it, so
         // a failure only leaves the name out.
         let emit = self.emit.clone();
@@ -886,6 +887,10 @@ impl Engine {
                     return;
                 };
                 if reach != last {
+                    // Back after a stop: perhaps updated meanwhile.
+                    if reach == Reach::Up {
+                        tell_host_version(&emit, &api);
+                    }
                     last = reach.clone();
                     emit.emit(Event::Reach(reach));
                 }
@@ -899,7 +904,12 @@ impl Engine {
         let inbox = self.inbox.clone();
         tokio::spawn(async move {
             match reach_of(api.reach().await) {
-                Some(reach) => emit.emit(Event::Reach(reach)),
+                Some(reach) => {
+                    if reach == Reach::Up {
+                        tell_host_version(&emit, &api);
+                    }
+                    emit.emit(Event::Reach(reach));
+                }
                 None => {
                     let _ = inbox.send(Input::Expired);
                 }
@@ -1194,6 +1204,11 @@ impl Engine {
     }
 
     fn check_for_updates(&mut self) {
+        // About shows the signed-in Raphie's version beside this app's,
+        // so look at both again.
+        if let Some(api) = &self.api {
+            tell_host_version(&self.emit, api);
+        }
         let emit = self.emit.clone();
         let Some(url) = self.config.releases_url.clone() else {
             emit.emit(Event::UpdateChecked(Err(
@@ -2437,6 +2452,18 @@ async fn read_upload(upload: Upload) -> Result<(String, FileBytes), String> {
 /// What a connection check means, or `None` when the token was refused.
 /// Any answer from the runtime counts as up, even a refusal: only no
 /// answer, or the web host saying the runtime is unavailable, is down.
+/// Asks the signed-in Raphie which release it runs, for Settings → About.
+/// Nothing depends on it, so a failure leaves the last answer shown.
+fn tell_host_version(emit: &Emitter, api: &ApiClient) {
+    let emit = emit.clone();
+    let api = api.clone();
+    tokio::spawn(async move {
+        if let Ok(version) = api.host_version().await {
+            emit.emit(Event::HostVersion(version));
+        }
+    });
+}
+
 fn reach_of(result: Result<(), ApiError>) -> Option<Reach> {
     match result {
         Err(ApiError::Unauthenticated) => None,

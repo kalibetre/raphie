@@ -100,6 +100,51 @@ fn a_stopped_runtime_is_noticed_and_so_is_its_return() {
 }
 
 #[test]
+fn the_signed_in_raphies_version_is_learned_and_relearned_after_a_stop() {
+    let host = FakeHost::start();
+    let store = MemoryStore::new();
+    let config = EngineConfig {
+        reach_every: std::time::Duration::from_millis(20),
+        ..support::fast_config()
+    };
+    let mut driver = Driver::with_config(Arc::new(store), config);
+    driver.send(Command::Connect {
+        origin: host.origin.clone(),
+    });
+    driver.until("the version", |m, _| m.host_version.is_some());
+    assert_eq!(driver.model.host_version.as_deref(), Some("v0.0.4"));
+    assert_eq!(
+        host.requests("/_raphie/version")[0]
+            .authorization
+            .as_deref(),
+        Some(&*format!("Bearer {TOKEN}"))
+    );
+
+    // Stopped, updated, started again: the new version shows.
+    host.with(|h| h.runtime_down = true);
+    driver.until("the runtime reported down", |m, _| !m.reach.is_up());
+    host.with(|h| {
+        h.version = Some("v0.0.5".into());
+        h.runtime_down = false;
+    });
+    driver.until("the new version", |m, _| {
+        m.host_version.as_deref() == Some("v0.0.5")
+    });
+}
+
+#[test]
+fn checking_for_updates_asks_the_signed_in_raphie_again() {
+    let host = FakeHost::start();
+    let (mut driver, _store) = signed_in(&host);
+    driver.until("the version", |m, _| m.host_version.is_some());
+    host.with(|h| h.version = Some("v0.0.5".into()));
+    driver.send(Command::CheckForUpdates);
+    driver.until("the new version", |m, _| {
+        m.host_version.as_deref() == Some("v0.0.5")
+    });
+}
+
+#[test]
 fn checking_now_answers_even_when_nothing_changed() {
     let host = FakeHost::start();
     let (mut driver, _store) = signed_in(&host);

@@ -1,5 +1,6 @@
 //! Settings → About: this copy of Raphie Desktop, its version and whether
-//! a newer one is released. The web keeps its version under Appearance;
+//! a newer one is released, and the version of the Raphie it is signed in
+//! to. The web keeps its version under Appearance;
 //! the desktop gives it a page of its own, with room for more about the
 //! app later.
 
@@ -21,12 +22,18 @@ pub fn about(s: &Ui, look: &Look) -> El {
         "Information about this installation.",
         vec![version_row(t), channel_row(s, t), updates_row(s, t)],
     );
+    let host = group(
+        t,
+        "Raphie",
+        "The Raphie this app is signed in to.",
+        vec![host_version_row(s, t)],
+    );
     page(
         "rd-page-about",
         "About",
-        "Which Raphie Desktop this is, and whether a newer one is out.",
+        "This app's version and updates, and the Raphie it is signed in to.",
         Scope::App,
-        vec![app],
+        vec![app, host],
         look,
     )
 }
@@ -40,6 +47,22 @@ fn version_row(t: &Theme) -> El {
         "Raphie Desktop version",
         "The version of this app.",
         Some(value(shown, t.muted_foreground).key("rd-version")),
+    )
+}
+
+/// The release the signed-in Raphie runs, written as the web writes it.
+fn host_version_row(s: &Ui, t: &Theme) -> El {
+    let shown = match s.model.host_version.as_deref() {
+        None => "Unknown".to_owned(),
+        Some("development") => "Development".to_owned(),
+        Some(version) => version.strip_prefix('v').unwrap_or(version).to_owned(),
+    };
+    setting(
+        t,
+        Some(&icons::INFO),
+        "Raphie version",
+        "The version the signed-in Raphie runs: its runtime and web host.",
+        Some(value(shown, t.muted_foreground).key("rd-host-version")),
     )
 }
 
