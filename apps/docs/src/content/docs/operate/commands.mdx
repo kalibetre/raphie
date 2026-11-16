@@ -29,11 +29,12 @@ See [service](/operate/service/) for logs and the full set of service commands.
 
 ## Status
 
-| Command         | Installs | What it does                                                                                                                                 |
-| --------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `raphie status` | All      | Check the runtime on loopback. Prints its data directory and workspace ID; exits `1` if it does not answer within 3 seconds.                 |
-| `raphie health` | All      | Check both the runtime and the web host. Silent; exits `0` when healthy, `1` otherwise. A locked web host (no administrator yet) is healthy. |
-| `raphie port`   | All      | User install and source: print the web address and runtime port. System service: print the web port; works without `sudo` while it runs.     |
+| Command            | Installs     | What it does                                                                                                                                 |
+| ------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raphie status`    | All          | Check the runtime on loopback. Prints its data directory and workspace ID; exits `1` if it does not answer within 3 seconds.                 |
+| `raphie health`    | All          | Check both the runtime and the web host. Silent; exits `0` when healthy, `1` otherwise. A locked web host (no administrator yet) is healthy. |
+| `raphie port`      | All          | User install and source: print the web address and runtime port. System service: print the web port; works without `sudo` while it runs.     |
+| `raphie --version` | User, source | Print the installed release, such as `raphie v0.0.5`. From source it prints `raphie development`.                                            |
 
 ## Administrator
 
