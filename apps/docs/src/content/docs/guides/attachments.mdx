@@ -64,7 +64,7 @@ Old messages keep pointing at the original, so a download never changes even if 
 
 Image formats are detected from the file's bytes, not its name. Images are sent as they are: Raphie does not resize, convert or run OCR on them, and a provider may still reject a file it considers too large or unsupported.
 
-`read_document` converts documents to text locally, with no network calls, and returns it in chunks of 16,000 characters. For PDFs with scanned pages it falls back to plain text extraction of up to 200 pages and says which pages came back empty.
+`read_document` converts documents of up to 8 MiB to text locally, in a separate worker that gives up after 15 seconds, and returns the text in chunks of 16,000 characters. For PDFs with scanned pages it falls back to plain text extraction of up to 200 pages and says which pages came back empty.
 
 ## Limits
 

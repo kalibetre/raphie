@@ -27,7 +27,7 @@ The shadcn configuration is `apps/web/components.json` (style `base-nova`); gene
 
 `src/shared/ui/scroll-area.tsx` wraps `@base-ui/react/scroll-area`. Base UI owns the viewport and the custom thumb. Panels and other ancestors constrain size but never scroll themselves.
 
-The transcript, code blocks, tables, approval and activity details, settings pages, the session list and long drafts all use this one component. A wide code block or table scrolls inside its own area; the page never scrolls sideways.
+The transcript, code blocks, tables, activity details, settings pages, the session list and long drafts all use this one component. A wide code block or table scrolls inside its own area; the page never scrolls sideways.
 
 The transcript's `useStickToBottom` (from `use-stick-to-bottom`) points straight at the scroll area's viewport and content. That keeps three behaviours:
 

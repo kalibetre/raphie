@@ -14,7 +14,7 @@ Raphie records what it does in two separate places. **Activity** is the durable 
 |                   | Activity                                                                       | Diagnostics                                                        |
 | ----------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
 | Answers           | What happened in this session or bot: model, tool, approval and recovery steps | How long things took, where they failed, how many tokens they used |
-| Where to see it   | The Activity panel in a session; **Settings → Activity** for a bot             | **Settings → Diagnostics**, one page for every bot                 |
+| Where to see it   | Tool steps under each reply in a session; **Settings → Activity** for a bot    | **Settings → Diagnostics**, one page for every bot                 |
 | Stored in         | Each bot's execution database                                                  | `traces.sqlite` in the data directory, shared by all bots          |
 | Kept for          | The latest 5,000 events per bot, across restarts                               | 48 hours, at most 100,000 spans                                    |
 | Can be turned off | No; recovery depends on it                                                     | Yes, with **Collect diagnostic traces**                            |
@@ -61,7 +61,7 @@ Pruning frees space inside the file for reuse; the file itself may not shrink ri
 
 - Choose a 1, 6 or 24 hour window, and filter by text.
 - Expand a span to see its IDs, timing, status and recorded attributes, including which bot it belongs to.
-- Download the visible traces as JSON.
+- Download the loaded spans for the current window as JSON. The text filter does not apply to the download.
 
 The same data is available from the runtime at `GET /api/diagnostics/traces?hours=1`, with `6` or `24` as the other windows. See the [HTTP API](/architecture/http-api/).
 
@@ -82,7 +82,7 @@ Polling Diagnostics is itself never traced, so the page does not fill up with it
 | `delivery.send`              | One attempt to send or edit a message in a channel                     |
 | `file.submit`, `file.decide` | The file-copy command and its approval                                 |
 
-Each span carries the bot it belongs to. Model attempts and retries appear inside their agent run; other spans are linked by session, turn, approval and delivery IDs.
+Spans record the bot they belong to; an `http.request` span records it only when the URL names a bot. Model attempts and retries appear inside their agent run; other spans are linked by session, turn, approval and delivery IDs.
 
 Spans are written when they finish, so work in progress appears once it completes. When Raphie shuts down, unfinished spans end as interrupted. A run recovered after a crash starts a new trace marked partial; earlier timing is not reconstructed.
 
@@ -113,6 +113,6 @@ Open **Settings → Diagnostics** and switch off **Collect diagnostic traces**. 
 Tracing never changes the outcome of the work it observes.
 
 - If the receiver or trace store is unavailable, operations still run once and return normally. Diagnostics says the store is unavailable.
-- The exporter may retry sending spans, but it never retries the operation itself: a model call, tool call or channel delivery.
+- Exporting spans never repeats the operation itself: a model call, tool call or channel delivery.
 - A crash or forced stop can lose spans that were not yet exported.
 - On shutdown, Raphie waits up to two seconds to flush remaining spans.

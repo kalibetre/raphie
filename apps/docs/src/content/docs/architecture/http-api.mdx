@@ -50,13 +50,13 @@ Installed copies run both processes through the `raphie` launcher and service, o
   </Row>
 </Flow>
 
-| Layer                 | Checks                                                                                                                                                                                                                                                         | Rejects with                                           |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Web host sign-in gate | The `Host` matches a configured origin. Browsers need a valid session cookie; native clients send `Authorization: Bearer <token>` from device sign-in and no cookie or `Origin`. Event streams are re-checked every 2 seconds and close when the session ends. | 403, 401, or a redirect to `/login`                    |
-| Web host proxy        | `Origin` matches; the browser's backend ID still matches the configured runtime. Forwards only `content-type`, `x-raphie-client` and `origin`.                                                                                                                 | 403, 409 `backend_changed`, 503 if the runtime is down |
-| Runtime edge          | `Host` is `127.0.0.1:<port>` or `localhost:<port>`; `Origin`, if present, is loopback or a configured web origin; every method except `GET` and `OPTIONS` carries `x-raphie-client: web`                                                                       | 403                                                    |
-| Actor                 | Each bot's routes mint one owner actor. Identity or destination fields in a JSON body are never trusted.                                                                                                                                                       | 403                                                    |
-| Domain policy         | Idempotency, size limits, approval expiry, model rules                                                                                                                                                                                                         | 400, 404, 409                                          |
+| Layer                 | Checks                                                                                                                                                                                                                                                                           | Rejects with                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Web host sign-in gate | The `Host` matches a configured origin. Browsers need a valid session cookie; native clients send `Authorization: Bearer <token>` from device sign-in and no cookie, `Origin` or `Sec-Fetch-Site`. Event streams are re-checked every 2 seconds and close when the session ends. | 403, 401, a redirect to `/login`, or 503 while locked  |
+| Web host proxy        | `Origin`, if present, matches; the runtime address the page was opened against still matches the configured runtime. Forwards only `content-type`, `x-raphie-client` and `origin`.                                                                                               | 403, 409 `backend_changed`, 503 if the runtime is down |
+| Runtime edge          | `Host` is `127.0.0.1:<port>` or `localhost:<port>`; `Origin`, if present, is loopback or a configured web origin; every method except `GET` and `OPTIONS` carries `x-raphie-client: web`                                                                                         | 403                                                    |
+| Actor                 | Each bot's routes mint one owner actor. Identity or destination fields in a JSON body are never trusted.                                                                                                                                                                         | 403                                                    |
+| Domain policy         | Idempotency, size limits, approval expiry, model rules                                                                                                                                                                                                                           | 400, 403, 404, 409, 413, 503                           |
 
 :::danger
 `x-raphie-client` is a cross-site request marker, not a credential. Anything that can open a socket to the runtime port with the right `Host` header acts as the owner. Keep the runtime on loopback and reach Raphie remotely only through the web host. See [security](/architecture/security/) and [remote access](/operate/remote-access/).
@@ -66,17 +66,17 @@ The web host also serves its own routes, which never reach the runtime: `/api/au
 
 ## Addressing a bot
 
-| Prefix                 | Addresses                                                                                                                               |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/...`             | The default bot                                                                                                                         |
-| `/api/bots/:botId/...` | Any bot, including `default`. The host rewrites the path and hands it to exactly that bot's route table; 503 if the bot is unavailable. |
-| `/api/bots`            | The bot registry itself (host-level)                                                                                                    |
+| Prefix                 | Addresses                                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/...`             | The default bot                                                                                                                                            |
+| `/api/bots/:botId/...` | Any bot, including `default`. The host rewrites the path and hands it to exactly that bot's route table; 404 for an unknown bot, 503 if it is unavailable. |
+| `/api/bots`            | The bot registry itself (host-level)                                                                                                                       |
 
-Every route below works under both prefixes except the bot registry. Through the web host, the same paths are available on its origin.
+Every route below works under both prefixes except the bot registry. Trace diagnostics are wired only to the default bot; under another bot's prefix `/diagnostics/traces` reports an unconfigured, empty collector. Through the web host, the same paths are available on its origin.
 
 ## Routes
 
-All paths are relative to `/api`. Mutations need `Content-Type: application/json` unless noted, plus `x-raphie-client: web`.
+All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and those with a body need `Content-Type: application/json` unless noted.
 
 ### Sessions and turns
 
@@ -106,24 +106,24 @@ All paths are relative to `/api`. Mutations need `Content-Type: application/json
 
 ### Attachments and workspace
 
-| Method | Path                                  | Purpose                                                                          |
-| ------ | ------------------------------------- | -------------------------------------------------------------------------------- |
-| POST   | `/attachments`                        | Multipart upload, field `file`, at most 8 MiB. Returns the content-addressed ID. |
-| GET    | `/files/:id`                          | Download an uploaded original                                                    |
-| GET    | `/workspace`                          | Sandbox settings, provider availability and usage                                |
-| POST   | `/workspace/settings`                 | Save sandbox settings; 409 while the bot has pending turns                       |
-| GET    | `/workspace/files?path=`              | List a workspace folder                                                          |
-| GET    | `/workspace/download?path=&revision=` | Download a workspace file at a listed revision                                   |
+| Method | Path                                  | Purpose                                                                                                                        |
+| ------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/attachments`                        | Multipart upload, field `file`, at most 8 MiB (413 above). Returns 201 with a 64-hex ID hashed from the file's name and bytes. |
+| GET    | `/files/:id`                          | Download an uploaded original                                                                                                  |
+| GET    | `/workspace`                          | Sandbox settings, provider availability and usage                                                                              |
+| POST   | `/workspace/settings`                 | Save sandbox settings; 409 while the bot has pending turns                                                                     |
+| GET    | `/workspace/files?path=`              | List a workspace folder                                                                                                        |
+| GET    | `/workspace/download?path=&revision=` | Download a workspace file at a listed revision                                                                                 |
 
 ### Bots (host-level)
 
-| Method    | Path                | Purpose                                                          |
-| --------- | ------------------- | ---------------------------------------------------------------- |
-| GET, POST | `/bots`             | List bots; create one from `{ name, description, soul, color? }` |
-| GET, POST | `/bots/:id/profile` | Read; update with the current `revision`                         |
-| GET       | `/bots/:id/history` | Profile revisions                                                |
-| GET       | `/bots/:id/soul.md` | Download SOUL.md                                                 |
-| DELETE    | `/bots/:id`         | Delete a named bot; body confirms its `name` and `revision`      |
+| Method    | Path                | Purpose                                                                                                                   |
+| --------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| GET, POST | `/bots`             | List bots; create one from `{ name, description, soul, color? }` (201)                                                    |
+| GET, POST | `/bots/:id/profile` | Read; update with the current `revision`                                                                                  |
+| GET       | `/bots/:id/history` | Profile revisions                                                                                                         |
+| GET       | `/bots/:id/soul.md` | Download SOUL.md                                                                                                          |
+| DELETE    | `/bots/:id`         | Delete a named bot (204); body confirms its `name` and `revision`. 409 for `default`, a stale confirmation or active work |
 
 ### Settings, providers and memory
 
@@ -148,16 +148,16 @@ Secrets are write-only: keys and tokens are accepted but never returned.
 
 | Method    | Path                                                      | Purpose                                                                     |
 | --------- | --------------------------------------------------------- | --------------------------------------------------------------------------- |
-| GET, POST | `/mcp`                                                    | List MCP connections; add an HTTP or stdio connection                       |
+| GET, POST | `/mcp`                                                    | List MCP connections; add an HTTP or stdio connection (201)                 |
 | POST      | `/mcp/:id`                                                | `{ action: "enable" \| "disable" \| "remove" \| "import" }`                 |
 | GET       | `/channels`                                               | Discord and Telegram settings for the bot                                   |
 | POST      | `/channels/discord`, `/channels/discord/remove`           | Save or remove the Discord connection                                       |
 | POST      | `/channels/telegram`, `/channels/telegram/remove`         | Save or remove the Telegram connection                                      |
 | POST      | `/channels/telegram/pairing`, `/channels/telegram/unpair` | Create a pairing code; unpair a user                                        |
 | GET, POST | `/channels/home`                                          | Read destinations; select one with `{ id }`, or `{ id: null }` for web only |
-| GET, POST | `/jobs`                                                   | List schedules; add `{ name, prompt, everyMinutes, firstRunAt }`            |
+| GET, POST | `/jobs`                                                   | List schedules; add `{ name, prompt, everyMinutes, firstRunAt }` (201)      |
 | POST      | `/jobs/:id`                                               | `{ action: "enable" \| "disable" \| "remove" \| "run" }`                    |
-| GET       | `/jobs/runs`, `/jobs/notifications`                       | Run history; unread completions                                             |
+| GET       | `/jobs/runs`, `/jobs/notifications`                       | Run history, 20 per page; unread completions                                |
 | POST      | `/jobs/runs/:id/read`                                     | Acknowledge a run                                                           |
 
 ### Inspection
@@ -169,14 +169,14 @@ Secrets are write-only: keys and tokens are accepted but never returned.
 
 ### Compatibility routes
 
-These remain for older callers; the current clients do not use them.
+These remain for older callers. The web workspace still calls `/sessions/legacy/:id` to open old numeric conversation links; it does not use the others.
 
-| Method | Path                                         | Purpose                                               |
-| ------ | -------------------------------------------- | ----------------------------------------------------- |
-| GET    | `/chats`, `/events`                          | Whole-bot snapshot and its SSE stream                 |
-| POST   | `/chat`                                      | Admit a turn by numeric conversation ID               |
-| GET    | `/sessions/legacy/:id`                       | Resolve a numeric conversation ID to its session UUID |
-| GET    | `/state`; POST `/messages`, `/approvals/:id` | The file-copy approval workflow                       |
+| Method | Path                                         | Purpose                                                                                                                            |
+| ------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/chats`, `/events`                          | Whole-bot snapshot and its SSE stream. Unlike the session routes, it includes internal conversation numbers and turn fingerprints. |
+| POST   | `/chat`                                      | Admit a turn by numeric conversation ID                                                                                            |
+| GET    | `/sessions/legacy/:id`                       | Resolve a numeric conversation ID to its session UUID                                                                              |
+| GET    | `/state`; POST `/messages`, `/approvals/:id` | The file-copy approval workflow                                                                                                    |
 
 ## Sending a message
 
@@ -196,33 +196,33 @@ These remain for older callers; the current clients do not use them.
 
 | Field          | Rule                                                                                                                            |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `text`         | Up to 4,000 characters; may be empty only with attachments                                                                      |
+| `text`         | Up to 4,000 characters; may be empty (or whitespace) only with attachments                                                      |
 | `eventId`      | 1 to 200 characters, stable across retries. Same `eventId` and same content returns the same receipt; different content is 409. |
-| `sessionId`    | Omit to start a new session; an unknown ID is 404                                                                               |
+| `sessionId`    | A UUID. Omit to start a new session; an unknown ID is 404                                                                       |
 | `approvalMode` | Only for a new session; saved before its first turn runs. Defaults to Ask.                                                      |
-| `attachments`  | Up to four unique upload IDs from `POST /attachments`                                                                           |
+| `attachments`  | Up to four unique upload IDs from `POST /attachments`; an ID this bot does not hold is 404                                      |
 
-The receipt confirms durable admission, not completion. Follow the session's events or poll its observation to see the reply.
+Admission returns 503 `no_model` when no model is configured, and 400 when the chosen model is not in the catalogue. The receipt confirms durable admission, not completion. Follow the session's events or poll its observation to see the reply.
 
 ## Session model selection
 
 - A new session uses the bot's default model unless the message carries `model: { provider, modelId }`. An explicit choice is saved with the first turn.
 - The model is part of the admission fingerprint, so retrying an `eventId` with a different explicit model is a 409.
-- `POST /sessions/:id/model` changes an idle session's model without sending a message. It checks that the provider is connected and the model is in its catalogue, and returns 409 while a turn is pending.
+- `POST /sessions/:id/model` changes an idle session's model without sending a message. It returns 400 if the model is not in the runtime's model catalogue and 409 while a turn is pending.
 - A session keeps its model through default-model changes and restarts. The observation exposes it as `session.model`.
 
 ## Reading state
 
-| Behaviour        | Detail                                                                                                                                                          |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Page sizes       | 1 to 100 items; sessions and history default to 50, activity to 100                                                                                             |
-| Observation size | Up to 50 recent turns (plus the first pending one if older), the latest 200 activity events and 100 approvals                                                   |
-| SSE              | Each stream starts with authoritative state, sends a replacement when it changes, and sends a heartbeat every 15 seconds while idle. There is no resume cursor. |
-| Disconnects      | Closing a stream never cancels or resubmits a turn                                                                                                              |
-| Phases           | `idle`, `queued`, `model`, `writing`, `tool`, `approval`, `failed`: observed evidence, not private model reasoning                                              |
-| IDs              | Public session IDs are UUIDs. Internal Pi IDs and admission fingerprints never appear in responses.                                                             |
+| Behaviour        | Detail                                                                                                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page sizes       | 1 to 100 items; sessions and history default to 50, activity to 100                                                                                                                |
+| Observation size | Up to 50 recent turns (plus the first pending one if older), the latest 200 activity events and 100 approvals                                                                      |
+| SSE              | Each stream starts with authoritative state, sends a replacement when it changes, and sends a heartbeat every 15 seconds while idle. There is no resume cursor.                    |
+| Disconnects      | Closing a stream never cancels or resubmits a turn                                                                                                                                 |
+| Phases           | `idle`, `queued`, `model`, `writing`, `tool`, `approval`, `failed`: observed evidence, not private model reasoning                                                                 |
+| IDs              | Public session IDs are UUIDs. The session, history, approval and activity routes never return internal Pi IDs or admission fingerprints; the compatibility `/chats` snapshot does. |
 
-Errors are JSON `{ "code": "...", "error": "..." }`. Application errors carry a stable `code`; unexpected errors become a generic 400 without internal detail. Unknown routes return 404.
+Application errors are JSON `{ "code": "...", "error": "..." }`. The `code` follows the status (`invalid_request`, `forbidden`, `not_found`, `conflict`, `too_large`, `unavailable`) unless a more specific one applies, such as `no_model`. Any other error becomes a generic 400 `invalid_request` without internal detail. Schema validation failures (400), oversized bodies (413) and unknown routes (404) return only `{ "error": "..." }`.
 
 ## Limits
 

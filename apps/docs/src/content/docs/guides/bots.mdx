@@ -68,12 +68,12 @@ Choose a bot in the sidebar. The workspace resumes the session you last had open
 
 Open **Profile** by clicking the bot's name in the title bar, or from Settings. One page edits:
 
-| Field       | Limit                                        | Notes                                               |
-| ----------- | -------------------------------------------- | --------------------------------------------------- |
-| Name        | 80 characters                                | A display label. The bot's ID never changes.        |
-| Description | 500 characters                               | Optional.                                           |
-| Colour      | 8 presets, a custom colour, or **Automatic** | Automatic picks an unused preset in creation order. |
-| `SOUL.md`   | 16,000 characters                            | The personality.                                    |
+| Field       | Limit                                        | Notes                                            |
+| ----------- | -------------------------------------------- | ------------------------------------------------ |
+| Name        | 80 characters                                | A display label. The bot's ID never changes.     |
+| Description | 500 characters                               | Optional.                                        |
+| Colour      | 8 presets, a custom colour, or **Automatic** | Automatic avoids colours other bots already use. |
+| `SOUL.md`   | 16,000 characters                            | The personality.                                 |
 
 `SOUL.md` is your description of the bot's voice, values and way of working. The runtime adds it to the model's instructions when a turn starts, so a turn already running keeps the version it started with.
 
@@ -85,7 +85,7 @@ Don't put credentials in `SOUL.md`. The model receives it as instructions, and e
 
 ### Revisions
 
-Every save creates a revision. **Revision history**, below the editor, shows the latest 50 with their name, description and `SOUL.md`. To roll back, copy older text into the editor and save it as a new revision.
+Every save creates a revision. **View revision history**, below the editor, opens the latest 50 with their name, description, colour and `SOUL.md`. To roll back, copy older text into the editor and save it as a new revision.
 
 The runtime also serves the active personality as a plain `SOUL.md` file; see the [HTTP API](/architecture/http-api/).
 
@@ -111,7 +111,7 @@ If cleanup fails partway, Raphie asks for a restart and finishes the deletion on
 ## Limits
 
 - Bots share one process and one owner. They are separated by storage and configuration, not by OS or VM isolation.
-- Profile saves and deletion wait for that bot's turns to finish; other bots keep working.
+- Profile saves and deletion are refused while that bot has a turn in progress; other bots keep working.
 - Diagnostics traces are collected once for the whole runtime, not per bot.
 
 ## Related

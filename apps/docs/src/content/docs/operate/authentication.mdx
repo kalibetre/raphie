@@ -19,9 +19,7 @@ Until an administrator exists, the web host is **locked**. The sign-in page expl
 
 <Steps>
 
-1. Start Raphie.
-
-2. On the same machine, run the setup command for your install:
+1. On the machine that runs Raphie, run the setup command for your install. Raphie does not need to be running.
 
    ```sh
    raphie auth setup              # user install
@@ -31,9 +29,9 @@ Until an administrator exists, the web host is **locked**. The sign-in page expl
 
    On the system service, the command runs as the `raphie` service user, so the files it creates stay readable by the service.
 
-3. Enter an email, then a password of at least 12 characters, twice. The password is never echoed, logged or accepted as an argument or environment variable.
+2. Enter an email, then a password of at least 12 characters, twice. The password is not echoed, and the command takes no password argument or environment variable.
 
-4. Open your Raphie address and sign in. By default that is `http://127.0.0.1:24320` for a user install, `http://127.0.0.1:41837` for the system service and `http://127.0.0.1:4320` for a source checkout; `raphie port` prints yours.
+3. Open your Raphie address and sign in. By default that is `http://127.0.0.1:24320` for a user install, `http://127.0.0.1:41837` for the system service and `http://127.0.0.1:4320` for a source checkout; `raphie port` prints yours.
 
 </Steps>
 
@@ -57,15 +55,15 @@ It prompts for a new password and then:
 | Signs out every browser and device   | All sessions, including device sessions |
 | Removes every passkey                | Register them again after signing in    |
 | Invalidates outstanding device codes | Devices must start sign-in again        |
-| Clears sign-in attempt limits        | Lets you sign in right away             |
+| Clears password attempt limits       | Lets you sign in right away             |
 
-`recover` also completes a half-finished setup. It needs local access to the data directory and has no HTTP equivalent.
+`recover` also gives a password to an administrator whose setup stopped before one was saved. It needs local access to the data directory and has no HTTP equivalent.
 
 ## Passkeys
 
 Register passkeys in **Settings → Account**. Password sign-in keeps working alongside them.
 
-- Registering needs a fresh browser session. If yours has aged out, sign in again first.
+- Registering needs a browser session signed in within the last day. If yours is older, sign in again first.
 - A passkey belongs to one hostname. Register separately for `localhost`, a Tailscale name or a custom domain; a passkey for one cannot sign in to another.
 - Use `http://localhost:PORT` for local passkeys, not `127.0.0.1`. Numeric addresses are not portable passkey hosts.
 - Only a signed-in browser can add or remove passkeys. Device sessions cannot.
@@ -95,9 +93,9 @@ The [desktop app](/guides/desktop/) signs in with a device code: the device show
 
 1. Start sign-in on the device. It shows a code and an approval link.
 
-2. Open the link in a browser signed in to Raphie. The link must contain the code; opening `/device` on its own sends you back to the device.
+2. Open the link in a browser signed in to Raphie. The link must contain the code; opening `/device` on its own only asks you to use the link from the device.
 
-3. Compare the code on the page with the one on the device in front of you, then choose **Approve** or **Deny**.
+3. Compare the code on the page with the one on the device in front of you, then choose **Approve device** or **Deny**.
 
 </Steps>
 
@@ -117,13 +115,13 @@ The desktop app keeps its token in the operating system's credential store.
 
 ## Sessions
 
-| Setting         | Value                                                                          |
-| --------------- | ------------------------------------------------------------------------------ |
-| Lifetime        | 30 days, refreshed daily while in use                                          |
-| Cookie          | `HttpOnly`, `SameSite=Lax`, named per web port (`raphie_<port>.session_token`) |
-| `Secure` cookie | On HTTPS origins only; loopback HTTP cookies are not `Secure`                  |
-| Revocation      | Immediate: every request re-reads the session from the database                |
-| Event streams   | Re-checked every 2 seconds and closed when their session ends                  |
+| Setting         | Value                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Lifetime        | 30 days, refreshed daily while in use                                                                              |
+| Cookie          | `HttpOnly`, `SameSite=Lax`, named per web port (`raphie_<port>.session_token`, with a `__Secure-` prefix on HTTPS) |
+| `Secure` cookie | On HTTPS origins only; loopback HTTP cookies are not `Secure`                                                      |
+| Revocation      | Immediate: every request re-reads the session from the database                                                    |
+| Event streams   | Re-checked every 2 seconds and closed when their session ends                                                      |
 
 Use the account menu beside the sidebar's connection status to open **Manage account** or **Sign out**. Signing out ends only the current browser's session.
 
@@ -131,15 +129,17 @@ Use the account menu beside the sidebar's connection status to open **Manage acc
 
 The check runs in front of the application in both the production host and the development server. There is no bypass, including in the test fixture.
 
-| Request                                                     | Requirement                                                       |
-| ----------------------------------------------------------- | ----------------------------------------------------------------- |
-| Pages, server functions, `/api/*`, downloads, event streams | A signed-in browser session or an approved device session         |
-| Browser requests that change state                          | Also an `Origin` that matches the configured origin               |
-| Passkey management, device approval, connected devices      | A signed-in browser session from the same origin                  |
-| `/login`, built `/assets/*`                                 | Public                                                            |
-| `GET /_raphie/health`, `GET /auth/status`                   | Public; report `ready` or `locked` and whether you are signed in  |
-| Password and passkey sign-in, sign-out                      | Public once an administrator exists                               |
-| Device code request and token polling                       | Public once an administrator exists; browser credentials rejected |
+| Request                                                | Requirement                                                                   |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Pages, server functions, downloads, event streams      | A signed-in browser session                                                   |
+| `/api/*` (other than sign-in)                          | A signed-in browser session or an approved device session                     |
+| Browser requests that change state                     | Also an `Origin` that matches the configured origin they were sent to         |
+| Passkey management, device approval, connected devices | A signed-in browser session from the same origin                              |
+| `/login`, built `/assets/*`                            | Public                                                                        |
+| `GET /_raphie/health`                                  | Public; reports `ready` or `locked`                                           |
+| `GET /auth/status`                                     | Public; reports whether an administrator exists and whether you are signed in |
+| Password and passkey sign-in, sign-out                 | Public once an administrator exists                                           |
+| Device code request and token polling                  | Public once an administrator exists; browser credentials rejected             |
 
 Every request must also use a configured host; anything else gets `403`. When a request is refused, a page load redirects to `/login`, an API call gets `401`, and a locked host answers `503`. If the authentication store cannot be checked, the request is refused with `503`, never let through.
 
@@ -161,5 +161,5 @@ Both live in the data directory, so your normal [backups](/operate/backup-and-re
 
 - **One administrator.** Multiple users are not supported.
 - **The runtime port is not authenticated.** Sign-in protects the web host. The runtime port (`24316` on a user install, `4316` otherwise by default) trusts any local process that reaches it; see [security](/architecture/security/).
-- **Duplicate-guess throttling only.** Each email and password pair gets five attempts per minute; other authentication calls share a limit of 60 per minute. This does not stop distributed or varied-password guessing. Limit who can reach Raphie with tailnet access rules.
+- **Duplicate-guess throttling only.** Each email and password pair gets five attempts per minute. Other authentication endpoints, such as sign-out and device code requests, are each limited to 60 calls per minute for all clients together; passkey sign-in is not throttled. None of this stops guessing with many different passwords. Limit who can reach Raphie with tailnet access rules.
 - **Forwarded headers are ignored.** Raphie never trusts client-address headers. The web host listens on loopback only; reach it remotely through a TLS proxy that preserves the configured host. See [remote access](/operate/remote-access/).

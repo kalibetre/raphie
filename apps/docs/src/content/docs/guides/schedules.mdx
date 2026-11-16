@@ -97,13 +97,13 @@ Everyone in a group chosen as home can read every scheduled reply. Pick a group 
 
 Timing is durable: jobs survive restarts without your doing anything.
 
-| Situation                               | What happens                                                                                                                              |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Raphie was down when a job was due      | The job runs once when Raphie starts. Missed intervals are not replayed.                                                                  |
-| A run starts over 60 seconds late       | It is marked **Late** in run history and Notifications.                                                                                   |
-| The bot is busy or waiting for approval | The run waits, shown as **Waiting for bot**. It never expires and never skips an approval.                                                |
-| Submitting the turn fails               | Raphie retries up to four times, after 1, 2 and 4 seconds. Then the run is recorded as failed and a recurring job schedules its next run. |
-| Raphie stops during a run               | The run is recorded as interrupted.                                                                                                       |
+| Situation                               | What happens                                                                                                                                                |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Raphie was down when a job was due      | The job runs once when Raphie starts. Missed intervals are not replayed.                                                                                    |
+| A run starts over 60 seconds late       | It is marked **Late** in run history and Notifications.                                                                                                     |
+| The bot is busy or waiting for approval | The run waits, shown as **Waiting for bot**. It never expires and never skips an approval.                                                                  |
+| Submitting the turn fails               | Raphie tries four times in all, waiting 1, 2 and 4 seconds between attempts. Then the run is recorded as failed and a recurring job schedules its next run. |
+| Raphie stops during a run               | The run's turn is recovered on the next start like any other turn. A run whose turn is stopped or aborted is recorded as interrupted.                       |
 
 Tool calls made by a scheduled prompt need the same approval as any other. A job never bypasses them.
 

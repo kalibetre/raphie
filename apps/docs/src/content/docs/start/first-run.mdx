@@ -29,7 +29,7 @@ A new Raphie has no account and no model. You create the single administrator fr
    bun run raphie auth setup      # source checkout
    ```
 
-   Enter an email, then a password of at least 12 characters, twice. The password is never echoed, logged or accepted as an argument. There is only ever one administrator.
+   Enter an email, then a password of at least 12 characters, twice. The password is never echoed or accepted as an argument. There is only ever one administrator.
 
 3. **Sign in.** Open the web workspace and sign in with that email and password.
 
@@ -64,14 +64,14 @@ On a Mac, the desktop app is an alternative to the browser for everyday use. Set
 
 2. Enter the same address you signed in to above, or Raphie's `https://` tailnet address if it runs on another machine.
 
-3. Open the approval link the app shows in your signed-in browser, check the code matches, and choose **Approve**.
+3. Choose **Open approval page** in the app, check in your signed-in browser that the code matches, and choose **Approve device**.
 
 </Steps>
 
 Conversations, approvals and settings are the same in both; a reply read in one counts as read in the other.
 
 :::tip[Forgot the password?]
-Run `raphie auth recover` on the server. It sets a new password and signs out every browser and device. See [authentication](/operate/authentication/).
+Run `raphie auth recover` on the server (`sudo raphie auth recover` on the system service). It sets a new password, signs out every browser and device, and removes all passkeys. See [authentication](/operate/authentication/).
 :::
 
 ## Where to go next

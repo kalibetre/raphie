@@ -12,8 +12,8 @@ bun run lint:fix
 bun run validate
 ```
 
-`validate` checks formatting, linting, TypeScript, tests, and the production
-build. CI runs the same command on a GitHub-hosted Linux x64 runner with the
+`validate` checks formatting, architecture rules, linting, TypeScript, tests,
+and the production build. CI runs the same command on a GitHub-hosted Linux x64 runner with the
 pinned Bun version and builds the container test fixture first. It does not
 require model credentials or connected integrations.
 
@@ -80,14 +80,16 @@ bun run dev:web:fixture
 
 Sign-in is always required, including for the fixture. Create the administrator
 once with `bun run raphie auth setup` and sign in at the fixture URL; there is no
-bypass flag. Browser check scripts run in a tab that is already signed in.
+bypass flag. The fixture's web host uses the same sign-in store as the normal app
+(in `.data/`) unless you start it and `auth setup` with the same throwaway
+`DATA_DIRECTORY`. Browser check scripts run in a tab that is already signed in.
 
 The normal application uses ports 4316/4320 and persists to `.data/`. The fixture
-uses 4317/4321 and removes its temporary database on shutdown. Never replace the
+uses 4317/4321; its runtime removes its temporary data on shutdown. Never replace the
 normal runtime with the fixture or use production conversations as test data.
 
 Tests use `bun:test` and temporary databases. The root test script explicitly
-selects the project test directories explicitly. Keep test
+selects the project test directories. Keep test
 assertions unchanged during pure code moves and formatting; add regression
 tests when observable behavior changes.
 

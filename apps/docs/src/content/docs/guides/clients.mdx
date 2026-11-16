@@ -29,30 +29,30 @@ Read state is shared through the runtime: whatever any client has read counts as
 
 ## Bot settings
 
-| Page                                     | Web workspace | Desktop                      | Telegram |
-| ---------------------------------------- | ------------- | ---------------------------- | -------- |
-| Profile, personality and revisions       | Yes           | Yes                          | No       |
-| Create or delete a bot                   | Yes           | Yes                          | No       |
-| Providers and models                     | Yes           | Yes                          | No       |
-| Memory settings; browse, correct, forget | Yes           | Yes                          | No       |
-| MCP tools                                | Yes           | Yes, OAuth opens the browser | No       |
-| Channels                                 | Yes           | Yes                          | No       |
-| Sandbox and workspace files              | Yes           | Yes                          | No       |
-| Scheduled jobs and run history           | Yes           | Yes                          | No       |
-| Activity and Diagnostics                 | Yes           | Yes                          | No       |
+| Page                                     | Web workspace | Desktop                        | Telegram |
+| ---------------------------------------- | ------------- | ------------------------------ | -------- |
+| Profile, personality and revisions       | Yes           | Yes                            | No       |
+| Create or delete a bot                   | Yes           | Yes                            | No       |
+| Providers and models                     | Yes           | Yes, sign-in opens the browser | No       |
+| Memory settings; browse, correct, forget | Yes           | Yes                            | No       |
+| MCP tools                                | Yes           | Yes, OAuth opens the browser   | No       |
+| Channels                                 | Yes           | Yes                            | No       |
+| Sandbox and workspace files              | Yes           | Yes                            | No       |
+| Scheduled jobs and run history           | Yes           | Yes                            | No       |
+| Activity and Diagnostics                 | Yes           | Yes                            | No       |
 
 ## Access and the app
 
-| Capability                       | Web workspace            | Desktop                              | Telegram                     |
-| -------------------------------- | ------------------------ | ------------------------------------ | ---------------------------- |
-| Sign in                          | Password or passkey      | Device code, approved in the browser | [Pairing](/guides/telegram/) |
-| Approve a new device             | Yes                      | Opens the browser                    | No                           |
-| List or disconnect devices       | Yes                      | Opens the browser                    | No                           |
-| Register or remove passkeys      | Yes                      | Opens the browser                    | No                           |
-| Sign this client out             | Yes                      | Yes                                  | No                           |
-| Appearance (light, dark, system) | Yes, per browser         | Yes, per device                      | No                           |
-| Version and update check         | Version under Appearance | About page, checks for new releases  | No                           |
-| UI plugins                       | Yes                      | No                                   | No                           |
+| Capability                       | Web workspace            | Desktop                                    | Telegram                     |
+| -------------------------------- | ------------------------ | ------------------------------------------ | ---------------------------- |
+| Sign in                          | Password or passkey      | Device code, approved in the browser       | [Pairing](/guides/telegram/) |
+| Approve a new device             | Yes                      | Opens the browser                          | No                           |
+| List or disconnect devices       | Yes                      | Opens the browser                          | No                           |
+| Register or remove passkeys      | Yes                      | Opens the browser                          | No                           |
+| Sign this client out             | Yes                      | Yes                                        | No                           |
+| Appearance (light, dark, system) | Yes, per browser         | Yes, per device                            | No                           |
+| Version and update check         | Version under Appearance | About page, checks GitHub for new releases | No                           |
+| UI plugins                       | Yes                      | No                                         | No                           |
 
 Recovering a lost admin password is not done from any client: run `raphie auth recover` on the Raphie machine. See [authentication](/operate/authentication/).
 

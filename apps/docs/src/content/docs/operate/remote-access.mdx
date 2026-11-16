@@ -119,11 +119,11 @@ launchctl bootstrap gui/$(id -u) "$plist"
 
 Raphie checks every request's `Host` and, for browser changes, its `Origin` against a fixed list. Requests from anywhere else get `403`.
 
-| Origin                                            | Allowed when                         |
-| ------------------------------------------------- | ------------------------------------ |
-| `http://127.0.0.1:PORT`, `http://localhost:PORT`  | Always, on the local web port        |
-| Primary origin (`RAPHIE_WEB_ORIGIN`)              | Set at install; defaults to loopback |
-| Additional origins (`RAPHIE_WEB_ALLOWED_ORIGINS`) | Each listed exactly, comma-separated |
+| Origin                                            | Allowed when                                                                 |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `http://127.0.0.1:PORT`, `http://localhost:PORT`  | Always, on the local web port                                                |
+| Primary origin (`RAPHIE_WEB_ORIGIN`)              | System service: `--web-origin` at install. Otherwise `http://127.0.0.1:PORT` |
+| Additional origins (`RAPHIE_WEB_ALLOWED_ORIGINS`) | Each listed exactly, comma-separated                                         |
 
 Write origins exactly: lowercase, scheme, host, a non-default port if any, no path. Anything other than `127.0.0.1` or `localhost` must be `https://`, and the same host and port cannot appear with both schemes. On the system service, `sudo raphie origins` shows the current list.
 

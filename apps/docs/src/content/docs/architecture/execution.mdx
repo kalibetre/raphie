@@ -7,11 +7,11 @@ sidebar:
 
 import { Arrow, Box, Flow, Row, Sequence } from "~/components/diagram";
 
-Every change in Raphie commits through Pi Durable, a transactional agent harness over SQLite. A turn has two halves: **admission** (one synchronous transaction that returns a receipt) and **execution** (a durable task that runs the agent loop). Admission is not completion, and approval is not proof that an action ran.
+Every conversation, turn, approval, delivery and schedule in Raphie commits through Pi Durable, a transactional agent harness over SQLite. Settings, memory, MCP connections, channel credentials and bot profiles live in their own SQLite stores beside it. A turn has two halves: **admission** (one synchronous transaction that returns a receipt) and **execution** (a durable task that runs the agent loop). Admission is not completion, and approval is not proof that an action ran.
 
 ## Durable execution
 
-Raphie has no job queue or state-machine runner of its own. Each bot runtime is a thin set of services over one Pi Durable harness, which stores everything in that bot's `gateway.sqlite`.
+Raphie has no job queue or state-machine runner of its own. Each bot runtime is a thin set of services over one Pi Durable harness, which keeps its conversations, documents and tasks in that bot's `gateway.sqlite`.
 
 <Flow>
   <Row label="Bot runtime">
@@ -34,7 +34,7 @@ Raphie has no job queue or state-machine runner of its own. Each bot runtime is 
 
 | Primitive     | What Raphie relies on                                                                                                                                                                                                               |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Harness**   | One per bot. Owns conversations, documents, tasks and their recovery. On start it resumes unfinished tasks.                                                                                                                         |
+| **Harness**   | One per bot. Owns conversations, documents, tasks and their recovery. Raphie resumes unfinished tasks only after every bot has opened.                                                                                              |
 | **Document**  | Typed JSON state, read and written only inside a commit. One commit can change many documents atomically.                                                                                                                           |
 | **Task**      | A resumable state machine. Each phase ends in a commit that returns running (with a checkpoint), sleeping (until a time) or terminal. Tasks are created inside transactions, so enqueueing is atomic with the state that caused it. |
 | **Tool**      | Intent is committed before execution. `replay: "safe"` means the tool's own durable gate makes re-execution harmless; `replay: "unsafe"` means it is never re-run after an interruption.                                            |
@@ -93,15 +93,15 @@ A domain policy, such as "expiry wins over a late decision", is applied inside t
 
 Admission runs in one transaction, behind a gate that also guards model and provider changes.
 
-| Step                   | What happens                                                                                                                                                            | Failure                    |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| Check                  | A model must be configured. Text is 1 to 4,000 characters (or empty with at least one attachment), `eventId` is 1 to 200 characters, at most four unique attachment IDs | 503 or 400                 |
-| Deduplicate            | The request key is the source plus `eventId`; a fingerprint covers text, session, attachments and model. Same key and same content returns the original receipt.        | 409 if the content differs |
-| Resolve the session    | By public session ID, by channel binding, or create a new session with a UUIDv7 ID and a title from the first 70 characters                                             | 404 for an unknown session |
-| Apply model rules      | Validate the model against the connected provider's catalogue; refuse a model change while a turn is pending                                                            | 409                        |
-| Freeze the destination | A channel turn records its reply destination on the turn. Later configuration changes cannot redirect it.                                                               |                            |
-| Freeze the persona     | Snapshot the bot's instructions: memory policy, name, description and SOUL.md, the current time and a fixed guardrail paragraph                                         |                            |
-| Enqueue                | Record the pending turn, write `run.accepted` to the activity journal and create the `raphie.chat-reply` task                                                           |                            |
+| Step                   | What happens                                                                                                                                                                                        | Failure                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Check                  | A model must be configured. Text is 1 to 4,000 characters (or empty with at least one attachment), `eventId` is 1 to 200 characters, at most four unique attachment IDs, each held by this bot      | 503, 400, or 404 for an unknown attachment |
+| Deduplicate            | The request key is the source plus `eventId`; a fingerprint covers text, session, attachments and model. Same key and same content returns the original receipt.                                    | 409 if the content differs                 |
+| Resolve the session    | By public session ID, by channel binding, or create a new session with a UUIDv7 ID and a title from the first 70 characters of the text (or the first attachment's name, or a scheduled job's name) | 404 for an unknown session                 |
+| Apply model rules      | Validate the model against the runtime's model catalogue; refuse a model change while a turn is pending                                                                                             | 400 unknown model, 409 while pending       |
+| Freeze the destination | A channel turn records its reply destination on the turn. Later configuration changes cannot redirect it.                                                                                           |                                            |
+| Freeze the persona     | Write the conversation's instructions: memory policy, name, description and SOUL.md, the verified message origin for channel turns, the current time and a fixed guardrail paragraph                |                                            |
+| Enqueue                | Record the pending turn, write `run.accepted` to the activity journal and create the `raphie.chat-reply` task (plus a `raphie.job-run-outcome` watcher for a scheduled run)                         |                                            |
 
 Raster image attachments become image inputs only when the model advertises image support. PDFs and other documents are never sent to the model as files; they stay in the workspace for tools to read.
 
@@ -109,7 +109,7 @@ Raster image attachments become image inputs only when the model advertises imag
 
 One `raphie.chat-reply` task runs per turn. It submits the input to the Pi conversation with `requestId` set to the turn ID, so a retry after a crash attaches to the same submission instead of duplicating it. Pi then runs the agent loop (model, tools, model) with a 120-second stream timeout and one retry.
 
-When the loop ends, one commit settles the turn: it stores the answer (or an error), finishes any linked scheduled run, writes `run.completed`, `run.failed` or `run.cancelled`, and queues a delivery if the turn came from a channel.
+When the loop ends, one commit settles the turn: it stores the answer (or an error), finishes any linked scheduled run, writes `run.completed`, `run.failed` or `run.cancelled`, and queues a delivery if the turn has a reply destination (a channel turn, or a scheduled turn sent to the home destination).
 
 ### Queue, steer and stop
 
@@ -118,17 +118,17 @@ When the loop ends, one commit settles the turn: it stores the answer (or an err
 | New message while busy | Joins the conversation inbox as a follow-up, run after the current turn                |
 | **Steer**              | Moves a waiting web message so it is applied after the current tool round              |
 | **Queue**              | Moves it back to run after the current turn                                            |
-| **Stop**               | Aborts the run and, in one commit, expires every pending approval in that conversation |
+| **Stop**               | Aborts the run, then expires every pending approval in that conversation in one commit |
 
 Steer and queue work only for web-origin, non-scheduled turns that Pi has not picked up yet; otherwise they return 409. Stop never undoes a completed external effect, and uncertain effects keep their state.
 
 ### Observation
 
-Reads are separate from writes. The runtime watches each active conversation for live text and usage, and each SSE stream recomputes its authoritative snapshot every 150 ms, sending it only when it changed, with a heartbeat every 15 seconds while idle. There is no resume cursor: a reconnect starts from fresh state. A viewer disconnecting never touches durable work.
+Reads are separate from writes. The runtime watches each conversation for live text and usage, and each SSE stream recomputes its authoritative snapshot every 150 ms, sending it only when it changed, with a heartbeat every 15 seconds while idle. There is no resume cursor: a reconnect starts from fresh state. A viewer disconnecting never touches durable work.
 
 ## Tool approvals
 
-Every tool with an effect outside the model follows the same pattern: **ensure → wait → claim → execute → record**. The approval record is both the unit of consent and the idempotency ledger for the effect. It holds two state machines that never move backwards.
+MCP calls and workspace commands follow the same pattern: **ensure → wait → claim → execute → record**. The approval record is both the unit of consent and the idempotency ledger for the effect. Other tools (container file tools, memory, scheduling and document reading) run without an approval record; see the table below. It holds two state machines that never move backwards.
 
 <Flow caption="Consent and effect are tracked separately, and neither moves backwards.">
   <Row label="Consent · status">
@@ -150,27 +150,29 @@ Every tool with an effect outside the model follows the same pattern: **ensure �
   </Row>
 </Flow>
 
-| Rule            | Detail                                                                                                                                                                                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Exact arguments | The owner approves the exact, pretty-printed arguments. MCP arguments over 64 KiB are refused as unreviewable. A changed fingerprint (connection, tool or arguments) fails the call.                                                            |
-| Deadline        | Approvals expire after 10 minutes. Expiry wins: a decision at or after the deadline yields `expired`. Settled approvals are immutable.                                                                                                          |
-| Claim           | Before the effect, a commit re-checks the conversation, task, fingerprint and `approved` status, then moves `waiting` to `running`. A replay of a `done` call returns the stored result; anything else that is not `waiting` becomes uncertain. |
-| Uncertain       | A thrown error or crash after the claim marks the action uncertain. The model is told not to repeat it, and nothing retries it.                                                                                                                 |
-| Notifications   | Approval cards in channels are deliveries. A failed notification never repeats an approved action.                                                                                                                                              |
+| Rule            | Detail                                                                                                                                                                                                                                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exact arguments | The owner approves the exact arguments (pretty-printed for MCP). MCP arguments over 64 KiB are refused as unreviewable. A changed fingerprint (connection, tool or arguments) fails the call.                                                                                                                  |
+| Deadline        | Approvals expire after 10 minutes. Expiry wins: a decision at or after the deadline yields `expired`. Settled approvals are immutable.                                                                                                                                                                         |
+| Claim           | Before the effect, a commit re-checks the conversation, task, fingerprint and `approved` status, then moves `waiting` to `running`. For MCP, a replay of a `done` call returns the stored result, and any other state that is not `waiting` is reported to the model as an unknown outcome without a new call. |
+| Uncertain       | A thrown error or crash after the claim marks the action uncertain. The model is told not to repeat it, and nothing retries it.                                                                                                                                                                                |
+| Notifications   | Approval cards in channels are deliveries. A failed notification never repeats an approved action.                                                                                                                                                                                                             |
 
 ### Who must approve what
 
-| Tool class                                             | Ask (default)                             | Full access                         | Command session grant                      | Replay                                  |
-| ------------------------------------------------------ | ----------------------------------------- | ----------------------------------- | ------------------------------------------ | --------------------------------------- |
-| Workspace command (`workspace_exec`, container `bash`) | Prompt per call                           | Auto-approved for that conversation | Auto-approved for the exact same arguments | Safe                                    |
-| Container `read`, `write`, `edit`                      | Not gated; bound to the bot's environment |                                     |                                            | Unsafe                                  |
-| MCP tool                                               | Prompt per call                           | Never                               | Never (once only)                          | Safe at the gate, not the remote action |
-| MCP documentation lookup tools                         | Allow-listed per connection; no prompt    |                                     |                                            |                                         |
-| Memory tools                                           | No prompt (the bot's own store)           |                                     |                                            | Unsafe                                  |
+| Tool class                                             | Ask (default)                                                                       | Full access                         | Command session grant                      | Replay                                  |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------ | --------------------------------------- |
+| Workspace command (`workspace_exec`, container `bash`) | Prompt per call                                                                     | Auto-approved for that conversation | Auto-approved for the exact same arguments | Safe                                    |
+| Container `read`, `write`, `edit`                      | Not gated; bound to the bot's environment                                           |                                     |                                            | Unsafe                                  |
+| MCP tool                                               | Prompt per call                                                                     | Never                               | Never (once only)                          | Safe at the gate, not the remote action |
+| MCP documentation lookup tool                          | No prompt. Only `skills` on an `executor` server configured through the environment |                                     |                                            |                                         |
+| Memory tools                                           | No prompt (the bot's own store)                                                     |                                     |                                            | Unsafe                                  |
+| Schedule tools (`schedule_*`)                          | No prompt                                                                           |                                     |                                            | Safe                                    |
+| `read_document`                                        | No prompt (read only)                                                               |                                     |                                            | Safe                                    |
 
 The command permission mode (Ask or Full access) and command session grants apply to workspace commands only. An MCP claim is refused if it carries Full access or a grant, even if a record were forged. Revoking a grant blocks future claims; it cannot undo an action already dispatched.
 
-Channel decisions have extra checks: the same connection, the same thread as the card, and the same user who started the request. When more than one turn is pending, the initiator is ambiguous, so only the web workspace can decide.
+Channel decisions have extra checks: the same connection, the same thread as the card, and the same user who started the request. Telegram decisions are accepted only in a private chat. When more than one turn is pending, the initiator is ambiguous, so only the web workspace can decide; approvals for scheduled turns and Telegram group conversations are web-only as well.
 
 ## Crash anywhere: what happens next
 

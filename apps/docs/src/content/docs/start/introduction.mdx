@@ -11,7 +11,7 @@ import Features from "~/components/Features.astro";
 
 Raphie is a self-hosted assistant you run on your own machine. It hosts one or more persistent **bots**, each with its own instructions, memory, workspace and scheduled work, and you talk to them from a browser, the Raphie desktop app for Mac or a messaging channel.
 
-Everything runs in one runtime process that you own. Model calls go to the provider you connect; your conversations, memory and files stay in Raphie's data directory.
+Raphie runs as two local processes on a machine you own: a runtime and a web host. Model calls go to the provider you connect; your conversations, memory and files stay in Raphie's data directory.
 
 ## How it fits together
 
@@ -24,7 +24,9 @@ Everything runs in one runtime process that you own. Model calls go to the provi
     <Box title="Channels">Telegram or Discord</Box>
   </Row>
   <Arrow />
-  <Box title="Raphie runtime" tone="accent" />
+  <Box title="Raphie" tone="accent">
+    web host and runtime
+  </Box>
   <Arrow />
   <Row label="Each bot">
     <Box title="Sessions" />

@@ -7,7 +7,7 @@ sidebar:
 
 import { Arrow, Box, Flow, Row } from "~/components/diagram";
 
-A bot is the ownership boundary for configuration, sessions, memory, tools and files. Every bot runs in the same runtime process, but each has its own harness, stores and credentials, and the model can never reach another bot's state. This is logical separation inside a trusted host, not operating-system isolation.
+A bot is the ownership boundary for configuration, sessions, memory, tools and files. Every bot runs in the same runtime process, but each has its own harness, stores and credentials, and no model tool can address another bot. This is logical separation inside a trusted host, not operating-system isolation.
 
 ## Bots: separate state, shared process
 
@@ -35,7 +35,7 @@ A bot is the ownership boundary for configuration, sessions, memory, tools and f
 
 | Part        | How it works                                                                                                                                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default bot | Built first. It keeps the original flat data layout and session IDs, and it cannot be deleted. Unprefixed `/api/*` routes address it.                                                                         |
+| Default bot | Built first. It keeps the original flat data layout at the data directory root, and it cannot be deleted (409). Unprefixed `/api/*` routes address it.                                                        |
 | Named bots  | Get runtime-issued UUIDs and a private directory under `bots/<id>/`. They start with no inherited tools, keys or channels.                                                                                    |
 | Routing     | `/api/bots/:botId/*` resolves exactly one bot and rewrites to that bot's route table. Each route factory receives one bot's runtime and cannot resolve its peers. An unavailable bot returns 503.             |
 | Actors      | Each bot has its own actor authority. A request context is a frozen object registered with that authority, so it cannot be forged, rebuilt from JSON or reused for another bot.                               |
@@ -44,14 +44,14 @@ A bot is the ownership boundary for configuration, sessions, memory, tools and f
 
 ### What is and isn't isolated
 
-| Property                                                   | Holds?  | Mechanism                                                                                                                 |
-| ---------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Separate sessions, approvals, activity                     | Yes     | One `gateway.sqlite` and harness per bot                                                                                  |
-| Separate provider keys, memory, MCP grants, channel config | Yes     | Per-bot stores; each ciphertext is bound to its record                                                                    |
-| Model cannot select another bot                            | Yes     | Tools close over their bot when they are built; bot identity never comes from tool arguments                              |
-| One Discord or Telegram connection per bot                 | Yes     | The host reserves a connection before connecting. In older data with duplicates, the first bot in profile order keeps it. |
-| Concurrency                                                | Per bot | Each bot has its own configuration gate and workspace queue; different bots run in parallel                               |
-| Process and OS isolation                                   | No      | Same process, OS user, filesystem permissions and network. A bug in shared code, or the owner, crosses bots.              |
+| Property                                                    | Holds?  | Mechanism                                                                                                                                      |
+| ----------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Separate sessions, approvals, activity                      | Yes     | One `gateway.sqlite` and harness per bot                                                                                                       |
+| Separate provider keys, memory, MCP grants, channel config  | Yes     | Per-bot stores; each ciphertext is bound to its record                                                                                         |
+| Model cannot select another bot                             | Yes     | Tools close over their bot when they are built; bot identity never comes from tool arguments                                                   |
+| A Discord application or Telegram bot serves one Raphie bot | Yes     | The host reserves it before connecting. In older data with duplicates, the first bot to attach (the default bot, then profile order) keeps it. |
+| Concurrency                                                 | Per bot | Each bot has its own configuration gate and workspace queue; different bots run in parallel                                                    |
+| Process and OS isolation                                    | No      | Same process, OS user, filesystem permissions and network. A bug in shared code, or the owner, crosses bots.                                   |
 
 Bot management (create, edit, delete) is an owner HTTP surface only. No model tool can change a bot profile. See [security](/architecture/security/) for the trust boundaries around this.
 
@@ -117,15 +117,15 @@ Each bot owns one persistent `/workspace`, shared by all its sessions. Compute i
   </Row>
 </Flow>
 
-A command runs in a throwaway worker that gets only the checkpoint and the command: no database paths, host mounts, network, native binaries, Node, Python or `sqlite3`. Only a zero exit produces a new checkpoint, committed together with the tool receipt. That is why `workspace_exec` is replay-safe: after a crash, either both exist (the stored result is returned) or neither does (it runs again from the old checkpoint).
+A command runs in a throwaway worker that gets only the checkpoint and the command: no database paths, host mounts, network, native binaries, Node, Python or `sqlite3`. Every run stores a receipt; only a zero exit also replaces the checkpoint, in the same transaction as that receipt. That is why `workspace_exec` is replay-safe: after a crash, either both exist (the stored result is returned) or neither does (it runs again from the old checkpoint).
 
-| Limit                       | Value                                                    |
-| --------------------------- | -------------------------------------------------------- |
-| Wall time                   | 5 s (a host timer kills the worker)                      |
-| Command source / output     | 16 KiB / 32 KiB                                          |
-| File / checkpoint / entries | 8 MiB / 12 MiB / 1,024                                   |
-| Receipts                    | 16 MiB per bot                                           |
-| Concurrency                 | Serial per bot, 16 queued per bot, 4 workers per process |
+| Limit                                 | Value                                                    |
+| ------------------------------------- | -------------------------------------------------------- |
+| Wall time                             | 5 s (a host timer kills the worker)                      |
+| Command source / output               | 16 KiB / 32 KiB                                          |
+| Files in total / checkpoint / entries | 8 MiB / 12 MiB / 1,024                                   |
+| Receipts                              | 16 MiB per bot                                           |
+| Concurrency                           | Serial per bot, 16 queued per bot, 4 workers per process |
 
 Only `/workspace` persists. `/tmp` and shell state last one command.
 
@@ -168,10 +168,10 @@ Saving sandbox settings runs under the workspace gate and is refused (409) while
 | Store                         | Contents                                                                                                                |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `gateway.sqlite`              | Pi Durable journal and every `raphie.*` document: sessions, turns, approvals, activity, deliveries, bindings, schedules |
-| `settings.sqlite`             | Provider connections, default model, telemetry preference, encrypted keys                                               |
+| `settings.sqlite`             | Provider connections, default model, encrypted keys; the default bot's copy also holds the host-wide telemetry switch   |
 | `memory.sqlite`               | Memory configuration, built-in evidence and search indexes                                                              |
-| `mcp.sqlite`                  | MCP connections and encrypted OAuth grants                                                                              |
-| `channels.sqlite`             | Discord configuration and encrypted token                                                                               |
+| `mcp.sqlite`                  | Encrypted MCP connections, including tokens and OAuth grants                                                            |
+| `channels.sqlite`             | Encrypted Discord configuration, including its token                                                                    |
 | `telegram.sqlite`             | Encrypted Telegram configuration and the durable polling position                                                       |
 | `files/`                      | Content-addressed uploaded originals                                                                                    |
 | `workspace/checkpoint.sqlite` | Sandbox settings, the just-bash checkpoint and execution receipts                                                       |
@@ -183,7 +183,7 @@ The default bot keeps these at the root of the data directory; each named bot ha
 ## Limits
 
 - Bots share one process, OS user and network; a container sandbox shares the host kernel and can reach host and LAN services.
-- Memory has no background consolidation; reflection is synthesis by the conversation model (built-in) or by Hindsight.
+- Built-in memory has no background consolidation; reflection is synthesis by the conversation model. Hindsight consolidates and reflects on its own side.
 - There is no cross-bot file or memory sharing operation.
 
 ## Related

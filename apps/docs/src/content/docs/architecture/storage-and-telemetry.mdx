@@ -13,14 +13,15 @@ All of Raphie's state lives in one data directory, owned by exactly one runtime 
 
 ## One data directory, one owner
 
-| Mode               | Default location                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| From source        | `.data/` at the root of the Git checkout (shared by its worktrees)                                      |
-| Installed on macOS | `~/Library/Application Support/Raphie`                                                                  |
-| Installed on Linux | `$XDG_DATA_HOME/raphie`, or `~/.local/share/raphie`                                                     |
-| Any mode           | `DATA_DIRECTORY`, or `--data-dir` on the `raphie` launcher; it must be absolute for an installed binary |
+| Mode                 | Default location                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| From source          | `.data/` at the root of the Git checkout (shared by its worktrees)                                    |
+| Installed on macOS   | `~/Library/Application Support/Raphie`                                                                |
+| Installed on Linux   | `$XDG_DATA_HOME/raphie` when it is absolute, otherwise `~/.local/share/raphie`                        |
+| Linux system service | `/var/lib/raphie/data`                                                                                |
+| Any mode             | `DATA_DIRECTORY` (must be absolute for an installed binary), or `--data-dir` on the `raphie` launcher |
 
-The directory is created with mode `0700`; secrets and lock files are `0600`. Raphie never moves, merges or resets an existing directory: if a source checkout finds two candidate locations, it refuses to start and asks you to set `DATA_DIRECTORY`.
+The directory is created with mode `0700`; the ownership lock, installation ID, `auth.secret` and most databases are `0600`. Raphie never moves, merges or resets an existing directory: if a source checkout finds two candidate locations, it refuses to start and asks you to set `DATA_DIRECTORY`.
 
 <Flow>
   <Box title="Runtime starts" />
@@ -36,7 +37,7 @@ The directory is created with mode `0700`; secrets and lock files are `0600`. Ra
   </Row>
   <Arrow label="no: record own PID and token" />
   <Row>
-    <Box title="Credential store">available?</Box>
+    <Box title="Credential store">available? (after `traces.sqlite` opens)</Box>
     <Arrow right label="no" />
     <Box title="Exit">fail closed</Box>
   </Row>
@@ -73,24 +74,24 @@ Ownership is taken before any product store is opened, which is what prevents tw
 
 </FileTree>
 
-| Store                                | Scope    | Contents                                                                  | Notes                                                      |
-| ------------------------------------ | -------- | ------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `runtime-owner.sqlite`               | Host     | Owning process ID and token                                               | Liveness-checked ownership lock                            |
-| `workspace-identity.json`            | Host     | Stable installation ID                                                    | Restore it from backup; never reset it                     |
-| `bots.sqlite`                        | Host     | Bot registry and profile revisions                                        | `synchronous=FULL`                                         |
-| `traces.sqlite`                      | Host     | OTLP trace spans                                                          | Best-effort; may be lost                                   |
-| `auth.sqlite`, `auth.secret`         | Web host | Administrator, sessions, passkeys, devices; the session signing secret    | Only the web host opens these                              |
-| `gateway.sqlite`                     | Per bot  | Pi Durable journal and every `raphie.*` document                          | One writer connection, WAL                                 |
-| `settings.sqlite`                    | Per bot  | Provider connections, default model, telemetry preference, encrypted keys | `secure_delete` on                                         |
-| `memory.sqlite`                      | Per bot  | Memory configuration, built-in evidence, FTS5 indexes                     | `secure_delete` on, WAL                                    |
-| `mcp.sqlite`                         | Per bot  | MCP connections and encrypted OAuth grants                                |                                                            |
-| `channels.sqlite`, `telegram.sqlite` | Per bot  | Encrypted Discord and Telegram configuration; Telegram's polling position |                                                            |
-| `files/`                             | Per bot  | Content-addressed upload originals (SHA-256 IDs)                          | Originals stay downloadable after the working copy changes |
-| `workspace/checkpoint.sqlite`        | Per bot  | Sandbox settings, just-bash checkpoint, execution receipts                | Outside the container mount                                |
-| `workspace/container.sqlite`         | Per bot  | Container lease and command journal                                       | Outside the container mount                                |
-| `workspace/files/`                   | Per bot  | The disk view of the bot's `/workspace`                                   | The only path a container sees                             |
+| Store                                | Scope    | Contents                                                                                     | Notes                                                      |
+| ------------------------------------ | -------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `runtime-owner.sqlite`               | Host     | Owning process ID and token                                                                  | Liveness-checked ownership lock                            |
+| `workspace-identity.json`            | Host     | Stable installation ID                                                                       | Restore it from backup; never reset it                     |
+| `bots.sqlite`                        | Host     | Bot registry and profile revisions                                                           | `synchronous=FULL`                                         |
+| `traces.sqlite`                      | Host     | OTLP trace spans                                                                             | Best-effort; may be lost                                   |
+| `auth.sqlite`, `auth.secret`         | Web host | Administrator, sessions, passkeys, devices; the session signing secret                       | Only the web host opens these                              |
+| `gateway.sqlite`                     | Per bot  | Pi Durable journal and every `raphie.*` document                                             | One writer connection, WAL                                 |
+| `settings.sqlite`                    | Per bot  | Provider connections, default model, encrypted keys; the telemetry switch (default bot only) | `secure_delete` on, rollback journal (not WAL)             |
+| `memory.sqlite`                      | Per bot  | Memory configuration, built-in evidence, FTS5 indexes                                        | `secure_delete` on, WAL                                    |
+| `mcp.sqlite`                         | Per bot  | Encrypted MCP connections, tokens and OAuth grants                                           | `secure_delete` on                                         |
+| `channels.sqlite`, `telegram.sqlite` | Per bot  | Encrypted Discord and Telegram configuration; Telegram's polling position                    |                                                            |
+| `files/`                             | Per bot  | Content-addressed upload originals (SHA-256 IDs)                                             | Originals stay downloadable after the working copy changes |
+| `workspace/checkpoint.sqlite`        | Per bot  | Sandbox settings, just-bash checkpoint, execution receipts                                   | Outside the container mount                                |
+| `workspace/container.sqlite`         | Per bot  | Container lease and command journal                                                          | Outside the container mount                                |
+| `workspace/files/`                   | Per bot  | The disk view of the bot's `/workspace`                                                      | The only path a container sees                             |
 
-Provider keys and channel tokens are encrypted with AES-256-GCM under a master key kept outside the data directory, in the OS credential store or an owner-only key file. See [credentials](/operate/credentials/) and [security](/architecture/security/).
+Provider keys, channel configuration and MCP credentials are encrypted with AES-256-GCM under a master key held in the OS credential store or, when `RAPHIE_CREDENTIAL_KEY_FILE` is set, in an owner-only (`0600`, in a `0700` folder) key file. Keep that file outside the data directory; Raphie does not check where it is. See [credentials](/operate/credentials/) and [security](/architecture/security/).
 
 ### Evolving the layout
 
@@ -124,9 +125,9 @@ Back up with the SQLite backup API or with the runtime stopped. Copying a live d
 | Retention      | The latest 5,000 events per bot                                                                                                                    | 48 hours, at most 100,000 spans                                                                                                                        |
 | Authority      | Authoritative record of what the agent did; recovery reads it                                                                                      | Operational and expendable; may be lost                                                                                                                |
 | Contents       | Events such as `run.accepted`, `run.recovered`, `approval.requested`, `action.claimed`, `action.uncertain`, `grant.revoked`, with redacted details | Spans such as `http.request`, `session.submit`, `approval.decide`, `tool.call`, `delivery.send`, `agent.run`, `model.generate`, tagged with the bot ID |
-| Never contains | Secrets (details are redacted)                                                                                                                     | Request text, tool arguments or attachment names                                                                                                       |
+| Never contains | Known secrets: secret-named fields and registered keys are redacted before storage                                                                 | Request text, tool arguments or attachment names: span attributes come from a fixed list                                                               |
 
-Telemetry export is on by default and the Settings switch takes effect immediately. Polling the Diagnostics routes does not create spans, so the view does not feed itself. See [observability](/operate/observability/) for using both views.
+Trace collection is on by default. It is one switch for the whole host, **Collect diagnostic traces** under Settings → Diagnostics, and it takes effect for the next span. Polling the Diagnostics routes does not create spans, so the view does not feed itself. See [observability](/operate/observability/) for using both views.
 
 ## Limits
 

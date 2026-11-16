@@ -7,7 +7,7 @@ sidebar:
 
 import { Arrow, Box, Flow, Row } from "~/components/diagram";
 
-Raphie is a single-owner system. Authority comes from trusted adapters (a signed-in web session, a paired channel account) and never from what a request claims about itself. Every external effect a model proposes goes through an approval record that separates the owner's consent from the effect itself.
+Raphie is a single-owner system. Authority comes from trusted adapters (a signed-in web session, a paired channel account) and never from what a request claims about itself. Every MCP tool call and workspace command a model proposes goes through an approval record that separates the owner's consent from the effect itself.
 
 ## Trust boundaries
 
@@ -26,7 +26,7 @@ Raphie is a single-owner system. Authority comes from trusted adapters (a signed
   <Box title="Runtime" tone="accent">
     on loopback
   </Box>
-  <Arrow label="approval gate for MCP and the sandbox" />
+  <Arrow label="approval gate for MCP tools and workspace commands" />
   <Row label="Effects">
     <Box title="Model provider" tone="store" />
     <Box title="MCP servers" />
@@ -34,25 +34,25 @@ Raphie is a single-owner system. Authority comes from trusted adapters (a signed
   </Row>
 </Flow>
 
-| Boundary                           | What crosses it                       | What guards it                                                           |
-| ---------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
-| Network to web host                | Browser and desktop app requests      | Configured host, signed-in session, matching `Origin`                    |
-| Web host to runtime                | Proxied `/api/*` requests             | Loopback bind, `Host` and `Origin` checks, a client marker               |
-| Messaging platform to runtime      | Channel messages and approval buttons | Paired or allow-listed owner accounts, verified per message              |
-| Runtime to MCP servers and sandbox | Tool calls proposed by the model      | Per-call owner approval, or an explicit permission mode or grant         |
-| Runtime to model provider          | Prompts and tool results              | Encrypted provider credentials; see [credentials](/operate/credentials/) |
+| Boundary                           | What crosses it                       | What guards it                                                                                                          |
+| ---------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Network to web host                | Browser and desktop app requests      | Configured host, signed-in session, matching `Origin`                                                                   |
+| Web host to runtime                | Proxied `/api/*` requests             | Loopback bind, `Host` and `Origin` checks, a client marker                                                              |
+| Messaging platform to runtime      | Channel messages and approval buttons | Paired or allow-listed owner accounts, verified per message                                                             |
+| Runtime to MCP servers and sandbox | Tool calls proposed by the model      | Per-call owner approval; for workspace commands, also a permission mode or grant. Container file tools need no approval |
+| Runtime to model provider          | Prompts and tool results              | Encrypted provider credentials; see [credentials](/operate/credentials/)                                                |
 
 ## Gates before a mutation
 
 A browser request passes five independent gates. Failing any one stops it; nothing later runs.
 
-| Gate             | Where                      | Checks                                                                                                                                                              | Refusal                                            |
-| ---------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| 1. Web gateway   | Web host                   | Configured host; a session re-read from the database on every request; `Origin` for state changes; sign-in bodies bounded to 8 KiB                                  | `403`, `401`, `303` to `/login`, `503` when locked |
-| 2. Runtime proxy | Web host                   | `Host` and `Origin` again; the browser's backend matches the current one; forwards only `content-type`, `x-raphie-client` and `origin`; never follows redirects     | `403`, `409 backend_changed`, `503`                |
-| 3. Runtime edge  | Runtime                    | `Host` is `127.0.0.1` or `localhost` on the runtime port; `Origin`, if any, is loopback or a configured web origin; non-`GET` requests carry `x-raphie-client: web` | `403`                                              |
-| 4. Actor         | Runtime                    | The operation holds an owner context issued by a trusted adapter for that bot                                                                                       | `403`                                              |
-| 5. Domain policy | Runtime, inside the commit | Idempotency, input limits, session state (for example, no model change while a turn is pending)                                                                     | `409`, `4xx`                                       |
+| Gate             | Where                      | Checks                                                                                                                                                                                   | Refusal                                            |
+| ---------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 1. Web gateway   | Web host                   | Configured host; a session re-read from the database on every request; `Origin` for state changes; sign-in bodies bounded to 8 KiB                                                       | `403`, `401`, `303` to `/login`, `503` when locked |
+| 2. Runtime proxy | Web host                   | `Host` and `Origin` again; the browser's backend, when it names one, matches the current one; forwards only `content-type`, `x-raphie-client` and `origin`; never follows redirects      | `403`, `409 backend_changed`, `503`                |
+| 3. Runtime edge  | Runtime                    | `Host` is `127.0.0.1` or `localhost` on the runtime port; `Origin`, if any, is loopback or a configured web origin; requests other than `GET` and `OPTIONS` carry `x-raphie-client: web` | `403`                                              |
+| 4. Actor         | Runtime                    | The operation holds an owner context issued by a trusted adapter for that bot                                                                                                            | `403`                                              |
+| 5. Domain policy | Runtime, inside the commit | Idempotency, input limits, session state (for example, no model change while a turn is pending)                                                                                          | `409`, `4xx`                                       |
 
 The runtime also sets a strict Content Security Policy, sends `Cache-Control: no-store`, and maps unexpected errors to a generic message so internals never reach a client. Authentication details are on [authentication](/operate/authentication/).
 
@@ -64,7 +64,7 @@ The runtime also sets a strict Content Security Policy, sends `Cache-Control: no
 
 ## Tool authorization: consent is not effect
 
-Every tool that has an effect outside the model follows the same five steps, all recorded on one approval record.
+MCP tool calls and workspace commands follow the same five steps, all recorded on one approval record. Container file reads and writes do not; see the table below.
 
 <Flow>
   <Row>
@@ -84,7 +84,7 @@ Every tool that has an effect outside the model follows the same five steps, all
   </Row>
 </Flow>
 
-The record holds the exact arguments shown to the owner and a fingerprint of the connection, tool and arguments. If any of them change between approval and execution, the call fails. Approval and execution are tracked separately:
+The record holds the exact arguments shown to the owner and a fingerprint of the connection, tool and arguments. If any of them change between approval and execution, the call is refused. Approval and execution are tracked separately:
 
 <Flow caption="Consent and effect are tracked separately, and neither moves backwards.">
   <Row label="Consent · status">
@@ -107,7 +107,7 @@ The record holds the exact arguments shown to the owner and a fingerprint of the
 - **Expiry wins.** A request expires after 10 minutes. A decision that arrives after the deadline records `expired`, whatever was clicked.
 - **Claiming re-checks everything.** Before the effect starts, a transaction confirms the approval is still valid for this exact call, permission mode and grant.
 - **Done is cached.** Replaying a finished call returns the stored result instead of running it again.
-- **Uncertain is never retried.** If Raphie crashed while a call was running, it may or may not have happened. Raphie marks it uncertain and the owner decides what to do.
+- **Uncertain is never retried.** If an MCP call fails, or Raphie crashed while a call was running, it may or may not have happened. Raphie does not run it again, reports the outcome as unknown, and the owner decides what to do.
 
 ### Which tools need approval
 
@@ -125,11 +125,11 @@ Full access and session grants never apply to MCP tools. MCP arguments over 64 K
 
 "Plugin" means three different things in Raphie. None of them grants authority.
 
-| Surface            | What it is                                                                             | Can                                                                                         | Cannot                                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| UI plugins         | Components compiled into the web workspace, enabled in **Settings → UI plugins**       | Render in a named slot (the composer footer) from the draft, model and usage they are given | Call tools, read other data or reach the runtime; a failing plugin is contained by an error boundary  |
-| Runtime extensions | First-party tool sets installed per bot (memory, workspace, documents, schedules, MCP) | Add tools and prompt sections; hot-swap without a restart                                   | Choose their bot or conversation from tool arguments; that scope is fixed when the extension is built |
-| MCP servers        | External tool servers connected per bot                                                | Offer tools that the model can propose                                                      | Run a tool without the owner's approval of its exact arguments                                        |
+| Surface            | What it is                                                                                   | Can                                                                                         | Cannot                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| UI plugins         | First-party components compiled into the web workspace, enabled in **Settings → UI plugins** | Render in a named slot (the composer footer) from the draft, model and usage they are given | Break the page: a failing plugin is contained by an error boundary. They are trusted code, not sandboxed |
+| Runtime extensions | First-party tool sets installed per bot (memory, workspace, documents, schedules, MCP)       | Add tools and prompt sections; hot-swap without a restart                                   | Choose their bot or conversation from tool arguments; that scope is fixed when the extension is built    |
+| MCP servers        | External tool servers connected per bot                                                      | Offer tools that the model can propose                                                      | Run a tool without the owner's approval of its exact arguments                                           |
 
 MCP connections are hardened in the runtime:
 

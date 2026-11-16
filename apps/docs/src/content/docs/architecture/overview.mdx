@@ -38,15 +38,15 @@ Raphie is a single-owner, self-hosted assistant platform. One long-running **run
   </Row>
 </Flow>
 
-| Part                           | What it owns                                                                                   | What it does not own                                             |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| **Runtime** (`raphie-runtime`) | Every SQLite store except `auth.sqlite`, model calls, tools, approvals, channels, schedules    | Sign-in, browser sessions                                        |
-| **Web host** (`raphie-web`)    | `auth.sqlite` (the administrator, sessions, passkeys, devices), the React UI, the `/api` proxy | Conversations, model calls                                       |
-| **Launcher** (`raphie`)        | Starting both processes, `auth setup` and `auth recover`, status and health                    | Any state of its own                                             |
-| **Desktop app**                | Its sign-in token and local view state                                                         | Anything durable: it talks to the web host like the browser does |
-| **Channel bridges**            | Their connection settings; they run inside the runtime, one per bot connection                 | Session state, which stays in the bot's store                    |
+| Part                           | What it owns                                                                                   | What it does not own                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Runtime** (`raphie-runtime`) | Every SQLite store except `auth.sqlite`, model calls, tools, approvals, channels, schedules    | Sign-in, browser sessions                                                              |
+| **Web host** (`raphie-web`)    | `auth.sqlite` (the administrator, sessions, passkeys, devices), the React UI, the `/api` proxy | Conversations, model calls                                                             |
+| **Launcher** (`raphie`)        | Starting both processes, `auth setup` and `auth recover`, status, health, ports                | Runtime or session state; a user install keeps only its saved ports and update channel |
+| **Desktop app**                | Its sign-in token (in the OS credential store) and local preferences such as appearance        | Anything durable: it talks to the web host like the browser does                       |
+| **Channel bridges**            | Their connection settings; they run inside the runtime, one per bot connection                 | Session state, which stays in the bot's store                                          |
 
-The two server processes share one [data directory](/architecture/storage-and-telemetry/) and talk only over loopback HTTP. Runtime work continues when every client disconnects, and the runtime keeps serving Discord, Telegram and schedules if the web host stops.
+The two server processes share one [data directory](/architecture/storage-and-telemetry/) and talk only over loopback HTTP. Runtime work, including Discord, Telegram and schedules, continues when every client disconnects. They are not independent in an installed copy, though: `raphie start` runs both, and when either process exits it stops the other.
 
 ### Ports
 
@@ -64,29 +64,29 @@ A user install saves its ports in `~/.local/lib/raphie/.ports`, and updates keep
 
 Six constraints shape the code. Each one has a concrete mechanism.
 
-| Rule                                                 | How the code enforces it                                                                                                                                              |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| State that matters survives any crash point          | All mutation is a transaction over durable documents; recovery is one startup transaction, not a special mode. See [execution](/architecture/execution/).             |
-| External effects happen once or are marked uncertain | Tool claims, delivery plans and memory writes are journalled before the effect. An interrupted effect becomes uncertain and is never retried automatically.           |
-| One owner is the trust root                          | There is no multi-tenant model. Bots are separated logically, not by the operating system. See [state](/architecture/state/) and [security](/architecture/security/). |
-| The core is headless                                 | Clients and channels call the same application operations. See the [HTTP API](/architecture/http-api/).                                                               |
-| Nothing beyond the machine                           | SQLite only: no broker, cache or hosted control plane. Two processes, one data directory.                                                                             |
-| Dependencies point inward                            | Domain code is framework-free; `bun run architecture` fails the build on a wrong import.                                                                              |
+| Rule                                                 | How the code enforces it                                                                                                                                                |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| State that matters survives any crash point          | Conversation state changes are transactions over durable documents; recovery is one startup transaction, not a special mode. See [execution](/architecture/execution/). |
+| External effects happen once or are marked uncertain | Tool claims and deliveries are recorded before the effect. An interrupted one becomes uncertain and is not retried automatically; memory tools are never replayed.      |
+| One owner is the trust root                          | There is no multi-tenant model. Bots are separated logically, not by the operating system. See [state](/architecture/state/) and [security](/architecture/security/).   |
+| The core is headless                                 | Clients and channels call the same application operations. See the [HTTP API](/architecture/http-api/).                                                                 |
+| Nothing beyond the machine                           | SQLite only: no broker, cache or hosted control plane. Two processes, one data directory.                                                                               |
+| Dependencies point inward                            | Domain code is framework-free; `bun run architecture`, part of `bun run validate` in CI, fails on a wrong import.                                                       |
 
 ## Tech stack by layer
 
-| Layer             | Choices                                                                                                 | Used for                                                                            |
-| ----------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Browser           | React 19, TanStack Start, Router and Query, Base UI (shadcn-style), Tailwind 4, Vite                    | The web workspace; live updates over server-sent events (SSE)                       |
-| Web host          | `Bun.serve`, Better Auth (one administrator, passkeys, device sign-in), TanStack Start server rendering | Sign-in gate in front of the UI and the runtime proxy                               |
-| Runtime transport | Hono 4.13 on `Bun.serve`, zod 4                                                                         | HTTP routes, SSE, input validation, secure headers                                  |
-| Runtime lifecycle | Effect 4.1                                                                                              | Scoped startup and shutdown, OTLP trace export                                      |
-| Agent core        | Pi Durable 1.5 (`pi-durable`, `pi-ai`, `pi-mcp`, `pi-schema`)                                           | Durable harness, documents, tasks, tools, model catalogue, MCP client               |
-| Channels          | Chat SDK with its Discord adapter; Telegram Bot API over plain `fetch` with long polling                | Messaging bridges                                                                   |
-| Execution         | just-bash 3.6 in a worker thread; Docker or Podman CLI; `anydoc-wasm` and `pdfjs-dist` in a worker      | Workspace commands, the opt-in container sandbox, document reading                  |
-| Storage           | SQLite through `bun:sqlite` (WAL), FTS5, AES-256-GCM, `Bun.secrets`                                     | Every store, memory search, encrypted provider keys, the OS credential store        |
-| Desktop           | Rust, the Rune UI toolkit, `reqwest` on Tokio                                                           | The desktop app in `apps/desktop`, shipped with each release for Apple Silicon Macs |
-| Toolchain         | Bun 1.4.4, TypeScript 7.0.2, Oxlint (type-aware), `bun fmt`, `bun:test`, Varlock, `bun build --compile` | Build, checks, configuration and the standalone binaries                            |
+| Layer             | Choices                                                                                                                       | Used for                                                                            |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Browser           | React 19, TanStack Start, Router and Query, Base UI (shadcn-style), Tailwind 4, Vite                                          | The web workspace; live updates over server-sent events (SSE)                       |
+| Web host          | `Bun.serve`, Better Auth (one administrator, passkeys, device sign-in), TanStack Start server rendering                       | Sign-in gate in front of the UI and the runtime proxy                               |
+| Runtime transport | Hono 4.13 on `Bun.serve`, zod 4                                                                                               | HTTP routes, SSE, input validation, secure headers                                  |
+| Runtime lifecycle | Effect 4.1                                                                                                                    | Scoped startup and shutdown, OTLP trace export                                      |
+| Agent core        | Pi Durable 1.5 (`pi-durable`, `pi-ai`, `pi-mcp`, `pi-schema`, `chord`)                                                        | Durable harness, documents, tasks, tools, model catalogue, MCP client               |
+| Channels          | Chat SDK with its Discord adapter; Telegram Bot API over plain `fetch` with long polling                                      | Messaging bridges                                                                   |
+| Execution         | just-bash 3.6 in a worker thread; the `docker` CLI (or `RAPHIE_CONTAINER_BINARY`); `anydoc-wasm` and `pdfjs-dist` in a worker | Workspace commands, the opt-in container sandbox, document reading                  |
+| Storage           | SQLite through `bun:sqlite` (WAL for most stores), FTS5, AES-256-GCM, `Bun.secrets`                                           | Every store, memory search, encrypted provider keys, the OS credential store        |
+| Desktop           | Rust, the Rune UI toolkit, `reqwest` on Tokio                                                                                 | The desktop app in `apps/desktop`, shipped with each release for Apple Silicon Macs |
+| Toolchain         | Bun 1.4.4, TypeScript 7.0.2, Oxlint (type-aware), `bun fmt`, `bun:test`, Varlock, `bun build --compile`                       | Build, checks, configuration and the standalone binaries                            |
 
 ## Code layering
 
@@ -109,19 +109,19 @@ The runtime (`packages/runtime`) and the web app (`apps/web`) are organised by d
   </Box>
 </Flow>
 
-| Layer            | Holds                                                                    | May import                                                |
-| ---------------- | ------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `domain`         | Models and business policies, such as "expiry wins over a late approval" | Relative imports and `@raphie/contracts` only             |
-| `application`    | Ports (interfaces) for commands and reads, pure projections              | `domain`, `@raphie/contracts`                             |
-| `infrastructure` | Pi Durable transactions and tasks, storage, network and browser adapters | Inner layers and any package                              |
-| `presentation`   | Hono route factories, React components                                   | Inner layers; never a harness or SQLite directly          |
-| `bootstrap`      | Wiring and process lifecycle                                             | Everything; only `main.ts` and `router.tsx` may import it |
+| Layer            | Holds                                                                    | May import                                                              |
+| ---------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `domain`         | Models and business policies, such as "expiry wins over a late approval" | Relative imports and `@raphie/contracts` only                           |
+| `application`    | Ports (interfaces) for commands and reads, pure projections              | `domain`, `@raphie/contracts`                                           |
+| `infrastructure` | Pi Durable transactions and tasks, storage, network and browser adapters | Inner layers and any package                                            |
+| `presentation`   | Hono route factories, React components                                   | Inner layers and infrastructure helpers; the check does not restrict it |
+| `bootstrap`      | Wiring and process lifecycle                                             | Everything; only `main.ts` and `router.tsx` may import it               |
 
 `bun run architecture` (`scripts/check-architecture.mjs`) statically scans imports in `apps/web`, `packages/runtime` and `packages/contracts` and fails on:
 
 - `domain` or `application` importing `infrastructure`, `presentation` or `bootstrap`.
 - `domain` importing `application`.
-- A core layer importing any package other than `@raphie/contracts`.
+- A core layer (`domain` or `application`) importing any package, including `node:` built-ins, other than `@raphie/contracts`.
 - Anything outside `bootstrap` (or the entrypoints) importing `bootstrap`.
 - `shared` importing `domains`, `bootstrap` or `presentation`.
 - `apps/web` importing the runtime package, or any Radix package.

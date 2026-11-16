@@ -7,7 +7,7 @@ sidebar:
 
 import { FileTree, Steps } from "@astrojs/starlight/components";
 
-The desktop app in `apps/desktop` is a Rust app built on [Rune](https://github.com/anomalyco/rune), a GPU-rendered UI framework. It is a client of the web host's authenticated API, never of the runtime directly, and it copies the web workspace's look by value. Any change to the web design or to `@raphie/contracts` that the app reads must be mirrored here.
+The desktop app in `apps/desktop` is a Rust app built on [Rune](https://github.com/anomalyco/rune), a GPU-rendered UI framework. It is a client of the web host's authenticated API, never of the runtime directly (its only other request is the update check against GitHub's public releases API), and it copies the web workspace's look by value. Any change to the web design or to `@raphie/contracts` that the app reads must be mirrored here.
 
 ## Run it from source
 
@@ -52,10 +52,10 @@ RAPHIE_VERSION=v0.0.5 scripts/dmg.sh     # target/dist/Raphie-macos-arm64.dmg
 
 `RAPHIE_VERSION` (for example `v0.0.5` or a nightly tag) stamps the version the app shows in **About** and compares in its update check. The image is signed ad hoc only, with no Developer ID or notarisation, which is why users need **Open Anyway** on first launch; see [desktop app](/guides/desktop/#install).
 
-| Workflow                            | When                                                  | What it does with the image                                                                                                                                         |
-| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Desktop app** (`desktop-app.yml`) | Pull requests touching `apps/desktop/**` or `VERSION` | Runs `scripts/dmg.sh` on a macOS runner and keeps the image as a run artifact for seven days, for trying out.                                                       |
-| **Release** (`release.yml`)         | Every stable and nightly release                      | Runs `scripts/dmg.sh` with the release's `RAPHIE_VERSION`, attests its provenance, and publishes `Raphie-macos-arm64.dmg` with the release, listed in `SHA256SUMS`. |
+| Workflow                            | When                                                                                             | What it does with the image                                                                                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Desktop app** (`desktop-app.yml`) | Pull requests touching `apps/desktop/**`, `VERSION` or the workflow itself                       | Runs `scripts/dmg.sh` on a macOS runner and keeps the image as a run artifact for seven days, for trying out.                                                       |
+| **Release** (`release.yml`)         | A pushed `vX.Y.Z` tag (a draft stable release) or a manual run on `main` (a nightly pre-release) | Runs `scripts/dmg.sh` with the release's `RAPHIE_VERSION`, attests its provenance, and publishes `Raphie-macos-arm64.dmg` with the release, listed in `SHA256SUMS`. |
 
 ## Use the fixture
 
@@ -70,7 +70,7 @@ Never point the app at a real Raphie (4316/4320 in a checkout, 24316/24320 for a
    bun run dev:web:fixture    # web host on 4321
    ```
 
-2. If the fixture's web host asks for setup, run `bun run raphie auth setup` with a throwaway `DATA_DIRECTORY`, so the administrator is not written to the main checkout's `.data/`.
+2. The fixture's web host keeps its sign-in store in the checkout's data directory (the main checkout's `.data/`) unless `DATA_DIRECTORY` is set, and approving the app's device writes to that store. To keep the test device out of `.data/`, start `bun run dev:web:fixture` with a throwaway `DATA_DIRECTORY` and create the administrator in the same one with `DATA_DIRECTORY=… bun run raphie auth setup`.
 3. Start the app, enter `http://127.0.0.1:4321`, choose **Connect** and approve the device in the browser.
 4. Send a message. The fixture's `acceptance` model streams a canned reply; a message containing "tool" or "approval" proposes an action that needs approval. No paid model is called.
 5. When done, disconnect the test device in the web's **Settings → Account**.
@@ -120,8 +120,6 @@ The crate split is the boundary: the core owns the API client, auth, event strea
 
 </FileTree>
 
-Capabilities the desktop might one day offer the runtime (local speech, the owner's browser) belong in the core or crates beside it, not in the UI.
-
 ## Check your changes
 
 CI runs these in a `desktop` job beside `validate`:
@@ -169,7 +167,7 @@ The web's root font size is 14 px, so its Tailwind rem sizes are 14/16 of their 
 
 Tests catch silent drift: `avatar.rs`, `projections.rs` and `model_library.rs` compare against values printed by the web's TypeScript, and `tests/screens.rs` checks page colours against the tokens in both themes. To compare by eye, put `scripts/snapshots.sh` output beside the web workspace at 1280×800.
 
-The app differs from the web on purpose where a control would be dead (no UI plugins page, no usage view), where security calls for it (one provider form open at a time, so at most one typed key is in memory), and where the platform helps (system notifications, pasting files).
+The app differs from the web on purpose where a control would be dead (no UI plugins page), where security calls for it (one provider form open at a time, so at most one typed key is in memory), and where the platform helps (system notifications, pasting files).
 
 ## Keep the contracts in sync
 
@@ -179,17 +177,16 @@ The app differs from the web on purpose where a control would be dead (no UI plu
 
 Things that will save you time, at the pinned Rune rev:
 
-| Topic            | Note                                                                                                                                                                                                                             |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Patches          | A dependency's `[patch.crates-io]` does not apply to the app. `Cargo.toml` repeats Rune's patches (winit, parley_engine, wgpu-hal, accesskit_windows); recheck them on every Rune bump, or the build silently uses stock crates. |
-| Toolchain        | Keep `rust-toolchain.toml` in step with Rune's own when bumping the rev.                                                                                                                                                         |
-| Text fields      | Kit `TextInput` and `TextArea` default to 280 pt wide; use `.width(None)` to fill the container.                                                                                                                                 |
-| Keys             | rune-kit keys its own parts (`label`, `value`, …). Prefix app keys with `rd-`.                                                                                                                                                   |
-| `AppSpec`        | Takes `fn` pointers, not closures. Pass configuration through `App::init`, `rune::extra_args()` or state.                                                                                                                        |
-| Background work  | `AppSpec::setup` hands over a waker the core accepts as a plain callback; `poll` drains its events.                                                                                                                              |
-| Borders          | A border takes no layout room by default. Use `border_layout()` to make it behave like CSS.                                                                                                                                      |
-| Rounded clipping | `clip_rounded` also clips the element's own shadow. Clip an inner element instead.                                                                                                                                               |
-| Line height      | Text defaults to 1.25; the web uses 1.5. Set line heights explicitly through `theme::font`.                                                                                                                                      |
-| Window chrome    | `Cx::titlebar_inset` is the horizontal space taken by the traffic lights, and headless runs report it too.                                                                                                                       |
-| Redraws          | A covered window does not redraw, so a screen capture of it shows a stale frame.                                                                                                                                                 |
-| Look             | The kit's look is its own design system. The app replaces its shell, buttons and fields with plain functions in `widgets.rs`, keeping the kit's `Markdown`, `Loader` and `Select`.                                               |
+| Topic           | Note                                                                                                                                                                                                                             |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Patches         | A dependency's `[patch.crates-io]` does not apply to the app. `Cargo.toml` repeats Rune's patches (winit, parley_engine, wgpu-hal, accesskit_windows); recheck them on every Rune bump, or the build silently uses stock crates. |
+| Toolchain       | Keep `rust-toolchain.toml` in step with Rune's own when bumping the rev.                                                                                                                                                         |
+| Text fields     | Kit `TextInput` and `TextArea` default to 280 pt wide; use `.width(None)` to fill the container.                                                                                                                                 |
+| Keys            | rune-kit keys its own parts (`label`, `value`, …). Prefix app keys with `rd-`.                                                                                                                                                   |
+| `AppSpec`       | Takes `fn` pointers, not closures. Pass configuration through `App::init`, `rune::extra_args()` or state.                                                                                                                        |
+| Background work | `AppSpec::setup` hands over a waker the core accepts as a plain callback; `poll` drains its events.                                                                                                                              |
+| Borders         | A border takes no layout room by default. Use `border_layout()` to make it behave like CSS.                                                                                                                                      |
+| Line height     | Text defaults to 1.25; the web uses 1.5. Set line heights explicitly through `theme::font`.                                                                                                                                      |
+| Window chrome   | `Cx::titlebar_inset` is the horizontal space taken by the traffic lights, and headless runs report it too.                                                                                                                       |
+| Redraws         | A covered window does not redraw, so a screen capture of it shows a stale frame.                                                                                                                                                 |
+| Look            | The kit's look is its own design system. The app replaces its shell, buttons and fields with plain functions in `widgets.rs`, keeping the kit's `Markdown`, `Loader`, `Select`, `Dialog` and popovers.                           |
