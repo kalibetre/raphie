@@ -19,7 +19,7 @@ bun run validate              # format, architecture, lint, types, tests, build
 
 ## Architecture rules
 
-Both the runtime and the web app are organised by domain, with layers (`domain`, `application`, `infrastructure`, `presentation`) that only depend inward. `bun run architecture` enforces the dependency direction, so run it when moving code. Details and reasoning are in [docs/architecture.md](docs/architecture.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+Both the runtime and the web app are organised by domain, with layers (`domain`, `application`, `infrastructure`, `presentation`) that only depend inward. `bun run architecture` enforces the dependency direction, so run it when moving code. Details and reasoning are in [the architecture overview](apps/docs/src/content/docs/architecture/overview.mdx) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - The browser depends on `@raphie/contracts`, never on runtime internals.
 - Domain and application code stay framework-free.
@@ -30,7 +30,7 @@ Both the runtime and the web app are organised by domain, with layers (`domain`,
 
 - Use shadcn components built on Base UI. Do not add Radix or native controls where a shadcn one exists.
 - Scope CSS to explicit class names. Never use `> div` or bare element descendant selectors, since they have stretched unrelated controls before.
-- Use the shared scroll area for scrolling regions; see [docs/ui-scrolling.md](docs/ui-scrolling.md).
+- Use the shared scroll area for scrolling regions; see [UI conventions](apps/docs/src/content/docs/contribute/ui-conventions.mdx).
 - Before reporting UI work as finished, look at every changed screen in light and dark mode at 2x zoom and at a mobile width. DOM metrics and small screenshots miss misalignment.
 
 ## Running and testing safely
@@ -43,4 +43,4 @@ Both the runtime and the web app are organised by domain, with layers (`domain`,
 
 ## Documentation
 
-Docs are part of the change. When behaviour, defaults, settings, storage or API contracts change, update the matching guide in `docs/` in the same change. Keep planned work visibly separate from delivered work. The docs index is [docs/README.md](docs/README.md).
+Docs are part of the change. When behaviour, defaults, settings, storage or API contracts change, update the matching page of the docs site in `apps/docs/src/content/docs/` in the same change. Guides describe current behavior only. Follow [apps/docs/WRITING.md](apps/docs/WRITING.md), draw diagrams with the components in `apps/docs/src/components/diagram`, and check with `bun run --filter @raphie/docs build`.

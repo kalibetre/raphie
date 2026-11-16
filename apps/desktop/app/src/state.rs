@@ -20,6 +20,7 @@ use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::{self, Announcement, Announcements, Item, Target};
 use raphie_core::jobs::JobAction;
+use raphie_core::local_install;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
 use raphie_core::model::{AuthState, Effect, Event, Model};
@@ -43,7 +44,19 @@ use crate::sandbox::SandboxDraft;
 use crate::sections::{BotSection, Page};
 
 /// The fixture's web host: the default for a first launch from a checkout.
-pub const DEFAULT_ORIGIN: &str = "http://127.0.0.1:4321";
+/// The test fixture's web host (`bun run dev:web:fixture`), which the dev
+/// app offers until it has signed in somewhere.
+pub const FIXTURE_ORIGIN: &str = "http://127.0.0.1:4321";
+
+/// The address offered before this app has signed in anywhere: the dev app
+/// offers the test fixture; the release app, Raphie installed on this Mac
+/// (at the port its installer saved, or the default one).
+fn first_origin(flavor: Flavor, ports_file: Option<&std::path::Path>) -> String {
+    match flavor {
+        Flavor::Dev => FIXTURE_ORIGIN.to_owned(),
+        Flavor::Release => local_install::origin_at(ports_file).as_str().to_owned(),
+    }
+}
 
 /// Which conversations the panel lists (the web's filter chips).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -466,7 +479,7 @@ impl Ui {
         // its default, whatever this computer's owner has chosen. The
         // `dev-build` scene shows the dev look.
         if rune::tooling::headless_run().is_some() {
-            let mut ui = Ui::with_origin(DEFAULT_ORIGIN);
+            let mut ui = Ui::with_origin(&first_origin(Flavor::Release, None));
             ui.flavor = Flavor::Release;
             ui.release_channel = ReleaseChannel::Stable;
             return ui;
@@ -474,7 +487,8 @@ impl Ui {
         let saved = Settings::default_path()
             .map(|path| Settings::load(&path))
             .unwrap_or_default();
-        let mut ui = Ui::with_origin(saved.origin.as_deref().unwrap_or(DEFAULT_ORIGIN));
+        let first = || first_origin(Flavor::current(), local_install::ports_file().as_deref());
+        let mut ui = Ui::with_origin(&saved.origin.unwrap_or_else(first));
         ui.theme = saved.theme;
         ui.favorites = saved.model_favorites;
         // `as f32` turns the saved whole points into points to draw with.
@@ -572,6 +586,23 @@ impl Ui {
     }
 
     // ----- What the owner does -----
+
+    /// The address of a Raphie found on this Mac, when it is not the one
+    /// already in the field.
+    pub fn local_install_offer(&self) -> Option<&str> {
+        let local = self.model.local_install.as_ref()?;
+        let typed = Origin::parse(&self.origin_field.text).ok();
+        (typed.as_ref() != Some(local)).then_some(local.as_str())
+    }
+
+    /// Connects to the Raphie found on this Mac.
+    pub fn use_local_install(&mut self) {
+        let Some(local) = self.model.local_install.clone() else {
+            return;
+        };
+        self.origin_field = TextEdit::new(local.as_str());
+        self.connect();
+    }
 
     pub fn connect(&mut self) {
         match Origin::parse(&self.origin_field.text) {
@@ -2895,6 +2926,8 @@ pub fn setup(ui: &mut Ui, waker: Waker) {
     notify::prepare();
     // Once per launch; Settings → Appearance can ask again.
     ui.check_for_updates();
+    // Whether Raphie runs on this Mac, to offer it on the sign-in screen.
+    ui.command(Command::FindLocalInstall);
     // `raphie-desktop --origin https://…` signs in to that origin at once;
     // otherwise reuse the last origin's stored token, if there is one.
     if let Some(origin) = origin_argument(rune::extra_args()) {
@@ -2959,6 +2992,11 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
         return false;
     }
     for event in events {
+        // Back on the sign-in screen (a failed connect, a sign-out): look
+        // for Raphie on this Mac again, in case it started since.
+        if matches!(event, Event::SignedOut { .. }) {
+            ui.command(Command::FindLocalInstall);
+        }
         for effect in ui.model.apply(event) {
             match effect {
                 Effect::ModelChosen => ui.model_picker.open = false,
@@ -3076,4 +3114,25 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     // Whatever is still new after that is worth a system notification.
     ui.announce();
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_dev_app_first_offers_the_fixture_and_the_release_app_this_mac() {
+        assert_eq!(first_origin(Flavor::Dev, None), FIXTURE_ORIGIN);
+        assert_eq!(
+            first_origin(Flavor::Release, None),
+            "http://127.0.0.1:24320"
+        );
+        let file = std::env::temp_dir().join(format!("raphie-first-{}", std::process::id()));
+        std::fs::write(&file, "runtime=25016\nweb=25020\n").unwrap();
+        assert_eq!(
+            first_origin(Flavor::Release, Some(&file)),
+            "http://127.0.0.1:25020"
+        );
+        std::fs::remove_file(file).unwrap();
+    }
 }

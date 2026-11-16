@@ -1,0 +1,355 @@
+/* Raphie's web workspace palette: warm paper surfaces, one green accent for
+   "alive" things, amber only when the owner is needed. Starlight's dark theme
+   is the :root default; light overrides it. */
+:root {
+  --sl-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sl-font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --raphie-brand-font: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --sl-content-width: 46rem;
+  --sl-sidebar-width: 17.5rem;
+
+  --sl-color-accent-low: #263228;
+  --sl-color-accent: #7fb08b;
+  --sl-color-accent-high: #cfe3d3;
+  --sl-color-white: #ebe8df;
+  --sl-color-gray-1: #e0dcd1;
+  --sl-color-gray-2: #c9c4b8;
+  --sl-color-gray-3: #a29d91;
+  --sl-color-gray-4: #6f6b61;
+  --sl-color-gray-5: #36342e;
+  --sl-color-gray-6: #24231f;
+  --sl-color-black: #1c1b18;
+  --sl-color-bg-nav: #161512;
+  --sl-color-bg-sidebar: #161512;
+  --sl-color-hairline-light: #36342e;
+  --sl-color-hairline: #2c2a25;
+  --sl-color-orange: #e0a54a;
+  --sl-color-orange-low: #3a2f1b;
+  --sl-color-orange-high: #f3d7a8;
+  --sl-color-red: #e07a6e;
+  --sl-color-red-low: #3b2421;
+  --sl-color-red-high: #f4c4bd;
+  --sl-color-green: #7fb08b;
+  --sl-color-green-low: #263228;
+  --sl-color-green-high: #cfe3d3;
+  --sl-color-blue: #7fb08b;
+  --sl-color-blue-low: #263228;
+  --sl-color-blue-high: #cfe3d3;
+  --sl-color-purple: #b59ad6;
+  --sl-color-purple-low: #2e2737;
+  --sl-color-purple-high: #e2d6f1;
+
+  --raphie-card: #24231f;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #dfe8dc;
+  --sl-color-accent: #4a7a57;
+  --sl-color-accent-high: #2d4d36;
+  --sl-color-white: #24231f;
+  --sl-color-gray-1: #33312b;
+  --sl-color-gray-2: #4a473f;
+  --sl-color-gray-3: #6f6b61;
+  --sl-color-gray-4: #a29d91;
+  --sl-color-gray-5: #dcd8cc;
+  --sl-color-gray-6: #ebe8de;
+  --sl-color-gray-7: #f1eee6;
+  --sl-color-black: #f7f5ef;
+  --sl-color-bg-nav: #f7f5ef;
+  --sl-color-bg-sidebar: #f1eee6;
+  --sl-color-hairline-light: #e2ded2;
+  --sl-color-hairline: #dcd8cc;
+  --sl-color-orange: #a2670f;
+  --sl-color-orange-low: #f6e8cc;
+  --sl-color-orange-high: #6b440a;
+  --sl-color-red: #b13e32;
+  --sl-color-red-low: #f6dcd8;
+  --sl-color-red-high: #7a2a22;
+  --sl-color-green: #4a7a57;
+  --sl-color-green-low: #dfe8dc;
+  --sl-color-green-high: #2d4d36;
+  --sl-color-blue: #4a7a57;
+  --sl-color-blue-low: #dfe8dc;
+  --sl-color-blue-high: #2d4d36;
+  --sl-color-purple: #6e4f99;
+  --sl-color-purple-low: #ebe3f5;
+  --sl-color-purple-high: #45306a;
+
+  --raphie-card: #fdfcf8;
+}
+
+/* Header. The wordmark keeps the web workspace's serif; everything else is
+   the interface sans. */
+.header {
+  border-bottom-color: var(--sl-color-hairline);
+}
+
+.site-title {
+  gap: 0.6rem;
+  font-family: var(--raphie-brand-font);
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--sl-color-white);
+}
+
+.site-title img {
+  height: 1.75rem;
+}
+
+/* Sidebar: plain group names, the current page as a soft accent pill. */
+.sidebar-pane {
+  border-inline-end-color: var(--sl-color-hairline);
+}
+
+.sidebar-content .top-level > li > details > summary .large {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--sl-color-white);
+}
+
+.sidebar-content ul ul li {
+  margin-inline-start: 0;
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.sidebar-content a {
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--sl-color-gray-2);
+}
+
+.sidebar-content a:hover {
+  color: var(--sl-color-white);
+  background: var(--sl-color-gray-6);
+}
+
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover,
+.sidebar-content a[aria-current="page"]:focus {
+  font-weight: 600;
+  color: var(--sl-color-accent-high);
+  background: var(--sl-color-accent-low);
+}
+
+/* Content typography */
+.sl-markdown-content {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.sl-markdown-content :is(h2, h3, h4) {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--sl-color-white);
+}
+
+.sl-markdown-content h2 {
+  font-size: 1.6rem;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h2 {
+  margin-top: 3.25rem;
+}
+
+.sl-markdown-content h3 {
+  font-size: 1.2rem;
+}
+
+.sl-markdown-content h4 {
+  font-size: 1rem;
+}
+
+.sl-markdown-content a:not(.sl-link-button, .raphie-tile) {
+  font-weight: 500;
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--sl-color-accent) 35%,
+    transparent
+  );
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.sl-markdown-content a:not(.sl-link-button, .raphie-tile):hover {
+  text-decoration-color: currentColor;
+}
+
+.sl-markdown-content :not(pre) > code {
+  padding: 0.1em 0.35em;
+  border: 0;
+  border-radius: 0.375rem;
+  font-size: 0.875em;
+  background: var(--sl-color-gray-6);
+}
+
+/* Tables: open rows on the page, a quiet header. */
+.sl-markdown-content table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.sl-markdown-content :is(th, td) {
+  padding: 0.65rem 0.9rem 0.65rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--sl-color-hairline);
+}
+
+.sl-markdown-content th {
+  font-weight: 600;
+  color: var(--sl-color-gray-3);
+  background: none;
+}
+
+.sl-markdown-content thead th {
+  border-bottom-color: var(--sl-color-hairline-light);
+}
+
+.sl-markdown-content tr:last-child td {
+  border-bottom: 0;
+}
+
+.sl-markdown-content tbody tr:nth-child(2n) {
+  background: transparent;
+}
+
+/* Wide tables scroll inside their own box on small screens. */
+@media (max-width: 50rem) {
+  .sl-markdown-content table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* Asides: a tinted panel, no heavy rule. */
+.starlight-aside {
+  border: 0;
+  border-radius: 0.75rem;
+  background: color-mix(
+    in srgb,
+    var(--sl-color-asides-border) 12%,
+    transparent
+  );
+}
+
+.starlight-aside__title {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+/* Starlight cards, where pages still use them: flat, icon without a frame. */
+.sl-markdown-content .card {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 1rem;
+  background: var(--raphie-card);
+  box-shadow: none;
+}
+
+.sl-markdown-content .card .icon {
+  border: 0;
+  background: none;
+  color: var(--sl-color-accent);
+}
+
+.sl-markdown-content .card .title {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.sl-markdown-content .sl-link-card {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 1rem;
+  background: var(--raphie-card);
+  box-shadow: none;
+}
+
+.sl-markdown-content .sl-link-card:hover {
+  border-color: var(--sl-color-hairline-light);
+  background: var(--sl-color-gray-6);
+}
+
+/* Steps: numbered with the accent. */
+.sl-markdown-content .sl-steps > li::before {
+  font-weight: 600;
+  color: var(--sl-color-accent-high);
+  background: var(--sl-color-accent-low);
+  box-shadow: none;
+}
+
+.sl-markdown-content .sl-steps > li::after {
+  background: var(--sl-color-hairline-light);
+}
+
+/* Table of contents */
+starlight-toc nav h2 {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--sl-color-white);
+}
+
+starlight-toc a {
+  color: var(--sl-color-gray-3);
+}
+
+starlight-toc a[aria-current="true"],
+starlight-toc a[aria-current="true"]:hover {
+  color: var(--sl-color-accent);
+}
+
+/* Footer pagination */
+.pagination-links a {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 1rem;
+  background: none;
+  box-shadow: none;
+}
+
+.pagination-links a:hover {
+  background: var(--sl-color-gray-6);
+}
+
+.pagination-links .link-title {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* Visible keyboard focus everywhere. */
+:is(a, button, summary, select):focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
+}
+
+/* Home: copy beside an illustration, stacked on narrow screens. */
+.raphie-split {
+  display: grid;
+  gap: 2.5rem;
+  align-items: center;
+}
+
+@media (min-width: 60rem) {
+  .raphie-split {
+    grid-template-columns: 5fr 6fr;
+  }
+}
+
+.raphie-split-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+
+.sl-markdown-content .raphie-split-note {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--sl-color-gray-3);
+}
+
+/* Formatted MDX may wrap a box's detail in a paragraph. */
+.raphie-box-detail > p {
+  margin: 0;
+}

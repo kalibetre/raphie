@@ -14,6 +14,7 @@
 //! - [`settings`]: non-secret preferences.
 //! - [`flavor`]: the dev build and the release build, kept apart.
 //! - [`updates`]: this app's version, and whether a newer one is released.
+//! - [`local_install`]: finding a Raphie installed on this computer.
 //!
 //! A UI (today the Rune app in `../app`) owns a [`model::Model`], sends
 //! [`engine::Command`]s through an [`engine::Client`] and applies the
@@ -31,6 +32,7 @@ pub mod flavor;
 pub mod inbox;
 pub mod inspection;
 pub mod jobs;
+pub mod local_install;
 pub mod mcp;
 pub mod memory;
 pub mod model;

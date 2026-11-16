@@ -15,7 +15,7 @@
 //! display instead of failing to decode a whole observation.
 //!
 //! Generating these from the TypeScript types is a proposed follow-up (see
-//! `docs/desktop.md`); until then, the decoding tests in `tests/contracts.rs`
+//! `apps/docs/src/content/docs/contribute/desktop-development.mdx`); until then, the decoding tests in `tests/contracts.rs`
 //! use JSON captured from the runtime's own shapes.
 
 use serde::{Deserialize, Serialize};

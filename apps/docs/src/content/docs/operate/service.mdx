@@ -1,0 +1,196 @@
+---
+title: Service
+description: How Raphie runs in the background, which ports and origins it uses, how to update it and where its logs are.
+sidebar:
+  order: 2
+---
+
+import { TabItem, Tabs } from "@astrojs/starlight/components";
+
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
+Raphie is two processes: the **runtime**, which runs bots and stores data, and the **web host**, which serves the web workspace and proxies signed-in requests to the runtime. Both bind to `127.0.0.1` only. The installers wrap them in a background service so Raphie restarts on failure and starts again at login or boot.
+
+<Flow>
+  <Row>
+    <Box title="Browser" tone="person" />
+    <Box title="Desktop app" tone="person" />
+  </Row>
+  <Arrow label="sign-in required" />
+  <Box title="Web host" tone="accent">
+    `127.0.0.1`, web port
+  </Box>
+  <Arrow />
+  <Box title="Runtime">`127.0.0.1`, runtime port</Box>
+  <Arrow />
+  <Box title="Data directory" tone="store" />
+</Flow>
+
+## Ports and origins
+
+| Setting                                      | User install                | System service          | Source                  | Change it                                                                       |
+| -------------------------------------------- | --------------------------- | ----------------------- | ----------------------- | ------------------------------------------------------------------------------- |
+| Runtime port (`PORT`)                        | `24316`                     | `4316`                  | `4316`                  | User: `raphie set-port WEB_PORT --runtime PORT`. Keep it private.               |
+| Web port (`RAPHIE_WEB_PORT`)                 | `24320`                     | `41837`                 | `4320`                  | User: `raphie set-port WEB_PORT`. System: `sudo raphie set-port PORT`           |
+| Primary origin (`RAPHIE_WEB_ORIGIN`)         | `http://127.0.0.1:WEB_PORT` | `http://127.0.0.1:PORT` | `http://127.0.0.1:4320` | System: `--web-origin` at install. User: always follows the web port            |
+| Extra origins (`RAPHIE_WEB_ALLOWED_ORIGINS`) | none                        | none                    | none                    | System: `sudo raphie set-origins`; others: the variable in Raphie's environment |
+
+`raphie port` shows the ports your install uses. A user install saves its ports in `~/.local/lib/raphie/.ports`; one made before ports were saved keeps `4320` and `4316`. New user installs can pick other ports with the installer's `--port` and `--runtime-port`; see [ports](/start/installation/#ports).
+
+An **origin** is an exact browser address (scheme, host and port) that Raphie accepts sign-ins and requests from. `127.0.0.1` and `localhost` on the web port always work locally. Any other origin must be HTTPS behind a TLS proxy; see [remote access](/operate/remote-access/).
+
+:::danger
+The runtime port has no authentication of its own and trusts every local process. Never forward, publish or proxy the runtime port.
+:::
+
+A source checkout and a user install with the default ports can run side by side. The system service and a source checkout both use runtime port `4316`, as does a user install made before ports were saved, so only one of those can run at a time on a machine.
+
+## Manage the service
+
+<Tabs syncKey="service">
+<TabItem label="User install, Linux">
+
+A systemd user unit at `~/.config/systemd/user/raphie.service`, enabled at install when a user manager is available.
+
+```sh
+systemctl --user status raphie
+systemctl --user restart raphie
+systemctl --user stop raphie
+systemctl --user enable --now raphie   # after fixing a failed start
+```
+
+User services stop when you log out unless lingering is on. The `--headless` install tries to enable it; if that fails, ask an administrator to run `loginctl enable-linger <user>`.
+
+The desktop credential store needs the user manager to see `DBUS_SESSION_BUS_ADDRESS` and an unlocked Secret Service. A headless install does not.
+
+</TabItem>
+<TabItem label="User install, macOS">
+
+A LaunchAgent at `~/Library/LaunchAgents/com.raphie.user.plist`, loaded at login and restarted if it exits with an error.
+
+```sh
+launchctl print gui/$(id -u)/com.raphie.user              # status
+launchctl kickstart -k gui/$(id -u)/com.raphie.user       # restart
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.raphie.user.plist   # stop
+```
+
+If the installer stopped and disabled an unhealthy agent, fix the cause, then:
+
+```sh
+launchctl enable gui/$(id -u)/com.raphie.user
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.raphie.user.plist
+```
+
+Unlock your login Keychain before the service starts, or it cannot read provider credentials.
+
+</TabItem>
+<TabItem label="System service">
+
+A system unit, `raphie.service`, running as the `raphie` user. Configuration is in `/etc/raphie/raphie.conf`; programs are in `/opt/raphie`.
+
+```sh
+sudo systemctl status raphie
+sudo systemctl restart raphie
+sudo systemctl stop raphie
+```
+
+The service starts its own D-Bus session and GNOME Keyring, unlocked with a systemd credential encrypted to this host (`/etc/raphie/keyring.cred`), so it needs no login session. The runtime port is `4316`.
+
+</TabItem>
+<TabItem label="Source">
+
+No service is installed. `bun run dev` runs a development server; `bun run build` then `bun run start` runs the production bundle. Put either under your own supervisor if you need restarts.
+
+</TabItem>
+</Tabs>
+
+If no service manager is available for a user install, run `raphie start` in a terminal and leave it open.
+
+## Logs
+
+| Install              | Logs                                                        |
+| -------------------- | ----------------------------------------------------------- |
+| User install, Linux  | `journalctl --user -u raphie -e`                            |
+| User install, macOS  | `~/Library/Logs/Raphie/service.log` and `service-error.log` |
+| System service       | `sudo journalctl -u raphie -e`                              |
+| Foreground or source | The terminal running `raphie start` or `bun run dev`        |
+
+For what bots did, rather than whether the service is up, use Activity and Diagnostics; see [observability](/operate/observability/).
+
+## Updates and release channels
+
+<Tabs syncKey="service">
+<TabItem label="User install, Linux">
+
+Rerun the installer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
+```
+
+</TabItem>
+<TabItem label="User install, macOS">
+
+Rerun the installer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
+```
+
+</TabItem>
+<TabItem label="System service">
+
+```sh
+sudo raphie update          # latest stable
+sudo raphie update v1.2.3   # a specific version
+```
+
+The update downloads the release, stops the service, writes an offline backup of the data and keyrings to `/var/backups/raphie/`, switches release and restarts. If the new release is not healthy within 30 seconds, it stops the service and prints the backup location. Running work is interrupted. The download is not checked against `SHA256SUMS` or its attestation; see [check a release by hand](/start/installation/#check-a-release-by-hand). Nightly releases cannot be installed this way.
+
+</TabItem>
+<TabItem label="Source">
+
+Pull, reinstall dependencies and restart:
+
+```sh
+git pull
+bun install --frozen-lockfile
+```
+
+</TabItem>
+</Tabs>
+
+The user install follows a **release channel**:
+
+| Channel   | Follows                                                                                                                           |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `stable`  | Stable releases (`vX.Y.Z`). The default.                                                                                          |
+| `nightly` | Pre-releases built from `main` (`vX.Y.Z-nightly.*`) when a maintainer runs the release workflow, after the same checks as stable. |
+
+Change it with `raphie channel nightly` (or `stable`), then rerun the installer; or pass `--channel` to the installer to switch and update in one step. When you rerun it, the installer:
+
+1. finds the newest release on your channel that has your platform's archive, downloads it and checks it against that release's `SHA256SUMS`;
+2. refuses to move backwards: if that release does not contain your installed version, nothing changes until one does;
+3. stops the service and refuses to continue if its web or runtime port is still in use;
+4. copies the stopped data directory to `~/.local/share/raphie-backups/` (a headless master key is not included; back it up yourself);
+5. swaps in the new binaries, keeping the old ones in `~/.local/lib/.raphie-previous.*`;
+6. restarts the service and waits up to 15 seconds for it to become healthy; if it does not, it stops and disables the service.
+
+Stop a foreground `raphie start` yourself before updating. On Linux, keep the same `XDG_DATA_HOME` you installed with; the installer refuses to guess a changed data location.
+
+:::caution
+Updates can migrate databases one way. Never run older binaries against data a newer version has opened. To roll back, restore the backup taken before the update together with its matching binaries; see [backup and recovery](/operate/backup-and-recovery/#restore).
+:::
+
+## Remove Raphie
+
+**System service:** `sudo raphie uninstall` keeps your data, configuration, keyrings, backups and the `raphie` user; `--purge` deletes them too. Purge while the command still exists, since a plain uninstall removes it.
+
+**User install:** there is no uninstall command. Stop and disable the service, then remove what the installer created:
+
+| Created                     | Path                                                                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Binaries and command        | `~/.local/lib/raphie`, `~/.local/bin/raphie`                                                                         |
+| Service                     | `~/.config/systemd/user/raphie.service` (plus `raphie.service.d/`) or `~/Library/LaunchAgents/com.raphie.user.plist` |
+| PATH block                  | Between `# >>> Raphie PATH >>>` markers in your shell startup files                                                  |
+| Data, backups, headless key | See [where data lives](/operate/backup-and-recovery/#where-data-lives). Delete only once you are sure.               |

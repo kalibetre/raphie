@@ -1,0 +1,314 @@
+---
+// A sequence diagram drawn in HTML: one column per actor, one row per step.
+//
+// steps:
+//   ["Owner", "Runtime", "Send a message"]            a call
+//   ["Runtime", "Owner", "Receipt", "reply"]           a dashed reply
+//   ["Runtime", "Runtime", "One commit"]               the actor acts alone
+//   { note: "Admission ends here" }                    a note across all actors
+//   { group: "Until no tool call", steps: [ ... ] }    a loop or condition
+type Message = [from: string, to: string, label: string, kind?: "reply"];
+
+type Note = { note: string };
+
+type Group = { group: string; steps: Step[] };
+
+export type Step = Message | Note | Group;
+
+interface Props {
+  actors: string[];
+  steps: Step[];
+  caption?: string;
+}
+
+const { actors, steps, caption } = Astro.props;
+
+function column(name: string) {
+  const index = actors.indexOf(name);
+  if (index === -1)
+    throw new Error(`Sequence step names "${name}", which is not an actor.`);
+  return index + 1;
+}
+
+type Row =
+  | { kind: "message"; start: number; span: number; label: string; reverse: boolean; reply: boolean }
+  | { kind: "self"; column: number; label: string }
+  | { kind: "note"; label: string }
+  | { kind: "group"; label: string; rows: Row[] };
+
+function toRows(list: Step[]): Row[] {
+  return list.map((step): Row => {
+    if ("note" in step) return { kind: "note", label: step.note };
+    if ("group" in step)
+      return { kind: "group", label: step.group, rows: toRows(step.steps) };
+    const [from, to, label, kind] = step;
+    const a = column(from);
+    const b = column(to);
+    if (a === b) return { kind: "self", column: a, label };
+    return {
+      kind: "message",
+      start: Math.min(a, b),
+      span: Math.abs(a - b) + 1,
+      label,
+      reverse: b < a,
+      reply: kind === "reply",
+    };
+  });
+}
+
+const rows = toRows(steps);
+const columns = `repeat(${actors.length}, minmax(0, 1fr))`;
+---
+
+<figure class="raphie-figure raphie-seq-figure not-content">
+  <div class="raphie-seq" style={`--raphie-seq-columns: ${columns}`}>
+    <div class="raphie-seq-lifelines" aria-hidden="true">
+      {actors.map(() => <span />)}
+    </div>
+    <div class="raphie-seq-grid raphie-seq-actors">
+      {actors.map((actor) => <span class="raphie-seq-actor">{actor}</span>)}
+    </div>
+    <ol class="raphie-seq-steps">
+      {
+        rows.map(function render(row): any {
+          if (row.kind === "note")
+            return (
+              <li class="raphie-seq-grid">
+                <span class="raphie-seq-note">{row.label}</span>
+              </li>
+            );
+          if (row.kind === "group")
+            return (
+              <li class="raphie-seq-group">
+                <span class="raphie-seq-group-label">{row.label}</span>
+                <ol class="raphie-seq-steps">{row.rows.map(render)}</ol>
+              </li>
+            );
+          if (row.kind === "self")
+            return (
+              <li class="raphie-seq-grid">
+                <span
+                  class="raphie-seq-self"
+                  style={`grid-column: ${row.column} / span 1`}
+                >
+                  {row.label}
+                </span>
+              </li>
+            );
+          return (
+            <li class="raphie-seq-grid">
+              <span
+                class:list={[
+                  "raphie-seq-message",
+                  {
+                    "raphie-seq-message--reverse": row.reverse,
+                    "raphie-seq-message--reply": row.reply,
+                  },
+                ]}
+                style={`grid-column: ${row.start} / span ${row.span}; --raphie-seq-inset: calc(100% / ${row.span * 2})`}
+              >
+                <span class="raphie-seq-label">{row.label}</span>
+                <span class="raphie-seq-line" aria-hidden="true" />
+              </span>
+            </li>
+          );
+        })
+      }
+    </ol>
+    <div class="raphie-seq-grid raphie-seq-actors raphie-seq-actors--end" aria-hidden="true">
+      {actors.map((actor) => <span class="raphie-seq-actor">{actor}</span>)}
+    </div>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style is:global>
+  .raphie-seq-figure {
+    overflow-x: auto;
+  }
+
+  .raphie-seq {
+    position: relative;
+    min-width: 30rem;
+  }
+
+  .raphie-seq-grid,
+  .raphie-seq-lifelines {
+    display: grid;
+    grid-template-columns: var(--raphie-seq-columns);
+  }
+
+  .raphie-seq-lifelines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .raphie-seq-lifelines > span {
+    justify-self: center;
+    width: 0;
+    border-left: 1.5px dashed var(--sl-color-hairline-light);
+  }
+
+  .raphie-seq-actors {
+    position: relative;
+    gap: 0;
+  }
+
+  .raphie-seq-actor {
+    justify-self: center;
+    max-width: calc(100% - 0.5rem);
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.6rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--sl-color-white);
+    background: var(--sl-color-black);
+  }
+
+  .raphie-seq-actors--end {
+    margin-top: 0.5rem;
+    opacity: 0.6;
+  }
+
+  .raphie-seq-steps {
+    position: relative;
+    margin: 0;
+    padding: 0.6rem 0;
+    list-style: none;
+  }
+
+  .raphie-seq-steps > li {
+    margin: 0;
+    padding: 0.3rem 0;
+  }
+
+  .raphie-seq-steps > li + li {
+    margin-top: 0;
+  }
+
+  .raphie-seq-message {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding-inline: var(--raphie-seq-inset);
+  }
+
+  /* Labels may extend past a short arrow instead of wrapping word by word. */
+  .raphie-seq-label {
+    align-self: center;
+    width: max-content;
+    max-width: 22rem;
+    padding-inline: 0.6rem;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    text-align: center;
+    color: var(--sl-color-gray-2);
+  }
+
+  .raphie-seq-line {
+    position: relative;
+    height: 1.5px;
+    background: var(--sl-color-gray-3);
+  }
+
+  .raphie-seq-message--reply .raphie-seq-line {
+    height: 0;
+    border-top: 1.5px dashed var(--sl-color-gray-4);
+    background: none;
+  }
+
+  .raphie-seq-line::after {
+    position: absolute;
+    top: -4.25px;
+    right: 0;
+    width: 0;
+    height: 0;
+    content: "";
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--sl-color-gray-3);
+  }
+
+  .raphie-seq-message--reply .raphie-seq-line::after {
+    top: -5.75px;
+    border-left-color: var(--sl-color-gray-4);
+  }
+
+  .raphie-seq-message--reverse .raphie-seq-line::after {
+    right: auto;
+    left: 0;
+    border-right: 7px solid var(--sl-color-gray-3);
+    border-left: 0;
+  }
+
+  .raphie-seq-message--reply.raphie-seq-message--reverse .raphie-seq-line::after {
+    border-right-color: var(--sl-color-gray-4);
+  }
+
+  .raphie-seq-self {
+    position: relative;
+    z-index: 1;
+    justify-self: center;
+    max-width: 14rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--sl-color-accent);
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    text-align: center;
+    color: var(--sl-color-accent-high);
+    background: var(--sl-color-accent-low);
+  }
+
+  .raphie-seq-note {
+    position: relative;
+    z-index: 1;
+    grid-column: 1 / -1;
+    justify-self: center;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--sl-color-orange);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--sl-color-orange-high);
+    background: var(--sl-color-orange-low);
+  }
+
+  .raphie-seq-group {
+    position: relative;
+    margin-block: 0.4rem !important;
+    padding: 1.4rem 0 0.2rem !important;
+    border: 1px dashed var(--sl-color-gray-4);
+    border-radius: 0.75rem;
+  }
+
+  /* Groups are inset from the edges, and their contents are pulled back out
+     so steps stay on the actors' lifelines. */
+  .raphie-seq-group {
+    margin-inline: 0.35rem;
+  }
+
+  .raphie-seq-group > .raphie-seq-steps {
+    margin-inline: calc(-0.35rem - 1px);
+    padding: 0;
+  }
+
+  .raphie-seq-group .raphie-seq-group {
+    margin-inline: 0.7rem;
+  }
+
+  .raphie-seq-group .raphie-seq-group > .raphie-seq-steps {
+    margin-inline: calc(-0.7rem - 1px);
+  }
+
+  .raphie-seq-group-label {
+    position: absolute;
+    top: 0.3rem;
+    left: 0.7rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--sl-color-gray-3);
+  }
+</style>

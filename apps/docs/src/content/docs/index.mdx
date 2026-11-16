@@ -1,0 +1,93 @@
+---
+title: Documentation
+description: Raphie is a self-hosted assistant platform. Each persistent bot keeps its own instructions, memory, workspace and scheduled work, on hardware you control.
+template: splash
+editUrl: false
+hero:
+  title: Raphie
+  tagline: A self-hosted assistant platform. Each persistent bot keeps its own instructions, memory, workspace and scheduled work, on hardware you control.
+  actions:
+    - text: Install Raphie
+      link: /start/installation/
+      icon: right-arrow
+    - text: Get the Mac app
+      link: /guides/desktop/
+      variant: minimal
+---
+
+import { LinkButton } from "@astrojs/starlight/components";
+
+import DesktopPreview from "~/components/DesktopPreview.astro";
+import Feature from "~/components/Feature.astro";
+import Features from "~/components/Features.astro";
+
+## Up and running in a minute
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
+raphie health        # in a new terminal
+raphie auth setup    # create your administrator
+```
+
+Then open `http://127.0.0.1:24320`, sign in and connect a model provider. [First run](/start/first-run/) walks through it.
+
+## Raphie for Mac
+
+<div class="raphie-split">
+  <div>
+    A native app for the daily loop, written in Rust. Pick a bot, keep
+    conversations going, watch replies stream in and approve tool actions,
+    with notifications when a bot needs you. It connects to your Raphie on
+    this Mac or anywhere on your tailnet.
+
+    <div class="raphie-split-actions">
+      <LinkButton
+        href="https://github.com/kalibetre/raphie/releases/latest/download/Raphie-macos-arm64.dmg"
+        icon="download"
+        iconPlacement="start"
+      >
+        Download for Mac
+      </LinkButton>
+      <LinkButton href="/guides/desktop/" variant="minimal" icon="right-arrow">
+        Desktop guide
+      </LinkButton>
+    </div>
+    <p class="raphie-split-note">Apple Silicon (M1 or later) · Ships with every Raphie release</p>
+
+  </div>
+  <DesktopPreview />
+</div>
+
+## What a bot has
+
+<Features>
+  <Feature title="A personality" icon="star" href="/guides/bots/">
+    A name, a description and a revisioned SOUL.md you write.
+  </Feature>
+  <Feature title="Memory it can correct" icon="document" href="/guides/memory/">
+    It remembers across sessions. You can browse, fix and forget.
+  </Feature>
+  <Feature title="A workspace" icon="laptop" href="/guides/workspaces/">
+    Files that persist, worked on in a bounded shell or a container.
+  </Feature>
+  <Feature title="Tools and schedules" icon="puzzle" href="/guides/tools/">
+    MCP servers per bot, and prompts that run on a timer.
+  </Feature>
+</Features>
+
+## Find your way
+
+<Features outlined>
+  <Feature title="Use it" href="/guides/conversations/">
+    Conversations, bots, memory, workspaces, tools, Telegram and the Mac app.
+  </Feature>
+  <Feature title="Run it" href="/operate/commands/">
+    The raphie command, the background service, remote access and backups.
+  </Feature>
+  <Feature title="Secure it" href="/operate/authentication/">
+    Sign-in, devices, credential storage and what each layer protects.
+  </Feature>
+  <Feature title="Understand it" href="/architecture/overview/">
+    Durable turns, approvals, isolation between bots and the HTTP API.
+  </Feature>
+</Features>

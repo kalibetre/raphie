@@ -86,7 +86,8 @@ fn card(s: &Ui, look: &Look) -> El {
                 AuthState::SignedOut { notice } => notice.as_deref(),
                 _ => None,
             };
-            choose_origin(&s.origin_field, connecting, notice, t)
+            let local = s.local_install_offer().filter(|_| !connecting);
+            choose_origin(&s.origin_field, connecting, notice, local, t)
         }
     };
     col()
@@ -186,7 +187,13 @@ fn small_print(t: &Theme, content: &str) -> El {
 }
 
 /// Step 1: which Raphie to connect to.
-fn choose_origin(origin: &TextEdit, connecting: bool, notice: Option<&str>, t: &Theme) -> El {
+fn choose_origin(
+    origin: &TextEdit,
+    connecting: bool,
+    notice: Option<&str>,
+    local: Option<&str>,
+    t: &Theme,
+) -> El {
     let field = text_field(
         t,
         Field {
@@ -220,6 +227,9 @@ fn choose_origin(origin: &TextEdit, connecting: bool, notice: Option<&str>, t: &
                 .live_region(LiveRegion::Polite),
         );
     }
+    if let Some(local) = local {
+        form = form.child(this_mac(local, t));
+    }
     let label = if connecting {
         "Connecting…"
     } else {
@@ -234,8 +244,43 @@ fn choose_origin(origin: &TextEdit, connecting: bool, notice: Option<&str>, t: &
     ))
     .child(small_print(
         t,
-        "Use its HTTPS address, or http://127.0.0.1 when Raphie runs on this machine.",
+        "Use its HTTPS address, or http://127.0.0.1:24320 when Raphie is installed on this Mac.",
     ))
+}
+
+/// A Raphie installed on this Mac answered at `address`, and the field
+/// holds another address: offer it in one press.
+fn this_mac(address: &str, t: &Theme) -> El {
+    row()
+        .key("rd-local-install")
+        .w_full()
+        .gap(10.5)
+        .px(14.0)
+        .py(10.5)
+        .radius(10.5)
+        .fill(t.muted)
+        .border(1.0, t.border)
+        .center_y()
+        .child(
+            col()
+                .grow(1.0)
+                .gap(1.75)
+                .child(
+                    text("Raphie is running on this Mac")
+                        .font(font(12.25, 600.0).lh(17.5))
+                        .color(t.foreground),
+                )
+                .child(
+                    text(address.to_owned())
+                        .font(mono(11.5))
+                        .color(t.muted_foreground),
+                ),
+        )
+        .child(pressable(
+            button(t, Kind::Outline, Size::Regular, None, "Use it").key("rd-use-local"),
+            true,
+            |s: &mut Ui| s.use_local_install(),
+        ))
 }
 
 /// Step 2: the code to check in the browser, and the way there.

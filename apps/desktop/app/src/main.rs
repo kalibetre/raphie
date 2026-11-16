@@ -1,6 +1,6 @@
 //! `raphie-desktop`: opens the window. With Rune's headless flags it renders
 //! instead, for example `raphie-desktop --snap out.png --scene approval
-//! --theme dark` (see `docs/desktop.md`).
+//! --theme dark` (see `apps/docs/src/content/docs/contribute/desktop-development.mdx`).
 
 use rune::{Chrome, WindowOptions};
 

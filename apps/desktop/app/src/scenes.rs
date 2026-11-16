@@ -35,6 +35,7 @@ pub type Scene = (&'static str, fn(&mut Ui));
 pub const SCENES: &[Scene] = &[
     ("sign-in", sign_in),
     ("sign-in-error", sign_in_error),
+    ("sign-in-this-mac", sign_in_this_mac),
     ("device-code", device_code),
     ("new-conversation", new_conversation),
     ("conversations", conversations),
@@ -125,6 +126,16 @@ pub fn sign_in_error(ui: &mut Ui) {
     ui.model.auth = AuthState::SignedOut {
         notice: Some("Use https://, or http:// only for 127.0.0.1 or localhost.".into()),
     };
+}
+
+/// The remembered address no longer answers, and Raphie installed on this
+/// Mac does: it is offered.
+pub fn sign_in_this_mac(ui: &mut Ui) {
+    ui.origin_field = TextEdit::new("http://127.0.0.1:4321");
+    ui.model.auth = AuthState::SignedOut {
+        notice: Some("Could not reach Raphie: error sending request".into()),
+    };
+    ui.model.local_install = Origin::parse("http://127.0.0.1:24320").ok();
 }
 
 pub fn device_code(ui: &mut Ui) {

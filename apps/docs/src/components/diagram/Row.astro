@@ -1,0 +1,86 @@
+---
+// One layer of a Flow: boxes side by side. With a label it is drawn as a
+// boundary (a process, a machine, a bot).
+interface Props {
+  /** Boundary name, shown on the frame. Omit for a plain row. */
+  label?: string;
+  /** Highlight the boundary as the subject of the diagram. */
+  accent?: boolean;
+}
+
+const { label, accent = false } = Astro.props;
+---
+
+<div
+  class:list={[
+    "raphie-row",
+    { "raphie-row--group": Boolean(label), "raphie-row--accent": accent },
+  ]}
+>
+  {label && <span class="raphie-row-label">{label}</span>}
+  <div class="raphie-row-items"><slot /></div>
+</div>
+
+<style is:global>
+  .raphie-row {
+    position: relative;
+    width: 100%;
+  }
+
+  .raphie-row-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: stretch;
+    justify-content: center;
+  }
+
+  /* A chain joined by sideways arrows stays on one line, its boxes sharing
+     the width; on narrow screens it stacks and the arrows point down. */
+  .raphie-row-items:has(> .raphie-arrow--right) {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+
+  .raphie-row-items:has(> .raphie-arrow--right) > .raphie-box {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  @container (max-width: 34rem) {
+    .raphie-row-items:has(> .raphie-arrow--right) {
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    .raphie-row-items:has(> .raphie-arrow--right) > .raphie-box {
+      flex: none;
+      width: min(100%, 16rem);
+    }
+  }
+
+  .raphie-row--group {
+    padding: 1.6rem 0.9rem 0.9rem;
+    border: 1px dashed var(--sl-color-gray-4);
+    border-radius: 0.9rem;
+  }
+
+  .raphie-row--accent {
+    border-color: var(--sl-color-accent);
+    background: color-mix(in srgb, var(--sl-color-accent-low) 45%, transparent);
+  }
+
+  .raphie-row-label {
+    position: absolute;
+    top: 0.45rem;
+    left: 0.9rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--sl-color-gray-3);
+  }
+
+  .raphie-row--accent > .raphie-row-label {
+    color: var(--sl-color-accent);
+  }
+</style>

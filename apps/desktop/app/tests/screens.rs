@@ -135,6 +135,31 @@ fn sign_in_refuses_plain_http_off_loopback() {
 }
 
 #[test]
+fn raphie_on_this_mac_is_offered_when_another_address_is_in_the_field() {
+    let mut rt = render(scenes::sign_in_this_mac, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Raphie is running on this Mac"), "{text}");
+    assert!(text.contains("http://127.0.0.1:24320"));
+    // One press puts it in the field and connects.
+    click(&mut rt, "rd-use-local");
+    assert_eq!(rt.state.origin_field.text, "http://127.0.0.1:24320");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::Connect { origin }) if origin.as_str() == "http://127.0.0.1:24320"
+    ));
+    // Not offered while connecting, nor when the field already holds it.
+    assert!(rt.find("rd-local-install").is_none());
+    deliver(&mut rt, Event::SignedOut { notice: None });
+    assert!(rt.find("rd-local-install").is_none());
+    // Back on the sign-in screen, the app looks again.
+    assert_eq!(rt.state.sent.last(), Some(&Command::FindLocalInstall));
+    // Nothing found: nothing offered.
+    rt.update(|ui, _| ui.origin_field = TextEdit::new("https://raphie.example.ts.net"));
+    deliver(&mut rt, Event::LocalInstall(None));
+    assert!(rt.find("rd-local-install").is_none());
+}
+
+#[test]
 fn the_device_code_screen_shows_the_code_and_can_cancel() {
     for dark in [false, true] {
         let mut rt = render(scenes::device_code, dark);

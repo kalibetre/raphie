@@ -1,0 +1,157 @@
+---
+title: Workspaces and sandboxes
+description: Where a bot keeps its files, how it runs commands on them, and what each execution environment can and cannot reach.
+sidebar:
+  order: 4
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+import { Arrow, Box, Flow, Row } from "~/components/diagram";
+
+Every bot has one persistent workspace at `/workspace`, shared by all of its sessions. Commands run in a sandbox: a replaceable execution environment that works on those files. You choose the sandbox per bot: **just-bash** (the default, no network) or **Container** (real processes with open network).
+
+Both sandboxes work on the same files, so switching keeps them. Processes, shell variables and memory never carry over.
+
+<Flow>
+  <Row label="Bot">
+    <Box title="Session A" />
+    <Box title="Session B" />
+  </Row>
+  <Arrow />
+  <Box title="Workspace" tone="accent">
+    `/workspace`, kept on disk
+  </Box>
+  <Arrow label="one sandbox at a time, replaceable" />
+  <Row>
+    <Box title="just-bash sandbox" />
+    <Box title="Container sandbox" />
+  </Row>
+</Flow>
+
+## Choose a sandbox
+
+|                    | just-bash (default)                                                                   | Container                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| What it is         | A shell interpreter running in a disposable worker inside Raphie, over virtual files  | One Docker container per bot, with the workspace bind-mounted at `/workspace`                              |
+| Tools the bot gets | `workspace_exec`, plus `read_document`                                                | `read`, `write`, `edit` and `bash`, plus `read_document`                                                   |
+| Programs           | just-bash's built-in commands only: no native binaries, Node, Python, curl or SQLite  | Anything installed in the image                                                                            |
+| Network            | None                                                                                  | Open, including the Raphie host and your local network (see [What is not isolated](#what-is-not-isolated)) |
+| Persistence        | Only `/workspace` files survive; `/tmp` and shell state are scratch                   | Files in `/workspace` survive; processes stop when the container goes idle or is replaced                  |
+| Failure behaviour  | All-or-nothing: a nonzero exit, timeout or crash discards that command's file changes | No rollback: files written before a failure stay                                                           |
+| Isolation          | Logical separation in the Raphie process, not an OS or VM boundary                    | Container isolation, not a VM boundary                                                                     |
+| Requirements       | None                                                                                  | A Docker-compatible CLI and daemon, and a workspace image                                                  |
+
+Pick just-bash for notes and small text processing. Pick Container when the bot needs to clone repositories, run CLIs or call the network.
+
+## Change a bot's sandbox
+
+Open **Settings**, choose the bot, then **Sandbox**.
+
+<Steps>
+
+1. Choose a **Provider**: just-bash or Container.
+2. For Container, turn on **I understand host and local network access**. Save stays disabled until you do.
+3. Optionally set **Idle minutes** and **Disk quota (MiB)**. Both apply only to Container.
+4. Choose **Save**. A save is refused while a workspace command or file operation for this bot is running or queued; wait for it to finish.
+
+</Steps>
+
+| Setting                      | Default   | Allowed values                      | Applies to |
+| ---------------------------- | --------- | ----------------------------------- | ---------- |
+| Provider                     | just-bash | just-bash, Container                | Both       |
+| Host network acknowledgement | Off       | Must be on to save Container        | Container  |
+| Idle minutes                 | 10        | Whole minutes, 1 to 1440            | Container  |
+| Disk quota (MiB)             | No limit  | Any positive whole number, or empty | Container  |
+
+Settings are per bot and survive restarts. The bot has no tool to change them. Every save while Container is selected, or when switching away from it, removes that bot's running container and ends its processes.
+
+When you switch from Container back to just-bash, the whole workspace must fit just-bash's [limits](#limits). If it does not, the switch is refused and nothing changes; delete or shrink files with the Container tools first.
+
+### Set up Container
+
+Container runs through the Docker CLI. Two variables, set through your Raphie configuration, control it:
+
+| Variable                  | Default                   | Purpose                                    |
+| ------------------------- | ------------------------- | ------------------------------------------ |
+| `RAPHIE_CONTAINER_BINARY` | `docker`                  | The container CLI to call                  |
+| `RAPHIE_CONTAINER_IMAGE`  | `raphie-workspace:slice2` | The image each bot's container starts from |
+
+The default image is not published; build it once from `packages/runtime/test/fixtures/container`. It is a Node 22 Alpine image with `git` and `ripgrep`. To use your own image, point `RAPHIE_CONTAINER_IMAGE` at it. It must have `node` on its `PATH`, because Raphie runs its helper inside the container with `node`, plus `/bin/sh`, which the bot's `bash` tool uses, and `du`, which measures disk usage.
+
+```sh
+docker build -t raphie-workspace:slice2 packages/runtime/test/fixtures/container
+```
+
+Each container runs as the user and group ID of the account running Raphie (1000:1000 if that is root), with all capabilities dropped, `no-new-privileges`, a read-only root filesystem, a 64 MiB `/tmp`, 512 MiB of memory, one CPU and 128 processes. Only the bot's workspace folder is mounted. No host home folder, Raphie data, credentials, Docker socket or published ports are passed in, and Docker's proxy variables are cleared.
+
+## How commands are approved
+
+Shell commands (`workspace_exec` in just-bash, `bash` in Container) follow the conversation's command permission mode:
+
+- **Ask** asks you to approve each command. **Approve for session** lets that exact command run again in the same conversation without asking.
+- **Full access** runs commands without asking in that conversation.
+
+File tools (`read`, `write`, `edit`) are not gated by the mode. Neither mode changes sandbox limits or authorizes [MCP tools](/guides/tools/). See [conversations](/guides/conversations/) for where to set the mode.
+
+## What is not isolated
+
+:::caution[Container can reach your host and network]
+Container uses Docker's `bridge` network. Programs in it can reach the internet, the Raphie host (on some Docker runtimes, such as Docker Desktop and OrbStack, even services bound to `127.0.0.1`, through `host.docker.internal`), other machines on your LAN or tailnet, and other containers. That includes Raphie's own local HTTP API. Raphie adds no firewall rules or egress filtering. Turning on the acknowledgement accepts this for that bot only.
+:::
+
+Other boundaries to keep in mind:
+
+- **just-bash is not an OS sandbox.** It interprets a limited shell inside the Raphie process with no host files, environment, network or native programs. The Raphie process account and its installed dependencies are still trusted.
+- **Container is not a VM.** Container and kernel escapes are possible.
+- **The disk quota is a check, not a limit.** Raphie measures usage with `du` before each command or growing write and refuses new work over quota. A running command or its background processes can still exceed it.
+- **Memory limits in just-bash are budgets.** The interpreter caps commands, loops and expansions, but there is no OS memory limit.
+- **Credentials do not belong in the workspace.** Use [MCP tools](/guides/tools/) for authenticated actions; their configuration stays on the host.
+
+## Limits
+
+| Limit                           | just-bash                                               | Container                                                     |
+| ------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------- |
+| Time per command                | 5 seconds                                               | 30 seconds (shorter if the bot asks)                          |
+| Command source                  | 16 KiB                                                  | 16 KiB                                                        |
+| Shell output                    | 32 KiB; more fails the command and discards its changes | 32 KiB; more interrupts the command and removes the container |
+| File content kept               | 8 MiB in total                                          | Disk quota, if set                                            |
+| Files, folders and links        | 1,024                                                   | No fixed count                                                |
+| Commands queued per bot         | 16                                                      | 16                                                            |
+| Recorded operations             | 16 MiB of receipts                                      | 10,000 command and write receipts                             |
+| Running at once across all bots | 4 workers                                               | 4 containers, 4 operations                                    |
+| Container resources             | n/a                                                     | 512 MiB memory, 1 CPU, 128 processes                          |
+
+Commands for one bot run one at a time, in order, across all its sessions. Different bots run in parallel. When capacity is busy, the command fails with a "capacity is busy" error rather than waiting.
+
+## Checkpoints and recovery
+
+**just-bash** commits files only when a command exits with status zero. The new files and a receipt for the tool call are saved together in one transaction, so a tool call replayed after a crash returns its saved result instead of running again. After a restart the bot starts from the last committed checkpoint.
+
+**Container** writes straight to disk, so there is nothing to roll back. Raphie records every command and file write before it runs. If Raphie stops mid-command, the command is marked interrupted and is never rerun automatically; the bot is told the outcome is unknown and should inspect the files before trying again.
+
+| Situation                              | What happens                                                                                                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Command fails or times out (just-bash) | Its file changes are discarded. Earlier files are untouched.                                                                                                     |
+| Command fails or times out (Container) | Files already written stay. On timeout, abort or output overflow the whole container is removed, ending its processes.                                           |
+| Container idle for the set minutes     | The container is removed. Files stay; the next command starts a fresh container.                                                                                 |
+| Docker unavailable at startup          | Raphie starts. Sandbox settings stay editable, but the bot's tools and file browser are blocked. Restore Docker, then save the settings again or restart Raphie. |
+| Receipt storage full                   | New work stops: just-bash at 16 MiB of receipts, Container at 10,000 receipts. Receipts are never evicted, because that could replay old writes.                 |
+
+The workspace lives in the bot's data folder under `workspace/`; the files themselves are in `workspace/files/`. Back it up with the rest of the data directory, and do not edit it while Raphie is running. See [backup and recovery](/operate/backup-and-recovery/).
+
+## See workspace files
+
+Open **Settings**, choose the bot, then **Workspace**. You can open folders, go back with the breadcrumbs, and download single files. The list refreshes every five seconds.
+
+- With just-bash you see the last committed checkpoint. Files from a command still running are not shown.
+- With Container you see the live files, including any left by a failed command. Folders over 4,096 entries are not listed; ask the bot to inspect them instead.
+- Downloads are limited to 8 MiB per file. Symbolic links are marked and never followed.
+- There is no preview, editing, upload or folder download here. To give a bot a file, attach it in the composer; see [attachments](/guides/attachments/).
+
+**Settings → Sandbox** also shows the active provider, its limits and current disk usage.
+
+## Related
+
+- [Bots](/guides/bots/)
+- [How bots and workspaces are stored](/architecture/state/)

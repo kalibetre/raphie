@@ -1,0 +1,6 @@
+# Generated from CONTRIBUTING.md, CONTEXT.md and WRITING.md by scripts/sync-root-docs.ts
+src/content/docs/contribute/contributing.md
+src/content/docs/contribute/glossary.md
+.astro/
+.wrangler/
+src/content/docs/contribute/writing-docs.md
