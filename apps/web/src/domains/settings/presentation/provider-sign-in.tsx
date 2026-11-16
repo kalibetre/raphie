@@ -34,9 +34,9 @@ export function ProviderSignInSteps({
       {link && (
         <div className="sign-in-step">
           <p>
-            Open the sign-in page and sign in. When it sends you back and the
-            page doesn’t load, which happens when Raphie runs on another
-            computer, copy that page’s address and paste it below.
+            The sign-in page opened in a new tab. Sign in there. When it sends
+            you back and the page doesn’t load, which happens when Raphie runs
+            on another computer, copy that page’s address and paste it below.
           </p>
           <Button
             variant="outline"
@@ -46,7 +46,7 @@ export function ProviderSignInSteps({
             }
           >
             <ExternalLink />
-            Open the sign-in page
+            Open it again
           </Button>
         </div>
       )}

@@ -15,7 +15,7 @@ use raphie_core::contracts::{
     ApprovalMode, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
     RuntimeSettings, Scope, TurnStatus,
 };
-use raphie_core::contracts::{ProviderSignIn, SignInStatus};
+use raphie_core::contracts::{ProviderSignIn, SignInEvent, SignInStatus};
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::{self, Announcement, Announcements, Item, Target};
@@ -389,6 +389,8 @@ pub struct Ui {
     mcp_asked_at: f64,
     /// The frame clock when a waiting sign-in was last asked about.
     sign_in_asked_at: f64,
+    /// The sign-in whose page was opened by itself, so it opens once.
+    sign_in_opened: Option<String>,
     /// The Profile form on screen.
     pub profile: ProfileDraft,
     /// Unsaved Profile edits for other bots, kept while the owner looks at
@@ -543,6 +545,7 @@ impl Ui {
             mcp: McpForm::new(),
             mcp_asked_at: 0.0,
             sign_in_asked_at: 0.0,
+            sign_in_opened: None,
             profile: ProfileDraft::empty(),
             parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
@@ -1679,6 +1682,28 @@ impl Ui {
             self.command(Command::PollProviderSignIn { bot_id, id });
         }
         true
+    }
+
+    /// Opens a waiting sign-in's page as soon as the runtime reports it, so
+    /// one press of "Sign in" is enough. Once per sign-in: the card keeps a
+    /// button to open it again.
+    fn open_announced_sign_in_page(&mut self, tx: &mut Tx) {
+        let Some((_, sign_in)) = &self.model.sign_in else {
+            return;
+        };
+        if sign_in.status != SignInStatus::Waiting
+            || self.sign_in_opened.as_deref() == Some(sign_in.id.as_str())
+        {
+            return;
+        }
+        let Some(url) = sign_in.events.iter().find_map(|e| match e {
+            SignInEvent::AuthUrl { url, .. } => Some(url.clone()),
+            _ => None,
+        }) else {
+            return;
+        };
+        self.sign_in_opened = Some(sign_in.id.clone());
+        self.open_sign_in_page(&url, tx);
     }
 
     /// Opens a sign-in page the runtime reported, when it is a web address.
@@ -3040,6 +3065,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.ensure_models();
     ui.ensure_command_mode();
     ui.ask_previews();
+    ui.open_announced_sign_in_page(tx);
     // A reply that arrived while its conversation is on screen is read.
     ui.mark_read();
     // Whatever is still new after that is worth a system notification.

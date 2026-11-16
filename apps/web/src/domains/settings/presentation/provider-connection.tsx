@@ -69,7 +69,7 @@ export function ProviderConnection({
     setMessage("");
     mutation.reset();
     signing.reset();
-    signing.start.mutate({
+    signing.begin({
       provider,
       name: name.trim(),
       ...(connection ? { connectionId: connection.id } : {}),

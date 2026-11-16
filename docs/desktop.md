@@ -170,7 +170,8 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
     provider key and never shows or logs one. A subscription (OpenAI's "Sign
     in with ChatGPT") is connected by signing in instead: the page shows
     whatever the provider's sign-in reports and asks (a page to open, a code,
-    a question), the same for every provider, and a pasted redirect address
+    a question), the same for every provider. A sign-in page opens in the
+    browser by itself, as on the web, and a pasted redirect address
     goes in a masked field. An expired subscription shows "Sign in again".
   - **Memory** switches a bot's memory on or off, chooses its back end
     (built-in or Hindsight) and scope, and tests the saved setup. A Hindsight

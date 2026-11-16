@@ -721,7 +721,7 @@ fn sign_in_steps(s: &Ui, bot_id: &str, sign_in: &ProviderSignIn, t: &Theme) -> E
                 .w_full()
                 .gap(8.0)
                 .child(note(
-                    "Open the sign-in page and sign in. When it sends you back and the page doesn’t load, which happens when Raphie runs on another computer, copy that page’s address and paste it below."
+                    "The sign-in page opened in your browser. Sign in there. When it sends you back and the page doesn’t load, which happens when Raphie runs on another computer, copy that page’s address and paste it below."
                         .to_owned(),
                 ))
                 .child(
@@ -731,7 +731,7 @@ fn sign_in_steps(s: &Ui, bot_id: &str, sign_in: &ProviderSignIn, t: &Theme) -> E
                             Kind::Outline,
                             Size::Regular,
                             Some(&icons::EXTERNAL_LINK),
-                            "Open the sign-in page",
+                            "Open it again",
                         )
                         .key("rd-sign-in-open")
                         .on_press_tx(move |s: &mut Ui, tx: &mut Tx| s.open_sign_in_page(&open, tx)),

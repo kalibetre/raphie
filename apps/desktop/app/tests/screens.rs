@@ -4275,7 +4275,27 @@ fn a_subscription_signs_in_through_the_providers_form() {
     let mut rt = render(scenes::settings_providers_sign_in, false);
     let text = screen_text(&rt);
     assert!(text.contains("Connect OpenAI"), "{text}");
-    assert!(text.contains("Open the sign-in page"));
+    assert!(text.contains("Open it again"));
+    // The page opens by itself when the runtime reports it, once however
+    // often the sign-in is reported.
+    let waiting = || {
+        Event::ProviderSignIn {
+        bot_id: "default".into(),
+        sign_in: serde_json::from_value(serde_json::json!({
+            "id": "sign-in-1", "provider": "openai", "name": "OpenAI 1",
+            "status": "waiting",
+            "events": [{"type": "auth_url", "url": "https://auth.openai.com/oauth/authorize?state=x"}],
+            "prompt": {"id": "p-1", "type": "manual_code", "message": "Paste the final redirect URL here:"}
+        }))
+        .unwrap(),
+    }
+    };
+    deliver(&mut rt, waiting());
+    deliver(&mut rt, waiting());
+    assert_eq!(
+        rt.state.opened,
+        ["https://auth.openai.com/oauth/authorize?state=x"]
+    );
     // No key field: a subscription signs in instead.
     assert!(rt.find("rd-connection-key").is_none());
     assert!(rt.find("rd-connection-save").is_none());
