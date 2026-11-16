@@ -35,6 +35,14 @@ Delivered in this first version (macOS first; see [Limits](#limits)):
   last origin; if the host answers 401 (the device was disconnected in
   Settings → Account, or the password was recovered), the token is deleted and
   the app returns to sign-in with an explanation.
+- **Raphie on this Mac** is found by itself. The installer saves its ports in
+  `~/.local/lib/raphie/.ports`; the app reads the web port there (24320 when
+  none was saved) and asks `/_raphie/health` at launch and each time it is
+  back on the sign-in screen. Before it has signed in anywhere, the release
+  app offers that address; the dev app offers the test fixture
+  (`http://127.0.0.1:4321`). When a Raphie answers on this Mac and the field
+  holds another address, for example one that no longer answers, the sign-in
+  card offers it: **Use it** fills it in and connects.
 - **Bots and conversations** from the focused client queries: the bot roster
   (`GET /api/bots`), each bot's live session list (`/api/sessions/events`, plus
   "Load more conversations" pages), and bot-prefixed routes for named bots. The
@@ -259,9 +267,10 @@ Nightlies are pre-releases on the same page.
 
    Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Raphie.app`.
 
-4. Enter the address of your Raphie web host: `http://127.0.0.1:24320` when
-   Raphie is installed on this Mac ([ports](user-installation.md#ports)), or
-   its `https://` address on a server ([tailnet](#connect-over-a-tailnet)).
+4. Connect. When Raphie is installed on this Mac, the app finds it by itself,
+   at whatever port the installer saved ([ports](user-installation.md#ports)),
+   and offers it. For a server, enter its `https://` address
+   ([tailnet](#connect-over-a-tailnet)).
 
 To update, download the newer image when **Settings → About** says one exists,
 and replace the app in Applications. The sign-in and settings are kept.

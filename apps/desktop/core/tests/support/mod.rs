@@ -213,6 +213,7 @@ fn router(fake: Fake) -> Router {
         .route("/api/auth/device/code", post(device_code))
         .route("/api/auth/device/token", post(device_token))
         .route("/auth/status", get(auth_status))
+        .route("/_raphie/health", get(health))
         .route("/api/bots", get(bots).post(create_bot))
         .route("/api/bots/{id}", axum::routing::delete(delete_bot))
         .route("/api/bots/{id}/history", get(bot_history))
@@ -1254,6 +1255,12 @@ async fn github_releases(State(fake): State<Fake>, headers: HeaderMap) -> Respon
     .into_response()
 }
 
+/// The web host's health check: up, without an administrator yet.
+async fn health(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(&fake, "GET", "/_raphie/health".into(), &headers);
+    Json(json!({ "status": "locked" })).into_response()
+}
+
 async fn auth_status(State(fake): State<Fake>, headers: HeaderMap) -> Response {
     record(&fake, "GET", "/auth/status".into(), &headers);
     let signed_in = refuse(&fake, &headers).is_none();
@@ -1919,6 +1926,9 @@ pub fn fast_config() -> EngineConfig {
         // Nor ask GitHub anything: a test that checks for updates points
         // this at the fake host's `/github/releases`.
         releases_url: None,
+        // Nor look for a Raphie on this computer: a test that does points
+        // this at a ports file naming the fake host.
+        local_ports_file: None,
         reconnect_min: Duration::from_millis(20),
         reconnect_max: Duration::from_millis(100),
         send_retries: vec![Duration::from_millis(10), Duration::from_millis(10)],
