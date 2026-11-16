@@ -169,6 +169,24 @@ api='https://api.github.com/repos/kalibetre/raphie/releases?per_page=100'
 # Large downloads show curl's meter (size, speed, time left) in a terminal;
 # logs and pipes get the quiet form.
 if [ -t 2 ]; then fetch=-fSL; else fetch=-fsSL; fi
+# Downloads release file $1 to $2. A release's files never change, so a
+# download that breaks off resumes where it stopped instead of starting
+# over: on a slow link the archive takes a long time.
+download() {
+  local attempt=1 status
+  while :; do
+    status=0
+    curl "$fetch" "$1" -o "$2" -C - || status=$?
+    [ "$status" = 0 ] && return 0
+    # 33: the server cannot resume, so the next attempt starts over.
+    [ "$status" != 33 ] || rm -f "$2"
+    [ "$attempt" -lt 5 ] || return 1
+    attempt=$((attempt + 1))
+    printf 'The download broke off at %s MB; resuming (attempt %s of 5)...\n' \
+      "$(python3 -c 'import os, sys; print(f"{os.path.getsize(sys.argv[1]) / 1e6:.1f}" if os.path.exists(sys.argv[1]) else "0.0")' "$2")" "$attempt"
+    sleep $((attempt * 2))
+  done
+}
 echo "Finding the newest $channel release..."
 if [ "$channel" = stable ]; then
   # The latest stable may be older than 100 nightly releases.
@@ -335,10 +353,10 @@ PY_COMPARE
   fi
 fi
 echo "Downloading $asset for $version ($asset_size)..."
-if ! curl "$fetch" "https://github.com/kalibetre/raphie/releases/download/$version/$asset" -o "$work/release.tar.gz"; then
+if ! download "https://github.com/kalibetre/raphie/releases/download/$version/$asset" "$work/release.tar.gz"; then
   echo "Could not download $asset for $version." >&2; exit 1
 fi
-if ! curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$version/SHA256SUMS" -o "$work/SHA256SUMS"; then
+if ! fetch=-fsSL download "https://github.com/kalibetre/raphie/releases/download/$version/SHA256SUMS" "$work/SHA256SUMS"; then
   echo "Could not download release checksums for $version." >&2; exit 1
 fi
 echo 'Verifying the download...'
