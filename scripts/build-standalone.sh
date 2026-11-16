@@ -2,8 +2,8 @@
 set -eu
 
 # Experimental build for isolated verification, not a release installer.
-target=${1:?Usage: sh scripts/build-standalone.sh bun-linux-x64\|bun-linux-arm64\|bun-darwin-x64\|bun-darwin-arm64 [version] [build-id]}
-case "$target" in bun-linux-x64|bun-linux-arm64|bun-darwin-x64|bun-darwin-arm64) ;; *) echo 'Unsupported target.' >&2; exit 1;; esac
+target=${1:?Usage: sh scripts/build-standalone.sh bun-linux-x64\|bun-linux-arm64\|bun-darwin-arm64 [version] [build-id]}
+case "$target" in bun-linux-x64|bun-linux-arm64|bun-darwin-arm64) ;; *) echo 'Unsupported target.' >&2; exit 1;; esac
 version=${2:-development}
 revision=${3:-development}
 case "$version$revision" in *[!a-zA-Z0-9._+-]*) echo 'Invalid version or build ID.' >&2; exit 1;; esac
