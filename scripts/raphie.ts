@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { statSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { openAuthService } from "../apps/web/src/infrastructure/auth/auth-service.ts";
@@ -41,16 +42,139 @@ function installedPorts(directory: string): Ports {
 const run = (command: string[]) =>
   Bun.spawnSync(command, { stdout: "ignore", stderr: "ignore" }).exitCode === 0;
 
-/** The background service, when the installer set one up and it is loaded. */
-function service() {
+/** A user installation's background service: a launchd agent or a systemd user unit. */
+type Service = {
+  running(): boolean;
+  start(): boolean;
+  stop(): boolean;
+  restart(): boolean;
+};
+
+/** The background service, when the installer set one up. */
+function userService(): Service | undefined {
+  const home = process.env.HOME || homedir();
   if (process.platform === "darwin") {
-    const label = `gui/${process.getuid?.()}/com.raphie.user`;
-    if (!run(["launchctl", "print", label])) return undefined;
-    return () => run(["launchctl", "kickstart", "-k", label]);
+    const domain = `gui/${process.getuid?.()}`;
+    const label = `${domain}/com.raphie.user`;
+    const agent = join(home, "Library/LaunchAgents/com.raphie.user.plist");
+    if (!existsSync(agent)) return undefined;
+    return {
+      running: () => run(["launchctl", "print", label]),
+      // As the installer does: an agent that was disabled stays loadable.
+      start: () =>
+        run(["launchctl", "enable", label]) &&
+        run(["launchctl", "bootstrap", domain, agent]),
+      stop: () => run(["launchctl", "bootout", domain, agent]),
+      restart: () => run(["launchctl", "kickstart", "-k", label]),
+    };
   }
-  if (!run(["systemctl", "--user", "is-active", "--quiet", "raphie.service"]))
+  if (!existsSync(join(home, ".config/systemd/user/raphie.service")))
     return undefined;
-  return () => run(["systemctl", "--user", "restart", "raphie.service"]);
+  const systemctl = (action: string) =>
+    run(["systemctl", "--user", action, "raphie.service"]);
+  return {
+    running: () =>
+      run(["systemctl", "--user", "is-active", "--quiet", "raphie.service"]),
+    start: () => systemctl("start"),
+    stop: () => systemctl("stop"),
+    restart: () => systemctl("restart"),
+  };
+}
+
+/** The background service, when the installer set one up and it is running. */
+function service() {
+  const found = userService();
+  if (!found?.running()) return undefined;
+  return () => found.restart();
+}
+
+/** This user installation's folder, or what to use instead. */
+function requireUserInstall(command: "stop" | "restart" | "update") {
+  const directory = userInstall();
+  if (directory) return directory;
+  throw new Error(
+    command === "update"
+      ? "raphie update updates a user installation. For a system installation use sudo raphie update."
+      : `raphie ${command} manages a user installation's background service. For a system installation use sudo systemctl ${command} raphie; from a source checkout, use the terminal running raphie start.`,
+  );
+}
+
+/** `raphie stop`: stops the background service until restart or next login. */
+async function stopService() {
+  requireUserInstall("stop");
+  const found = userService();
+  if (!found?.running()) {
+    console.log("Raphie's background service is not running.");
+    return;
+  }
+  if (!found.stop())
+    throw new Error("Could not stop Raphie's background service.");
+  // A stopped service may hold its ports for a moment while it exits.
+  const ports = [Number(process.env.PORT), Number(process.env.RAPHIE_WEB_PORT)];
+  for (let attempt = 0; attempt < 120; attempt++) {
+    if ((await Promise.all(ports.map(portFree))).every(Boolean)) {
+      console.log(
+        "Raphie stopped. It starts again at your next login, or now with raphie restart.",
+      );
+      return;
+    }
+    await Bun.sleep(250);
+  }
+  throw new Error(
+    `Raphie's service stopped, but port ${ports.join(" or ")} is still in use.`,
+  );
+}
+
+/** `raphie restart`: restarts the background service, or starts a stopped one. */
+async function restartService() {
+  requireUserInstall("restart");
+  const found = userService();
+  if (!found)
+    throw new Error(
+      "This installation has no background service. Run raphie start in a terminal instead.",
+    );
+  const started = found.running() ? found.restart() : found.start();
+  if (!started || !(await healthyWithin(15)))
+    throw new Error(
+      "Raphie did not answer after restarting. Check raphie status and the service log.",
+    );
+  console.log(
+    `Raphie is running at http://127.0.0.1:${process.env.RAPHIE_WEB_PORT}.`,
+  );
+}
+
+/** Where `raphie update` gets the installer: the same one the docs pipe to bash. */
+const INSTALLER_URL =
+  "https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh";
+
+/** `raphie update [--channel stable|nightly]`: runs the installer, which updates in place. */
+async function update(args: string[]) {
+  requireUserInstall("update");
+  const [flag, channel, ...rest] = args;
+  if (rest.length || (flag !== undefined && (flag !== "--channel" || !channel)))
+    throw new Error("Usage: raphie update [--channel stable|nightly]");
+  if (channel !== undefined && channel !== "stable" && channel !== "nightly")
+    throw new Error("Choose either stable or nightly.");
+  const folder = mkdtempSync(join(tmpdir(), "raphie-update-"));
+  try {
+    const installer = join(folder, "install.sh");
+    if (!run(["curl", "-fsSL", INSTALLER_URL, "-o", installer]))
+      throw new Error("Could not download the installer. Nothing was changed.");
+    // The installer checks the release against SHA256SUMS, backs up the
+    // data, stops the service, swaps the binaries and restarts it.
+    const child = Bun.spawn(
+      ["bash", installer, ...(channel ? ["--channel", channel] : [])],
+      {
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+        env: process.env,
+      },
+    );
+    process.exitCode = await child.exited;
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
 }
 
 async function healthyWithin(seconds: number) {
@@ -216,6 +340,7 @@ async function main() {
   if (install)
     Object.assign(process.env, portEnvironment(installedPorts(install)));
   if (command === "set-port") return setPort(args.slice(1));
+  if (command === "update") return update(args.slice(1));
   if (
     ((command === "auth" || command === "channel") && args.length > 2) ||
     (command !== "auth" && command !== "channel" && args.length > 1)
@@ -241,9 +366,11 @@ async function main() {
       );
     const channel = userInstallChannel(dirname(process.execPath), action);
     console.log(`Release channel: ${channel}`);
-    if (action) console.log("Run the installer again to check for an update.");
+    if (action) console.log("Run raphie update to update now.");
     return;
   }
+  if (command === "stop") return stopService();
+  if (command === "restart") return restartService();
   if (command === "health") {
     if (!(await installationHealthy(process.env))) process.exitCode = 1;
     return;
@@ -319,7 +446,7 @@ async function main() {
   }
   if (!command || command === "help" || command === "--help") {
     console.log(
-      `Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
+      `Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie stop                 Stop the background service\n  raphie restart              Restart (or start) the background service\n  raphie update [--channel stable|nightly]  Update to the newest release\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
     );
     return;
   }
