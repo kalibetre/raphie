@@ -80,7 +80,7 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     };
     await checksum();
     const assets = [
-      { name: "raphie-linux-x64.tar.gz" },
+      { name: "raphie-linux-x64.tar.gz", size: 87_654_321 },
       { name: "raphie-darwin-arm64.tar.gz" },
       { name: "SHA256SUMS" },
     ];
@@ -98,7 +98,7 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     await compare("ahead");
     await writeFile(
       join(bin, "curl"),
-      `#!/bin/sh\ncase "$2" in *api.github.com*/compare/*) printf '%s' "$2" > "$FIXTURE/compare-url"; cp "$FIXTURE/compare.json" "$4";; *api.github.com*) cp "$FIXTURE/release.json" "$4";; *SHA256SUMS) cp "$FIXTURE/SHA256SUMS" "$4";; *) cp "$FIXTURE/archive.tar.gz" "$4";; esac\n`,
+      `#!/bin/sh\nprintf '%s\\n' "$1" >> "$FIXTURE/curl-flags"\ncase "$2" in *api.github.com*/compare/*) printf '%s' "$2" > "$FIXTURE/compare-url"; cp "$FIXTURE/compare.json" "$4";; *api.github.com*) cp "$FIXTURE/release.json" "$4";; *SHA256SUMS) cp "$FIXTURE/SHA256SUMS" "$4";; *) cp "$FIXTURE/archive.tar.gz" "$4";; esac\n`,
       { mode: 0o755 },
     );
     await writeFile(join(bin, "sudo"), "#!/bin/sh\nexit 99\n", { mode: 0o755 });
@@ -268,6 +268,20 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     const update = run();
     assert.equal(update.exitCode, 0, update.stderr.toString());
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-11-1");
+    // Each slow step says what it is doing, the download with its size.
+    assert.match(
+      update.stdout.toString(),
+      /Finding the newest nightly release\.\.\.\n[^]*Checking that nightly-11-1 follows the installed nightly-10-1\.\.\.\nDownloading raphie-linux-x64\.tar\.gz for nightly-11-1 \(87\.7 MB\)\.\.\.\nVerifying the download\.\.\.\nStopping Raphie to update it\.\.\.\n[^]*Waiting for Raphie to start\.\.\./,
+    );
+    // Without a terminal to draw it on, curl's progress meter stays off.
+    assert.deepEqual(
+      [
+        ...new Set(
+          (await readFile(join(temp, "curl-flags"), "utf8")).split("\n"),
+        ),
+      ],
+      ["-fsSL", ""],
+    );
     // It asks for a comparison without file diffs, which can be megabytes.
     assert.match(
       await readFile(join(temp, "compare-url"), "utf8"),

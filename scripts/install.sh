@@ -166,14 +166,18 @@ fi
 case "$runtime_port:$web_port" in *[!0-9:]*|:*|*:) echo "Saved ports in $install_dir/.ports are not valid. Fix them with raphie set-port." >&2; exit 1 ;; esac
 if [ "$runtime_port" = "$web_port" ]; then echo 'The web and runtime ports must differ.' >&2; exit 1; fi
 api='https://api.github.com/repos/kalibetre/raphie/releases?per_page=100'
+# Large downloads show curl's meter (size, speed, time left) in a terminal;
+# logs and pipes get the quiet form.
+if [ -t 2 ]; then fetch=-fSL; else fetch=-fsSL; fi
+echo "Finding the newest $channel release..."
 if [ "$channel" = stable ]; then
   # The latest stable may be older than 100 nightly releases.
   curl -fsSL 'https://api.github.com/repos/kalibetre/raphie/releases/latest' -o "$work/releases.json" 2>/dev/null || {
-    if ! curl -fsSL "$api" -o "$work/releases.json"; then
+    if ! curl "$fetch" "$api" -o "$work/releases.json"; then
       echo 'Could not fetch GitHub release metadata. Check connectivity or API rate limits and retry.' >&2; exit 1
     fi
   }
-elif ! curl -fsSL "$api" -o "$work/releases.json"; then
+elif ! curl "$fetch" "$api" -o "$work/releases.json"; then
   echo 'Could not fetch GitHub release metadata. Check connectivity or API rate limits and retry.' >&2; exit 1
 fi
 current_version=
@@ -274,9 +278,12 @@ def key(r):
         if not match: return None
         return (0, *map(int, match.groups()))
     return tuple(map(int, match.groups()))
-candidates = [(k, r['tag_name']) for r in releases if (k := key(r)) is not None]
+def size(r):
+    found = [a.get('size') for a in r['assets'] if isinstance(a, dict) and a.get('name') == sys.argv[3]]
+    return f'{found[0] / 1e6:.1f} MB' if found and isinstance(found[0], int) else 'size unknown'
+candidates = [(k, r['tag_name'], size(r)) for r in releases if (k := key(r)) is not None]
 if not candidates: raise SystemExit(42)
-print(max(candidates)[1])
+print('%s %s' % max(candidates)[1:])
 PY_RELEASE
 ); then :; else
   status=$?
@@ -286,6 +293,8 @@ PY_RELEASE
   fi
   exit 1
 fi
+asset_size=${version#* }
+version=${version%% *}
 if [ -n "$current_version" ] && [ "$current_version" = "$version" ]; then
   if [ "$headless" = true ]; then
     systemctl --user stop raphie.service
@@ -311,6 +320,7 @@ if [ -n "$current_version" ]; then
   # Only the status is needed. GitHub lists the changed files on the first
   # page of a comparison only, and those diffs can run to megabytes, so ask
   # for the second page of one commit each.
+  echo "Checking that $version follows the installed $current_version..."
   if ! curl -fsSL "https://api.github.com/repos/kalibetre/raphie/compare/$current_version...$version?per_page=1&page=2" -o "$work/compare.json" --retry 3; then
     echo 'Could not verify update ancestry. The current installation remains unchanged.' >&2; exit 1
   fi
@@ -324,12 +334,14 @@ PY_COMPARE
     exit 0
   fi
 fi
-if ! curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$version/$asset" -o "$work/release.tar.gz"; then
+echo "Downloading $asset for $version ($asset_size)..."
+if ! curl "$fetch" "https://github.com/kalibetre/raphie/releases/download/$version/$asset" -o "$work/release.tar.gz"; then
   echo "Could not download $asset for $version." >&2; exit 1
 fi
 if ! curl -fsSL "https://github.com/kalibetre/raphie/releases/download/$version/SHA256SUMS" -o "$work/SHA256SUMS"; then
   echo "Could not download release checksums for $version." >&2; exit 1
 fi
+echo 'Verifying the download...'
 python3 - "$work/release.tar.gz" "$work/SHA256SUMS" "$asset" <<'PY_HASH'
 import hashlib, re, sys
 with open(sys.argv[2], encoding='ascii') as source: lines = source.read().splitlines()
@@ -358,6 +370,7 @@ with tarfile.open(sys.argv[1], 'r:gz') as archive:
 PY
 stopped_service=
 if [ "$updating" = true ]; then
+  echo 'Stopping Raphie to update it...'
   if [ "$platform" = Linux ] && [ -f "$HOME/.config/systemd/user/raphie.service" ]; then
     systemctl --user stop raphie.service || { echo 'Could not stop the user service; no update was performed.' >&2; exit 1; }
     stopped_service=systemd
@@ -475,6 +488,7 @@ PY_SERVICE
 esac
 service_failed=false
 if [ "$service_started" = true ]; then
+  echo 'Waiting for Raphie to start...'
   ready=false
   for attempt in {1..15}; do
     if "$install_dir/raphie" health >/dev/null 2>&1; then ready=true; break; fi
