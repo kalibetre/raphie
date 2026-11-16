@@ -7,6 +7,8 @@ node_modules/
 .nitro/
 .DS_Store
 .data/
+# Sign-in store for the browser fixture (bun run fixture:auth)
+.fixture-data/
 dist/
 .tanstack/
 .env.schema.cache.json

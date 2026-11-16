@@ -145,7 +145,7 @@ sudo raphie update          # latest stable
 sudo raphie update v1.2.3   # a specific version
 ```
 
-The update downloads the release, stops the service, writes an offline backup of the data and keyrings to `/var/backups/raphie/`, switches release and restarts. If the new release is not healthy within 30 seconds, it stops the service and prints the backup location. Running work is interrupted. The download is not checked against `SHA256SUMS` or its attestation; see [check a release by hand](/start/installation/#check-a-release-by-hand). Nightly releases cannot be installed this way.
+The update downloads the release, stops the service, writes an offline backup of the data and keyrings to `/var/backups/raphie/`, switches release and restarts. If the new release is not healthy within 30 seconds, it stops the service and prints the backup location. Running work is interrupted. The download must match the release's `SHA256SUMS`; its attestation is not checked, see [check a release by hand](/start/installation/#check-a-release-by-hand). Nightly releases cannot be installed this way.
 
 </TabItem>
 <TabItem label="Source">

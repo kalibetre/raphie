@@ -13,6 +13,7 @@ import {
 import { openLocalOtlp } from "../domains/diagnostics/infrastructure/local-otlp.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { CredentialStoreError } from "../domains/settings/infrastructure/credential-cipher.ts";
+import { assertKeyFileOutsideData } from "../domains/settings/infrastructure/file-credential-key-store.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
 import { legacyMcpConfig } from "../infrastructure/mcp/legacy-config.ts";
 import { createTelemetry } from "../infrastructure/observability/effect-telemetry.ts";
@@ -44,6 +45,14 @@ const program = Effect.gen(function* () {
     process.env.DATA_DIRECTORY,
     Bun.isStandaloneExecutable,
   );
+  const keyFile = process.env.RAPHIE_CREDENTIAL_KEY_FILE;
+  if (keyFile !== undefined)
+    try {
+      assertKeyFileOutsideData(keyFile, directory);
+    } catch (error) {
+      console.error((error as Error).message);
+      throw error;
+    }
   yield* resource(
     () => ownAppData(directory),
     async (owner) => owner.close(),

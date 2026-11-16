@@ -227,7 +227,7 @@ fn form(s: &Ui, info: &SandboxInfo, look: &Look, overlays: &mut Vec<El>) -> El {
     group(
         t,
         "Sandbox settings",
-        "Saved for this bot across restarts. Providers keep separate files; switching does not move or delete them.",
+        "Saved for this bot across restarts. Both providers work on the same workspace files, so switching keeps them.",
         rows,
     )
 }

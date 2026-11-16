@@ -125,13 +125,13 @@ export class HindsightMemory implements MemoryBackend {
 
   async revise(_scope: string, _id: string, _content: string): Promise<void> {
     throw new InputError(
-      "Hindsight source corrections are not supported in this slice. Manage sources in Hindsight.",
+      "Raphie cannot correct Hindsight sources. Manage them in Hindsight.",
     );
   }
 
   async forget(_scope: string, _id: string): Promise<void> {
     throw new InputError(
-      "Hindsight source deletion is not supported in this slice. Manage sources in Hindsight.",
+      "Raphie cannot delete Hindsight sources. Manage them in Hindsight.",
     );
   }
 

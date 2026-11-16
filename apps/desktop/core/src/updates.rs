@@ -125,6 +125,9 @@ pub struct Release {
     pub html_url: String,
     #[serde(default)]
     pub draft: bool,
+    /// Nightly builds are published as pre-releases.
+    #[serde(default)]
+    pub prerelease: bool,
 }
 
 /// A newer release than this build.
@@ -137,14 +140,19 @@ pub struct Update {
 }
 
 /// The newest release after `current`, if there is one. Drafts, tags that
-/// are not versions and pages outside Raphie's releases are skipped.
+/// are not versions and pages outside Raphie's releases are skipped. A
+/// stable build is only offered stable releases; a pre-release build (a
+/// nightly) is offered both.
 pub fn newest_after(current: &str, releases: &[Release]) -> Option<Update> {
     let current = Version::parse(current)?;
+    let stable_only = current.pre.is_empty();
     releases
         .iter()
         .filter(|release| !release.draft && release.html_url.starts_with(RELEASE_PAGES))
+        .filter(|release| !(stable_only && release.prerelease))
         // `filter_map` keeps the `Some`s: here, releases whose tag parses.
         .filter_map(|release| Some((Version::parse(&release.tag_name)?, release)))
+        .filter(|(version, _)| !(stable_only && !version.pre.is_empty()))
         .filter(|(version, _)| *version > current)
         .max_by(|(a, _), (b, _)| a.cmp(b))
         .map(|(_, release)| Update {
@@ -213,6 +221,7 @@ mod tests {
             tag_name: tag.to_owned(),
             html_url: format!("{RELEASE_PAGES}tag/{tag}"),
             draft: false,
+            prerelease: Version::parse(tag).is_some_and(|version| !version.pre.is_empty()),
         }
     }
 
@@ -278,6 +287,30 @@ mod tests {
             release("v0.0.4"),
         ];
         assert_eq!(newest_after("0.0.4", &releases), None);
+    }
+
+    #[test]
+    fn a_stable_build_is_never_offered_a_nightly() {
+        // Nightlies carry the next version, so they sort after this build.
+        let releases = [
+            release("v0.0.5-nightly.20261116.43858742213.1"),
+            release("v0.0.5-alpha.1"),
+        ];
+        assert_eq!(newest_after("0.0.4", &releases), None);
+        // GitHub's flag alone is enough, whatever the tag says.
+        let mut flagged = release("v0.0.6");
+        flagged.prerelease = true;
+        assert_eq!(newest_after("0.0.4", &[flagged]), None);
+    }
+
+    #[test]
+    fn a_nightly_build_is_offered_newer_nightlies_and_releases() {
+        let current = "0.0.5-nightly.20261110.42000000000.1";
+        let newer_nightly = release("v0.0.5-nightly.20261116.43858742213.1");
+        let update = newest_after(current, &[newer_nightly]).unwrap();
+        assert_eq!(update.version, "v0.0.5-nightly.20261116.43858742213.1");
+        let update = newest_after(current, &[release("v0.0.5")]).unwrap();
+        assert_eq!(update.version, "v0.0.5");
     }
 
     #[test]
