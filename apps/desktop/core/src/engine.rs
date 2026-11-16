@@ -42,6 +42,7 @@ use crate::contracts::{
 };
 use crate::inbox::JobUpdates;
 use crate::jobs::{JobAction, NewJob};
+use crate::local_install;
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::MemoryUpdate;
 use crate::model::{DecisionOutcome, Event, StreamStatus};
@@ -148,6 +149,9 @@ pub enum Command {
     /// Ask GitHub whether a newer Raphie has been released. Works signed
     /// in or not: it does not involve the host.
     CheckForUpdates,
+    /// Look for a Raphie installed for this user on this computer, at the
+    /// port its installer saved. Works signed in or not.
+    FindLocalInstall,
     /// Ask how a session treats commands.
     LoadApprovalMode {
         session_id: String,
@@ -396,6 +400,9 @@ pub struct EngineConfig {
     pub downloads: Option<PathBuf>,
     /// The list of releases to check for updates; `None` checks nothing.
     pub releases_url: Option<String>,
+    /// Where a local installation saved its ports
+    /// ([`local_install::ports_file`]); `None` looks at the default port.
+    pub local_ports_file: Option<PathBuf>,
 }
 
 impl Default for EngineConfig {
@@ -408,6 +415,7 @@ impl Default for EngineConfig {
             settings_path: Settings::default_path(),
             downloads: dirs::download_dir(),
             releases_url: Some(updates::RELEASES_URL.to_owned()),
+            local_ports_file: local_install::ports_file(),
         }
     }
 }
@@ -611,6 +619,7 @@ impl Engine {
             } => self.load_inbox(session_bots, job_bots),
             Command::AcknowledgeRun { bot_id, run_id } => self.acknowledge_run(bot_id, run_id),
             Command::CheckForUpdates => self.check_for_updates(),
+            Command::FindLocalInstall => self.find_local_install(),
             Command::LoadPreview { bot_id, id } => self.load_preview(bot_id, id),
             Command::StartProviderSignIn {
                 bot_id,
@@ -1131,6 +1140,15 @@ impl Engine {
         };
         tokio::spawn(async move {
             emit.emit(Event::UpdateChecked(updates::check(&url).await));
+        });
+    }
+
+    fn find_local_install(&mut self) {
+        let emit = self.emit.clone();
+        let origin = local_install::origin_at(self.config.local_ports_file.as_deref());
+        tokio::spawn(async move {
+            let found = local_install::answers(&origin).await;
+            emit.emit(Event::LocalInstall(found.then_some(origin)));
         });
     }
 
