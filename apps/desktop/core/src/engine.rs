@@ -45,7 +45,7 @@ use crate::jobs::{JobAction, NewJob};
 use crate::local_install;
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::MemoryUpdate;
-use crate::model::{DecisionOutcome, Event, StreamStatus};
+use crate::model::{DecisionOutcome, Event, Reach, StreamStatus};
 use crate::origin::Origin;
 use crate::sandbox::SandboxUpdate;
 use crate::settings::Settings;
@@ -74,6 +74,11 @@ pub enum Command {
     /// Forget this device's token. The device stays listed in Settings →
     /// Account on the host until disconnected there.
     SignOut,
+    /// Back to the sign-in screen to connect to another address, keeping
+    /// this one's token so connecting to it again needs no new approval.
+    ChangeAddress,
+    /// Ask now whether the signed-in Raphie answers.
+    CheckReach,
     SelectBot {
         bot_id: String,
     },
@@ -403,6 +408,8 @@ pub struct EngineConfig {
     /// Where a local installation saved its ports
     /// ([`local_install::ports_file`]); `None` looks at the default port.
     pub local_ports_file: Option<PathBuf>,
+    /// How often a signed-in app checks that Raphie still answers.
+    pub reach_every: Duration,
 }
 
 impl Default for EngineConfig {
@@ -416,6 +423,7 @@ impl Default for EngineConfig {
             downloads: dirs::download_dir(),
             releases_url: Some(updates::RELEASES_URL.to_owned()),
             local_ports_file: local_install::ports_file(),
+            reach_every: Duration::from_secs(10),
         }
     }
 }
@@ -454,6 +462,7 @@ impl Client {
             sign_in: None,
             sessions_stream: None,
             session_stream: None,
+            reach: None,
         };
         runtime.spawn(engine.run(commands));
         Client {
@@ -564,6 +573,8 @@ struct Engine {
     sign_in: Option<Task>,
     sessions_stream: Option<Task>,
     session_stream: Option<Task>,
+    /// Checks, while signed in, that Raphie still answers.
+    reach: Option<Task>,
 }
 
 impl Engine {
@@ -603,6 +614,13 @@ impl Engine {
                     self.sign_out(api.origin().clone(), None);
                 }
             }
+            Command::ChangeAddress => {
+                if self.api.take().is_some() {
+                    self.leave_host();
+                    self.emit.emit(Event::SignedOut { notice: None });
+                }
+            }
+            Command::CheckReach => self.check_reach(),
             Command::SelectBot { bot_id } => self.select_bot(bot_id),
             Command::SelectSession { session_id } => self.open_session(session_id),
             Command::LoadMoreSessions { after } => self.load_more_sessions(after),
@@ -794,6 +812,7 @@ impl Engine {
         self.api = Some(api.clone());
         self.bot_id = None;
         self.session_id = None;
+        self.watch_reach(api.clone());
         // Who is signed in, for Settings → Account. Nothing depends on it, so
         // a failure only leaves the name out.
         let emit = self.emit.clone();
@@ -824,12 +843,18 @@ impl Engine {
         });
     }
 
-    fn sign_out(&mut self, origin: Origin, notice: Option<String>) {
+    /// Stops everything that talks to the signed-in host.
+    fn leave_host(&mut self) {
         self.sign_in = None;
         self.sessions_stream = None;
         self.session_stream = None;
+        self.reach = None;
         self.bot_id = None;
         self.session_id = None;
+    }
+
+    fn sign_out(&mut self, origin: Origin, notice: Option<String>) {
+        self.leave_host();
         let store = self.store.clone();
         let emit = self.emit.clone();
         tokio::spawn(async move {
@@ -841,6 +866,44 @@ impl Engine {
                 _ => notice,
             };
             emit.emit(Event::SignedOut { notice });
+        });
+    }
+
+    // ----- Whether Raphie answers -----
+
+    /// Checks every `reach_every` that Raphie still answers, and reports
+    /// when that changes.
+    fn watch_reach(&mut self, api: ApiClient) {
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        let every = self.config.reach_every;
+        self.reach = Some(Task::spawn(async move {
+            let mut last = Reach::Up;
+            loop {
+                sleep(every).await;
+                let Some(reach) = reach_of(api.reach().await) else {
+                    let _ = inbox.send(Input::Expired);
+                    return;
+                };
+                if reach != last {
+                    last = reach.clone();
+                    emit.emit(Event::Reach(reach));
+                }
+            }
+        }));
+    }
+
+    fn check_reach(&mut self) {
+        let Some(api) = self.api.clone() else { return };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match reach_of(api.reach().await) {
+                Some(reach) => emit.emit(Event::Reach(reach)),
+                None => {
+                    let _ = inbox.send(Input::Expired);
+                }
+            }
         });
     }
 
@@ -2371,9 +2434,48 @@ async fn read_upload(upload: Upload) -> Result<(String, FileBytes), String> {
     }
 }
 
+/// What a connection check means, or `None` when the token was refused.
+/// Any answer from the runtime counts as up, even a refusal: only no
+/// answer, or the web host saying the runtime is unavailable, is down.
+fn reach_of(result: Result<(), ApiError>) -> Option<Reach> {
+    match result {
+        Err(ApiError::Unauthenticated) => None,
+        Err(ApiError::Network(error)) => Some(Reach::Unreachable(error)),
+        Err(ApiError::Rejected { status, message }) if status >= 500 => {
+            Some(Reach::RuntimeDown(message))
+        }
+        Err(ApiError::Locked) => Some(Reach::RuntimeDown(ApiError::Locked.to_string())),
+        _ => Some(Reach::Up),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_check_is_down_only_when_nothing_or_no_runtime_answers() {
+        let network = ApiError::Network("connection refused".into());
+        assert_eq!(
+            reach_of(Err(network)),
+            Some(Reach::Unreachable("connection refused".into()))
+        );
+        let unavailable = ApiError::Rejected {
+            status: 503,
+            message: "The runtime is unavailable. Please retry.".into(),
+        };
+        assert!(matches!(
+            reach_of(Err(unavailable)),
+            Some(Reach::RuntimeDown(_))
+        ));
+        // An older host without the route still answered.
+        assert_eq!(
+            reach_of(Err(ApiError::NotFound("no".into()))),
+            Some(Reach::Up)
+        );
+        assert_eq!(reach_of(Ok(())), Some(Reach::Up));
+        assert_eq!(reach_of(Err(ApiError::Unauthenticated)), None);
+    }
 
     #[test]
     fn a_stale_decision_reports_the_earlier_outcome() {

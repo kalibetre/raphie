@@ -2870,6 +2870,22 @@ impl Ui {
         (picture.is_ready() && picture.error().is_none()).then_some(picture)
     }
 
+    /// Asks now whether the signed-in Raphie answers, unless a check is
+    /// already on its way.
+    pub fn check_reach(&mut self) {
+        if !self.model.checking_reach {
+            self.model.checking_reach = true;
+            self.command(Command::CheckReach);
+        }
+    }
+
+    /// Back to the sign-in screen with this address in the field, to
+    /// connect to another. This address's sign-in is kept.
+    pub fn change_address(&mut self) {
+        self.close_settings();
+        self.command(Command::ChangeAddress);
+    }
+
     /// Asks whether a newer Raphie has been released, unless a check is
     /// already on its way.
     pub fn check_for_updates(&mut self) {

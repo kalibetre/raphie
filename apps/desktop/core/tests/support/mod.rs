@@ -36,6 +36,9 @@ pub struct Host {
     /// Where the approval link points (defaults to this host).
     pub verification_override: Option<String>,
     pub revoked: bool,
+    /// The runtime behind the web host is stopped: `/api/runtime` answers
+    /// 503, as the web host's proxy does.
+    pub runtime_down: bool,
     /// Submissions answered 503 before succeeding.
     pub failing_submits: u32,
     pub submits: Vec<Value>,
@@ -214,6 +217,7 @@ fn router(fake: Fake) -> Router {
         .route("/api/auth/device/token", post(device_token))
         .route("/auth/status", get(auth_status))
         .route("/_raphie/health", get(health))
+        .route("/api/runtime", get(runtime_info))
         .route("/api/bots", get(bots).post(create_bot))
         .route("/api/bots/{id}", axum::routing::delete(delete_bot))
         .route("/api/bots/{id}/history", get(bot_history))
@@ -1253,6 +1257,22 @@ async fn github_releases(State(fake): State<Fake>, headers: HeaderMap) -> Respon
         { "tag_name": "v100.0.0", "html_url": page("v100.0.0"), "draft": true }
     ]))
     .into_response()
+}
+
+/// What `raphie status` and the app's connection check ask the runtime.
+async fn runtime_info(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(&fake, "GET", "/api/runtime".into(), &headers);
+    if let Some(refused) = refuse(&fake, &headers) {
+        return refused;
+    }
+    if fake.host.lock().unwrap().runtime_down {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "The runtime is unavailable. Please retry." })),
+        )
+            .into_response();
+    }
+    Json(json!({ "identity": { "id": "workspace-1" } })).into_response()
 }
 
 /// The web host's health check: up, without an administrator yet.

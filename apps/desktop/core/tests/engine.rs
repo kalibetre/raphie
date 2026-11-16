@@ -18,7 +18,7 @@ use raphie_core::inspection::{pretty_json, span_matches};
 use raphie_core::jobs::{JobAction, NewJob, job_badge, job_interval, run_description};
 use raphie_core::mcp::{McpAction, NewMcpConnection, summary};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
-use raphie_core::model::{AuthState, DecisionOutcome, Event, StreamStatus};
+use raphie_core::model::{AuthState, DecisionOutcome, Event, Reach, StreamStatus};
 use raphie_core::sandbox::{SandboxUpdate, files_summary};
 use raphie_core::updates::UpdateStatus;
 use support::{Driver, FakeHost, TOKEN, observation_json, sessions_json, turn_json};
@@ -63,6 +63,83 @@ fn device_sign_in_stores_the_token_and_opens_the_default_bot() {
         );
         assert!(!seen.cookie && !seen.origin_header);
     }
+}
+
+#[test]
+fn a_stopped_runtime_is_noticed_and_so_is_its_return() {
+    let host = FakeHost::start();
+    let store = MemoryStore::new();
+    let config = EngineConfig {
+        reach_every: std::time::Duration::from_millis(20),
+        ..support::fast_config()
+    };
+    let mut driver = Driver::with_config(Arc::new(store), config);
+    driver.send(Command::Connect {
+        origin: host.origin.clone(),
+    });
+    driver.until("signed in", |m, _| m.auth == AuthState::SignedIn);
+    assert!(driver.model.reach.is_up());
+
+    host.with(|h| h.runtime_down = true);
+    driver.until(
+        "the runtime reported down",
+        |m, _| matches!(&m.reach, Reach::RuntimeDown(message) if message.contains("unavailable")),
+    );
+    // Still signed in: the token is kept for when Raphie is back.
+    assert_eq!(driver.model.auth, AuthState::SignedIn);
+
+    host.with(|h| h.runtime_down = false);
+    driver.until("the runtime reported back", |m, _| m.reach.is_up());
+    // Each check asks with the device's token.
+    for seen in host.requests("/api/runtime") {
+        assert_eq!(
+            seen.authorization.as_deref(),
+            Some(&*format!("Bearer {TOKEN}"))
+        );
+    }
+}
+
+#[test]
+fn checking_now_answers_even_when_nothing_changed() {
+    let host = FakeHost::start();
+    let (mut driver, _store) = signed_in(&host);
+    host.with(|h| h.runtime_down = true);
+    driver.model.checking_reach = true;
+    driver.send(Command::CheckReach);
+    driver.until("the check's answer", |m, _| !m.checking_reach);
+    assert!(matches!(driver.model.reach, Reach::RuntimeDown(_)));
+}
+
+#[test]
+fn a_revoked_token_found_by_a_check_signs_out() {
+    let host = FakeHost::start();
+    let (mut driver, _store) = signed_in(&host);
+    host.with(|h| h.revoked = true);
+    driver.send(Command::CheckReach);
+    driver.until("signed out", |m, _| {
+        matches!(m.auth, AuthState::SignedOut { notice: Some(_) })
+    });
+}
+
+#[test]
+fn changing_address_keeps_this_address_signed_in_for_later() {
+    let host = FakeHost::start();
+    let (mut driver, store) = signed_in(&host);
+    driver.send(Command::ChangeAddress);
+    driver.until("the sign-in screen", |m, _| {
+        m.auth == AuthState::SignedOut { notice: None }
+    });
+    // The address stays in the field, and its token in the Keychain.
+    assert_eq!(driver.model.origin.as_ref(), Some(&host.origin));
+    assert_eq!(store.load(&host.origin).unwrap().unwrap().expose(), TOKEN);
+
+    // Connecting to it again needs no new device code.
+    let codes = host.requests("/api/auth/device/code").len();
+    driver.send(Command::Connect {
+        origin: host.origin.clone(),
+    });
+    driver.until("signed in again", |m, _| m.auth == AuthState::SignedIn);
+    assert_eq!(host.requests("/api/auth/device/code").len(), codes);
 }
 
 #[test]
