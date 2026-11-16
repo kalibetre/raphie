@@ -178,6 +178,13 @@ such as OpenAI's "Sign in with ChatGPT") is made by the provider's own sign-in,
 which Pi runs on the runtime. Which of Pi's subscription providers are offered is
 an allow-list in `subscription-sign-ins.ts`; adding one is an entry there.
 
+Pi loads each sign-in flow by a module name built at run time, which
+`bun build --compile` cannot follow, so the same module calls Pi's
+`registerBunOAuthFlows()` to bundle them into the release binaries. The compiled
+smoke check (`scripts/standalone-smoke.ts`) starts every offered sign-in, checks
+that it announces its page, and stops it. When a sign-in fails, the client shows
+a short message and the runtime logs the reason.
+
 - **Sign-in sessions** live in memory on the runtime and are driven over
   `/api/settings/sign-ins` (see [headless interface](headless-interface.md)): the
   client shows what the sign-in reports (a page to open, a device code, progress)
