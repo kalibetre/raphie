@@ -71,6 +71,7 @@ curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/insta
 The installer:
 
 - says what it is doing at each step, and in a terminal shows the download's size, speed and time left;
+- resumes a download that breaks off where it stopped, up to five attempts, rather than starting over;
 - checks the archive's SHA-256 hash against the `SHA256SUMS` file from the same release, and stops on a mismatch. This catches a corrupted or incomplete download, not a tampered release, since both files come from the same release; the installer does not check the release's GitHub attestations ([check one by hand](#check-a-release-by-hand));
 - puts the binaries in `~/.local/lib/raphie` and links `~/.local/bin/raphie`;
 - adds `~/.local/bin` to PATH for new Bash and Zsh terminals;

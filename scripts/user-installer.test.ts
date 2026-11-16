@@ -98,7 +98,7 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     await compare("ahead");
     await writeFile(
       join(bin, "curl"),
-      `#!/bin/sh\nprintf '%s\\n' "$1" >> "$FIXTURE/curl-flags"\ncase "$2" in *api.github.com*/compare/*) printf '%s' "$2" > "$FIXTURE/compare-url"; cp "$FIXTURE/compare.json" "$4";; *api.github.com*) cp "$FIXTURE/release.json" "$4";; *SHA256SUMS) cp "$FIXTURE/SHA256SUMS" "$4";; *) cp "$FIXTURE/archive.tar.gz" "$4";; esac\n`,
+      `#!/bin/sh\nprintf '%s\\n' "$1" >> "$FIXTURE/curl-flags"\ncase "$2" in *api.github.com*/compare/*) printf '%s' "$2" > "$FIXTURE/compare-url"; cp "$FIXTURE/compare.json" "$4";; *api.github.com*) cp "$FIXTURE/release.json" "$4";; *SHA256SUMS) cp "$FIXTURE/SHA256SUMS" "$4";; *) if [ -e "$FIXTURE/break-once" ]; then rm "$FIXTURE/break-once"; head -c 100 "$FIXTURE/archive.tar.gz" > "$4"; exit 18; fi; if [ "$5 $6" = "-C -" ] && [ -s "$4" ]; then wc -c < "$4" | tr -d ' ' > "$FIXTURE/resumed-from"; tail -c +$(( $(wc -c < "$4") + 1 )) "$FIXTURE/archive.tar.gz" >> "$4"; else cp "$FIXTURE/archive.tar.gz" "$4"; fi;; esac\n`,
       { mode: 0o755 },
     );
     await writeFile(join(bin, "sudo"), "#!/bin/sh\nexit 99\n", { mode: 0o755 });
@@ -265,13 +265,24 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       { tag_name: "nightly-11-1", prerelease: true },
       { tag_name: "v0.0.4", prerelease: false },
     ]);
+    // The download breaks off once, after 100 bytes.
+    await writeFile(join(temp, "break-once"), "");
     const update = run();
     assert.equal(update.exitCode, 0, update.stderr.toString());
+    // It resumed from where it stopped rather than starting over.
+    assert.match(
+      update.stdout.toString(),
+      /The download broke off at 0\.0 MB; resuming \(attempt 2 of 5\)\.\.\./,
+    );
+    assert.equal(
+      (await readFile(join(temp, "resumed-from"), "utf8")).trim(),
+      "100",
+    );
     assert.equal((await readFile(marker, "utf8")).trim(), "nightly-11-1");
     // Each slow step says what it is doing, the download with its size.
     assert.match(
       update.stdout.toString(),
-      /Finding the newest nightly release\.\.\.\n[^]*Checking that nightly-11-1 follows the installed nightly-10-1\.\.\.\nDownloading raphie-linux-x64\.tar\.gz for nightly-11-1 \(87\.7 MB\)\.\.\.\nVerifying the download\.\.\.\nStopping Raphie to update it\.\.\.\n[^]*Waiting for Raphie to start\.\.\./,
+      /Finding the newest nightly release\.\.\.\n[^]*Checking that nightly-11-1 follows the installed nightly-10-1\.\.\.\nDownloading raphie-linux-x64\.tar\.gz for nightly-11-1 \(87\.7 MB\)\.\.\.\n(?:The download broke off.*\n)?Verifying the download\.\.\.\nStopping Raphie to update it\.\.\.\n[^]*Waiting for Raphie to start\.\.\./,
     );
     // Without a terminal to draw it on, curl's progress meter stays off.
     assert.deepEqual(
