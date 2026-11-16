@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import start from "./dist/server/server.js";
 import { startWebServer } from "./src/bootstrap/http-server.ts";
@@ -10,12 +11,18 @@ import {
 } from "./src/infrastructure/auth/auth-storage.ts";
 import { createGateway } from "./src/infrastructure/auth/gateway.ts";
 
+// A release is one executable and this host a second entry point in it, so
+// its own files are found from the executable's root, beside `Bun.main`.
+const files = Bun.isStandaloneExecutable
+  ? pathToFileURL(`${dirname(Bun.main)}/`)
+  : new URL("./", import.meta.url);
+
 let build = { id: "development", version: "development" };
 try {
   const [id, version] = readFileSync(
     new URL(
       Bun.isStandaloneExecutable ? "./.raphie-build" : "../../.raphie-build",
-      import.meta.url,
+      files,
     ),
     "utf8",
   )
@@ -51,7 +58,7 @@ const server = startWebServer({
     localPort: Number(process.env.RAPHIE_WEB_PORT ?? 4320),
   }),
   fetch: (request) => start.fetch(request),
-  clientDirectory: fileURLToPath(new URL("./dist/client", import.meta.url)),
+  clientDirectory: fileURLToPath(new URL("./dist/client", files)),
   port: Number(process.env.RAPHIE_WEB_PORT ?? 4320),
   build,
 });

@@ -72,7 +72,7 @@ The installer:
 
 - says what it is doing at each step, and in a terminal shows the download's size, speed and time left;
 - checks the archive's SHA-256 hash against the `SHA256SUMS` file from the same release, and stops on a mismatch. This catches a corrupted or incomplete download, not a tampered release, since both files come from the same release; the installer does not check the release's GitHub attestations ([check one by hand](#check-a-release-by-hand));
-- puts the binaries in `~/.local/lib/raphie` and links `~/.local/bin/raphie`;
+- puts the `raphie` executable in `~/.local/lib/raphie` and links `~/.local/bin/raphie`;
 - adds `~/.local/bin` to PATH for new Bash and Zsh terminals;
 - saves the web and runtime ports in `~/.local/lib/raphie/.ports`;
 - creates and starts a background service when it can: a systemd user unit on Linux (if a user manager is running), a LaunchAgent on macOS.

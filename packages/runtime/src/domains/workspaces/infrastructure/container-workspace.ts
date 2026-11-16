@@ -19,6 +19,7 @@ import {
 import { ContainerCli, containerLimits as limits } from "./container-cli.ts";
 import { ContainerRpc } from "./container-rpc.ts";
 import { encodeWire, envMethods } from "./container-wire.ts";
+import { embeddedFile } from "./embedded-file.ts";
 
 export const authorizeContainerDispatch = Symbol("authorizeContainerDispatch");
 
@@ -56,9 +57,7 @@ let guestSource: Promise<string> | undefined;
 
 async function bundleGuest() {
   if (Bun.isStandaloneExecutable)
-    return Bun.file(
-      new URL("./raphie-sandbox-guest.js", import.meta.url),
-    ).text();
+    return Bun.file(embeddedFile("./raphie-sandbox-guest.js")).text();
   const build = await Bun.build({
     entrypoints: [
       fileURLToPath(new URL("./container-guest.ts", import.meta.url)),

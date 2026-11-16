@@ -10,7 +10,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /** Two loopback ports that were free a moment ago. */
 async function freePorts() {
@@ -30,29 +31,38 @@ test("a user installation runs on its saved ports, and set-port changes them and
     await mkdir(install, { recursive: true });
     await mkdir(stubs);
     const binary = join(install, "raphie");
+    // Stand-ins for the runtime and web host, which a release builds into
+    // raphie: each notes the addresses it was given. Neither exits before
+    // both have noted theirs: start stops the other as soon as one exits.
+    const roles = join(root, "roles");
+    for (const [role, path] of [
+      ["raphie-runtime", "packages/runtime/src/main.js"],
+      ["raphie-web", "apps/web/server.js"],
+    ] as const) {
+      await mkdir(dirname(join(roles, path)), { recursive: true });
+      await writeFile(
+        join(roles, path),
+        `import { existsSync, writeFileSync } from "node:fs";
+const env = process.env, dir = env.TEST_DIR;
+writeFileSync(\`\${dir}/${role}\`, [env.PORT, env.RAPHIE_WEB_PORT, env.RAPHIE_RUNTIME_URL, env.RAPHIE_WEB_ORIGIN].join(" "));
+while (!existsSync(\`\${dir}/raphie-runtime\`) || !existsSync(\`\${dir}/raphie-web\`)) await Bun.sleep(50);
+`,
+      );
+    }
     const build = Bun.spawnSync([
       process.execPath,
       "build",
       "--compile",
       "--no-compile-autoload-dotenv",
       "--no-compile-autoload-bunfig",
+      "--define",
+      `__RAPHIE_ROLE_ROOT__=${JSON.stringify(pathToFileURL(`${roles}/`).href)}`,
       "scripts/raphie.ts",
       "--outfile",
       binary,
     ]);
     assert.equal(build.exitCode, 0, build.stderr.toString());
     await writeFile(join(install, ".raphie-user-install"), "v0.0.5\n");
-    // The runtime and web host note the addresses they were given.
-    for (const name of ["raphie-runtime", "raphie-web"]) {
-      await writeFile(
-        join(install, name),
-        `#!/bin/sh\nprintf "%s %s %s %s" "$PORT" "$RAPHIE_WEB_PORT" "$RAPHIE_RUNTIME_URL" "$RAPHIE_WEB_ORIGIN" > "$TEST_DIR/${name}"\n` +
-          // Neither exits before both have noted theirs: start stops the
-          // other as soon as one exits.
-          'until [ -e "$TEST_DIR/raphie-runtime" ] && [ -e "$TEST_DIR/raphie-web" ]; do sleep 0.05; done\n',
-      );
-      await chmod(join(install, name), 0o755);
-    }
     // launchctl and systemctl: the service is loaded when $SERVICE is on,
     // and a restart is noted for the test to answer.
     const stub =

@@ -132,7 +132,7 @@ jobs:
       - name: Verify compiled workspace worker
         run: dist/standalone/${{ matrix.target }}/raphie-smoke
       - name: Package release binaries
-        run: COPYFILE_DISABLE=1 tar -C 'dist/standalone/${{ matrix.target }}' -czf '${{ matrix.asset }}' raphie raphie-runtime raphie-web
+        run: COPYFILE_DISABLE=1 tar -C 'dist/standalone/${{ matrix.target }}' -czf '${{ matrix.asset }}' raphie
       - name: Attest build provenance
         uses: actions/attest@v4
         with:

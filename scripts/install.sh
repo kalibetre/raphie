@@ -355,7 +355,10 @@ PY_HASH
 mkdir "$work/bundle"
 python3 - "$work/release.tar.gz" "$work/bundle" <<'PY'
 import os, re, shutil, sys, tarfile
-required = {'raphie', 'raphie-runtime', 'raphie-web'}
+# A release is one executable; one from before that also has the runtime
+# and web host as their own executables, which it then needs.
+required = {'raphie'}
+wanted = required | {'raphie-runtime', 'raphie-web'}
 with tarfile.open(sys.argv[1], 'r:gz') as archive:
     members = archive.getmembers()
     names = [m.name for m in members]
@@ -363,7 +366,7 @@ with tarfile.open(sys.argv[1], 'r:gz') as archive:
         or any(not m.isfile() or m.size > 500_000_000 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', m.name) for m in members)):
         raise SystemExit('Invalid release archive contents.')
     for member in members:
-        if member.name not in required: continue
+        if member.name not in wanted: continue
         with archive.extractfile(member) as source, open(os.path.join(sys.argv[2], member.name), 'xb') as target:
             shutil.copyfileobj(source, target)
         os.chmod(os.path.join(sys.argv[2], member.name), 0o755)
@@ -419,7 +422,7 @@ if [ "$updating" = true ] && [ -d "$data_dir" ]; then
   echo "Offline data backup: $backup/data (the credential key must be backed up separately)."
 fi
 stage=$(mktemp -d "$HOME/.local/lib/.raphie-stage.XXXXXXXX")
-cp "$work/bundle/raphie" "$work/bundle/raphie-runtime" "$work/bundle/raphie-web" "$stage/"
+cp "$work/bundle/"* "$stage/"
 printf '%s\n' "$version" > "$stage/.raphie-user-install"
 printf '%s\n' "$data_dir" > "$stage/.data-directory"
 printf '%s\n' "$channel" > "$stage/.channel"

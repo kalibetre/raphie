@@ -1,35 +1,56 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 test("standalone launcher stops the other process when one exits", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-launcher-test-"));
   try {
     const binary = join(directory, "raphie");
+    // Stand-ins for the runtime and web host that raphie runs as its own
+    // two processes: the runtime runs until stopped, the web host fails.
+    const roles = join(directory, "roles");
+    const runtime = join(roles, "packages/runtime/src/main.js");
+    const web = join(roles, "apps/web/server.js");
+    await mkdir(dirname(runtime), { recursive: true });
+    await mkdir(dirname(web), { recursive: true });
+    await writeFile(
+      runtime,
+      `import { writeFileSync } from "node:fs";
+const dir = process.env.TEST_DIR;
+writeFileSync(\`\${dir}/runtime-dir\`, process.env.DATA_DIRECTORY);
+process.on("SIGTERM", () => {
+  writeFileSync(\`\${dir}/stopped\`, "stopped");
+  process.exit(0);
+});
+writeFileSync(\`\${dir}/ready\`, "ready");
+setInterval(() => {}, 1000);
+`,
+    );
+    await writeFile(
+      web,
+      `import { existsSync, writeFileSync } from "node:fs";
+const dir = process.env.TEST_DIR;
+writeFileSync(\`\${dir}/web-dir\`, process.env.DATA_DIRECTORY);
+while (!existsSync(\`\${dir}/ready\`)) await Bun.sleep(100);
+process.exit(7);
+`,
+    );
     const build = Bun.spawnSync([
       process.execPath,
       "build",
       "--compile",
       "--no-compile-autoload-dotenv",
       "--no-compile-autoload-bunfig",
+      "--define",
+      `__RAPHIE_ROLE_ROOT__=${JSON.stringify(pathToFileURL(`${roles}/`).href)}`,
       "scripts/raphie.ts",
       "--outfile",
       binary,
     ]);
     assert.equal(build.exitCode, 0, build.stderr.toString());
-    const runtime = join(directory, "raphie-runtime");
-    const web = join(directory, "raphie-web");
-    await writeFile(
-      runtime,
-      '#!/bin/sh\nprintf "%s" "$DATA_DIRECTORY" > "$TEST_DIR/runtime-dir"\ntrap \'echo stopped > "$TEST_DIR/stopped"; exit 0\' TERM\necho ready > "$TEST_DIR/ready"\nwhile :; do sleep 0.1; done\n',
-    );
-    await writeFile(
-      web,
-      '#!/bin/sh\nprintf "%s" "$DATA_DIRECTORY" > "$TEST_DIR/web-dir"\nwhile [ ! -e "$TEST_DIR/ready" ]; do sleep 0.1; done\nexit 7\n',
-    );
-    await Promise.all([chmod(runtime, 0o755), chmod(web, 0o755)]);
     const selected = join(directory, "selected-data");
     const launch = Bun.spawn([binary, "start", "--data-dir", selected], {
       env: {
