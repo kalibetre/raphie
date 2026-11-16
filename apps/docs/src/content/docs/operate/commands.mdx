@@ -1,0 +1,111 @@
+---
+title: Commands
+description: Every raphie command and flag, grouped by purpose, with which install each one applies to.
+sidebar:
+  order: 1
+---
+
+The `raphie` command starts Raphie, checks it, manages the administrator and handles updates. The user install and source checkout share one CLI; the Linux system service wraps it with extra administration commands that need `sudo`.
+
+| Install        | How you run it                                                    |
+| -------------- | ----------------------------------------------------------------- |
+| User install   | `raphie <command>` (from `~/.local/bin`)                          |
+| System service | `sudo raphie <command>` (only `raphie port` works without `sudo`) |
+| Source         | `bun run raphie <command>` from the checkout                      |
+
+Run `raphie --help` for the installed version's summary, and `sudo raphie <command> --help` on the system service for per-command details.
+
+## Lifecycle
+
+| Command        | Installs     | What it does                                                                                                   |
+| -------------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `raphie start` | User, source | Start the runtime and web host in the foreground. `Ctrl+C` stops both. Use it when no background service runs. |
+
+The background services are managed with the OS tools, not the CLI:
+
+| Install             | Start, stop, restart                                            |
+| ------------------- | --------------------------------------------------------------- |
+| User install, Linux | `systemctl --user start\|stop\|restart raphie`                  |
+| User install, macOS | `launchctl kickstart -k gui/$(id -u)/com.raphie.user` (restart) |
+| System service      | `sudo systemctl start\|stop\|restart raphie`                    |
+
+See [service](/operate/service/) for logs and the full set of service commands.
+
+## Status
+
+| Command         | Installs | What it does                                                                                                                                 |
+| --------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raphie status` | All      | Check the runtime on loopback. Prints its data directory; exits `1` if it does not answer.                                                   |
+| `raphie health` | All      | Check both the runtime and the web host. Silent; exits `0` when healthy, `1` otherwise. A locked web host (no administrator yet) is healthy. |
+| `raphie port`   | System   | Print the local web port. Works without `sudo` while the service runs.                                                                       |
+
+## Administrator
+
+| Command               | Installs | What it does                                                                                    |
+| --------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `raphie auth setup`   | All      | Create the single administrator. Prompts for email and password; refuses if one already exists. |
+| `raphie auth recover` | All      | Set a new password and sign out every browser and device.                                       |
+
+Both need an interactive terminal and must run as the account that owns the data directory. On the system service, `sudo` runs them as the `raphie` service user for you. See [authentication](/operate/authentication/).
+
+## Updates and release channels
+
+| Command                                                                  | Installs | What it does                                                                                                                     |
+| ------------------------------------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `raphie channel`                                                         | User     | Show the release channel.                                                                                                        |
+| `raphie channel stable\|nightly`                                         | User     | Change the channel. Takes effect the next time you run the installer.                                                            |
+| `sudo raphie update`                                                     | System   | Update to the latest stable release.                                                                                             |
+| `sudo raphie update vX.Y.Z`                                              | System   | Update to an explicit version, including `vX.Y.Z-alpha.N`.                                                                       |
+| `sudo raphie update /path/to/bundle`                                     | System   | Update from a trusted local bundle directory.                                                                                    |
+| `sudo raphie restore BACKUP`                                             | System   | Restore a backup from `/var/backups/raphie/` and switch to its matching release. Asks you to type `RESTORE`.                     |
+| `sudo raphie restore BACKUP --recovery-key FILE --identity AGE_IDENTITY` | System   | Restore on a different host using an exported recovery key.                                                                      |
+| `sudo raphie recovery-key export RECIPIENT FILE`                         | System   | Export the keyring unlock credential, encrypted to an `age` recipient, for cross-host recovery.                                  |
+| `sudo raphie uninstall`                                                  | System   | Remove the service and programs; keep data, configuration, keyrings, backups and the service user. Asks you to type `UNINSTALL`. |
+| `sudo raphie uninstall --purge`                                          | System   | Also delete data, configuration, keyrings and backups. Asks you to type `PURGE`.                                                 |
+
+The user install updates by rerunning the installer; see [updates](/operate/service/#updates-and-release-channels). `sudo raphie update` does not compare versions, so check the target before updating: running older binaries against newer data is unsafe.
+
+## Ports and origins
+
+These apply to the system service. For the user install and source checkout, set the equivalent environment variables below.
+
+| Command                         | What it does                                                                                        |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `sudo raphie origins`           | Show the primary, local and additional browser origins.                                             |
+| `sudo raphie set-origins "A,B"` | Replace the additional origins and restart. `""` clears them; primary and local origins stay.       |
+| `sudo raphie set-port PORT`     | Change the local web port (1024 to 65535, not `4316`) and restart. Rolls back if the restart fails. |
+
+Origins are exact, lowercase, with scheme and any non-default port, and no path. Non-loopback origins must be HTTPS. See [remote access](/operate/remote-access/).
+
+## Data directory
+
+| Flag or variable  | Applies to      | What it does                                                                                                                              |
+| ----------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `--data-dir PATH` | `start`, `auth` | Use this data directory. Relative paths resolve against the current directory. Give it once.                                              |
+| `DATA_DIRECTORY`  | All             | Same, from the environment. Must be absolute for installed binaries; in a source checkout a relative value resolves against the checkout. |
+
+Pass the same directory to `auth` commands that the running Raphie uses, or the account lands somewhere the web host never reads. Default locations are listed in [backup and recovery](/operate/backup-and-recovery/#where-data-lives).
+
+## Environment
+
+The CLI reads these when checking or configuring a running Raphie. The background services set them for you.
+
+| Variable                     | Default                 | Used by                                |
+| ---------------------------- | ----------------------- | -------------------------------------- |
+| `PORT`                       | `4316`                  | Runtime port for `status` and `health` |
+| `RAPHIE_WEB_PORT`            | `4320`                  | Web port for `health`                  |
+| `RAPHIE_WEB_ORIGIN`          | `http://127.0.0.1:4320` | Primary browser origin                 |
+| `RAPHIE_WEB_ALLOWED_ORIGINS` | empty                   | Extra browser origins, comma-separated |
+| `RAPHIE_CREDENTIAL_KEY_FILE` | unset (OS store)        | Headless master-key file path          |
+
+## Installer flags
+
+The user installer (`scripts/install.sh`) takes:
+
+| Flag                        | What it does                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| `--channel stable\|nightly` | Install or switch to this channel. Default: the saved channel, else `stable`.     |
+| `--headless`                | Linux only. Use an owner-only master-key file instead of the OS credential store. |
+| `--no-modify-path`          | Do not edit shell startup files.                                                  |
+
+The system installer (`bootstrap.sh`) takes an optional version, `--web-port`, `--web-origin` and `--data-dir`; see [installation](/start/installation/).

@@ -1,0 +1,171 @@
+---
+title: Backup and recovery
+description: Where Raphie keeps its data, what to back up (including the credential key), how to restore, and fixes for common failures.
+sidebar:
+  order: 4
+---
+
+import { FileTree, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+
+Everything Raphie knows lives in one **data directory**: sessions, bots, memory, workspaces, settings and the administrator account. Back up that directory while Raphie is stopped, and keep the **credential master key** safe separately, because saved provider keys cannot be decrypted without it.
+
+## Where data lives
+
+| Install             | Data directory                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| Source checkout     | `.data/` at the main checkout root, shared by all Git worktrees                          |
+| User install, Linux | `~/.local/share/raphie`, or `$XDG_DATA_HOME/raphie` when that is set to an absolute path |
+| User install, macOS | `~/Library/Application Support/Raphie`                                                   |
+| System service      | `/var/lib/raphie/data`, or the `--data-dir` chosen at install                            |
+
+`--data-dir PATH` on `raphie start` and `raphie auth`, or the `DATA_DIRECTORY` variable, picks another location. `raphie status` prints the directory the running runtime uses. Raphie never moves, merges or adopts data on its own.
+
+Inside, the default bot's stores sit at the top level and every other bot has the same set under `bots/`:
+
+<FileTree>
+
+- data/
+  - auth.sqlite administrator account and sign-in sessions
+  - auth.secret signing secret for sign-in sessions
+  - gateway.sqlite sessions, messages, turns and approvals
+  - bots.sqlite bot profiles and personality revisions
+  - traces.sqlite Diagnostics traces
+  - settings.sqlite provider connections (encrypted keys) and defaults
+  - memory.sqlite memory evidence
+  - mcp.sqlite MCP tool connections
+  - channels.sqlite channel bindings
+  - telegram.sqlite Telegram state
+  - workspace/ the default bot's workspace
+  - bots/
+    - bot-id/ the same stores and workspace for each other bot
+
+</FileTree>
+
+## What to back up
+
+| Item                  | Where                                      | Without it                                                                                         |
+| --------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Data directory        | See above                                  | Everything is lost.                                                                                |
+| Credential master key | Depends on the credential store (below)    | Saved provider, memory, MCP and channel credentials cannot be decrypted. Everything else survives. |
+| System configuration  | `/etc/raphie/raphie.conf` (system service) | You re-enter the port, origins and data path.                                                      |
+
+The master key is never inside the data directory:
+
+| Credential store                        | Master key                                                                                                                                                                                            |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OS store (macOS, Linux desktop, source) | An item in your Keychain or Secret Service under `com.raphie.provider-credentials`. It stays with your OS account; copy data to another account or machine and saved credentials will not open there. |
+| Headless user install                   | `~/.local/share/raphie-headless/master-key`, mode `0600`. Back it up separately from the data.                                                                                                        |
+| System service                          | Keyring files are in the data backups, but the key that unlocks them is bound to the host. Export it with `sudo raphie recovery-key export`.                                                          |
+
+Raphie never replaces a missing or malformed master key, and it never falls back to another store. Store keys apart from data backups: anyone with both can decrypt your credentials. See [credentials](/operate/credentials/) for how each store works.
+
+:::caution
+A backup holds your conversations, the sign-in secret and encrypted credentials. Encrypt it and keep it somewhere only you can read.
+:::
+
+## Make a backup
+
+<Tabs syncKey="install">
+<TabItem label="User install">
+
+Updates copy the stopped data directory to `~/.local/share/raphie-backups/update.*/data` automatically. To take one yourself, stop the service so no database is mid-write, copy, then start again:
+
+```sh
+systemctl --user stop raphie        # macOS: launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.raphie.user.plist
+cp -a ~/.local/share/raphie ~/raphie-backup-$(date +%Y%m%d)
+systemctl --user start raphie       # macOS: launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.raphie.user.plist
+```
+
+On macOS, copy `~/Library/Application Support/Raphie` instead. For a headless install, also copy `~/.local/share/raphie-headless/` and keep its ownership and modes.
+
+</TabItem>
+<TabItem label="System service">
+
+`sudo raphie update` writes a backup to `/var/backups/raphie/raphie-XXXXXXXX.tar` and keeps the matching release installed. Restore needs both.
+
+Before you need to recover on a new machine, export the keyring unlock key, encrypted to an [age](https://age-encryption.org) recipient:
+
+```sh
+sudo raphie recovery-key export AGE_PUBLIC_RECIPIENT /secure/path/raphie-key.age
+```
+
+Keep the age identity apart from both the exported key and the backups. Export again for each backup you intend to keep.
+
+</TabItem>
+<TabItem label="Source">
+
+Stop `bun run dev` (or `bun run start`), then copy `.data/` from the main checkout root. Copying a live `.sqlite` file can miss recent writes that are still in its `-wal` file.
+
+</TabItem>
+</Tabs>
+
+## Restore
+
+Restore a data backup together with the binaries that wrote it. Databases migrate forward only, so never start an older version against data a newer one has opened.
+
+<Tabs syncKey="install">
+<TabItem label="User install">
+
+<Steps>
+
+1. Stop the service (see [service](/operate/service/#manage-the-service)).
+
+2. Move the current data aside rather than deleting it:
+
+   ```sh
+   mv ~/.local/share/raphie ~/.local/share/raphie.before-restore
+   cp -a ~/.local/share/raphie-backups/update.XXXXXXXX/data ~/.local/share/raphie
+   ```
+
+   On macOS, the data directory is `~/Library/Application Support/Raphie`; backups are still under `~/.local/share/raphie-backups/`.
+
+3. If the backup came from before an update, put the previous binaries back too:
+
+   ```sh
+   mv ~/.local/lib/raphie ~/.local/lib/raphie.newer
+   mv ~/.local/lib/.raphie-previous.XXXXXXXX ~/.local/lib/raphie
+   ```
+
+4. Make sure the matching master key is in place: the same OS account, or the original headless key file with its ownership and mode.
+
+5. Start the service and check `raphie health`.
+
+</Steps>
+
+</TabItem>
+<TabItem label="System service">
+
+```sh
+sudo raphie restore /var/backups/raphie/raphie-XXXXXXXX.tar
+```
+
+Type `RESTORE` to confirm. Raphie switches to the release that made the backup, restores data and keyrings, and keeps the replaced data next to the staging directory.
+
+On a **new host**, install the same release, put the backup and its `.release` file under `/var/backups/raphie/`, copy the exported key and age identity over securely, install `age`, then:
+
+```sh
+sudo raphie restore /var/backups/raphie/raphie-XXXXXXXX.tar \
+  --recovery-key /secure/path/raphie-key.age --identity /secure/path/age-identity
+```
+
+It checks the key before stopping anything, so a wrong identity leaves the running service alone.
+
+</TabItem>
+</Tabs>
+
+## Common failures
+
+| Symptom                                                                 | Fix                                                                                                                                                                                                                      |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `raphie: command not found` after installing                            | Open a new terminal, or run `export PATH="$HOME/.local/bin:$PATH"`.                                                                                                                                                      |
+| Installer: "An unmanaged installation or raphie command already exists" | Another `raphie` is in `~/.local/bin` or `~/.local/lib/raphie`. Remove or rename it, then rerun.                                                                                                                         |
+| Installer: "Existing Raphie data found"                                 | The installer will not adopt existing data. Move that directory aside to install fresh.                                                                                                                                  |
+| Installer or update: "Raphie ports are in use"                          | Stop the other Raphie, such as a foreground `raphie start` or the system service, and retry.                                                                                                                             |
+| Update: "Data directory changed"                                        | Set `XDG_DATA_HOME` back to the value used at install and retry.                                                                                                                                                         |
+| Service "did not become healthy"                                        | Read the [logs](/operate/service/#logs). Usually a locked Keychain or Secret Service, a missing headless key file, or a port conflict. Fix it, then re-enable the service.                                               |
+| Startup error about the credential store or master key                  | Unlock the Keychain or Secret Service, or restore the headless key file from backup. If the key is gone for good, saved credentials are lost: reconnect providers in Settings. See [credentials](/operate/credentials/). |
+| Sign-in page says Raphie is locked                                      | No administrator exists yet. Run `raphie auth setup`.                                                                                                                                                                    |
+| Forgotten password                                                      | Run `raphie auth recover` on the server. See [authentication](/operate/authentication/).                                                                                                                                 |
+| Broken after an update                                                  | Stop the service, then [restore](#restore) the pre-update backup with its previous binaries.                                                                                                                             |
+| Source worktree: "This checkout has separate data"                      | Set `DATA_DIRECTORY` to the data you mean to use. Raphie will not merge the two.                                                                                                                                         |
+| `403` from a new address                                                | Add it as an origin. See [remote access](/operate/remote-access/#add-an-origin).                                                                                                                                         |

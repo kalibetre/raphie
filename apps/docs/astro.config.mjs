@@ -1,105 +1,80 @@
 // @ts-check
 import starlight from "@astrojs/starlight";
+import mermaid from "astro-mermaid";
 import { defineConfig } from "astro/config";
 
-const repository = "https://github.com/kalibetre/raphie";
-/** @param {string} label @param {string} slug */
-const page = (label, slug) => ({ label, slug });
-
-/** @param {string} label @param {string} link */
-const external = (label, link) => ({
+/** @param {string} label @param {string} directory @param {boolean} [collapsed] */
+const section = (label, directory, collapsed = false) => ({
   label,
-  link,
-  attrs: { target: "_blank", rel: "noopener" },
+  collapsed,
+  items: [{ autogenerate: { directory } }],
 });
 
 export default defineConfig({
   // Set DOCS_SITE_URL to the deployed origin for canonical URLs and the sitemap.
   site: process.env.DOCS_SITE_URL,
   integrations: [
+    // Must come before Starlight. Diagrams render with Mermaid's neutral base
+    // theme; src/styles/theme.css recolours them for light and dark.
+    mermaid({
+      theme: "base",
+      autoTheme: false,
+      mermaidConfig: {
+        fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+        flowchart: {
+          curve: "basis",
+          padding: 14,
+          nodeSpacing: 40,
+          rankSpacing: 48,
+        },
+        sequence: { useMaxWidth: false },
+      },
+    }),
     starlight({
       title: "Raphie",
       description:
         "Documentation for Raphie, a self-hosted assistant platform with persistent bots.",
       logo: { src: "./src/assets/raphie.svg" },
       favicon: "/favicon.svg",
+      social: [
+        {
+          icon: "github",
+          label: "GitHub",
+          href: "https://github.com/kalibetre/raphie",
+        },
+      ],
       customCss: ["./src/styles/theme.css"],
-      social: [{ icon: "github", label: "GitHub", href: repository }],
+      components: {
+        Hero: "./src/components/Hero.astro",
+        PageTitle: "./src/components/PageTitle.astro",
+      },
+      expressiveCode: {
+        themes: ["vitesse-dark", "vitesse-light"],
+        styleOverrides: {
+          borderRadius: "0.75rem",
+          borderColor: "var(--sl-color-hairline)",
+          codeBackground: "var(--raphie-card)",
+          codeFontFamily: "var(--sl-font-mono)",
+          frames: {
+            editorTabBarBackground: "var(--sl-color-bg-sidebar)",
+            terminalTitlebarBackground: "var(--sl-color-bg-sidebar)",
+            terminalTitlebarBorderBottomColor: "var(--sl-color-hairline)",
+            editorActiveTabIndicatorTopColor: "var(--sl-color-accent)",
+            frameBoxShadowCssValue: "none",
+          },
+        },
+      },
       lastUpdated: false,
+      editLink: {
+        baseUrl: "https://github.com/kalibetre/raphie/edit/main/apps/docs/",
+      },
       sidebar: [
-        {
-          label: "Start here",
-          items: [
-            page("Run from source", "source-setup"),
-            page("User installation", "user-installation"),
-            page("Linux system install", "linux-installation"),
-            page("Service commands", "commands"),
-          ],
-        },
-        {
-          label: "Using Raphie",
-          items: [
-            page("Using Raphie", "using-raphie"),
-            page("Bots & personality", "bots"),
-            page("Memory", "memory"),
-            page("Workspaces & sandboxes", "bot-workspaces"),
-            page("MCP tools & schedules", "bot-automation"),
-            page("Attachments", "general-attachments"),
-            page("Telegram channel", "telegram"),
-            page("Desktop client", "desktop"),
-            page("Clients: who can do what", "clients"),
-          ],
-        },
-        {
-          label: "Security & operations",
-          items: [
-            page("Authentication", "authentication"),
-            page("Credential storage", "provider-credential-storage"),
-            page("Observability", "observability"),
-            page("Standalone builds", "standalone-build"),
-          ],
-        },
-        {
-          label: "Architecture",
-          items: [
-            page("Current architecture", "architecture"),
-            page("HTTP interface", "headless-interface"),
-            external("Architecture in diagrams", "/diagrams/overview/"),
-            external("Visual architecture guide", "/diagrams/reference/"),
-            {
-              label: "Decisions",
-              items: [
-                page(
-                  "ADR 0001 · Headless runtime",
-                  "adr/0001-headless-runtime-and-capability-specific-adapters",
-                ),
-                page(
-                  "ADR 0002 · Bot workspaces",
-                  "adr/0002-bot-owned-workspaces-and-temporary-compute",
-                ),
-                page(
-                  "ADR 0003 · Native sandbox",
-                  "adr/0003-native-bot-sandbox",
-                ),
-              ],
-            },
-          ],
-        },
-        {
-          label: "Project",
-          collapsed: true,
-          items: [
-            page("Roadmap", "roadmap"),
-            page("Headless runtime design", "headless-runtime"),
-            page("UI scrolling", "ui-scrolling"),
-            page("Learning Rust (desktop)", "learning-rust"),
-            page("Bun migration", "bun-migration"),
-            page("Repository cleanup", "repository-cleanup"),
-            page("Cleanup record", "cleanup"),
-            external("Domain language", `${repository}/blob/main/CONTEXT.md`),
-            external("Contributing", `${repository}/blob/main/CONTRIBUTING.md`),
-          ],
-        },
+        section("Get started", "start"),
+        section("Guides", "guides"),
+        section("Operate", "operate"),
+        section("Architecture", "architecture"),
+        section("Decisions", "decisions", true),
+        section("Contribute", "contribute", true),
       ],
     }),
   ],

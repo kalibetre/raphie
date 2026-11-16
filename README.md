@@ -13,7 +13,7 @@ A personal AI assistant you run yourself, with a place for every conversation, b
 
 ## Get Raphie running
 
-Install Raphie for your user on Linux or macOS. You need `curl` and `python3`, plus an available OS credential store for desktop mode. Linux desktop mode requires a Secret Service provider such as an unlocked GNOME Keyring or KWallet. On a headless Linux server, pass `--headless` to the installer to use an owner-only master-key file outside app data; see [headless setup](docs/user-installation.md#headless-linux).
+Install Raphie for your user on Linux or macOS. You need `curl` and `python3`, plus an available OS credential store for desktop mode. Linux desktop mode requires a Secret Service provider such as an unlocked GNOME Keyring or KWallet. On a headless Linux server, pass `--headless` to the installer to use an owner-only master-key file outside app data; see [headless setup](apps/docs/src/content/docs/start/installation.mdx).
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
@@ -25,9 +25,9 @@ The default channel is **stable**. Check the [published releases](https://github
 curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --channel nightly
 ```
 
-The selected channel is remembered for updates. Use `raphie channel stable` or `raphie channel nightly` to switch. The installer executes code downloaded from GitHub; [download and inspect it first](docs/user-installation.md) if you prefer.
+The selected channel is remembered for updates. Use `raphie channel stable` or `raphie channel nightly` to switch. The installer executes code downloaded from GitHub; [download and inspect it first](apps/docs/src/content/docs/start/installation.mdx) if you prefer.
 
-The installer configures PATH for new Bash/Zsh terminals and attempts to start a user service. Open a new terminal and run `raphie health` to check that the runtime and web service are available. If no user service is available, run `raphie start` and leave that terminal open. If the service failed to start, follow the installer's log hint and the [service recovery instructions](docs/user-installation.md#background-service).
+The installer configures PATH for new Bash/Zsh terminals and attempts to start a user service. Open a new terminal and run `raphie health` to check that the runtime and web service are available. If no user service is available, run `raphie start` and leave that terminal open. If the service failed to start, follow the installer's log hint and the [service recovery instructions](apps/docs/src/content/docs/operate/service.mdx).
 
 With Raphie running, create your administrator in a second terminal:
 
@@ -35,7 +35,7 @@ With Raphie running, create your administrator in a second terminal:
 raphie auth setup
 ```
 
-Open **http://127.0.0.1:4320**, sign in, and connect a model provider in Settings. See [installation and service setup](docs/user-installation.md) for background service requirements, remote access and troubleshooting.
+Open **http://127.0.0.1:4320**, sign in, and connect a model provider in Settings. See [installation and service setup](apps/docs/src/content/docs/start/installation.mdx) for background service requirements, remote access and troubleshooting.
 
 ## A little more room to think
 
@@ -47,6 +47,6 @@ Raphie can also connect bots to Discord and MCP tools, and run scheduled prompts
 
 ## Need a hand?
 
-[User installation](docs/user-installation.md) · [Linux system service](docs/linux-installation.md) · [Remote access](docs/standalone-build.md#tailnet-access) · [Commands](docs/commands.md) · [Bots & personality](docs/bots.md) · [Memory](docs/memory.md) · [All documentation](docs/README.md) · [Docs site](https://kalibetre.github.io/raphie/) · [How it works](https://kalibetre.github.io/raphie/architecture.html)
+[User installation](apps/docs/src/content/docs/start/installation.mdx) · [Linux system service](apps/docs/src/content/docs/start/installation.mdx) · [Remote access](apps/docs/src/content/docs/operate/remote-access.mdx) · [Commands](apps/docs/src/content/docs/operate/commands.mdx) · [Bots & personality](apps/docs/src/content/docs/guides/bots.mdx) · [Memory](apps/docs/src/content/docs/guides/memory.mdx) · [All documentation](apps/docs) · [How it works](apps/docs/src/content/docs/architecture/overview.mdx)
 
-Want to contribute or run from source? See [source setup](docs/source-setup.md) and [contributing](CONTRIBUTING.md).
+Want to contribute or run from source? See [source setup](apps/docs/src/content/docs/start/installation.mdx) and [contributing](CONTRIBUTING.md).

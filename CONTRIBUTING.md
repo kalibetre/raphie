@@ -39,7 +39,7 @@ configuration are excluded. Vite generates
 
 ## Organizing code
 
-Both applications follow domain boundaries. See [the architecture decision](docs/architecture.md)
+Both applications follow domain boundaries. See [the architecture overview](apps/docs/src/content/docs/architecture/overview.mdx)
 and [CONTEXT.md](CONTEXT.md) for the shared language.
 
 - `domains/<context>/domain` holds framework-free models and business policies.
@@ -95,26 +95,14 @@ Keep credentials in private configuration, load them through Varlock, and
 never print their values. Use `bun --bun run varlock load --agent` for masked
 validation. Preserve `.data/`, including its private legacy archive, during cleanup.
 
-## Feature documentation
+## Documentation
 
-Keep [the documentation index](docs/README.md) and feature guides current in the
-same change that changes product behavior. Update defaults, Settings controls,
-storage, API/tool contracts, recovery behavior, provider differences and relevant
-verification instructions. Describe model-dependent behavior accurately and keep
-planned capabilities visibly separate from delivered ones. For memory changes,
-update [the memory guide](docs/memory.md); update the architecture guide and roadmap
-when the architectural boundary or delivery status changes. Link new feature
-guides from the docs index and the relevant root README section.
-
-## Visual architecture documentation
-
-`docs/architecture.html` is the standalone visual field guide. Keep its current
-implementation labels, proposed interfaces, capability map, and migration phases
-in sync with `docs/architecture.md`, `docs/headless-runtime.md`, and
-`docs/roadmap.md`. Future capabilities must stay visibly marked as planned.
-Use inline styles, scripts, and SVG so the guide works offline without a CDN or
-a build step. Check both themes, narrow layouts, keyboard controls, and browser
-console output when changing it.
+The documentation site lives in `apps/docs`; its pages are the only copy of the
+guides. Update the matching page in the same change that changes product
+behavior: defaults, Settings controls, storage, API or tool contracts, recovery
+behavior and provider differences. Describe model-dependent behavior as such,
+and keep planned work out of guides. Diagrams are Mermaid blocks in the page.
+[Writing docs](apps/docs/WRITING.md) covers the structure, voice and checks.
 
 ## Scrolling and the composer
 
@@ -127,4 +115,4 @@ to the transcript viewport and content refs instead of adding another scroller.
 The composer floats inside `chat-stage`. Its measured height supplies transcript
 bottom padding and the jump-button offset, including multiline drafts and errors.
 Preserve last-message clearance while letting older messages scroll underneath.
-See [UI scrolling](docs/ui-scrolling.md) for the long-history fixture and browser probe.
+See [UI conventions](apps/docs/src/content/docs/contribute/ui-conventions.mdx) for the long-history fixture and browser probe.

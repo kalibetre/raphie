@@ -1,0 +1,156 @@
+---
+title: Extensions and channels
+description: The three plugin surfaces and their limits, how replies reach Discord and Telegram without silent duplicates, and why schedules are durable tasks rather than timers.
+sidebar:
+  order: 5
+---
+
+Raphie has three extension surfaces, and none of them grants authority on its own: every effect still goes through the owner's approval rules. Channels deliver replies by persisting a send plan before any network call, so a crash can only produce an uncertain send, never a silent duplicate. Schedules are durable Pi tasks, so they survive restarts like any other work.
+
+## Plugin surfaces
+
+```mermaid
+flowchart TB
+  subgraph browser [Browser · compiled in]
+    ui["UI plugins<br/>named slots, e.g. composer.footer"]
+  end
+  subgraph runtime [Runtime · one registry per bot]
+    ext["Runtime extensions<br/>tools · tasks · prompt sections"]
+    gate{{"Approval gate"}}
+  end
+  mcp[("MCP servers<br/>HTTP or stdio")]
+  mcp --> gate --> ext
+  class gate accent
+```
+
+| Surface               | Unit                                                         | Who writes it                                 | Can it act?                                                  |
+| --------------------- | ------------------------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------ |
+| **Runtime extension** | A Pi extension: a name plus tools, tasks and prompt sections | First-party code in the runtime               | Only through its tools, under the approval and replay rules  |
+| **MCP server**        | One external server per connection, configured per bot       | Any MCP server the owner adds                 | Only after owner approval for every call                     |
+| **UI plugin**         | A React component for a named slot                           | First-party code compiled into the web bundle | No: it sees only the slot's context and has no tools or data |
+
+### Runtime extensions
+
+Each bot holds a Pi registry. Extensions can be installed and removed while the runtime runs, and a turn always resolves the current tool set, so MCP changes and sandbox switches apply from the next turn without a restart.
+
+| Extension                          | Contributes                                                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `raphie.gateway`                   | The `raphie.chat-reply` and `raphie.job-run-outcome` tasks and the file-approval workflow                                           |
+| `raphie.memory`                    | The five memory tools                                                                                                               |
+| `raphie.workspace`                 | `workspace_exec` (just-bash) or the container `read`, `write`, `edit` and `bash` tools, plus a prompt section describing the limits |
+| `raphie.documents`                 | `read_document`: PDF and office document extraction in a worker                                                                     |
+| `raphie.mcp.*`                     | One tool per advertised MCP tool, approval-gated                                                                                    |
+| Tool search                        | Lets the model discover deferred MCP tools on demand, instead of paying their schema cost on every turn                             |
+| `raphie.jobs`, `raphie.scheduling` | The `raphie.recurring-prompt` task and the `schedule_create`, `schedule_update`, `schedule_delete` and `schedule_list` tools        |
+
+A tool declares a name (at most 64 characters), a schema, a replay flag, output limits and an `execute` function. Scope (bot and conversation) is closed over by the factory or read from the durable context, never taken from arguments.
+
+### MCP servers
+
+| Aspect     | Behaviour                                                                                                                                                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transports | Streamable HTTP (URL plus optional bearer token) or stdio (command, arguments, explicit environment). Legacy SSE is not supported.                                                                                                                   |
+| Hardening  | No credentials in URLs; bearer tokens need HTTPS except on loopback; redirects are refused; calls to tools the server did not advertise are rejected locally                                                                                         |
+| stdio      | Children get only `PATH` plus the variables you supply. They run as the runtime's OS user and are **not sandboxed**.                                                                                                                                 |
+| OAuth      | For servers with discovery and dynamic client registration: PKCE through a one-shot loopback callback, consent expires after 5 minutes, tokens are encrypted per bot connection. The browser must be on the runtime's machine to reach the callback. |
+| Naming     | `mcp_<namespace>_<tool>`, with unsafe characters replaced; long names are truncated and suffixed with a short hash; duplicates fail registration                                                                                                     |
+| Results    | Normalised to text and truncated at 30,000 characters; non-text parts become placeholders                                                                                                                                                            |
+| Timeouts   | 15 s per protocol request, 30 s per tool call                                                                                                                                                                                                        |
+
+Discovery never implies approval. See [tools](/guides/tools/) for configuring connections.
+
+### UI plugins
+
+A UI plugin declares an ID, a version, `hostApiVersion: 1`, a name, a description and the slots it fills. The only slot is `composer.footer`, which receives the draft text, the selected model and the conversation's usage. The built-in token counter is the only plugin. Each plugin renders inside an error boundary, so a failing plugin shows as unavailable instead of breaking the composer. Enabling a plugin is a per-browser preference.
+
+| Limit              | Today                                                |
+| ------------------ | ---------------------------------------------------- |
+| Loading            | Compile-time only; no dynamic or third-party plugins |
+| Runtime extensions | First-party only                                     |
+| Authority          | UI plugins cannot give a bot tools or data           |
+
+## Channels
+
+A channel is an external messaging platform (Discord, Telegram); a client is an application (web, desktop). Both reach the same application operations and differ only in how identity is established and how output is delivered.
+
+|                 | Discord                                                                       | Telegram                                                         |
+| --------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Ingress         | Gateway events through the Chat SDK; HTTP webhooks are rejected               | Bot API long polling, with the update offset stored durably      |
+| Who may talk    | Allow-listed user IDs, plus the configured guild, channel and thread when set | Paired users                                                     |
+| Idempotency key | The platform message ID                                                       | The platform update                                              |
+| Reply chunks    | 1,900 characters                                                              | 4,000 characters                                                 |
+| Approvals       | Buttons on a card; the card is edited when the approval resolves              | Inline buttons; the message is edited when the approval resolves |
+
+A **channel binding** associates one external conversation with exactly one session. Message text can never name a session ID, and there is no operation that links a channel conversation to a web session. Each admitted channel turn freezes its **reply destination**, so a later configuration change cannot redirect a reply. Web turns have no destination; clients observe them instead.
+
+### Delivery: persist the plan before the network
+
+Replies and approval cards are recorded as delivery intents in the bot's durable documents. One worker per channel connection turns each intent into a persisted plan before any network call.
+
+```mermaid
+sequenceDiagram
+  participant T as chat-reply task
+  participant D as gateway.sqlite
+  participant W as Delivery worker
+  participant P as Platform API
+  T->>D: settle turn, add pending intent
+  W->>D: claim: render N payloads, save plan, op 1 = sending
+  loop each operation
+    W->>P: send or edit
+    alt platform returns a message ID
+      P-->>W: message ID
+      W->>D: settle operation: sent
+    else error or crash
+      W->>D: operation: uncertain
+    end
+  end
+  W->>D: intent sent only if every operation was sent
+```
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> pending
+  pending --> sending: claim
+  sending --> sent: message ID returned
+  sending --> uncertain: error or crash
+```
+
+- Rendering (chunks, cards, files, edits) happens before any claim or send.
+- An uncertain chunk is never repeated, but later pending chunks of the same reply still send. The intent then ends uncertain, with a note to check the platform before retrying.
+- Each worker claims only its own connection's intents. Notification failure never repeats an approved tool action.
+- Successful delivery does not prove the tool behind an approval succeeded.
+
+## Schedules are durable tasks, not timers
+
+Each enabled job is one `raphie.recurring-prompt` Pi task. Pi persists the sleep, so a restart resumes from the checkpoint instead of losing or doubling a run.
+
+```mermaid
+stateDiagram-v2
+  direction TB
+  [*] --> waiting
+  waiting --> checking: due time reached
+  checking --> waiting: bot busy, retry in 5 s
+  checking --> delivering: job current and bot idle
+  delivering --> waiting: recurring, next run
+  delivering --> finished: one-shot
+  checking --> finished: job disabled or replaced
+  finished --> [*]
+```
+
+| Rule                  | Mechanism                                                                                                                                       |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Atomic creation       | A job and its task are created in one commit, from the Schedules page or the `schedule_*` tools (whose receipts commit in the same transaction) |
+| No double runs        | The run ID and admission `eventId` are `job:<task>:<scheduledAt>`, so a crash between phases cannot admit twice                                 |
+| No overlap with chat  | If the bot has a pending turn, the task sleeps 5 seconds and checks again; **Run now** is refused while busy                                    |
+| Replace, don't mutate | Updating a job creates a new task; the old task sees the ID mismatch and ends                                                                   |
+| Submission retries    | A failed admission retries up to three more times with backoff, then the run is recorded as failed                                              |
+| Where replies go      | Scheduled turns freeze the bot's selected home destination, if any; otherwise the reply is visible in the web workspace                         |
+
+A bot can have at most 100 scheduled jobs. Run history keeps active and unread runs plus the newest 500 acknowledged ones; unread completions show as notifications.
+
+## Related
+
+- [Tools](/guides/tools/), [schedules](/guides/schedules/) and [Telegram](/guides/telegram/) for setup
+- [Execution](/architecture/execution/) for the approval gate every tool passes through
+- [Security](/architecture/security/) for what plugins and MCP servers can reach

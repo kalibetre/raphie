@@ -1,0 +1,112 @@
+---
+title: Conversations
+description: Find your way around the web workspace, send messages, choose models, follow progress and decide on tool requests.
+sidebar:
+  order: 1
+---
+
+The web workspace is the browser app at `http://127.0.0.1:4320` where you talk to your bots. Pick a bot in the sidebar, type in the composer, and the reply streams in as the bot works; tool steps and approval requests appear inline in the same conversation.
+
+Every conversation is a durable **session** stored by the runtime, not the browser. Closing the tab never cancels work, and the session looks the same from the desktop client or a channel.
+
+## Sessions
+
+| Where                            | What it does                                                                                                                      |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar                          | Lists your bots. Choosing one resumes the conversation you last had open with it in this browser.                                 |
+| **New conversation** (title bar) | Starts an empty session with the current bot.                                                                                     |
+| Conversations panel (panel icon) | Searchable list of the bot's sessions, with filters for new replies and approval requests. On narrow screens it opens as a sheet. |
+| Notifications (bell)             | Replies, approval requests and finished scheduled jobs from every bot in one place.                                               |
+
+Each session has its own link, `/sessions/<id>`. Links to a bot other than the default carry `?bot=<id>`, so a bookmarked session always opens with the right bot.
+
+Read state is shared through the runtime: a reply you read on the desktop client is marked read here too.
+
+## The composer
+
+| Control             | Use                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Text box            | Up to 4,000 characters. **Enter** sends; **Shift+Enter** adds a line.                                                            |
+| Attach files        | Up to four files per message. See [attachments](/guides/attachments/).                                                           |
+| Model picker        | The model for this session. See [choosing a model](#choosing-a-model).                                                           |
+| Command permissions | **Ask** (the default) or **Full access** for workspace commands. See [approvals](#tool-approvals).                               |
+| Send / Stop         | Send turns into Stop while the bot is working and the draft is empty. With text in the draft, **Stop task** is under the ⋯ menu. |
+
+You can keep sending while the bot works. A waiting message shows as **Queued**; choose **Steer** to have the bot pick it up after its current tool step, or **Keep queued** to leave it until the current reply finishes.
+
+Stopping withdraws queued messages and marks the interrupted reply as stopped. It does not undo anything a tool has already done.
+
+## Choosing a model
+
+The model picker lists models from the providers connected to this bot, with search, family filters and favourites. Favourites are kept in this browser.
+
+- Choosing **before** the first message sets the new session's model.
+- Choosing **later** changes only this session, and only while it is idle.
+- A session keeps its model across restarts and when you change the bot's default under **Settings → Models**.
+
+If the bot has no provider yet, the workspace prompts you to connect one; see [first run](/start/first-run/).
+
+## Following progress
+
+Replies stream as text with Markdown, code and Mermaid diagrams rendered. While a turn runs, tool steps appear in the reply; expand one to see its arguments and result. Each reply also reports its time, tokens and cost when the provider supplies them.
+
+For a fuller record, open **Settings → [bot] → Activity**: the bot's latest 100 events across all sessions (model calls, tools, approvals, recovery), refreshed every five seconds, with JSON export. Model reasoning is never shown. More in [observability](/operate/observability/).
+
+## Tool approvals
+
+When a bot wants to run something that needs your say-so, the turn pauses and an approval card shows the exact tool and arguments.
+
+| Choice                  | Effect                                                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Reject**              | The action does not run.                                                                                                          |
+| **Approve once**        | Runs this exact call once.                                                                                                        |
+| **Approve for session** | Workspace commands only. Allows the same command with the same arguments again in this session, until revoked. Survives restarts. |
+
+Each card shows when it expires; an expired request cannot be approved. A decision made in any client or channel settles the same request everywhere.
+
+**Command permissions** apply to the two workspace command tools only. **Full access** lets them run without asking in this session; it does not change sandbox limits and does not cover MCP tools, which always follow their own [approval rules](/guides/tools/).
+
+:::caution
+An action interrupted by a crash or restart is marked uncertain and is never repeated automatically, because it may already have taken effect. Check the result before asking again.
+:::
+
+## Settings tour
+
+Open Settings from the gear. Bot pages are grouped under each bot; app pages apply to every bot.
+
+| Page              | Controls                                                           | Guide                                      |
+| ----------------- | ------------------------------------------------------------------ | ------------------------------------------ |
+| Profile           | Name, description, colour, `SOUL.md` personality and its revisions | [Bots](/guides/bots/)                      |
+| Providers         | This bot's model connections: API keys or subscription sign-in     | [Credentials](/operate/credentials/)       |
+| Models            | Compare models and choose the default for new sessions             | [First run](/start/first-run/)             |
+| Memory            | Backend, scope, and browsing saved memories                        | [Memory](/guides/memory/)                  |
+| MCP tools         | Tool servers this bot can use                                      | [Tools](/guides/tools/)                    |
+| Channels          | Telegram and Discord connections, home channel                     | [Telegram](/guides/telegram/)              |
+| Sandbox           | How commands run and their limits                                  | [Workspaces](/guides/workspaces/)          |
+| Workspace         | Browse and download the bot's files                                | [Workspaces](/guides/workspaces/)          |
+| Scheduled jobs    | Reminders and recurring prompts, with run history                  | [Schedules](/guides/schedules/)            |
+| Activity          | The bot's recent events                                            | [Observability](/operate/observability/)   |
+| Account (app)     | The signed-in admin, passkeys and connected devices                | [Authentication](/operate/authentication/) |
+| Appearance (app)  | Light, dark or system theme for this browser; app version          |                                            |
+| Diagnostics (app) | Trace collection switch and recent traces from all bots            | [Observability](/operate/observability/)   |
+| UI plugins (app)  | Turn workspace plugins on or off in this browser                   | [UI plugins](#ui-plugins)                  |
+
+Pages with a form block navigation while you have unsaved changes; save or discard first.
+
+## UI plugins
+
+UI plugins are small, trusted additions built into the web workspace. The one included is a **token counter** in the composer footer: a rough estimate for your draft (about one token per four characters) plus the provider-reported tokens and cost of the open session.
+
+Turn plugins on or off under **Settings → UI plugins**. Plugins are not a sandbox or a marketplace, and they grant bots no extra capabilities.
+
+## What stays in your browser
+
+The browser keeps only conveniences; history lives in the runtime.
+
+| Kept in browser storage                 | Scope                  |
+| --------------------------------------- | ---------------------- |
+| Message drafts and attached-file drafts | Per bot and session    |
+| Theme, panel layout, favourite models   | This browser, all bots |
+| Enabled UI plugins                      | This browser           |
+
+Clearing site data loses unsent drafts and these preferences, never conversations.

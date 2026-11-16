@@ -1,0 +1,117 @@
+---
+title: Bots
+description: Create, switch, edit and delete bots, and give each its own personality in SOUL.md.
+sidebar:
+  order: 2
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+A bot is a persistent assistant with its own personality, model connections, sessions, memory and workspace. Raphie starts with one, the **default** bot named Raphie; add more when you want assistants that keep separate context, credentials or tools.
+
+All bots run in the same runtime and answer to you. Separation between them is logical, not an operating-system boundary.
+
+## What a bot owns
+
+```mermaid
+flowchart TB
+  subgraph bot[A bot]
+    profile[Profile and SOUL.md]
+    providers[Providers and default model]
+    sessions[Sessions]
+    memory[(Memory)]
+    workspace[(Workspace and sandbox)]
+    automation[MCP tools, channels, scheduled jobs]
+  end
+  runtime[Runtime] --> bot
+```
+
+| Separate for each bot                                      | Shared by all bots                                   |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| Name, description, colour and `SOUL.md` with its revisions | The runtime process and data directory               |
+| Sessions and their attachments                             | Your admin sign-in, passkeys and connected devices   |
+| Provider connections, keys and default model               | Diagnostics traces                                   |
+| Memory configuration and stored memories                   | Browser preferences: theme, panel layout, UI plugins |
+| Workspace files and sandbox settings                       |                                                      |
+| MCP tools, channels and scheduled jobs                     |                                                      |
+| Activity                                                   |                                                      |
+
+A session belongs to exactly one bot and cannot be opened through another.
+
+## The default bot
+
+The first start creates the default bot. It cannot be deleted. Its data lives at the top of the data directory, while each other bot gets its own folder under `bots/<id>/`; see [backup and recovery](/operate/backup-and-recovery/).
+
+## Create a bot
+
+<Steps>
+
+1. Choose **New bot** in the sidebar (the plus icon on mobile), or **Create a bot** in Settings.
+2. Give it a name, an optional description and a personality.
+3. Under **Providers**, connect a model provider with an API key or a subscription sign-in. A new bot has no provider and cannot reply until it has one.
+4. Under **Models**, pick its default model.
+5. Optionally adjust **Memory**, **MCP tools**, **Channels** and **Sandbox**.
+
+</Steps>
+
+A new bot starts with built-in memory on and no providers, tools or channels. Nothing is copied from another bot.
+
+## Switch bots
+
+Choose a bot in the sidebar. The workspace resumes the session you last had open with it in this browser and keeps a separate draft for each bot. Badges on other bots show unread replies and pending approvals.
+
+## Edit identity and personality
+
+Open **Profile** by clicking the bot's name in the title bar, or from Settings. One page edits:
+
+| Field       | Limit                                        | Notes                                               |
+| ----------- | -------------------------------------------- | --------------------------------------------------- |
+| Name        | 80 characters                                | A display label. The bot's ID never changes.        |
+| Description | 500 characters                               | Optional.                                           |
+| Colour      | 8 presets, a custom colour, or **Automatic** | Automatic picks an unused preset in creation order. |
+| `SOUL.md`   | 16,000 characters                            | The personality.                                    |
+
+`SOUL.md` is your description of the bot's voice, values and way of working. The runtime adds it to the model's instructions when a turn starts, so a turn already running keeps the version it started with.
+
+Personality is owner configuration. A bot has no tool to edit its own profile, and nothing in `SOUL.md` can grant tools, access or permissions. If a bot suggests a change to its personality, it is only text until you save it.
+
+:::caution
+Don't put credentials in `SOUL.md`. The model receives it as instructions, and every revision is kept. Keys belong under **Providers** or the relevant settings page, where they are encrypted.
+:::
+
+### Revisions
+
+Every save creates a revision. **Revision history**, below the editor, shows the latest 50 with their name, description and `SOUL.md`. To roll back, copy older text into the editor and save it as a new revision.
+
+The runtime also serves the active personality as a plain `SOUL.md` file; see the [HTTP API](/architecture/http-api/).
+
+A save is refused while the bot has a turn in progress, or if someone saved a newer revision in another window. Wait for the turn to finish, or refresh, then save again.
+
+## Delete a bot
+
+<Steps>
+
+1. Open the bot's **Profile** and save or discard any edits.
+2. Choose **Delete bot…** and type the bot's name to confirm.
+
+</Steps>
+
+Deletion needs the bot to be idle: no turn in progress, no running workspace command and no pending approval. It stops the bot's channels, scheduled jobs, MCP connections and containers, then removes its profile history, sessions, attachments, local memory, saved connections and workspace files. The web workspace returns to the default bot.
+
+:::danger
+Deleting a bot cannot be undone. Memories held in an external service, messages already sent to channels and your backups are not touched, and provider keys are not revoked at the provider.
+:::
+
+If cleanup fails partway, Raphie asks for a restart and finishes the deletion on the next start before opening any other bot.
+
+## Limits
+
+- Bots share one process and one owner. They are separated by storage and configuration, not by OS or VM isolation.
+- Profile saves and deletion wait for that bot's turns to finish; other bots keep working.
+- Diagnostics traces are collected once for the whole runtime, not per bot.
+
+## Related
+
+- [Memory](/guides/memory/): what a bot remembers and how to change it.
+- [Workspaces](/guides/workspaces/): a bot's files and sandbox.
+- [How bots are isolated and stored](/architecture/state/).

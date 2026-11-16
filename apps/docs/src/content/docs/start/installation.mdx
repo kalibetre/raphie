@@ -1,0 +1,144 @@
+---
+title: Installation
+description: Install Raphie for your user on macOS or Linux, as a Linux system service, or from a source checkout.
+sidebar:
+  order: 2
+---
+
+import { TabItem, Tabs } from "@astrojs/starlight/components";
+
+Most people should use the **user install**: one command, no `sudo`, prebuilt binaries for macOS and Linux, and a background service that starts with your session. Pick the **system service** for a dedicated Debian or Ubuntu server, or run **from source** to work on Raphie itself.
+
+## Choose an install
+
+| Install        | Runs as                     | Platforms                                | Web address              | Updates              |
+| -------------- | --------------------------- | ---------------------------------------- | ------------------------ | -------------------- |
+| User install   | Your account                | macOS and glibc Linux, x64 and ARM64     | `http://127.0.0.1:4320`  | Rerun the installer  |
+| System service | A dedicated `raphie` user   | Debian or Ubuntu with systemd, x64/ARM64 | `http://127.0.0.1:41837` | `sudo raphie update` |
+| From source    | Your account, in a terminal | Anywhere Bun runs                        | `http://127.0.0.1:4320`  | `git pull`           |
+
+Alpine (musl) and native Windows are not supported.
+
+## Install
+
+<Tabs syncKey="install">
+<TabItem label="User install">
+
+**You need:** `curl`, `python3`, and an OS credential store Raphie can use for provider keys:
+
+- **macOS:** your login Keychain, unlocked.
+- **Linux desktop:** libsecret and an unlocked Secret Service provider, such as GNOME Keyring or KWallet.
+- **Linux server without a desktop:** a systemd user manager, then install with `--headless` (below).
+
+Install the latest stable release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
+```
+
+To follow nightly builds instead, which are published from `main` after the automated checks pass:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --channel nightly
+```
+
+On a Linux host with no desktop session, add `--headless`. Raphie then keeps its credential master key in an owner-only file instead of the OS store, and the installer tries to enable user lingering so the service starts at boot:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- --headless
+```
+
+| Installer flag              | Effect                                                                     |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `--channel stable\|nightly` | Release channel to install and follow. Default `stable`.                   |
+| `--headless`                | Linux only. Use a master-key file instead of the OS credential store.      |
+| `--no-modify-path`          | Leave your shell startup files alone; add `~/.local/bin` to PATH yourself. |
+
+The installer:
+
+- verifies the release archive against the published `SHA256SUMS`;
+- puts the binaries in `~/.local/lib/raphie` and links `~/.local/bin/raphie`;
+- adds `~/.local/bin` to PATH for new Bash and Zsh terminals;
+- creates and starts a background service: a systemd user unit on Linux, a LaunchAgent on macOS.
+
+It refuses to overwrite an existing `raphie` command or adopt an existing data directory, so it never migrates data you did not ask it to touch.
+
+:::tip[Inspect before you run]
+Piping to `bash` runs downloaded code immediately. To read it first, download it with `curl -fsSLo install-raphie.sh <url>`, review it, then run `bash install-raphie.sh`.
+:::
+
+Open a new terminal so `raphie` is on your PATH, or run the `export PATH=...` line the installer prints.
+
+</TabItem>
+<TabItem label="Linux system service">
+
+**You need:** Debian or Ubuntu with systemd, `sudo`, an internet connection and a free local web port. The installer adds the OS packages it needs (D-Bus, GNOME Keyring, libsecret, Python 3, curl). You do not need Bun.
+
+:::caution
+This installer is experimental and runs as root. It downloads releases over HTTPS but does not verify checksums or provenance. Read both scripts before running them, and use a machine you are comfortable experimenting on.
+:::
+
+Download the two scripts into an empty directory and read them:
+
+```sh
+mkdir raphie-install && cd raphie-install
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/linux-binary/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/linux-binary/download-release.sh
+less bootstrap.sh download-release.sh
+```
+
+Install the latest stable release, or pass a version such as `v1.2.3`:
+
+```sh
+sudo sh bootstrap.sh
+```
+
+| Option             | Default                 | Notes                                                                                                       |
+| ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `VERSION`          | latest stable           | `vX.Y.Z` or an explicit `vX.Y.Z-alpha.N`.                                                                   |
+| `--web-port PORT`  | `41837`                 | 1024 to 65535, free, and not `4316`.                                                                        |
+| `--web-origin URL` | `http://127.0.0.1:PORT` | The address browsers use. Non-loopback origins must be HTTPS; see [remote access](/operate/remote-access/). |
+| `--data-dir PATH`  | `/var/lib/raphie/data`  | Absolute, must not exist yet, no symlinks; existing parents root-owned and not group- or world-writable.    |
+
+The installer creates a `raphie` service user, installs the release under `/opt/raphie`, writes `/etc/raphie/raphie.conf`, and enables and starts `raphie.service`. It refuses to run if any earlier installation, service user or data directory exists.
+
+</TabItem>
+<TabItem label="From source">
+
+**You need:** [Bun](https://bun.sh) at the version pinned in `.bun-version`, Git, and an available OS credential store (as for the user install).
+
+```sh
+git clone https://github.com/kalibetre/raphie.git
+cd raphie
+bun install --frozen-lockfile
+bun run dev
+```
+
+`bun run dev` starts the runtime on port 4316 and the web workspace on 4320. Data lives in `.data/` at the main checkout root. Run the CLI through Bun, for example `bun run raphie auth setup`.
+
+For a production web bundle, run `bun run build`, then `bun run start`, under a process supervisor of your choice. Configuration, tests and the fixture app are covered in [contributing](/contribute/contributing/).
+
+</TabItem>
+</Tabs>
+
+## Check it worked
+
+```sh
+raphie health && echo ok
+```
+
+`raphie health` prints nothing and exits `0` when both the runtime and the web host answer. A web host with no administrator yet counts as healthy. On the system service, run `sudo raphie health`.
+
+`raphie status` checks only the runtime and prints its data directory:
+
+```text
+Raphie runtime is responding.
+Data: /home/you/.local/share/raphie
+```
+
+If the check fails:
+
+- **No background service** (for example, no systemd user manager): run `raphie start` in a terminal and leave it open.
+- **Service did not become healthy:** the installer stops it and prints where to look. See [restarting and logs](/operate/service/#logs) and the [recovery table](/operate/backup-and-recovery/#common-failures).
+
+Next, [create the administrator and connect a model](/start/first-run/).

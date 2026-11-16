@@ -1,13 +1,27 @@
 name: Docs
 
-# Builds the Starlight site in apps/docs from docs/ and deploys it to
+# Builds the Starlight site in apps/docs and deploys it to
 # Cloudflare Workers static assets. Pull requests only build it.
 on:
   push:
     branches: [main]
-    paths: [docs/**, apps/docs/**, bun.lock, .github/workflows/docs.yml]
+    paths:
+      [
+        apps/docs/**,
+        CONTRIBUTING.md,
+        CONTEXT.md,
+        bun.lock,
+        .github/workflows/docs.yml,
+      ]
   pull_request:
-    paths: [docs/**, apps/docs/**, bun.lock, .github/workflows/docs.yml]
+    paths:
+      [
+        apps/docs/**,
+        CONTRIBUTING.md,
+        CONTEXT.md,
+        bun.lock,
+        .github/workflows/docs.yml,
+      ]
   workflow_dispatch:
 
 permissions:

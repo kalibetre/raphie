@@ -1,0 +1,124 @@
+---
+title: Memory
+description: How a bot remembers facts and preferences across sessions, and how to inspect, correct, forget or switch off what it keeps.
+sidebar:
+  order: 3
+---
+
+Memory lets a bot carry lasting facts and preferences from one session to the next. It is on by default with built-in storage, needs no extra service, and keeps each saved item with a link back to the conversation it came from.
+
+Memory is a set of tools the model chooses to use, not a recording of everything you say. You can see, correct and delete every saved item under **Settings → [bot] → Memory → Browse memory**.
+
+## What memory is and is not
+
+| Memory is                                                    | Memory is not                                |
+| ------------------------------------------------------------ | -------------------------------------------- |
+| Short, selected facts, preferences and confirmed experiences | A copy of every transcript                   |
+| Shared across all sessions of one bot                        | Shared with other bots                       |
+| Searched when the model decides it is relevant               | Injected into every turn automatically       |
+| Evidence the model reasons over                              | Permission to use a tool or skip an approval |
+
+Within a session, the bot still sees the full conversation history; memory is about other sessions.
+
+## Using memory
+
+The bot is instructed to save clear, lasting statements without asking you to confirm, such as "From now on, check my calendar before suggesting times." It skips one-off requests, guesses, secrets and sensitive details unless you ask, and it respects "don't remember this".
+
+You can also ask directly:
+
+- "Remember that I prefer jasmine tea."
+- In a new session: "What tea do I prefer?"
+- "Correct that: I prefer coffee now."
+- "Forget my drink preference."
+
+These work only if the model calls the matching memory tool. A bot saying "I'll remember that" is not proof; check **Browse memory** to see the saved record.
+
+## How built-in memory works
+
+```mermaid
+sequenceDiagram
+  actor Owner
+  participant Model
+  participant Memory as Built-in memory
+  Owner->>Model: I prefer jasmine tea
+  Model->>Memory: memory_retain(fact)
+  Memory-->>Model: Saved with ID, source and time
+  Note over Owner,Memory: Later, in another session
+  Owner->>Model: What tea do I like?
+  Model->>Memory: memory_recall(tea)
+  Memory-->>Model: Up to 8 matching records
+  Model-->>Owner: Answer citing the saved fact
+```
+
+1. **Save.** The model calls `memory_retain` with a fact or experience. The runtime stamps it with an ID, the session and turn it came from, and a timestamp.
+2. **Recall.** In any session of the same bot, the model calls `memory_recall` with a query. Full-text search returns up to eight records.
+3. **Answer.** The model uses those records in its reply and should separate what was recorded from what it infers.
+4. **Maintain.** `memory_revise` replaces a record's content and bumps its revision; `memory_forget` deletes it.
+
+## What is stored
+
+| Field    | Meaning                                               |
+| -------- | ----------------------------------------------------- |
+| Content  | The fact or experience, up to 8,000 characters        |
+| Kind     | `fact` or `experience`                                |
+| Source   | The session and turn it came from, linked from Browse |
+| Time     | When the source turn happened                         |
+| Revision | Starts at 1 and goes up with each correction          |
+
+Built-in memory lives in the bot's `memory.sqlite`, unencrypted, like its conversations. Recalled records are sent to the bot's model provider as part of the conversation.
+
+## Search and reflection
+
+Built-in search is lexical: it matches words and simple word forms ("prefer", "preferred"), not meaning. A query for "beverages" can miss a record about "tea". Queries are limited to 2,000 characters.
+
+`memory_reflect` returns the same matching records with guidance for the model to reason over them. Built-in memory makes no model calls of its own, has no background consolidation, and never saves a reflection as a new fact.
+
+Results depend on the model: a different model may save different things or search with different words.
+
+## Browse, correct and forget
+
+Open **Settings → [bot] → Memory → Browse memory**.
+
+- Records appear newest first, 25 at a time, with a total count. Use **Load more** to continue.
+- Type to search; search shows up to eight matches. **Clear search** returns to the full list.
+- Expand **Source and record ID** to see where a record came from, with a link to the session.
+- **Correct** edits a record's content; **Forget** deletes it.
+
+:::note
+Forgetting removes the memory record only. The original conversation, earlier replies, tool output and backups still contain the information. Delete the session too if you need it gone from history.
+:::
+
+## Scope, disabling and backends
+
+Each bot has its own memory settings under **Settings → [bot] → Memory**.
+
+| Setting | Effect                                                                                                |
+| ------- | ----------------------------------------------------------------------------------------------------- |
+| Enabled | Off rejects all memory operations but keeps saved records. Turning it back on restores them.          |
+| Backend | **Built-in** (default) or **Hindsight**.                                                              |
+| Scope   | A namespace, `owner` by default. Changing it starts an empty namespace and leaves the old one intact. |
+
+Switching backend or scope never copies, merges or deletes data. Switch back and the earlier records are there again. Settings cannot be saved while one of the bot's turns is in progress.
+
+### Backend support
+
+|                             | Built-in                             | Hindsight                                 |
+| --------------------------- | ------------------------------------ | ----------------------------------------- |
+| Needs                       | Nothing                              | An existing Hindsight deployment and bank |
+| Save and search             | Yes                                  | Yes                                       |
+| Reflection                  | The bot's model reasons over results | Hindsight's own reflection                |
+| Browse all records          | Yes                                  | No; use search                            |
+| Correct or forget in Raphie | Yes                                  | No; manage records in Hindsight           |
+| Consolidation               | None                                 | Done by Hindsight                         |
+
+For Hindsight, enter its endpoint, bank ID and optional API key. The endpoint must use HTTPS, or HTTP on `localhost`. The key is encrypted and only ever sent to the endpoint and bank it was saved for; change either and you must enter the key again. Use a dedicated bank: Raphie's scope tags filter results but are not tenant isolation.
+
+## Recovery
+
+| Situation                                                   | What happens                                                                                                                                    |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hindsight key can't be decrypted (the OS key store changed) | Raphie still starts. Memory settings show the error and Hindsight calls fail until you re-enter the key. Built-in memory and chat keep working. |
+| Crash during a save                                         | The save is not retried automatically. Check **Browse memory** before asking the bot to save it again.                                          |
+| A correction or forget, then a retried save                 | The retry is ignored, so it can't undo the correction or bring the record back.                                                                 |
+
+Back up `memory.sqlite` with the rest of the data directory; see [backup and recovery](/operate/backup-and-recovery/).

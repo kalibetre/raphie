@@ -1,0 +1,47 @@
+---
+title: "0003: Native bot sandbox"
+description: Why Raphie adds an opt-in container sandbox with real processes and a real disk workspace, and the limits that come with it.
+sidebar:
+  order: 3
+---
+
+**Status:** Accepted. The container provider is in effect; the credential proxy and network restrictions described below are not built.
+
+## Context
+
+The default just-bash workspace is an in-memory shell interpreter with no network, no `git` and an 8 MiB file limit. It suits notes and small scripts, but not cloning a repository, running a CLI such as `gh`, or editing a real project. Bots need a second execution provider with real processes and a real disk, without giving up the replay and recovery rules of [ADR 0002](/decisions/0002-bot-owned-workspaces/).
+
+## Decision
+
+- Use Pi's own coding tools (`read`, `write`, `edit`, `bash`), which reach files and processes only through an execution environment the host builds per call. Raphie supplies one backed by a per-bot container.
+- The bot is resolved from the conversation, never from tool arguments. Every session of one bot sees the same files.
+- One container per bot, started on demand. Its only writable mount is the bot's `workspace/files`. No home directory, data directory, credentials or container socket is mounted.
+- The container stops after a per-bot idle period. Files persist; processes and shell state do not.
+- Network is open, because a bot must clone, fetch and call APIs. The owner must explicitly acknowledge per bot that the container can reach the host and LAN before selecting it.
+- Provider is a per-bot setting: `just-bash` (default) or `container`. There is no silent fallback between them.
+
+## Consequences
+
+| Area        | Today                                                                                                                                                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Isolation   | The host user ID (never root), all capabilities dropped, `no-new-privileges`, read-only root, 64 MiB `/tmp`                                                                                                         |
+| Resources   | 512 MiB memory, 1 CPU, 128 processes, 30 s per command, 16 KiB command source, 32 KiB output; 4 containers per runtime                                                                                              |
+| Idle period | 1 to 1,440 minutes, default 10                                                                                                                                                                                      |
+| Disk        | No quota by default; an optional per-bot quota in MiB                                                                                                                                                               |
+| Recovery    | Commands are journalled before dispatch. A lost container or restart leaves files intact and reports the last command's outcome as unknown; it is never rerun. There is no rollback: the working tree is the state. |
+| Fencing     | Each provider open increments an epoch and removes older containers first, so a stale provider cannot act                                                                                                           |
+| Engine      | `docker` by default; set `RAPHIE_CONTAINER_BINARY` for another Docker-compatible CLI. The guest image is set by `RAPHIE_CONTAINER_IMAGE`.                                                                           |
+
+## Limits
+
+:::caution
+A container is a process boundary on a shared kernel, not a VM. Its bridge network can reach services on the host and on the LAN. A prompt-injected bot could call those services.
+:::
+
+- **No credentials inside the sandbox.** There is no credential proxy, so the bot cannot push or clone private repositories from the container. Authenticated work goes through the bot's MCP connections, which run on the host and are approval-gated.
+- **No enforced egress policy.** Blocking loopback, private ranges and cloud metadata addresses, and per-bot allowlists, are not implemented.
+- **No free-space floor.** With no quota set, a bot can fill the host disk.
+- **Lifecycle calls are synchronous.** Container start and stop calls can block the runtime's event loop up to their deadline.
+- **Tested engine.** Docker is tested (on Linux in CI, and on macOS through OrbStack). Podman is not verified.
+
+See [workspaces](/guides/workspaces/) for choosing a provider and [state](/architecture/state/#container-opt-in) for how the container is wired.

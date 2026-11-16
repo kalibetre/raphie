@@ -1,70 +1,97 @@
 ---
 title: Documentation
-description: A self-hosted assistant platform where each bot has its own instructions, memory, workspace and scheduled work.
+description: Raphie is a self-hosted assistant platform. Each persistent bot keeps its own instructions, memory, workspace and scheduled work, on hardware you control.
 template: splash
 editUrl: false
 hero:
   title: Raphie
   tagline: A self-hosted assistant platform. Each persistent bot keeps its own instructions, memory, workspace and scheduled work, on hardware you control.
-  image:
-    file: ../../assets/raphie.svg
   actions:
-    - text: Run from source
-      link: /source-setup/
+    - text: Install Raphie
+      link: /start/installation/
       icon: right-arrow
-    - text: Install on a server
-      link: /user-installation/
-      variant: minimal
-    - text: View on GitHub
-      link: https://github.com/kalibetre/raphie
-      icon: external
+    - text: What is Raphie?
+      link: /start/introduction/
       variant: minimal
 ---
 
 import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
+## Up and running in a minute
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash
+raphie health        # in a new terminal
+raphie auth setup    # create your administrator
+```
+
+Then open `http://127.0.0.1:4320`, sign in and connect a model provider. [First run](/start/first-run/) walks through it.
+
 ## What a bot has
 
 <CardGrid>
-  <Card title="Its own personality" icon="star">
-    Owner-managed names, descriptions and revisioned SOUL.md documents define
-    who each bot is. [Bots and personality](/bots/)
+  <Card title="A personality" icon="star">
+    A name, a description and a revisioned SOUL.md you write.
+    [Bots](/guides/bots/)
   </Card>
   <Card title="Memory it can correct" icon="document">
-    Bots remember across sessions, and you can inspect, correct and forget what
-    they keep. [Memory](/memory/)
+    It remembers across sessions; you can browse, fix and forget.
+    [Memory](/guides/memory/)
   </Card>
-  <Card title="A workspace to work in" icon="laptop">
-    Files, an in-memory shell or an opt-in container sandbox, scoped to one bot.
-    [Workspaces and sandboxes](/bot-workspaces/)
+  <Card title="A workspace" icon="laptop">
+    Files that persist, run in a bounded shell or a container.
+    [Workspaces](/guides/workspaces/)
   </Card>
-  <Card title="Scheduled work and tools" icon="puzzle">
-    Per-bot MCP servers with encrypted configuration, plus recurring prompts.
-    [Bot automation](/bot-automation/)
+  <Card title="Tools and schedules" icon="puzzle">
+    MCP servers per bot, and prompts that run on a timer.
+    [Tools](/guides/tools/) · [Schedules](/guides/schedules/)
   </Card>
 </CardGrid>
 
-## Where to go next
+## How it fits together
+
+```mermaid
+flowchart TB
+  owner([You]) --> web[Web workspace]
+  owner --> desktop[Desktop client]
+  owner --> tg[Telegram]
+  subgraph host [Your machine]
+    runtime[Raphie runtime]
+    bots[Bots: sessions, memory, workspace]
+    data[(Data directory)]
+    runtime --> bots --> data
+  end
+  web --> runtime
+  desktop --> runtime
+  tg --> runtime
+  runtime --> models[(Model providers)]
+  class runtime accent
+  class owner attention
+```
+
+Everything runs in one runtime you own, with one data directory. Clients and channels are ways in; they never hold your data. [Architecture overview](/architecture/overview/)
+
+## Find your way
 
 <CardGrid>
   <LinkCard
-    title="Using Raphie"
-    description="Conversations, settings, storage and features in the web workspace."
-    href="/using-raphie/"
+    title="Use it"
+    description="Conversations, bots, memory, workspaces, tools, Telegram and the desktop client."
+    href="/guides/conversations/"
   />
   <LinkCard
-    title="Desktop client"
-    description="The native Rust app, device sign-in and tailnet connections."
-    href="/desktop/"
+    title="Run it"
+    description="The raphie command, the background service, remote access, backups and recovery."
+    href="/operate/commands/"
   />
   <LinkCard
-    title="Telegram channel"
-    description="Talk to a bot from Telegram: setup, pairing and limits."
-    href="/telegram/"
+    title="Secure it"
+    description="Administrator sign-in, devices, credential storage and what each layer protects."
+    href="/operate/authentication/"
   />
   <LinkCard
-    title="Architecture"
-    description="How the headless runtime, durable turns and clients fit together."
-    href="/architecture/"
+    title="Understand it"
+    description="Durable turns, approvals, isolation between bots, storage and the HTTP API."
+    href="/architecture/overview/"
   />
 </CardGrid>

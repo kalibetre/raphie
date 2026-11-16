@@ -1,0 +1,71 @@
+---
+title: First run
+description: Create the administrator, sign in, connect a model provider and start your first conversation.
+sidebar:
+  order: 3
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+A new Raphie has no account and no model. You create the single administrator from a terminal on the machine running Raphie, sign in from a browser, connect a provider to the default bot, and start talking. It takes about five minutes.
+
+## Set up Raphie
+
+<Steps>
+
+1. **Check Raphie is running.**
+
+   ```sh
+   raphie health && echo ok
+   ```
+
+   If it fails, see [check it worked](/start/installation/#check-it-worked).
+
+2. **Create the administrator.** The web workspace stays locked until you do; its sign-in page tells you so. In a terminal on the same machine:
+
+   ```sh
+   raphie auth setup              # user install
+   sudo raphie auth setup         # Linux system service
+   bun run raphie auth setup      # source checkout
+   ```
+
+   Enter an email, then a password of at least 12 characters, twice. The password is never echoed, logged or accepted as an argument. There is only ever one administrator.
+
+3. **Sign in.** Open the web workspace and sign in with that email and password.
+
+   | Install        | Address                                                                   |
+   | -------------- | ------------------------------------------------------------------------- |
+   | User install   | `http://127.0.0.1:4320`                                                   |
+   | System service | `http://127.0.0.1:41837` (or the port you chose; `raphie port` prints it) |
+   | Source         | `http://127.0.0.1:4320`                                                   |
+
+   On a remote server, open an SSH tunnel first, for example `ssh -L 4320:127.0.0.1:4320 you@server`. See [remote access](/operate/remote-access/).
+
+4. **Connect a model provider.** Open **Settings** from the bot sidebar, then **Providers**, and choose **Add connection**. Pick one:
+
+   - **OpenRouter:** paste an API key from your [OpenRouter keys page](https://openrouter.ai/settings/keys).
+   - **ChatGPT subscription:** choose the sign-in button and finish signing in on the page it opens. If your browser is on a different machine from Raphie, the final redirect to `127.0.0.1` fails; copy that address from the browser bar and paste it back into Raphie.
+
+   Connections belong to the bot you are configuring, and keys are encrypted on this machine. Details are in [credentials](/operate/credentials/).
+
+5. **Pick a default model.** Open **Models**, find a model from your new connection and choose **Set as default**. New conversations start with it; existing ones keep their model.
+
+6. **Start a conversation.** Choose **New conversation**, type in the composer and send. You can switch models per conversation from the composer.
+
+</Steps>
+
+:::tip[Forgot the password?]
+Run `raphie auth recover` on the server. It sets a new password and signs out every browser and device. See [authentication](/operate/authentication/).
+:::
+
+## Where to go next
+
+| To                                                 | Read                                                 |
+| -------------------------------------------------- | ---------------------------------------------------- |
+| Learn the workspace: sessions, approvals, settings | [Conversations](/guides/conversations/)              |
+| Give a bot its own identity, or create another bot | [Bots](/guides/bots/)                                |
+| Let a bot remember things across conversations     | [Memory](/guides/memory/)                            |
+| Connect tools                                      | [Tools](/guides/tools/)                              |
+| Talk to Raphie from your phone                     | [Telegram](/guides/telegram/)                        |
+| Reach Raphie from another device                   | [Remote access](/operate/remote-access/)             |
+| Keep your data safe                                | [Backup and recovery](/operate/backup-and-recovery/) |

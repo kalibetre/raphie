@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sync": "bun scripts/sync-docs.ts",
+    "sync": "bun scripts/sync-root-docs.ts",
     "dev": "bun run sync && astro dev --host 127.0.0.1 --port 4330",
     "build": "bun run sync && astro build",
     "check": "bun run sync && astro sync && tsc --noEmit",
@@ -14,6 +14,8 @@
   "dependencies": {
     "@astrojs/starlight": "0.43.1",
     "astro": "7.4.12",
+    "astro-mermaid": "2.2.0",
+    "mermaid": "12.3.0",
     "sharp": "0.35.5"
   },
   "devDependencies": {
