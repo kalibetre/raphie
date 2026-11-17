@@ -16,7 +16,7 @@ pub struct Theme {
     pub dark: bool,
     /// The conversation's backdrop.
     pub background: Color,
-    /// The bot roster and the conversations panel.
+    /// The bot roster, with the selected bot's conversations.
     pub sidebar: Color,
     /// Raised surfaces: the composer, cards, code blocks.
     pub card: Color,

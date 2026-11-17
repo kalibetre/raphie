@@ -6,46 +6,9 @@ import {
   writeLocal,
 } from "../../infrastructure/preferences/storage";
 
-// The narrowest the conversation may be with the panel docked beside it;
-// narrower, and the panel opens as a sheet over it instead.
-const MIN_CONVERSATION = 560;
-
-/** True when the panel must float: docking it would leave the conversation
- * narrower than {@link MIN_CONVERSATION}. Phones always use the sheet. */
-export function panelFloats(
-  viewportWidth: number,
-  navigationWidth: number,
-  activityWidth: number,
-) {
-  return (
-    viewportWidth >= 768 &&
-    viewportWidth - navigationWidth - activityWidth < MIN_CONVERSATION
-  );
-}
-
-// The conversations panel stays open per bot: switching bots remounts the
-// workspace, so the open state lives in storage rather than component state.
-const inspectorKey = (botId: string) => `raphie:inspector-open:${botId}`;
-
-export function useWorkspaceLayout(
-  view: "settings" | "notifications" | undefined,
-  botId: string,
-) {
-  const [inspector, setInspectorValue] = useState(
-    () => readLocal(inspectorKey(botId)) === "true",
-  );
-  useEffect(() => {
-    setInspectorValue(readLocal(inspectorKey(botId)) === "true");
-  }, [botId]);
-
-  function setInspector(open: boolean) {
-    setInspectorValue(open);
-    writeLocal(inspectorKey(botId), String(open));
-  }
-
+export function useWorkspaceLayout() {
   const [sidebar, setSidebar] = useState(false);
   const [navigationWidth, setNavigationWidth] = useState(264);
-  const [activityWidth, setActivityWidth] = useState(340);
   const [viewportWidth, setViewportWidth] = useState(1440);
   useEffect(() => {
     const update = () => {
@@ -58,21 +21,13 @@ export function useWorkspaceLayout(
   }, []);
   useEffect(() => {
     const left = Number(readLocal("raphie:navigation-width"));
-    const right = Number(readLocal("raphie:activity-width"));
     if (Number.isFinite(left) && left >= 220 && left <= 480)
       setNavigationWidth(left);
-    if (Number.isFinite(right) && right >= 280 && right <= 640)
-      setActivityWidth(right);
   }, []);
 
-  function resizePanel(side: "left" | "right", value: number) {
-    if (side === "left") {
-      setNavigationWidth(value);
-      writeLocal("raphie:navigation-width", String(value));
-    } else {
-      setActivityWidth(value);
-      writeLocal("raphie:activity-width", String(value));
-    }
+  function resizePanel(value: number) {
+    setNavigationWidth(value);
+    writeLocal("raphie:navigation-width", String(value));
   }
 
   useEffect(() => {
@@ -97,47 +52,12 @@ export function useWorkspaceLayout(
   useEffect(() => {
     setCollapsed(readLocal("raphie:sidebar-collapsed") === "true");
   }, []);
-  // Too narrow to dock both the roster and the panel beside a readable
-  // conversation: the panel floats as a sheet, as it does on a phone.
-  const overlayActivity = panelFloats(
-    viewportWidth,
-    collapsed ? 0 : navigationWidth,
-    activityWidth,
-  );
-  const dockedActivity =
-    inspector && !view && viewportWidth >= 768 && !overlayActivity;
   const visibleNavigationWidth = Math.min(
     navigationWidth,
-    Math.max(220, viewportWidth - 320 - (dockedActivity ? 280 : 0)),
+    Math.max(220, viewportWidth - 320),
   );
-  const visibleActivityWidth = Math.min(
-    activityWidth,
-    Math.max(
-      280,
-      dockedActivity
-        ? viewportWidth - (collapsed ? 0 : visibleNavigationWidth) - 320
-        : viewportWidth - 40,
-    ),
-  );
-  const navigationMax = Math.min(
-    480,
-    Math.max(
-      220,
-      viewportWidth - 320 - (dockedActivity ? visibleActivityWidth : 0),
-    ),
-  );
-  const activityMax = Math.min(
-    640,
-    Math.max(
-      280,
-      dockedActivity
-        ? viewportWidth - (collapsed ? 0 : visibleNavigationWidth) - 320
-        : viewportWidth - 40,
-    ),
-  );
+  const navigationMax = Math.min(480, Math.max(220, viewportWidth - 320));
   return {
-    inspector,
-    setInspector,
     sidebar,
     setSidebar,
     collapsed,
@@ -145,9 +65,6 @@ export function useWorkspaceLayout(
     toggleCollapsed,
     resizePanel,
     visibleNavigationWidth,
-    visibleActivityWidth,
     navigationMax,
-    activityMax,
-    overlayActivity,
   };
 }

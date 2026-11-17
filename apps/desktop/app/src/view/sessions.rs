@@ -1,25 +1,26 @@
-//! The conversations panel on the right: search, filter chips and one row
-//! per session of the selected bot.
+//! The selected bot's conversations, in the roster below its bots: a label
+//! with a new-conversation button, then search, filter chips and one row
+//! per session.
 //!
-//! Mirrors `apps/web/src/presentation/workspace/workspace-panel.tsx`,
-//! `domains/conversations/presentation/sessions/` and the `.library-*` rules
-//! in `bot-workspace.css`.
+//! Mirrors `ConversationList` in `bot-sidebar.tsx`'s `.roster-conversations`
+//! section, `domains/conversations/presentation/sessions/` and the
+//! `.library-*` rules in `bot-workspace.css`.
 
 use raphie_core::contracts::SessionSummary;
 use raphie_core::engine::Command;
-use rune::{Color, El, ScrollSpec, Tx, col, icon, row, text, text_input};
+use rune::{Color, El, ScrollSpec, TextCase, Tx, col, icon, row, text, text_input};
 
 use super::Look;
-use super::roster::plain;
+use super::roster::{label_action, plain};
 use crate::format;
 use crate::icons;
 use crate::state::{Filter, Ui};
 use crate::theme::{Theme, font};
-use crate::widgets::{Kind, Size, button, centered, count_badge, icon_button, one_line, pressable};
+use crate::widgets::{Kind, Size, button, centered, one_line, pressable};
 
-/// `floating` is true when the panel lies over the conversation (a narrow
-/// window); it then has a close button, as the web's sheet does.
-pub fn panel(s: &Ui, look: &Look, floating: bool) -> El {
+/// The section under the bots: it takes the roster's remaining height, and
+/// everything below its label scrolls.
+pub fn sessions(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     let model = &s.model;
     let query = s.search.text.trim().to_lowercase();
@@ -41,11 +42,6 @@ pub fn panel(s: &Ui, look: &Look, floating: bool) -> El {
         .session_list()
         .filter(|session| s.unread(session) > 0)
         .count();
-    // The tab's badge counts both kinds, as the header's does.
-    let attention = model
-        .session_list()
-        .filter(|session| s.needs_attention(session))
-        .count();
 
     let selected = model.conversation.as_ref().map(|c| c.session_id.as_str());
     let now = format::now_ms();
@@ -65,25 +61,19 @@ pub fn panel(s: &Ui, look: &Look, floating: bool) -> El {
         ));
     }
 
-    let results = if query.is_empty() {
-        format!("{} · Most recent first", conversations(shown.len()))
-    } else {
-        format!(
-            "{} matching “{}”",
-            conversations(shown.len()),
-            s.search.text.trim()
-        )
-    };
+    // No "N conversations" line under the chips, as on the web: the
+    // filters already say what is shown, and the sidebar keeps the room.
     let mut page = col()
         .w_full()
-        .px(10.0)
-        .pt(10.0)
-        .pb(16.0)
+        .px(12.0)
+        .pt(6.0)
+        .pb(12.0)
         .child(search_box(s, t))
         .child(
             row()
                 .w_full()
-                .mt(10.0)
+                .mt(8.0)
+                .mb(6.0)
                 .gap(6.0)
                 .child(chip(
                     t,
@@ -109,16 +99,6 @@ pub fn panel(s: &Ui, look: &Look, floating: bool) -> El {
                     s.filter == Filter::Approvals,
                     Filter::Approvals,
                 )),
-        )
-        .child(
-            text(results)
-                .key("rd-results")
-                .font(font(11.0, 400.0))
-                .color(t.muted_foreground)
-                .wrap()
-                .mx(4.0)
-                .mt(10.0)
-                .mb(6.0),
         )
         .child(list);
     if shown.is_empty() {
@@ -148,13 +128,42 @@ pub fn panel(s: &Ui, look: &Look, floating: bool) -> El {
         );
     }
 
+    let name = model
+        .selected_bot()
+        .map_or("Raphie", |bot| bot.name.as_str());
+    let title = format!("{name}’s conversations");
     col()
-        .key("rd-panel")
-        .w(s.visible_panel_width())
-        .h_full()
-        .fill(t.sidebar)
-        .border_sides([0.0, 0.0, 0.0, 1.0], t.border)
-        .child(tab_strip(attention, floating, look))
+        .key("rd-conversations")
+        .role("region")
+        .label(title.clone())
+        .w_full()
+        .grow(1.0)
+        .min_h(0.0)
+        .mt(8.0)
+        .pt(14.0)
+        // Only a top edge: `[top, right, bottom, left]` widths.
+        .border_sides([1.0, 0.0, 0.0, 0.0], t.border)
+        .child(
+            row()
+                .w_full()
+                .px(22.0)
+                .pb(4.0)
+                .gap(8.0)
+                .justify_between()
+                .center_y()
+                .child(
+                    one_line(title, font(10.0, 400.0).tracking(1.0), t.muted_foreground)
+                        // Drawn in capitals; screen readers hear the name as it is.
+                        .text_case(TextCase::Uppercase)
+                        .shrink(),
+                )
+                .child(pressable(
+                    label_action(t, &icons::SQUARE_PEN, "New conversation")
+                        .key("rd-new-conversation"),
+                    true,
+                    |s: &mut Ui| s.select_session(None),
+                )),
+        )
         .child(
             col()
                 .w_full()
@@ -165,58 +174,6 @@ pub fn panel(s: &Ui, look: &Look, floating: bool) -> El {
                 })
                 .child(page),
         )
-}
-
-fn conversations(count: usize) -> String {
-    if count == 1 {
-        "1 conversation".to_owned()
-    } else {
-        format!("{count} conversations")
-    }
-}
-
-/// The strip of panel tabs. The web has room for more tabs here; the only
-/// one so far is Conversations, so it is always the selected one.
-fn tab_strip(attention: usize, floating: bool, look: &Look) -> El {
-    let t = &look.theme;
-    let mut tab = row()
-        .w(176.0)
-        .h(31.5)
-        .px(10.5)
-        .gap(7.0)
-        .center_y()
-        .radius(10.5)
-        .fill(t.accent_soft)
-        .border(1.0, t.accent.alpha(0.25))
-        .child(
-            icon(&icons::MESSAGE_SQUARE_TEXT, 14.0)
-                .color(t.accent)
-                .a11y_hidden(),
-        )
-        .child(one_line("Conversations", font(10.5, 500.0), t.accent).grow(1.0));
-    if attention > 0 {
-        tab = tab.child(count_badge(t, attention));
-    }
-    let strip = row()
-        .w_full()
-        // As tall as the bar over the conversation beside it, so the tab
-        // sits level with that bar's buttons. No line under it: with one
-        // tab there is nothing to separate.
-        .h(44.0)
-        .px(10.5)
-        .center_y()
-        .justify_between()
-        // Empty parts of the strip move the window, like the header's.
-        .window_drag()
-        .child(tab);
-    if !floating {
-        return strip;
-    }
-    strip.child(pressable(
-        icon_button(t, &icons::X, 16.0, "Close").key("rd-panel-close"),
-        true,
-        |s: &mut Ui| s.panel_open = false,
-    ))
 }
 
 fn search_box(s: &Ui, t: &Theme) -> El {
@@ -234,8 +191,8 @@ fn search_box(s: &Ui, t: &Theme) -> El {
     let mut search = row()
         .key("rd-search")
         .w_full()
-        .px(12.0)
-        .py(10.0)
+        .px(10.0)
+        .py(7.0)
         .gap(8.0)
         .center_y()
         .radius(10.0)

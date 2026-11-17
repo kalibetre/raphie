@@ -42,16 +42,16 @@ Raphie has no job queue or state-machine runner of its own. Each bot runtime is 
 
 Raphie stores its own state in ten `raphie.*` document kinds:
 
-| Document                                                               | Holds                                                                               |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `raphie.chats`                                                         | Conversations (public session ID, title, model), turns and reply deliveries         |
-| `raphie.tool-approvals`                                                | Approvals, command session grants, command permission modes, approval notifications |
-| `raphie.activity`                                                      | The redacted activity journal, a ring of 5,000 events                               |
-| `raphie.delivery-plans`                                                | Persisted multi-part send plans for channels                                        |
-| `raphie.channel-bindings`                                              | External conversation to session bindings                                           |
-| `raphie.channel-home`                                                  | The bot's selected home destination for scheduled replies                           |
-| `raphie.scheduled-jobs`, `raphie.job-runs`, `raphie.schedule-mutation` | Schedules, run history and schedule tool receipts                                   |
-| `raphie.gateway`                                                       | Approvals for the older file-copy workflow                                          |
+| Document                                                               | Holds                                                                       |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `raphie.chats`                                                         | Conversations (public session ID, title, model), turns and reply deliveries |
+| `raphie.tool-approvals`                                                | Approvals, command session grants, permission modes, approval notifications |
+| `raphie.activity`                                                      | The redacted activity journal, a ring of 5,000 events                       |
+| `raphie.delivery-plans`                                                | Persisted multi-part send plans for channels                                |
+| `raphie.channel-bindings`                                              | External conversation to session bindings                                   |
+| `raphie.channel-home`                                                  | The bot's selected home destination for scheduled replies                   |
+| `raphie.scheduled-jobs`, `raphie.job-runs`, `raphie.schedule-mutation` | Schedules, run history and schedule tool receipts                           |
+| `raphie.gateway`                                                       | Approvals for the older file-copy workflow                                  |
 
 A domain policy, such as "expiry wins over a late decision", is applied inside the same commit that stores its result. The pure policy lives in a `domain` module; the transaction lives in `infrastructure`.
 
@@ -170,7 +170,7 @@ MCP calls and workspace commands follow the same pattern: **ensure → wait → 
 | Schedule tools (`schedule_*`)                          | No prompt                                                                           |                                     |                                            | Safe                                    |
 | `read_document`                                        | No prompt (read only)                                                               |                                     |                                            | Safe                                    |
 
-The command permission mode (Ask or Full access) and command session grants apply to workspace commands only. An MCP claim is refused if it carries Full access or a grant, even if a record were forged. Revoking a grant blocks future claims; it cannot undo an action already dispatched.
+The permission mode (Ask or Full access) applies to workspace commands and MCP tools; session grants apply to workspace commands only. An MCP claim made under Full access is refused unless the conversation is still in Full access when the call is claimed, and a claim that carries a grant is always refused, even if a record were forged. Revoking a grant blocks future claims; it cannot undo an action already dispatched.
 
 Channel decisions have extra checks: the same connection, the same thread as the card, and the same user who started the request. Telegram decisions are accepted only in a private chat. When more than one turn is pending, the initiator is ambiguous, so only the web workspace can decide; approvals for scheduled turns and Telegram group conversations are web-only as well.
 

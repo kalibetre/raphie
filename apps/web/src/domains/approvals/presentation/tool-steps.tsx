@@ -124,7 +124,7 @@ function Step({ step }: { step: ToolStep }) {
               : state === "uncertain"
                 ? "outcome unknown"
                 : approval
-                  ? `${approvalState(approval)}${approval.decidedVia ? ` via ${approval.decidedVia}` : ""}`
+                  ? `${approvalState(approval)}${approval.decidedApp === "desktop" ? " via desktop app" : approval.decidedVia ? ` via ${approval.decidedVia}` : ""}`
                   : state === "done"
                     ? formatDuration((step.doneAt ?? 0) - step.startedAt)
                     : "running"}

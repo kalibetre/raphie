@@ -77,6 +77,8 @@ export function approvalRoutes(
           c.req.param("id"),
           c.req.valid("json").decision,
           c.req.valid("json").scope,
+          // Set by the web host from the device's sign-in, never by a client.
+          c.req.header("x-raphie-app") === "desktop" ? "desktop" : undefined,
         ),
       });
     },

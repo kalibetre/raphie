@@ -30,15 +30,15 @@ All bots run in the same runtime and answer to you. Separation between them is l
   </Row>
 </Flow>
 
-| Separate for each bot                                      | Shared by all bots                                   |
-| ---------------------------------------------------------- | ---------------------------------------------------- |
-| Name, description, colour and `SOUL.md` with its revisions | The runtime process and data directory               |
-| Sessions and their attachments                             | Your admin sign-in, passkeys and connected devices   |
-| Provider connections, keys and default model               | Diagnostics traces                                   |
-| Memory configuration and stored memories                   | Browser preferences: theme, panel layout, UI plugins |
-| Workspace files and sandbox settings                       |                                                      |
-| MCP tools, channels and scheduled jobs                     |                                                      |
-| Activity                                                   |                                                      |
+| Separate for each bot                                      | Shared by all bots                                    |
+| ---------------------------------------------------------- | ----------------------------------------------------- |
+| Name, description, colour and `SOUL.md` with its revisions | The runtime process and data directory                |
+| Sessions and their attachments                             | Your admin sign-in, passkeys and connected devices    |
+| Provider connections, keys and default model               | Diagnostics traces                                    |
+| Memory configuration and stored memories                   | Browser preferences: theme, sidebar width, UI plugins |
+| Workspace files and sandbox settings                       |                                                       |
+| MCP tools, channels and scheduled jobs                     |                                                       |
+| Activity                                                   |                                                       |
 
 A session belongs to exactly one bot and cannot be opened through another.
 
@@ -50,7 +50,7 @@ The first start creates the default bot. It cannot be deleted. Its data lives at
 
 <Steps>
 
-1. Choose **New bot** in the sidebar (the plus icon on mobile), or **Create a bot** in Settings.
+1. Choose **+** beside **Your bots** in the sidebar (at the end of the bot strip on a phone), or **Create a bot** in Settings.
 2. Give it a name, an optional description and a personality.
 3. Under **Providers**, connect a model provider with an API key or a subscription sign-in. A new bot has no provider and cannot reply until it has one.
 4. Under **Models**, pick its default model.
@@ -62,7 +62,7 @@ A new bot starts with built-in memory on and no providers, tools or channels. No
 
 ## Switch bots
 
-Choose a bot in the sidebar. The workspace resumes the session you last had open with it in this browser and keeps a separate draft for each bot. Badges on other bots show unread replies and pending approvals.
+Choose a bot in the sidebar. Its conversations list below the bots, and the workspace resumes the session you last had open with it in this browser; on a phone it opens on that list instead. Each bot keeps a separate draft. Badges on other bots show unread replies and pending approvals.
 
 ## Edit identity and personality
 

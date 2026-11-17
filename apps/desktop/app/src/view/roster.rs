@@ -1,5 +1,5 @@
-//! The bot roster down the left edge: the brand, one row per bot, and the
-//! connection status with sign-out.
+//! The bot roster down the left edge: the brand, one row per bot, the
+//! selected bot's conversations, and the connection status with sign-out.
 //!
 //! Mirrors `apps/web/src/domains/settings/presentation/bot-sidebar.tsx` and
 //! the `.bot-roster` rules in `bot-workspace.css`.
@@ -7,14 +7,15 @@
 use raphie_core::contracts::BotProfile;
 use raphie_core::engine::Command;
 use raphie_core::model::StreamStatus;
-use rune::{El, LiveRegion, ScrollSpec, TextCase, col, row, text};
+use rune::{El, Icon, LiveRegion, ScrollSpec, TextCase, col, icon, row, text};
 
 use super::Look;
+use super::sessions::sessions;
 use crate::avatar::bot_avatar;
 use crate::icons;
 use crate::sections::Page;
 use crate::state::Ui;
-use crate::theme::font;
+use crate::theme::{Theme, font};
 use crate::widgets::{
     build_badge, build_badge_width, count_badge, icon_button, one_line, pressable, status_dot,
 };
@@ -40,6 +41,20 @@ pub fn roster(s: &Ui, look: &Look) -> El {
     let mut list = col().w_full();
     for bot in bots {
         list = list.child(bot_row(s, bot, look));
+    }
+    let mut bots_list = col()
+        .key("rd-bots")
+        .role("navigation")
+        .label("Your bots")
+        .w_full()
+        .scroll(ScrollSpec {
+            stick_bottom: false,
+        })
+        .child(list);
+    // The bots take what they need, up to two fifths of the window, and
+    // scroll past that; the selected bot's conversations fill the rest.
+    if s.workspace_height > 0.0 {
+        bots_list = bots_list.max_h((s.workspace_height * 0.4).floor());
     }
     col()
         .key("rd-roster")
@@ -82,25 +97,14 @@ pub fn roster(s: &Ui, look: &Look) -> El {
                         // Drawn in capitals; screen readers get "Your bots".
                         .text_case(TextCase::Uppercase),
                 )
-                .child(
-                    text(bots.len().to_string())
-                        .font(font(10.0, 400.0))
-                        .color(t.muted_foreground),
-                ),
+                .child(pressable(
+                    label_action(t, &icons::PLUS, "New bot").key("rd-new-bot"),
+                    true,
+                    |s: &mut Ui| s.open_settings(Some(Page::NewBot)),
+                )),
         )
-        .child(
-            col()
-                .key("rd-bots")
-                .role("navigation")
-                .label("Your bots")
-                .w_full()
-                .grow(1.0)
-                .min_h(0.0)
-                .scroll(ScrollSpec {
-                    stick_bottom: false,
-                })
-                .child(list),
-        )
+        .child(bots_list)
+        .child(sessions(s, look))
         .child(footer(s, look))
 }
 
@@ -111,24 +115,6 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
     // How many of this bot's conversations have something for the owner.
     // Another bot's are known from the inbox's last round.
     let waiting = s.attention_in(&bot.id);
-    let preview = if waiting == 1 {
-        "1 conversation needs you".to_owned()
-    } else if waiting > 1 {
-        format!("{waiting} conversations need you")
-    } else {
-        let latest = selected
-            .then(|| s.model.session_list().next())
-            .flatten()
-            .map(|session| plain(&session.preview))
-            .filter(|preview| !preview.is_empty());
-        latest.unwrap_or_else(|| {
-            if bot.description.is_empty() {
-                "Start a conversation".to_owned()
-            } else {
-                bot.description.clone()
-            }
-        })
-    };
 
     let mut name = row()
         .w_full()
@@ -137,7 +123,17 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
         .center_y()
         .child(one_line(bot.name.clone(), font(13.0, 550.0), t.foreground).shrink());
     if waiting > 0 {
-        name = name.child(count_badge(t, waiting));
+        // The web shows the number alone; a screen reader hears what it counts.
+        let needs = if waiting == 1 {
+            "1 conversation needs you".to_owned()
+        } else {
+            format!("{waiting} conversations need you")
+        };
+        name = name.child(
+            count_badge(t, waiting)
+                .key(format!("rd-bot-{}-count", bot.id))
+                .label(needs),
+        );
     }
     let id = bot.id.clone();
     let row = row()
@@ -146,25 +142,18 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
         .label(bot.name.clone())
         .w_full()
         .px(22.0)
-        .py(12.0)
+        .py(5.0)
         .gap(12.0)
         .center_y()
         .child(
             row()
-                .size(40.0, 40.0)
+                .size(28.0, 28.0)
                 .center()
-                .radius(12.0)
+                .radius(8.0)
                 .fill(tone.body.alpha(if selected { 0.22 } else { 0.12 }))
-                .child(bot_avatar(&bot.id, tone, 32.0)),
+                .child(bot_avatar(&bot.id, tone, 24.0)),
         )
-        .child(
-            col()
-                .grow(1.0)
-                .min_w(0.0)
-                .gap(4.0)
-                .child(name)
-                .child(one_line(preview, font(11.0, 400.0), t.muted_foreground)),
-        );
+        .child(col().grow(1.0).min_w(0.0).child(name));
     // The selected row is washed in the bot's own colour; the others show
     // the hover colour under the pointer.
     let row = if selected {
@@ -175,6 +164,26 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
     // `move` gives the closure its own copy of `id`, since it outlives this
     // function.
     pressable(row, true, move |s: &mut Ui| s.select_bot(&id))
+}
+
+/// The small ghost button at the end of a roster label (the web's
+/// `.roster-label-action`, an `icon-xs` button): 21 points with a 10.5-point
+/// glyph, pulled into the label's padding so the row stays as tall as its
+/// text.
+pub fn label_action(t: &Theme, glyph: &'static Icon, label: &str) -> El {
+    row()
+        .role("button")
+        .label(label)
+        .help(label)
+        .size(21.0, 21.0)
+        .mx(-4.0)
+        .my(-6.0)
+        .center()
+        .radius(5.25)
+        .hover(t.hover)
+        .press(t.hover)
+        .focus_ring(2.0, 2.0, t.accent)
+        .child(icon(glyph, 10.5).color(t.muted_foreground).a11y_hidden())
 }
 
 /// A preview without Markdown markers, on one line (the web's `sessionPreview`).

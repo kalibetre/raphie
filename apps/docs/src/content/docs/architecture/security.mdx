@@ -115,11 +115,11 @@ The record holds the exact arguments shown to the owner and a fingerprint of the
 | ------------------------------------------------------- | --------------------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
 | Workspace commands (`workspace_exec`, container `bash`) | Asks per call                           | Runs without asking in that conversation | Repeats of the exact same arguments in the same conversation |
 | Container file read, write and edit                     | No prompt; limited to the bot's sandbox | Same                                     | Not applicable                                               |
-| MCP tools, including read-only ones                     | Asks per call                           | Still asks                               | Not available                                                |
+| MCP tools, including read-only ones                     | Asks per call                           | Runs without asking in that conversation | Not available                                                |
 | MCP documentation lookups chosen per connection         | No prompt                               | No prompt                                | Not applicable                                               |
 | Memory tools                                            | No prompt; the owner's own store        | Same                                     | Not applicable                                               |
 
-Full access and session grants never apply to MCP tools. MCP arguments over 64 KiB are refused as too large to review. Grants survive restarts and can be revoked; revoking stops future calls only. See [tools](/guides/tools/) and [workspaces](/guides/workspaces/).
+Session grants never apply to MCP tools. Full access does, and the gate checks the mode again just before each call, so switching back to Ask stops calls not yet sent. MCP arguments over 64 KiB are refused as too large to review. Grants survive restarts and can be revoked; revoking stops future calls only. See [tools](/guides/tools/) and [workspaces](/guides/workspaces/).
 
 ## What plugins can and cannot do
 

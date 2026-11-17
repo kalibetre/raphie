@@ -21,6 +21,8 @@ export type ToolApproval = {
   expiresAt: number;
   status: "pending" | "approved" | "rejected" | "expired";
   decidedVia: Source | null;
+  /** Decided in the desktop app, which reaches Raphie through the web host. */
+  decidedApp?: "desktop";
   execution: "waiting" | "running" | "done" | "uncertain";
   result: ToolResult | null;
 };

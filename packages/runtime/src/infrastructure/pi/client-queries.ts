@@ -203,6 +203,7 @@ export class PiClientQueries implements ClientQueries {
         expiresAt: a.expiresAt,
         status: a.status,
         decidedVia: a.decidedVia,
+        ...(a.decidedApp ? { decidedApp: a.decidedApp } : {}),
         execution: a.execution,
       }));
   }

@@ -9,7 +9,11 @@ import {
   type AuthService,
   openAuthService,
 } from "../src/infrastructure/auth/auth-service.ts";
-import { createGateway } from "../src/infrastructure/auth/gateway.ts";
+import {
+  APP_HEADER,
+  createGateway,
+  markApp,
+} from "../src/infrastructure/auth/gateway.ts";
 
 const origin = "http://127.0.0.1:4320";
 const opened: AuthService[] = [];
@@ -274,6 +278,14 @@ test("a browser explicitly approves a native device and can revoke it independen
   ).toBe(403);
   if (admission instanceof Response)
     throw new Error("Expected device admission.");
+  // The runtime records a decision made with the token as the desktop app's;
+  // a browser's request can never claim to be it.
+  expect(markApp(new Headers(), admission).get(APP_HEADER)).toBe("desktop");
+  const browser = await check("/api/runtime", { headers: { cookie } });
+  if (browser instanceof Response) throw new Error("Expected admission.");
+  expect(
+    markApp(new Headers({ [APP_HEADER]: "desktop" }), browser).has(APP_HEADER),
+  ).toBe(false);
   let cancelled = false;
   const stream = gateway.finish(
     new Response(

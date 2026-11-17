@@ -546,6 +546,7 @@ mod tests {
             expires_at: 9000,
             status: ApprovalStatus::Approved,
             decided_via: None,
+            decided_app: None,
             execution: Execution::Done,
             connection_identity: None,
         }

@@ -64,6 +64,7 @@ export interface SessionOperations {
     id: string,
     decision: "approved" | "rejected",
     scope?: "once" | "session",
+    app?: "desktop",
   ): Promise<ApprovalStatus>;
 }
 
@@ -251,6 +252,7 @@ export class Sessions implements SessionOperations {
     id: string,
     decision: "approved" | "rejected",
     scope: "once" | "session" = "once",
+    app?: "desktop",
   ) {
     const verified = this.authority.require(actor);
     return this.approvals.decide(
@@ -262,6 +264,7 @@ export class Sessions implements SessionOperations {
       verified.connectionId,
       verified.discordUserId,
       scope,
+      app,
     );
   }
 }

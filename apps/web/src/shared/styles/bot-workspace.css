@@ -1,30 +1,4 @@
 @layer components {
-  /* Right workspace panel: tabs today, more tools later. */
-  .workspace-panel-tabs {
-    flex: 1;
-    min-height: 0;
-    gap: 0;
-  }
-  .workspace-panel-content {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-  }
-  .workspace-panel-tab-list .reply-count {
-    margin-left: 6px;
-  }
-  .panel-toggle {
-    position: relative;
-  }
-  .panel-toggle .reply-count {
-    position: absolute;
-    top: -3px;
-    right: -5px;
-    min-width: 15px;
-    padding: 0 4px;
-    font-size: 9px;
-  }
   /* A scheduled job's delivery, shown in place of an owner message. */
   .turn-scheduled {
     display: flex;
@@ -92,14 +66,17 @@
     letter-spacing: 1px;
     color: var(--muted-foreground);
   }
-  .roster-total {
-    font-size: 10px;
-    letter-spacing: 0;
-    color: var(--muted-foreground);
-  }
+  /* The bots take what they need, up to two fifths of the window; the
+     selected bot's conversations fill the rest. */
   .bot-roster-scroll {
-    flex: 1;
+    flex: none;
     margin: 0 -12px;
+  }
+  /* A percentage of an auto height would not bound the viewport, so the
+     bots are capped by the window's height and scroll past it. */
+  .bot-roster-scroll,
+  .bot-roster-scroll .scroll-area-viewport {
+    max-height: 40vh;
   }
   .bot-roster-list {
     display: grid;
@@ -112,7 +89,7 @@
     text-align: left;
     border: 0;
     border-radius: 0;
-    padding: 12px 22px;
+    padding: 5px 22px;
     background: transparent;
     min-width: 0;
     width: 100%;
@@ -128,9 +105,9 @@
     display: grid;
     place-items: center;
     flex: none;
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
     background: color-mix(in srgb, var(--tone) 12%, transparent);
   }
   .bot-roster-item[aria-current] .roster-avatar {
@@ -160,7 +137,6 @@
     justify-content: space-between;
     font-size: 13px;
     font-weight: 550;
-    margin-bottom: 4px;
   }
   .bot-roster-title {
     min-width: 0;
@@ -189,36 +165,66 @@
     background: var(--accent-soft);
     color: var(--accent);
   }
-  .new-bot-row {
+  @media (min-width: 768px) {
+    .bot-roster-list .roster-avatar .bot-avatar {
+      width: 24px;
+      height: 24px;
+    }
+  }
+  .roster-label-action {
+    margin: -6px -4px;
+    color: var(--muted-foreground);
+  }
+  .roster-label-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .roster-conversations {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    margin: 8px -12px 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .roster-conversations > .roster-label {
+    padding: 0 22px 4px;
+  }
+  .roster-conversations .library-page {
+    padding: 6px 12px 12px;
+  }
+  /* The filters already say what is shown; the sidebar keeps the room. */
+  .roster-conversations .library-results {
+    display: none;
+  }
+  .roster-conversations .library-search {
+    padding: 7px 10px;
+  }
+  .roster-conversations .library-filters {
+    margin: 8px 0 6px;
+  }
+  .mobile-conversations {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .mobile-conversations-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    width: calc(100% + 24px);
-    margin: 12px -12px 0;
-    padding: 10px 22px;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    color: var(--muted-foreground);
-    font-size: 13px;
-    font-weight: 550;
-    text-align: left;
-    transition:
-      color 150ms,
-      background-color 150ms;
+    justify-content: space-between;
+    padding: 14px 18px 4px;
   }
-  .new-bot-row:hover {
-    color: var(--foreground);
-    background: var(--hover);
+  .mobile-conversations-header h1 {
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
   }
-  .new-bot-icon {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    background: var(--muted);
+  .mobile-conversations-new {
+    border-radius: 999px;
   }
   .roster-footer {
     display: flex;
@@ -738,11 +744,11 @@
     }
     .bot-roster .roster-brand,
     .bot-roster .roster-label,
-    .new-bot-row,
     .roster-footer {
       display: none;
     }
     .bot-roster-scroll {
+      max-height: none;
       margin: 0;
     }
     .bot-roster-list {

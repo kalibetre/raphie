@@ -1253,16 +1253,16 @@ pub fn model_settings() -> RuntimeSettings {
     }))
 }
 
-/// The same, with the conversations panel open.
+/// The selected bot's conversations in the sidebar, with "Plan the week"
+/// open beside them.
 pub fn conversations(ui: &mut Ui) {
-    new_conversation(ui);
-    ui.panel_open = true;
+    conversation(ui);
 }
 
-/// The conversations panel with replies not read yet: two new in one
+/// The sidebar's conversations with replies not read yet: two new in one
 /// conversation, and one that was read to its end.
 pub fn unread(ui: &mut Ui) {
-    conversations(ui);
+    new_conversation(ui);
     for session in &mut ui.model.sessions {
         session.reply_count = match session.id.as_str() {
             "s-1" => Some(3),
