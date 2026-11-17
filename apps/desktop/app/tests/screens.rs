@@ -4541,3 +4541,159 @@ fn an_expired_subscription_asks_to_sign_in_again() {
         connection_id: Some("openai_1".into())
     }));
 }
+
+/// The text shown inside the element keyed `key` (its first text child).
+fn text_inside(rt: &Runtime<Ui>, key: &str) -> ElementInfo {
+    let elements = rt.elements();
+    let parent = elements
+        .iter()
+        .position(|e| e.key.as_deref() == Some(key))
+        .unwrap_or_else(|| panic!("no element keyed {key}"));
+    elements
+        .into_iter()
+        .find(|e| e.parent == Some(parent) && e.text.is_some())
+        .unwrap_or_else(|| panic!("no text in {key}"))
+}
+
+#[test]
+fn the_context_ring_says_how_full_the_models_context_is() {
+    for dark in [false, true] {
+        // Unknown until the bot's models load: no ring.
+        let rt = render(scenes::conversation, dark);
+        assert!(rt.find("rd-context").is_none());
+
+        // The latest model call used 1,210 of the model's million tokens;
+        // the conversation's three calls used 1,938 and cost $0.0127.
+        let rt = render(scenes::composer, dark);
+        let ring = element(&rt, "rd-context");
+        assert_eq!(
+            ring.label.as_deref(),
+            Some("Context: 1.2k of 1M tokens (0%). This conversation: 1,938 tokens, $0.01.")
+        );
+        let help = ring.help.unwrap_or_default();
+        assert!(
+            help.starts_with("Context: 1.2k of 1M tokens (0%)"),
+            "{help}"
+        );
+        assert!(
+            help.ends_with("This conversation: 1,938 tokens, $0.01"),
+            "{help}"
+        );
+        // It sits between the permissions and Send.
+        let x = |key: &str| element(&rt, key).rect[0];
+        assert!(x("rd-permissions") < x("rd-context") && x("rd-context") < x("rd-send"));
+
+        let rt = render(scenes::composer_context, dark);
+        assert!(
+            element(&rt, "rd-context")
+                .label
+                .unwrap_or_default()
+                .starts_with("Context: 620k of 1M tokens (62%).")
+        );
+        let rt = render(scenes::composer_nearly_full, dark);
+        assert!(
+            element(&rt, "rd-context")
+                .label
+                .unwrap_or_default()
+                .starts_with("Context: 850k of 1M tokens (85%).")
+        );
+    }
+    // A new conversation has used nothing yet, and has spent nothing.
+    let mut rt = render(scenes::new_conversation, false);
+    deliver(
+        &mut rt,
+        Event::BotSettings {
+            bot_id: "default".into(),
+            settings: Box::new(scenes::model_settings()),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-context").label.as_deref(),
+        Some("Context: 0 of 1M tokens (0%).")
+    );
+}
+
+#[test]
+fn the_model_button_drops_the_makers_name() {
+    let mut rt = render(scenes::composer, false);
+    assert_eq!(
+        text_inside(&rt, "rd-model").text.as_deref(),
+        Some("Claude Fable Latest")
+    );
+    click(&mut rt, "rd-model");
+    click(&mut rt, "rd-model-choice-c-router:anthropic/claude-opus");
+    deliver(
+        &mut rt,
+        Event::ModelChosen {
+            session_id: "s-1".into(),
+            model: ModelSelection {
+                provider: "c-router".into(),
+                model_id: "anthropic/claude-opus".into(),
+            },
+        },
+    );
+    // A screen reader still hears the whole name.
+    assert_eq!(
+        element(&rt, "rd-model").label.as_deref(),
+        Some("Choose model: Anthropic: Claude Opus")
+    );
+    assert_eq!(
+        text_inside(&rt, "rd-model").text.as_deref(),
+        Some("Claude Opus")
+    );
+}
+
+#[test]
+fn full_access_reads_in_the_attention_colour() {
+    for (dark, amber) in [(false, "#a2670f"), (true, "#e0a54a")] {
+        let rt = render(scenes::composer, dark);
+        let ask = text_inside(&rt, "rd-permissions");
+        assert_eq!(ask.text.as_deref(), Some("Ask"));
+        assert_ne!(&ask.text_color.unwrap().hex()[..7], amber);
+        let rt = render(scenes::composer_full_access, dark);
+        let full = text_inside(&rt, "rd-permissions");
+        assert_eq!(full.text.as_deref(), Some("Full access"));
+        assert_eq!(&full.text_color.unwrap().hex()[..7], amber);
+    }
+}
+
+#[test]
+fn the_composer_toolbar_stays_one_row_in_the_smallest_window() {
+    fn with_panel(ui: &mut Ui) {
+        scenes::composer_full_access(ui);
+        ui.panel_open = true;
+    }
+    // The window's smallest size, with and without the conversations panel
+    // taking room from the composer.
+    for scene in [scenes::composer_full_access, with_panel] {
+        for size in [(960.0, 560.0), (1280.0, 800.0)] {
+            let rt = render_sized(scene, false, size);
+            let card = element(&rt, "rd-composer-card").rect;
+            let controls = [
+                "rd-attach",
+                "rd-model",
+                "rd-permissions",
+                "rd-context",
+                "rd-send",
+            ];
+            let rects: Vec<[f32; 4]> = controls.iter().map(|key| element(&rt, key).rect).collect();
+            let middle = |r: &[f32; 4]| r[1] + r[3] / 2.0;
+            for (key, rect) in controls.iter().zip(&rects) {
+                assert!(
+                    (middle(rect) - middle(&rects[0])).abs() < 1.0,
+                    "{key} left the row at {size:?}: {rect:?}"
+                );
+                assert!(rect[0] + rect[2] <= card[0] + card[2], "{key} overflows");
+            }
+            // In order, none overlapping the next.
+            for pair in rects.windows(2) {
+                assert!(pair[0][0] + pair[0][2] <= pair[1][0] + 0.5, "{pair:?}");
+            }
+            // The permissions keep their whole name.
+            assert_eq!(
+                text_inside(&rt, "rd-permissions").text.as_deref(),
+                Some("Full access")
+            );
+        }
+    }
+}

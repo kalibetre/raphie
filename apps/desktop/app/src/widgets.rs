@@ -145,9 +145,14 @@ pub fn pressable(e: El, enabled: bool, action: impl Fn(&mut Ui) + 'static) -> El
     }
 }
 
-/// A tinted chip in the composer's toolbar that opens a list: a glyph, a
-/// name and a chevron (the web's `.composer-model-trigger`). `label` is
-/// what a screen reader calls it; `open` says whether its list shows.
+/// A quiet text button in the composer's toolbar that opens a list: a
+/// glyph, a name and a chevron, with no fill until hovered (the web's
+/// `.composer-model-trigger`), so the draft stays the loudest thing in the
+/// composer. `label` is what a screen reader calls it; `open` says whether
+/// its list shows; `attention` paints it all in amber (Full access).
+///
+/// It keeps its width; a caller whose name may be long adds `.max_w(..)`
+/// and `.shrink()`, and the name is then cut with "…".
 pub fn toolbar_chip(
     t: &Theme,
     key: &str,
@@ -155,31 +160,33 @@ pub fn toolbar_chip(
     label: String,
     name: impl Into<String>,
     open: bool,
+    attention: bool,
 ) -> El {
+    let (ink, quiet) = if attention {
+        (t.attention, t.attention)
+    } else {
+        (t.foreground, t.muted_foreground)
+    };
     row()
         .key(key.to_owned())
         .role("button")
         .label(label)
         .expanded(open)
-        .min_h(32.0)
-        .max_w(280.0)
-        // May be narrower than its name, which is then cut with "…", so a
-        // small window never pushes it under the send button.
-        .shrink()
-        .px(10.0)
+        .min_h(28.0)
+        .min_w(0.0)
+        .px(8.0)
         .py(4.0)
-        .gap(6.0)
+        .gap(5.0)
         .center_y()
         .radius(8.0)
-        .fill(t.accent_soft)
-        .hover(t.hover.alpha(0.5))
+        .hover(t.hover)
         .press(t.hover)
         .focus_ring(1.0, 1.0, t.accent)
-        .child(icon(glyph, 13.0).color(t.accent).a11y_hidden())
-        .child(one_line(name, font(12.0, 400.0), t.foreground).shrink())
+        .child(icon(glyph, 13.0).color(quiet).a11y_hidden())
+        .child(one_line(name, font(12.5, 550.0), ink).shrink())
         .child(
             icon(&crate::icons::CHEVRON_DOWN, 12.0)
-                .color(t.accent)
+                .color(quiet)
                 .a11y_hidden(),
         )
 }

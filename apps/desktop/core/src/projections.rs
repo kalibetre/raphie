@@ -341,14 +341,120 @@ pub fn pretty(json: &str) -> String {
     indented(&value)
 }
 
-/// "88", "1.3k", "12k".
+/// How full the model's context is: the tokens of the conversation's
+/// latest model call (its input, cached input and reply) among the runs
+/// `run_ids`, or `None` before the first one.
+pub fn context_tokens(run_ids: &[&str], activity: &[SessionActivity]) -> Option<u64> {
+    let mut latest: Option<(i64, u64)> = None;
+    for event in activity {
+        let in_runs = event
+            .run_id
+            .as_deref()
+            .is_some_and(|run| run_ids.contains(&run));
+        if event.kind != "model.completed" || !in_runs {
+            continue;
+        }
+        let tokens = details(event)["usage"]["totalTokens"].as_u64().unwrap_or(0);
+        // A later call wins; of two at the same time, the later in the journal.
+        if tokens > 0 && latest.is_none_or(|(at, _)| event.at >= at) {
+            latest = Some((event.at, tokens));
+        }
+    }
+    latest.map(|(_, tokens)| tokens)
+}
+
+/// What the composer's context pie shows: how much of the model's context
+/// window the conversation fills, and what its tooltip says.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextFill {
+    /// From 0 to 1.
+    pub share: f64,
+    /// Four fifths or more: drawn in the attention colour.
+    pub nearly_full: bool,
+    /// "Context: 88 of 1M tokens (0%)".
+    pub context: String,
+    /// "This conversation: 1,338 tokens, $0.0136", once a model call has
+    /// reported usage.
+    pub spent: Option<String>,
+}
+
+/// The pie for a conversation whose latest model call used `used` tokens
+/// (`None` before the first) of a `window`-token context, having spent
+/// `usage` so far. `None` when the window is not known, as the web hides
+/// its ring then.
+pub fn context_fill(
+    used: Option<u64>,
+    window: u64,
+    usage: Option<RunUsage>,
+) -> Option<ContextFill> {
+    if window == 0 {
+        return None;
+    }
+    let used = used.unwrap_or(0);
+    let share = (used as f64 / window as f64).min(1.0);
+    // JavaScript's `Math.round`: halves up.
+    let percent = (share * 100.0 + 0.5).floor();
+    let context = format!(
+        "Context: {} of {} tokens ({percent}%)",
+        format_tokens(used),
+        format_tokens(window)
+    );
+    let spent = usage.filter(|usage| usage.tokens > 0).map(|usage| {
+        format!(
+            "This conversation: {} tokens, {}",
+            grouped(usage.tokens),
+            format_cost(usage.cost)
+        )
+    });
+    Some(ContextFill {
+        share,
+        nearly_full: share >= 0.8,
+        context,
+        spent,
+    })
+}
+
+/// What all of `run_ids`' model calls cost together, or `None` before the
+/// first finished.
+pub fn conversation_usage(run_ids: &[&str], activity: &[SessionActivity]) -> Option<RunUsage> {
+    run_ids
+        .iter()
+        .filter_map(|run| run_usage(run, activity))
+        .reduce(|total, run| RunUsage {
+            tokens: total.tokens + run.tokens,
+            cost: total.cost + run.cost,
+            calls: total.calls + run.calls,
+        })
+}
+
+/// A count with thousands separators, as JavaScript's `toLocaleString`
+/// writes it in English: "12,480".
+pub fn grouped(count: u64) -> String {
+    let digits = count.to_string();
+    let mut out = String::new();
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
+}
+
+/// "88", "1.3k", "12k", "1M", "1.5M".
 pub fn format_tokens(value: u64) -> String {
     if value < 1000 {
         return value.to_string();
     }
-    let thousands = value as f64 / 1000.0;
-    let digits = if value < 10_000 { 1 } else { 0 };
-    format!("{}k", to_fixed(thousands, digits))
+    if value < 1_000_000 {
+        let thousands = value as f64 / 1000.0;
+        let digits = if value < 10_000 { 1 } else { 0 };
+        return format!("{}k", to_fixed(thousands, digits));
+    }
+    // `Number(x.toFixed(1))` drops a trailing ".0": "1M", not "1.0M".
+    let millions = to_fixed(value as f64 / 1_000_000.0, 1);
+    let millions = millions.strip_suffix(".0").unwrap_or(&millions);
+    format!("{millions}M")
 }
 
 /// "$0.0004" below a cent, "$0.13" from a cent up.
@@ -658,6 +764,72 @@ mod tests {
     }
 
     #[test]
+    fn the_context_is_the_latest_model_call_of_the_conversation() {
+        use serde_json::json;
+        let call = |id: i64, at: i64, run: &str, tokens: u64| {
+            event(
+                id,
+                at,
+                Some(run),
+                None,
+                "model.completed",
+                "model completed",
+                json!({"usage": {"totalTokens": tokens, "cost": {"total": 0.01}}}),
+            )
+        };
+        let journal = vec![
+            call(1, 1000, "t1", 400),
+            call(2, 3000, "t2", 900),
+            // Another conversation's run, later still.
+            call(3, 4000, "other", 50_000),
+            // A call that reported nothing does not count.
+            call(4, 5000, "t2", 0),
+        ];
+        assert_eq!(context_tokens(&["t1", "t2"], &journal), Some(900));
+        assert_eq!(context_tokens(&["t1"], &journal), Some(400));
+        assert_eq!(context_tokens(&["t9"], &journal), None);
+        let usage = conversation_usage(&["t1", "t2"], &journal).unwrap();
+        assert_eq!((usage.tokens, usage.calls), (1300, 3));
+        assert_eq!(conversation_usage(&["t9"], &journal), None);
+    }
+
+    #[test]
+    fn the_context_pie_says_how_full_the_window_is() {
+        let spent = RunUsage {
+            tokens: 1338,
+            cost: 0.0136,
+            calls: 3,
+        };
+        let fill = context_fill(Some(88), 1_000_000, Some(spent)).unwrap();
+        assert_eq!(fill.context, "Context: 88 of 1M tokens (0%)");
+        assert_eq!(
+            fill.spent.as_deref(),
+            Some("This conversation: 1,338 tokens, $0.01")
+        );
+        assert!(!fill.nearly_full);
+        // Before the first model call: empty, and nothing spent.
+        let fresh = context_fill(None, 200_000, None).unwrap();
+        assert_eq!(fresh.context, "Context: 0 of 200k tokens (0%)");
+        assert_eq!((fresh.share, fresh.spent), (0.0, None));
+        // Four fifths and more reads in the attention colour.
+        let nearly = context_fill(Some(160_000), 200_000, None).unwrap();
+        assert!(nearly.nearly_full);
+        assert_eq!(nearly.context, "Context: 160k of 200k tokens (80%)");
+        assert!(
+            !context_fill(Some(159_999), 200_000, None)
+                .unwrap()
+                .nearly_full
+        );
+        // More than the window still draws a full pie.
+        assert_eq!(
+            context_fill(Some(300_000), 200_000, None).unwrap().share,
+            1.0
+        );
+        // An unknown window draws nothing.
+        assert_eq!(context_fill(Some(88), 0, None), None);
+    }
+
+    #[test]
     fn numbers_are_written_as_the_web_writes_them() {
         let tokens = [
             0, 88, 999, 1000, 1150, 1250, 1349, 9949, 9999, 10000, 10499, 10500, 123_456,
@@ -667,6 +839,11 @@ mod tests {
             "123k",
         ];
         assert_eq!(tokens.map(format_tokens), expected);
+        let large = [
+            999_999, 1_000_000, 1_040_000, 1_050_000, 1_500_000, 2_000_000,
+        ];
+        let expected = ["1000k", "1M", "1M", "1.1M", "1.5M", "2M"];
+        assert_eq!(large.map(format_tokens), expected);
 
         let costs = [
             0.0, 0.00004, 0.00005, 0.0099, 0.00995, 0.01, 0.125, 0.375, 1.005, 12.3,

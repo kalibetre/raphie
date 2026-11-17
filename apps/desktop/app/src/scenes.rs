@@ -9,8 +9,8 @@ use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::ApprovalMode;
 use raphie_core::contracts::{
     Account, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection, MemoryEvidence,
-    MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionObservation,
-    SessionSummary, TelegramPairingCode, WorkspaceListing,
+    MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionActivity,
+    SessionObservation, SessionSummary, TelegramPairingCode, WorkspaceListing,
 };
 use raphie_core::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use raphie_core::contracts::{JobRun, ScheduledJob};
@@ -46,6 +46,10 @@ pub const SCENES: &[Scene] = &[
     ("attachments", attachments),
     ("image-viewer", image_viewer),
     ("permissions", permissions),
+    ("composer", composer),
+    ("composer-full-access", composer_full_access),
+    ("composer-context", composer_context),
+    ("composer-nearly-full", composer_nearly_full),
     ("model-picker", model_picker),
     ("model-picker-favorites", model_picker_favorites),
     ("model-picker-family", model_picker_family),
@@ -1375,6 +1379,59 @@ pub fn permissions(ui: &mut Ui) {
         .command_mode
         .loaded("s-1", ApprovalMode::FullAccess);
     ui.permissions_open = true;
+}
+
+/// The conversation once its models and command mode have loaded: the
+/// composer names the model and shows how full its context is.
+pub fn composer(ui: &mut Ui) {
+    conversation(ui);
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(model_settings()),
+    });
+    ui.model.command_mode.open("s-1");
+    ui.model.command_mode.loaded("s-1", ApprovalMode::Ask);
+}
+
+/// The composer set to run commands without asking, which reads in amber.
+pub fn composer_full_access(ui: &mut Ui) {
+    composer(ui);
+    ui.model
+        .command_mode
+        .loaded("s-1", ApprovalMode::FullAccess);
+}
+
+/// The composer after a model call that filled `tokens` of the model's
+/// million-token context.
+fn composer_after_call(ui: &mut Ui, tokens: u64) {
+    composer(ui);
+    let call: SessionActivity = from_json(activity(
+        8,
+        -293_000,
+        "t2",
+        None,
+        "model.completed",
+        "model completed",
+        json!({"stopReason": "stop", "usage": {"totalTokens": tokens, "cost": {"total": 0.62}}}),
+    ));
+    if let Some(observation) = ui
+        .model
+        .conversation
+        .as_mut()
+        .and_then(|conversation| conversation.observation.as_mut())
+    {
+        observation.activity.push(call);
+    }
+}
+
+/// The composer with the context 62% full.
+pub fn composer_context(ui: &mut Ui) {
+    composer_after_call(ui, 620_000);
+}
+
+/// The composer with the context 85% full: the ring turns amber.
+pub fn composer_nearly_full(ui: &mut Ui) {
+    composer_after_call(ui, 850_000);
 }
 
 /// The conversation with the composer's model picker open.

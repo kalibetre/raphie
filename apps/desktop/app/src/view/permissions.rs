@@ -35,6 +35,8 @@ pub fn permissions(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         format!("Command permissions: {spoken}"),
         mode_label(mode),
         s.permissions_open,
+        // Full access is never on by accident: it reads in amber.
+        mode == Some(ApprovalMode::FullAccess),
     )
     .on_press(|s: &mut Ui| s.permissions_open = !s.permissions_open);
     if s.permissions_open {
