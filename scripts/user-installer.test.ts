@@ -75,7 +75,8 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     };
     await checksum();
     const assets = [
-      { name: "raphie-linux-x64.tar.gz", size: 87_654_321 },
+      // Under 8 MiB, so the archive downloads in one stream.
+      { name: "raphie-linux-x64.tar.gz", size: 1_234_567 },
       { name: "raphie-darwin-arm64.tar.gz" },
       { name: "SHA256SUMS" },
     ];
@@ -277,7 +278,7 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     // Each slow step says what it is doing, the download with its size.
     assert.match(
       update.stdout.toString(),
-      /Finding the newest nightly release\.\.\.\n[^]*Checking that nightly-11-1 follows the installed nightly-10-1\.\.\.\nDownloading raphie-linux-x64\.tar\.gz for nightly-11-1 \(87\.7 MB\)\.\.\.\n(?:The download broke off.*\n)?Verifying the download\.\.\.\nStopping Raphie to update it\.\.\.\n[^]*Waiting for Raphie to start\.\.\./,
+      /Finding the newest nightly release\.\.\.\n[^]*Checking that nightly-11-1 follows the installed nightly-10-1\.\.\.\nDownloading raphie-linux-x64\.tar\.gz for nightly-11-1 \(1\.2 MB\)\.\.\.\n(?:The download broke off.*\n)?Verifying the download\.\.\.\nStopping Raphie to update it\.\.\.\n[^]*Waiting for Raphie to start\.\.\./,
     );
     // Without a terminal to draw it on, curl's progress meter stays off.
     assert.deepEqual(
@@ -634,3 +635,147 @@ exit 0
   }
   // Each case runs the whole installer; together they take about 30 s.
 }, 90_000);
+
+/**
+ * The installer's download functions, run on their own against a fake curl
+ * that serves `file` by byte range from disk.
+ */
+async function downloadWith(
+  temp: string,
+  file: Uint8Array,
+  options: { ranges?: boolean; breakOnce?: boolean; failPart?: boolean } = {},
+  size: string = String(file.length),
+) {
+  const bin = join(temp, "bin");
+  await mkdir(bin, { recursive: true });
+  await writeFile(join(temp, "release.bin"), file);
+  if (options.ranges !== false) await writeFile(join(temp, "ranges-ok"), "");
+  if (options.breakOnce) await writeFile(join(temp, "break-once"), "");
+  if (options.failPart) await writeFile(join(temp, "fail-part"), "");
+  await writeFile(
+    join(bin, "curl"),
+    `#!/bin/bash
+range= headers= out= resume=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -r) range=$2; shift ;;
+    -D) headers=$2; shift ;;
+    -o) out=$2; shift ;;
+    -C) resume=$2; shift ;;
+  esac
+  shift
+done
+file="$FIXTURE/release.bin"
+if [ -z "$range" ]; then echo one >> "$FIXTURE/requests"; cp "$file" "$out"; exit 0; fi
+echo "$range" >> "$FIXTURE/requests"
+if [ ! -e "$FIXTURE/ranges-ok" ]; then printf 'HTTP/2 200\r\n\r\n' > "$headers"; cat "$file"; exit 0; fi
+start=\${range%-*} end=\${range#*-}
+if [ "$start" -gt 0 ] && [ -e "$FIXTURE/fail-part" ]; then exit 22; fi
+printf 'HTTP/2 206\r\n\r\n' > "$headers"
+# One part breaks off after 100 bytes, once.
+if [ "$start" -gt 0 ] && mv "$FIXTURE/break-once" "$FIXTURE/broke" 2>/dev/null; then
+  tail -c +$((start + 1)) "$file" | head -c 100; exit 92
+fi
+tail -c +$((start + 1)) "$file" | head -c $((end - start + 1))
+`,
+    { mode: 0o755 },
+  );
+  const script = await readFile(resolve("scripts/install.sh"), "utf8");
+  const functions = script.slice(
+    script.indexOf("# Downloads release file $1 to $2."),
+    script.indexOf('echo "Finding the newest'),
+  );
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      "-c",
+      `fetch=-fsSL\nsleep() { :; }\n${functions}\ndownload_parallel "https://github.example/release.bin" "$FIXTURE/out.bin" "$1"`,
+      "download",
+      size,
+    ],
+    {
+      env: {
+        ...process.env,
+        FIXTURE: temp,
+        PATH: `${bin}:${process.env.PATH}`,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  const requests = existsSync(join(temp, "requests"))
+    ? (await readFile(join(temp, "requests"), "utf8")).trim().split("\n")
+    : [];
+  const out = existsSync(join(temp, "out.bin"))
+    ? new Uint8Array(await readFile(join(temp, "out.bin")))
+    : undefined;
+  return { result, requests, out };
+}
+
+test("installer downloads a large archive in 16 parts at once and resumes a broken part", async () => {
+  const temp = await mkdtemp(join(tmpdir(), "raphie-parallel-download-"));
+  try {
+    const file = crypto.getRandomValues(new Uint8Array(9 * 1048576 + 7));
+    const { result, requests, out } = await downloadWith(temp, file, {
+      breakOnce: true,
+    });
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+    assert.ok(
+      out && Buffer.compare(out, file) === 0,
+      "the parts join into the file",
+    );
+    const ranges = requests.map((range) => range.split("-").map(Number));
+    // Sixteen parts that cover the file once, plus the broken one resuming 100
+    // bytes after its start.
+    const starts = new Set(ranges.map(([start]) => start));
+    assert.equal(starts.size, 17);
+    assert.equal(Math.max(...ranges.map(([, end]) => end!)), file.length - 1);
+    assert.ok(
+      ranges.some(([start]) => start! % Math.ceil(file.length / 16) === 100),
+    );
+    // No temporary parts are left beside the download.
+    assert.equal(existsSync(join(temp, "out.bin.parts")), false);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test("installer downloads in one stream when the server ignores ranges, the file is small or its size unknown", async () => {
+  for (const [name, options, length, size] of [
+    ["no ranges", { ranges: false }, 9 * 1048576, undefined],
+    ["small", {}, 1048576, undefined],
+    ["unknown size", {}, 9 * 1048576, "-"],
+  ] as const) {
+    const temp = await mkdtemp(join(tmpdir(), "raphie-parallel-download-"));
+    try {
+      const file = crypto.getRandomValues(new Uint8Array(length));
+      const { result, requests, out } = await downloadWith(
+        temp,
+        file,
+        options,
+        size,
+      );
+      assert.equal(result.exitCode, 0, `${name}: ${result.stderr.toString()}`);
+      assert.ok(out && Buffer.compare(out, file) === 0, name);
+      assert.equal(requests.at(-1), "one", name);
+      if (name === "no ranges")
+        assert.match(result.stdout.toString(), /downloading it in one stream/);
+      else assert.deepEqual(requests, ["one"], name);
+    } finally {
+      await rm(temp, { recursive: true, force: true });
+    }
+  }
+});
+
+test("installer stops when a part cannot be downloaded", async () => {
+  const temp = await mkdtemp(join(tmpdir(), "raphie-parallel-download-"));
+  try {
+    const file = crypto.getRandomValues(new Uint8Array(9 * 1048576));
+    const { result, out } = await downloadWith(temp, file, { failPart: true });
+    assert.notEqual(result.exitCode, 0);
+    assert.equal(out, undefined);
+    assert.equal(existsSync(join(temp, "out.bin.parts")), false);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
