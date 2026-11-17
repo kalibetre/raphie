@@ -15,12 +15,27 @@ use crate::icons;
 use crate::sections::Page;
 use crate::state::Ui;
 use crate::theme::font;
-use crate::widgets::{build_badge, count_badge, icon_button, one_line, pressable, status_dot};
+use crate::widgets::{
+    build_badge, build_badge_width, count_badge, icon_button, one_line, pressable, status_dot,
+};
 
 pub fn roster(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     // The brand starts right of the window's own buttons when there are any.
     let brand_inset = (look.lights + 12.0).max(20.0);
+    let width = s.visible_roster_width();
+    let wordmark = font(17.0, 650.0).tracking(-0.2);
+    // The build badge says its word only when the brand has room for it; a
+    // narrow roster shows the badge's icon alone rather than run past its edge.
+    let brand_width = brand_inset
+        + 30.0
+        + 9.0
+        + rune::text::measure("raphie", &[], wordmark, None).0
+        + 9.0
+        + build_badge_width(s.flavor, s.release_channel)
+        // At least this much of the roster stays clear to the badge's right.
+        + 12.0;
+    let compact = brand_width > width;
     let bots = &s.model.bots;
     let mut list = col().w_full();
     for bot in bots {
@@ -28,7 +43,7 @@ pub fn roster(s: &Ui, look: &Look) -> El {
     }
     col()
         .key("rd-roster")
-        .w(s.visible_roster_width())
+        .w(width)
         .h_full()
         .pb(16.0)
         .fill(t.sidebar)
@@ -48,14 +63,10 @@ pub fn roster(s: &Ui, look: &Look) -> El {
                 .center_y()
                 .window_drag()
                 .child(bot_avatar("default", look.tones.of("default"), 30.0))
-                .child(
-                    text("raphie")
-                        .font(font(17.0, 650.0).tracking(-0.2))
-                        .color(t.foreground),
-                )
-                // `then` turns a true into `Some(badge)`. An `Option` is
-                // a list of none or one, which is what `children` takes.
-                .children(build_badge(t, s.flavor, s.release_channel)),
+                .child(text("raphie").font(wordmark).color(t.foreground))
+                // An `Option` is a list of none or one, which is what
+                // `children` takes.
+                .children(build_badge(t, s.flavor, s.release_channel, compact)),
         )
         .child(
             row()

@@ -65,6 +65,7 @@ pub const SCENES: &[Scene] = &[
     ("settings-about-update", settings_about_update),
     ("dev-build", dev_build),
     ("nightly-build", nightly_build),
+    ("nightly-build-narrow", nightly_build_narrow),
     ("settings-about-nightly", settings_about_nightly),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
@@ -260,6 +261,13 @@ pub fn nightly_build(ui: &mut Ui) {
     conversations(ui);
     ui.flavor = Flavor::Release;
     ui.release_channel = ReleaseChannel::Nightly;
+}
+
+/// A nightly release with the roster at its narrowest: only the badge's moon
+/// has room beside the brand.
+pub fn nightly_build_narrow(ui: &mut Ui) {
+    nightly_build(ui);
+    ui.roster_width = crate::state::ROSTER_MIN;
 }
 
 /// Settings → About in a nightly release.
