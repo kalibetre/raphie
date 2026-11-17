@@ -1,5 +1,5 @@
 //! The bar over the conversation: which bot, which conversation, and the
-//! buttons for a new conversation and the conversations panel.
+//! buttons for a new conversation and the inbox.
 //!
 //! Mirrors `apps/web/src/presentation/workspace/workspace-header.tsx` and the
 //! `.bot-workspace-header` rules in `bot-workspace.css`.
@@ -53,35 +53,6 @@ pub fn header(s: &Ui, look: &Look) -> El {
         identity = identity.child(name);
     }
 
-    // How many of this bot's conversations have something for the owner:
-    // a reply not read yet, or an action waiting for approval.
-    let waiting = model
-        .session_list()
-        .filter(|session| s.needs_attention(session))
-        .count();
-    let mut panel_toggle = pressable(
-        icon_button(
-            t,
-            &icons::PANEL_RIGHT,
-            16.0,
-            if s.panel_open {
-                "Hide conversations"
-            } else {
-                "Show conversations"
-            },
-        )
-        .key("rd-toggle-panel"),
-        true,
-        |s: &mut Ui| s.panel_open = !s.panel_open,
-    );
-    if waiting > 0 {
-        // A small count on the button's top-right corner.
-        panel_toggle = panel_toggle.child(
-            count_badge(t, waiting)
-                .pin(None, Some(-3.0), Some(-5.0), None)
-                .a11y_hidden(),
-        );
-    }
     let actions = row()
         .gap(8.0)
         .center_y()
@@ -90,8 +61,7 @@ pub fn header(s: &Ui, look: &Look) -> El {
             true,
             |s: &mut Ui| s.select_session(None),
         ))
-        .child(bell(s, t))
-        .child(panel_toggle);
+        .child(bell(s, t));
 
     // With the roster hidden, the bar starts right of the window's buttons.
     let left = if s.roster_open {

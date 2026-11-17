@@ -185,7 +185,15 @@ fn the_roster_lists_bots_and_says_which_need_the_owner() {
         let mut rt = render(scenes::new_conversation, dark);
         assert!(rt.find("rd-bot-default").is_some() && rt.find("rd-bot-b-research").is_some());
         let text = screen_text(&rt);
-        assert!(text.contains("1 conversation needs you"), "{text}");
+        assert_eq!(
+            needs_you(&rt, "default").as_deref(),
+            Some("1 conversation needs you")
+        );
+        assert_eq!(needs_you(&rt, "b-research"), None);
+        // One line per bot, no preview under the name: a 28-point tile
+        // and 5 points above and below.
+        let row = element(&rt, "rd-bot-default").rect;
+        assert!((row[3] - 38.0).abs() < 0.5, "{row:?}");
         assert!(text.contains("What’s on your mind?"), "the welcome screen");
 
         click(&mut rt, "rd-bot-b-research");
@@ -198,26 +206,109 @@ fn the_roster_lists_bots_and_says_which_need_the_owner() {
     }
 }
 
+/// What a bot's count badge in the roster says to a screen reader; `None`
+/// when it has no badge.
+fn needs_you(rt: &Runtime<Ui>, bot_id: &str) -> Option<String> {
+    rt.elements()
+        .into_iter()
+        .find(|e| e.key.as_deref() == Some(&format!("rd-bot-{bot_id}-count")))
+        .and_then(|e| e.label)
+}
+
+/// True when the element keyed `key` lies inside the one keyed `outer`.
+fn inside(rt: &Runtime<Ui>, key: &str, outer: &str) -> bool {
+    let [x, y, w, h] = element(rt, key).rect;
+    let [ox, oy, ow, oh] = element(rt, outer).rect;
+    x >= ox && y >= oy && x + w <= ox + ow + 0.5 && y + h <= oy + oh + 0.5
+}
+
 #[test]
-fn the_roster_and_the_panel_open_and_close() {
+fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
+    for (size, dark) in [((1280.0, 800.0), false), ((960.0, 560.0), true)] {
+        let mut rt = render_sized(scenes::conversations, dark, size);
+        // No conversations panel on the right, nor a button for one.
+        for gone in [
+            "rd-panel",
+            "rd-toggle-panel",
+            "rd-panel-resize",
+            "rd-results",
+        ] {
+            assert!(rt.find(gone).is_none(), "{gone}");
+        }
+        for key in [
+            "rd-conversations",
+            "rd-new-conversation",
+            "rd-search",
+            "rd-filter-all",
+            "rd-session-s-1",
+        ] {
+            assert!(inside(&rt, key, "rd-roster"), "{key} in the roster");
+        }
+        // Below the bots, and labelled with the bot's name.
+        let bots = element(&rt, "rd-bots").rect;
+        let list = element(&rt, "rd-conversations").rect;
+        assert!(list[1] >= bots[1] + bots[3], "{bots:?} {list:?}");
+        assert!(screen_text(&rt).contains("Raphie’s conversations"));
+        assert!(!screen_text(&rt).contains("Most recent first"));
+
+        // A row opens its conversation; the pen starts a new one.
+        click(&mut rt, "rd-session-s-3");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SelectSession {
+                session_id: Some("s-3".into())
+            })
+        );
+        click(&mut rt, "rd-new-conversation");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SelectSession { session_id: None })
+        );
+        // The label's "+" creates a bot.
+        click(&mut rt, "rd-new-bot");
+        assert_eq!(rt.state.screen, Screen::Settings(Page::NewBot));
+    }
+}
+
+#[test]
+fn the_bots_take_at_most_two_fifths_of_the_window_and_scroll() {
+    let mut rt = render_sized(scenes::conversations, false, (960.0, 560.0));
+    rt.update(|ui, _| {
+        let research = ui.model.bots[1].clone();
+        for n in 0..12 {
+            let mut bot = research.clone();
+            bot.id = format!("b-more-{n}");
+            bot.name = format!("Helper {n}");
+            ui.model.bots.push(bot);
+        }
+    });
+    settle(&mut rt);
+    let bots = element(&rt, "rd-bots").rect;
+    assert!(bots[3] <= 224.0 + 0.5, "{bots:?}");
+    assert!(bots[3] > 200.0, "the bots use their share: {bots:?}");
+    // The conversations keep the rest, rows and all.
+    assert!(element(&rt, "rd-conversations").rect[3] > 150.0);
+    assert!(inside(&rt, "rd-session-s-1", "rd-roster"));
+}
+
+#[test]
+fn the_roster_opens_and_closes_with_its_conversations() {
     let mut rt = render(scenes::new_conversation, false);
-    assert!(rt.find("rd-panel").is_none(), "the panel starts closed");
-    click(&mut rt, "rd-toggle-panel");
-    assert!(rt.find("rd-panel").is_some());
+    assert!(rt.find("rd-conversations").is_some());
     click(&mut rt, "rd-toggle-roster");
     assert!(rt.find("rd-roster").is_none());
+    assert!(rt.find("rd-conversations").is_none());
     click(&mut rt, "rd-toggle-roster");
     assert!(rt.find("rd-roster").is_some());
 }
 
 #[test]
-fn the_panel_lists_searches_and_filters_sessions() {
+fn the_sidebar_lists_searches_and_filters_sessions() {
     for dark in [false, true] {
-        let mut rt = render(scenes::conversations, dark);
+        let mut rt = render(scenes::new_conversation, dark);
         for id in ["s-1", "s-2", "s-3"] {
             assert!(rt.find(&format!("rd-session-{id}")).is_some(), "row {id}");
         }
-        assert!(screen_text(&rt).contains("3 conversations · Most recent first"));
 
         // The Approvals chip keeps only the session waiting for the owner.
         click(&mut rt, "rd-filter-approvals");
@@ -230,7 +321,6 @@ fn the_panel_lists_searches_and_filters_sessions() {
         rt.paste("TEA");
         settle(&mut rt);
         assert!(rt.find("rd-session-s-3").is_some() && rt.find("rd-session-s-1").is_none());
-        assert!(screen_text(&rt).contains("1 conversation matching “TEA”"));
         click(&mut rt, "rd-search-clear");
         assert!(rt.find("rd-session-s-1").is_some());
 
@@ -241,6 +331,7 @@ fn the_panel_lists_searches_and_filters_sessions() {
                 session_id: Some("s-2".into())
             })
         );
+        // The title bar's own button starts one too.
         click(&mut rt, "rd-new");
         assert_eq!(
             rt.state.sent.last(),
@@ -3745,14 +3836,16 @@ fn replies_not_read_yet_are_marked_counted_and_filtered() {
         assert!(rt.find("rd-session-s-3-dot").is_none());
         // Two conversations have something for the owner: one with new
         // replies, one waiting for approval.
-        assert!(shown.contains("2 conversations need you"));
+        assert_eq!(
+            needs_you(&rt, "default").as_deref(),
+            Some("2 conversations need you")
+        );
 
         click(&mut rt, "rd-filter-new");
         assert_eq!(rt.state.filter, Filter::NewReplies);
         assert!(rt.find("rd-session-s-1").is_some());
         assert!(rt.find("rd-session-s-2").is_none());
         assert!(rt.find("rd-session-s-3").is_none());
-        assert!(screen_text(&rt).contains("1 conversation · Most recent first"));
     }
 }
 
@@ -3867,7 +3960,10 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
         assert!(shown.contains(expected), "missing: {expected}");
     }
     // The other bot's row in the roster counts its conversation too.
-    assert!(shown.contains("1 conversation needs you"));
+    assert_eq!(
+        needs_you(&rt, "b-research").as_deref(),
+        Some("1 conversation needs you")
+    );
 
     click(&mut rt, "rd-inbox-jobs");
     assert_eq!(rt.state.inbox_filter, InboxFilter::Jobs);
@@ -4171,73 +4267,6 @@ fn a_picture_that_is_not_ready_cannot_be_opened_and_shows_nothing() {
     assert!(rt.find("rd-viewer").is_none());
 }
 
-#[test]
-fn a_narrow_window_floats_the_conversations_panel_over_the_conversation() {
-    // 1280 wide leaves the conversation 676 points beside both columns.
-    let rt = render(scenes::conversations, false);
-    assert!(rt.state.panel_open);
-    assert!(!rt.state.panel_floats());
-    assert!(rt.find("rd-panel").is_some());
-    assert!(rt.find("rd-panel-float").is_none());
-    assert!(rt.find("rd-panel-close").is_none());
-
-    // 960 would leave it 356: the panel floats instead.
-    let mut rt = render_sized(scenes::conversations, false, (960.0, 640.0));
-    assert!(rt.state.panel_floats());
-    assert!(rt.find("rd-panel-float").is_some());
-    // The conversation keeps the window's width beside the roster.
-    let main = element(&rt, "rd-main");
-    assert!(main.rect[2] > 600.0, "{:?}", main.rect);
-
-    // Picking a conversation closes it.
-    // The key is read first: `click` needs `rt` to itself.
-    let row = element_with_label(&rt, "Tea preferences");
-    click(&mut rt, &row);
-    assert!(!rt.state.panel_open);
-    assert!(rt.find("rd-panel-float").is_none());
-
-    // So does a press outside it.
-    rt.update(|ui, _| ui.panel_open = true);
-    settle(&mut rt);
-    click(&mut rt, "rd-panel-scrim");
-    assert!(!rt.state.panel_open);
-
-    // And its close button, which only a floating panel has.
-    rt.update(|ui, _| ui.panel_open = true);
-    settle(&mut rt);
-    click(&mut rt, "rd-panel-close");
-    assert!(!rt.state.panel_open);
-
-    // Hiding the roster makes room: at 960 the panel docks again.
-    rt.update(|ui, _| {
-        ui.roster_open = false;
-        ui.panel_open = true;
-    });
-    settle(&mut rt);
-    assert!(!rt.state.panel_floats());
-    assert!(rt.find("rd-panel-float").is_none());
-}
-
-#[test]
-fn escape_closes_a_floating_panel_but_not_a_docked_one() {
-    let on_key = raphie_desktop::spec().on_key.expect("window keys");
-    let escape = KeyEvent {
-        key: Key::Escape,
-        mods: Default::default(),
-    };
-    let mut rt = render_sized(scenes::conversations, false, (960.0, 640.0));
-    rt.update(|ui, tx| {
-        assert!(on_key(ui, &escape, tx));
-    });
-    assert!(!rt.state.panel_open);
-
-    let mut rt = render(scenes::conversations, false);
-    rt.update(|ui, tx| {
-        assert!(!on_key(ui, &escape, tx));
-    });
-    assert!(rt.state.panel_open);
-}
-
 /// Drags the handle keyed `key` sideways by `dx` points.
 fn drag(rt: &mut Runtime<Ui>, key: &str, dx: f32) {
     let (x, y) = rt
@@ -4253,10 +4282,9 @@ fn drag(rt: &mut Runtime<Ui>, key: &str, dx: f32) {
 }
 
 #[test]
-fn the_side_columns_resize_by_their_edges_within_the_webs_limits() {
+fn the_roster_resizes_by_its_edge_within_the_webs_limits() {
     let mut rt = render(scenes::conversations, false);
     assert_eq!(rt.state.roster_width, 264.0);
-    assert_eq!(rt.state.panel_width, 340.0);
 
     // The roster's edge moves right to widen it.
     drag(&mut rt, "rd-roster-resize", 60.0);
@@ -4266,20 +4294,12 @@ fn the_side_columns_resize_by_their_edges_within_the_webs_limits() {
         rt.state.roster_width
     );
     assert!((element(&rt, "rd-roster").rect[2] - 324.0).abs() < 1.0);
-    // The panel's edge moves left to widen it.
-    drag(&mut rt, "rd-panel-resize", -40.0);
-    assert!(
-        (rt.state.panel_width - 380.0).abs() < 1.0,
-        "{}",
-        rt.state.panel_width
-    );
-    assert!((element(&rt, "rd-panel").rect[2] - 380.0).abs() < 1.0);
 
-    // Never past the limits: 220 to 480, and 280 to 640.
+    // Never past the limits: 220 to 480.
     drag(&mut rt, "rd-roster-resize", -400.0);
     assert_eq!(rt.state.roster_width, 220.0);
-    drag(&mut rt, "rd-panel-resize", 400.0);
-    assert_eq!(rt.state.panel_width, 280.0);
+    drag(&mut rt, "rd-roster-resize", 400.0);
+    assert_eq!(rt.state.roster_width, 480.0);
 }
 
 #[test]
@@ -4288,7 +4308,6 @@ fn a_window_too_small_for_the_chosen_widths_draws_them_narrower() {
     rt.update(|ui, _| {
         ui.roster_width = 480.0;
         ui.roster_open = true;
-        ui.panel_open = false;
     });
     settle(&mut rt);
     // 1100 less the conversation's 320 leaves 780: 480 fits.
