@@ -103,10 +103,28 @@ export function runUsage(runId: string, activity: ActivityEvent[]) {
   return calls ? { tokens, cost, calls } : undefined;
 }
 
+/** How full the model's context is: the tokens of the conversation's latest
+ * model call (its input, cached input and reply), or undefined before one. */
+export function contextTokens(runIds: string[], activity: ActivityEvent[]) {
+  const runs = new Set(runIds);
+  let latest: { at: number; tokens: number } | undefined;
+  for (const event of activity) {
+    if (event.type !== "model.completed" || !runs.has(event.runId ?? ""))
+      continue;
+    const tokens = (
+      details(event).usage as { totalTokens?: number } | undefined
+    )?.totalTokens;
+    if (tokens && (!latest || event.at >= latest.at))
+      latest = { at: event.at, tokens };
+  }
+  return latest?.tokens;
+}
+
 export function formatTokens(value: number) {
-  return value < 1000
-    ? String(value)
-    : `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
+  if (value < 1000) return String(value);
+  if (value < 1_000_000)
+    return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
+  return `${Number((value / 1_000_000).toFixed(1))}M`;
 }
 
 export function formatCost(value: number) {

@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 
 import type { RuntimeSettings } from "@raphie/contracts";
 
-import { modelCatalog } from "../src/domains/conversations/application/model-catalog.ts";
+import {
+  modelCatalog,
+  shortModelName,
+} from "../src/domains/conversations/application/model-catalog.ts";
 
 const settings: RuntimeSettings = {
   telemetryEnabled: true,
@@ -84,4 +87,16 @@ test("favorites and search retain the identity of two connections to the same pr
   assert.deepEqual(modelCatalog(data, "personal", "all", []).matching, [
     personal,
   ]);
+});
+
+test("the composer drops a model's provider prefix unless two would then match", () => {
+  assert.equal(shortModelName("Anthropic: Claude Fable"), "Claude Fable");
+  assert.equal(shortModelName("GPT-6 Luna"), "GPT-6 Luna");
+  assert.equal(
+    shortModelName("Anthropic: Claude Fable", [
+      { name: "Anthropic: Claude Fable" },
+      { name: "Bedrock: Claude Fable" },
+    ]),
+    "Anthropic: Claude Fable",
+  );
 });

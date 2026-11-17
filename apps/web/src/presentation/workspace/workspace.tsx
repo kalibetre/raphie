@@ -4,7 +4,10 @@ import { ArrowLeft, MessageSquareText } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
-import { runUsage } from "../../domains/conversations/application/run-projection";
+import {
+  contextTokens,
+  runUsage,
+} from "../../domains/conversations/application/run-projection";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
 import { ConversationList } from "../../domains/conversations/presentation/sessions/conversation-list";
@@ -160,6 +163,14 @@ export function Workspace({
       }),
       { tokens: 0, cost: 0 },
     );
+  const contextUsed = data
+    ? contextTokens(
+        data.turns
+          .filter((t) => t.conversationId === conversationId)
+          .map((t) => t.id),
+        data.activity,
+      )
+    : undefined;
   const readSessionId = conversation?.sessionId;
   const readCount = conversation?.replyCount ?? 0;
   const markInboxRead = inbox.markRead;
@@ -470,6 +481,7 @@ export function Workspace({
                       model={conversation?.model ?? data?.model ?? null}
                       needsModel={!data?.model}
                       usage={usage?.tokens ? usage : undefined}
+                      contextUsed={contextUsed}
                       disabled={
                         !connected ||
                         !data?.model ||

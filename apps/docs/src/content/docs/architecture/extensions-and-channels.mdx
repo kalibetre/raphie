@@ -61,7 +61,7 @@ Discovery never implies approval. See [tools](/guides/tools/) for configuring co
 
 ### UI plugins
 
-A UI plugin declares an ID, a version, `hostApiVersion: 1`, a name, a description and the slots it fills. The only slot is `composer.footer`, which receives the draft text, the selected model and the conversation's usage. The built-in token counter is the only plugin. Each plugin renders inside an error boundary, so a failing plugin shows as unavailable instead of breaking the composer. Enabling a plugin is a per-browser preference.
+A UI plugin declares an ID, a version, `hostApiVersion: 1`, a name, a description and the slots it fills. The only slot is `composer.footer`, which receives the draft text, the selected model and the conversation's usage. The built-in token counter, which estimates the draft, is the only plugin; the conversation's usage shows in the composer's context pie. Each plugin renders inside an error boundary, so a failing plugin shows as unavailable instead of breaking the composer. Enabling a plugin is a per-browser preference.
 
 | Limit              | Today                                                |
 | ------------------ | ---------------------------------------------------- |

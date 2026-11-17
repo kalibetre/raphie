@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "../../../shared/ui/select";
 import { useRuntimeSettings } from "../../settings/infrastructure/use-runtime-settings";
-import { modelCatalog } from "../application/model-catalog";
+import { modelCatalog, shortModelName } from "../application/model-catalog";
 import { useModelFavorites } from "../infrastructure/use-model-favorites";
 import { ModelResults } from "./model-results";
 
@@ -50,6 +50,7 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
   );
   const name =
     current?.name ?? model?.modelId.split("/").at(-1) ?? "Choose model";
+  const shortName = current ? shortModelName(current.name, data?.models) : name;
   const { families, matching } = modelCatalog(data, search, filter, favorites);
   useEffect(() => {
     if (disabled) setOpen(false);
@@ -89,14 +90,15 @@ export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
             variant="ghost"
             size="sm"
             type="button"
-            className="composer-model-trigger focus-visible:ring-1"
+            // The model name gives way first on a narrow composer.
+            className="composer-model-trigger shrink focus-visible:ring-1"
             disabled={disabled || saving}
             aria-label={`Choose model: ${name}`}
           />
         }
       >
         <Sparkles size={13} />
-        <span>{name}</span>
+        <span>{shortName}</span>
         <ChevronDown size={12} />
       </PopoverTrigger>
       <PopoverContent

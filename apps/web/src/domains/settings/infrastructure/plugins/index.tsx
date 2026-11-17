@@ -1,10 +1,6 @@
-import { Gauge } from "lucide-react";
 import { Component, type ComponentType, type ReactNode } from "react";
 
-import {
-  formatCost,
-  formatTokens,
-} from "../../../conversations/application/run-projection";
+import { formatTokens } from "../../../conversations/application/run-projection";
 
 export type ComposerContext = {
   draft: string;
@@ -28,22 +24,17 @@ const tokenCounter: UiPlugin = {
   hostApiVersion: 1,
   name: "Token counter",
   description:
-    "Rough token estimate for your draft, plus the provider-reported tokens and cost of the open conversation.",
+    "Rough token estimate for your draft while you type. The context ring beside Send shows the conversation's tokens and cost.",
   slots: {
-    "composer.footer": ({ draft, usage }) => (
-      <span
-        className="composer-chip"
-        title={`Draft: rough estimate, one token per four characters.${usage ? `\nConversation: ${usage.tokens.toLocaleString()} tokens, ${formatCost(usage.cost)}, provider-reported.` : ""}`}
-      >
-        <Gauge size={13} />~
-        {formatTokens(Math.ceil(Array.from(draft).length / 4))}
-        {usage && (
-          <span className="composer-chip-muted">
-            · {formatTokens(usage.tokens)} used · {formatCost(usage.cost)}
-          </span>
-        )}
-      </span>
-    ),
+    "composer.footer": ({ draft }) =>
+      draft.trim() ? (
+        <span
+          className="composer-chip"
+          title="Draft: rough estimate, one token per four characters."
+        >
+          ~{formatTokens(Math.ceil(Array.from(draft).length / 4))} tokens
+        </span>
+      ) : null,
   },
 };
 

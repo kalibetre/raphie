@@ -455,28 +455,59 @@
   .composer:focus-within {
     border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
   }
+  /* One row at any width: the model name gives way first. */
   .composer-toolbar {
     display: flex;
     align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
+    gap: 4px;
     margin-top: 10px;
     min-height: 32px;
+  }
+  .composer-toolbar-spacer {
+    flex: 1;
   }
   .composer-chip {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    height: 26px;
-    padding: 0 9px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    color: var(--muted-foreground);
-    font-size: 12px;
+    padding: 0 4px;
+    color: var(--faint);
+    font-size: 11.5px;
     white-space: nowrap;
   }
-  .composer-chip-muted {
-    color: var(--faint);
+  /* The draft estimate gives way on a phone, where the row has no room. */
+  @media (max-width: 767px) {
+    .composer-chip {
+      display: none;
+    }
+  }
+  .context-ring {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    outline-offset: 2px;
+  }
+  .context-ring svg {
+    width: 18px;
+    height: 18px;
+    transform: rotate(-90deg);
+  }
+  .context-ring circle {
+    fill: none;
+  }
+  .context-ring-track {
+    stroke: var(--muted-foreground);
+    stroke-width: 1.5;
+    opacity: 0.55;
+  }
+  .context-ring-fill {
+    stroke: var(--accent);
+    stroke-width: 7;
+  }
+  .context-ring[data-nearly-full] .context-ring-fill {
+    stroke: var(--attention);
   }
   .composer-hint {
     margin: 8px 0 0;

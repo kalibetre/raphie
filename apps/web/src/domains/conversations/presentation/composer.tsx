@@ -9,8 +9,10 @@ import {
 import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Textarea } from "../../../shared/ui/textarea";
 import { ComposerPlugins } from "../../settings/infrastructure/plugins/index";
+import { useRuntimeSettings } from "../../settings/infrastructure/use-runtime-settings";
 import { ComposerActions } from "./composer-actions";
 import { AttachmentChips, ComposerAttachments } from "./composer-attachments";
+import { ContextRing } from "./context-ring";
 import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
 import { useComposerAttachments } from "./use-composer-attachments";
@@ -22,6 +24,7 @@ export function Composer({
   model,
   needsModel,
   usage,
+  contextUsed,
   disabled,
   busy,
   enabledPlugins,
@@ -35,6 +38,8 @@ export function Composer({
   model: ModelSelection | null;
   needsModel: boolean;
   usage?: { tokens: number; cost: number };
+  /** Tokens in the conversation's latest model call, for the context ring. */
+  contextUsed?: number;
   disabled: boolean;
   busy: boolean;
   enabledPlugins: string[];
@@ -56,6 +61,10 @@ export function Composer({
   const [newModel, setNewModel] = useState<ModelSelection>();
   const selectedForNewSession = conversationId ? undefined : newModel;
   const activeModel = selectedForNewSession ?? model;
+  const contextWindow = useRuntimeSettings().data?.models.find(
+    (m) =>
+      m.id === activeModel?.modelId && m.connectionId === activeModel?.provider,
+  )?.contextWindow;
   const [draft, setDraft] = useState("");
   const draftValue = useRef(draft);
   const [sending, setSending] = useState(false);
@@ -233,9 +242,15 @@ export function Composer({
               onDraftMode={(mode) => setPermission({ key, mode })}
             />
           }
+          <span className="composer-toolbar-spacer" />
           <ComposerPlugins
             enabled={enabledPlugins}
             context={{ draft, model: activeModel?.modelId ?? null, usage }}
+          />
+          <ContextRing
+            used={conversationId ? contextUsed : undefined}
+            window={contextWindow}
+            usage={usage}
           />
           <ComposerActions
             busy={busy}
