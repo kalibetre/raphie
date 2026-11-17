@@ -271,7 +271,7 @@ fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, look: &Look) -> El {
         .child(body)
 }
 
-/// "approved via telegram", "rejected", "expired".
+/// "approved via telegram", "approved via desktop app", "rejected", "expired".
 fn decided(approval: &SessionApproval, now: i64) -> String {
     let outcome = match approval_state(approval, now) {
         ApprovalState::Pending => "pending",
@@ -281,6 +281,7 @@ fn decided(approval: &SessionApproval, now: i64) -> String {
         ApprovalState::Uncertain => "uncertain",
     };
     let via = match approval.decided_via {
+        _ if approval.decided_app.as_deref() == Some("desktop") => " via desktop app",
         Some(Channel::Web) => " via web",
         Some(Channel::Discord) => " via discord",
         Some(Channel::Telegram) => " via telegram",
@@ -392,4 +393,36 @@ fn decision(approval: &SessionApproval, deciding: bool, t: &Theme) -> El {
         ));
     }
     bar
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approval(extra: &str) -> SessionApproval {
+        serde_json::from_str(&format!(
+            r#"{{"id": "a", "server": "fixture", "tool": "execute",
+                "argumentsJson": "{{}}", "createdAt": 0, "expiresAt": 1,
+                "status": "approved", "execution": "done"{extra}}}"#
+        ))
+        .expect("an approval")
+    }
+
+    #[test]
+    fn a_decision_names_the_app_or_channel_it_came_from() {
+        // The desktop app reaches Raphie through the web host, so its
+        // decisions arrive as `web`; the host marks them as the app's.
+        let desktop = approval(r#", "decidedVia": "web", "decidedApp": "desktop""#);
+        assert_eq!(decided(&desktop, 0), "approved via desktop app");
+        assert_eq!(
+            decided(&approval(r#", "decidedVia": "web""#), 0),
+            "approved via web"
+        );
+        assert_eq!(
+            decided(&approval(r#", "decidedVia": "telegram""#), 0),
+            "approved via telegram"
+        );
+        // Full access approves without anyone deciding.
+        assert_eq!(decided(&approval(""), 0), "approved");
+    }
 }

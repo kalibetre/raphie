@@ -404,6 +404,100 @@ test("restart after remote execution claim reports uncertainty without repeating
   }
 });
 
+test("Full access runs MCP tools without asking, and Ask makes the next call wait", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-mcp-full-access-"));
+  const calls: unknown[] = [];
+  const mcp = fixture(async (name, args) => {
+    calls.push([name, args]);
+    return { content: [{ type: "text", text: "External result confirmed" }] };
+  });
+  // The model calls the tool on each new message.
+  const app = await Gateway.open({ directory, ...model(true), mcp });
+  try {
+    const web = {
+      source: "web" as const,
+      actor: "owner",
+      text: "Use the tool",
+    };
+    const full = await app.chats.send({
+      ...web,
+      eventId: "full",
+      approvalMode: "full-access",
+    });
+    await until(async () => calls.length === 1);
+    const approved = (await app.toolApprovals.state()).approvals[0];
+    assert.equal(approved.status, "approved");
+    assert.equal(approved.fullAccess, true);
+    assert.equal(approved.decidedVia, null);
+
+    // Back to Ask: the same conversation's next call waits for the owner.
+    await until(async () =>
+      (await app.chats.state()).turns.every((t) => t.status !== "pending"),
+    );
+    await app.toolApprovals.approvalMode("owner", full.sessionId, "ask");
+    await app.chats.send({
+      ...web,
+      eventId: "ask",
+      conversationId: full.conversationId,
+    });
+    await until(
+      async () => (await app.toolApprovals.state()).approvals.length === 2,
+    );
+    const asked = (await app.toolApprovals.state()).approvals[1];
+    assert.equal(asked.status, "pending");
+    await delay(50);
+    assert.equal(calls.length, 1);
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a decision from the desktop app is recorded as the desktop app's", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-mcp-desktop-"));
+  const mcp = fixture(async () => ({
+    content: [{ type: "text", text: "External result confirmed" }],
+  }));
+  const app = await Gateway.open({ directory, ...model(), mcp });
+  const http = await startServer(app, { port: 0 });
+  try {
+    const turn = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "desktop",
+      text: "Use the tool",
+    });
+    await until(
+      async () => (await app.toolApprovals.state()).approvals.length === 1,
+    );
+    const [proposal] = (await app.toolApprovals.state()).approvals;
+    const decided = await fetch(
+      `${http.url}/api/tool-approvals/${proposal.id}`,
+      {
+        method: "POST",
+        headers: {
+          "x-raphie-client": "web",
+          // The web host sets this for a device's token.
+          "x-raphie-app": "desktop",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ decision: "approved" }),
+      },
+    );
+    assert.equal(decided.status, 200);
+    const listed = await (
+      await fetch(`${http.url}/api/sessions/${turn.sessionId}/approvals`)
+    ).json();
+    const [view] = listed.items ?? listed;
+    assert.equal(view.decidedVia, "web");
+    assert.equal(view.decidedApp, "desktop");
+  } finally {
+    await http.close();
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("MCP once approval does not authorize changed arguments after restart", async () => {
   const directory = await mkdtemp(join(tmpdir(), "mcp-session-dispatch-"));
   const calls: unknown[] = [];

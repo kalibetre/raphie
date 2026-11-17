@@ -505,6 +505,10 @@ pub struct SessionApproval {
     /// The channel the decision came from, once there is one.
     #[serde(default)]
     pub decided_via: Option<Channel>,
+    /// "desktop" when the decision was made in this app, which reaches
+    /// Raphie through the web host and so arrives as `web`.
+    #[serde(default)]
+    pub decided_app: Option<String>,
     /// How far the approved action got.
     #[serde(default)]
     pub execution: Execution,
@@ -655,11 +659,11 @@ pub enum Decision {
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ApprovalMode {
-    /// Each command waits for the owner's approval.
+    /// Each command and tool call waits for the owner's approval.
     #[default]
     Ask,
-    /// Commands run without asking in this conversation. Sandbox
-    /// restrictions and external approvals still apply.
+    /// Commands and tool calls run without asking in this conversation.
+    /// Sandbox restrictions and an MCP server's own approvals still apply.
     FullAccess,
 }
 

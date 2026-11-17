@@ -3691,10 +3691,10 @@ fn command_permissions_load_and_change_for_an_open_conversation() {
         }));
         assert_eq!(
             element(&rt, "rd-permissions").label.as_deref(),
-            Some("Command permissions: Loading")
+            Some("Permissions: Loading")
         );
         click(&mut rt, "rd-permissions");
-        assert!(screen_text(&rt).contains("Loading Command permissions…"));
+        assert!(screen_text(&rt).contains("Loading permissions…"));
         // Nothing can be chosen until the mode is known: the options are
         // disabled, and choosing sends nothing.
         let before = rt.state.sent.len();
@@ -3711,7 +3711,7 @@ fn command_permissions_load_and_change_for_an_open_conversation() {
         );
         assert_eq!(
             element(&rt, "rd-permissions").label.as_deref(),
-            Some("Command permissions: Ask")
+            Some("Permissions: Ask")
         );
         assert_eq!(rt.state.shown_command_mode(), Some(ApprovalMode::Ask));
         click(&mut rt, "rd-permissions-full");
@@ -3731,7 +3731,7 @@ fn command_permissions_load_and_change_for_an_open_conversation() {
         );
         assert_eq!(
             element(&rt, "rd-permissions").label.as_deref(),
-            Some("Command permissions: Full access")
+            Some("Permissions: Full access")
         );
         assert_eq!(
             rt.state.shown_command_mode(),
@@ -3748,7 +3748,7 @@ fn command_permissions_load_and_change_for_an_open_conversation() {
         );
         assert_eq!(
             element(&rt, "rd-permissions-save-error").text.as_deref(),
-            Some("Could not save Command permissions. Please retry.")
+            Some("Could not save permissions. Please retry.")
         );
         assert_eq!(
             rt.state.shown_command_mode(),
@@ -3774,7 +3774,7 @@ fn a_failed_load_of_command_permissions_can_be_retried() {
         },
     );
     click(&mut rt, "rd-permissions");
-    assert!(screen_text(&rt).contains("Could not load Command permissions."));
+    assert!(screen_text(&rt).contains("Could not load permissions."));
     let loads = |rt: &Runtime<Ui>| {
         rt.state
             .sent
@@ -3785,7 +3785,7 @@ fn a_failed_load_of_command_permissions_can_be_retried() {
     let before = loads(&rt);
     click(&mut rt, "rd-permissions-retry");
     assert_eq!(loads(&rt), before + 1);
-    assert!(screen_text(&rt).contains("Loading Command permissions…"));
+    assert!(screen_text(&rt).contains("Loading permissions…"));
 }
 
 #[test]
@@ -3794,7 +3794,7 @@ fn a_new_conversation_starts_with_the_command_mode_chosen_for_it() {
     // No session yet, so the mode is this client's and starts at Ask.
     assert_eq!(
         element(&rt, "rd-permissions").label.as_deref(),
-        Some("Command permissions: Ask")
+        Some("Permissions: Ask")
     );
     click(&mut rt, "rd-permissions");
     let before = rt.state.sent.len();

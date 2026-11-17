@@ -6,7 +6,21 @@ export type Admission = {
   cookies: string[];
   /** Re-reads the session from the database. Null for public pages. */
   stillValid: (() => Promise<boolean>) | null;
+  /** Signed in with a device's token: the request comes from the desktop app. */
+  native?: boolean;
 };
+
+/** Says which app made a request, for the runtime's records ("approved via
+ * desktop app"). The gateway sets it; a client never can. */
+export const APP_HEADER = "x-raphie-app";
+
+/** The request's headers with {@link APP_HEADER} set from the admission alone. */
+export function markApp(headers: Headers, admission: Admission) {
+  const marked = new Headers(headers);
+  marked.delete(APP_HEADER);
+  if (admission.native) marked.set(APP_HEADER, "desktop");
+  return marked;
+}
 
 const SAFE_METHODS = ["GET", "HEAD"];
 const AUTH_BODY_LIMIT = 8 * 1024;
@@ -340,6 +354,7 @@ export function createGateway(options: {
         const session = await service.session(request.headers, publicOrigin);
         if (!session) return denyUnauthenticated(request, url, false);
         return {
+          native,
           cookies: native ? [] : session.cookies,
           stillValid: async () =>
             (await service.session(request.headers, publicOrigin)) !== null,

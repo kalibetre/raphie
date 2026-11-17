@@ -1,4 +1,5 @@
 import { webOrigins } from "../auth/auth-storage";
+import { APP_HEADER } from "../auth/gateway";
 import { backendAddress } from "./backend-connection.server";
 
 export async function proxyRuntime(request: Request) {
@@ -52,7 +53,7 @@ export async function proxyRuntime(request: Request) {
   incoming.searchParams.delete("_raphie_backend");
   const target = new URL(incoming.pathname + incoming.search, base);
   const headers = new Headers();
-  for (const key of ["content-type", "x-raphie-client", "origin"]) {
+  for (const key of ["content-type", "x-raphie-client", "origin", APP_HEADER]) {
     const value = request.headers.get(key);
     if (value) headers.set(key, value);
   }

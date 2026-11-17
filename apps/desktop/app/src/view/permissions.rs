@@ -32,7 +32,7 @@ pub fn permissions(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         t,
         TRIGGER,
         &icons::SHIELD,
-        format!("Command permissions: {spoken}"),
+        format!("Permissions: {spoken}"),
         mode_label(mode),
         s.permissions_open,
     )
@@ -81,7 +81,7 @@ fn panel(s: &Ui, mode: Option<ApprovalMode>, t: &Theme) -> El {
     let mut body = col()
         .key("rd-permissions-list")
         .role("dialog")
-        .label("Command permissions")
+        .label("Permissions")
         .w(320.0)
         .padding(16.0)
         .gap(12.0)
@@ -95,7 +95,7 @@ fn panel(s: &Ui, mode: Option<ApprovalMode>, t: &Theme) -> El {
                         .a11y_hidden(),
                 )
                 .child(
-                    text("Command permissions")
+                    text("Permissions")
                         .font(font(14.0, 600.0))
                         .color(t.foreground),
                 ),
@@ -112,7 +112,7 @@ fn panel(s: &Ui, mode: Option<ApprovalMode>, t: &Theme) -> El {
                     "rd-permissions-ask",
                     ApprovalMode::Ask,
                     "Ask",
-                    "Review each command before it runs.",
+                    "Review each command and tool call before it runs.",
                     mode,
                     can_choose,
                 ))
@@ -121,7 +121,7 @@ fn panel(s: &Ui, mode: Option<ApprovalMode>, t: &Theme) -> El {
                     "rd-permissions-full",
                     ApprovalMode::FullAccess,
                     "Full access",
-                    "Allow commands without asking in this conversation.",
+                    "Run commands and tools without asking in this conversation.",
                     mode,
                     can_choose,
                 )),
@@ -137,7 +137,7 @@ fn panel(s: &Ui, mode: Option<ApprovalMode>, t: &Theme) -> El {
     };
     if loading {
         body = body.child(
-            status("Loading Command permissions…")
+            status("Loading permissions…")
                 .key("rd-permissions-loading")
                 .role("status"),
         );
@@ -149,7 +149,7 @@ fn panel(s: &Ui, mode: Option<ApprovalMode>, t: &Theme) -> El {
                 .gap(6.0)
                 .center_y()
                 .child(
-                    status("Could not load Command permissions.")
+                    status("Could not load permissions.")
                         .key("rd-permissions-load-error")
                         .role("alert")
                         .color(t.error),
@@ -167,7 +167,7 @@ fn panel(s: &Ui, mode: Option<ApprovalMode>, t: &Theme) -> El {
     }
     if save_failed {
         body = body.child(
-            status("Could not save Command permissions. Please retry.")
+            status("Could not save permissions. Please retry.")
                 .key("rd-permissions-save-error")
                 .role("alert")
                 .color(t.error),

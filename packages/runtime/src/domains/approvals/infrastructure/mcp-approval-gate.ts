@@ -146,7 +146,9 @@ export function createMcpTools(
             item.taskId !== api.taskId ||
             item.fingerprint !== fingerprint ||
             item.status !== "approved" ||
-            !!item.fullAccess ||
+            (item.fullAccess &&
+              state.commandModes?.[String(api.conversationId)] !==
+                "full-access") ||
             !!item.grantId
           )
             return { kind: "unauthorized" as const };
@@ -166,11 +168,7 @@ export function createMcpTools(
             )
           )
             return { kind: "unauthorized" as const };
-          if (
-            ctx.abortSignal?.aborted ||
-            (item.fullAccess &&
-              state.modes?.[String(api.conversationId)] !== "full-access")
-          )
+          if (ctx.abortSignal?.aborted)
             return { kind: "unauthorized" as const };
           item.execution = "running";
           record(

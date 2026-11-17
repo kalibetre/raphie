@@ -36,13 +36,13 @@ Read state is shared through the runtime: a reply you read on the desktop app is
 
 ## The composer
 
-| Control             | Use                                                                                                                              |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Text box            | Up to 4,000 characters. **Enter** sends; **Shift+Enter** adds a line.                                                            |
-| Attach files        | Up to four files per message. See [attachments](/guides/attachments/).                                                           |
-| Model picker        | The model for this session. See [choosing a model](#choosing-a-model).                                                           |
-| Command permissions | **Ask** (the default) or **Full access** for workspace commands. See [approvals](#tool-approvals).                               |
-| Send / Stop         | Send turns into Stop while the bot is working and the draft is empty. With text in the draft, **Stop task** is under the ⋯ menu. |
+| Control      | Use                                                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Text box     | Up to 4,000 characters. **Enter** sends; **Shift+Enter** adds a line.                                                            |
+| Attach files | Up to four files per message. See [attachments](/guides/attachments/).                                                           |
+| Model picker | The model for this session. See [choosing a model](#choosing-a-model).                                                           |
+| Permissions  | **Ask** (the default) or **Full access** for workspace commands and MCP tools. See [approvals](#tool-approvals).                 |
+| Send / Stop  | Send turns into Stop while the bot is working and the draft is empty. With text in the draft, **Stop task** is under the ⋯ menu. |
 
 You can keep sending while the bot works. A waiting message shows as **Queued**; choose **Steer** to have the bot pick it up after its current tool step, or **Keep queued** to leave it until the current reply finishes.
 
@@ -76,7 +76,7 @@ When a bot wants to run something that needs your say-so, the turn pauses and an
 
 Each card shows when it expires; an expired request cannot be approved. A decision made in any client or channel settles the same request everywhere.
 
-**Command permissions** apply to the two workspace command tools only. **Full access** lets them run without asking in this session; it does not change sandbox limits and does not cover MCP tools, which always follow their own [approval rules](/guides/tools/).
+**Permissions** apply to workspace commands and [MCP tools](/guides/tools/). **Full access** lets both run without asking in this session. It does not change sandbox limits, and an MCP server with approvals of its own still asks for them. Switching back to **Ask** stops calls that have not started yet.
 
 :::caution
 An action interrupted by a crash or restart is marked uncertain and is never repeated automatically, because it may already have taken effect. Check the result before asking again.

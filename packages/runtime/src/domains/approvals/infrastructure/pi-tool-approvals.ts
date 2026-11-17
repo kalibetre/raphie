@@ -168,12 +168,10 @@ export class ToolApprovalService {
         execution: "waiting",
         result: null,
       };
-      if (
-        proposal.connectionIdentity === "raphie.workspace.command" &&
-        proposal.server === "workspace" &&
-        (proposal.tool === "workspace_exec" || proposal.tool === "bash") &&
-        state.commandModes?.[String(api.conversationId)] === "full-access"
-      ) {
+      // Full access approves every tool call in its conversation: workspace
+      // commands and MCP tools alike. The gate checks the mode again when it
+      // claims the call, so switching back to Ask stops calls not yet sent.
+      if (state.commandModes?.[String(api.conversationId)] === "full-access") {
         item.status = "approved";
         item.fullAccess = true;
       }
@@ -191,7 +189,6 @@ export class ToolApprovalService {
           item.grantId = grant.id;
         }
       }
-      // Command permissions never authorize external MCP service calls.
       // Legacy MCP grants and modes remain readable for migration only.
       state.approvals.push(item);
       record(
@@ -310,6 +307,7 @@ export class ToolApprovalService {
     connectionId = "legacy-discord",
     discordUserId?: string,
     scope: "once" | "session" = "once",
+    app?: "desktop",
   ) {
     this.app.authorize(actor);
     if (!isDecision(decision)) throw new InputError("Invalid decision.");
@@ -366,6 +364,7 @@ export class ToolApprovalService {
         item.grantId = grant.id;
       }
       item.decidedVia = via;
+      if (app) item.decidedApp = app;
       record(
         await tx.doc(Activity),
         `approval.${item.status}`,
@@ -373,7 +372,7 @@ export class ToolApprovalService {
         {
           conversationId: item.conversationId,
           operationId: item.id,
-          details: { via, actor },
+          details: { via, actor, ...(app ? { app } : {}) },
         },
       );
       notify(state, item, "resolved", destination);

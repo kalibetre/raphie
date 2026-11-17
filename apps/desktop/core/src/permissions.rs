@@ -1,5 +1,5 @@
-//! Command permissions: whether a conversation asks before each command
-//! or runs them without asking.
+//! Permissions: whether a conversation asks before each command and
+//! tool call or runs them without asking.
 //!
 //! The runtime keeps the mode per session
 //! (`GET` and `PUT /api/sessions/:id/approval-mode`). A conversation that
