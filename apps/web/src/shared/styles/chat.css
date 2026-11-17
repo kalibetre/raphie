@@ -494,17 +494,18 @@
     height: 18px;
     transform: rotate(-90deg);
   }
+  /* A donut gauge: flat ends and a solid track, so it never reads as a
+     loading spinner. */
   .context-ring circle {
     fill: none;
+    stroke-width: 2.5;
   }
   .context-ring-track {
-    stroke: var(--muted-foreground);
-    stroke-width: 1.5;
-    opacity: 0.55;
+    stroke: var(--border);
   }
   .context-ring-fill {
     stroke: var(--accent);
-    stroke-width: 7;
+    stroke-linecap: butt;
   }
   .context-ring[data-nearly-full] .context-ring-fill {
     stroke: var(--attention);

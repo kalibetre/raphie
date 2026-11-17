@@ -5,12 +5,11 @@ import {
 } from "../../../shared/ui/tooltip";
 import { formatCost, formatTokens } from "../application/run-projection";
 
-// A pie: a stroke as wide as its circle's diameter fills a wedge.
-const RADIUS = 3.5;
+const RADIUS = 7;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /**
- * How full the model's context is, as a small pie beside Send. Its tooltip
+ * How full the model's context is, as a small donut beside Send. Its tooltip
  * gives the numbers, and what the conversation has used and cost so far.
  */
 export function ContextRing({
@@ -46,7 +45,7 @@ export function ContextRing({
         }
       >
         <svg viewBox="0 0 18 18" aria-hidden="true">
-          <circle className="context-ring-track" cx="9" cy="9" r="7.5" />
+          <circle className="context-ring-track" cx="9" cy="9" r={RADIUS} />
           <circle
             className="context-ring-fill"
             cx="9"
