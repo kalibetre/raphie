@@ -1,7 +1,7 @@
 import { serveStatic } from "@hono/bun";
 import { Hono } from "hono";
 
-import type { Gateway } from "../infrastructure/auth/gateway.ts";
+import { type Gateway, markApp } from "../infrastructure/auth/gateway.ts";
 
 /**
  * Bun owns sockets and file responses; Start owns SSR and API proxy routes.
@@ -43,7 +43,10 @@ export function startWebServer(options: {
     async fetch(request) {
       const admission = await options.gateway.check(request);
       if (admission instanceof Response) return admission;
-      return options.gateway.finish(await app.fetch(request), admission);
+      const marked = new Request(request, {
+        headers: markApp(request.headers, admission),
+      });
+      return options.gateway.finish(await app.fetch(marked), admission);
     },
   });
 }

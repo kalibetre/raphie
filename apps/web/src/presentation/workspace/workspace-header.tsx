@@ -3,7 +3,6 @@ import {
   Bell,
   ChevronsLeft,
   ChevronsRight,
-  PanelRight,
   SquarePen,
 } from "lucide-react";
 
@@ -16,13 +15,10 @@ export function WorkspaceHeader({
   botId,
   description,
   collapsed,
-  inspector,
-  showInspector,
   onToggleNavigation,
-  onToggleInspector,
   onBack,
+  onList,
   onNew,
-  unreadCount,
   onBotSettings,
   onNotifications,
   notificationCount,
@@ -32,14 +28,11 @@ export function WorkspaceHeader({
   botId: string;
   description: string;
   collapsed: boolean;
-  inspector: boolean;
-  showInspector: boolean;
-  onOpenNavigation: () => void;
   onToggleNavigation: () => void;
-  onToggleInspector: () => void;
   onBack?: () => void;
+  /** On a phone: back to the bot's conversation list. */
+  onList?: () => void;
   onNew?: () => void;
-  unreadCount: number;
   onBotSettings: () => void;
   onNotifications: () => void;
   notificationCount: number;
@@ -47,6 +40,17 @@ export function WorkspaceHeader({
   return (
     <header className="workspace-header bot-workspace-header">
       <div className="header-identity">
+        {onList && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Back to conversations"
+            title="Back to conversations"
+            onClick={onList}
+          >
+            <ArrowLeft size={16} />
+          </Button>
+        )}
         <Button
           className="navigation-toggle hidden md:inline-flex"
           variant="ghost"
@@ -105,22 +109,6 @@ export function WorkspaceHeader({
             </span>
           )}
         </Button>
-        {showInspector && (
-          <Button
-            className="panel-toggle"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`${inspector ? "Hide" : "Show"} conversations panel${unreadCount ? `, ${unreadCount} need attention` : ""}`}
-            title="Conversations"
-            aria-pressed={inspector}
-            onClick={onToggleInspector}
-          >
-            <PanelRight size={16} />
-            {unreadCount > 0 && (
-              <span className="reply-count">{unreadCount}</span>
-            )}
-          </Button>
-        )}
       </div>
     </header>
   );

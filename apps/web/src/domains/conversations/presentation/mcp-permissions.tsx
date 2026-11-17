@@ -49,7 +49,7 @@ export function McpPermissions({
             size="sm"
             type="button"
             className="composer-model-trigger focus-visible:ring-1"
-            aria-label={`Command permissions: ${mode.data?.mode === "full-access" ? "Full access" : mode.data ? "Ask" : "Loading"}`}
+            aria-label={`Permissions: ${mode.data?.mode === "full-access" ? "Full access" : mode.data ? "Ask" : "Loading"}`}
           />
         }
       >
@@ -68,10 +68,10 @@ export function McpPermissions({
         align="start"
         sideOffset={10}
         className="w-80 max-w-[calc(100vw-24px)] p-4 text-left"
-        aria-label="Command permissions"
+        aria-label="Permissions"
       >
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <ShieldCheck size={16} /> Command permissions
+          <ShieldCheck size={16} /> Permissions
         </div>
         <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
           Choose how this conversation uses commands.
@@ -83,11 +83,15 @@ export function McpPermissions({
         >
           {(
             [
-              ["ask", "Ask", "Review each command before it runs."],
+              [
+                "ask",
+                "Ask",
+                "Review each command and tool call before it runs.",
+              ],
               [
                 "full-access",
                 "Full access",
-                "Allow commands without asking in this conversation.",
+                "Run commands and tools without asking in this conversation.",
               ],
             ] as const
           ).map(([value, title, description]) => (
@@ -118,12 +122,12 @@ export function McpPermissions({
         </p>
         {mode.isPending && (
           <p role="status" className="mt-2 text-xs">
-            Loading Command permissions…
+            Loading permissions…
           </p>
         )}
         {mode.isError && (
           <p role="alert" className="mt-2 text-xs text-destructive">
-            Could not load Command permissions.{" "}
+            Could not load permissions.{" "}
             <button
               type="button"
               onClick={() => {
@@ -136,7 +140,7 @@ export function McpPermissions({
         )}
         {update.isError && (
           <p role="alert" className="mt-2 text-xs text-destructive">
-            Could not save Command permissions. Please retry.
+            Could not save permissions. Please retry.
           </p>
         )}
       </PopoverContent>

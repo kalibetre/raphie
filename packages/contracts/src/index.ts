@@ -84,6 +84,8 @@ export type ToolApprovalView = {
   expiresAt: number;
   status: ApprovalStatus;
   decidedVia: Channel | null;
+  /** Decided in the desktop app rather than the browser. */
+  decidedApp?: "desktop";
   execution: "waiting" | "running" | "done" | "uncertain";
 };
 

@@ -1,5 +1,5 @@
 //! The UI's state: the core [`Model`] plus what only the window needs (text
-//! being typed, which side panels are open), and the bridge to the engine.
+//! being typed, whether the sidebar is open), and the bridge to the engine.
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -58,7 +58,7 @@ fn first_origin(flavor: Flavor, ports_file: Option<&std::path::Path>) -> String 
     }
 }
 
-/// Which conversations the panel lists (the web's filter chips).
+/// Which conversations the sidebar lists (the web's filter chips).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Filter {
     All,
@@ -311,16 +311,15 @@ pub struct Ui {
     pub drop_hover: bool,
     /// Whether the bot roster on the left shows (⌘B).
     pub roster_open: bool,
-    /// Whether the conversations panel on the right shows.
-    pub panel_open: bool,
-    /// The workspace's width in points, as last laid out; 0 before the
-    /// first layout. It decides whether the panel docks or floats.
+    /// The workspace's size in points, as last laid out; 0 before the
+    /// first layout. The width bounds the roster's, and the height the
+    /// share the bots take of it.
     pub workspace_width: f32,
-    /// The roster's and the panel's chosen widths, dragged by their edges
-    /// and kept in the settings.
+    pub workspace_height: f32,
+    /// The roster's chosen width, dragged by its edge and kept in the
+    /// settings.
     pub roster_width: f32,
-    pub panel_width: f32,
-    /// The conversations panel's search box.
+    /// The search box over the selected bot's conversations.
     pub search: TextEdit,
     pub filter: Filter,
     pub screen: Screen,
@@ -445,19 +444,9 @@ pub const ROSTER_WIDTH: f32 = 264.0;
 pub const ROSTER_MIN: f32 = 220.0;
 pub const ROSTER_MAX: f32 = 480.0;
 
-/// The conversations panel's width on the right until dragged, and its
-/// limits, as on the web.
-pub const PANEL_WIDTH: f32 = 340.0;
-pub const PANEL_MIN: f32 = 280.0;
-pub const PANEL_MAX: f32 = 640.0;
-
 /// The narrowest the conversation is squeezed to when the window is too
 /// small for the chosen widths: the columns give way first (the web's 320).
 const CONVERSATION_FLOOR: f32 = 320.0;
-
-/// The narrowest the conversation may be with the panel docked beside it;
-/// narrower, and the panel floats over it instead.
-pub const MIN_CONVERSATION: f32 = 560.0;
 
 /// The composer's model picker: whether it is open, and how its list is
 /// narrowed.
@@ -495,9 +484,6 @@ impl Ui {
         if let Some(width) = saved.roster_width {
             ui.roster_width = (width as f32).clamp(ROSTER_MIN, ROSTER_MAX);
         }
-        if let Some(width) = saved.panel_width {
-            ui.panel_width = (width as f32).clamp(PANEL_MIN, PANEL_MAX);
-        }
         ui.read_replies = ReadReplies::default_path()
             .map(|path| ReadReplies::load(&path))
             .unwrap_or_default();
@@ -518,10 +504,8 @@ impl Ui {
             drop_hover: false,
             roster_open: true,
             workspace_width: 0.0,
+            workspace_height: 0.0,
             roster_width: ROSTER_WIDTH,
-            panel_width: PANEL_WIDTH,
-            // Closed until asked for, like the web workspace's panel.
-            panel_open: false,
             search: TextEdit::new(""),
             filter: Filter::All,
             screen: Screen::Workspace,
@@ -631,53 +615,14 @@ impl Ui {
         });
     }
 
-    /// True when the conversations panel floats over the conversation
-    /// rather than standing beside it: when docking it would leave the
-    /// conversation narrower than [`MIN_CONVERSATION`]. The web's panel does
-    /// the same with its sheet.
-    pub fn panel_floats(&self) -> bool {
-        let roster = if self.roster_open {
-            self.roster_width
-        } else {
-            0.0
-        };
-        // Before the first layout the width is unknown: dock, as usual.
-        self.workspace_width > 0.0
-            && self.workspace_width - roster - self.panel_width < MIN_CONVERSATION
-    }
-
     /// The roster's drawn width: the chosen one, unless the window cannot
-    /// fit it beside the conversation (and a docked panel), as on the web.
+    /// fit it beside the conversation, as on the web.
     pub fn visible_roster_width(&self) -> f32 {
         if self.workspace_width <= 0.0 {
             return self.roster_width;
         }
-        let docked = if self.panel_open && !self.panel_floats() {
-            PANEL_MIN
-        } else {
-            0.0
-        };
-        let room = self.workspace_width - CONVERSATION_FLOOR - docked;
+        let room = self.workspace_width - CONVERSATION_FLOOR;
         self.roster_width.min(room.max(ROSTER_MIN))
-    }
-
-    /// The panel's drawn width: the chosen one, unless the window cannot
-    /// fit it. Floating, it leaves 40 points of the window showing.
-    pub fn visible_panel_width(&self) -> f32 {
-        if self.workspace_width <= 0.0 {
-            return self.panel_width;
-        }
-        let room = if self.panel_floats() {
-            self.workspace_width - 40.0
-        } else {
-            let roster = if self.roster_open {
-                self.visible_roster_width()
-            } else {
-                0.0
-            };
-            self.workspace_width - roster - CONVERSATION_FLOOR
-        };
-        self.panel_width.min(room.max(PANEL_MIN))
     }
 
     /// Sets the roster's width from a drag, within its limits.
@@ -685,12 +630,7 @@ impl Ui {
         self.roster_width = width.clamp(ROSTER_MIN, ROSTER_MAX);
     }
 
-    /// Sets the panel's width from a drag, within its limits.
-    pub fn resize_panel(&mut self, width: f32) {
-        self.panel_width = width.clamp(PANEL_MIN, PANEL_MAX);
-    }
-
-    /// Keeps the two widths for the next launch, once a drag ends.
+    /// Keeps the roster's width for the next launch, once a drag ends.
     pub fn save_layout(&self) {
         if self.client.is_none() {
             // Tests and headless runs leave the owner's settings alone.
@@ -700,17 +640,12 @@ impl Ui {
             let mut saved = Settings::load(&path);
             // `round` then `as u32`: the nearest whole point.
             saved.roster_width = Some(self.roster_width.round() as u32);
-            saved.panel_width = Some(self.panel_width.round() as u32);
             // Forgetting a width is harmless: the default comes back.
             let _ = saved.save(&path);
         }
     }
 
     pub fn select_session(&mut self, session_id: Option<&str>) {
-        // A floating panel has done its job once a conversation is picked.
-        if self.panel_floats() {
-            self.panel_open = false;
-        }
         self.inbox_open = false;
         self.new_model = None;
         self.model_picker.open = false;

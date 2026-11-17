@@ -9,7 +9,7 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { ToolApprovals } from "../src/domains/approvals/infrastructure/pi-tool-approvals.ts";
 import { chatModel } from "./chat-model.ts";
 
-test("command permissions persist independently of once-only MCP approval", async () => {
+test("Full access persists across restart and approves commands and MCP tools; Ask makes both wait", async () => {
   const directory = await mkdtemp(join(tmpdir(), "command-permissions-"));
   let app = await Gateway.open({
     directory,
@@ -53,32 +53,19 @@ test("command permissions persist independently of once-only MCP approval", asyn
     expect((await propose(100, "raphie.workspace.command")).status).toBe(
       "approved",
     );
-    const first = await propose(101, "mcp-fixture");
-    expect(first.status).toBe("pending");
-    await app.toolApprovals.decide(
-      first.id,
-      "approved",
-      "owner",
-      "web",
-      undefined,
-      undefined,
-      undefined,
-      "once",
-    );
-    expect((await propose(102, "mcp-fixture")).status).toBe("pending");
-    expect(await app.toolApprovals.approvalMode("owner", turn.sessionId)).toBe(
-      "full-access",
-    );
+    // Full access covers MCP tools too.
+    expect((await propose(101, "mcp-fixture")).status).toBe("approved");
     await app.close();
     app = await Gateway.open({ directory, deferResume: true, ...chatModel() });
     expect(await app.toolApprovals.approvalMode("owner", turn.sessionId)).toBe(
       "full-access",
     );
-    expect((await propose(103, "mcp-fixture")).status).toBe("pending");
+    expect((await propose(102, "mcp-fixture")).status).toBe("approved");
     await app.toolApprovals.approvalMode("owner", turn.sessionId, "ask");
-    expect((await propose(104, "raphie.workspace.command")).status).toBe(
+    expect((await propose(103, "raphie.workspace.command")).status).toBe(
       "pending",
     );
+    expect((await propose(104, "mcp-fixture")).status).toBe("pending");
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });

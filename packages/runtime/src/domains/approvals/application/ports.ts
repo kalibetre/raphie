@@ -24,6 +24,7 @@ export interface ToolApprovalCommands {
     connectionId?: string,
     discordUserId?: string,
     scope?: "once" | "session",
+    app?: "desktop",
   ): Promise<"approved" | "rejected" | "expired" | "pending">;
 }
 

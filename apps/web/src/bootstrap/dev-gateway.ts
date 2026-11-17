@@ -9,7 +9,7 @@ import {
   authDirectory,
   webOrigins,
 } from "../infrastructure/auth/auth-storage.ts";
-import { createGateway } from "../infrastructure/auth/gateway.ts";
+import { APP_HEADER, createGateway } from "../infrastructure/auth/gateway.ts";
 
 type DevRequest = IncomingMessage & { originalUrl?: string };
 
@@ -107,6 +107,8 @@ export function developmentGateway(): Plugin {
           }
           const admission = await gateway.check(request);
           if (admission instanceof Response) return send(res, admission);
+          delete req.headers[APP_HEADER];
+          if (admission.native) req.headers[APP_HEADER] = "desktop";
           for (const cookie of admission.cookies)
             res.appendHeader("set-cookie", cookie);
           if (admission.stillValid) {

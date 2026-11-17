@@ -1,6 +1,6 @@
 import type { ModelSelection } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, MessageSquareText } from "lucide-react";
+import { ArrowLeft, SquarePen } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
@@ -39,7 +39,6 @@ import { useWorkspaceLayout } from "./use-workspace-layout";
 import { useLiveState } from "./use-workspace-state";
 import { WorkspaceAlert } from "./workspace-alert";
 import { WorkspaceHeader } from "./workspace-header";
-import { WorkspacePanel } from "./workspace-panel";
 
 export function Workspace({
   sessionId,
@@ -96,7 +95,6 @@ export function Workspace({
   ].sort((a, b) => b.lastAt - a.lastAt);
   const unread = (session: (typeof summaries)[number]) =>
     inbox.unread(workspace.botId, session);
-  const attention = summaries.filter((s) => unread(s) > 0 || s.waiting).length;
   const lastSessionKey = useCallback(
     (id: string) =>
       `raphie:last-session:${encodeURIComponent(workspace.url)}:${id}`,
@@ -106,22 +104,23 @@ export function Workspace({
     (c) => c.sessionId === (sessionId ?? legacySessionId),
   );
   const {
-    inspector,
-    setInspector,
     setSidebar,
     collapsed,
     collapse,
     toggleCollapsed,
     resizePanel,
     visibleNavigationWidth,
-    visibleActivityWidth,
     navigationMax,
-    activityMax,
-    overlayActivity,
-  } = useWorkspaceLayout(view, workspace.botId);
+  } = useWorkspaceLayout();
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
   const [enabled, setEnabled] = useEnabledPlugins();
   const mobile = useIsMobile();
+  // A phone opens on the bot's conversation list; this is a new conversation
+  // started from it, before its first message gives it an address.
+  const [composing, setComposing] = useState(false);
+  useEffect(() => {
+    if (sessionId) setComposing(false);
+  }, [sessionId]);
   const conversationId = conversation?.id;
   const missing =
     sessionMissing ||
@@ -204,8 +203,7 @@ export function Workspace({
 
   function select(id?: string, nextView?: "settings") {
     setSuggestion(undefined);
-    // A sheet, on a phone or a narrow window, closes once a pick is made.
-    if (mobile || overlayActivity) setInspector(false);
+    setComposing(!id && mobile && !nextView);
     const selected = summaries.find((c) => c.id === id);
     if (selected)
       void navigate({
@@ -258,6 +256,21 @@ export function Workspace({
     conversation?.title ??
     (missing ? "Conversation unavailable" : "New conversation");
   const settings = view === "settings";
+  const conversationList = (
+    <ConversationList
+      name={botProfile?.name ?? "Raphie"}
+      sessions={summaries}
+      selectedId={conversationId}
+      unread={unread}
+      onSelect={select}
+      hasMore={!!hasMoreSessions}
+      loadMore={() => void loadMoreSessions()}
+    />
+  );
+  // On a phone the bot's conversations are a screen of their own, until one
+  // is opened or started.
+  const listScreen =
+    mobile && !view && !sessionId && !legacyConversationId && !composing;
   const roster = (
     <BotSidebar
       bots={inbox.bots.data?.items ?? []}
@@ -267,9 +280,13 @@ export function Workspace({
       connected={connected}
       error={!!inbox.bots.error}
       onRetry={() => void inbox.bots.refetch()}
+      conversations={mobile ? undefined : conversationList}
+      onNew={() => select()}
       onSelect={(id) => {
         const nextBot = id === "default" ? undefined : id;
-        const last = readLocal(lastSessionKey(id));
+        // A phone shows the bot's conversations; a wide screen reopens the
+        // one you were in, with the list beside it.
+        const last = mobile ? undefined : readLocal(lastSessionKey(id));
         if (last)
           void navigate({
             to: "/sessions/$sessionId",
@@ -299,7 +316,6 @@ export function Workspace({
         style={
           {
             "--sidebar-width": `${visibleNavigationWidth}px`,
-            "--inspector-width": `${visibleActivityWidth}px`,
           } as CSSProperties
         }
         // No width animation: the sidebar tracks its resize handle exactly.
@@ -328,7 +344,7 @@ export function Workspace({
             side="left"
             value={visibleNavigationWidth}
             maxWidth={navigationMax}
-            onChange={(value) => resizePanel("left", value)}
+            onChange={resizePanel}
           />
         )}
         <SidebarInset id="main" className="main-panel">
@@ -349,8 +365,27 @@ export function Workspace({
             </SettingsMain>
           ) : (
             <>
-              {mobile && view !== "notifications" && roster}
-              {view === "notifications" ? (
+              {listScreen && roster}
+              {listScreen ? (
+                <section
+                  className="mobile-conversations"
+                  aria-label={`${botProfile?.name ?? "Raphie"}’s conversations`}
+                >
+                  <header className="mobile-conversations-header">
+                    <h1>Conversations</h1>
+                    <Button
+                      size="icon-sm"
+                      className="mobile-conversations-new"
+                      aria-label="New conversation"
+                      title="New conversation"
+                      onClick={() => select()}
+                    >
+                      <SquarePen size={15} />
+                    </Button>
+                  </header>
+                  {conversationList}
+                </section>
+              ) : view === "notifications" ? (
                 <header className="workspace-header notifications-global-header">
                   <Button
                     variant="ghost"
@@ -381,8 +416,15 @@ export function Workspace({
                     botProfile?.description ?? "Your personal assistant"
                   }
                   onBack={view ? () => select(conversationId) : undefined}
-                  onNew={!view ? () => select() : undefined}
-                  unreadCount={attention}
+                  onList={
+                    mobile && !view
+                      ? () => {
+                          setComposing(false);
+                          void navigate({ to: "/", search: { bot } });
+                        }
+                      : undefined
+                  }
+                  onNew={!view && !mobile ? () => select() : undefined}
                   onBotSettings={() => openSettings("bot")}
                   notificationCount={notificationCount}
                   onNotifications={() =>
@@ -393,14 +435,10 @@ export function Workspace({
                     })
                   }
                   collapsed={collapsed}
-                  inspector={inspector}
-                  showInspector={!view}
-                  onOpenNavigation={() => setSidebar(true)}
                   onToggleNavigation={toggleCollapsed}
-                  onToggleInspector={() => setInspector(!inspector)}
                 />
               )}
-              {view === "notifications" ? (
+              {listScreen ? null : view === "notifications" ? (
                 <Notifications
                   items={notifications.items}
                   jobs={jobNotifications}
@@ -521,35 +559,6 @@ export function Workspace({
             </>
           )}
         </SidebarInset>
-        {!view && (
-          <WorkspacePanel
-            open={inspector}
-            overlay={overlayActivity}
-            onOpenChange={setInspector}
-            width={visibleActivityWidth}
-            maxWidth={activityMax}
-            onResize={(value) => resizePanel("right", value)}
-            tabs={[
-              {
-                id: "conversations",
-                label: "Conversations",
-                icon: <MessageSquareText aria-hidden="true" />,
-                badge: attention,
-                content: (
-                  <ConversationList
-                    name={botProfile?.name ?? "Raphie"}
-                    sessions={summaries}
-                    selectedId={conversationId}
-                    unread={unread}
-                    onSelect={select}
-                    hasMore={!!hasMoreSessions}
-                    loadMore={() => void loadMoreSessions()}
-                  />
-                ),
-              },
-            ]}
-          />
-        )}
       </SidebarProvider>
     </TooltipProvider>
   );

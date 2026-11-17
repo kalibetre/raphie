@@ -50,12 +50,12 @@ test("permission controls use only the selected session and bot cache", () => {
     a.queries.setQueryData(["mcp-mode", "second"], { mode: "ask" });
     a.queries.setQueryData(["mcp-grants", "second"], { grants: [] });
     const first = render(a, <McpPermissions sessionId="first" />);
-    expect(first).toContain('aria-label="Command permissions: Full access"');
+    expect(first).toContain('aria-label="Permissions: Full access"');
     const second = render(a, <McpPermissions sessionId="second" />);
-    expect(second).toContain('aria-label="Command permissions: Ask"');
+    expect(second).toContain('aria-label="Permissions: Ask"');
     expect(second).not.toContain("execute-first");
     const otherBot = render(b, <McpPermissions sessionId="first" />);
-    expect(otherBot).toContain('aria-label="Command permissions: Loading"');
+    expect(otherBot).toContain('aria-label="Permissions: Loading"');
     expect(otherBot).not.toContain("execute-first");
   } finally {
     a.dispose();
@@ -391,11 +391,11 @@ test("new conversations expose Ask by default and the selected draft mode", () =
   const workspace = new BackendWorkspace("http://127.0.0.1:4317");
   try {
     expect(render(workspace, <McpPermissions />)).toContain(
-      'aria-label="Command permissions: Ask"',
+      'aria-label="Permissions: Ask"',
     );
     expect(
       render(workspace, <McpPermissions draftMode="full-access" />),
-    ).toContain('aria-label="Command permissions: Full access"');
+    ).toContain('aria-label="Permissions: Full access"');
   } finally {
     workspace.dispose();
   }
