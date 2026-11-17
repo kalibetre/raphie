@@ -140,6 +140,32 @@ printf '#!/bin/sh\\nprintf "%%s " "$@" > "$TEST_DIR/installer-args"\\nexit 3\\n'
       // A running one is restarted.
       assert.equal((await output(raphie(["restart"]))).code, 0);
       assert.ok(noted("restarted"));
+
+      // Typed in a terminal, start starts the background service and
+      // returns, rather than running Raphie in that terminal.
+      const inTerminal = (args: string[]) =>
+        output(
+          raphie(
+            [
+              "-c",
+              "import pty, sys; sys.exit(pty.spawn(sys.argv[1:]) >> 8)",
+              binary,
+              ...args,
+            ],
+            "python3",
+          ),
+        );
+      await rm(join(root, "running"));
+      await rm(join(root, "started"));
+      const background = await inTerminal(["start"]);
+      assert.equal(background.code, 0, background.out);
+      assert.match(background.out, /running in the background at/);
+      assert.match(background.out, /raphie start --foreground/);
+      assert.ok(noted("started") && noted("running"));
+      assert.match(
+        (await inTerminal(["start"])).out,
+        /already running in the background/,
+      );
     } finally {
       await runtime.stop(true);
       await web.stop(true);

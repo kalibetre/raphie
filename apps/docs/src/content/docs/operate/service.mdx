@@ -103,12 +103,12 @@ If no service manager is available for a user install, run `raphie start` in a t
 
 ## Logs
 
-| Install              | Logs                                                        |
-| -------------------- | ----------------------------------------------------------- |
-| User install, Linux  | `journalctl --user -u raphie -e`                            |
-| User install, macOS  | `~/Library/Logs/Raphie/service.log` and `service-error.log` |
-| System service       | `sudo journalctl -u raphie -e`                              |
-| Foreground or source | The terminal running `raphie start` or `bun run dev`        |
+| Install              | Logs                                                              |
+| -------------------- | ----------------------------------------------------------------- |
+| User install, Linux  | `journalctl --user -u raphie -e`                                  |
+| User install, macOS  | `~/Library/Logs/Raphie/service.log` and `service-error.log`       |
+| System service       | `sudo journalctl -u raphie -e`                                    |
+| Foreground or source | The terminal running `raphie start --foreground` or `bun run dev` |
 
 For what bots did, rather than whether the service is up, use Activity and Diagnostics; see [observability](/operate/observability/).
 
@@ -181,7 +181,7 @@ Change it with `raphie channel nightly` (or `stable`), then run `raphie update`;
 5. swaps in the new binaries, keeping the old ones in `~/.local/lib/.raphie-previous.*`;
 6. restarts the service and waits up to 15 seconds for it to become healthy; if it does not, it stops and disables the service.
 
-Stop a foreground `raphie start` yourself before updating. On Linux, keep the same `XDG_DATA_HOME` you installed with; the installer refuses to guess a changed data location.
+Stop a foreground `raphie start --foreground` yourself before updating. On Linux, keep the same `XDG_DATA_HOME` you installed with; the installer refuses to guess a changed data location.
 
 :::caution
 Updates can migrate databases one way. Never run older binaries against data a newer version has opened. To roll back, restore the backup taken before the update together with its matching binaries; see [backup and recovery](/operate/backup-and-recovery/#restore).

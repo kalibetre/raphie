@@ -150,6 +150,22 @@ async function restartService() {
   );
 }
 
+/** `raphie start` in a terminal: start the background service, or say it runs. */
+async function startService(found: Service) {
+  const address = `http://127.0.0.1:${process.env.RAPHIE_WEB_PORT}`;
+  if (found.running()) {
+    console.log(`Raphie is already running in the background at ${address}.`);
+    return;
+  }
+  if (!found.start() || !(await healthyWithin(15)))
+    throw new Error(
+      "Raphie did not answer after starting. Check raphie status and the service log.",
+    );
+  console.log(
+    `Raphie is running in the background at ${address}.\nStop it with raphie stop, or run it in this terminal with raphie start --foreground.`,
+  );
+}
+
 /** Where `raphie update` gets the installer: the same one the docs pipe to bash. */
 const INSTALLER_URL =
   "https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh";
@@ -381,6 +397,18 @@ async function main() {
     Object.assign(process.env, portEnvironment(installedPorts(install)));
   if (command === "set-port") return setPort(args.slice(1));
   if (command === "update") return update(args.slice(1));
+  let foreground = false;
+  if (command === "start" && action === "--foreground") {
+    foreground = true;
+    args.splice(1, 1);
+  }
+  // Typed in a terminal, start leaves Raphie running as the background
+  // service, as it runs after login. The service runs start itself with no
+  // terminal, so it, and --foreground, run Raphie here.
+  if (command === "start" && !foreground && install && process.stdin.isTTY) {
+    const found = userService();
+    if (found) return startService(found);
+  }
   if (
     ((command === "auth" || command === "channel") && args.length > 2) ||
     (command !== "auth" && command !== "channel" && args.length > 1)
@@ -485,7 +513,7 @@ async function main() {
   }
   if (!command || command === "help" || command === "--help") {
     console.log(
-      `Raphie CLI\n\n  raphie start                Start the web server and runtime\n  raphie status               Check the local runtime\n  raphie stop                 Stop the background service\n  raphie restart              Restart (or start) the background service\n  raphie update [--channel stable|nightly]  Update to the newest release\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n  raphie --version            Show the installed version\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
+      `Raphie CLI\n\n  raphie start                Start Raphie (in the background on a user install)\n  raphie start --foreground   Run Raphie in this terminal until Ctrl+C\n  raphie status               Check the local runtime\n  raphie stop                 Stop the background service\n  raphie restart              Restart (or start) the background service\n  raphie update [--channel stable|nightly]  Update to the newest release\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n  raphie --version            Show the installed version\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
     );
     return;
   }
