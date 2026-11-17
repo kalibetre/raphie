@@ -21,12 +21,14 @@ Its address depends on how you installed Raphie:
 
 ## Sessions
 
-| Where                            | What it does                                                                                                                      |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Sidebar                          | Lists your bots. Choosing one resumes the conversation you last had open with it in this browser.                                 |
-| **New conversation** (title bar) | Starts an empty session with the current bot.                                                                                     |
-| Conversations panel (panel icon) | Searchable list of the bot's sessions, with filters for new replies and approval requests. On narrow screens it opens as a sheet. |
-| Notifications (bell)             | Replies, approval requests and finished scheduled jobs from every bot in one place.                                               |
+| Where                   | What it does                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar, top            | Your bots. Choosing one resumes the conversation you last had open with it in this browser. **+** creates a bot.                                   |
+| Sidebar, below the bots | The selected bot's conversations, with search and filters for new replies and approval requests. The pen icon beside the heading starts a new one. |
+| **New conversation**    | The pen icon in the title bar also starts an empty session with the current bot.                                                                   |
+| Notifications (bell)    | Replies, approval requests and finished scheduled jobs from every bot in one place.                                                                |
+
+On a phone the bots are a strip across the top, and the workspace opens on the selected bot's conversations. Opening one fills the screen; the arrow at the top left goes back to the list.
 
 Each session has its own link, `/sessions/<id>`. Links to a bot other than the default carry `?bot=<id>`, so a bookmarked session always opens with the right bot.
 
@@ -116,7 +118,7 @@ The browser keeps only conveniences; history lives in the runtime.
 | Kept in browser storage                 | Scope                  |
 | --------------------------------------- | ---------------------- |
 | Message drafts and attached-file drafts | Per bot and session    |
-| Theme, panel layout, favourite models   | This browser, all bots |
+| Theme, sidebar width, favourite models  | This browser, all bots |
 | Last open session, local read markers   | Per bot                |
 | Enabled UI plugins                      | This browser           |
 

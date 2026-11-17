@@ -1,5 +1,6 @@
 import type { BotProfile, SessionSummary } from "@raphie/contracts";
-import { Plus, Settings } from "lucide-react";
+import { Plus, Settings, SquarePen } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
@@ -19,6 +20,8 @@ export function BotSidebar({
   connected,
   error,
   onRetry,
+  conversations,
+  onNew,
 }: {
   bots: BotProfile[];
   botId: string;
@@ -31,8 +34,13 @@ export function BotSidebar({
   connected: boolean;
   error: boolean;
   onRetry: () => void;
+  /** The selected bot's conversation list, below the bots; none on a phone,
+   * where the roster is a strip and the list has the screen. */
+  conversations?: ReactNode;
+  onNew?: () => void;
 }) {
   const botStyle = useBotStyle();
+  const current = bots.find((b) => b.id === botId);
   return (
     <div className="bot-roster">
       <div className="roster-brand">
@@ -44,7 +52,17 @@ export function BotSidebar({
         </span>
       </div>
       <div className="roster-label">
-        Your bots<span className="roster-total">{bots.length}</span>
+        Your bots
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="roster-label-action"
+          aria-label="New bot"
+          title="New bot"
+          onClick={onCreate}
+        >
+          <Plus size={14} />
+        </Button>
       </div>
       <ScrollArea
         className="bot-roster-scroll [&_[data-slot=scroll-area-scrollbar]]:hidden"
@@ -75,13 +93,6 @@ export function BotSidebar({
                     <span className="bot-roster-title">{b.name}</span>
                     {count > 0 && <span className="reply-count">{count}</span>}
                   </span>
-                  <span className="bot-roster-preview">
-                    {count
-                      ? `${count} ${count === 1 ? "conversation needs" : "conversations need"} you`
-                      : sessions[0]?.preview ||
-                        b.description ||
-                        "Start a conversation"}
-                  </span>
                 </span>
               </button>
             );
@@ -103,16 +114,31 @@ export function BotSidebar({
           )}
         </nav>
       </ScrollArea>
-      <button
-        type="button"
-        className="new-bot-row hidden md:flex"
-        onClick={onCreate}
-      >
-        <span className="new-bot-icon">
-          <Plus size={16} />
-        </span>
-        New bot
-      </button>
+      {conversations && (
+        <section
+          className="roster-conversations"
+          aria-label={`${current?.name ?? "Raphie"}’s conversations`}
+        >
+          <div className="roster-label">
+            <span className="roster-label-text">
+              {current?.name ?? "Raphie"}’s conversations
+            </span>
+            {onNew && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="roster-label-action"
+                aria-label="New conversation"
+                title="New conversation"
+                onClick={onNew}
+              >
+                <SquarePen size={13} />
+              </Button>
+            )}
+          </div>
+          {conversations}
+        </section>
+      )}
       <footer className="roster-footer">
         <span className="runtime-status">
           <span className={`status-dot ${connected ? "" : "offline"}`} />
