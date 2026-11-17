@@ -200,51 +200,91 @@ pub fn count_badge(t: &Theme, count: usize) -> El {
         )
 }
 
-/// The "DEV" mark beside the brand in a dev build, so it is never taken
-/// for the release app.
 /// The pill beside the brand that says which build this is: "DEV" for the
 /// dev build, "NIGHTLY" with a moon for a nightly release, none for stable.
-pub fn build_badge(t: &Theme, flavor: Flavor, channel: ReleaseChannel) -> Option<El> {
+/// `compact` draws only the badge's icon, for a brand with no room for the
+/// word; a screen reader still hears which build it is.
+pub fn build_badge(
+    t: &Theme,
+    flavor: Flavor,
+    channel: ReleaseChannel,
+    compact: bool,
+) -> Option<El> {
     if flavor.is_dev() {
-        Some(dev_badge(t))
+        Some(dev_badge(t, compact))
     } else if channel.is_nightly() {
-        Some(nightly_badge(t))
+        Some(nightly_badge(t, compact))
     } else {
         None
     }
 }
 
-/// "NIGHTLY" with a moon, in night-sky indigo.
-pub fn nightly_badge(t: &Theme) -> El {
-    row()
+/// How wide [`build_badge`] draws in full, or 0 when there is none.
+pub fn build_badge_width(flavor: Flavor, channel: ReleaseChannel) -> f32 {
+    let word = if flavor.is_dev() {
+        "DEV"
+    } else if channel.is_nightly() {
+        "NIGHTLY"
+    } else {
+        return 0.0;
+    };
+    let (width, _) = rune::text::measure(word, &[], badge_font(), None);
+    let moon = if flavor.is_dev() {
+        0.0
+    } else {
+        BADGE_ICON + 3.0
+    };
+    BADGE_PAD * 2.0 + moon + width
+}
+
+const BADGE_PAD: f32 = 5.0;
+const BADGE_ICON: f32 = 9.0;
+
+fn badge_font() -> rune::TextStyle {
+    font(9.0, 650.0).tracking(0.6)
+}
+
+/// "NIGHTLY" with a moon, in night-sky indigo; only the moon when compact.
+pub fn nightly_badge(t: &Theme, compact: bool) -> El {
+    let pill = row()
         .key("rd-nightly-badge")
-        .px(5.0)
+        .px(BADGE_PAD)
         .py(1.0)
         .gap(3.0)
         .center()
         .radius(5.0)
         .fill(t.night_soft)
-        .child(icon(&crate::icons::MOON, 9.0).color(t.night).a11y_hidden())
         .child(
-            text("NIGHTLY")
-                .font(font(9.0, 650.0).tracking(0.6))
-                .color(t.night),
-        )
+            icon(&crate::icons::MOON, BADGE_ICON)
+                .color(t.night)
+                .a11y_hidden(),
+        );
+    if compact {
+        pill.role("img").label("Nightly")
+    } else {
+        pill.child(text("NIGHTLY").font(badge_font()).color(t.night))
+    }
 }
 
-pub fn dev_badge(t: &Theme) -> El {
-    row()
+/// "DEV" in amber, so the dev build is never taken for the release app; a
+/// wrench when compact.
+pub fn dev_badge(t: &Theme, compact: bool) -> El {
+    let pill = row()
         .key("rd-dev-badge")
-        .px(5.0)
+        .px(BADGE_PAD)
         .py(1.0)
         .center()
         .radius(5.0)
-        .fill(t.attention_soft)
-        .child(
-            text("DEV")
-                .font(font(9.0, 650.0).tracking(0.6))
-                .color(t.attention),
+        .fill(t.attention_soft);
+    if compact {
+        pill.role("img").label("Dev build").child(
+            icon(&crate::icons::WRENCH, BADGE_ICON)
+                .color(t.attention)
+                .a11y_hidden(),
         )
+    } else {
+        pill.child(text("DEV").font(badge_font()).color(t.attention))
+    }
 }
 
 /// The green "connected" dot with its soft ring (`.status-dot`), amber when

@@ -571,6 +571,42 @@ fn a_nightly_says_nightly_beside_the_brand_and_on_about() {
     });
     settle(&mut rt);
     assert!(has(&rt, "rd-dev-badge") && !has(&rt, "rd-nightly-badge"));
+    // A roster too narrow for the word keeps the badge inside it, as an icon
+    // a screen reader still names; so does the dev build's. The brand starts
+    // after macOS's window buttons, which end about 76 points in.
+    rt.set_titlebar_inset(76.0);
+    let inside = |rt: &Runtime<Ui>, key: &str| {
+        let [x, _, w, _] = element(rt, key).rect;
+        let [rx, _, rw, _] = element(rt, "rd-roster").rect;
+        x + w <= rx + rw - 12.0
+    };
+    for flavor in [Flavor::Release, Flavor::Dev] {
+        let (key, word, name) = if flavor.is_dev() {
+            ("rd-dev-badge", "DEV", "Dev build")
+        } else {
+            ("rd-nightly-badge", "NIGHTLY", "Nightly")
+        };
+        rt.update(|ui, _| {
+            ui.flavor = flavor;
+            ui.roster_width = 300.0;
+        });
+        settle(&mut rt);
+        assert!(
+            inside(&rt, key) && screen_text(&rt).contains(word),
+            "{word} in full"
+        );
+        rt.update(|ui, _| ui.roster_width = state::ROSTER_MIN);
+        settle(&mut rt);
+        assert!(inside(&rt, key), "{word} stays inside the narrowest roster");
+        assert!(!screen_text(&rt).contains(word));
+        assert_eq!(element(&rt, key).label.as_deref(), Some(name));
+    }
+    rt.update(|ui, _| {
+        ui.flavor = Flavor::Release;
+        ui.roster_width = state::ROSTER_WIDTH;
+    });
+    settle(&mut rt);
+
     // The sign-in screen too.
     let mut rt = render(scenes::sign_in, false);
     rt.update(|ui, _| {

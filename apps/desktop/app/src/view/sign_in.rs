@@ -56,7 +56,7 @@ pub fn sign_in(s: &Ui, look: &Look) -> El {
                         .font(font(15.75, 600.0).tracking(-0.4))
                         .color(t.foreground),
                 )
-                .children(build_badge(t, s.flavor, s.release_channel)),
+                .children(build_badge(t, s.flavor, s.release_channel, false)),
         )
         .child(
             col()
