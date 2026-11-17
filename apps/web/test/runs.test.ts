@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   activeRunLabel,
+  contextTokens,
+  formatTokens,
   runUsage,
   toolSteps,
 } from "../src/domains/conversations/application/run-projection.ts";
@@ -104,4 +106,28 @@ test("run usage sums provider-reported tokens and cost per run", () => {
     calls: 2,
   });
   assert.equal(runUsage("missing", activity), undefined);
+});
+
+test("the context ring reads the conversation's latest model call", () => {
+  const usage = (totalTokens: number) =>
+    JSON.stringify({ usage: { totalTokens } });
+  const activity = [
+    event("model.completed", "run-1", null, "first", usage(1200)),
+    event("model.completed", "run-1", null, "second", usage(3400)),
+    event(
+      "model.completed",
+      "other",
+      null,
+      "another conversation",
+      usage(9000),
+    ),
+    event("model.completed", "run-2", null, "latest", usage(5100)),
+    event("run.completed", "run-2", null),
+  ];
+  assert.equal(contextTokens(["run-1", "run-2"], activity), 5100);
+  assert.equal(contextTokens(["run-1"], activity), 3400);
+  assert.equal(contextTokens(["none"], activity), undefined);
+  assert.equal(formatTokens(1_000_000), "1M");
+  assert.equal(formatTokens(1_048_576), "1M");
+  assert.equal(formatTokens(200_000), "200k");
 });

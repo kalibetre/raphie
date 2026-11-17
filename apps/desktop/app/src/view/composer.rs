@@ -7,9 +7,17 @@
 //! Files join a message three ways: the paperclip (the system's file
 //! picker, one file at a time), dragging them onto the conversation, or
 //! pasting an image or copied files into the text.
+//!
+//! Beside Send, a small ring fills towards the model's context window, as
+//! the web's `context-ring.tsx`; its tooltip gives the numbers.
 
 use raphie_core::attachments::MAX_FILES;
-use rune::{ClipboardContent, El, Tx, auto_grow, col, icon, row, text, text_input};
+use raphie_core::model_library::selected;
+use raphie_core::projections::{context_fill, context_tokens, conversation_usage};
+use rune::{
+    ClipboardContent, El, LineCap, Path, Shape, Tx, auto_grow, canvas, col, icon, row, text,
+    text_input,
+};
 
 use super::Look;
 use super::attachments::{Action, file_card};
@@ -87,7 +95,7 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         .focus_ring(2.0, 2.0, t.accent)
         .child(icon(&icons::SQUARE, 13.0).color(t.error).a11y_hidden())
         .on_press(|s: &mut Ui| s.stop());
-    let mut actions = row().gap(6.0).center_y();
+    let mut actions = row().gap(6.0).center_y().children(context_pie(s, look));
     if running {
         actions = actions.child(stop);
     }
@@ -151,16 +159,15 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         // The text grows from one line to ten, then scrolls.
         .child(auto_grow(input, 1, 10))
         .child(
-            // The toolbar wraps, as the web's does: in a narrow window the
-            // chips keep their names and the send button moves to a second
-            // row instead of squeezing them.
+            // One row at any width: in a narrow window the model's name is
+            // cut short first, so the send button never moves.
             row()
+                .key("rd-composer-toolbar")
                 .w_full()
                 .mt(10.0)
                 .min_h(32.0)
-                .gap(6.0)
+                .gap(4.0)
                 .center_y()
-                .flex_wrap()
                 // The paperclip sits 6 left of the text's edge so its
                 // glyph, not its hover square, lines up with the text.
                 .child(attach.ml(-6.0))
@@ -168,8 +175,8 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
                 // is on its way.
                 .child(model_picker(s, !busy && !locked, look, overlays))
                 .child(permissions(s, look, overlays))
-                // Takes the room that is left and puts the buttons at its
-                // right end, on whichever row they land.
+                // Takes the room that is left and puts the context pie and
+                // the buttons at its right end.
                 .child(row().grow(1.0).justify_end().child(actions)),
         )
         // A press anywhere on the card puts the caret in the text.
@@ -222,4 +229,110 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         .w_full()
         .items_center()
         .child(wrap)
+}
+
+/// How full the model's context is, as a small ring beside Send, or
+/// nothing while the model's context window is not known. The ring fills
+/// with the share of the window the conversation's latest model call used;
+/// it is empty before the first.
+fn context_pie(s: &Ui, look: &Look) -> Option<El> {
+    let t = &look.theme;
+    let active = s.active_model()?;
+    let window = selected(&s.bot_models()?.models, &active)?.context_window;
+    let (used, usage) = match &s.model.conversation {
+        Some(conversation) => {
+            let turns = conversation.turns();
+            let runs: Vec<&str> = turns.iter().map(|turn| turn.id.as_str()).collect();
+            let activity = conversation
+                .observation
+                .as_ref()
+                .map_or(&[][..], |observation| &observation.activity[..]);
+            (
+                context_tokens(&runs, activity),
+                conversation_usage(&runs, activity),
+            )
+        }
+        None => (None, None),
+    };
+    let fill = context_fill(used, window, usage)?;
+    let ink = if fill.nearly_full {
+        t.attention
+    } else {
+        t.accent
+    };
+    let mut label = format!("{}.", fill.context);
+    if let Some(spent) = &fill.spent {
+        label.push_str(&format!(" {spent}."));
+    }
+    // An 18-point drawing: a circle in the border colour, and over it the
+    // same circle from twelve o'clock, clockwise, as far as the share. The
+    // circle is one closed stroke (Rune rounds its joints, so it has no
+    // seams); the share is a filled band, so its ends are flat.
+    let mut shape = Shape::new().stroke_path(&circle(), RING_WIDTH, LineCap::Round, t.border);
+    if fill.share > 0.0 {
+        shape = shape.fill_path(&band(fill.share as f32), ink);
+    }
+    let mut ring = row()
+        .key("rd-context")
+        .role("img")
+        .label(label)
+        .focusable(true)
+        .size(28.0, 28.0)
+        .center()
+        .radius(8.0)
+        .focus_ring(2.0, 2.0, t.accent)
+        .help(fill.context)
+        .help_above()
+        .child(canvas(shape).size(18.0, 18.0).a11y_hidden());
+    if let Some(spent) = fill.spent {
+        ring = ring.help_row(spent);
+    }
+    Some(ring)
+}
+
+/// The centre of the ring's 18-point drawing, its radius and its width.
+const CENTRE: f32 = 9.0;
+const RADIUS: f32 = 7.0;
+const RING_WIDTH: f32 = 2.5;
+
+/// A point `radius` from the centre, `turn` of the way round clockwise
+/// from twelve o'clock (y grows downwards).
+fn on_circle(radius: f32, turn: f32) -> [f32; 2] {
+    let angle = turn * std::f32::consts::TAU;
+    [CENTRE + radius * angle.sin(), CENTRE - radius * angle.cos()]
+}
+
+/// How many points a `share` of the circle is drawn with: one every 3
+/// degrees, smooth at this size.
+fn steps(share: f32) -> usize {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let steps = (share * 120.0).ceil() as usize;
+    steps.max(1)
+}
+
+/// The ring's whole circle.
+fn circle() -> Path {
+    let mut path = Path::new().move_to(on_circle(RADIUS, 0.0));
+    for step in 1..steps(1.0) {
+        path = path.line_to(on_circle(RADIUS, step as f32 / steps(1.0) as f32));
+    }
+    path.close()
+}
+
+/// The ring's width from twelve o'clock round to `share` of a turn: out
+/// along the outer edge, back along the inner, with flat ends. A whole
+/// turn stops just short, so the band stays a simple shape.
+fn band(share: f32) -> Path {
+    let share = share.min(0.9999);
+    let (outer, inner) = (RADIUS + RING_WIDTH / 2.0, RADIUS - RING_WIDTH / 2.0);
+    let count = steps(share);
+    let turn = |step: usize| share * step as f32 / count as f32;
+    let mut path = Path::new().move_to(on_circle(outer, 0.0));
+    for step in 1..=count {
+        path = path.line_to(on_circle(outer, turn(step)));
+    }
+    for step in (0..=count).rev() {
+        path = path.line_to(on_circle(inner, turn(step)));
+    }
+    path.close()
 }

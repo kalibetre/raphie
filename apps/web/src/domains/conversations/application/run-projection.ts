@@ -2,6 +2,7 @@ export {
   activeRunLabel,
   toolSteps,
   runUsage,
+  contextTokens,
   formatTokens,
   formatCost,
   formatDuration,

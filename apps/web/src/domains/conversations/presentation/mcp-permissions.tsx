@@ -49,6 +49,7 @@ export function McpPermissions({
             size="sm"
             type="button"
             className="composer-model-trigger focus-visible:ring-1"
+            data-full-access={mode.data?.mode === "full-access" || undefined}
             aria-label={`Permissions: ${mode.data?.mode === "full-access" ? "Full access" : mode.data ? "Ask" : "Loading"}`}
           />
         }

@@ -7,6 +7,7 @@
 //! its word is final.
 
 use crate::contracts::{SandboxInfo, SandboxProvider};
+use crate::projections::grouped;
 
 /// JavaScript's largest exact integer, the runtime's cap on a disk quota.
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
@@ -60,19 +61,6 @@ pub fn bytes(count: u64) -> String {
     } else {
         format!("{:.1} MiB", exact / (1024.0 * 1024.0))
     }
-}
-
-/// A count with thousands separators: "12,480".
-fn grouped(count: u64) -> String {
-    let digits = count.to_string();
-    let mut out = String::new();
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
-    }
-    out
 }
 
 /// The "Files" line under Execution limits: how much is used, of how much.

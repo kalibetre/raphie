@@ -36,13 +36,14 @@ Read state is shared through the runtime: a reply you read on the desktop app is
 
 ## The composer
 
-| Control      | Use                                                                                                                              |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| Text box     | Up to 4,000 characters. **Enter** sends; **Shift+Enter** adds a line.                                                            |
-| Attach files | Up to four files per message. See [attachments](/guides/attachments/).                                                           |
-| Model picker | The model for this session. See [choosing a model](#choosing-a-model).                                                           |
-| Permissions  | **Ask** (the default) or **Full access** for workspace commands and MCP tools. See [approvals](#tool-approvals).                 |
-| Send / Stop  | Send turns into Stop while the bot is working and the draft is empty. With text in the draft, **Stop task** is under the ⋯ menu. |
+| Control       | Use                                                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Text box      | Up to 4,000 characters. **Enter** sends; **Shift+Enter** adds a line.                                                              |
+| Attach files  | Up to four files per message. See [attachments](/guides/attachments/).                                                             |
+| Model picker  | The model for this session. See [choosing a model](#choosing-a-model).                                                             |
+| Permissions   | **Ask** (the default) or **Full access** for workspace commands and MCP tools. See [approvals](#tool-approvals).                   |
+| Context donut | How full the model's context is. Hover it for the numbers, and the tokens and cost of the session so far; it turns amber past 80%. |
+| Send / Stop   | Send turns into Stop while the bot is working and the draft is empty. With text in the draft, **Stop task** is under the ⋯ menu.   |
 
 You can keep sending while the bot works. A waiting message shows as **Queued**; choose **Steer** to have the bot pick it up after its current tool step, or **Keep queued** to leave it until the current reply finishes.
 
@@ -107,7 +108,7 @@ Pages with a form block navigation while you have unsaved changes; save or disca
 
 ## UI plugins
 
-UI plugins are small, trusted additions built into the web workspace. The one included is a **token counter** in the composer footer: a rough estimate for your draft (about one token per four characters) plus the provider-reported tokens and cost of the open session.
+UI plugins are small, trusted additions built into the web workspace. The one included is a **token counter** beside the context donut: while you type, a rough estimate for your draft (about one token per four characters). It is hidden on a phone.
 
 Turn plugins on or off under **Settings → UI plugins**. Plugins are not a sandbox or a marketplace, and they grant bots no extra capabilities.
 

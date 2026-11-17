@@ -1,26 +1,45 @@
 @layer components {
+  /* Quiet text buttons: no fill until hovered, so the draft stays the
+     loudest thing in the composer. */
   .composer-model-trigger {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     min-width: 0;
-    max-width: min(280px, calc(100% - 44px));
-    min-height: 32px;
-    padding: 4px 10px;
+    max-width: min(240px, 45%);
+    min-height: 28px;
+    padding: 4px 8px;
     border: 0;
     border-radius: 8px;
-    background: var(--accent-soft);
-    color: var(--foreground);
-    font-size: 12px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+  }
+  .composer-model-trigger:hover:not(:disabled) {
+    background: var(--hover);
   }
   .composer-model-trigger > span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--foreground);
+    font-weight: 550;
   }
   .composer-model-trigger > svg {
     flex: none;
-    color: var(--accent);
+    color: var(--muted-foreground);
+  }
+  /* A phone's composer row is tight: the menus open without the chevrons. */
+  @media (max-width: 767px) {
+    .composer-model-trigger > svg:last-child {
+      display: none;
+    }
+  }
+  /* Full access is never on by accident: it reads in the attention colour. */
+  .composer-model-trigger[data-full-access],
+  .composer-model-trigger[data-full-access] > span,
+  .composer-model-trigger[data-full-access] > svg {
+    color: var(--attention);
   }
   .composer-model-trigger:disabled {
     opacity: 0.6;

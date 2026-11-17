@@ -7,7 +7,8 @@
 
 use raphie_core::contracts::{LibraryModel, ModelSelection, RuntimeSettings};
 use raphie_core::model_library::{
-    PickerFilter, families, favorite_key, pick_models, selected, selection_name, short_price,
+    PickerFilter, families, favorite_key, pick_models, selected, selection_name, short_model_name,
+    short_price,
 };
 use rune::{El, Icon, Tx, col, icon, row, text, text_input};
 use rune_kit::{Placement, Select, SelectAppearance, popover, scrim};
@@ -30,6 +31,12 @@ pub fn model_picker(s: &Ui, enabled: bool, look: &Look, overlays: &mut Vec<El>) 
     let models: &[LibraryModel] = settings.map_or(&[], |settings| &settings.models);
     let active = s.active_model();
     let name = selection_name(models, active.as_ref());
+    // The button drops the maker ("Anthropic: "), unless that would make
+    // two models read the same; a screen reader hears the whole name.
+    let shown = match active.as_ref().and_then(|active| selected(models, active)) {
+        Some(model) => short_model_name(&model.name, models),
+        None => name.clone(),
+    };
     // `enabled` is the composer's say (not while Raphie works); the button
     // also waits while a choice is being saved, but the list stays open
     // then, to say so.
@@ -39,9 +46,13 @@ pub fn model_picker(s: &Ui, enabled: bool, look: &Look, overlays: &mut Vec<El>) 
         TRIGGER,
         &icons::SPARKLES,
         format!("Choose model: {name}"),
-        name,
+        shown,
         s.model_picker.open,
-    );
+        false,
+    )
+    // The model name gives way first in a narrow composer.
+    .max_w(240.0)
+    .shrink();
     let trigger = if can_open {
         // Opening also puts the caret in the search, so typing narrows
         // the list at once.

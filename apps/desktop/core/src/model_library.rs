@@ -199,6 +199,33 @@ pub fn selection_name(models: &[LibraryModel], selection: Option<&ModelSelection
     }
 }
 
+/// A model's name without its provider prefix ("Anthropic: Claude Fable"
+/// reads "Claude Fable"), unless another model in `models` would then read
+/// the same. Mirrors `shortModelName` in the web's `model-catalog.ts`.
+pub fn short_model_name(name: &str, models: &[LibraryModel]) -> String {
+    let short = strip_maker(name);
+    if short == name {
+        return name.to_owned();
+    }
+    let clash = models
+        .iter()
+        .any(|model| model.name != name && strip_maker(&model.name) == short);
+    if clash { name } else { short }.to_owned()
+}
+
+/// `name` without a leading "Maker: ", the web's `/^[^:]{1,40}:\s+/`.
+fn strip_maker(name: &str) -> &str {
+    let Some((maker, rest)) = name.split_once(':') else {
+        return name;
+    };
+    let length = maker.chars().count();
+    let after = rest.trim_start();
+    if !(1..=40).contains(&length) || after.len() == rest.len() {
+        return name;
+    }
+    after
+}
+
 /// A price to two significant digits, as the picker shows it: "$3",
 /// "$0.25", "$0.075", "$15". Mirrors `Number(usd.toPrecision(2))`.
 pub fn short_price(usd: f64) -> String {
@@ -304,6 +331,34 @@ mod tests {
             input_modalities: vec!["text".into()],
             pricing: None,
         }
+    }
+
+    #[test]
+    fn the_button_drops_the_makers_name_unless_another_model_would_clash() {
+        let models = catalogue();
+        assert_eq!(
+            short_model_name("Anthropic: Claude Fable Latest", &models),
+            "Claude Fable Latest"
+        );
+        assert_eq!(short_model_name("GPT X", &models), "GPT X");
+        // "Claude Opus" is already in the list, so this one keeps its maker.
+        let mut clashing = models.clone();
+        clashing.push(model(
+            "anthropic/claude-opus",
+            "Anthropic: Claude Opus",
+            "x",
+        ));
+        assert_eq!(
+            short_model_name("Anthropic: Claude Opus", &clashing),
+            "Anthropic: Claude Opus"
+        );
+        // Only a "Maker: " prefix of 1 to 40 characters, with a space after.
+        assert_eq!(short_model_name("Ratio:1", &models), "Ratio:1");
+        assert_eq!(short_model_name(": Odd", &models), ": Odd");
+        let long = format!("{}: Model", "M".repeat(41));
+        assert_eq!(short_model_name(&long, &models), long);
+        let forty = format!("{}: Model", "M".repeat(40));
+        assert_eq!(short_model_name(&forty, &models), "Model");
     }
 
     /// The catalogue the expected values below were computed from, by

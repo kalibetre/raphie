@@ -30,7 +30,7 @@ export function ComposerActions({
       )}
       <Button
         variant={stopOnly ? "ghost" : "default"}
-        className={`ml-auto size-8 rounded-full transition-[transform,opacity,background-color] duration-150 enabled:hover:scale-105 enabled:active:scale-95 ${stopOnly ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : ""}`}
+        className={`size-8 rounded-full transition-[transform,opacity,background-color] duration-150 enabled:hover:scale-105 enabled:active:scale-95 ${stopOnly ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : ""}`}
         type={stopOnly ? "button" : "submit"}
         onClick={stopOnly ? onStop : undefined}
         size="icon"
