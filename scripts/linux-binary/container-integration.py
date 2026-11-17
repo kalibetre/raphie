@@ -119,8 +119,9 @@ for _ in range(30):
 else: raise RuntimeError('Service did not recover after rejected restore')
 malicious.unlink(); pathlib.Path(str(malicious) + '.release').unlink()
 shutil.copytree('/binaries', '/tmp/raphie-bad-bundle')
-pathlib.Path('/tmp/raphie-bad-bundle/raphie-web').write_text('#!/bin/sh\nexit 1\n')
-pathlib.Path('/tmp/raphie-bad-bundle/raphie-web').chmod(0o755)
+# A release is one executable, which the service runs; break that one.
+pathlib.Path('/tmp/raphie-bad-bundle/raphie').write_text('#!/bin/sh\nexit 1\n')
+pathlib.Path('/tmp/raphie-bad-bundle/raphie').chmod(0o755)
 failed = subprocess.run(['/usr/local/bin/raphie', 'update', '/tmp/raphie-bad-bundle'], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 assert failed.returncode != 0
 failed_backups = set(pathlib.Path('/var/backups/raphie').glob('raphie-*.tar')) - set(backups)
