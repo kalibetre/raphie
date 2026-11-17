@@ -128,7 +128,7 @@ work=$(mktemp -d)
 stage=
 lock=
 claimed=false
-trap 'if [ "$claimed" = true ]; then rm -rf "$install_dir"; fi; [ -z "$lock" ] || rmdir "$lock" 2>/dev/null || true; [ -z "$stage" ] || rm -rf "$stage"; rm -rf "$work"' EXIT
+trap 'kill $(jobs -p) 2>/dev/null || true; if [ "$claimed" = true ]; then rm -rf "$install_dir"; fi; [ -z "$lock" ] || rmdir "$lock" 2>/dev/null || true; [ -z "$stage" ] || rm -rf "$stage"; rm -rf "$work"' EXIT
 mkdir -p "$HOME/.local/lib" "$bin_dir"
 lock="$HOME/.local/lib/.raphie-install.lock"
 if ! mkdir "$lock"; then lock=; echo 'Another Raphie installation or update is in progress.' >&2; exit 1; fi
@@ -186,6 +186,71 @@ download() {
       "$(python3 -c 'import os, sys; print(f"{os.path.getsize(sys.argv[1]) / 1e6:.1f}" if os.path.exists(sys.argv[1]) else "0.0")' "$2")" "$attempt"
     sleep $((attempt * 2))
   done
+}
+# Downloads byte range $3-$4 of $1 to $2, resuming where a broken attempt
+# stopped. Returns 2 when the server answers with the whole file instead of
+# the range, so the caller can fall back to one stream.
+download_part() {
+  local want=$(($4 - $3 + 1)) attempt=1 have
+  : > "$2"
+  while :; do
+    have=$(($(wc -c < "$2")))
+    [ "$have" -lt "$want" ] || break
+    if [ "$attempt" -gt 1 ]; then
+      [ "$attempt" -le 5 ] || return 1
+      sleep $((attempt * 2))
+    fi
+    rm -f "$2.headers"
+    curl -fsSL -r "$(($3 + have))-$4" -D "$2.headers" "$1" >> "$2" || true
+    if grep -q '^HTTP/[0-9.]* 200' "$2.headers" 2>/dev/null && ! grep -q '^HTTP/[0-9.]* 206' "$2.headers"; then return 2; fi
+    attempt=$((attempt + 1))
+  done
+  [ "$have" = "$want" ]
+}
+megabytes() { awk -v bytes="$1" 'BEGIN { printf "%.1f", bytes / 1e6 }'; }
+# Downloads release file $1 of $3 bytes to $2 as 16 parts at once. On
+# some networks GitHub's download server is slow per connection while the
+# link has room to spare, so parts in parallel arrive several times faster
+# than one stream. Small or unsized files, and a server that ignores
+# ranges, take one stream.
+download_parallel() {
+  local parts=16 size=$3 chunk i start end got failed=0 status pid began=$SECONDS
+  local -a pids=()
+  case "$size" in '' | *[!0-9]*) download "$1" "$2"; return ;; esac
+  if [ "$size" -lt 8388608 ]; then download "$1" "$2"; return; fi
+  chunk=$(((size + parts - 1) / parts))
+  mkdir "$2.parts"
+  for ((i = 0; i < parts; i++)); do
+    start=$((i * chunk)); end=$((start + chunk - 1))
+    [ "$end" -lt "$size" ] || end=$((size - 1))
+    download_part "$1" "$2.parts/$i" "$start" "$end" &
+    pids+=($!)
+  done
+  # curl's own meter would draw once per part, so count the parts instead.
+  if [ -t 2 ]; then
+    while [ -n "$(jobs -rp)" ]; do
+      got=0
+      for ((i = 0; i < parts; i++)); do got=$((got + $(wc -c < "$2.parts/$i" 2>/dev/null || echo 0))); done
+      printf '\r%s of %s MB, %s KB/s, in %s parts at once ' "$(megabytes "$got")" "$(megabytes "$size")" \
+        "$((got / 1000 / (SECONDS - began + 1)))" "$parts" >&2
+      sleep 1
+    done
+    printf '\n' >&2
+  fi
+  for pid in "${pids[@]}"; do
+    status=0
+    wait "$pid" || status=$?
+    [ "$status" = 0 ] || [ "$failed" = 2 ] || failed=$status
+  done
+  if [ "$failed" = 0 ]; then
+    for ((i = 0; i < parts; i++)); do cat "$2.parts/$i"; done > "$2"
+    rm -rf "$2.parts"
+    return 0
+  fi
+  rm -rf "$2.parts"
+  [ "$failed" = 2 ] || return 1
+  echo 'The server does not send the file in parts; downloading it in one stream...'
+  download "$1" "$2"
 }
 echo "Finding the newest $channel release..."
 if [ "$channel" = stable ]; then
@@ -298,7 +363,7 @@ def key(r):
     return tuple(map(int, match.groups()))
 def size(r):
     found = [a.get('size') for a in r['assets'] if isinstance(a, dict) and a.get('name') == sys.argv[3]]
-    return f'{found[0] / 1e6:.1f} MB' if found and isinstance(found[0], int) else 'size unknown'
+    return found[0] if found and type(found[0]) is int and found[0] > 0 else '-'
 candidates = [(k, r['tag_name'], size(r)) for r in releases if (k := key(r)) is not None]
 if not candidates: raise SystemExit(42)
 print('%s %s' % max(candidates)[1:])
@@ -311,7 +376,8 @@ PY_RELEASE
   fi
   exit 1
 fi
-asset_size=${version#* }
+# The archive's size in bytes, or - when the release does not say.
+asset_bytes=${version#* }
 version=${version%% *}
 if [ -n "$current_version" ] && [ "$current_version" = "$version" ]; then
   if [ "$headless" = true ]; then
@@ -352,8 +418,9 @@ PY_COMPARE
     exit 0
   fi
 fi
+if [ "$asset_bytes" = - ]; then asset_size='size unknown'; else asset_size="$(megabytes "$asset_bytes") MB"; fi
 echo "Downloading $asset for $version ($asset_size)..."
-if ! download "https://github.com/kalibetre/raphie/releases/download/$version/$asset" "$work/release.tar.gz"; then
+if ! download_parallel "https://github.com/kalibetre/raphie/releases/download/$version/$asset" "$work/release.tar.gz" "$asset_bytes"; then
   echo "Could not download $asset for $version." >&2; exit 1
 fi
 if ! fetch=-fsSL download "https://github.com/kalibetre/raphie/releases/download/$version/SHA256SUMS" "$work/SHA256SUMS"; then
