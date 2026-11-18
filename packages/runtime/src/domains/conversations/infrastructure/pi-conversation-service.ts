@@ -46,6 +46,11 @@ import {
 import type { ConversationCommands } from "../application/ports.ts";
 import { messageViolation } from "../domain/admission.ts";
 import {
+  EMPTY_REPLY,
+  INTERRUPTED_REPLY,
+  replyFailure,
+} from "../domain/failure.ts";
+import {
   type ChatConversation,
   type ChatDelivery,
   type ChatTurn,
@@ -130,6 +135,11 @@ export const chatWorkflow = defineTask<
         turn.cancelled =
           settled.status === "unanswered" && settled.reason === "aborted";
         turn.status = answer ? "done" : "error";
+        if (!answer && !turn.cancelled)
+          turn.failure =
+            settled.status === "unanswered"
+              ? replyFailure(settled.reason, settled.detail)
+              : EMPTY_REPLY;
         // Steering may share a run's answer or start a distinct run. Only
         // suppress replies whose actual answer entry is already represented.
         const duplicate =
@@ -164,13 +174,17 @@ export const chatWorkflow = defineTask<
             : answer
               ? "Reply completed"
               : "Reply failed",
-          { conversationId: turn.conversationId, runId: turn.id },
+          {
+            conversationId: turn.conversationId,
+            runId: turn.id,
+            ...(turn.failure ? { details: turn.failure } : {}),
+          },
         );
         const destination = turn.replyTo?.conversation;
         if (destination) {
           const text =
             answer ??
-            "I could not complete that reply. Check the model configuration and send a new message to retry.";
+            `I could not complete that reply. ${turn.failure?.message ?? "Send a new message to retry."}`;
           state.deliveries.push({
             id: `${turn.id}:reply`,
             turnId: turn.id,
@@ -194,7 +208,10 @@ export const chatWorkflow = defineTask<
       const turn = (await tx.doc(Chats)).turns.find(
         (item) => item.id === task.input.turnId,
       );
-      if (turn?.status === "pending") turn.status = "error";
+      if (turn?.status === "pending") {
+        turn.status = "error";
+        turn.failure = INTERRUPTED_REPLY;
+      }
       if (turn?.scheduled)
         await finishJobRun(tx, task.input.turnId, "interrupted");
       return { status: "terminal", outcome: { status: "aborted" } };
@@ -219,7 +236,13 @@ export const watchJobRun = defineTask<
         const turn = (await tx.doc(Chats)).turns.find(
           (item) => item.id === task.input.turnId,
         );
-        if (turn?.status === "pending") turn.status = "error";
+        if (turn?.status === "pending") {
+          turn.status = "error";
+          turn.failure =
+            status === "aborted" || status === "orphaned"
+              ? INTERRUPTED_REPLY
+              : replyFailure("faulted", reply.state.outcome.error);
+        }
         await finishJobRun(
           tx,
           task.input.turnId,

@@ -264,10 +264,19 @@ export function Chat({
           <p className="message-meta">Stopped · message not completed</p>
         )}
         {turn.status === "error" && !turn.cancelled && (
-          <p className="error turn-error" role="alert">
-            <CircleAlert size={14} /> Raphie could not complete this reply.
-            Check Diagnostics, then send a new message to retry.
-          </p>
+          <div className="turn-failure" role="alert">
+            <p className="error turn-error">
+              <CircleAlert size={14} className="turn-error-icon" />
+              <span>
+                Raphie could not complete this reply.{" "}
+                {turn.failure?.message ??
+                  "Check Diagnostics, then send a new message to retry."}
+              </span>
+            </p>
+            {turn.failure?.detail && (
+              <pre className="turn-error-detail">{turn.failure.detail}</pre>
+            )}
+          </div>
         )}
       </>
     );

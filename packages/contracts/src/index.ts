@@ -48,6 +48,14 @@ export type Session = {
   createdAt: number;
 };
 
+/** Why a reply ended without an answer. */
+export type TurnFailure = {
+  /** A plain sentence: what happened and what to do next. */
+  message: string;
+  /** The model provider's own error text, when there is one. */
+  detail?: string;
+};
+
 export type Turn = {
   id: string;
   requestKey: string;
@@ -61,6 +69,8 @@ export type Turn = {
   answer: string | null;
   queueMode?: "followUp" | "steer";
   cancelled?: boolean;
+  /** Set when the turn failed (`status: "error"`, not cancelled). */
+  failure?: TurnFailure;
   /** Set when a scheduled job, not the owner, started this turn. */
   scheduled?: { name: string };
 };

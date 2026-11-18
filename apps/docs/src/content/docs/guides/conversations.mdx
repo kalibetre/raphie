@@ -63,6 +63,8 @@ If the bot has no provider yet, the workspace prompts you to connect one; see [f
 
 Replies stream as text with Markdown, code and Mermaid diagrams rendered. While a turn runs, tool steps appear in the reply; expand one to see its arguments and result. Each reply also reports its time, tokens and cost when the provider supplies them.
 
+When a reply cannot finish, the conversation says why under your message, for example that the model returned an error, that no model is chosen, or that the bot used its limit of tool rounds. A model error also shows the provider's own message, such as a rate limit; anything shaped like a key is masked. The desktop app shows the same. A channel such as Telegram gets the reason without the provider's message. The **Reply failed** event in Activity records both.
+
 For a fuller record, open **Settings → [bot] → Activity**: the bot's latest 100 events across all sessions (model calls, tools, approvals, recovery), refreshed every five seconds, with JSON export. Model reasoning is never shown. More in [observability](/operate/observability/).
 
 ## Tool approvals

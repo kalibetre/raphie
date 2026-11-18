@@ -180,6 +180,7 @@ export class PiClientQueries implements ClientQueries {
       answer: t.answer,
       queueMode: t.queueMode,
       cancelled: t.cancelled,
+      ...(t.failure ? { failure: t.failure } : {}),
       ...(t.scheduled
         ? { scheduled: t.scheduled, scheduledDelivery: t.scheduledDelivery }
         : {}),
@@ -334,7 +335,9 @@ export class PiClientQueries implements ClientQueries {
         last?.status === "error" && !last.cancelled
           ? {
               code: "reply_failed",
-              message: "Raphie could not complete this reply.",
+              message: last.failure
+                ? `Raphie could not complete this reply. ${last.failure.message}`
+                : "Raphie could not complete this reply.",
             }
           : null,
     };

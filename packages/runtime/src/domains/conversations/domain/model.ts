@@ -3,6 +3,7 @@ import type {
   Channel as Source,
   ChannelOrigin,
   ModelSelection,
+  TurnFailure,
 } from "@raphie/contracts";
 
 import type { ReplyDestination } from "../../channels/domain/binding.ts";
@@ -44,6 +45,8 @@ export type ChatTurn = {
   submissionId?: string;
   queueMode?: "followUp" | "steer";
   cancelled?: boolean;
+  /** Why the reply failed, when it did. */
+  failure?: TurnFailure;
   answerEntryId?: string;
   replyTo?: ReplyDestination | null;
   discordUserId?: string;
