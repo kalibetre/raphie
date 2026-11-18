@@ -142,7 +142,7 @@ fn main() {
     for (turn, steps) in steps_by_turn(&turns, &observation.activity, &observation.tool_approvals) {
         let names: Vec<String> = steps
             .iter()
-            .map(|step| format!("{} ({:?})", step.tool, step_state(step, i64::MAX)))
+            .map(|step| format!("{} ({:?})", step.tool, step_state(step, i64::MAX, true)))
             .collect();
         let usage = run_usage(&turn.id, &observation.activity).map_or("no usage".to_owned(), |u| {
             format!("{} tokens, {} calls", format_tokens(u.tokens), u.calls)

@@ -26,12 +26,14 @@ function approvalState(approval: Approval) {
   return approval.status;
 }
 
-function stepState(step: ToolStep) {
+export function stepState(step: ToolStep, working: boolean) {
   const approval = step.approval && approvalState(step.approval);
   if (approval === "pending") return "pending";
   if (step.failed || approval === "uncertain") return "uncertain";
   if (approval === "rejected" || approval === "expired") return "rejected";
-  return step.doneAt ? "done" : "running";
+  // Once the reply is finished nothing is still running, even a call whose
+  // end the journal missed.
+  return step.doneAt || !working ? "done" : "running";
 }
 
 const icons = {
@@ -53,7 +55,7 @@ export function ToolSteps({
   activeLabel?: string;
   elapsed?: string;
 }) {
-  const needsYou = steps.some((s) => stepState(s) === "pending");
+  const needsYou = steps.some((s) => stepState(s, working) === "pending");
   const [open, setOpen] = useState(false);
   const first = steps[0]?.startedAt;
   const last = Math.max(...steps.map((s) => s.doneAt ?? s.startedAt));
@@ -97,7 +99,7 @@ export function ToolSteps({
       {expanded && (
         <ol className="steps-list">
           {steps.map((step) => (
-            <Step key={step.id} step={step} />
+            <Step key={step.id} step={step} working={working} />
           ))}
         </ol>
       )}
@@ -105,8 +107,8 @@ export function ToolSteps({
   );
 }
 
-function Step({ step }: { step: ToolStep }) {
-  const state = stepState(step);
+function Step({ step, working }: { step: ToolStep; working: boolean }) {
+  const state = stepState(step, working);
   const approval = step.approval;
   const args = approval?.argumentsJson ?? step.args;
   return (
@@ -125,9 +127,11 @@ function Step({ step }: { step: ToolStep }) {
                 ? "outcome unknown"
                 : approval
                   ? `${approvalState(approval)}${approval.decidedApp === "desktop" ? " via desktop app" : approval.decidedVia ? ` via ${approval.decidedVia}` : ""}`
-                  : state === "done"
-                    ? formatDuration((step.doneAt ?? 0) - step.startedAt)
-                    : "running"}
+                  : state === "running"
+                    ? "running"
+                    : step.doneAt
+                      ? formatDuration(step.doneAt - step.startedAt)
+                      : "finished"}
           </span>
         </summary>
         {args && (

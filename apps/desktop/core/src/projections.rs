@@ -212,15 +212,16 @@ pub enum StepState {
     Uncertain,
 }
 
-/// The web's `stepState`.
-pub fn step_state(step: &ToolStep, now: i64) -> StepState {
+/// The web's `stepState`. Once the run has finished (`working` false)
+/// nothing is still running, even a call whose end the journal missed.
+pub fn step_state(step: &ToolStep, now: i64, working: bool) -> StepState {
     let approval = step.approval.as_ref().map(|a| approval_state(a, now));
     match approval {
         Some(ApprovalState::Pending) => StepState::Pending,
         _ if step.failed => StepState::Uncertain,
         Some(ApprovalState::Uncertain) => StepState::Uncertain,
         Some(ApprovalState::Rejected | ApprovalState::Expired) => StepState::Rejected,
-        _ if step.done_at.is_some() => StepState::Done,
+        _ if step.done_at.is_some() || !working => StepState::Done,
         _ => StepState::Running,
     }
 }
@@ -897,23 +898,28 @@ mod tests {
     #[test]
     fn step_states_put_the_owners_decision_first() {
         let mut step = tool_steps("t2", &journal(), &[]).remove(0);
-        assert_eq!(step_state(&step, 0), StepState::Running);
+        assert_eq!(step_state(&step, 0, true), StepState::Running);
+        assert_eq!(
+            step_state(&step, 0, false),
+            StepState::Done,
+            "a finished run has nothing running"
+        );
         step.done_at = Some(1);
-        assert_eq!(step_state(&step, 0), StepState::Done);
+        assert_eq!(step_state(&step, 0, true), StepState::Done);
 
         let mut pending = approval("ap");
         pending.status = ApprovalStatus::Pending;
         pending.execution = Execution::Waiting;
         step.approval = Some(pending.clone());
-        assert_eq!(step_state(&step, 8999), StepState::Pending);
+        assert_eq!(step_state(&step, 8999, true), StepState::Pending);
         assert_eq!(
-            step_state(&step, 9000),
+            step_state(&step, 9000, true),
             StepState::Rejected,
             "past its deadline"
         );
 
         pending.execution = Execution::Uncertain;
         step.approval = Some(pending);
-        assert_eq!(step_state(&step, 0), StepState::Uncertain);
+        assert_eq!(step_state(&step, 0, true), StepState::Uncertain);
     }
 }
