@@ -176,7 +176,7 @@ Change it with `raphie channel nightly` (or `stable`), then run `raphie update`;
 
 1. finds the newest release on your channel that has your platform's archive, downloads it and checks it against that release's `SHA256SUMS`;
 2. refuses to move backwards: if that release does not contain your installed version, nothing changes until one does;
-3. stops the service, waits up to 30 seconds for it to free its web and runtime ports, and, if another program still holds one, restarts the service as it was and stops without changing anything;
+3. stops the service and waits up to 30 seconds for it to free its web and runtime ports. If a program still holds one, it names that program. In a terminal it then asks you to stop it and press Return to check again; otherwise, or if you press Ctrl-C, it starts the service again as it was and stops without changing anything. If the service will not start again, it says so and gives the command that starts it;
 4. copies the stopped data directory to `~/.local/share/raphie-backups/` (a headless master key is not included; back it up yourself);
 5. swaps in the new binaries, keeping the old ones in `~/.local/lib/.raphie-previous.*`;
 6. restarts the service and waits up to 15 seconds for it to become healthy; if it does not, it stops and disables the service.

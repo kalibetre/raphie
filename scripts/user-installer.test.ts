@@ -570,11 +570,101 @@ exit 0
 `,
       { mode: 0o755 },
     );
+    // Something else keeps the runtime port: the update stops, starts the
+    // service again and says what holds the port; the download is kept.
+    const other = Bun.listen({
+      hostname: "127.0.0.1",
+      port: held.runtime,
+      socket: { data() {} },
+    });
+    const blocked = run([], {
+      HOME: updateHome,
+      // The stopped service's own brief hold is on a port nobody uses.
+      HOLD_PORT: String(freePorts().runtime),
+      RAPHIE_PORT_WAIT_SECONDS: "1",
+    });
+    other.stop(true);
+    assert.notEqual(blocked.exitCode, 0);
+    assert.match(
+      blocked.stderr.toString(),
+      new RegExp(
+        `Port ${held.runtime} is still in use[^]*Stop it and run the update again; no data was changed\\.\\nStarting Raphie again\\.\\.\\.`,
+      ),
+    );
+    assert.ok(existsSync(join(temp, "bootstrapped")), "started again");
+    await rm(join(temp, "bootstrapped"));
+    assert.equal(
+      (
+        await readFile(join(updateInstall, ".raphie-user-install"), "utf8")
+      ).trim(),
+      "nightly-11-1",
+    );
+    const kept = join(updateHome, "Library/Caches/Raphie/downloads");
+    assert.deepEqual(await readdir(kept), [
+      "nightly-12-1-raphie-darwin-arm64.tar.gz",
+    ]);
+    // In a terminal it asks instead, and carries on once the port is free:
+    // the helper holds the port, frees it at the prompt and presses Return.
+    await writeFile(join(temp, "installer.sh"), input);
+    const terminal = Bun.spawnSync(
+      [
+        "python3",
+        "-c",
+        `import os, pty, select, socket, sys
+port, script = int(sys.argv[1]), sys.argv[2]
+held = socket.socket(); held.bind(("127.0.0.1", port)); held.listen()
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("bash", ["bash", script])
+out, answered = b"", False
+while True:
+    if not select.select([fd], [], [], 60)[0]: break
+    try: chunk = os.read(fd, 4096)
+    except OSError: break
+    if not chunk: break
+    out += chunk
+    if not answered and b"press Return" in out:
+        held.close(); answered = True; os.write(fd, b"\\n")
+_, status = os.waitpid(pid, 0)
+sys.stdout.write(out.decode(errors="replace"))
+sys.exit(os.waitstatus_to_exitcode(status))`,
+        String(held.runtime),
+        join(temp, "installer.sh"),
+      ],
+      {
+        env: {
+          ...env,
+          HOME: updateHome,
+          HOLD_PORT: String(freePorts().runtime),
+          RAPHIE_PORT_WAIT_SECONDS: "1",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const said = terminal.stdout.toString();
+    assert.equal(terminal.exitCode, 0, said + terminal.stderr.toString());
+    assert.match(said, new RegExp(`Port ${held.runtime} is still in use`));
+    assert.match(said, /press Return to check again/);
+    // It used the download the blocked run kept.
+    assert.match(
+      said,
+      /Using raphie-darwin-arm64\.tar\.gz for nightly-12-1, downloaded earlier\./,
+    );
+    assert.doesNotMatch(said, /Downloading/);
+    assert.match(said, /Installed Raphie nightly-12-1/);
+    // Put the earlier release back for the run below.
+    await writeFile(
+      join(updateInstall, ".raphie-user-install"),
+      "nightly-11-1\n",
+    );
     const macUpdate = run([], {
       HOME: updateHome,
       HOLD_PORT: String(held.runtime),
     });
     assert.equal(macUpdate.exitCode, 0, macUpdate.stderr.toString());
+    // An installed release leaves no download behind.
+    assert.equal(existsSync(kept), false);
     assert.equal(
       (
         await readFile(join(updateInstall, ".raphie-user-install"), "utf8")
@@ -767,13 +857,22 @@ test("installer downloads in one stream when the server ignores ranges, the file
   }
 });
 
-test("installer stops when a part cannot be downloaded", async () => {
+test("installer stops when a part cannot be downloaded, and the next run carries on", async () => {
   const temp = await mkdtemp(join(tmpdir(), "raphie-parallel-download-"));
   try {
     const file = crypto.getRandomValues(new Uint8Array(9 * 1048576));
     const { result, out } = await downloadWith(temp, file, { failPart: true });
     assert.notEqual(result.exitCode, 0);
     assert.equal(out, undefined);
+    // The parts that arrived stay for the next run.
+    assert.ok(existsSync(join(temp, "out.bin.parts/0")));
+    await rm(join(temp, "fail-part"));
+    await rm(join(temp, "requests"));
+    const again = await downloadWith(temp, file);
+    assert.equal(again.result.exitCode, 0, again.result.stderr.toString());
+    assert.ok(again.out && Buffer.compare(again.out, file) === 0);
+    // The first part had arrived whole, so it was not asked for again.
+    assert.ok(!again.requests.some((range) => range.startsWith("0-")));
     assert.equal(existsSync(join(temp, "out.bin.parts")), false);
   } finally {
     await rm(temp, { recursive: true, force: true });

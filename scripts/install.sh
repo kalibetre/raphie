@@ -124,11 +124,38 @@ elif [ -e "$data_dir" ] || [ -L "$data_dir" ]; then
   echo "Existing Raphie data found at $data_dir; no files were changed. Migration requires a separate plan." >&2
   exit 1
 fi
+# Loads the LaunchAgent. launchctl refuses while it still tears down the
+# copy it has just stopped, so this keeps trying for about 20 seconds.
+bootstrap_agent() {
+  local attempt
+  for attempt in {1..10}; do
+    launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.raphie.user.plist" 2>/dev/null && return 0
+    sleep 2
+  done
+  launchctl print "gui/$(id -u)/com.raphie.user" >/dev/null 2>&1
+}
+# An update that stops before swapping in the new release starts the
+# service it stopped again, or says plainly that Raphie is stopped.
+stopped_service=
+restore_on_exit=false
+start_service_again() {
+  restore_on_exit=false
+  case "$stopped_service" in
+    systemd)
+      systemctl --user start raphie.service && return 0
+      echo 'Raphie is stopped and did not start again. Start it with: systemctl --user start raphie.service' >&2 ;;
+    launchd)
+      echo 'Starting Raphie again...' >&2
+      bootstrap_agent && return 0
+      echo "Raphie is stopped and did not start again. Start it with: launchctl bootstrap gui/$(id -u) $HOME/Library/LaunchAgents/com.raphie.user.plist" >&2 ;;
+  esac
+  return 0
+}
 work=$(mktemp -d)
 stage=
 lock=
 claimed=false
-trap 'kill $(jobs -p) 2>/dev/null || true; if [ "$claimed" = true ]; then rm -rf "$install_dir"; fi; [ -z "$lock" ] || rmdir "$lock" 2>/dev/null || true; [ -z "$stage" ] || rm -rf "$stage"; rm -rf "$work"' EXIT
+trap 'kill $(jobs -p) 2>/dev/null || true; [ "$restore_on_exit" != true ] || start_service_again; if [ "$claimed" = true ]; then rm -rf "$install_dir"; fi; [ -z "$lock" ] || rmdir "$lock" 2>/dev/null || true; [ -z "$stage" ] || rm -rf "$stage"; rm -rf "$work"' EXIT
 mkdir -p "$HOME/.local/lib" "$bin_dir"
 lock="$HOME/.local/lib/.raphie-install.lock"
 if ! mkdir "$lock"; then lock=; echo 'Another Raphie installation or update is in progress.' >&2; exit 1; fi
@@ -187,12 +214,13 @@ download() {
     sleep $((attempt * 2))
   done
 }
-# Downloads byte range $3-$4 of $1 to $2, resuming where a broken attempt
-# stopped. Returns 2 when the server answers with the whole file instead of
+# Downloads byte range $3-$4 of $1 to $2, resuming where a broken attempt,
+# or an earlier run, stopped. Returns 2 when the server answers with the whole file instead of
 # the range, so the caller can fall back to one stream.
 download_part() {
   local want=$(($4 - $3 + 1)) attempt=1 have
-  : > "$2"
+  # A part longer than its range is not this file's; start it again.
+  if [ ! -e "$2" ] || [ "$(($(wc -c < "$2")))" -gt "$want" ]; then : > "$2"; fi
   while :; do
     have=$(($(wc -c < "$2")))
     [ "$have" -lt "$want" ] || break
@@ -219,7 +247,7 @@ download_parallel() {
   case "$size" in '' | *[!0-9]*) download "$1" "$2"; return ;; esac
   if [ "$size" -lt 8388608 ]; then download "$1" "$2"; return; fi
   chunk=$(((size + parts - 1) / parts))
-  mkdir "$2.parts"
+  mkdir -p "$2.parts"
   for ((i = 0; i < parts; i++)); do
     start=$((i * chunk)); end=$((start + chunk - 1))
     [ "$end" -lt "$size" ] || end=$((size - 1))
@@ -247,8 +275,9 @@ download_parallel() {
     rm -rf "$2.parts"
     return 0
   fi
-  rm -rf "$2.parts"
+  # Parts that broke off stay, so the next run carries on from them.
   [ "$failed" = 2 ] || return 1
+  rm -rf "$2.parts"
   echo 'The server does not send the file in parts; downloading it in one stream...'
   download "$1" "$2"
 }
@@ -418,16 +447,22 @@ PY_COMPARE
     exit 0
   fi
 fi
-if [ "$asset_bytes" = - ]; then asset_size='size unknown'; else asset_size="$(megabytes "$asset_bytes") MB"; fi
-echo "Downloading $asset for $version ($asset_size)..."
-if ! download_parallel "https://github.com/kalibetre/raphie/releases/download/$version/$asset" "$work/release.tar.gz" "$asset_bytes"; then
-  echo "Could not download $asset for $version." >&2; exit 1
-fi
+# A release's files never change, so a download is kept until it is
+# installed: a run that stops later (a busy port, Ctrl-C) or breaks off
+# leaves it, and the next run checks it and carries on from it.
+case "$platform" in
+  Darwin) downloads="$HOME/Library/Caches/Raphie/downloads" ;;
+  *) case "${XDG_CACHE_HOME:-}" in /*) downloads="$XDG_CACHE_HOME/raphie/downloads" ;; *) downloads="$HOME/.cache/raphie/downloads" ;; esac ;;
+esac
+mkdir -p "$downloads" && chmod 700 "$downloads"
+archive="$downloads/$version-$asset"
+# The checksums come first: they decide whether a kept download can be used.
 if ! fetch=-fsSL download "https://github.com/kalibetre/raphie/releases/download/$version/SHA256SUMS" "$work/SHA256SUMS"; then
   echo "Could not download release checksums for $version." >&2; exit 1
 fi
-echo 'Verifying the download...'
-python3 - "$work/release.tar.gz" "$work/SHA256SUMS" "$asset" <<'PY_HASH'
+# Checks file $1 against the release's checksum for the archive.
+verify() {
+  python3 - "$1" "$work/SHA256SUMS" "$asset" <<'PY_HASH'
 import hashlib, re, sys
 with open(sys.argv[2], encoding='ascii') as source: lines = source.read().splitlines()
 matches = [m.group(1).lower() for line in lines if (m := re.fullmatch(r'([a-fA-F0-9]{64}) [ *](.+)', line)) and m.group(2) == sys.argv[3]]
@@ -437,8 +472,22 @@ with open(sys.argv[1], 'rb') as source:
     for block in iter(lambda: source.read(1024 * 1024), b''): h.update(block)
 if h.hexdigest() != matches[0]: raise SystemExit('Release checksum does not match; installation stopped.')
 PY_HASH
+}
+if [ -f "$archive" ] && verify "$archive" 2>/dev/null; then
+  echo "Using $asset for $version, downloaded earlier."
+else
+  rm -f "$archive"
+  if [ "$asset_bytes" = - ]; then asset_size='size unknown'; else asset_size="$(megabytes "$asset_bytes") MB"; fi
+  echo "Downloading $asset for $version ($asset_size)..."
+  if ! download_parallel "https://github.com/kalibetre/raphie/releases/download/$version/$asset" "$archive.partial" "$asset_bytes"; then
+    echo "Could not download $asset for $version. Run the update again to carry on from where it stopped." >&2; exit 1
+  fi
+  echo 'Verifying the download...'
+  if ! verify "$archive.partial"; then rm -rf "$archive.partial" "$archive.partial.parts"; exit 1; fi
+  mv -f "$archive.partial" "$archive"
+fi
 mkdir "$work/bundle"
-python3 - "$work/release.tar.gz" "$work/bundle" <<'PY'
+python3 - "$archive" "$work/bundle" <<'PY'
 import os, re, shutil, sys, tarfile
 # A release is one executable; one from before that also has the runtime
 # and web host as their own executables, which it then needs.
@@ -462,19 +511,20 @@ if [ "$updating" = true ]; then
   if [ "$platform" = Linux ] && [ -f "$HOME/.config/systemd/user/raphie.service" ]; then
     systemctl --user stop raphie.service || { echo 'Could not stop the user service; no update was performed.' >&2; exit 1; }
     stopped_service=systemd
+    restore_on_exit=true
   elif [ "$platform" = Darwin ] && launchctl print "gui/$(id -u)/com.raphie.user" >/dev/null 2>&1; then
     launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.raphie.user.plist" || { echo 'Could not stop the user service; no update was performed.' >&2; exit 1; }
     stopped_service=launchd
+    restore_on_exit=true
   fi
 fi
-# A foreground or another installation may still hold either port. Never copy a live database.
-# launchctl bootout returns before the service has exited, so an update
-# waits for the ports to free up before giving up.
-if ! python3 - "$runtime_port" "$web_port" "$updating" <<'PY_PORT'
+# Prints the first of the ports still in use after waiting up to $1 seconds
+# for it to free up, and fails when both are free.
+busy_port() {
+  python3 - "$1" "$runtime_port" "$web_port" <<'PY_PORT'
 import socket, sys, time
-runtime, web, updating = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3] == 'true'
-deadline = time.monotonic() + (30 if updating else 0)
-for port in (runtime, web):
+deadline = time.monotonic() + float(sys.argv[1])
+for port in map(int, sys.argv[2:]):
     while True:
         sock = socket.socket()
         try:
@@ -484,19 +534,42 @@ for port in (runtime, web):
             if time.monotonic() < deadline:
                 time.sleep(0.25)
                 continue
-            if updating:
-                sys.exit(f'Port {port} is in use. Stop the other Raphie or process holding it and retry; no data was changed.')
-            flag = '--runtime-port' if port == runtime else '--port'
-            sys.exit(f'Port {port} is in use by another program; nothing was installed. Run the installer again with a free port, for example:\n  curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- {flag} {port + 100}')
+            print(port)
+            sys.exit(0)
         finally:
             sock.close()
+sys.exit(1)
 PY_PORT
-then
-  # Leave the installed Raphie running as it was found.
-  case "$stopped_service" in
-    systemd) systemctl --user start raphie.service || true ;;
-    launchd) launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.raphie.user.plist" || true ;;
-  esac
+}
+# Names the program listening on port $1, as "name (process 123)".
+port_holder() {
+  command -v lsof >/dev/null || return 0
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN -Fpc 2>/dev/null | awk '/^p/ { pid = substr($0, 2) } /^c/ { print substr($0, 2) " (process " pid ")"; exit }'
+}
+# A foreground or another installation may still hold either port. Never copy a live database.
+# launchctl bootout returns before the service has exited, so an update
+# waits for the ports to free up; in a terminal it then asks you to free
+# them and checks again, for as long as you like.
+if [ "$updating" = true ]; then
+  # Tests shorten the first wait.
+  wait_seconds=${RAPHIE_PORT_WAIT_SECONDS:-30}
+  case "$wait_seconds" in '' | *[!0-9]*) wait_seconds=30 ;; esac
+  while port=$(busy_port "$wait_seconds"); do
+    holder=$(port_holder "$port")
+    echo "Port $port is still in use${holder:+ by $holder}." >&2
+    if [ -t 2 ] && { exec 3</dev/tty; } 2>/dev/null; then
+      printf 'Stop it, then press Return to check again (Ctrl-C cancels, and Raphie starts again as it was): ' >&2
+      if ! read -r _ <&3; then exec 3<&-; echo >&2; exit 1; fi
+      exec 3<&-
+      wait_seconds=3
+    else
+      echo 'Stop it and run the update again; no data was changed.' >&2
+      exit 1
+    fi
+  done
+elif port=$(busy_port 0); then
+  flag=--port; [ "$port" != "$runtime_port" ] || flag=--runtime-port
+  printf 'Port %s is in use by another program; nothing was installed. Run the installer again with a free port, for example:\n  curl -fsSL https://raw.githubusercontent.com/kalibetre/raphie/main/scripts/install.sh | bash -s -- %s %s\n' "$port" "$flag" "$((port + 100))" >&2
   exit 1
 fi
 if [ "$updating" = true ] && [ -d "$data_dir" ]; then
@@ -513,6 +586,8 @@ printf '%s\n' "$data_dir" > "$stage/.data-directory"
 printf '%s\n' "$channel" > "$stage/.channel"
 printf 'runtime=%s\nweb=%s\n' "$runtime_port" "$web_port" > "$stage/.ports"
 if [ "$updating" = true ]; then
+  # From here the new release starts the service, not the old one.
+  restore_on_exit=false
   old=$(mktemp -d "$HOME/.local/lib/.raphie-previous.XXXXXXXX")
   rmdir "$old"
   mv "$install_dir" "$old"
@@ -530,6 +605,8 @@ else
   claimed=false
 fi
 printf '\nInstalled Raphie %s (%s channel).\n' "$version" "$channel"
+# Installed: the kept download has done its job.
+rm -rf "$downloads"
 if [ "$updating" = false ]; then configure_path; fi
 service_started=false
 service_attempted=false
@@ -571,7 +648,7 @@ PY_SERVICE
       if launchctl bootstrap "gui/$(id -u)" "$agent"; then service_started=true; fi
     elif [ "$updating" = true ] && [ -f "$agent" ]; then
       service_attempted=true
-      if launchctl enable "gui/$(id -u)/com.raphie.user" && launchctl bootstrap "gui/$(id -u)" "$agent"; then service_started=true; fi
+      if launchctl enable "gui/$(id -u)/com.raphie.user" && bootstrap_agent; then service_started=true; fi
     fi ;;
 esac
 service_failed=false
