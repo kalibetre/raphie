@@ -73,6 +73,7 @@ The installer:
 - says what it is doing at each step, and in a terminal shows how much of the download has arrived and how fast;
 - downloads an archive of 8 MiB or more in 16 parts at once. Some networks limit each connection to GitHub's download server, so parts in parallel arrive several times faster than one stream. If the server sends the whole file instead of a part, the installer downloads it in one stream;
 - resumes a part, or a single download, that breaks off where it stopped, up to five attempts, rather than starting over;
+- keeps the download until the release is installed, in `~/Library/Caches/Raphie/downloads` on a Mac or `~/.cache/raphie/downloads` on Linux. An update that stops early, or a download that breaks off, carries on from it on the next run; it is checked against `SHA256SUMS` before it is used;
 - checks the archive's SHA-256 hash against the `SHA256SUMS` file from the same release, and stops on a mismatch. This catches a corrupted or incomplete download, not a tampered release, since both files come from the same release; the installer does not check the release's GitHub attestations ([check one by hand](#check-a-release-by-hand));
 - puts the `raphie` executable in `~/.local/lib/raphie` and links `~/.local/bin/raphie`;
 - adds `~/.local/bin` to PATH for new Bash and Zsh terminals;
