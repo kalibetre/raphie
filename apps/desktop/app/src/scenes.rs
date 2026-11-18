@@ -27,7 +27,7 @@ use serde_json::{Value, json};
 
 use crate::format::now_ms;
 use crate::sections::{BotSection, Page};
-use crate::state::{BACKEND, Dropdown, Ui};
+use crate::state::{BACKEND, Dropdown, Filter, Ui};
 
 /// A named change to a fresh [`Ui`], as `AppSpec::scenes` takes them.
 pub type Scene = (&'static str, fn(&mut Ui));
@@ -39,10 +39,12 @@ pub const SCENES: &[Scene] = &[
     ("device-code", device_code),
     ("new-conversation", new_conversation),
     ("conversations", conversations),
+    ("conversations-archived", conversations_archived),
     ("unread", unread),
     ("inbox", inbox),
     ("inbox-empty", inbox_empty),
     ("conversation", conversation),
+    ("conversation-archived", conversation_archived),
     ("attachments", attachments),
     ("image-viewer", image_viewer),
     ("permissions", permissions),
@@ -1258,6 +1260,56 @@ pub fn model_settings() -> RuntimeSettings {
 /// open beside them.
 pub fn conversations(ui: &mut Ui) {
     conversation(ui);
+}
+
+/// The sidebar's Archived filter: two archived conversations, with "Plan
+/// the week" still open beside them.
+pub fn conversations_archived(ui: &mut Ui) {
+    conversation(ui);
+    ui.filter = Filter::Archived;
+    let now = now_ms();
+    let archived = |mut session: SessionSummary, at: i64| {
+        session.archived_at = Some(at);
+        session
+    };
+    ui.model.apply(Event::ArchivedSessions {
+        bot_id: "default".into(),
+        sessions: vec![
+            archived(
+                summary(
+                    "s-4",
+                    "Holiday packing list",
+                    "Sun cream, adapters and the blue notebook.",
+                    now - 3 * 86_400_000,
+                    false,
+                    false,
+                ),
+                now - 86_400_000,
+            ),
+            archived(
+                summary(
+                    "s-5",
+                    "Birthday gift ideas",
+                    "A pottery class, or a good pair of gloves.",
+                    now - 12 * 86_400_000,
+                    false,
+                    false,
+                ),
+                now - 5 * 86_400_000,
+            ),
+        ],
+    });
+}
+
+/// "Plan the week" open after it was archived: the title bar offers to
+/// bring it back.
+pub fn conversation_archived(ui: &mut Ui) {
+    conversation(ui);
+    ui.model.apply(Event::Archived {
+        bot_id: "default".into(),
+        session_id: "s-1".into(),
+        archived_at: Some(now_ms()),
+    });
 }
 
 /// The sidebar's conversations with replies not read yet: two new in one

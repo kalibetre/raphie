@@ -1,4 +1,6 @@
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   Bell,
   ChevronsLeft,
@@ -19,6 +21,8 @@ export function WorkspaceHeader({
   onBack,
   onList,
   onNew,
+  archived,
+  onArchive,
   onBotSettings,
   onNotifications,
   notificationCount,
@@ -33,6 +37,10 @@ export function WorkspaceHeader({
   /** On a phone: back to the bot's conversation list. */
   onList?: () => void;
   onNew?: () => void;
+  /** Whether the open conversation is archived. */
+  archived?: boolean;
+  /** Archives the open conversation, or brings it back. */
+  onArchive?: () => void;
   onBotSettings: () => void;
   onNotifications: () => void;
   notificationCount: number;
@@ -71,7 +79,10 @@ export function WorkspaceHeader({
           <strong>{breadcrumb}</strong>
         </button>
       </div>
-      <h1 className="header-conversation-title">{title}</h1>
+      <h1 className="header-conversation-title">
+        {title}
+        {archived && <span className="header-archived">Archived</span>}
+      </h1>
       <div className="header-actions">
         {onBack && (
           <Button
@@ -82,6 +93,19 @@ export function WorkspaceHeader({
             onClick={onBack}
           >
             <ArrowLeft size={16} />
+          </Button>
+        )}
+        {onArchive && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={
+              archived ? "Unarchive conversation" : "Archive conversation"
+            }
+            title={archived ? "Unarchive" : "Archive"}
+            onClick={onArchive}
+          >
+            {archived ? <ArchiveRestore size={17} /> : <Archive size={17} />}
           </Button>
         )}
         {onNew && (

@@ -1,5 +1,5 @@
 //! The bar over the conversation: which bot, which conversation, and the
-//! buttons for a new conversation and the inbox.
+//! buttons to archive it, start a new one and open the inbox.
 //!
 //! Mirrors `apps/web/src/presentation/workspace/workspace-header.tsx` and the
 //! `.bot-workspace-header` rules in `bot-workspace.css`.
@@ -53,15 +53,65 @@ pub fn header(s: &Ui, look: &Look) -> El {
         identity = identity.child(name);
     }
 
-    let actions = row()
-        .gap(8.0)
-        .center_y()
+    let mut actions = row().gap(8.0).center_y();
+    // An open conversation can be archived, or brought back; it stays open
+    // either way.
+    if let Some(open) = conversation {
+        let archived = model.open_archived();
+        let (glyph, label) = if archived {
+            (&icons::ARCHIVE_RESTORE, "Unarchive conversation")
+        } else {
+            (&icons::ARCHIVE, "Archive conversation")
+        };
+        let session_id = open.session_id.clone();
+        actions = actions.child(pressable(
+            icon_button(t, glyph, 17.0, label).key("rd-archive"),
+            true,
+            move |s: &mut Ui| s.archive(&session_id, !archived),
+        ));
+    }
+    let actions = actions
         .child(pressable(
             icon_button(t, &icons::SQUARE_PEN, 17.0, "New conversation").key("rd-new"),
             true,
             |s: &mut Ui| s.select_session(None),
         ))
         .child(bell(s, t));
+
+    // `grow` takes the room between the two sides, and the title centres in
+    // it, with "Archived" beside it for an archived conversation (the web's
+    // `.header-archived`).
+    let mut heading = row()
+        .grow(1.0)
+        .min_w(0.0)
+        .gap(8.0)
+        .center_y()
+        .justify_center()
+        .child(
+            text(title)
+                .key("rd-title")
+                .role("heading")
+                .font(font(14.0, 560.0))
+                .color(t.foreground)
+                .truncate()
+                .align(Align::Center)
+                .shrink(),
+        );
+    if conversation.is_some() && model.open_archived() {
+        heading = heading.child(
+            row()
+                .key("rd-title-archived")
+                .px(7.0)
+                .py(1.0)
+                .radius(9.0)
+                .border(1.0, t.border)
+                .child(
+                    text("Archived")
+                        .font(font(11.0, 500.0))
+                        .color(t.muted_foreground),
+                ),
+        );
+    }
 
     // With the roster hidden, the bar starts right of the window's buttons.
     let left = if s.roster_open {
@@ -83,19 +133,7 @@ pub fn header(s: &Ui, look: &Look) -> El {
         // Empty parts of the bar move the window; its buttons still press.
         .window_drag()
         .child(identity)
-        .child(
-            // `grow` takes the room between the two sides, and the title
-            // centres in it.
-            text(title)
-                .key("rd-title")
-                .role("heading")
-                .font(font(14.0, 560.0))
-                .color(t.foreground)
-                .truncate()
-                .align(Align::Center)
-                .grow(1.0)
-                .min_w(0.0),
-        )
+        .child(heading)
         .child(actions)
 }
 

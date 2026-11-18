@@ -341,6 +341,139 @@ fn the_sidebar_lists_searches_and_filters_sessions() {
 }
 
 #[test]
+fn the_archived_filter_fetches_and_lists_archived_conversations() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::new_conversation, dark);
+        assert!(rt.find("rd-filter-archived").is_some());
+        click(&mut rt, "rd-filter-archived");
+        assert_eq!(rt.state.filter, Filter::Archived);
+        assert_eq!(rt.state.sent.last(), Some(&Command::LoadArchived));
+        // Until they arrive, the list says so rather than "none".
+        assert!(rt.find("rd-session-s-1").is_none());
+        assert!(screen_text(&rt).contains("Loading archived conversations…"));
+
+        // The archived ones, and none of the live list.
+        let mut rt = render(scenes::conversations_archived, dark);
+        for id in ["s-4", "s-5"] {
+            assert!(rt.find(&format!("rd-session-{id}")).is_some(), "row {id}");
+        }
+        for id in ["s-1", "s-2", "s-3"] {
+            assert!(rt.find(&format!("rd-session-{id}")).is_none(), "row {id}");
+        }
+        assert!(rt.find("rd-more-sessions").is_none());
+        // A row's button brings its conversation back.
+        let restore = element(&rt, "rd-session-s-4-archive");
+        assert_eq!(
+            restore.label.as_deref(),
+            Some("Unarchive Holiday packing list")
+        );
+        click(&mut rt, "rd-session-s-4-archive");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::Archive {
+                session_id: "s-4".into(),
+                archived: false
+            })
+        );
+
+        // Nothing archived: the list says so.
+        rt.update(|ui, _| {
+            ui.model.apply(Event::ArchivedSessions {
+                bot_id: "default".into(),
+                sessions: Vec::new(),
+            });
+        });
+        settle(&mut rt);
+        assert!(screen_text(&rt).contains("No archived conversations."));
+    }
+}
+
+#[test]
+fn a_rows_button_archives_its_conversation() {
+    let mut rt = render(scenes::new_conversation, false);
+    let button = element(&rt, "rd-session-s-3-archive");
+    assert_eq!(button.label.as_deref(), Some("Archive Tea preferences"));
+    // Over the row's top-right corner, where its time is.
+    let row = element(&rt, "rd-session-s-3").rect;
+    let [x, y, w, h] = button.rect;
+    assert!(
+        x + w <= row[0] + row[2] && x > row[0] + row[2] / 2.0,
+        "{row:?}"
+    );
+    assert!(
+        y >= row[1] && y + h <= row[1] + row[3] / 2.0 + 4.0,
+        "{row:?}"
+    );
+    let sent = rt.state.sent.len();
+    click(&mut rt, "rd-session-s-3-archive");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Archive {
+            session_id: "s-3".into(),
+            archived: true
+        })
+    );
+    // The press archives only: it does not open the conversation.
+    assert_eq!(rt.state.sent.len(), sent + 1);
+}
+
+#[test]
+fn the_title_bar_archives_and_unarchives_the_open_conversation() {
+    for dark in [false, true] {
+        // A new conversation has nothing to archive.
+        let rt = render(scenes::new_conversation, dark);
+        assert!(rt.find("rd-archive").is_none());
+
+        let mut rt = render(scenes::conversation, dark);
+        assert_eq!(
+            element(&rt, "rd-archive").label.as_deref(),
+            Some("Archive conversation")
+        );
+        assert!(rt.find("rd-title-archived").is_none());
+        click(&mut rt, "rd-archive");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::Archive {
+                session_id: "s-1".into(),
+                archived: true
+            })
+        );
+
+        // Archived, it stays open, out of the list, and the same button
+        // brings it back.
+        let mut rt = render(scenes::conversation_archived, dark);
+        assert_eq!(
+            element(&rt, "rd-archive").label.as_deref(),
+            Some("Unarchive conversation")
+        );
+        assert!(rt.find("rd-session-s-1").is_none());
+        // Marked beside its title, as on the web.
+        assert!(rt.find("rd-title-archived").is_some());
+        assert_eq!(rt.state.attention_in("default"), 1, "only the approval");
+        click(&mut rt, "rd-archive");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::Archive {
+                session_id: "s-1".into(),
+                archived: false
+            })
+        );
+        rt.update(|ui, _| {
+            ui.model.apply(Event::Archived {
+                bot_id: "default".into(),
+                session_id: "s-1".into(),
+                archived_at: None,
+            });
+        });
+        settle(&mut rt);
+        assert_eq!(
+            element(&rt, "rd-archive").label.as_deref(),
+            Some("Archive conversation")
+        );
+    }
+}
+
+#[test]
 fn a_suggestion_fills_the_composer_without_sending() {
     let mut rt = render(scenes::new_conversation, false);
     let key = element_with_label(&rt, "Help me plan my day");

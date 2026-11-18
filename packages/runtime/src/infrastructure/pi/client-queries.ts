@@ -102,11 +102,17 @@ export class PiClientQueries implements ClientQueries {
     };
   }
 
-  async sessions(actor: ActorContext, after?: string, limit = 50) {
+  async sessions(
+    actor: ActorContext,
+    after?: string,
+    limit = 50,
+    archived = false,
+  ) {
     const size = pageSize(limit);
     const chats = await this.visible(actor);
     const tools = await this.app.toolApprovals.state();
     const items: SessionSummary[] = chats.conversations
+      .filter((c) => !!c.archivedAt === archived)
       .map((c) => {
         const turns = chats.turns.filter((t) => t.conversationId === c.id);
         const latest = turns.at(-1);
@@ -128,6 +134,7 @@ export class PiClientQueries implements ClientQueries {
             (t) => t.status === "done" && t.answer !== null,
           ).length,
           readReplyCount: c.readReplyCount ?? 0,
+          ...(c.archivedAt ? { archivedAt: c.archivedAt } : {}),
           replyPreview:
             turns
               .findLast((t) => t.status === "done" && t.answer !== null)
@@ -282,6 +289,7 @@ export class PiClientQueries implements ClientQueries {
             t.answer !== null,
         ).length,
         readReplyCount: session.readReplyCount ?? 0,
+        ...(session.archivedAt ? { archivedAt: session.archivedAt } : {}),
         replyPreview:
           chats.turns
             .findLast(

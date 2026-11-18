@@ -16,6 +16,8 @@ export type ChatConversation = {
   createdAt: number;
   /** Completed replies the owner has read, in any client; absent means none. */
   readReplyCount?: number;
+  /** When the owner archived it. A new message brings it back. */
+  archivedAt?: number;
 };
 
 /**

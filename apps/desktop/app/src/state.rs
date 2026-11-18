@@ -66,6 +66,8 @@ pub enum Filter {
     NewReplies,
     /// Only conversations with an action waiting for approval.
     Approvals,
+    /// Only archived conversations, fetched when chosen.
+    Archived,
 }
 
 /// Which notifications the inbox lists (the web's tabs).
@@ -612,6 +614,28 @@ impl Ui {
         self.model.select_bot(bot_id.to_owned());
         self.command(Command::SelectBot {
             bot_id: bot_id.to_owned(),
+        });
+        // The Archived filter shows this bot's archived ones now.
+        if self.filter == Filter::Archived && self.model.archived.is_none() {
+            self.command(Command::LoadArchived);
+        }
+    }
+
+    /// Chooses which conversations the sidebar lists. The archived ones
+    /// are fetched each time their filter is chosen, as on the web.
+    pub fn choose_filter(&mut self, filter: Filter) {
+        self.filter = filter;
+        if filter == Filter::Archived {
+            self.command(Command::LoadArchived);
+        }
+    }
+
+    /// Archives one of the selected bot's conversations, or brings it
+    /// back. It stays open if it is.
+    pub fn archive(&mut self, session_id: &str, archived: bool) {
+        self.command(Command::Archive {
+            session_id: session_id.to_owned(),
+            archived,
         });
     }
 

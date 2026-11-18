@@ -1727,6 +1727,81 @@ fn files_are_uploaded_sent_with_a_message_and_saved_back() {
 }
 
 #[test]
+fn a_session_is_archived_and_brought_back() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    let archived = serde_json::json!({
+        "id": "s-9", "title": "Old plans", "origin": "web", "lastAt": 1,
+        "working": false, "failed": false, "waiting": false, "preview": "",
+        "turnCount": 1, "archivedAt": 2,
+    });
+    host.with(|h| h.archived_sessions = vec![archived]);
+
+    // The archived list is fetched when asked for.
+    assert_eq!(driver.model.archived, None);
+    driver.send(Command::LoadArchived);
+    driver.until("the archived list", |m, _| m.archived.is_some());
+    let listed = driver.model.archived.clone().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].archived_at, Some(2));
+    let seen = host.requests("/api/sessions");
+    assert!(
+        seen.iter()
+            .any(|r| r.method == "GET" && r.path == "/api/sessions"),
+        "{seen:?}"
+    );
+
+    // Archiving the open session keeps it open, marks it archived and
+    // takes it out of the list.
+    let listed_first = driver.model.sessions[0].id.clone();
+    driver.model.select_session(Some(listed_first.clone()));
+    driver.send(Command::SelectSession {
+        session_id: Some(listed_first.clone()),
+    });
+    driver.until("the conversation", |m, _| {
+        m.conversation
+            .as_ref()
+            .is_some_and(|open| open.observation.is_some())
+    });
+    assert!(!driver.model.open_archived());
+    driver.send(Command::Archive {
+        session_id: listed_first.clone(),
+        archived: true,
+    });
+    driver.until("the archive", |m, _| m.open_archived());
+    assert!(driver.model.session_list().all(|s| s.id != listed_first));
+    host.with(|h| {
+        let (path, body) = h.archives.last().unwrap();
+        assert_eq!(path, &format!("/api/sessions/{listed_first}/archive"));
+        assert_eq!(*body, serde_json::json!({ "archived": true }));
+    });
+    let archive = host.requests(&format!("/api/sessions/{listed_first}/archive"));
+    assert_eq!(archive[0].method, "POST");
+    assert_eq!(archive[0].client_marker.as_deref(), Some("web"));
+
+    // Bringing it back sends `false`.
+    driver.send(Command::Archive {
+        session_id: listed_first.clone(),
+        archived: false,
+    });
+    driver.until("the unarchive", |m, _| !m.open_archived());
+    host.with(|h| {
+        assert_eq!(
+            h.archives.last().unwrap().1,
+            serde_json::json!({ "archived": false })
+        );
+    });
+
+    // An unknown session says why.
+    driver.send(Command::Archive {
+        session_id: "gone".into(),
+        archived: true,
+    });
+    driver.until("the refusal", |m, _| m.notice.is_some());
+    assert_eq!(driver.model.notice.as_deref(), Some("Session not found."));
+}
+
+#[test]
 fn a_sessions_model_is_changed_and_a_new_session_starts_with_the_one_chosen() {
     let host = FakeHost::start();
     let (mut driver, _) = signed_in(&host);

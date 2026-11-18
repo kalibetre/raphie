@@ -1,4 +1,5 @@
-import type { ModelSelection } from "@raphie/contracts";
+import type { ModelSelection, Page, SessionSummary } from "@raphie/contracts";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, SquarePen } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
@@ -56,6 +57,7 @@ export function Workspace({
 }) {
   const { workspace } = useBackend();
   const api = workspace.api;
+  const queries = useQueryClient();
   const bot = workspace.botId === "default" ? undefined : workspace.botId;
   const navigate = useNavigate();
   const {
@@ -72,7 +74,10 @@ export function Workspace({
     loadMoreSessions,
     hasMoreSessions,
   } = useLiveState(sessionId, legacyConversationId);
-  const inbox = useBotInbox(data?.conversations);
+  // An archived conversation stays open while you read it, but it is not
+  // listed and counts toward no badge.
+  const active = data?.conversations.filter((c) => !c.archivedAt);
+  const inbox = useBotInbox(active);
   const notificationBots = inbox.bots.data?.items ?? [];
   const jobNotifications = useJobNotifications(notificationBots);
   const notifications = notificationItems(
@@ -90,10 +95,9 @@ export function Workspace({
   );
   const summaries = [
     ...new Map(
-      [
-        ...(data?.conversations ?? []),
-        ...(inbox.byBot.get(workspace.botId) ?? []),
-      ].map((s) => [s.id, s]),
+      [...(active ?? []), ...(inbox.byBot.get(workspace.botId) ?? [])].map(
+        (s) => [s.id, s],
+      ),
     ).values(),
   ].sort((a, b) => b.lastAt - a.lastAt);
   const unread = (session: (typeof summaries)[number]) =>
@@ -215,11 +219,13 @@ export function Workspace({
   function select(id?: string, nextView?: "settings") {
     setSuggestion(undefined);
     setComposing(!id && mobile && !nextView);
-    const selected = summaries.find((c) => c.id === id);
+    // An archived conversation is not among the summaries; its id is its
+    // session id.
+    const selected = summaries.find((c) => c.id === id)?.sessionId ?? id;
     if (selected)
       void navigate({
         to: "/sessions/$sessionId",
-        params: { sessionId: selected.sessionId },
+        params: { sessionId: selected },
         search: {
           bot,
           view: nextView,
@@ -267,6 +273,16 @@ export function Workspace({
     conversation?.title ??
     (missing ? "Conversation unavailable" : "New conversation");
   const settings = view === "settings";
+
+  // Archiving keeps the conversation open, so its header can bring it back.
+  async function archive(sessionId: string, archived: boolean) {
+    await api(`/api/sessions/${sessionId}/archive`, { archived });
+    await Promise.all([
+      queries.invalidateQueries({ queryKey: ["sessions"] }),
+      queries.invalidateQueries({ queryKey: ["session", sessionId] }),
+    ]);
+  }
+
   const conversationList = (
     <ConversationList
       name={botProfile?.name ?? "Raphie"}
@@ -276,6 +292,13 @@ export function Workspace({
       onSelect={select}
       hasMore={!!hasMoreSessions}
       loadMore={() => void loadMoreSessions()}
+      fetchArchived={async () =>
+        (await api<Page<SessionSummary>>("/api/sessions?archived=1&limit=100"))
+          .items
+      }
+      onArchive={(session, archived) =>
+        void archive(session.sessionId, archived)
+      }
     />
   );
   // On a phone the bot's conversations are a screen of their own, until one
@@ -436,6 +459,16 @@ export function Workspace({
                       : undefined
                   }
                   onNew={!view && !mobile ? () => select() : undefined}
+                  archived={!!conversation?.archivedAt}
+                  onArchive={
+                    !view && conversation
+                      ? () =>
+                          void archive(
+                            conversation.sessionId,
+                            !conversation.archivedAt,
+                          )
+                      : undefined
+                  }
                   onBotSettings={() => openSettings("bot")}
                   notificationCount={notificationCount}
                   onNotifications={() =>
