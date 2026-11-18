@@ -25,6 +25,8 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   /** Completed replies the owner has read in any client; optional for older runtimes. */
   readReplyCount?: number;
   waiting: boolean;
+  /** When the owner archived it; archived sessions are listed apart. */
+  archivedAt?: number;
 };
 
 export type SessionTurn = Omit<

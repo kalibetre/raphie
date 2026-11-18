@@ -8,6 +8,8 @@ export function traceSessions(sessions: Sessions, telemetry: Telemetry) {
       sessions.chooseModel(...args),
     markRead: (...args: Parameters<Sessions["markRead"]>) =>
       sessions.markRead(...args),
+    archive: (...args: Parameters<Sessions["archive"]>) =>
+      sessions.archive(...args),
     submit: (...args: Parameters<Sessions["submit"]>) =>
       telemetry.run(
         "session.submit",

@@ -109,6 +109,10 @@ pub struct Host {
     pub job_runs: Vec<Value>,
     /// Each named bot's conversations, as its sessions page lists them.
     pub bot_sessions: HashMap<String, Vec<Value>>,
+    /// The archived conversations, as `?archived=1` lists them.
+    pub archived_sessions: Vec<Value>,
+    /// Archive requests: the path asked and the body.
+    pub archives: Vec<(String, Value)>,
     /// Each bot's undismissed job runs ("default" for the default bot).
     pub job_updates: HashMap<String, Vec<Value>>,
     /// Answer job update requests with a failure.
@@ -260,6 +264,9 @@ fn router(fake: Fake) -> Router {
         .route("/api/jobs", get(jobs).post(add_job))
         .route("/api/jobs/runs", get(job_runs))
         .route("/api/bots/{bot}/sessions", get(bot_sessions))
+        .route("/api/sessions", get(bot_sessions))
+        .route("/api/sessions/{id}/archive", post(archive))
+        .route("/api/bots/{bot}/sessions/{id}/archive", post(archive))
         .route("/github/releases", get(github_releases))
         .route("/api/jobs/notifications", get(job_updates))
         .route("/api/bots/{bot}/jobs/notifications", get(job_updates))
@@ -532,12 +539,46 @@ async fn bot_sessions(
         return denied;
     }
     let host = fake.host.lock().unwrap();
-    let items = host
-        .bot_sessions
-        .get(&bot_of(&uri))
-        .cloned()
-        .unwrap_or_default();
+    let archived = uri
+        .query()
+        .is_some_and(|query| query.split('&').any(|pair| pair == "archived=1"));
+    let items = if archived {
+        host.archived_sessions.clone()
+    } else {
+        host.bot_sessions
+            .get(&bot_of(&uri))
+            .cloned()
+            .unwrap_or_default()
+    };
     Json(json!({ "items": items, "next": null })).into_response()
+}
+
+/// `POST /api/sessions/<id>/archive`: records the request and answers as
+/// the runtime does; an unknown session is not found.
+async fn archive(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    if uri.path().contains("/sessions/gone/") {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Session not found." })),
+        )
+            .into_response();
+    }
+    let archived = body["archived"].as_bool().unwrap_or(false);
+    fake.host
+        .lock()
+        .unwrap()
+        .archives
+        .push((uri.path().to_owned(), body));
+    Json(json!({ "archived": archived })).into_response()
 }
 
 /// A bot's undismissed job runs: at most two a page, with the total.

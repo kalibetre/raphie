@@ -21,18 +21,23 @@ Its address depends on how you installed Raphie:
 
 ## Sessions
 
-| Where                   | What it does                                                                                                                                       |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sidebar, top            | Your bots. Choosing one resumes the conversation you last had open with it in this browser. **+** creates a bot.                                   |
-| Sidebar, below the bots | The selected bot's conversations, with search and filters for new replies and approval requests. The pen icon beside the heading starts a new one. |
-| **New conversation**    | The pen icon in the title bar also starts an empty session with the current bot.                                                                   |
-| Notifications (bell)    | Replies, approval requests and finished scheduled jobs from every bot in one place.                                                                |
+| Where                   | What it does                                                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar, top            | Your bots. Choosing one resumes the conversation you last had open with it in this browser. **+** creates a bot.                                                           |
+| Sidebar, below the bots | The selected bot's conversations, with search and filters for new replies, approval requests and archived conversations. The pen icon beside the heading starts a new one. |
+| **Archive**             | The box icon on a conversation while you point at it, or in the title bar of an open one.                                                                                  |
+| **New conversation**    | The pen icon in the title bar also starts an empty session with the current bot.                                                                                           |
+| Notifications (bell)    | Replies, approval requests and finished scheduled jobs from every bot in one place.                                                                                        |
 
 On a phone the bots are a strip across the top, and the workspace opens on the selected bot's conversations. Opening one fills the screen; the arrow at the top left goes back to the list.
 
 Each session has its own link, `/sessions/<id>`. Links to a bot other than the default carry `?bot=<id>`, so a bookmarked session always opens with the right bot.
 
 Read state is shared through the runtime: a reply you read on the desktop app is marked read here too.
+
+### Archiving
+
+Archiving puts a conversation away without deleting anything. It leaves the list and the notification counts, and the box icon at the end of the filters lists it. It still opens, marked **Archived** beside its title; the title bar's icon, now **Unarchive**, brings it back, as does the icon on its row. A new message also brings it back, whether you send it from an app, a channel such as Telegram sends it, or a scheduled job runs in it. Conversations cannot be deleted.
 
 ## The composer
 

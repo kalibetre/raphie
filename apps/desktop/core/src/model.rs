@@ -328,6 +328,22 @@ pub enum Event {
         page: Page<SessionSummary>,
         more: bool,
     },
+    /// A bot's archived sessions, most recent first.
+    ArchivedSessions {
+        bot_id: String,
+        sessions: Vec<SessionSummary>,
+    },
+    ArchivedFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// A session was archived (`archived_at` is when) or brought back
+    /// (`None`).
+    Archived {
+        bot_id: String,
+        session_id: String,
+        archived_at: Option<i64>,
+    },
     /// A first message created this session; the engine now follows it.
     SessionCreated {
         bot_id: String,
@@ -769,6 +785,9 @@ pub struct Model {
     /// Later pages the owner asked for.
     pub more_sessions: Vec<SessionSummary>,
     pub sessions_next: Option<String>,
+    /// The selected bot's archived sessions, newest first; `None` until
+    /// they are fetched (when the Archived filter is chosen).
+    pub archived: Option<Vec<SessionSummary>>,
     /// The open conversation; `None` means a new, unsent conversation.
     pub conversation: Option<Conversation>,
     pub sending: bool,
@@ -876,6 +895,7 @@ impl Default for Model {
             sessions: Vec::new(),
             more_sessions: Vec::new(),
             sessions_next: None,
+            archived: None,
             conversation: None,
             sending: false,
             inbox: Inbox::default(),
@@ -1245,6 +1265,28 @@ impl Model {
                     self.sessions_page(page, more);
                 }
             }
+            Event::ArchivedSessions { bot_id, sessions } => {
+                if self.bot_id.as_deref() == Some(bot_id.as_str()) {
+                    self.archived = Some(sessions);
+                }
+            }
+            Event::ArchivedFailed { bot_id, message } => {
+                if self.bot_id.as_deref() == Some(bot_id.as_str()) {
+                    // An empty list rather than one loading for ever; the
+                    // notice says why.
+                    self.archived.get_or_insert_with(Vec::new);
+                    self.notice = Some(message);
+                }
+            }
+            Event::Archived {
+                bot_id,
+                session_id,
+                archived_at,
+            } => {
+                if self.bot_id.as_deref() == Some(bot_id.as_str()) {
+                    self.archived_changed(&session_id, archived_at);
+                }
+            }
             Event::SessionCreated { bot_id, session_id } => {
                 // Only follow the new session if the owner is still on that
                 // bot's new conversation.
@@ -1406,7 +1448,44 @@ impl Model {
             self.sessions.clear();
             self.more_sessions.clear();
             self.sessions_next = None;
+            self.archived = None;
             self.conversation = None;
+        }
+    }
+
+    /// A session was archived or brought back. The live list and the
+    /// archived one are sent again; until then, each copy changes here.
+    fn archived_changed(&mut self, session_id: &str, archived_at: Option<i64>) {
+        if archived_at.is_some() {
+            self.sessions.retain(|session| session.id != session_id);
+            self.more_sessions
+                .retain(|session| session.id != session_id);
+        } else if let Some(archived) = &mut self.archived {
+            archived.retain(|session| session.id != session_id);
+        }
+        let open = self
+            .conversation
+            .as_mut()
+            .filter(|conversation| conversation.session_id == session_id)
+            .and_then(|conversation| conversation.observation.as_mut());
+        if let Some(observation) = open {
+            observation.session.archived_at = archived_at;
+        }
+    }
+
+    /// Whether the open conversation is archived.
+    pub fn open_archived(&self) -> bool {
+        let Some(conversation) = &self.conversation else {
+            return false;
+        };
+        match &conversation.observation {
+            Some(observation) => observation.session.archived_at.is_some(),
+            // Before its first observation, the archived list knows.
+            None => self.archived.as_ref().is_some_and(|archived| {
+                archived
+                    .iter()
+                    .any(|session| session.id == conversation.session_id)
+            }),
         }
     }
 
@@ -1639,13 +1718,17 @@ impl Model {
     }
 
     /// The session list as shown: the live first page, then later pages.
+    /// Archived sessions are never in it; the runtime leaves them out too.
     pub fn session_list(&self) -> impl Iterator<Item = &SessionSummary> {
         let first: HashSet<&str> = self.sessions.iter().map(|s| s.id.as_str()).collect();
-        self.sessions.iter().chain(
-            self.more_sessions
-                .iter()
-                .filter(move |s| !first.contains(s.id.as_str())),
-        )
+        self.sessions
+            .iter()
+            .chain(
+                self.more_sessions
+                    .iter()
+                    .filter(move |s| !first.contains(s.id.as_str())),
+            )
+            .filter(|s| s.archived_at.is_none())
     }
 
     pub fn selected_bot(&self) -> Option<&BotProfile> {

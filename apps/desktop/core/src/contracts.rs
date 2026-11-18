@@ -403,6 +403,10 @@ pub struct SessionSummary {
     /// The model chosen for this session; `None` uses the bot's default.
     #[serde(default)]
     pub model: Option<ModelSelection>,
+    /// When the owner archived the session (milliseconds since the Unix
+    /// epoch); `None` while it is active.
+    #[serde(default)]
+    pub archived_at: Option<i64>,
 }
 
 /// `Turn["status"]` in `packages/contracts/src/index.ts`.
@@ -626,6 +630,13 @@ pub struct SessionObservation {
     pub next_before: Option<String>,
     pub phase: RunPhase,
     pub error: Option<ObservationError>,
+}
+
+/// The body and the answer of `POST /api/sessions/<id>/archive`
+/// (`packages/runtime/src/domains/conversations/presentation/http/routes.ts`).
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ArchiveBody {
+    pub archived: bool,
 }
 
 /// Body of `POST /api/sessions/messages`

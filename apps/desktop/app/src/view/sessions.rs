@@ -28,12 +28,18 @@ pub fn sessions(s: &Ui, look: &Look) -> El {
         .session_list()
         .filter(|session| session.waiting)
         .count();
-    // The sessions that pass the search box and the chosen chip.
-    let shown: Vec<&SessionSummary> = model
-        .session_list()
+    // The sessions that pass the search box and the chosen chip. The
+    // Archived chip lists the archived ones, which the live list leaves out.
+    let listed: Vec<&SessionSummary> = match (s.filter, &model.archived) {
+        (Filter::Archived, Some(archived)) => archived.iter().collect(),
+        (Filter::Archived, None) => Vec::new(),
+        _ => model.session_list().collect(),
+    };
+    let shown: Vec<&SessionSummary> = listed
+        .into_iter()
         .filter(|session| session.title.to_lowercase().contains(&query))
         .filter(|session| match s.filter {
-            Filter::All => true,
+            Filter::All | Filter::Archived => true,
             Filter::NewReplies => s.unread(session) > 0,
             Filter::Approvals => session.waiting,
         })
@@ -74,7 +80,10 @@ pub fn sessions(s: &Ui, look: &Look) -> El {
                 .w_full()
                 .mt(8.0)
                 .mb(6.0)
+                // The web's sidebar filters: four on one row, wrapping
+                // only when the roster is too narrow for them.
                 .gap(6.0)
+                .flex_wrap()
                 .child(chip(
                     t,
                     "rd-filter-all",
@@ -98,14 +107,28 @@ pub fn sessions(s: &Ui, look: &Look) -> El {
                     Some(waiting).filter(|count| *count > 0),
                     s.filter == Filter::Approvals,
                     Filter::Approvals,
+                ))
+                // No count and no word, as on the web.
+                .child(chip(
+                    t,
+                    "rd-filter-archived",
+                    "Archived",
+                    None,
+                    s.filter == Filter::Archived,
+                    Filter::Archived,
                 )),
         )
         .child(list);
     if shown.is_empty() {
         page = page.child(empty(s, &query, t));
     }
-    // Later pages exist: offer the next one.
-    if let Some(after) = model.sessions_next.clone() {
+    // Later pages exist: offer the next one. Not for the archived list,
+    // which is one page.
+    if let Some(after) = model
+        .sessions_next
+        .clone()
+        .filter(|_| s.filter != Filter::Archived)
+    {
         page = page.child(
             pressable(
                 button(
@@ -239,8 +262,15 @@ fn chip(t: &Theme, key: &str, label: &str, count: Option<usize>, on: bool, filte
         .center()
         // Half the height: fully rounded ends.
         .radius(12.25)
-        .hover(t.hover)
-        .child(text(label).font(font(11.0, 500.0)).color(ink).a11y_hidden());
+        .hover(t.hover);
+    // Archived is the archive box alone, as on the web: an icon keeps the
+    // four filters on one row, and matches the archive buttons.
+    chip = if filter == Filter::Archived {
+        chip.help(label.to_owned())
+            .child(icon(&icons::ARCHIVE, 13.0).color(ink).a11y_hidden())
+    } else {
+        chip.child(text(label).font(font(11.0, 500.0)).color(ink).a11y_hidden())
+    };
     if on {
         chip = chip.fill(t.accent_soft).border(1.0, t.accent.alpha(0.25));
     }
@@ -252,7 +282,7 @@ fn chip(t: &Theme, key: &str, label: &str, count: Option<usize>, on: bool, filte
                 .a11y_hidden(),
         );
     }
-    pressable(chip, true, move |s: &mut Ui| s.filter = filter)
+    pressable(chip, true, move |s: &mut Ui| s.choose_filter(filter))
 }
 
 /// One conversation: title and age, the last thing said, and what it is
@@ -301,9 +331,12 @@ fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, 
                     .min_w(0.0),
             )
             .child(
+                // Hidden while the row is hovered or focused: the archive
+                // button takes its place.
                 text(format::ago(session.last_at, now))
                     .font(font(11.0, 400.0))
-                    .color(t.faint),
+                    .color(t.faint)
+                    .group_opacity(1.0, 0.0),
             ),
         )
         .child(one_line(
@@ -314,19 +347,61 @@ fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, 
     if let Some((label, color)) = status {
         entry = entry.child(text(label).font(font(11.0, 400.0).lh(16.0)).color(color));
     }
-    entry = if selected {
-        entry.fill(t.accent_soft.alpha(0.7))
-    } else {
-        entry.hover(t.hover)
-    };
+    if selected {
+        entry = entry.fill(t.accent_soft.alpha(0.7));
+    }
     let id = session.id.clone();
-    pressable(entry, true, move |s: &mut Ui| s.select_session(Some(&id)))
+    let open = pressable(entry, true, move |s: &mut Ui| s.select_session(Some(&id)));
+    // The web's `.library-row`: the row, with the archive button over its
+    // top-right corner where the time is. The hover tint is the row's, so
+    // it stays while the pointer is on the button.
+    let mut wrapper = col()
+        .w_full()
+        .radius(8.0)
+        .hover_group()
+        .child(open)
+        .child(archive_button(session, t).pin(None, Some(5.0), Some(6.0), None));
+    if !selected {
+        wrapper = wrapper.hover(t.hover);
+    }
+    wrapper
+}
+
+/// Archives the row's conversation, or brings an archived one back. Shown
+/// only while the row is hovered or focused (the web's
+/// `.library-row-archive`).
+fn archive_button(session: &SessionSummary, t: &Theme) -> El {
+    let archived = session.archived_at.is_some();
+    let (glyph, verb) = if archived {
+        (&icons::ARCHIVE_RESTORE, "Unarchive")
+    } else {
+        (&icons::ARCHIVE, "Archive")
+    };
+    let button = row()
+        .key(format!("rd-session-{}-archive", session.id))
+        .role("button")
+        .label(format!("{verb} {}", session.title))
+        .help(verb)
+        .size(24.0, 24.0)
+        .center()
+        .radius(6.0)
+        .hover(t.hover)
+        .group_opacity(0.0, 1.0)
+        .child(icon(glyph, 14.0).color(t.muted_foreground).a11y_hidden());
+    let id = session.id.clone();
+    pressable(button, true, move |s: &mut Ui| s.archive(&id, !archived))
 }
 
 /// What the list says when it has no rows (the web's `.library-empty`).
 fn empty(s: &Ui, query: &str, t: &Theme) -> El {
     let message = if !query.is_empty() {
         "No matching conversations."
+    } else if s.filter == Filter::Archived {
+        if s.model.archived.is_none() {
+            "Loading archived conversations…"
+        } else {
+            "No archived conversations."
+        }
     } else if s.filter == Filter::All {
         "Your conversations will appear here."
     } else {

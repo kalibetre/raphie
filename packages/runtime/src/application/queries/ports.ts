@@ -12,10 +12,12 @@ import type { ActorContext } from "../access/actors.ts";
 
 export interface ClientQueries {
   info(actor: ActorContext): Promise<RuntimeInfo>;
+  /** The active sessions, or with `archived` only the archived ones. */
   sessions(
     actor: ActorContext,
     after?: string,
     limit?: number,
+    archived?: boolean,
   ): Promise<Page<SessionSummary>>;
   session(actor: ActorContext, id: string): Promise<SessionObservation>;
   history(

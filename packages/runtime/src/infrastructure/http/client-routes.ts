@@ -14,6 +14,7 @@ export function clientRoutes(queries: ClientQueries, actor: ActorContext) {
           actor,
           c.req.query("after"),
           c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
+          c.req.query("archived") === "1",
         ),
       ),
     )
