@@ -158,6 +158,9 @@ test("provider failures settle visibly; missing model or invalid input never que
     const failed = await answered(app, sent.id);
     assert.equal(failed.status, "error");
     assert.equal(failed.answer, null);
+    // The owner sees why, with the provider's own words.
+    assert.equal(failed.failure?.message, "The model returned an error.");
+    assert.match(failed.failure?.detail ?? "", /Fixture failure/);
     await app.close();
     app = await Gateway.open({ directory });
     await assert.rejects(

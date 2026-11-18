@@ -96,6 +96,20 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
   };
   void (async () => {
     stream.push({ type: "start", partial: structuredClone(message) });
+    // "provider error" in a message shows how a failed reply reads.
+    if (/provider error/i.test(input)) {
+      stream.push({
+        type: "error",
+        reason: "error",
+        error: {
+          ...message,
+          stopReason: "error",
+          errorMessage:
+            "429 Too Many Requests: rate limit reached for requests per minute. Try again in 20s.",
+        },
+      });
+      return;
+    }
     if (!useTool) {
       for (const delta of text.match(/.{1,8}/gs) ?? []) {
         await delay(90);

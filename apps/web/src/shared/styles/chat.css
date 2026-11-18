@@ -198,10 +198,32 @@
     font-size: 13px;
     margin: 0;
   }
+  .turn-failure {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
   .turn-error {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
+  }
+  .turn-error-icon {
+    flex: none;
+    margin-top: 2px;
+  }
+  .turn-error-detail {
+    margin: 0 0 0 20px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 160px;
+    overflow: auto;
   }
   .scroll-bottom {
     position: absolute;

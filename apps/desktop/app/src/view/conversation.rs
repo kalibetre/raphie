@@ -18,7 +18,7 @@ use rune_kit::{Loader, Markdown};
 
 use super::Look;
 use super::attachments::{Action, file_card};
-use super::steps::{Run, Working, tool_steps};
+use super::steps::{Run, Working, code_box, tool_steps};
 use crate::format;
 use crate::icons;
 use crate::state::Ui;
@@ -123,9 +123,6 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             items.push(active_run(s, turn, steps, observation, now, look));
         }
     }
-    if let Some(error) = &observation.error {
-        items.push(error_line("rd-reply-error", &error.message, t));
-    }
     items
 }
 
@@ -164,11 +161,23 @@ fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &L
                 .color(t.faint),
         );
     } else if turn.status == TurnStatus::Error {
+        let reason = turn.failure.as_ref().map_or(
+            "Check Diagnostics, then send a new message to retry.",
+            |failure| failure.message.as_str(),
+        );
         block = block.child(error_line(
             &format!("rd-failed-{}", turn.id),
-            "Raphie could not complete this reply. Send a new message to retry.",
+            &format!("Raphie could not complete this reply. {reason}"),
             t,
         ));
+        if let Some(detail) = turn.failure.as_ref().and_then(|f| f.detail.clone()) {
+            // The provider's own words, under the sentence and in line with it.
+            block = block.child(row().w_full().pl(20.0).child(code_box(
+                &format!("rd-failed-detail-{}", turn.id),
+                detail,
+                t,
+            )));
+        }
     }
     block
 }
@@ -410,11 +419,11 @@ fn error_line(key: &str, message: &str, t: &Theme) -> El {
         .key(key)
         .w_full()
         .gap(6.0)
-        .center_y()
         .live_region(LiveRegion::Polite)
         .child(
             icon(&icons::CIRCLE_ALERT, 14.0)
                 .color(t.error)
+                .mt(2.0)
                 .a11y_hidden(),
         )
         .child(
