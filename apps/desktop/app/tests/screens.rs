@@ -605,6 +605,18 @@ fn finished_replies_show_their_tools_time_and_cost() {
 }
 
 #[test]
+fn a_finished_reply_shows_no_step_as_running() {
+    // The second call's end is missing from the journal, as when a nested
+    // call leaves with its caller.
+    for dark in [false, true] {
+        let rt = render(scenes::tools_unfinished, dark);
+        let text = screen_text(&rt);
+        assert!(text.contains("finished"), "{text}");
+        assert!(!text.contains("running"), "{text}");
+    }
+}
+
+#[test]
 fn a_failed_reply_says_why_once() {
     for dark in [false, true] {
         let rt = render(scenes::reply_failed, dark);

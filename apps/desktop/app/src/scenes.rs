@@ -56,6 +56,7 @@ pub const SCENES: &[Scene] = &[
     ("model-picker-favorites", model_picker_favorites),
     ("model-picker-family", model_picker_family),
     ("tools", tools),
+    ("tools-unfinished", tools_unfinished),
     ("reply-failed", reply_failed),
     ("streaming", streaming),
     ("working", working),
@@ -1390,6 +1391,10 @@ pub fn inbox_empty(ui: &mut Ui) {
 }
 
 pub fn conversation(ui: &mut Ui) {
+    conversation_with(ui, finished_activity());
+}
+
+fn conversation_with(ui: &mut Ui, activity: Vec<Value>) {
     open(
         ui,
         "s-1",
@@ -1414,7 +1419,7 @@ pub fn conversation(ui: &mut Ui) {
             None,
             "idle",
             vec![],
-            finished_activity(),
+            activity,
         ),
     );
 }
@@ -1635,6 +1640,18 @@ pub fn tools(ui: &mut Ui) {
     conversation(ui);
     ui.open_runs.insert("t2".into());
     ui.open_steps.insert("op-1".into());
+}
+
+/// The finished reply's second tool call without its end in the journal,
+/// as when a nested call leaves with its caller: it shows as finished, not
+/// running.
+pub fn tools_unfinished(ui: &mut Ui) {
+    let activity = finished_activity()
+        .into_iter()
+        .filter(|event| event["id"] != 6)
+        .collect();
+    conversation_with(ui, activity);
+    ui.open_runs.insert("t2".into());
 }
 
 pub fn streaming(ui: &mut Ui) {
