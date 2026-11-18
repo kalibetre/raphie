@@ -63,7 +63,19 @@ const server = startWebServer({
   build,
 });
 console.log(`Raphie workspace: ${server.url}`);
+// Timestamped, so the service log shows how long a stop took.
+const logged = (message) =>
+  console.log(`${new Date().toISOString()} ${message}`);
 for (const signal of ["SIGINT", "SIGTERM"])
   process.once(signal, () => {
-    void server.stop(true).finally(() => auth.close());
+    const started = performance.now();
+    logged(`Raphie web stopping (${signal})`);
+    void server
+      .stop(true)
+      .finally(() => auth.close())
+      .finally(() =>
+        logged(
+          `Raphie web stopped after ${((performance.now() - started) / 1000).toFixed(1)}s`,
+        ),
+      );
   });
