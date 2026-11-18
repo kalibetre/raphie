@@ -168,11 +168,12 @@ export class Observations {
 
     const priorTools = new Map(
       [...(previous?.tools ?? []), ...(previous?.nestedTools ?? [])].map(
-        (tool) => [tool.callId, tool.status],
+        (tool) => [tool.callId, tool],
       ),
     );
-    for (const tool of [...(next?.tools ?? []), ...(next?.nestedTools ?? [])]) {
-      const prior = priorTools.get(tool.callId);
+    const nextTools = [...(next?.tools ?? []), ...(next?.nestedTools ?? [])];
+    for (const tool of nextTools) {
+      const prior = priorTools.get(tool.callId)?.status;
       if (tool.status === "running" && prior !== "running")
         rows.push({
           type: "tool.started",
@@ -187,6 +188,17 @@ export class Observations {
           operationId: tool.callId,
         });
     }
+    // A call can leave the live state without being seen done: a nested
+    // call goes when its caller settles, and updates can arrive merged. It
+    // has ended either way, so its step stops showing as running.
+    const present = new Set(nextTools.map((tool) => tool.callId));
+    for (const [callId, tool] of priorTools)
+      if (tool.status === "running" && !present.has(callId))
+        rows.push({
+          type: "tool.completed",
+          summary: `${tool.name} settled`,
+          operationId: callId,
+        });
 
     if (
       next?.runFailure &&

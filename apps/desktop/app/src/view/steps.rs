@@ -41,7 +41,7 @@ pub fn tool_steps(s: &Ui, run: &Run, now: i64, look: &Look) -> El {
     let needs_you = run
         .steps
         .iter()
-        .any(|step| step_state(step, now) == StepState::Pending);
+        .any(|step| step_state(step, now, run.working.is_some()) == StepState::Pending);
     // Settled work stays folded; a pending approval forces it open because
     // it needs the owner.
     let expanded = needs_you || s.open_runs.contains(run.turn_id);
@@ -55,7 +55,7 @@ pub fn tool_steps(s: &Ui, run: &Run, now: i64, look: &Look) -> El {
         let mut list = col().w_full().mt(6.0);
         for (index, step) in run.steps.iter().enumerate() {
             let last = index + 1 == run.steps.len();
-            list = list.child(step_row(s, step, last, now, look));
+            list = list.child(step_row(s, step, last, now, run.working.is_some(), look));
         }
         block = block.child(list);
     }
@@ -147,9 +147,9 @@ fn header(run: &Run, needs_you: bool, expanded: bool, look: &Look) -> El {
 }
 
 /// One tool call: its state icon in the left gutter, details on the right.
-fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, look: &Look) -> El {
+fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, working: bool, look: &Look) -> El {
     let t = &look.theme;
-    let state = step_state(step, now);
+    let state = step_state(step, now, working);
     let approval = step.approval.as_ref();
 
     // The icon and its colours say how the step went.
@@ -187,9 +187,10 @@ fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, look: &Look) -> El {
         (StepState::Pending, _) => "needs approval".to_owned(),
         (StepState::Uncertain, _) => "outcome unknown".to_owned(),
         (_, Some(approval)) => decided(approval, now),
-        (StepState::Done, None) => {
-            format_duration(step.done_at.unwrap_or(step.started_at) - step.started_at)
-        }
+        (StepState::Done, None) => match step.done_at {
+            Some(done_at) => format_duration(done_at - step.started_at),
+            None => "finished".to_owned(),
+        },
         _ => "running".to_owned(),
     };
     let mut name = row().gap(6.0).center_y().grow(1.0).min_w(0.0);
