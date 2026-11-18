@@ -110,6 +110,8 @@ If no service manager is available for a user install, run `raphie start` in a t
 | System service       | `sudo journalctl -u raphie -e`                                    |
 | Foreground or source | The terminal running `raphie start --foreground` or `bun run dev` |
 
+On a user install, `raphie logs` shows the last 100 lines of the log, and `raphie logs -f` follows it.
+
 A stop is logged with times, so a slow one can be traced: when Raphie, its runtime and its web host were told to stop, any part of the runtime's shutdown that took a second or more (for example `closing bots took 1.2s`, where bots close their MCP connections), and how long each took to exit. The runtime finishes its shutdown even if a second stop signal follows within five seconds, as with Ctrl-C under `raphie start --foreground`; one after that stops it at once.
 
 For what bots did, rather than whether the service is up, use Activity and Diagnostics; see [observability](/operate/observability/).

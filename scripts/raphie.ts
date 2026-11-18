@@ -106,6 +106,71 @@ function requireUserInstall(command: "stop" | "restart" | "update") {
   );
 }
 
+/** `raphie logs [--follow] [--lines N]`: the background service's log. */
+async function logs(args: string[]) {
+  let follow = false;
+  let lines = 100;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === "-f" || arg === "--follow") follow = true;
+    else if (
+      (arg === "-n" || arg === "--lines") &&
+      /^\d{1,6}$/.test(args[index + 1] ?? "")
+    )
+      lines = Number(args[++index]);
+    else throw new Error("Usage: raphie logs [--follow] [--lines N]");
+  }
+  const home = process.env.HOME || homedir();
+  let command: string[];
+  if (process.platform === "darwin") {
+    const folder = join(home, "Library/Logs/Raphie");
+    const files = ["service.log", "service-error.log"]
+      .map((name) => join(folder, name))
+      .filter((file) => existsSync(file));
+    if (!files.length) {
+      console.log(
+        `No service log in ${folder} yet. Raphie run with raphie start --foreground logs to its terminal.`,
+      );
+      return;
+    }
+    // -F keeps following a log the service starts again.
+    command = [
+      "tail",
+      "-n",
+      String(lines),
+      ...(follow ? ["-F"] : []),
+      ...files,
+    ];
+  } else if (existsSync(join(home, ".config/systemd/user/raphie.service")))
+    command = [
+      "journalctl",
+      "--user",
+      "-u",
+      "raphie",
+      "-n",
+      String(lines),
+      "--no-pager",
+      ...(follow ? ["-f"] : []),
+    ];
+  else if (existsSync("/etc/systemd/system/raphie.service")) {
+    console.log(
+      `Raphie runs as a system service. Read its log with: sudo journalctl -u raphie -n ${lines}${follow ? " -f" : ""}`,
+    );
+    return;
+  } else {
+    console.log(
+      "Raphie has no background service here. Raphie run with raphie start --foreground logs to its terminal.",
+    );
+    return;
+  }
+  const child = Bun.spawn(command, {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  process.exitCode = await child.exited;
+}
+
 /** `raphie stop`: stops the background service until restart or next login. */
 async function stopService() {
   requireUserInstall("stop");
@@ -397,6 +462,7 @@ async function main() {
     Object.assign(process.env, portEnvironment(installedPorts(install)));
   if (command === "set-port") return setPort(args.slice(1));
   if (command === "update") return update(args.slice(1));
+  if (command === "logs") return logs(args.slice(1));
   let foreground = false;
   if (command === "start" && action === "--foreground") {
     foreground = true;
@@ -538,7 +604,7 @@ async function main() {
   }
   if (!command || command === "help" || command === "--help") {
     console.log(
-      `Raphie CLI\n\n  raphie start                Start Raphie (in the background on a user install)\n  raphie start --foreground   Run Raphie in this terminal until Ctrl+C\n  raphie status               Check the local runtime\n  raphie stop                 Stop the background service\n  raphie restart              Restart (or start) the background service\n  raphie update [--channel stable|nightly]  Update to the newest release\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n  raphie --version            Show the installed version\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
+      `Raphie CLI\n\n  raphie start                Start Raphie (in the background on a user install)\n  raphie start --foreground   Run Raphie in this terminal until Ctrl+C\n  raphie status               Check the local runtime\n  raphie stop                 Stop the background service\n  raphie restart              Restart (or start) the background service\n  raphie logs [-f] [-n LINES]  Show the background service's log (-f follows it)\n  raphie update [--channel stable|nightly]  Update to the newest release\n  raphie port                 Show the web and runtime ports\n  raphie set-port WEB [--runtime PORT]  Change the ports and restart (default ${DEFAULT_PORTS.web}, runtime ${DEFAULT_PORTS.runtime})\n  raphie channel [stable|nightly]  Show or change the update channel\n  raphie auth setup           Create the administrator (interactive)\n  raphie auth recover         Reset the password and sign every browser out\n  raphie --version            Show the installed version\n\nUse --data-dir PATH to select the data directory for start or auth commands.`,
     );
     return;
   }
