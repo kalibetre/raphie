@@ -484,6 +484,24 @@ fn a_finished_reply_shows_no_step_as_running() {
 }
 
 #[test]
+fn a_failed_reply_says_why_once() {
+    for dark in [false, true] {
+        let rt = render(scenes::reply_failed, dark);
+        let text = screen_text(&rt);
+        assert!(
+            text.contains("Raphie could not complete this reply. The model returned an error."),
+            "{text}"
+        );
+        assert!(text.contains("429 Too Many Requests"), "{text}");
+        // Said under the message only, not again at the end.
+        assert_eq!(text.matches("could not complete").count(), 1, "{text}");
+        let line = element(&rt, "rd-failed-t2").rect;
+        let detail = element(&rt, "rd-failed-detail-t2").rect;
+        assert!(detail[1] >= line[1] + line[3], "the detail sits below");
+    }
+}
+
+#[test]
 fn a_running_task_can_be_stopped_and_a_queued_message_steered() {
     let mut rt = render(scenes::working, false);
     let text = screen_text(&rt);

@@ -458,11 +458,25 @@ pub struct SessionTurn {
     pub answer: Option<String>,
     #[serde(default)]
     pub cancelled: Option<bool>,
+    /// Why the reply failed, when it did.
+    #[serde(default)]
+    pub failure: Option<TurnFailure>,
     #[serde(default)]
     pub scheduled: Option<ScheduledBy>,
     /// Set while the message waits behind the run in progress.
     #[serde(default)]
     pub queue_mode: Option<QueueMode>,
+}
+
+/// `TurnFailure` in `packages/contracts/src/index.ts`: why a reply ended
+/// without an answer.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct TurnFailure {
+    /// A plain sentence: what happened and what to do next.
+    pub message: String,
+    /// The model provider's own error text, when there is one.
+    #[serde(default)]
+    pub detail: Option<String>,
 }
 
 /// `Turn["queueMode"]`: how a message sent during a run joins it.

@@ -55,6 +55,7 @@ pub const SCENES: &[Scene] = &[
     ("model-picker-family", model_picker_family),
     ("tools", tools),
     ("tools-unfinished", tools_unfinished),
+    ("reply-failed", reply_failed),
     ("streaming", streaming),
     ("working", working),
     ("approval", approval),
@@ -1545,6 +1546,42 @@ const SITE_PHOTO_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="
 <path d="M85 165 L140 120 L195 165 Z" fill="#a4553f"/>
 <rect x="128" y="195" width="24" height="35" fill="#6b4a33"/>
 </svg>"##;
+
+/// A reply that failed, with the reason and the model provider's own words.
+pub fn reply_failed(ui: &mut Ui) {
+    let mut failed = turn(
+        "t2",
+        -60_000,
+        "Which accounts can I connect to the calendar app?",
+        None,
+        "error",
+    );
+    failed["failure"] = json!({
+        "message": "The model returned an error.",
+        "detail": "429 Too Many Requests: rate limit reached for requests per minute. Try again in 20s."
+    });
+    open(
+        ui,
+        "s-1",
+        observation(
+            "Plan the week",
+            vec![
+                turn(
+                    "t1",
+                    -600_000,
+                    "What should I focus on today?",
+                    Some(PLAN),
+                    "done",
+                ),
+                failed,
+            ],
+            None,
+            "failed",
+            vec![],
+            vec![],
+        ),
+    );
+}
 
 /// The same conversation with the second reply's tool steps unfolded.
 pub fn tools(ui: &mut Ui) {
