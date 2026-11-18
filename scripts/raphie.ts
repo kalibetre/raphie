@@ -446,27 +446,52 @@ async function main() {
   if (command === "start") {
     if (Bun.isStandaloneExecutable) {
       const children: ReturnType<typeof Bun.spawn>[] = [];
+      const signalled = new Set<(typeof children)[number]>();
       let stopping = false;
-      const stop = () => {
+      let stoppingAt = 0;
+      // Timestamped, so the service log shows how long a stop took and
+      // which part of Raphie it waited for.
+      const logged = (message: string) =>
+        console.log(`${new Date().toISOString()} ${message}`);
+      const seconds = () =>
+        `${((performance.now() - stoppingAt) / 1000).toFixed(1)}s`;
+      const stop = (signal?: string) => {
+        if (!stopping && typeof signal === "string") {
+          stoppingAt = performance.now();
+          logged(`Raphie stopping (${signal})`);
+        }
         stopping = true;
-        for (const child of children) child.kill("SIGTERM");
+        // Once each: the runtime takes a second signal as "stop now", and
+        // the web host usually exits first, which calls this again.
+        for (const child of children)
+          if (!signalled.has(child)) {
+            signalled.add(child);
+            child.kill("SIGTERM");
+          }
       };
       process.once("SIGINT", stop);
       process.once("SIGTERM", stop);
       try {
-        for (const role of Object.keys(ROLES))
-          children.push(
-            Bun.spawn([process.execPath, role], {
-              stdin: "inherit",
-              stdout: "inherit",
-              stderr: "inherit",
-              env: process.env,
-            }),
-          );
+        for (const role of Object.keys(ROLES)) {
+          const child = Bun.spawn([process.execPath, role], {
+            stdin: "inherit",
+            stdout: "inherit",
+            stderr: "inherit",
+            env: process.env,
+          });
+          children.push(child);
+          void child.exited.then((code) => {
+            if (stoppingAt)
+              logged(
+                `Raphie ${role.slice(2)} exited (${code}) ${seconds()} after the stop`,
+              );
+          });
+        }
         const exit = await Promise.race(children.map((child) => child.exited));
         const interrupted = stopping;
         stop();
         await Promise.all(children.map((child) => child.exited));
+        if (stoppingAt) logged(`Raphie stopped after ${seconds()}`);
         process.exitCode = interrupted ? 0 : exit || 1;
       } finally {
         stop();
