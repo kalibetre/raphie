@@ -49,6 +49,12 @@ pub const SCENES: &[Scene] = &[
     ("image-viewer", image_viewer),
     ("permissions", permissions),
     ("composer", composer),
+    ("handoff-working", handoff_working),
+    ("handoff-waiting", handoff_waiting),
+    ("handoff-result", handoff_result),
+    ("handoff-several", handoff_several),
+    ("handoff-task", handoff_task),
+    ("mentions", mentions),
     ("composer-full-access", composer_full_access),
     ("composer-context", composer_context),
     ("composer-nearly-full", composer_nearly_full),
@@ -1991,4 +1997,229 @@ fn observation(
 
 fn from_json<T: serde::de::DeserializeOwned>(value: Value) -> T {
     serde_json::from_value(value).expect("scene data matches the contract types")
+}
+
+/// A brief Raphie handed to Research, as its handoff list says.
+fn handoff(id: &str, bot: (&str, &str), title: &str, from_turn: &str, waiting: bool) -> Value {
+    json!({
+        "id": id,
+        "to": { "id": bot.0, "name": bot.1 },
+        "title": title,
+        "fromSessionId": "s-1",
+        "toSessionId": format!("{}-task", bot.0),
+        "status": "working",
+        "createdAt": now_ms() - 120_000,
+        "waiting": waiting,
+        "requests": [{
+            "brief": format!("{title}. Return a short answer with sources."),
+            "fromTurnId": from_turn,
+            "sentAt": now_ms() - 120_000,
+            "turnId": format!("{id}-turn"),
+            "finishedAt": null,
+            "outcome": null
+        }]
+    })
+}
+
+fn handoffs(ui: &mut Ui, items: Vec<Value>) {
+    ui.model.apply(Event::Handoffs {
+        bot_id: "default".into(),
+        list: from_json(json!({
+            "targets": [
+                { "id": "b-research", "name": "Research" },
+                { "id": "b-writer", "name": "Writer" },
+                { "id": "b-finance", "name": "Finance" }
+            ],
+            "items": items
+        })),
+    });
+}
+
+/// The conversation where Raphie handed a task to Research, with the
+/// composer's models loaded so its toolbar is complete.
+fn handed_off(ui: &mut Ui, extra: Vec<Value>) {
+    let mut turns = vec![turn(
+        "t1",
+        -120_000,
+        "Ask @Research to compare Hindsight and Honcho for our memory layer.",
+        Some(
+            "I've asked @Research for the comparison. Its answer will come back here as a new message when it's ready.",
+        ),
+        "done",
+    )];
+    turns.extend(extra);
+    open(
+        ui,
+        "s-1",
+        observation("Memory backend choice", turns, None, "idle", vec![], vec![]),
+    );
+    ui.model.apply(Event::Bots(vec![
+        bot("default", "Raphie", "Your personal assistant.", None),
+        bot("b-research", "Research", "Reads and summarises.", None),
+        bot("b-writer", "Writer", "Drafts and edits.", None),
+        bot("b-finance", "Finance", "Budgets and spend.", None),
+    ]));
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(model_settings()),
+    });
+    ui.model.command_mode.open("s-1");
+    ui.model.command_mode.loaded("s-1", ApprovalMode::Ask);
+}
+
+/// Research is working on the task: its card, and its ring in the composer.
+pub fn handoff_working(ui: &mut Ui) {
+    handed_off(ui, vec![]);
+    handoffs(
+        ui,
+        vec![handoff(
+            "h-1",
+            ("b-research", "Research"),
+            "Compare Hindsight and Honcho",
+            "t1",
+            false,
+        )],
+    );
+}
+
+/// Research waits for the owner's approval: the card and the ring turn amber.
+pub fn handoff_waiting(ui: &mut Ui) {
+    handed_off(ui, vec![]);
+    handoffs(
+        ui,
+        vec![handoff(
+            "h-1",
+            ("b-research", "Research"),
+            "Compare Hindsight and Honcho",
+            "t1",
+            true,
+        )],
+    );
+}
+
+/// The result came back: its card with the report open, and Raphie's summary.
+pub fn handoff_result(ui: &mut Ui) {
+    let mut result = turn(
+        "t2",
+        -30_000,
+        "**Hindsight** fits a single-owner, self-hosted setup better.\n\n- It runs as one container next to the runtime.\n- Honcho needs Postgres and a worker.\n\nSources: the projects' self-hosting guides.",
+        Some(
+            "Research recommends **Hindsight**: it runs as one container, where Honcho needs Postgres and a worker. Want @Research to check the migration risk?",
+        ),
+        "done",
+    );
+    result["handoff"] = json!({
+        "id": "h-1", "kind": "result",
+        "bot": { "id": "b-research", "name": "Research" },
+        "title": "Compare Hindsight and Honcho", "outcome": "completed"
+    });
+    handed_off(ui, vec![result]);
+    let mut done = handoff(
+        "h-1",
+        ("b-research", "Research"),
+        "Compare Hindsight and Honcho",
+        "t1",
+        false,
+    );
+    done["status"] = json!("completed");
+    done["requests"][0]["finishedAt"] = json!(now_ms() - 30_000);
+    done["requests"][0]["outcome"] = json!("completed");
+    handoffs(ui, vec![done]);
+    ui.open_reports.insert("t2".into());
+}
+
+/// One reply handed out three tasks while an earlier one still runs; the
+/// composer's list of bots at work is open.
+pub fn handoff_several(ui: &mut Ui) {
+    handed_off(
+        ui,
+        vec![turn(
+            "t2",
+            -60_000,
+            "Prep me for Thursday: pricing from @Research, a draft from @Writer, last quarter's spend from @Finance.",
+            Some("Three tasks out. I'll pull everything into one brief for Thursday."),
+            "done",
+        )],
+    );
+    handoffs(
+        ui,
+        vec![
+            handoff(
+                "h-4",
+                ("b-finance", "Finance"),
+                "Pull last quarter's spend",
+                "t2",
+                true,
+            ),
+            handoff(
+                "h-3",
+                ("b-writer", "Writer"),
+                "Draft the switch announcement",
+                "t2",
+                false,
+            ),
+            handoff(
+                "h-2",
+                ("b-research", "Research"),
+                "Check Hindsight's pricing",
+                "t2",
+                false,
+            ),
+            handoff(
+                "h-1",
+                ("b-research", "Research"),
+                "Compare Hindsight and Honcho",
+                "t1",
+                false,
+            ),
+        ],
+    );
+    ui.delegates_open = true;
+}
+
+/// Research's side: the brief Raphie handed off, its answer, and the note
+/// in place of the composer.
+pub fn handoff_task(ui: &mut Ui) {
+    new_conversation(ui);
+    ui.model.apply(Event::BotSelected {
+        bot_id: "b-research".into(),
+    });
+    let mut brief = turn(
+        "t1",
+        -120_000,
+        "Compare Hindsight and Honcho as Raphie's memory backend: retrieval quality, self-hosting effort and cost. Return a recommendation with sources.",
+        Some(
+            "**Hindsight** fits better for a single-owner, self-hosted setup. It runs as one container; Honcho needs Postgres and a worker.",
+        ),
+        "done",
+    );
+    brief["handoff"] = json!({
+        "id": "h-1", "kind": "task",
+        "bot": { "id": "default", "name": "Raphie" },
+        "title": "Compare Hindsight and Honcho"
+    });
+    let mut observation = observation(
+        "Compare Hindsight and Honcho",
+        vec![brief],
+        None,
+        "idle",
+        vec![],
+        vec![],
+    );
+    observation.session.handed_off_by = Some(raphie_core::contracts::BotRef {
+        id: "default".into(),
+        name: "Raphie".into(),
+    });
+    ui.model.select_session(Some("s-1".into()));
+    ui.model.apply(Event::Observation {
+        session_id: "s-1".into(),
+        observation: Box::new(observation),
+    });
+}
+
+/// "@" typed in the composer: the bots to hand the task to.
+pub fn mentions(ui: &mut Ui) {
+    handoff_working(ui);
+    ui.composer = TextEdit::new("Ask @R");
+    ui.composer.focused = true;
 }

@@ -15,6 +15,7 @@ use raphie_core::contracts::{
     ApprovalMode, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
     RuntimeSettings, Scope, TurnStatus,
 };
+use raphie_core::contracts::{BotRef, Handoff, HandoffStatus};
 use raphie_core::contracts::{ProviderSignIn, SignInEvent, SignInStatus};
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
@@ -23,6 +24,7 @@ use raphie_core::jobs::JobAction;
 use raphie_core::local_install;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
+use raphie_core::mentions::{MentionQuery, insert_mention, mention_matches, mention_query};
 use raphie_core::model::{AuthState, Effect, Event, Model};
 use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
@@ -31,7 +33,9 @@ use raphie_core::settings::{Settings, ThemeChoice};
 use raphie_core::updates::ReleaseChannel;
 use raphie_core::updates::UpdateStatus;
 use raphie_core::workspace::{self, ROOT};
-use rune::{ClipboardContent, FileDialogOptions, Image, ImageCache, TextEdit, Tx, Waker};
+use rune::{
+    ClipboardContent, FileDialogOptions, Image, ImageCache, Key, KeyEvent, TextEdit, Tx, Waker,
+};
 
 use crate::channels::{DiscordForm, TelegramForm, UNSAVED};
 use crate::format::now_ms;
@@ -203,6 +207,12 @@ const SANDBOX_REFRESH: f64 = 5.0;
 /// How often the Scheduled jobs page asks again for its jobs and newest
 /// runs (the web's interval): runs start and finish on their own.
 const JOBS_REFRESH: f64 = 5.0;
+/// How often the selected bot's handoffs are asked for: often while one is
+/// open, as the web polls, and now and then otherwise.
+const HANDOFFS_OPEN_REFRESH: f64 = 3.0;
+const HANDOFFS_IDLE_REFRESH: f64 = 15.0;
+/// How a message links a bot it names: `raphie-bot:<id>`.
+pub const MENTION_SCHEME: &str = "raphie-bot:";
 
 /// How often Diagnostics and Activity ask again for their lists (the web's
 /// interval).
@@ -309,6 +319,21 @@ pub struct Ui {
     pub origin_field: TextEdit,
     /// What the owner is typing to Raphie.
     pub composer: TextEdit,
+    /// The list of bots working for this conversation, from the composer.
+    pub delegates_open: bool,
+    /// Result cards whose report is unfolded, by turn id.
+    pub open_reports: HashSet<String>,
+    /// The highlighted bot in the composer's "@" menu.
+    pub mention_active: usize,
+    /// The "@" (its byte offset) Escape closed the menu for.
+    pub mention_dismissed: Option<usize>,
+    /// When the selected bot's handoffs were last asked for, which bot that
+    /// was, and what its conversation looked like then: a settled turn or a
+    /// finished tool step asks again at once, so a new handoff's card comes
+    /// with the reply that made it.
+    handoffs_asked_at: f64,
+    handoffs_bot: Option<String>,
+    handoff_signal: String,
     /// Files are being dragged over the conversation.
     pub drop_hover: bool,
     /// Whether the bot roster on the left shows (⌘B).
@@ -541,6 +566,13 @@ impl Ui {
             inspect_asked_at: 0.0,
             job: JobForm::new_at(0),
             jobs_asked_at: 0.0,
+            delegates_open: false,
+            open_reports: HashSet::new(),
+            mention_active: 0,
+            mention_dismissed: None,
+            handoffs_asked_at: 0.0,
+            handoffs_bot: None,
+            handoff_signal: String::new(),
             files_asked_at: 0.0,
             sandbox: SandboxDraft::empty(),
             sandbox_asked_at: 0.0,
@@ -1234,6 +1266,190 @@ impl Ui {
                 .last()
                 .is_some_and(|turn| turn.status == TurnStatus::Pending)
         })
+    }
+
+    /// The selected bot's handoffs, newest first, once loaded.
+    pub fn handoffs(&self) -> &[Handoff] {
+        self.model
+            .bot_id
+            .as_ref()
+            .and_then(|id| self.model.handoffs.get(id))
+            .map_or(&[], |list| &list.items[..])
+    }
+
+    /// The bots the selected bot can hand tasks to: every other bot.
+    pub fn handoff_targets(&self) -> &[BotRef] {
+        self.model
+            .bot_id
+            .as_ref()
+            .and_then(|id| self.model.handoffs.get(id))
+            .map_or(&[], |list| &list.targets[..])
+    }
+
+    /// Every bot by id and name, so "@Name" in a message shows as the bot.
+    pub fn bot_refs(&self) -> Vec<BotRef> {
+        self.model
+            .bots
+            .iter()
+            .map(|bot| BotRef {
+                id: bot.id.clone(),
+                name: bot.name.clone(),
+            })
+            .collect()
+    }
+
+    /// The bot that handed the open conversation's task off, if one did:
+    /// only it sends messages there.
+    pub fn handed_off_by(&self) -> Option<&BotRef> {
+        let conversation = self.model.conversation.as_ref()?;
+        conversation
+            .observation
+            .as_ref()
+            .and_then(|o| o.session.handed_off_by.as_ref())
+            .or_else(|| {
+                self.model
+                    .sessions
+                    .iter()
+                    .find(|s| s.id == conversation.session_id)
+                    .and_then(|s| s.handed_off_by.as_ref())
+            })
+    }
+
+    /// Asks for the selected bot's handoffs when they are due: on a new
+    /// bot, when its conversation settles a turn or finishes a tool step,
+    /// and on a timer, faster while one is open. Returns whether one is
+    /// open, so the clock keeps waking.
+    pub fn refresh_handoffs(&mut self, clock: f64) -> bool {
+        if self.model.auth != AuthState::SignedIn {
+            return false;
+        }
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            return false;
+        };
+        let open = self
+            .handoffs()
+            .iter()
+            .any(|handoff| handoff.status == HandoffStatus::Working);
+        let signal = self
+            .model
+            .conversation
+            .as_ref()
+            .map_or_else(String::new, |c| {
+                let mut signal: String = c
+                    .turns()
+                    .iter()
+                    .map(|turn| format!("{}:{:?}|", turn.id, turn.status))
+                    .collect();
+                let done = c.observation.as_ref().map_or(0, |o| {
+                    o.activity
+                        .iter()
+                        .filter(|event| event.kind == "tool.completed")
+                        .count()
+                });
+                signal.push_str(&done.to_string());
+                signal
+            });
+        let every = if open {
+            HANDOFFS_OPEN_REFRESH
+        } else {
+            HANDOFFS_IDLE_REFRESH
+        };
+        let new_bot = self.handoffs_bot.as_deref() != Some(bot_id.as_str());
+        if new_bot || signal != self.handoff_signal || clock - self.handoffs_asked_at >= every {
+            self.handoffs_asked_at = clock;
+            self.handoffs_bot = Some(bot_id.clone());
+            self.handoff_signal = signal;
+            self.command(Command::LoadHandoffs { bot_id });
+        }
+        open
+    }
+
+    /// Stops the other bot's work on one of the selected bot's handoffs.
+    pub fn cancel_handoff(&mut self, id: &str) {
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            return;
+        };
+        if self.model.cancelling_handoff.is_some() {
+            return;
+        }
+        self.model.cancelling_handoff = Some(id.to_owned());
+        self.model.handoff_error = None;
+        self.command(Command::CancelHandoff {
+            bot_id,
+            id: id.to_owned(),
+        });
+    }
+
+    /// Opens another bot: one of its conversations, or the bot itself.
+    pub fn open_bot(&mut self, bot_id: &str, session_id: Option<&str>) {
+        self.delegates_open = false;
+        match session_id {
+            Some(session_id) => self.open_conversation(bot_id, session_id),
+            None => self.select_bot(bot_id),
+        }
+    }
+
+    /// A link pressed in a message: a bot it names opens that bot, and a
+    /// web address opens in the browser.
+    pub fn press_link(&mut self, url: &str, tx: &mut Tx) {
+        if let Some(bot_id) = url.strip_prefix(MENTION_SCHEME) {
+            self.open_bot(bot_id, None);
+        } else if url.starts_with("https://") || url.starts_with("http://") {
+            self.open_url(url.to_owned(), tx);
+        }
+    }
+
+    /// The "@name" typed before the composer's caret, unless Escape closed
+    /// the menu for it.
+    fn typed_mention(&self) -> Option<MentionQuery> {
+        let query = mention_query(&self.composer.text, self.composer.focus)?;
+        (self.mention_dismissed != Some(query.start)).then_some(query)
+    }
+
+    /// The bots the composer's "@" menu offers now; empty when it is shut.
+    pub fn mention_options(&self) -> Vec<BotRef> {
+        let Some(query) = self.typed_mention() else {
+            return Vec::new();
+        };
+        mention_matches(self.handoff_targets(), &query.query)
+            .into_iter()
+            .cloned()
+            .collect()
+    }
+
+    /// The highlighted option, kept within the list as it narrows.
+    pub fn mention_highlight(&self, count: usize) -> usize {
+        self.mention_active.min(count.saturating_sub(1))
+    }
+
+    /// Writes "@Name" for the chosen bot in place of what was typed.
+    pub fn choose_mention(&mut self, bot: &BotRef) {
+        let Some(query) = self.typed_mention() else {
+            return;
+        };
+        let (text, caret) =
+            insert_mention(&self.composer.text, &query, self.composer.focus, &bot.name);
+        self.composer.replace_text(text);
+        self.composer.set_caret(caret);
+        self.mention_active = 0;
+    }
+
+    /// The keys the open "@" menu takes before the composer: arrows move,
+    /// Return or Tab choose, Escape closes. Returns whether it took the key.
+    pub fn mention_key(&mut self, key: &KeyEvent) -> bool {
+        let options = self.mention_options();
+        if options.is_empty() {
+            return false;
+        }
+        let active = self.mention_highlight(options.len());
+        match key.key {
+            Key::Down => self.mention_active = (active + 1) % options.len(),
+            Key::Up => self.mention_active = (active + options.len() - 1) % options.len(),
+            Key::Enter | Key::Tab => self.choose_mention(&options[active]),
+            Key::Escape => self.mention_dismissed = self.typed_mention().map(|q| q.start),
+            _ => return false,
+        }
+        true
     }
 
     /// Unfolds or folds something by id: a run's steps, or one step's details.
@@ -2941,6 +3157,7 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         | ui.refresh_sandbox(clock)
         | ui.watch_files(clock)
         | ui.refresh_jobs(clock)
+        | ui.refresh_handoffs(clock)
         | ui.refresh_inspection(clock);
     if watching {
         tx.wake_after(Duration::from_secs(1));
