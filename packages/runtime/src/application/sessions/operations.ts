@@ -1,4 +1,8 @@
-import type { ApprovalStatus, ModelSelection } from "@raphie/contracts";
+import type {
+  ApprovalStatus,
+  ModelSelection,
+  TurnHandoff,
+} from "@raphie/contracts";
 
 import type {
   FileApprovalCommands,
@@ -156,6 +160,25 @@ export class Sessions implements SessionOperations {
       discordThreadId: verified.threadId,
       connectionId: verified.connectionId,
       discordUserId: verified.discordUserId,
+    });
+    return { id: receipt.id, sessionId: receipt.sessionId };
+  }
+
+  /** Internal: another bot's task or result, marked so clients show who sent it. */
+  async submitHandoff(
+    actor: ActorContext,
+    input: {
+      eventId: string;
+      text: string;
+      sessionId?: string;
+      handoff: TurnHandoff;
+    },
+  ) {
+    const verified = this.authority.require(actor);
+    const receipt = await this.conversations.send({
+      ...input,
+      source: verified.source,
+      actor: verified.subject,
     });
     return { id: receipt.id, sessionId: receipt.sessionId };
   }

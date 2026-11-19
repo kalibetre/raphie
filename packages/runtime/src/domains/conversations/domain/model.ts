@@ -4,6 +4,7 @@ import type {
   ChannelOrigin,
   ModelSelection,
   TurnFailure,
+  TurnHandoff,
 } from "@raphie/contracts";
 
 import type { ReplyDestination } from "../../channels/domain/binding.ts";
@@ -18,6 +19,8 @@ export type ChatConversation = {
   readReplyCount?: number;
   /** When the owner archived it. A new message brings it back. */
   archivedAt?: number;
+  /** The bot that handed this session's task off. Only that bot directs it. */
+  handedOffBy?: { id: string; name: string };
 };
 
 /**
@@ -55,6 +58,8 @@ export type ChatTurn = {
   /** Started by a scheduled job; its text is the saved instruction. */
   scheduled?: { name: string };
   scheduledDelivery?: "home" | "web-only" | "home-unavailable";
+  /** Started by another bot; its text is that bot's brief or result. */
+  handoff?: TurnHandoff;
 };
 
 export type ChatDelivery = {

@@ -73,6 +73,22 @@ export type Turn = {
   failure?: TurnFailure;
   /** Set when a scheduled job, not the owner, started this turn. */
   scheduled?: { name: string };
+  /** Set when another bot, not the owner, started this turn. */
+  handoff?: TurnHandoff;
+};
+
+/**
+ * A turn another bot started: a task it handed off to this bot, or the result
+ * of a task this bot handed off, coming back.
+ */
+export type TurnHandoff = {
+  id: string;
+  kind: "task" | "result";
+  /** The other bot: the one that handed the task off, or the one that did it. */
+  bot: { id: string; name: string };
+  title: string;
+  /** How the task ended. Only on results. */
+  outcome?: "completed" | "failed" | "cancelled";
 };
 
 export type ConversationDelivery = {
