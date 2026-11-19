@@ -30,8 +30,15 @@ belonging to one bot, independent of the interface through which the owner
 participates.
 _Avoid_: Chat as a synonym for a single message or a temporary browser connection.
 
-**Turn**: One admitted owner message and the agent work that answers it. A turn may
+**Turn**: One admitted message and the agent work that answers it: usually the
+owner's, but also a scheduled job's prompt or another bot's handoff. A turn may
 include several model responses and tool actions before it finishes.
+
+**Handoff**: A task one bot gives another bot the owner allows it to, with the
+brief, its follow-ups and the results that come back. The receiving bot works on
+it in its own session, which only the sending bot directs. A handoff never
+carries the owner's authority.
+_Avoid_: Delegation or bot message as names for it.
 
 **Approval**: An owner decision about an exact proposed action and its arguments.
 Approval does not itself prove that the action executed successfully.

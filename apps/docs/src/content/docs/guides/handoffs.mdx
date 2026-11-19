@@ -1,0 +1,81 @@
+---
+title: Handoffs
+description: Let one bot hand a task to another bot, follow the task, and know what the other bot may do with it.
+sidebar:
+  order: 7
+---
+
+import { Sequence } from "~/components/diagram";
+
+A bot can hand a task to another of your bots, if you allow it. The other bot works on the task in its own session, and its result comes back to the conversation the task came from as a new turn. The first bot then tells you what came back.
+
+Handoffs are off until you choose, for each bot, which other bots it may hand tasks to.
+
+## Allow a bot to hand off tasks
+
+There is no settings screen for handoffs yet. Set a bot's list with the [HTTP API](/architecture/http-api/#tools-channels-and-schedules), naming the other bots by ID:
+
+```sh
+PUT /api/bots/<bot-id>/handoffs/targets
+{ "bots": ["<other-bot-id>"] }
+```
+
+For the default bot, use `/api/handoffs/targets`. An empty list turns handoffs off. A bot whose list is empty is not offered the handoff tools at all.
+
+## Hand off a task
+
+Ask the bot in a conversation, for example "Ask Research to compare Hindsight and Honcho for our memory layer". The bot writes a brief with everything the other bot needs, since the other bot cannot see your conversation, and hands it off with its `handoff_create` tool. The tool returns at once, so you can keep talking while the task runs.
+
+<Sequence
+  actors={["You", "Chief of staff", "Research"]}
+  steps={[
+    ["You", "Chief of staff", "Ask for the comparison"],
+    ["Chief of staff", "Research", "Brief, in a new session"],
+    ["Chief of staff", "You", "Handed off", "reply"],
+    ["Research", "Research", "Work on the task"],
+    ["Research", "Chief of staff", "Result, as a new turn", "reply"],
+    ["Chief of staff", "You", "What came back", "reply"],
+  ]}
+/>
+
+To add instructions to a task already handed off, ask the first bot again. It sends them with `handoff_follow_up` into the same session, so the other bot keeps its context, and the new result returns the same way.
+
+## What the other bot may do
+
+A handed-off task does not carry your authority. The other bot receives the brief as a request from a named bot, not as your words.
+
+| Rule                     | Effect                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Its own session          | Titled with the task and marked with the bot that sent it. You can open it and read the bot's work.       |
+| Directed by the sender   | Only the sending bot sends messages into it. A message you send there is refused with `409`.              |
+| Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, as for any other turn. |
+| No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                         |
+| Separate memory and data | Each bot keeps its own memory, workspace and credentials. Only the brief and the reply cross.             |
+
+## Cancel a task
+
+Stop the task's session in the other bot, or call `POST /api/bots/<bot-id>/handoffs/<handoff-id>/cancel` on the bot that handed it off. Either way, the other bot stops, and the first bot is told the task was cancelled and says so in its conversation.
+
+`GET /api/bots/<bot-id>/handoffs` lists a bot's handoffs, newest first, with each request's status.
+
+## Results, failures and restarts
+
+The other bot's reply returns as written, up to 32,000 characters. A longer reply is cut, with a note that the full reply is in the other bot's session. If the other bot's turn fails, or the bot is deleted, the first bot is told the task failed and why.
+
+Handoffs are durable. A task survives a restart of either bot: the other bot's turn recovers like any other turn, and the first bot keeps waiting for it, checking every 2 seconds. Delivering a brief or a result is tried four times in all, waiting 1, 2 and 4 seconds between attempts; each attempt reuses the same event ID, so the receiving bot admits one turn.
+
+## Limits
+
+| Limit                                     | Value                                                       |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| Open tasks from one bot to another        | 3                                                           |
+| Brief                                     | 4,000 characters                                            |
+| Task title                                | 80 characters                                               |
+| Result                                    | 32,000 characters                                           |
+| Where results appear                      | The web workspace; they are not sent to Telegram or Discord |
+| Tasks handed on from a handed-off session | None                                                        |
+
+## Related
+
+- [Bots](/guides/bots/)
+- [Security model](/architecture/security/)

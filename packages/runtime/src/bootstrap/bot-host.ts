@@ -273,6 +273,10 @@ export class BotHost implements BotProfiles {
           input,
         );
       },
+      stop: async (id, sessionId) => {
+        if (!other(id)) throw new InputError("Bot not found.", 404);
+        await this.runtime(id).gateway.chats.control(sessionId, "stop");
+      },
       turn: async (id, turnId) =>
         other(id) ? this.runtime(id).gateway.chats.turn(turnId) : undefined,
     };

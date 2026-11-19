@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost } from "../src/bootstrap/bot-host.ts";
+import { startServer } from "../src/bootstrap/http-server.ts";
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 
@@ -336,6 +337,91 @@ test("a handoff waiting on the other bot survives a restart of both", async () =
     ).toHaveLength(1);
   } finally {
     held.resolve();
+    await app.close();
+  }
+});
+
+test("the owner sets who a bot may hand off to, sees its handoffs and cancels one over HTTP", async () => {
+  const held = Promise.withResolvers<void>();
+  const app = await twoBots({ pause: held.promise });
+  const server = await startServer(app.chief.gateway, {
+    port: 0,
+    bots: app.host,
+  });
+  const call = (method: string, path: string, body?: unknown) =>
+    fetch(server.url + path, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        "x-raphie-client": "web",
+        origin: server.url,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  try {
+    expect(await (await call("GET", "/api/handoffs")).json()).toEqual({
+      targets: [],
+      items: [],
+    });
+    expect(
+      (await call("PUT", "/api/handoffs/targets", { bots: ["nobody"] })).status,
+    ).toBe(400);
+    expect(
+      await (
+        await call("PUT", "/api/handoffs/targets", { bots: [app.research.id] })
+      ).json(),
+    ).toEqual({ targets: [{ id: app.research.id, name: "Research" }] });
+    // Each bot keeps its own list.
+    expect(
+      await (await call("GET", `/api/bots/${app.research.id}/handoffs`)).json(),
+    ).toEqual({ targets: [], items: [] });
+
+    await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(
+      async () => !!(await app.handoffs.read())[0]?.requests[0]?.turnId,
+    );
+    const { items } = (await (await call("GET", "/api/handoffs")).json()) as {
+      items: { id: string; status: string; toSessionId: string }[];
+    };
+    expect(items).toHaveLength(1);
+    expect(items[0].status).toBe("working");
+    // The task's session is marked in the other bot, and the owner cannot
+    // write into it.
+    const sessions = (await (
+      await call("GET", `/api/bots/${app.research.id}/sessions`)
+    ).json()) as { items: { id: string; handedOffBy?: unknown }[] };
+    expect(sessions.items[0]).toMatchObject({
+      id: items[0].toSessionId,
+      handedOffBy: { id: "default" },
+    });
+
+    expect(
+      (await call("POST", `/api/handoffs/${items[0].id}/cancel`)).status,
+    ).toBe(200);
+    await until(
+      async () => (await app.handoffs.read())[0]?.status === "cancelled",
+    );
+    await until(async () =>
+      (await app.chief.gateway.chats.state()).turns.some(
+        (t) => t.handoff?.kind === "result",
+      ),
+    );
+    const result = (await app.chief.gateway.chats.state()).turns.find(
+      (t) => t.handoff?.kind === "result",
+    )!;
+    expect(result.handoff?.outcome).toBe("cancelled");
+    expect(result.text).toBe(
+      "The owner cancelled the task before Research finished.",
+    );
+    expect(
+      (await call("POST", `/api/handoffs/${items[0].id}/cancel`)).status,
+    ).toBe(409);
+  } finally {
+    held.resolve();
+    await server.close();
     await app.close();
   }
 });

@@ -39,6 +39,8 @@ export type HandoffPeers = {
       handoff: TurnHandoff;
     },
   ): Promise<{ id: string; sessionId: string }>;
+  /** Stops the task's session in the other bot. */
+  stop(botId: string, sessionId: string): Promise<void>;
   /** Undefined when the bot or the turn no longer exists. Throws while it is unavailable. */
   turn(
     botId: string,
@@ -151,6 +153,23 @@ export class BotHandoffs {
     return structuredClone(
       (await this.options.harness.snapshot(Handoffs, context))?.items ?? [],
     );
+  }
+
+  /**
+   * Stops the other bot's work on a handoff. The waiting request then sees the
+   * stopped turn and reports the cancellation back like any other result.
+   */
+  async cancel(id: string) {
+    const handoff = (await this.read()).find((item) => item.id === id);
+    if (!handoff) throw new InputError("Handoff not found.", 404);
+    if (handoff.status !== "working")
+      throw new InputError("This task has already finished.", 409);
+    if (!handoff.toSessionId)
+      throw new InputError(
+        `${handoff.to.name} has not received the task yet. Try again in a moment.`,
+        409,
+      );
+    await this.options.peers.stop(handoff.to.id, handoff.toSessionId);
   }
 
   /** Records a new handoff and starts delivering it, in the caller's transaction. */

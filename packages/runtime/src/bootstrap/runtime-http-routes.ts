@@ -11,6 +11,8 @@ import { conversationRoutes } from "../domains/conversations/presentation/http/r
 import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
 import { noTraces } from "../domains/diagnostics/application/trace-reader.ts";
 import { diagnosticsRoutes } from "../domains/diagnostics/presentation/http/routes.ts";
+import type { BotHandoffs } from "../domains/handoffs/infrastructure/bot-handoffs.ts";
+import { handoffRoutes } from "../domains/handoffs/presentation/http/routes.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { memoryRoutes } from "../domains/memory/presentation/http/routes.ts";
 import type { BotJobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
@@ -30,6 +32,7 @@ export type RuntimeHttpOptions = {
   telegram?: BotTelegram;
   mcp?: BotMcp;
   jobs?: BotJobs;
+  handoffs?: BotHandoffs;
   discordConfigured?: boolean;
   diagnostics?: TraceReader;
   settings?: SettingsService;
@@ -67,6 +70,8 @@ export function runtimeRoutes(
     );
   if (options.mcp) app.route("/api/mcp", mcpRoutes(options.mcp));
   if (options.jobs) app.route("/api/jobs", jobRoutes(options.jobs));
+  if (options.handoffs)
+    app.route("/api/handoffs", handoffRoutes(options.handoffs));
   // The outer host owns sanitized transport error responses.
   app.onError((error) => {
     throw error;
