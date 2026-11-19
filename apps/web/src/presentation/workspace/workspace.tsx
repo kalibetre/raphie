@@ -124,6 +124,17 @@ export function Workspace({
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
   const handoffQuery = useHandoffs();
   const handoffs = handoffQuery.data?.items;
+  // A handoff is saved inside its tool call, so once a tool step completes or
+  // a turn settles the list has it. Refetch then, rather than waiting for the
+  // next poll, so its card arrives with the reply.
+  const handoffSignal = [
+    ...(data?.turns ?? []).map((turn) => `${turn.id}:${turn.status}`),
+    (data?.activity ?? []).filter((event) => event.type === "tool.completed")
+      .length,
+  ].join("|");
+  useEffect(() => {
+    void queries.invalidateQueries({ queryKey: ["handoffs"] });
+  }, [handoffSignal, queries]);
   const [enabled, setEnabled] = useEnabledPlugins();
   const mobile = useIsMobile();
   // A phone opens on the bot's conversation list; this is a new conversation
