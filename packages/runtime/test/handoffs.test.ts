@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
@@ -454,6 +456,51 @@ test("deleting the only other bot withdraws the handoff tools", async () => {
       revision: app.research.revision,
     });
     expect(app.handoffs.targets()).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
+test("tasks one conversation hands the same bot continue in one session on its side", async () => {
+  const app = await twoBots();
+  try {
+    const owner = await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(
+      async () => (await app.handoffs.read())[0]?.status === "completed",
+    );
+    // A second, separate task from the same conversation, as the model
+    // makes it when it does not choose handoff_follow_up.
+    await app.chief.gateway.root.commit(
+      (tx) =>
+        app.handoffs.create(
+          tx,
+          {
+            id: "second",
+            to: "Research",
+            title: "Go deeper",
+            brief: "Explain the risk.",
+          },
+          { sessionId: owner.sessionId, turnId: null },
+        ),
+      context,
+    );
+    app.chief.gateway.harness.resume();
+    await until(async () =>
+      (await app.handoffs.read()).every((item) => item.status === "completed"),
+    );
+    const [first, second] = await app.handoffs.read();
+    expect(second!.toSessionId).toBe(first!.toSessionId);
+    const received = await app.host
+      .runtime(app.research.id)
+      .gateway.chats.state();
+    expect(received.conversations).toHaveLength(1);
+    expect(received.turns.map((turn) => turn.handoff?.id)).toEqual([
+      first!.id,
+      "second",
+    ]);
   } finally {
     await app.close();
   }

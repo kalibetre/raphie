@@ -17,6 +17,7 @@ import type {
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import {
+  continuedSession,
   handoffStatus,
   MAX_OPEN_HANDOFFS_PER_BOT,
   openHandoffs,
@@ -301,14 +302,28 @@ export class BotHandoffs {
               );
               return;
             }
+            // One conversation talks to another bot in one session: a new
+            // task joins the session earlier tasks from here went to. Save
+            // the address first, so a retried delivery keeps the same one.
+            const joined = !handoff.toSessionId
+              ? continuedSession(
+                  (await runtime.snapshot(Handoffs, ctx))?.items ?? [],
+                  handoff,
+                )
+              : undefined;
+            if (joined)
+              await runtime.commit(async (tx) => {
+                const stored = await find(tx, handoffId);
+                if (stored && !stored.toSessionId) stored.toSessionId = joined;
+                return { status: "running", checkpoint: task.state.checkpoint };
+              }, ctx);
+            const sessionId = handoff.toSessionId ?? joined;
             try {
               // A retry reuses the event ID, so the other bot admits one turn.
               const receipt = await this.options.peers.submit(handoff.to.id, {
                 eventId: `handoff:${handoffId}:${n}`,
                 text: request.brief,
-                ...(handoff.toSessionId
-                  ? { sessionId: handoff.toSessionId }
-                  : {}),
+                ...(sessionId ? { sessionId } : {}),
                 handoff: {
                   id: handoffId,
                   kind: "task",

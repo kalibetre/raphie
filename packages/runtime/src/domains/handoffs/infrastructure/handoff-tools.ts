@@ -79,6 +79,7 @@ export function createHandoffTools(handoffs: BotHandoffs) {
         return [
           `You can hand tasks to these other bots of the owner's: ${targets.map((peer) => peer.name).join(", ")}. Hand a task off when the owner asks, or when it clearly suits one of them better.`,
           "When the owner names one of these bots with @, as in @Research, they want that bot to do the task: hand it off with handoff_create instead of doing it yourself. Write the brief from what you know of this conversation, since the other bot cannot see it.",
+          "Everything you hand one bot from this conversation goes to the same session on its side, so it keeps the context of earlier tasks; refer to them freely in a brief.",
           "Each handoff runs in the other bot's own session. Its result comes back into this conversation later as a new message, and you then tell the owner what came back. Do not wait for it, poll for it or invent its result.",
           "Use handoff_follow_up to send more instructions on a task you already handed off, so the other bot keeps its context. Use handoff_list to see their status.",
         ].join("\n");

@@ -34,3 +34,20 @@ export function resultText(
   const note = `\n\n[${bot}'s reply was cut here: it was longer than a result can hold. The full reply is in ${bot}'s session.]`;
   return text.slice(0, HANDOFF_RESULT_MAX_LENGTH - note.length) + note;
 }
+
+/**
+ * The other bot's session that earlier tasks from the same conversation went
+ * to, newest first, so a conversation keeps one thread with each bot.
+ */
+export function continuedSession(
+  items: readonly Handoff[],
+  handoff: Pick<Handoff, "id" | "fromSessionId" | "to">,
+) {
+  return items.findLast(
+    (item) =>
+      item.id !== handoff.id &&
+      item.fromSessionId === handoff.fromSessionId &&
+      item.to.id === handoff.to.id &&
+      item.toSessionId !== null,
+  )?.toSessionId;
+}

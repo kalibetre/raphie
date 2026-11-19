@@ -40,7 +40,7 @@ You follow a task from the conversation you started it in:
 
 When the other bot needs an approval, **Review** opens its session, where you approve or reject as usual.
 
-To add instructions to a task already handed off, ask the first bot again. It sends them with `handoff_follow_up` into the same session, so the other bot keeps its context, and the new result returns the same way.
+A conversation keeps one session with each bot it hands work to. Everything handed from that conversation to the same bot, whether a follow-up on a task or a new task, continues in that session, so the other bot keeps the context of earlier tasks. Each task still gets its own card, and each result returns the same way.
 
 ## What the other bot may do
 
@@ -48,7 +48,7 @@ A handed-off task does not carry your authority. The other bot receives the brie
 
 | Rule                     | Effect                                                                                                         |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| Its own session          | Titled with the task and marked with the bot that sent it. You can open it and read the bot's work.            |
+| Its own session          | One per conversation that hands it work, titled with the first task and marked with the bot that sent it.      |
 | Directed by the sender   | Only the sending bot sends messages into it. Its composer is replaced by a note saying so, with **Stop task**. |
 | Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, as for any other turn.      |
 | No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                              |
