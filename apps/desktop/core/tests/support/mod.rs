@@ -121,6 +121,10 @@ pub struct Host {
     pub acknowledge_down: bool,
     /// Bodies of job adds, as received.
     pub job_adds: Vec<Value>,
+    /// The default bot's handoffs, newest first, and the bots it can hand
+    /// tasks to, as `GET /api/handoffs` lists them.
+    pub handoffs: Vec<Value>,
+    pub handoff_targets: Vec<Value>,
     /// The workspace's files: `(path, bytes)`. Folders are implied by the
     /// paths. `workspace_revision` is the listing revision downloads name.
     pub workspace: Vec<(String, Vec<u8>)>,
@@ -262,6 +266,8 @@ fn router(fake: Fake) -> Router {
         .route("/api/diagnostics/traces", get(traces))
         .route("/api/inspection/activity", get(bot_activity))
         .route("/api/jobs", get(jobs).post(add_job))
+        .route("/api/handoffs", get(handoffs))
+        .route("/api/handoffs/{id}/cancel", post(cancel_handoff))
         .route("/api/jobs/runs", get(job_runs))
         .route("/api/bots/{bot}/sessions", get(bot_sessions))
         .route("/api/sessions", get(bot_sessions))
@@ -418,6 +424,45 @@ async fn jobs(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap
         return denied;
     }
     jobs_json(&fake)
+}
+
+async fn handoffs(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let host = fake.host.lock().unwrap();
+    Json(json!({ "targets": host.handoff_targets, "items": host.handoffs })).into_response()
+}
+
+/// Stops a working handoff; a finished one answers 409, as the runtime does.
+async fn cancel_handoff(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let mut host = fake.host.lock().unwrap();
+    let Some(item) = host.handoffs.iter_mut().find(|item| item["id"] == id) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Handoff not found." })),
+        )
+            .into_response();
+    };
+    if item["status"] != "working" {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "This task has already finished." })),
+        )
+            .into_response();
+    }
+    item["status"] = json!("cancelled");
+    Json(json!({ "ok": true })).into_response()
 }
 
 /// Schedules a job, unless its first run is in the past.

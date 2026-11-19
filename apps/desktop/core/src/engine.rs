@@ -275,6 +275,15 @@ pub enum Command {
         name: String,
         contents: String,
     },
+    /// Load a bot's handoffs and the bots it can hand tasks to.
+    LoadHandoffs {
+        bot_id: String,
+    },
+    /// Stop the other bot's work on one of a bot's handoffs.
+    CancelHandoff {
+        bot_id: String,
+        id: String,
+    },
     /// Load a bot's scheduled jobs.
     LoadJobs {
         bot_id: String,
@@ -727,6 +736,8 @@ impl Engine {
             Command::LoadBotActivity { bot_id } => self.load_bot_activity(bot_id),
             Command::SetTelemetry { bot_id, enabled } => self.set_telemetry(bot_id, enabled),
             Command::SaveExport { name, contents } => self.save_export(name, contents),
+            Command::LoadHandoffs { bot_id } => self.load_handoffs(bot_id),
+            Command::CancelHandoff { bot_id, id } => self.cancel_handoff(bot_id, id),
             Command::LoadJobs { bot_id } => self.load_jobs(bot_id),
             Command::AddJob { bot_id, job } => self.add_job(bot_id, job),
             Command::ChangeJob { bot_id, id, action } => self.change_job(bot_id, id, action),
@@ -1789,6 +1800,47 @@ impl Engine {
                 }
                 Ok(Err(error)) => failed(format!("Could not save the file: {error}.")),
                 Err(_) => failed("Could not save the file.".into()),
+            }
+        });
+    }
+
+    fn load_handoffs(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.handoffs(&bot_id).await {
+                Ok(list) => emit.emit(Event::Handoffs { bot_id, list }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                // A failed refresh keeps the list shown; the next one retries.
+                Err(_) => {}
+            }
+        });
+    }
+
+    fn cancel_handoff(&mut self, bot_id: String, id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.cancel_handoff(&bot_id, &id).await {
+                Ok(()) => match api.handoffs(&bot_id).await {
+                    Ok(list) => emit.emit(Event::Handoffs { bot_id, list }),
+                    Err(_) => emit.emit(Event::HandoffCancelled { id }),
+                },
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::HandoffCancelFailed {
+                    id,
+                    message: error.to_string(),
+                }),
             }
         });
     }

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use raphie_core::attachments::{FileBytes, Preview, TOO_LARGE, Upload};
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
-use raphie_core::contracts::{ApprovalMode, ModelSelection, NewBot, TraceState};
+use raphie_core::contracts::{ApprovalMode, HandoffStatus, ModelSelection, NewBot, TraceState};
 use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
     UpdateBotProfile, WorkspaceKind,
@@ -2260,4 +2260,62 @@ fn a_subscription_sign_in_is_started_followed_answered_and_cancelled() {
             .as_ref()
             .is_some_and(|(_, s)| s.status == SignInStatus::Cancelled)
     });
+}
+
+#[test]
+fn handoffs_load_and_a_working_one_is_cancelled_once() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.handoff_targets = vec![serde_json::json!({ "id": "research", "name": "Research" })];
+        h.handoffs = vec![serde_json::json!({
+            "id": "h-1",
+            "to": { "id": "research", "name": "Research" },
+            "title": "Compare memory backends",
+            "fromSessionId": "s-1",
+            "toSessionId": "r-1",
+            "status": "working",
+            "createdAt": 1,
+            "waiting": true,
+            "requests": [{
+                "brief": "Compare them.", "fromTurnId": "t-1", "sentAt": 1,
+                "turnId": "rt-1", "finishedAt": null, "outcome": null
+            }],
+        })];
+    });
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::LoadHandoffs {
+        bot_id: "default".into(),
+    });
+    driver.until("the handoffs", |m, _| m.handoffs.contains_key("default"));
+    let list = driver.model.handoffs["default"].clone();
+    assert_eq!(list.targets[0].name, "Research");
+    assert_eq!(list.items[0].status, HandoffStatus::Working);
+    assert!(list.items[0].waiting);
+    assert_eq!(
+        list.items[0].requests[0].from_turn_id.as_deref(),
+        Some("t-1")
+    );
+
+    driver.model.cancelling_handoff = Some("h-1".into());
+    driver.send(Command::CancelHandoff {
+        bot_id: "default".into(),
+        id: "h-1".into(),
+    });
+    driver.until("the cancel", |m, _| m.cancelling_handoff.is_none());
+    assert_eq!(
+        driver.model.handoffs["default"].items[0].status,
+        HandoffStatus::Cancelled
+    );
+    assert_eq!(host.requests("/api/handoffs/h-1/cancel").len(), 1);
+
+    // A finished task cannot be cancelled again, and says why.
+    driver.model.cancelling_handoff = Some("h-1".into());
+    driver.send(Command::CancelHandoff {
+        bot_id: "default".into(),
+        id: "h-1".into(),
+    });
+    driver.until("the refusal", |m, _| m.handoff_error.is_some());
+    let (id, why) = driver.model.handoff_error.clone().unwrap();
+    assert_eq!(id, "h-1");
+    assert!(why.contains("already finished"), "{why}");
 }
