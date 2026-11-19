@@ -447,26 +447,29 @@
 
 @layer components {
   /* "@Name" in a message: the bot it names, in its colour. */
+  /* An inline block takes its baseline from its own text, so the name sits
+     on the sentence's baseline; a flex chip would take the avatar's. */
   .mention-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
+    display: inline-block;
     margin: 0 1px;
-    padding: 0 7px 0 2px;
+    padding: 0 6px 0 3px;
     border: 0;
     border-radius: 999px;
     background: color-mix(in srgb, var(--tone) 26%, transparent);
     color: var(--foreground);
     font: inherit;
-    font-weight: 550;
-    line-height: 1.5;
-    vertical-align: baseline;
+    font-weight: 500;
+    line-height: inherit;
+    white-space: nowrap;
   }
   .mention-chip:hover {
     background: color-mix(in srgb, var(--tone) 40%, transparent);
   }
   .mention-chip .bot-avatar {
-    width: 16px;
-    height: 16px;
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    margin-right: 4px;
+    vertical-align: -2px;
   }
 }
