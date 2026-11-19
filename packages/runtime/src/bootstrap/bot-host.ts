@@ -29,6 +29,7 @@ import type { SettingsService } from "../domains/settings/application/ports.ts";
 import { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
 import type { CredentialKeyStore } from "../domains/settings/infrastructure/credential-cipher.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
+import { webSearchRoute } from "../domains/web/infrastructure/web-search-tools.ts";
 import { ContainerWorkspace } from "../domains/workspaces/infrastructure/container-workspace.ts";
 import type { McpConnection } from "../infrastructure/mcp/client.ts";
 import { InputError } from "../shared/application/input-error.ts";
@@ -249,6 +250,14 @@ export class BotHost implements BotProfiles {
     this.profiles.finishDeletion(id);
   }
 
+  /** Whether a bot's default model connection can search the web. */
+  private canSearchWeb(id: string) {
+    const gateway = this.runtimes.get(id)?.gateway;
+    const ref = gateway?.chats.model;
+    const model = ref && gateway.models.getModel(ref.provider, ref.modelId);
+    return !!model && !!webSearchRoute(model, undefined);
+  }
+
   /** Every bot can hand tasks to every other bot, so each one's offer follows the roster. */
   private refreshHandoffs() {
     for (const runtime of this.runtimes.values()) runtime.handoffs?.refresh();
@@ -281,6 +290,7 @@ export class BotHost implements BotProfiles {
             id: profile.id,
             name: profile.name,
             description: profile.description,
+            webSearch: this.canSearchWeb(profile.id),
             connections:
               this.runtimes
                 .get(profile.id)

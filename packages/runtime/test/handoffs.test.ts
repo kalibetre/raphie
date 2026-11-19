@@ -510,7 +510,7 @@ test("tasks one conversation hands the same bot continue in one session on its s
   }
 });
 
-test("a bot is told what each other bot can do, including that none can reach the web", async () => {
+test("a bot is told what each other bot can do: its description, web search and connections", async () => {
   const prompts: string[] = [];
   const app = await twoBots({}, { systemPrompt: (text) => prompts.push(text) });
   try {
@@ -522,9 +522,8 @@ test("a bot is told what each other bot can do, including that none can reach th
     const prompt = JSON.parse(prompts[0]!) as unknown;
     const text = JSON.stringify(prompt);
     expect(text).toContain("- Research: Study sources carefully.");
-    expect(text).toContain(
-      "Connections: none, so it cannot reach the web or any outside service",
-    );
+    // The fixture model is an OpenRouter model, so the bot can search.
+    expect(text).toContain("Web search: yes. Connections: none.");
     expect(text).toContain("tell the owner what is missing");
   } finally {
     await app.close();

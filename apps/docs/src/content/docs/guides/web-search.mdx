@@ -1,0 +1,42 @@
+---
+title: Web search
+description: Let a bot search the web through its own model connection, and know what the search sends and costs.
+sidebar:
+  order: 5.5
+---
+
+Every bot can search the web with its `web_search` tool. The search runs through the bot's own model connection, so there is no other account or key to set up. It needs an OpenRouter connection; other connections cannot search yet.
+
+A bot decides when to search: for current events, facts it is unsure of, and anything its memory and workspace do not hold. It gets back an answer with numbered sources, which it cites when it replies.
+
+## How a search works
+
+The tool sends one request to OpenRouter on the conversation's model, with OpenRouter's web plugin turned on. For OpenAI, Anthropic, Google and some other models, the model's own provider runs the search; other models search through Exa. Up to five results are read, plus any pages the bot asks to read with the query.
+
+The answer is returned to the bot as web content, not instructions. Text in a web page cannot tell the bot what to do.
+
+## Approval, data and cost
+
+| Question                  | Answer                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Does a search ask first?  | No. Searching only reads, like the memory tools, and runs in every session, including handed-off tasks.   |
+| What leaves your machine? | The query and any pages the bot names, sent to OpenRouter, which already receives the conversation.       |
+| What does it cost?        | One extra model request per search, plus OpenRouter's search charge, both billed to the bot's connection. |
+| Which model searches?     | The conversation's model.                                                                                 |
+
+## Limits
+
+| Limit                       | Value           |
+| --------------------------- | --------------- |
+| Connections that can search | OpenRouter      |
+| Results read per search     | 5               |
+| Extra pages per search      | 10              |
+| Answer length               | About 600 words |
+| Time before a search fails  | 90 seconds      |
+
+When the bot's connection cannot search, the tool says so and the bot tells you; it does not make results up.
+
+## Related
+
+- [MCP tools](/guides/tools/), for other outside services
+- [Handoffs](/guides/handoffs/)

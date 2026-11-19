@@ -77,10 +77,10 @@ export function createHandoffTools(handoffs: BotHandoffs) {
         const bots = handoffs.directory();
         if (!bots.length) return;
         return [
-          "You can hand tasks to these other bots of the owner's. Each has its own memory and workspace files; only the connections listed give it outside access, such as the web.",
+          "You can hand tasks to these other bots of the owner's. Each has its own memory and workspace files. Web search and the connections listed are its only outside access.",
           ...bots.map(
             (bot) =>
-              `- ${bot.name}: ${bot.description || "No description."} Connections: ${bot.connections.length ? bot.connections.join(", ") : "none, so it cannot reach the web or any outside service"}.`,
+              `- ${bot.name}: ${bot.description || "No description."} Web search: ${bot.webSearch ? "yes" : "no, so it cannot reach the web"}. Connections: ${bot.connections.length ? bot.connections.join(", ") : "none"}.`,
           ),
           "Hand a task off when the owner asks, or when it clearly suits one of them better, and only to a bot that can do it. If none can, for example the task needs the web and no bot has a connection for it, tell the owner what is missing instead of handing it off.",
           "When the owner names one of these bots with @, as in @Research, they want that bot to do the task: hand it off with handoff_create instead of doing it yourself. Write the brief from what you know of this conversation, since the other bot cannot see it. If the named bot cannot do it, say so before handing it off.",

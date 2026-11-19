@@ -29,7 +29,9 @@ export type Peer = { id: string; name: string };
 /** What a bot can do, so another can judge whether to hand it a task. */
 export type PeerProfile = Peer & {
   description: string;
-  /** Its connected integrations, by name; none means no outside access. */
+  /** Whether its default model connection can search the web. */
+  webSearch: boolean;
+  /** Its connected integrations, by name. */
   connections: string[];
 };
 
