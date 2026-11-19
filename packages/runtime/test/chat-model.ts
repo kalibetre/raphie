@@ -47,12 +47,14 @@ export function chatModel(
     const answer = context.messages
       .filter((m) => m.role === "user")
       .map((m) =>
-        typeof m.content === "string"
-          ? m.content
-          : m.content
-              .filter((c) => c.type === "text")
-              .map((c) => c.text)
-              .join(""),
+        withoutContext(
+          typeof m.content === "string"
+            ? m.content
+            : m.content
+                .filter((c) => c.type === "text")
+                .map((c) => c.text)
+                .join(""),
+        ),
       )
       .join(" | ");
     const message: AssistantMessage = {
@@ -163,4 +165,9 @@ export function chatModel(
     streamSimple: reply,
   });
   return { models, model: { provider: "fixture", modelId: "history" } };
+}
+
+/** A message's text after the runtime's leading `[Sent …]` and `[Origin …]` lines. */
+export function withoutContext(text: string) {
+  return text.replace(/^(\[[^\n]*\]\n)+\n/, "");
 }
