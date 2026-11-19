@@ -573,3 +573,70 @@ test("a command in a handed-off task is approved call by call, never for the ses
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a result reports back to the chat the owner last wrote from", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-handoff-channel-"));
+  const gateway = await Gateway.open({ directory, ...chatModel() });
+  const settled = () =>
+    until(async () =>
+      (await gateway.chats.state()).turns.every((t) => t.status !== "pending"),
+    );
+  const result = (n: number, sessionId: string) =>
+    gateway.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: `handoff:h1:result:${n}`,
+      text: "Hindsight fits better.",
+      sessionId,
+      handoff: {
+        id: "h1",
+        kind: "result",
+        bot: { id: "research", name: "Research" },
+        title: "Compare Hindsight and Honcho",
+        outcome: "completed",
+      },
+    });
+  const deliveries = async () =>
+    (await gateway.chats.state()).deliveries.filter((d) =>
+      d.id.endsWith(":reply"),
+    );
+  try {
+    const asked = await gateway.chats.send({
+      source: "telegram",
+      actor: "owner",
+      eventId: "tg-1",
+      text: "Ask @Research to compare them.",
+      discordThreadId: "telegram:chat:42",
+      connectionId: "tg",
+      discordUserId: "42",
+    });
+    await settled();
+    const before = (await deliveries()).length;
+    const back = await result(1, asked.sessionId);
+    await settled();
+    const sent = (await deliveries()).find((d) => d.turnId === back.id);
+    assert(sent, "the result's reply goes to Telegram");
+    expect(sent.threadId).toBe("telegram:chat:42");
+    expect(sent.connectionId).toBe("tg");
+    expect(sent.text).toStartWith(
+      "Research finished: Compare Hindsight and Honcho\n\n",
+    );
+    expect((await deliveries()).length).toBe(before + 1);
+
+    // Once the owner carries on in the web workspace, results stay there.
+    await gateway.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "web-1",
+      text: "Thanks.",
+      sessionId: asked.sessionId,
+    });
+    await settled();
+    const stays = await result(2, asked.sessionId);
+    await settled();
+    expect((await deliveries()).some((d) => d.turnId === stays.id)).toBe(false);
+  } finally {
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

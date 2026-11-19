@@ -11,19 +11,20 @@ All of them reach the same runtime as the same owner, so a session, approval or 
 
 ## Conversations
 
-| Capability                                          | Web workspace | Desktop                                | Telegram                                                 |
-| --------------------------------------------------- | ------------- | -------------------------------------- | -------------------------------------------------------- |
-| Talk to any bot, browse and search sessions         | Yes           | Yes                                    | One session per Telegram chat                            |
-| Streamed replies, tool steps, time, tokens and cost | Yes           | Yes                                    | Final replies only                                       |
-| Queue, steer or stop a turn                         | Yes           | Yes                                    | Messages wait their turn; no steer or stop               |
-| Approve or reject tool requests                     | Yes           | Yes                                    | Private chats only; group approvals go to web or desktop |
-| Approve a command for the whole session             | Yes           | Yes                                    | No                                                       |
-| Attachments                                         | Yes           | Yes                                    | No, text only                                            |
-| Choose a session's model                            | Yes           | Yes                                    | No                                                       |
-| Permissions (Ask or Full access)                    | Yes           | Yes                                    | No                                                       |
-| Unread markers                                      | Yes           | Yes                                    | Not applicable                                           |
-| Notifications                                       | In the app    | In the app and as system notifications | Telegram's own                                           |
-| Scheduled job updates                               | Yes           | Yes                                    | In the [home channel](/guides/schedules/)                |
+| Capability                                          | Web workspace                    | Desktop                                | Telegram                                                        |
+| --------------------------------------------------- | -------------------------------- | -------------------------------------- | --------------------------------------------------------------- |
+| Talk to any bot, browse and search sessions         | Yes                              | Yes                                    | One session per Telegram chat                                   |
+| Streamed replies, tool steps, time, tokens and cost | Yes                              | Yes                                    | Final replies only                                              |
+| Queue, steer or stop a turn                         | Yes                              | Yes                                    | Messages wait their turn; no steer or stop                      |
+| Approve or reject tool requests                     | Yes                              | Yes                                    | Private chats only; group approvals go to web or desktop        |
+| Approve a command for the whole session             | Yes                              | Yes                                    | No                                                              |
+| Attachments                                         | Yes                              | Yes                                    | No, text only                                                   |
+| Choose a session's model                            | Yes                              | Yes                                    | No                                                              |
+| Permissions (Ask or Full access)                    | Yes                              | Yes                                    | No                                                              |
+| Unread markers                                      | Yes                              | Yes                                    | Not applicable                                                  |
+| Notifications                                       | In the app                       | In the app and as system notifications | Telegram's own                                                  |
+| Scheduled job updates                               | Yes                              | Yes                                    | In the [home channel](/guides/schedules/)                       |
+| [Handoffs](/guides/handoffs/) to other bots         | Yes, with cards and `@` mentions | Yes, with cards and `@` mentions       | Ask in words; the reply about the result comes back to the chat |
 
 Read state is shared through the runtime: whatever any client has read counts as read everywhere.
 

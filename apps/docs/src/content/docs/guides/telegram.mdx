@@ -87,6 +87,8 @@ A group session is separate, but the bot's memory and tools are shared across al
 
 Every update is handled once, in order. Raphie saves its polling position after each update, and duplicates after a crash are rejected. The reply destination is fixed when the turn starts, so later settings changes cannot redirect it.
 
+When a bot you asked in a chat [hands a task](/guides/handoffs/) to another bot, its reply about the result comes back to the same chat, headed with the bot's name and the task title ("Research finished: Compare Hindsight and Honcho"), as long as the chat is still on that conversation.
+
 A tool approval in a private chat shows the server, tool and exact arguments with **Approve once** and **Decline** buttons. Only the account that started the turn can decide in Telegram; you can always decide in the web workspace instead. The first decision wins: a repeated, stale or opposite press only reports the current state.
 
 ## Delivery limits and recovery
