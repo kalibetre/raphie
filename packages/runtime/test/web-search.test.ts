@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +11,10 @@ import {
   searchResultText,
   uniqueSources,
 } from "../src/domains/web/domain/search.ts";
+import {
+  openAIResponsesSearch,
+  webSearchRoute,
+} from "../src/domains/web/infrastructure/search-providers.ts";
 import { chatModel } from "./chat-model.ts";
 
 async function until(check: () => Promise<boolean>) {
@@ -129,5 +134,163 @@ test("results are framed as web data with their sources", () => {
   ).toEqual([{ url: "u", title: "A" }]);
   expect(searchResultText("q", { answer: " ", sources: [] })).toContain(
     "No answer came back.\n\nSources:\nNone cited.",
+  );
+});
+
+type AnyModel = Parameters<typeof webSearchRoute>[0];
+
+const openai = {
+  id: "gpt-5.2",
+  name: "GPT-5.2",
+  baseUrl: "https://api.openai.com/v1",
+} as AnyModel;
+
+/** A Responses event stream, as OpenAI sends it. */
+function stream(events: unknown[]) {
+  const text = events
+    .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+    .join("");
+  // Split mid-event, as a network would, to exercise buffering.
+  const bytes = new TextEncoder().encode(`${text}data: [DONE]\n\n`);
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, 37));
+        controller.enqueue(bytes.slice(37));
+        controller.close();
+      },
+    }),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
+test("connections that can search are told apart by where they send requests", () => {
+  expect(webSearchRoute(openai)).toBe("openai");
+  expect(
+    webSearchRoute({
+      ...openai,
+      baseUrl: "https://openrouter.ai/api",
+    } as AnyModel),
+  ).toBe("openrouter");
+  expect(
+    webSearchRoute({
+      ...openai,
+      baseUrl: "https://api.anthropic.com",
+    } as AnyModel),
+  ).toBeUndefined();
+});
+
+test("an OpenAI or ChatGPT connection searches with the Responses web_search tool", async () => {
+  const requests: { url: string; init: RequestInit }[] = [];
+  const result = await openAIResponsesSearch(
+    async (url, init) => {
+      requests.push({ url, init });
+      return stream([
+        { type: "response.created" },
+        {
+          type: "response.output_item.done",
+          item: {
+            type: "web_search_call",
+            action: {
+              sources: [{ url: "https://example.com/read", title: "Read" }],
+            },
+          },
+        },
+        { type: "response.output_text.delta", delta: "Snapshots are " },
+        { type: "response.output_text.delta", delta: "checkpoints." },
+        {
+          type: "response.output_text.annotation.added",
+          annotation: {
+            type: "url_citation",
+            url: "https://example.com/a",
+            title: "A",
+          },
+        },
+        {
+          type: "response.completed",
+          response: {
+            output: [
+              {
+                type: "message",
+                content: [
+                  {
+                    type: "output_text",
+                    annotations: [
+                      {
+                        type: "url_citation",
+                        url: "https://example.com/a",
+                        title: "A",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ]);
+    },
+    openai,
+    { apiKey: "chatgpt-access-token" },
+    "How do snapshots work?",
+  );
+  expect(result).toEqual({
+    answer: "Snapshots are checkpoints.",
+    sources: [{ url: "https://example.com/a", title: "A" }],
+  });
+  const [request] = requests;
+  expect(request!.url).toBe("https://api.openai.com/v1/responses");
+  const headers = request!.init.headers as Record<string, string>;
+  expect(headers.authorization).toBe("Bearer chatgpt-access-token");
+  expect(headers.accept).toBe("text/event-stream");
+  const body = JSON.parse(request!.init.body as string) as Record<
+    string,
+    unknown
+  >;
+  expect(body).toMatchObject({
+    model: "gpt-5.2",
+    tools: [{ type: "web_search" }],
+    include: ["web_search_call.action.sources"],
+    stream: true,
+    store: false,
+  });
+  // A ChatGPT sign-in rejects output limits, so none are sent.
+  expect(body).not.toHaveProperty("max_output_tokens");
+});
+
+test("without citations, the pages the search read are the sources; a failed stream throws", async () => {
+  const uncited = await openAIResponsesSearch(
+    async () =>
+      stream([
+        {
+          type: "response.output_item.done",
+          item: {
+            type: "web_search_call",
+            action: { sources: [{ url: "https://example.com/read" }] },
+          },
+        },
+        { type: "response.output_text.delta", delta: "Found it." },
+      ]),
+    openai,
+    {},
+    "q",
+  );
+  expect(uncited.sources).toEqual([
+    { url: "https://example.com/read", title: "https://example.com/read" },
+  ]);
+  await assert.rejects(
+    openAIResponsesSearch(
+      async () =>
+        stream([
+          {
+            type: "response.failed",
+            response: { error: { message: "quota" } },
+          },
+        ]),
+      openai,
+      {},
+      "q",
+    ),
+    /The OpenAI search failed\. quota/,
   );
 });

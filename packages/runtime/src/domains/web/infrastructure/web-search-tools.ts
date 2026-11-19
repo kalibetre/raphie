@@ -1,4 +1,3 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
 import type { Models } from "@earendil-works/pi-ai/models";
 import {
   defineExtension,
@@ -11,103 +10,17 @@ import {
   MAX_SEARCH_URLS,
   searchPrompt,
   searchResultText,
-  uniqueSources,
-  type WebSearchAnswer,
-  type WebSource,
 } from "../domain/search.ts";
+import {
+  type Fetch,
+  openAIResponsesSearch,
+  openRouterSearch,
+  webSearchRoute,
+} from "./search-providers.ts";
 
-type Fetch = (input: string, init: RequestInit) => Promise<Response>;
+export { webSearchRoute } from "./search-providers.ts";
 
-const SEARCH_TIMEOUT_MS = 90_000;
-
-const SYSTEM = [
-  "You answer one web search request for another assistant.",
-  "Search the web, then reply with the facts that answer the request: names, numbers, dates and quotes where they matter.",
-  "Say plainly when sources disagree or when you found nothing reliable. Keep it under 600 words and cite sources as markdown links.",
-].join(" ");
-
-/** Which way this model's connection can search the web, if any. */
-export function webSearchRoute(model: Model<Api>, baseUrl: string | undefined) {
-  try {
-    if (new URL(baseUrl ?? model.baseUrl ?? "").hostname === "openrouter.ai")
-      return "openrouter" as const;
-  } catch {
-    // A model without a usable base URL cannot search.
-  }
-  return undefined;
-}
-
-/**
- * OpenRouter's web plugin: the model's own provider searches where it can
- * (OpenAI, Anthropic, Google and others), and Exa for the rest. Citations
- * come back as url_citation annotations.
- */
-async function openRouterSearch(
-  fetcher: Fetch,
-  model: Model<Api>,
-  auth: {
-    apiKey?: string;
-    headers?: Record<string, string | null>;
-    baseUrl?: string;
-  },
-  prompt: string,
-): Promise<WebSearchAnswer> {
-  // OpenRouter's Anthropic-format models carry ".../api" (their client adds
-  // "/v1/messages"), the rest ".../api/v1". Chat completions serves both.
-  const base = (auth.baseUrl ?? model.baseUrl)
-    .replace(/\/+$/, "")
-    .replace(/\/v1$/, "");
-  const response = await fetcher(`${base}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      // A null header value means "send no such header".
-      ...Object.fromEntries(
-        Object.entries(auth.headers ?? {}).filter(
-          (entry): entry is [string, string] => entry[1] !== null,
-        ),
-      ),
-      ...(auth.apiKey ? { authorization: `Bearer ${auth.apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model: model.id,
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: prompt },
-      ],
-      plugins: [{ id: "web", max_results: 5 }],
-      max_tokens: 1500,
-    }),
-    signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
-  });
-  if (!response.ok)
-    throw new Error(
-      `The search request failed with HTTP ${response.status}. ${(await response.text()).slice(0, 300)}`,
-    );
-  const body = (await response.json()) as {
-    choices?: {
-      message?: {
-        content?: string | null;
-        annotations?: {
-          type?: string;
-          url_citation?: { url?: string; title?: string };
-        }[];
-      };
-    }[];
-  };
-  const message = body.choices?.[0]?.message;
-  const sources: WebSource[] = (message?.annotations ?? []).flatMap((note) =>
-    note.type === "url_citation" && note.url_citation?.url
-      ? [
-          {
-            url: note.url_citation.url,
-            title: note.url_citation.title || note.url_citation.url,
-          },
-        ]
-      : [],
-  );
-  return { answer: message?.content ?? "", sources: uniqueSources(sources) };
-}
+const search = { openrouter: openRouterSearch, openai: openAIResponsesSearch };
 
 /**
  * Web search through the bot's own model connection, so it needs no other
@@ -156,9 +69,9 @@ export function createWebSearchTools(
           const route = webSearchRoute(model, auth.baseUrl);
           if (!route)
             throw new Error(
-              `Web search needs an OpenRouter connection; this conversation's model (${model.name}) uses another provider. Tell the owner, and do not make up results.`,
+              `Web search needs an OpenRouter, OpenAI or ChatGPT connection; this conversation's model (${model.name}) uses another provider. Tell the owner, and do not make up results.`,
             );
-          const result = await openRouterSearch(
+          const result = await search[route](
             fetcher,
             model,
             auth,
