@@ -160,7 +160,7 @@ Secrets are write-only: keys and tokens are accepted but never returned.
 | POST      | `/jobs/:id`                                               | `{ action: "enable" \| "disable" \| "remove" \| "run" }`                    |
 | GET       | `/jobs/runs`, `/jobs/notifications`                       | Run history, 20 per page; unread completions                                |
 | POST      | `/jobs/runs/:id/read`                                     | Acknowledge a run                                                           |
-| GET       | `/handoffs`                                               | `{ targets, items }`: bots it may hand tasks to; its handoffs, newest first |
+| GET       | `/handoffs`                                               | `{ targets, items }`: allowed bots; handoffs, newest first, with `waiting`  |
 | PUT       | `/handoffs/targets`                                       | `{ bots: [botId] }`; an empty list turns handoffs off                       |
 | POST      | `/handoffs/:id/cancel`                                    | Stop the other bot's work; `409` once the task has finished                 |
 

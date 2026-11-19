@@ -4,6 +4,8 @@ export type HandoffOutcome = "completed" | "failed" | "cancelled";
 /** One brief sent in a handoff: the first, or a follow-up. */
 export type HandoffRequest = {
   brief: string;
+  /** The turn in the sending session that sent this brief. */
+  fromTurnId: string | null;
   sentAt: number;
   /** The turn it started in the other bot, once delivered. */
   turnId: string | null;
@@ -25,4 +27,6 @@ export type Handoff = {
   status: "working" | HandoffOutcome;
   createdAt: number;
   requests: HandoffRequest[];
+  /** The other bot is waiting for the owner's approval. Read live, never stored. */
+  waiting?: boolean;
 };

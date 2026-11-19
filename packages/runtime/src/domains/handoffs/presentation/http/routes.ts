@@ -13,7 +13,7 @@ export function handoffRoutes(handoffs: BotHandoffs) {
     .get("/", async (c) =>
       c.json({
         targets: handoffs.targets(),
-        items: (await handoffs.read()).reverse(),
+        items: await handoffs.list(),
       }),
     )
     .put(

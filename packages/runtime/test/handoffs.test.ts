@@ -258,6 +258,8 @@ test("a bot hands a task to another bot and the result returns to the session it
     expect(handoff.fromSessionId).toBe(owner.sessionId);
     expect(handoff.requests[0].turnId).toBe(received.turns[0].id);
     expect(handoff.requests[0].outcome).toBe("completed");
+    // The card sits under the owner's turn that handed the task off.
+    expect(handoff.requests[0].fromTurnId).toBe(owner.id);
     expect(received.turns[0].handoff).toMatchObject({
       kind: "task",
       bot: { id: "default" },
@@ -392,6 +394,7 @@ test("the owner sets who a bot may hand off to, sees its handoffs and cancels on
     };
     expect(items).toHaveLength(1);
     expect(items[0].status).toBe("working");
+    expect(items[0]).toMatchObject({ waiting: false });
     // The task's session is marked in the other bot, and the owner cannot
     // write into it.
     const sessions = (await (
@@ -426,6 +429,27 @@ test("the owner sets who a bot may hand off to, sees its handoffs and cancels on
   } finally {
     held.resolve();
     await server.close();
+    await app.close();
+  }
+});
+
+test("a handoff shows when the other bot is waiting for the owner's approval", async () => {
+  const app = await twoBots({
+    tool: { name: "workspace_exec", args: { command: "echo checked" } },
+  });
+  try {
+    await app.handoffs.setTargets([app.research.id]);
+    await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to check something.",
+    });
+    await until(async () => (await app.handoffs.list())[0]?.waiting === true);
+    // The approval is the owner's, in the other bot's task session.
+    const recipient = app.host.runtime(app.research.id).gateway;
+    const [approval] = (await recipient.toolApprovals.state()).approvals;
+    expect(approval.status).toBe("pending");
+    expect(approval.tool).toBe("workspace_exec");
+  } finally {
     await app.close();
   }
 });

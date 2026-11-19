@@ -25,12 +25,13 @@ const Receipt = defineDoc<{ text: string | null }>({
 async function mutate(
   api: ToolExecutionApi,
   ctx: Context,
-  change: (tx: Tx, sessionId: string) => Promise<string>,
+  change: (tx: Tx, sessionId: string, turnId: string | null) => Promise<string>,
 ) {
   const text = await api.commit(async (tx) => {
     const receipt = await tx.doc(Receipt, api.taskId);
     if (receipt.text !== null) return receipt.text;
-    const session = (await tx.doc(Chats)).conversations.find(
+    const chats = await tx.doc(Chats);
+    const session = chats.conversations.find(
       (item) => item.id === api.conversationId,
     );
     if (!session) throw new Error("This conversation is unavailable.");
@@ -39,7 +40,14 @@ async function mutate(
       throw new Error(
         `This task came from ${session.handedOffBy.name}. Do it yourself rather than handing it on.`,
       );
-    receipt.text = await change(tx, session.sessionId);
+    // The tool runs inside the session's one unqueued pending turn.
+    const turn = chats.turns.findLast(
+      (item) =>
+        item.conversationId === session.id &&
+        item.status === "pending" &&
+        !item.queueMode,
+    );
+    receipt.text = await change(tx, session.sessionId, turn?.id ?? null);
     return receipt.text;
   }, ctx);
   return { output: [{ type: "text" as const, text }] };
@@ -99,7 +107,7 @@ export function createHandoffTools(handoffs: BotHandoffs) {
           // Task IDs repeat across bots, and the other bot keys its turns by
           // this ID. A replay of this call reuses the same one.
           const id = await api.memo("handoff-id", crypto.randomUUID(), ctx);
-          return mutate(api, ctx, async (tx, sessionId) =>
+          return mutate(api, ctx, async (tx, sessionId, turnId) =>
             view(
               await handoffs.create(
                 tx,
@@ -109,7 +117,7 @@ export function createHandoffTools(handoffs: BotHandoffs) {
                   title: args.title.trim(),
                   brief: args.brief.trim(),
                 },
-                sessionId,
+                { sessionId, turnId },
               ),
             ),
           );
@@ -130,14 +138,12 @@ export function createHandoffTools(handoffs: BotHandoffs) {
         }),
         replay: "safe",
         execute: (args, api, ctx) =>
-          mutate(api, ctx, async (tx, sessionId) =>
+          mutate(api, ctx, async (tx, sessionId, turnId) =>
             view(
-              await handoffs.followUp(
-                tx,
-                args.id,
-                args.brief.trim(),
+              await handoffs.followUp(tx, args.id, args.brief.trim(), {
                 sessionId,
-              ),
+                turnId,
+              }),
             ),
           ),
       }),

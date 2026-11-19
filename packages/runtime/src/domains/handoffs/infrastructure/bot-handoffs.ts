@@ -39,6 +39,8 @@ export type HandoffPeers = {
       handoff: TurnHandoff;
     },
   ): Promise<{ id: string; sessionId: string }>;
+  /** Whether the task's session in the other bot waits for an owner approval. */
+  waiting(botId: string, sessionId: string): Promise<boolean>;
   /** Stops the task's session in the other bot. */
   stop(botId: string, sessionId: string): Promise<void>;
   /** Undefined when the bot or the turn no longer exists. Throws while it is unavailable. */
@@ -155,6 +157,25 @@ export class BotHandoffs {
     );
   }
 
+  /** Handoffs with whether each open one waits for the owner, newest first. */
+  async list(): Promise<Handoff[]> {
+    const items = (await this.read()).reverse();
+    await Promise.all(
+      items.map(async (item) => {
+        if (item.status !== "working" || !item.toSessionId) return;
+        try {
+          item.waiting = await this.options.peers.waiting(
+            item.to.id,
+            item.toSessionId,
+          );
+        } catch {
+          // An unavailable bot is not known to be waiting.
+        }
+      }),
+    );
+    return items;
+  }
+
   /**
    * Stops the other bot's work on a handoff. The waiting request then sees the
    * stopped turn and reports the cancellation back like any other result.
@@ -176,7 +197,7 @@ export class BotHandoffs {
   async create(
     tx: Tx,
     input: { id: string; to: string; title: string; brief: string },
-    fromSessionId: string,
+    from: { sessionId: string; turnId: string | null },
   ) {
     const doc = await tx.doc(Handoffs);
     const existing = doc.items.find((item) => item.id === input.id);
@@ -196,13 +217,14 @@ export class BotHandoffs {
       id: input.id,
       to,
       title: input.title,
-      fromSessionId,
+      fromSessionId: from.sessionId,
       toSessionId: null,
       status: "working",
       createdAt: Date.now(),
       requests: [
         {
           brief: input.brief,
+          fromTurnId: from.turnId,
           sentAt: Date.now(),
           turnId: null,
           finishedAt: null,
@@ -216,10 +238,15 @@ export class BotHandoffs {
   }
 
   /** Sends a further brief into a handoff's session, in the caller's transaction. */
-  async followUp(tx: Tx, id: string, brief: string, fromSessionId: string) {
+  async followUp(
+    tx: Tx,
+    id: string,
+    brief: string,
+    from: { sessionId: string; turnId: string | null },
+  ) {
     const doc = await tx.doc(Handoffs);
     const handoff = doc.items.find((item) => item.id === id);
-    if (!handoff || handoff.fromSessionId !== fromSessionId)
+    if (!handoff || handoff.fromSessionId !== from.sessionId)
       throw new InputError("No task with that ID was handed off from here.");
     if (!handoff.toSessionId)
       throw new InputError(
@@ -231,6 +258,7 @@ export class BotHandoffs {
       );
     handoff.requests.push({
       brief,
+      fromTurnId: from.turnId,
       sentAt: Date.now(),
       turnId: null,
       finishedAt: null,
