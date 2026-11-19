@@ -95,13 +95,16 @@ export function createHandoffTools(handoffs: BotHandoffs) {
           brief,
         }),
         replay: "safe",
-        execute: (args, api, ctx) =>
-          mutate(api, ctx, async (tx, sessionId) =>
+        execute: async (args, api, ctx) => {
+          // Task IDs repeat across bots, and the other bot keys its turns by
+          // this ID. A replay of this call reuses the same one.
+          const id = await api.memo("handoff-id", crypto.randomUUID(), ctx);
+          return mutate(api, ctx, async (tx, sessionId) =>
             view(
               await handoffs.create(
                 tx,
                 {
-                  id: String(api.taskId),
+                  id,
                   to: args.bot,
                   title: args.title.trim(),
                   brief: args.brief.trim(),
@@ -109,7 +112,8 @@ export function createHandoffTools(handoffs: BotHandoffs) {
                 sessionId,
               ),
             ),
-          ),
+          );
+        },
       }),
       defineTool({
         name: "handoff_follow_up",

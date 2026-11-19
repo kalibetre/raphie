@@ -246,6 +246,10 @@ test("a bot hands a task to another bot and the result returns to the session it
     );
 
     const [handoff] = await handoffs.read();
+    // Unique across bots: the other bot keys its turns by this ID.
+    expect(handoff.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
     const recipient = host.runtime(research.id).gateway;
     const received = await recipient.chats.state();
     expect(received.conversations).toHaveLength(1);
