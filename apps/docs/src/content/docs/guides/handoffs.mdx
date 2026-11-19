@@ -11,6 +11,8 @@ Any bot can hand a task to any other of your bots. The other bot works on the ta
 
 There is nothing to turn on: once you have a second bot, every bot is offered the handoff tools.
 
+A bot is told each other bot's description and connected MCP tools, so it hands work only to a bot that can do it. A bot without a connection for the web cannot search it; when no bot can do a task, the bot says what is missing instead of handing it off. Give each bot a description that says what it is for.
+
 ## Hand off a task
 
 Ask the bot in a conversation, for example "Ask @Research to compare Hindsight and Honcho for our memory layer". Type `@` in the composer to pick from your other bots; naming a bot with `@` tells the bot you are talking to that this one should do the task. Plain words work too ("ask Research to…"). The bot writes a brief with everything the other bot needs, since the other bot cannot see your conversation, and hands it off with its `handoff_create` tool. The tool returns at once, so you can keep talking while the task runs.

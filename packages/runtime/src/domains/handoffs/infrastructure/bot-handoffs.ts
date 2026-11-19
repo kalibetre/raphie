@@ -26,11 +26,20 @@ import {
 
 export type Peer = { id: string; name: string };
 
+/** What a bot can do, so another can judge whether to hand it a task. */
+export type PeerProfile = Peer & {
+  description: string;
+  /** Its connected integrations, by name; none means no outside access. */
+  connections: string[];
+};
+
 /** The other bots, as the host that holds every bot exposes them to one. */
 export type HandoffPeers = {
   self(): Peer;
   /** Every other live bot. */
   others(): Peer[];
+  /** Every other live bot, with what it can do. */
+  profiles(): PeerProfile[];
   /** Another live bot by ID or name; never this bot. */
   find(idOrName: string): Peer | undefined;
   submit(
@@ -133,6 +142,11 @@ export class BotHandoffs {
   /** The bots this bot may hand tasks to: every other bot, as they are now. */
   targets(): Peer[] {
     return this.options.peers.others();
+  }
+
+  /** The other bots with their descriptions and connections, for the model. */
+  directory(): PeerProfile[] {
+    return this.options.peers.profiles();
   }
 
   self() {

@@ -164,7 +164,10 @@ test("a returning result joins the owner's session, may be a full report, and is
   }
 });
 
-async function twoBots(research: Parameters<typeof chatModel>[0] = {}) {
+async function twoBots(
+  research: Parameters<typeof chatModel>[0] = {},
+  chief: Parameters<typeof chatModel>[0] = {},
+) {
   const directory = await mkdtemp(join(tmpdir(), "raphie-handoff-bots-"));
   const keyStore = memoryCredentialKeyStore();
   const openHost = async (options: Parameters<typeof chatModel>[0]) => {
@@ -185,6 +188,7 @@ async function twoBots(research: Parameters<typeof chatModel>[0] = {}) {
                     brief: "Compare Hindsight and Honcho.",
                   },
                 },
+                ...chief,
               }
             : options,
         ),
@@ -501,6 +505,27 @@ test("tasks one conversation hands the same bot continue in one session on its s
       first!.id,
       "second",
     ]);
+  } finally {
+    await app.close();
+  }
+});
+
+test("a bot is told what each other bot can do, including that none can reach the web", async () => {
+  const prompts: string[] = [];
+  const app = await twoBots({}, { systemPrompt: (text) => prompts.push(text) });
+  try {
+    await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(async () => prompts.length > 0);
+    const prompt = JSON.parse(prompts[0]!) as unknown;
+    const text = JSON.stringify(prompt);
+    expect(text).toContain("- Research: Study sources carefully.");
+    expect(text).toContain(
+      "Connections: none, so it cannot reach the web or any outside service",
+    );
+    expect(text).toContain("tell the owner what is missing");
   } finally {
     await app.close();
   }

@@ -273,6 +273,23 @@ export class BotHost implements BotProfiles {
           .list()
           .filter((profile) => profile.id !== botId)
           .map((profile) => ({ id: profile.id, name: profile.name })),
+      profiles: () =>
+        this.profiles
+          .list()
+          .filter((profile) => profile.id !== botId)
+          .map((profile) => ({
+            id: profile.id,
+            name: profile.name,
+            description: profile.description,
+            connections:
+              this.runtimes
+                .get(profile.id)
+                ?.mcp?.read()
+                .filter(
+                  (connection) => connection.enabled && connection.connected,
+                )
+                .map((connection) => connection.name) ?? [],
+          })),
       find: (key) => {
         const profile = other(key);
         return profile && { id: profile.id, name: profile.name };
