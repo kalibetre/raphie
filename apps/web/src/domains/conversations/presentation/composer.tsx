@@ -1,4 +1,4 @@
-import type { ModelSelection } from "@raphie/contracts";
+import type { Handoff, ModelSelection } from "@raphie/contracts";
 import { useEffect, useRef, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -13,6 +13,7 @@ import { useRuntimeSettings } from "../../settings/infrastructure/use-runtime-se
 import { ComposerActions } from "./composer-actions";
 import { AttachmentChips, ComposerAttachments } from "./composer-attachments";
 import { ContextRing } from "./context-ring";
+import { HandoffDelegates } from "./handoffs/handoff-delegates";
 import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
 import { useComposerAttachments } from "./use-composer-attachments";
@@ -28,6 +29,7 @@ export function Composer({
   disabled,
   busy,
   enabledPlugins,
+  handoffs = [],
   onSend,
   onStop,
   onChooseModel,
@@ -43,6 +45,8 @@ export function Composer({
   disabled: boolean;
   busy: boolean;
   enabledPlugins: string[];
+  /** This bot's handoffs; the ones this session started show in the toolbar. */
+  handoffs?: readonly Handoff[];
   onStop: () => Promise<void>;
   onSend: (
     text: string,
@@ -242,6 +246,7 @@ export function Composer({
               onDraftMode={(mode) => setPermission({ key, mode })}
             />
           }
+          <HandoffDelegates sessionId={conversationId} handoffs={handoffs} />
           <span className="composer-toolbar-spacer" />
           <ComposerPlugins
             enabled={enabledPlugins}

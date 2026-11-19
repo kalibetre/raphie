@@ -1,0 +1,405 @@
+@layer components {
+  /* A task one bot handed another: cards in the sending conversation, the
+     brief in the receiving one, and the bots at work in the composer. */
+  .handoff-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .handoff-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    min-width: 0;
+  }
+  .handoff-card-head .bot-avatar {
+    width: 20px;
+    height: 20px;
+  }
+  .handoff-card-label {
+    flex: none;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .handoff-card-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .handoff-card-head .handoff-status {
+    margin-left: auto;
+  }
+  .handoff-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+    color: var(--muted-foreground);
+    background: var(--muted);
+  }
+  .handoff-status[data-status="working"] {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .handoff-status[data-status="waiting"] {
+    color: var(--attention);
+    background: var(--attention-soft);
+  }
+  .handoff-status[data-status="failed"] {
+    color: var(--error);
+  }
+  .handoff-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .handoff-brief {
+    margin: 0 14px;
+    padding: 6px 12px;
+    border-left: 2px solid var(--border);
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .handoff-waiting {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 14px 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--attention-soft);
+    color: var(--attention);
+    font-size: 12.5px;
+  }
+  .handoff-waiting button {
+    margin-left: auto;
+  }
+  .handoff-card-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 14px;
+  }
+  .handoff-card-time {
+    font-size: 12px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .handoff-card-error {
+    font-size: 12px;
+    color: var(--error);
+  }
+  .handoff-card-spacer {
+    flex: 1;
+  }
+  .handoff-list {
+    margin: 0 14px 12px;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .handoff-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 6px 6px 10px;
+    min-width: 0;
+  }
+  .handoff-list li + li {
+    border-top: 1px solid var(--border);
+  }
+  .handoff-list .bot-avatar {
+    width: 20px;
+    height: 20px;
+  }
+  .handoff-list-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+  }
+  .handoff-list-text strong {
+    font-weight: 600;
+  }
+  .handoff-list-text span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .handoff-result .handoff-card-head svg {
+    flex: none;
+    color: var(--muted-foreground);
+  }
+  .handoff-report {
+    border-top: 1px solid var(--border);
+    background: var(--background);
+    padding: 14px 16px;
+    font-size: 13.5px;
+  }
+
+  /* The receiving session: the brief stands in for an owner message. */
+  .handoff-brief-turn {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .handoff-marker {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .handoff-marker strong {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .handoff-marker time {
+    color: var(--faint);
+  }
+  .handoff-brief-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    padding: 10px 14px;
+  }
+  .handoff-brief-from {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .handoff-brief-from .bot-avatar {
+    width: 18px;
+    height: 18px;
+  }
+  .handoff-brief-from strong {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  /* In the composer: a bot at work turns in an orbit of its own colour. */
+  .handoff-delegates {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    height: 30px;
+    padding: 0 10px 0 3px;
+    border: 0;
+    border-radius: 15px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    white-space: nowrap;
+    transition:
+      background-color 120ms,
+      color 120ms;
+  }
+  .handoff-delegates:hover,
+  .handoff-delegates[data-popup-open] {
+    background: var(--hover);
+    color: var(--foreground);
+  }
+  .handoff-delegates[data-waiting] {
+    background: var(--attention-soft);
+    color: var(--attention);
+  }
+  .handoff-orbits {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+  }
+  .handoff-orbit {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--card);
+  }
+  .handoff-orbit + .handoff-orbit {
+    margin-left: -9px;
+  }
+  .handoff-delegates:hover .handoff-orbit,
+  .handoff-delegates[data-popup-open] .handoff-orbit {
+    background: var(--hover);
+  }
+  .handoff-delegates[data-waiting] .handoff-orbit {
+    background: var(--attention-soft);
+  }
+  .handoff-orbit .bot-avatar {
+    width: 18px;
+    height: 18px;
+  }
+  .handoff-orbit::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--tone) 30%, transparent);
+    border-top-color: color-mix(in srgb, var(--tone) 75%, var(--foreground));
+    animation: handoff-orbit 2.4s linear infinite;
+    animation-delay: var(--orbit-delay, 0s);
+  }
+  .handoff-orbit[data-waiting]::before {
+    border-color: var(--attention);
+    animation: none;
+  }
+  @keyframes handoff-orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .handoff-orbit::before {
+      animation: none;
+    }
+  }
+  .handoff-orbit-more {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    margin-left: -6px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .handoff-delegates-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  @media (max-width: 767px) {
+    .handoff-delegates-label {
+      display: none;
+    }
+    .handoff-delegates {
+      padding-right: 3px;
+    }
+  }
+  .handoff-popover {
+    width: min(380px, calc(100vw - 24px));
+    padding: 6px;
+  }
+  .handoff-popover-title {
+    margin: 4px 8px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+  .handoff-popover-group h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 8px 2px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .handoff-popover-group h3 .bot-avatar {
+    width: 18px;
+    height: 18px;
+  }
+  .handoff-popover-group h3 small {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--faint);
+  }
+  .handoff-popover-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px 4px 34px;
+  }
+  .handoff-popover-task {
+    flex: 1;
+    min-width: 0;
+    padding: 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    text-align: left;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .handoff-popover-task:hover {
+    background: var(--hover);
+  }
+
+  /* In place of the composer in a handed-off session. */
+  .handoff-lock {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: var(--composer-shadow);
+    font-size: 13px;
+    color: var(--muted-foreground);
+  }
+  .handoff-lock .bot-avatar {
+    width: 24px;
+    height: 24px;
+  }
+  .handoff-lock p {
+    flex: 1 1 240px;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .handoff-lock strong {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .handoff-lock-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .conversation-handoff {
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+  }
+}

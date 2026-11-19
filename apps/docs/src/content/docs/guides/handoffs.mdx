@@ -5,6 +5,8 @@ sidebar:
   order: 7
 ---
 
+import { Steps } from "@astrojs/starlight/components";
+
 import { Sequence } from "~/components/diagram";
 
 A bot can hand a task to another of your bots, if you allow it. The other bot works on the task in its own session, and its result comes back to the conversation the task came from as a new turn. The first bot then tells you what came back.
@@ -13,14 +15,14 @@ Handoffs are off until you choose, for each bot, which other bots it may hand ta
 
 ## Allow a bot to hand off tasks
 
-There is no settings screen for handoffs yet. Set a bot's list with the [HTTP API](/architecture/http-api/#tools-channels-and-schedules), naming the other bots by ID:
+<Steps>
 
-```sh
-PUT /api/bots/<bot-id>/handoffs/targets
-{ "bots": ["<other-bot-id>"] }
-```
+1. Open **Settings**, choose the bot that will hand off tasks, then **Handoffs**.
+2. Under **Can hand tasks to**, turn on each bot it may hand tasks to. The change saves at once.
 
-For the default bot, use `/api/handoffs/targets`. An empty list turns handoffs off. A bot whose list is empty is not offered the handoff tools at all.
+</Steps>
+
+A bot with no bots turned on is not offered the handoff tools at all. The same list is available over the [HTTP API](/architecture/http-api/#tools-channels-and-schedules) as `PUT /handoffs/targets`.
 
 ## Hand off a task
 
@@ -38,25 +40,36 @@ Ask the bot in a conversation, for example "Ask Research to compare Hindsight an
   ]}
 />
 
+## Follow a task
+
+You follow a task from the conversation you started it in:
+
+| Where                   | What you see                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Under the bot's reply   | A card with the other bot, the brief and its status: Working, Needs your approval, Done, Failed or Cancelled. **Cancel** stops it; **View in** opens its session.      |
+| In the composer         | One avatar per bot still working for this conversation, circled while it works and amber when it waits for you. Select it to list the tasks, review or jump to a card. |
+| When the result is back | A card in place of your message, with **Show report** for the other bot's reply as written, followed by the first bot's own summary.                                   |
+| In the other bot's list | The task's session, marked **From** the bot that sent it.                                                                                                              |
+
+When the other bot needs an approval, **Review** opens its session, where you approve or reject as usual.
+
 To add instructions to a task already handed off, ask the first bot again. It sends them with `handoff_follow_up` into the same session, so the other bot keeps its context, and the new result returns the same way.
 
 ## What the other bot may do
 
 A handed-off task does not carry your authority. The other bot receives the brief as a request from a named bot, not as your words.
 
-| Rule                     | Effect                                                                                                    |
-| ------------------------ | --------------------------------------------------------------------------------------------------------- |
-| Its own session          | Titled with the task and marked with the bot that sent it. You can open it and read the bot's work.       |
-| Directed by the sender   | Only the sending bot sends messages into it. A message you send there is refused with `409`.              |
-| Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, as for any other turn. |
-| No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                         |
-| Separate memory and data | Each bot keeps its own memory, workspace and credentials. Only the brief and the reply cross.             |
+| Rule                     | Effect                                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Its own session          | Titled with the task and marked with the bot that sent it. You can open it and read the bot's work.            |
+| Directed by the sender   | Only the sending bot sends messages into it. Its composer is replaced by a note saying so, with **Stop task**. |
+| Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, as for any other turn.      |
+| No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                              |
+| Separate memory and data | Each bot keeps its own memory, workspace and credentials. Only the brief and the reply cross.                  |
 
 ## Cancel a task
 
-Stop the task's session in the other bot, or call `POST /api/bots/<bot-id>/handoffs/<handoff-id>/cancel` on the bot that handed it off. Either way, the other bot stops, and the first bot is told the task was cancelled and says so in its conversation.
-
-`GET /api/bots/<bot-id>/handoffs` lists a bot's handoffs, newest first, with each request's status.
+Choose **Cancel** on the task's card, or **Stop task** in the other bot's session. Either way, the other bot stops, and the first bot is told the task was cancelled and says so in its conversation.
 
 ## Results, failures and restarts
 

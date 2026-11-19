@@ -5,6 +5,7 @@ import {
   Brain,
   Clock,
   FolderOpen,
+  Forward,
   History,
   KeyRound,
   Library,
@@ -57,6 +58,13 @@ export const sections = [
     icon: Clock,
     lede: (bot: string) =>
       `Give ${bot} reminders and recurring work, with results saved in a conversation.`,
+  },
+  {
+    id: "handoffs",
+    label: "Handoffs",
+    icon: Forward,
+    lede: (bot: string) =>
+      `Choose which other bots ${bot} may hand tasks to. Results come back to the conversation they came from.`,
   },
   {
     id: "bot",

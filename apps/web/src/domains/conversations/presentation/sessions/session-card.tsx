@@ -50,6 +50,11 @@ export function SessionCard({
       <span className="conversation-preview" title={messages}>
         {sessionPreview(session.preview)}
       </span>
+      {session.handedOffBy && (
+        <span className="conversation-handoff">
+          From {session.handedOffBy.name}
+        </span>
+      )}
       {status && (
         <span className={`conversation-status ${status.tone}`}>
           {status.label}

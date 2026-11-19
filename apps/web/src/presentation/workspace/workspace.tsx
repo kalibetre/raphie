@@ -9,8 +9,10 @@ import {
   contextTokens,
   runUsage,
 } from "../../domains/conversations/application/run-projection";
+import { useHandoffs } from "../../domains/conversations/infrastructure/use-handoffs";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
+import { HandoffLock } from "../../domains/conversations/presentation/handoffs/handoff-delegates";
 import { ConversationList } from "../../domains/conversations/presentation/sessions/conversation-list";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
@@ -120,6 +122,8 @@ export function Workspace({
     navigationMax,
   } = useWorkspaceLayout();
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
+  const handoffQuery = useHandoffs();
+  const handoffs = handoffQuery.data?.items;
   const [enabled, setEnabled] = useEnabledPlugins();
   const mobile = useIsMobile();
   // A phone opens on the bot's conversation list; this is a new conversation
@@ -535,6 +539,10 @@ export function Workspace({
                         state={data}
                         conversationId={conversation.id}
                         onRead={markRead}
+                        handoffs={handoffs}
+                        onCancelHandoff={(id) =>
+                          handoffQuery.cancel.mutateAsync(id)
+                        }
                       />
                     ) : (
                       <Welcome
@@ -545,59 +553,74 @@ export function Workspace({
                         }
                       />
                     )}
-                    <Composer
-                      key={`composer-${conversationId ?? "new"}`}
-                      conversationId={conversationId}
-                      suggestion={suggestion}
-                      model={conversation?.model ?? data?.model ?? null}
-                      needsModel={!data?.model}
-                      usage={usage?.tokens ? usage : undefined}
-                      contextUsed={contextUsed}
-                      disabled={
-                        !connected ||
-                        !data?.model ||
-                        (!!conversationId && !conversation)
-                      }
-                      busy={busy}
-                      enabledPlugins={enabled}
-                      onStop={async () => {
-                        if (!conversationId) return;
-                        await api(`/api/sessions/${conversationId}/control`, {
-                          action: "stop",
-                        });
-                        await refetch();
-                      }}
-                      onSend={send}
-                      onChooseModel={async (model) => {
-                        if (!conversationId) return;
-                        await api(
-                          `/api/sessions/${conversationId}/model`,
-                          model,
-                        );
-                        await refetch();
-                      }}
-                      onModelSettings={() => {
-                        if (conversation)
-                          void navigate({
-                            to: "/sessions/$sessionId",
-                            params: { sessionId: conversation.sessionId },
-                            search: {
-                              bot,
-                              view: "settings",
-                              section: "models",
-                            },
+                    {conversation?.handedOffBy ? (
+                      <HandoffLock
+                        from={conversation.handedOffBy}
+                        busy={busy}
+                        onStop={async () => {
+                          await api(
+                            `/api/sessions/${conversation.id}/control`,
+                            { action: "stop" },
+                          );
+                          await refetch();
+                        }}
+                      />
+                    ) : (
+                      <Composer
+                        key={`composer-${conversationId ?? "new"}`}
+                        handoffs={handoffs}
+                        conversationId={conversationId}
+                        suggestion={suggestion}
+                        model={conversation?.model ?? data?.model ?? null}
+                        needsModel={!data?.model}
+                        usage={usage?.tokens ? usage : undefined}
+                        contextUsed={contextUsed}
+                        disabled={
+                          !connected ||
+                          !data?.model ||
+                          (!!conversationId && !conversation)
+                        }
+                        busy={busy}
+                        enabledPlugins={enabled}
+                        onStop={async () => {
+                          if (!conversationId) return;
+                          await api(`/api/sessions/${conversationId}/control`, {
+                            action: "stop",
                           });
-                        else
-                          void navigate({
-                            to: "/",
-                            search: {
-                              bot,
-                              view: "settings",
-                              section: "models",
-                            },
-                          });
-                      }}
-                    />
+                          await refetch();
+                        }}
+                        onSend={send}
+                        onChooseModel={async (model) => {
+                          if (!conversationId) return;
+                          await api(
+                            `/api/sessions/${conversationId}/model`,
+                            model,
+                          );
+                          await refetch();
+                        }}
+                        onModelSettings={() => {
+                          if (conversation)
+                            void navigate({
+                              to: "/sessions/$sessionId",
+                              params: { sessionId: conversation.sessionId },
+                              search: {
+                                bot,
+                                view: "settings",
+                                section: "models",
+                              },
+                            });
+                          else
+                            void navigate({
+                              to: "/",
+                              search: {
+                                bot,
+                                view: "settings",
+                                section: "models",
+                              },
+                            });
+                        }}
+                      />
+                    )}
                   </div>
                 </>
               )}

@@ -3,6 +3,7 @@
 @import "./base.css";
 @import "./sessions.css";
 @import "./chat.css";
+@import "./handoffs.css";
 @import "./activity.css";
 @import "./settings/forms.css";
 @import "./settings/providers.css";
