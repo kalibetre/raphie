@@ -403,3 +403,44 @@
     color: var(--muted-foreground);
   }
 }
+
+@layer components {
+  /* @ in the composer: the other bots, above the draft. */
+  .composer:has(> .mention-menu) {
+    position: relative;
+  }
+  .mention-menu {
+    position: absolute;
+    left: 12px;
+    bottom: calc(100% + 8px);
+    z-index: 3;
+    min-width: 220px;
+    max-width: calc(100% - 24px);
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+  }
+  .mention-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .mention-option .bot-avatar {
+    width: 20px;
+    height: 20px;
+  }
+  .mention-option[aria-selected="true"] {
+    background: var(--hover);
+  }
+  .mention-hint {
+    margin: 4px 8px 2px;
+    font-size: 11px;
+    color: var(--faint);
+  }
+}

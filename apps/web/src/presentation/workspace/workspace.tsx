@@ -580,6 +580,7 @@ export function Workspace({
                       <Composer
                         key={`composer-${conversationId ?? "new"}`}
                         handoffs={handoffs}
+                        mentionables={handoffQuery.data?.targets}
                         conversationId={conversationId}
                         suggestion={suggestion}
                         model={conversation?.model ?? data?.model ?? null}

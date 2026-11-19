@@ -14,6 +14,7 @@ import { ComposerActions } from "./composer-actions";
 import { AttachmentChips, ComposerAttachments } from "./composer-attachments";
 import { ContextRing } from "./context-ring";
 import { HandoffDelegates } from "./handoffs/handoff-delegates";
+import { useMentions } from "./handoffs/mention-menu";
 import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
 import { useComposerAttachments } from "./use-composer-attachments";
@@ -30,6 +31,7 @@ export function Composer({
   busy,
   enabledPlugins,
   handoffs = [],
+  mentionables = [],
   onSend,
   onStop,
   onChooseModel,
@@ -47,6 +49,8 @@ export function Composer({
   enabledPlugins: string[];
   /** This bot's handoffs; the ones this session started show in the toolbar. */
   handoffs?: readonly Handoff[];
+  /** The other bots, offered when the owner types @ to hand a task to one. */
+  mentionables?: readonly { id: string; name: string }[];
   onStop: () => Promise<void>;
   onSend: (
     text: string,
@@ -108,6 +112,12 @@ export function Composer({
   }, [suggestion, key]);
 
   const { wrapper, input, revealCaret } = useComposerLayout(draft);
+  const mentions = useMentions({
+    draft,
+    bots: mentionables,
+    input,
+    update,
+  });
 
   function update(text: string) {
     setDraft(text);
@@ -188,6 +198,7 @@ export function Composer({
           void send();
         }}
       >
+        {mentions.menu}
         <AttachmentChips
           files={files}
           workspace={workspace}
@@ -205,11 +216,27 @@ export function Composer({
             placeholder="Message Raphie…"
             value={draft}
             maxLength={4000}
-            onSelect={revealCaret}
-            onKeyUp={revealCaret}
-            onPointerUp={revealCaret}
-            onChange={(event) => update(event.target.value)}
+            {...mentions.inputProps}
+            onSelect={() => {
+              revealCaret();
+              mentions.track();
+            }}
+            onKeyUp={(event) => {
+              revealCaret();
+              // Arrow keys move through an open menu, not the caret.
+              if (!mentions.inputProps["aria-expanded"]) mentions.track();
+              else if (!/^Arrow(Up|Down)$/.test(event.key)) mentions.track();
+            }}
+            onPointerUp={() => {
+              revealCaret();
+              mentions.track();
+            }}
+            onChange={(event) => {
+              update(event.target.value);
+              mentions.track();
+            }}
             onKeyDown={(event) => {
+              if (mentions.onKeyDown(event)) return;
               if (
                 event.key === "Enter" &&
                 !event.shiftKey &&

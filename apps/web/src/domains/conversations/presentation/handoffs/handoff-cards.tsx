@@ -27,8 +27,9 @@ const time = (at: number) =>
     minute: "2-digit",
   });
 
-const minutes = (ms: number) => {
-  const m = Math.max(1, Math.round(ms / 60_000));
+const duration = (ms: number) => {
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))} s`;
+  const m = Math.round(ms / 60_000);
   return m < 60 ? `${m} min` : `${Math.round(m / 6) / 10} h`;
 };
 
@@ -144,7 +145,7 @@ function RequestCard({
         <span className="handoff-card-time">
           Sent {time(request.sentAt)}
           {request.finishedAt
-            ? ` · took ${minutes(request.finishedAt - request.sentAt)}`
+            ? ` · took ${duration(request.finishedAt - request.sentAt)}`
             : ""}
         </span>
         {error && (
