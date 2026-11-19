@@ -6,7 +6,9 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
+import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { chatModel } from "./chat-model.ts";
+import { memoryCredentialKeyStore } from "./credential-store.ts";
 
 async function until(check: () => Promise<boolean>) {
   for (let n = 0; n < 300; n++) {
@@ -156,5 +158,184 @@ test("a returning result joins the owner's session, may be a full report, and is
   } finally {
     await gateway.close();
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+async function twoBots(research: Parameters<typeof chatModel>[0] = {}) {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-handoff-bots-"));
+  const keyStore = memoryCredentialKeyStore();
+  const openHost = async (options: Parameters<typeof chatModel>[0]) => {
+    const open = async (botId: string, path: string) => {
+      const gateway = await Gateway.open({
+        directory: path,
+        botId,
+        deferResume: true,
+        // The default bot hands off; the other bot is configured by the test.
+        ...chatModel(
+          botId === "default"
+            ? {
+                tool: {
+                  name: "handoff_create",
+                  args: {
+                    bot: "research",
+                    title: "Compare memory backends",
+                    brief: "Compare Hindsight and Honcho.",
+                  },
+                },
+              }
+            : options,
+        ),
+      });
+      return { gateway, close: () => gateway.close() };
+    };
+    return BotHost.open(directory, await open("default", directory), open, {
+      keyStore,
+      handoffPollMs: 20,
+    });
+  };
+  let host = await openHost(research);
+  const bot = await host.create({
+    name: "Research",
+    description: "Study sources carefully.",
+    soul: "Cite sources.",
+  });
+  const app = {
+    host,
+    research: bot,
+    chief: host.runtime("default"),
+    handoffs: host.runtime("default").handoffs!,
+    actor: host.runtime("default").gateway.actors.establish("web"),
+    /** Restarts every bot, the other one now with `options`. */
+    restart: async (options: Parameters<typeof chatModel>[0] = {}) => {
+      await host.close();
+      host = await openHost(options);
+      Object.assign(app, {
+        host,
+        chief: host.runtime("default"),
+        handoffs: host.runtime("default").handoffs!,
+        actor: host.runtime("default").gateway.actors.establish("web"),
+      });
+    },
+    close: async () => {
+      await host.close();
+      await rm(directory, { recursive: true, force: true });
+    },
+  };
+  return app;
+}
+
+test("a bot hands a task to another bot and the result returns to the session it came from", async () => {
+  const { host, research, chief, handoffs, actor, close } = await twoBots();
+  try {
+    await assert.rejects(handoffs.setTargets(["missing"]), /Choose bots/);
+    await assert.rejects(handoffs.setTargets(["default"]), /Choose bots/);
+    expect(await handoffs.setTargets([research.id])).toEqual([
+      { id: research.id, name: "Research" },
+    ]);
+
+    const owner = await chief.gateway.sessions.submit(actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(async () => (await handoffs.read())[0]?.status === "completed");
+    await until(async () =>
+      (await chief.gateway.chats.state()).turns.every(
+        (t) => t.status !== "pending",
+      ),
+    );
+
+    const [handoff] = await handoffs.read();
+    const recipient = host.runtime(research.id).gateway;
+    const received = await recipient.chats.state();
+    expect(received.conversations).toHaveLength(1);
+    expect(received.conversations[0].handedOffBy?.id).toBe("default");
+    expect(handoff.toSessionId).toBe(received.conversations[0].sessionId);
+    expect(handoff.fromSessionId).toBe(owner.sessionId);
+    expect(handoff.requests[0].turnId).toBe(received.turns[0].id);
+    expect(handoff.requests[0].outcome).toBe("completed");
+    expect(received.turns[0].handoff).toMatchObject({
+      kind: "task",
+      bot: { id: "default" },
+      title: "Compare memory backends",
+    });
+    expect(received.turns[0].answer).toContain("Compare Hindsight and Honcho.");
+
+    // The result came back into the owner's session, as one marked turn.
+    const sent = await chief.gateway.chats.state();
+    expect(sent.conversations).toHaveLength(1);
+    const results = sent.turns.filter((t) => t.handoff?.kind === "result");
+    expect(results).toHaveLength(1);
+    expect(results[0].handoff).toEqual({
+      id: handoff.id,
+      kind: "result",
+      bot: { id: research.id, name: "Research" },
+      title: "Compare memory backends",
+      outcome: "completed",
+    });
+    expect(results[0].text).toBe(received.turns[0].answer!);
+  } finally {
+    await close();
+  }
+});
+
+test("a task the other bot cannot finish comes back as a failure, said plainly", async () => {
+  const { research, chief, handoffs, actor, close } = await twoBots({
+    fail: true,
+  });
+  try {
+    await handoffs.setTargets([research.id]);
+    await chief.gateway.sessions.submit(actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(async () => (await handoffs.read())[0]?.status === "failed");
+    await until(async () =>
+      (await chief.gateway.chats.state()).turns.some(
+        (t) => t.handoff?.kind === "result",
+      ),
+    );
+    const result = (await chief.gateway.chats.state()).turns.find(
+      (t) => t.handoff?.kind === "result",
+    )!;
+    expect(result.handoff?.outcome).toBe("failed");
+    expect(result.text).toStartWith("Research could not finish the task.");
+  } finally {
+    await close();
+  }
+});
+
+test("a handoff waiting on the other bot survives a restart of both", async () => {
+  const held = Promise.withResolvers<void>();
+  const app = await twoBots({ pause: held.promise });
+  try {
+    await app.handoffs.setTargets([app.research.id]);
+    await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(
+      async () => !!(await app.handoffs.read())[0]?.requests[0]?.turnId,
+    );
+    await app.restart();
+    // Targets and the open handoff are durable; the other bot's turn recovers.
+    expect(app.handoffs.targets()).toEqual([
+      { id: app.research.id, name: "Research" },
+    ]);
+    await until(
+      async () => (await app.handoffs.read())[0]?.status === "completed",
+    );
+    await until(async () =>
+      (await app.chief.gateway.chats.state()).turns.some(
+        (t) => t.handoff?.kind === "result",
+      ),
+    );
+    expect(
+      (await app.chief.gateway.chats.state()).turns.filter(
+        (t) => t.handoff?.kind === "result",
+      ),
+    ).toHaveLength(1);
+  } finally {
+    held.resolve();
+    await app.close();
   }
 });

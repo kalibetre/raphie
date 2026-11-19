@@ -17,6 +17,12 @@ export type {
 } from "./bots/channels.ts";
 
 export type {
+  Handoff,
+  HandoffOutcome,
+  HandoffRequest,
+} from "./bots/handoffs.ts";
+
+export type {
   BotProfile,
   SaveBotProfile,
   UpdateBotProfile,

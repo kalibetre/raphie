@@ -16,6 +16,11 @@ import {
   TelegramConnections,
   type TelegramOptions,
 } from "../domains/channels/infrastructure/bot-telegram.ts";
+import {
+  BotHandoffs,
+  type HandoffPeers,
+} from "../domains/handoffs/infrastructure/bot-handoffs.ts";
+import { createHandoffTools } from "../domains/handoffs/infrastructure/handoff-tools.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { BotJobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
@@ -39,6 +44,7 @@ export type BotRuntime = {
   memory?: MemoryService;
   mcp?: BotMcp;
   jobs?: BotJobs;
+  handoffs?: BotHandoffs;
   channels?: BotChannels;
   telegram?: BotTelegram;
   close(): Promise<void>;
@@ -52,6 +58,8 @@ type Automation = {
   telegram?: TelegramOptions;
   /** The process's tracer. Each bot opened here records under its own id. */
   telemetry?: Telemetry;
+  /** How often a handoff checks the other bot's turn; tests shorten it. */
+  handoffPollMs?: number;
 };
 
 /** One process, separate storage and authorities. Only bootstrap holds every bot. */
@@ -239,6 +247,37 @@ export class BotHost implements BotProfiles {
     this.profiles.finishDeletion(id);
   }
 
+  /** One bot's view of the others: the only path between their separate stores. */
+  private peers(botId: string): HandoffPeers {
+    const other = (key: string) => {
+      const name = key.trim().toLowerCase();
+      return this.profiles
+        .list()
+        .find(
+          (profile) =>
+            profile.id !== botId &&
+            (profile.id === key || profile.name.toLowerCase() === name),
+        );
+    };
+    return {
+      self: () => ({ id: botId, name: this.profiles.read(botId).name }),
+      find: (key) => {
+        const profile = other(key);
+        return profile && { id: profile.id, name: profile.name };
+      },
+      submit: (id, input) => {
+        if (!other(id)) throw new InputError("Bot not found.", 404);
+        const { gateway } = this.runtime(id);
+        return gateway.sessions.submitHandoff(
+          gateway.actors.establish("web"),
+          input,
+        );
+      },
+      turn: async (id, turnId) =>
+        other(id) ? this.runtime(id).gateway.chats.turn(turnId) : undefined,
+    };
+  }
+
   private async attach(
     runtime: BotRuntime,
     directory: string,
@@ -288,10 +327,21 @@ export class BotHost implements BotProfiles {
       });
       const connections = mcp;
       gateway.install(createScheduleTools(jobs));
+      const handoffs = await BotHandoffs.open({
+        root: gateway.root,
+        harness: gateway.harness,
+        install: (extension) => gateway.install(extension),
+        uninstall: (extension) => gateway.uninstall(extension),
+        tools: createHandoffTools,
+        peers: this.peers(gateway.options.botId ?? "default"),
+        report: (input) => gateway.sessions.submitHandoff(actor, input),
+        pollMs: this.automation.handoffPollMs,
+      });
       return {
         ...runtime,
         mcp,
         jobs,
+        handoffs,
         channels,
         telegram,
         close: async () => {

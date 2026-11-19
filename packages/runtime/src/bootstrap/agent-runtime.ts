@@ -95,6 +95,10 @@ export class Gateway {
     this.registry.install(extension);
   }
 
+  uninstall(extension: Extension) {
+    this.registry.uninstall(extension);
+  }
+
   private registry!: ReturnType<typeof createRegistry>;
   private managedMcp: ReturnType<typeof createMcpTools>[] = [];
 

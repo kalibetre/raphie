@@ -322,6 +322,21 @@ export class ChatService implements ConversationCommands {
     return state;
   }
 
+  /** One turn's progress, for another bot waiting on a task it handed off. */
+  async turn(id: string) {
+    const turn = (await this.app.harness.snapshot(Chats, context))?.turns.find(
+      (item) => item.id === id,
+    );
+    return turn
+      ? {
+          status: turn.status,
+          answer: turn.answer,
+          ...(turn.cancelled ? { cancelled: true } : {}),
+          ...(turn.failure ? { failure: { ...turn.failure } } : {}),
+        }
+      : undefined;
+  }
+
   async control(
     sessionId: string,
     action: "stop" | "steer" | "queue",
