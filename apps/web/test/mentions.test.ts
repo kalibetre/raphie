@@ -4,6 +4,7 @@ import {
   insertMention,
   mentionMatches,
   mentionQuery,
+  splitMentions,
 } from "../src/domains/conversations/application/mentions";
 
 const bots = [
@@ -43,4 +44,27 @@ test("choosing a bot completes its name and moves the caret past it", () => {
     text: "@Writer ",
     caret: 8,
   });
+});
+
+test("a message splits around the bots it names, and only those", () => {
+  const research = bots[0]!;
+  const chief = bots[1]!;
+  expect(
+    splitMentions("aks @Research why it is checking memory?", bots),
+  ).toEqual([
+    "aks ",
+    { bot: research, text: "@Research" },
+    " why it is checking memory?",
+  ]);
+  expect(splitMentions("@chief of staff, and @Research.", bots)).toEqual([
+    { bot: chief, text: "@chief of staff" },
+    ", and ",
+    { bot: research, text: "@Research" },
+    ".",
+  ]);
+  // Unknown names, emails and partial words stay text.
+  expect(splitMentions("mail me@Research or @Nobody", bots)).toEqual([
+    "mail me@Research or @Nobody",
+  ]);
+  expect(splitMentions("@Researchers", bots)).toEqual(["@Researchers"]);
 });

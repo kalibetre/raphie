@@ -444,3 +444,29 @@
     color: var(--faint);
   }
 }
+
+@layer components {
+  /* "@Name" in a message: the bot it names, in its colour. */
+  .mention-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 1px;
+    padding: 0 7px 0 2px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--tone) 26%, transparent);
+    color: var(--foreground);
+    font: inherit;
+    font-weight: 550;
+    line-height: 1.5;
+    vertical-align: baseline;
+  }
+  .mention-chip:hover {
+    background: color-mix(in srgb, var(--tone) 40%, transparent);
+  }
+  .mention-chip .bot-avatar {
+    width: 16px;
+    height: 16px;
+  }
+}

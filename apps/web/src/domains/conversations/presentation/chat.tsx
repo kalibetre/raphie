@@ -30,7 +30,9 @@ import {
   HandoffCards,
   HandoffResult,
 } from "./handoffs/handoff-cards";
-import { markdownComponents } from "./markdown-components";
+import { mentionComponents, remarkMentions } from "./handoffs/mention-markdown";
+
+const noBots: readonly { id: string; name: string }[] = [];
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, {
@@ -44,6 +46,7 @@ export function Chat({
   onRead,
   handoffs: handoffItems = [],
   onCancelHandoff,
+  bots = noBots,
 }: {
   state: Snapshot;
   conversationId: string;
@@ -52,7 +55,16 @@ export function Chat({
       back into the live chat adapter, which republishes on cache events. */
   handoffs?: readonly Handoff[];
   onCancelHandoff?: (id: string) => Promise<unknown>;
+  /** Every bot, so "@Name" shows as the bot it names. */
+  bots?: readonly { id: string; name: string }[];
 }) {
+  const mentions = useMemo(
+    () => ({
+      components: mentionComponents(bots),
+      plugins: [remarkGfm, remarkMentions(bots)],
+    }),
+    [bots],
+  );
   const query = useQueryClient();
   const { workspace } = useBackend();
   const [controlError, setControlError] = useState<string>();
@@ -180,8 +192,8 @@ export function Chat({
               >
                 <div className="markdown">
                   <ReactMarkdown
-                    components={markdownComponents}
-                    remarkPlugins={[remarkGfm]}
+                    components={mentions.components}
+                    remarkPlugins={mentions.plugins}
                   >
                     {text}
                   </ReactMarkdown>
@@ -255,8 +267,8 @@ export function Chat({
             )}
             <div className="markdown">
               <ReactMarkdown
-                components={markdownComponents}
-                remarkPlugins={[remarkGfm]}
+                components={mentions.components}
+                remarkPlugins={mentions.plugins}
               >
                 {text}
               </ReactMarkdown>

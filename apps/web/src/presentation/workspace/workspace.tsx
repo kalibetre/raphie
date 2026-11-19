@@ -551,6 +551,7 @@ export function Workspace({
                         conversationId={conversation.id}
                         onRead={markRead}
                         handoffs={handoffs}
+                        bots={notificationBots}
                         onCancelHandoff={(id) =>
                           handoffQuery.cancel.mutateAsync(id)
                         }

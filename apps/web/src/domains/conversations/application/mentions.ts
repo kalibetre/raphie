@@ -38,3 +38,36 @@ export function insertMention(
     caret: mention.start + `@${name}`.length + 1,
   };
 }
+
+export type MentionPart = string | { bot: Bot; text: string };
+
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Splits text around "@Name" for known bots, so a message can show each as
+ * the bot it names. Longer names win ("@Chief of staff" over "@Chief"), and
+ * an @ inside a word, like an email address, is left alone.
+ */
+export function splitMentions(text: string, bots: readonly Bot[]) {
+  if (!bots.length || !text.includes("@")) return [text];
+  const names = [...bots]
+    .sort((a, b) => b.name.length - a.name.length)
+    .map((bot) => escape(bot.name));
+  const pattern = new RegExp(
+    `(^|[\\s(])@(${names.join("|")})(?=$|[\\s.,!?;:)'"])`,
+    "gi",
+  );
+  const parts: MentionPart[] = [];
+  let last = 0;
+  for (const match of text.matchAll(pattern)) {
+    const at = match.index + match[1]!.length;
+    const bot = bots.find(
+      (item) => item.name.toLowerCase() === match[2]!.toLowerCase(),
+    )!;
+    if (at > last) parts.push(text.slice(last, at));
+    parts.push({ bot, text: `@${match[2]}` });
+    last = at + 1 + match[2]!.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length ? parts : [text];
+}
