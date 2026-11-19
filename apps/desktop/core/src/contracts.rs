@@ -407,6 +407,10 @@ pub struct SessionSummary {
     /// epoch); `None` while it is active.
     #[serde(default)]
     pub archived_at: Option<i64>,
+    /// The bot that handed this session's task off; only it sends messages
+    /// here.
+    #[serde(default)]
+    pub handed_off_by: Option<BotRef>,
 }
 
 /// `Turn["status"]` in `packages/contracts/src/index.ts`.
@@ -424,6 +428,106 @@ pub enum TurnStatus {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct ScheduledBy {
     pub name: String,
+}
+
+/// Another bot, as a handoff names it.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct BotRef {
+    pub id: String,
+    pub name: String,
+}
+
+/// `TurnHandoff` in `packages/contracts/src/index.ts`.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnHandoff {
+    pub id: String,
+    pub kind: HandoffKind,
+    /// The other bot: the one that handed the task off, or the one that did it.
+    pub bot: BotRef,
+    pub title: String,
+    /// How the task ended. Only on results.
+    #[serde(default)]
+    pub outcome: Option<HandoffOutcome>,
+}
+
+/// `TurnHandoff["kind"]`.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum HandoffKind {
+    Task,
+    Result,
+    #[serde(other)]
+    Unknown,
+}
+
+/// `HandoffOutcome` in `packages/contracts/src/bots/handoffs.ts`.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum HandoffOutcome {
+    Completed,
+    Failed,
+    Cancelled,
+    #[serde(other)]
+    Unknown,
+}
+
+/// `Handoff["status"]`: working while any request is unfinished.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum HandoffStatus {
+    Working,
+    Completed,
+    Failed,
+    Cancelled,
+    #[serde(other)]
+    Unknown,
+}
+
+/// `HandoffRequest` in `packages/contracts/src/bots/handoffs.ts`: one brief.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoffRequest {
+    pub brief: String,
+    /// The turn in the sending session that sent this brief.
+    #[serde(default)]
+    pub from_turn_id: Option<String>,
+    pub sent_at: i64,
+    #[serde(default)]
+    pub turn_id: Option<String>,
+    #[serde(default)]
+    pub finished_at: Option<i64>,
+    #[serde(default)]
+    pub outcome: Option<HandoffOutcome>,
+}
+
+/// `Handoff` in `packages/contracts/src/bots/handoffs.ts`: a task this bot
+/// handed to another bot.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Handoff {
+    pub id: String,
+    pub to: BotRef,
+    pub title: String,
+    pub from_session_id: String,
+    #[serde(default)]
+    pub to_session_id: Option<String>,
+    pub status: HandoffStatus,
+    pub created_at: i64,
+    pub requests: Vec<HandoffRequest>,
+    /// The other bot waits for the owner's approval.
+    #[serde(default)]
+    pub waiting: bool,
+}
+
+/// `GET /api/handoffs`: the bots this one can hand tasks to, and its
+/// handoffs, newest first.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+pub struct HandoffList {
+    #[serde(default)]
+    pub targets: Vec<BotRef>,
+    #[serde(default)]
+    pub items: Vec<Handoff>,
 }
 
 /// `Attachment` in `packages/contracts/src/index.ts`: a file uploaded to a
@@ -467,6 +571,10 @@ pub struct SessionTurn {
     pub failure: Option<TurnFailure>,
     #[serde(default)]
     pub scheduled: Option<ScheduledBy>,
+    /// Set when another bot, not the owner, started the turn: a task it
+    /// handed off, or the result of one coming back.
+    #[serde(default)]
+    pub handoff: Option<TurnHandoff>,
     /// Set while the message waits behind the run in progress.
     #[serde(default)]
     pub queue_mode: Option<QueueMode>,

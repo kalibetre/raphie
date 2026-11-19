@@ -53,6 +53,7 @@ import {
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
+import { createWebSearchTools } from "../domains/web/infrastructure/web-search-tools.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
 import { createDocumentTools } from "../domains/workspaces/infrastructure/document-tools.ts";
 import { RuntimeWorkspace } from "../domains/workspaces/infrastructure/runtime-workspace.ts";
@@ -85,6 +86,8 @@ type Options = {
   mcp?: McpTools;
   mcpError?: boolean;
   telemetry?: Telemetry;
+  /** Web requests the web_search tool makes; tests answer them without a network. */
+  webFetch?: (input: string, init: RequestInit) => Promise<Response>;
 };
 
 export class Gateway {
@@ -93,6 +96,10 @@ export class Gateway {
 
   install(extension: Extension) {
     this.registry.install(extension);
+  }
+
+  uninstall(extension: Extension) {
+    this.registry.uninstall(extension);
   }
 
   private registry!: ReturnType<typeof createRegistry>;
@@ -218,6 +225,7 @@ export class Gateway {
             : null;
         }),
       );
+    registry.install(createWebSearchTools(() => app.models, options.webFetch));
     if (options.mcp) {
       registry.install(createMcpTools(app, options.mcp));
       app.mcpConnections = [options.mcp];

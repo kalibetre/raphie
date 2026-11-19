@@ -391,6 +391,11 @@ export class ToolApprovalService {
         (c) => c.sessionId === sessionId,
       );
       if (!conversation) throw new InputError("Session not found.", 404);
+      if (mode === "full-access" && conversation.handedOffBy)
+        throw new InputError(
+          "Tasks from other bots always ask before acting. Full access is unavailable here.",
+          409,
+        );
       const state = await tx.doc(ToolApprovals);
       if (mode !== undefined) {
         state.commandModes = {

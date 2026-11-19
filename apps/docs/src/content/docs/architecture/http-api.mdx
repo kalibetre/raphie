@@ -147,19 +147,21 @@ Secrets are write-only: keys and tokens are accepted but never returned.
 
 ### Tools, channels and schedules
 
-| Method    | Path                                                      | Purpose                                                                     |
-| --------- | --------------------------------------------------------- | --------------------------------------------------------------------------- |
-| GET, POST | `/mcp`                                                    | List MCP connections; add an HTTP or stdio connection (201)                 |
-| POST      | `/mcp/:id`                                                | `{ action: "enable" \| "disable" \| "remove" \| "import" }`                 |
-| GET       | `/channels`                                               | Discord and Telegram settings for the bot                                   |
-| POST      | `/channels/discord`, `/channels/discord/remove`           | Save or remove the Discord connection                                       |
-| POST      | `/channels/telegram`, `/channels/telegram/remove`         | Save or remove the Telegram connection                                      |
-| POST      | `/channels/telegram/pairing`, `/channels/telegram/unpair` | Create a pairing code; unpair a user                                        |
-| GET, POST | `/channels/home`                                          | Read destinations; select one with `{ id }`, or `{ id: null }` for web only |
-| GET, POST | `/jobs`                                                   | List schedules; add `{ name, prompt, everyMinutes, firstRunAt }` (201)      |
-| POST      | `/jobs/:id`                                               | `{ action: "enable" \| "disable" \| "remove" \| "run" }`                    |
-| GET       | `/jobs/runs`, `/jobs/notifications`                       | Run history, 20 per page; unread completions                                |
-| POST      | `/jobs/runs/:id/read`                                     | Acknowledge a run                                                           |
+| Method    | Path                                                      | Purpose                                                                      |
+| --------- | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| GET, POST | `/mcp`                                                    | List MCP connections; add an HTTP or stdio connection (201)                  |
+| POST      | `/mcp/:id`                                                | `{ action: "enable" \| "disable" \| "remove" \| "import" }`                  |
+| GET       | `/channels`                                               | Discord and Telegram settings for the bot                                    |
+| POST      | `/channels/discord`, `/channels/discord/remove`           | Save or remove the Discord connection                                        |
+| POST      | `/channels/telegram`, `/channels/telegram/remove`         | Save or remove the Telegram connection                                       |
+| POST      | `/channels/telegram/pairing`, `/channels/telegram/unpair` | Create a pairing code; unpair a user                                         |
+| GET, POST | `/channels/home`                                          | Read destinations; select one with `{ id }`, or `{ id: null }` for web only  |
+| GET, POST | `/jobs`                                                   | List schedules; add `{ name, prompt, everyMinutes, firstRunAt }` (201)       |
+| POST      | `/jobs/:id`                                               | `{ action: "enable" \| "disable" \| "remove" \| "run" }`                     |
+| GET       | `/jobs/runs`, `/jobs/notifications`                       | Run history, 20 per page; unread completions                                 |
+| POST      | `/jobs/runs/:id/read`                                     | Acknowledge a run                                                            |
+| GET       | `/handoffs`                                               | `{ targets, items }`: the other bots; handoffs, newest first, with `waiting` |
+| POST      | `/handoffs/:id/cancel`                                    | Stop the other bot's work; `409` once the task has finished                  |
 
 ### Inspection
 

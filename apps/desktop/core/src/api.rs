@@ -26,11 +26,11 @@ use crate::contracts::{
     Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile,
     ChannelHomeSettings, ChannelSettings, ControlAction, ControlBody, Decision, DecisionBody,
     DecisionResult, DefaultModelBody, DeviceCodeResponse, DeviceTokenResponse, EditConnectionBody,
-    ErrorBody, McpActionBody, McpConnection, McpList, MemoryPage, MemoryRecall, MemoryStatus, Page,
-    RecallBody, Receipt, ReviseMemoryBody, RuntimeSettings, SandboxInfo, SandboxSettings,
-    SaveDiscordBody, SaveMcpBody, SaveMemoryBody, SaveSandboxBody, SaveTelegramBody, Scope,
-    SelectHomeBody, SessionObservation, SessionSummary, SessionTurn, SubmitMessage,
-    TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
+    ErrorBody, HandoffList, McpActionBody, McpConnection, McpList, MemoryPage, MemoryRecall,
+    MemoryStatus, Page, RecallBody, Receipt, ReviseMemoryBody, RuntimeSettings, SandboxInfo,
+    SandboxSettings, SaveDiscordBody, SaveMcpBody, SaveMemoryBody, SaveSandboxBody,
+    SaveTelegramBody, Scope, SelectHomeBody, SessionObservation, SessionSummary, SessionTurn,
+    SubmitMessage, TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
 };
 use crate::contracts::{ActivityEvent, TelemetryBody, TraceDiagnostics};
 use crate::contracts::{AnswerSignInBody, ProviderSignIn, StartSignInBody};
@@ -522,6 +522,22 @@ impl ApiClient {
             .post_json(&bot_path(bot_id, &path), &JobActionBody { action })
             .await?;
         Ok(list.items)
+    }
+
+    /// The bots this one can hand tasks to, and the tasks it handed off,
+    /// newest first.
+    pub async fn handoffs(&self, bot_id: &str) -> Result<HandoffList, ApiError> {
+        self.get_json(&bot_path(bot_id, "/api/handoffs")).await
+    }
+
+    /// Stops the other bot's work on a handoff. The first bot is then told
+    /// the task was cancelled, like any other result.
+    pub async fn cancel_handoff(&self, bot_id: &str, id: &str) -> Result<(), ApiError> {
+        let path = format!("/api/handoffs/{}/cancel", encode(id));
+        let _: serde_json::Value = self
+            .post_json(&bot_path(bot_id, &path), &serde_json::json!({}))
+            .await?;
+        Ok(())
     }
 
     /// One page of a bot's job runs, newest first: every job's, or only

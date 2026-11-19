@@ -42,11 +42,17 @@ export function useBotInbox(currentSessions?: SessionSummary[]) {
     backend.queries,
   );
   useEffect(() => {
-    if (currentSessions)
-      backend.queries.setQueryData<Page<SessionSummary>>(
-        ["bot-inbox", workspace.botId],
-        (page) => ({ items: currentSessions, next: page?.next ?? null }),
-      );
+    if (!currentSessions) return;
+    const inbox = ["bot-inbox", workspace.botId];
+    const page = backend.queries.getQueryData<Page<SessionSummary>>(inbox);
+    // The list is rebuilt on every render, and writing even an equal copy
+    // notifies every observer, which renders it again.
+    if (page && JSON.stringify(page.items) === JSON.stringify(currentSessions))
+      return;
+    backend.queries.setQueryData<Page<SessionSummary>>(inbox, {
+      items: currentSessions,
+      next: page?.next ?? null,
+    });
   }, [backend, workspace.botId, currentSessions]);
   useEffect(() => {
     const sync = (event: StorageEvent) => {

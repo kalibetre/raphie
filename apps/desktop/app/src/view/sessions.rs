@@ -344,6 +344,15 @@ fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, 
             font(12.0, 400.0).lh(17.0),
             t.muted_foreground,
         ));
+    // A task another bot handed off, as the web's `.conversation-handoff`.
+    if let Some(from) = &session.handed_off_by {
+        entry = entry.child(
+            text(format!("From {}", from.name))
+                .key(format!("rd-session-{}-from", session.id))
+                .font(font(11.0, 400.0).lh(16.0))
+                .color(t.muted_foreground),
+        );
+    }
     if let Some((label, color)) = status {
         entry = entry.child(text(label).font(font(11.0, 400.0).lh(16.0)).color(color));
     }

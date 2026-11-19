@@ -18,6 +18,7 @@ use rune_kit::{Loader, Markdown};
 
 use super::Look;
 use super::attachments::{Action, file_card};
+use super::handoffs;
 use super::steps::{Run, Working, code_box, tool_steps};
 use crate::format;
 use crate::icons;
@@ -113,7 +114,7 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             .is_some_and(|w| w.id == turn.id)
             .then_some(live)
             .flatten();
-        if let Some(reply) = reply(turn, streaming, &observation.activity, look) {
+        if let Some(reply) = reply(s, turn, streaming, &observation.activity, look) {
             items.push(reply);
         }
     }
@@ -140,7 +141,7 @@ fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &L
     let mut block = col()
         .w_full()
         .gap(14.0)
-        .child(owner_message(s, turn, can_save, t));
+        .child(owner_message(s, turn, can_save, look));
     if let Some(mode) = turn.queue_mode {
         block = block.child(queue_controls(turn, mode, t));
     }
@@ -184,7 +185,11 @@ fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &L
 
 /// The owner's message: a bubble on the right, or a centred marker when a
 /// scheduled job started the turn.
-fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, t: &Theme) -> El {
+fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El {
+    let t = &look.theme;
+    if let Some(handoff) = &turn.handoff {
+        return handoffs::turn(s, turn, handoff, look);
+    }
     let key = format!("rd-turn-{}", turn.id);
     if let Some(job) = &turn.scheduled {
         return row().key(key).w_full().justify_center().child(
@@ -237,14 +242,7 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, t: &Theme) -> El {
         .help(format::clock(turn.created_at));
     // A message can be files alone.
     if !turn.text.is_empty() {
-        bubble = bubble.child(
-            text(turn.text.clone())
-                .font(font(14.0, 400.0).lh(23.0))
-                .color(t.foreground)
-                .wrap()
-                .selectable(true)
-                .selection_color(t.selection()),
-        );
+        bubble = bubble.child(handoffs::message_text(s, &turn.text, look));
     }
     if !turn.attachments.is_empty() {
         let mut files = row()
@@ -335,6 +333,7 @@ fn queue_controls(turn: &SessionTurn, mode: QueueMode, t: &Theme) -> El {
 /// What Raphie answered to `turn`, if there is anything to show yet: the
 /// finished reply with its time and cost, or the text written so far.
 fn reply(
+    s: &Ui,
     turn: &SessionTurn,
     live: Option<&str>,
     activity: &[SessionActivity],
@@ -346,17 +345,20 @@ fn reply(
         (None, Some(text)) if !text.is_empty() => (text, true),
         _ => return None,
     };
-    let mut reply = col()
-        .key(format!("rd-reply-{}", turn.id))
-        .w_full()
-        .px(2.0)
-        .child(
-            Markdown::new(source)
-                .style(t.markdown(&look.kit))
-                .streaming(streaming)
-                .selectable(true)
-                .build(&look.kit),
-        );
+    let mut reply = col().key(format!("rd-reply-{}", turn.id)).w_full().px(2.0);
+    // The briefs this turn handed off, above what it said about them.
+    if let Some(cards) = handoffs::cards(s, &turn.id, look) {
+        reply = reply.child(cards.mb(10.0));
+    }
+    reply = reply.child(if streaming {
+        Markdown::new(source)
+            .style(t.markdown(&look.kit))
+            .streaming(true)
+            .selectable(true)
+            .build(&look.kit)
+    } else {
+        handoffs::markdown(s, source, look)
+    });
     if turn.status == TurnStatus::Done {
         // "08:45 PM   88 tokens · $0.0000", from the run's model calls.
         let mut meta = row().key(format!("rd-meta-{}", turn.id)).mt(6.0).gap(10.0);

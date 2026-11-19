@@ -1,4 +1,9 @@
-import type { Channel, ChannelOrigin, ModelSelection } from "@raphie/contracts";
+import type {
+  Channel,
+  ChannelOrigin,
+  ModelSelection,
+  TurnHandoff,
+} from "@raphie/contracts";
 
 export type SendMessage = {
   source: Channel;
@@ -16,6 +21,8 @@ export type SendMessage = {
   discordUserId?: string;
   /** Internal only: a due scheduled job. Never accepted from HTTP input. */
   scheduled?: { name: string };
+  /** Internal only: another bot's task or result. Never accepted from HTTP input. */
+  handoff?: TurnHandoff;
 };
 
 export interface ConversationCommands {

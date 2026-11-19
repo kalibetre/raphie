@@ -1,3 +1,4 @@
+import type { Handoff } from "@raphie/contracts";
 import { useChat } from "@tanstack/ai-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -24,7 +25,14 @@ import { chatAdapter } from "../infrastructure/chat-adapter";
 import { ActiveRun } from "./active-run";
 import { AttachmentCard } from "./attachment-card";
 import { Conversation } from "./conversation";
-import { markdownComponents } from "./markdown-components";
+import {
+  HandoffBrief,
+  HandoffCards,
+  HandoffResult,
+} from "./handoffs/handoff-cards";
+import { mentionComponents, remarkMentions } from "./handoffs/mention-markdown";
+
+const noBots: readonly { id: string; name: string }[] = [];
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, {
@@ -36,11 +44,27 @@ export function Chat({
   state,
   conversationId,
   onRead,
+  handoffs: handoffItems = [],
+  onCancelHandoff,
+  bots = noBots,
 }: {
   state: Snapshot;
   conversationId: string;
   onRead?: () => void;
+  /** This bot's handoffs. Queried by the workspace: a query here would feed
+      back into the live chat adapter, which republishes on cache events. */
+  handoffs?: readonly Handoff[];
+  onCancelHandoff?: (id: string) => Promise<unknown>;
+  /** Every bot, so "@Name" shows as the bot it names. */
+  bots?: readonly { id: string; name: string }[];
 }) {
+  const mentions = useMemo(
+    () => ({
+      components: mentionComponents(bots),
+      plugins: [remarkGfm, remarkMentions(bots)],
+    }),
+    [bots],
+  );
   const query = useQueryClient();
   const { workspace } = useBackend();
   const [controlError, setControlError] = useState<string>();
@@ -121,6 +145,33 @@ export function Chat({
         const text = message.parts
           .flatMap((p) => (p.type === "text" ? [p.content] : []))
           .join("");
+        if (message.role === "user" && turn?.handoff)
+          return (
+            <div key={message.id} className="turn-user">
+              {turn.handoff.kind === "task" ? (
+                <HandoffBrief
+                  handoff={turn.handoff}
+                  text={turn.text}
+                  at={turn.createdAt}
+                  followUp={turns.some(
+                    (other) =>
+                      other.handoff?.kind === "task" &&
+                      other.createdAt < turn.createdAt,
+                  )}
+                />
+              ) : (
+                <HandoffResult
+                  handoff={turn.handoff}
+                  text={turn.text}
+                  at={turn.createdAt}
+                  record={handoffItems.find(
+                    (item) => item.id === turn.handoff?.id,
+                  )}
+                />
+              )}
+              {turnWork(turn, steps.get(turn.id) ?? [])}
+            </div>
+          );
         if (message.role === "user" && turn?.scheduled)
           return (
             <div key={message.id} className="turn-user">
@@ -141,8 +192,8 @@ export function Chat({
               >
                 <div className="markdown">
                   <ReactMarkdown
-                    components={markdownComponents}
-                    remarkPlugins={[remarkGfm]}
+                    components={mentions.components}
+                    remarkPlugins={mentions.plugins}
                   >
                     {text}
                   </ReactMarkdown>
@@ -207,10 +258,17 @@ export function Chat({
         )?.at;
         return (
           <article key={message.id} className="message message-assistant">
+            {turn && (
+              <HandoffCards
+                turnId={turn.id}
+                handoffs={handoffItems}
+                onCancel={(id) => onCancelHandoff?.(id) ?? Promise.resolve()}
+              />
+            )}
             <div className="markdown">
               <ReactMarkdown
-                components={markdownComponents}
-                remarkPlugins={[remarkGfm]}
+                components={mentions.components}
+                remarkPlugins={mentions.plugins}
               >
                 {text}
               </ReactMarkdown>

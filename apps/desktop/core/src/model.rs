@@ -16,9 +16,9 @@ use crate::contracts::Attachment;
 use crate::contracts::ModelSelection;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
-    Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection,
-    MemoryEvidence, MemoryPage, MemoryStatus, Page, Receipt, RuntimeSettings, SandboxInfo,
-    SandboxSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
+    Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, HandoffList,
+    McpConnection, MemoryEvidence, MemoryPage, MemoryStatus, Page, Receipt, RuntimeSettings,
+    SandboxInfo, SandboxSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
     TelegramPairingCode,
 };
 use crate::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
@@ -168,6 +168,19 @@ pub enum Event {
         saved_as: String,
     },
     ExportFailed {
+        message: String,
+    },
+    /// A bot's handoffs and the bots it can hand tasks to.
+    Handoffs {
+        bot_id: String,
+        list: HandoffList,
+    },
+    /// A cancel went through, though the list could not be reloaded.
+    HandoffCancelled {
+        id: String,
+    },
+    HandoffCancelFailed {
+        id: String,
         message: String,
     },
     /// A bot's scheduled jobs.
@@ -733,6 +746,12 @@ pub struct Model {
     /// What the last export said: the file's name, or why it failed.
     pub export_saved: Option<String>,
     pub export_error: Option<String>,
+    /// Each bot's handoffs and the bots it can hand tasks to, once loaded.
+    pub handoffs: HashMap<String, HandoffList>,
+    /// The handoff being cancelled.
+    pub cancelling_handoff: Option<String>,
+    /// Why a cancel failed: the handoff, and the reason.
+    pub handoff_error: Option<(String, String)>,
     /// Each bot's scheduled jobs, once loaded.
     pub jobs: HashMap<String, Vec<ScheduledJob>>,
     /// The bot whose jobs could not be loaded, and why.
@@ -868,6 +887,9 @@ impl Default for Model {
             exporting: false,
             export_saved: None,
             export_error: None,
+            handoffs: HashMap::new(),
+            cancelling_handoff: None,
+            handoff_error: None,
             jobs: HashMap::new(),
             jobs_error: None,
             changing_job: false,
@@ -1106,6 +1128,26 @@ impl Model {
             Event::ExportFailed { message } => {
                 self.exporting = false;
                 self.export_error = Some(message);
+            }
+            Event::Handoffs { bot_id, list } => {
+                // A finished cancel shows in the list it brings.
+                if self
+                    .cancelling_handoff
+                    .as_ref()
+                    .is_some_and(|id| list.items.iter().any(|h| &h.id == id))
+                {
+                    self.cancelling_handoff = None;
+                }
+                self.handoffs.insert(bot_id, list);
+            }
+            Event::HandoffCancelled { id } => {
+                if self.cancelling_handoff.as_deref() == Some(id.as_str()) {
+                    self.cancelling_handoff = None;
+                }
+            }
+            Event::HandoffCancelFailed { id, message } => {
+                self.cancelling_handoff = None;
+                self.handoff_error = Some((id, message));
             }
             Event::Jobs { bot_id, items } => {
                 self.jobs_error = None;

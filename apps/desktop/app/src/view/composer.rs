@@ -22,6 +22,7 @@ use rune::{
 use super::Look;
 use super::attachments::{Action, file_card};
 use super::conversation::READING_WIDTH;
+use super::handoffs::{delegates, mention_menu};
 use super::model_picker::model_picker;
 use super::permissions::permissions;
 use crate::icons;
@@ -55,6 +56,8 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         .on_input_paste(|s: &mut Ui, content: &ClipboardContent, _: &mut Tx| {
             s.paste_attachment(content)
         })
+        // An open "@" menu takes its keys first: arrows, Return, Tab, Escape.
+        .on_input_key(|s: &mut Ui, key: &rune::KeyEvent, _: &mut Tx| s.mention_key(key))
         // Return sends; Shift-Return types a new line.
         .on_submit(|s: &mut Ui, _: &mut Tx| s.send());
 
@@ -175,6 +178,8 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
                 // is on its way.
                 .child(model_picker(s, !busy && !locked, look, overlays))
                 .child(permissions(s, look, overlays))
+                // The bots working for this conversation, if any.
+                .children(delegates(s, look, overlays))
                 // Takes the room that is left and puts the context pie and
                 // the buttons at its right end.
                 .child(row().grow(1.0).justify_end().child(actions)),
@@ -184,6 +189,7 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     for shadow in t.composer_shadow {
         card = card.box_shadow(shadow);
     }
+    mention_menu(s, look, overlays);
 
     let mut wrap = col()
         .w_full()

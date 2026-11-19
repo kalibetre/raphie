@@ -4872,3 +4872,125 @@ fn the_composer_toolbar_stays_one_row_in_the_smallest_window() {
         );
     }
 }
+
+#[test]
+fn a_handoff_shows_its_card_and_cancels_once() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::handoff_working, dark);
+        let text = screen_text(&rt);
+        assert!(text.contains("Asked Research"));
+        assert!(
+            text.contains("Research is on it"),
+            "the composer says who works"
+        );
+        assert!(rt.find("rd-turn-t1").is_some());
+
+        click(&mut rt, "rd-handoff-cancel-h-1");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::CancelHandoff {
+                bot_id: "default".into(),
+                id: "h-1".into(),
+            })
+        );
+        // While the cancel is on its way, a second press sends nothing.
+        click(&mut rt, "rd-handoff-cancel-h-1");
+        let cancels = rt
+            .state
+            .sent
+            .iter()
+            .filter(|c| matches!(c, Command::CancelHandoff { .. }))
+            .count();
+        assert_eq!(cancels, 1);
+    }
+}
+
+#[test]
+fn a_waiting_handoff_asks_for_review_and_opens_the_other_bot() {
+    let mut rt = render(scenes::handoff_waiting, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Research is waiting for your approval."));
+    assert!(text.contains("Research needs you"));
+    click(&mut rt, "rd-handoff-review-h-1");
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("b-research"));
+}
+
+#[test]
+fn a_result_comes_back_as_the_other_bots_report() {
+    let mut rt = render(scenes::handoff_result, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Research finished"));
+    assert!(text.contains("Hide report"));
+    click(&mut rt, "rd-report-toggle-t2");
+    assert!(!rt.state.open_reports.contains("t2"));
+    assert!(screen_text(&rt).contains("Show report"));
+}
+
+#[test]
+fn the_composer_lists_every_bot_at_work_waiting_ones_first() {
+    let rt = render(scenes::handoff_several, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Finance needs you · 3 more working"));
+    assert!(text.contains("Handed off 3 tasks"));
+    let finance = element(&rt, "rd-delegate-h-4");
+    let research = element(&rt, "rd-delegate-h-1");
+    assert!(
+        finance.rect[1] < research.rect[1],
+        "waiting bots come first"
+    );
+    assert!(rt.find("rd-delegate-review-h-4").is_some());
+    assert!(rt.find("rd-delegate-review-h-1").is_none());
+}
+
+#[test]
+fn a_handed_off_task_is_directed_by_the_bot_that_sent_it() {
+    let mut rt = render(scenes::handoff_task, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Handed off by"));
+    assert!(rt.find("rd-handoff-lock").is_some());
+    assert!(rt.find("rd-composer-card").is_none(), "no composer");
+    click(&mut rt, "rd-lock-open");
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+}
+
+#[test]
+fn typing_an_at_offers_bots_and_return_completes_the_name() {
+    let mut rt = render(scenes::mentions, false);
+    assert!(rt.find("rd-mention-b-research").is_some());
+    assert!(
+        rt.find("rd-mention-b-writer").is_none(),
+        "only names that match"
+    );
+    let enter = KeyEvent {
+        key: Key::Enter,
+        mods: Default::default(),
+    };
+    rt.update(|ui, _| {
+        assert!(ui.mention_key(&enter));
+    });
+    settle(&mut rt);
+    assert_eq!(rt.state.composer.text, "Ask @Research ");
+    assert!(rt.find("rd-mentions").is_none());
+    assert!(
+        !rt.state
+            .sent
+            .iter()
+            .any(|c| matches!(c, Command::Send { .. })),
+        "choosing a bot does not send"
+    );
+}
+
+#[test]
+fn escape_closes_the_at_menu_until_another_at() {
+    let mut rt = render(scenes::mentions, true);
+    let escape = KeyEvent {
+        key: Key::Escape,
+        mods: Default::default(),
+    };
+    rt.update(|ui, _| {
+        assert!(ui.mention_key(&escape));
+    });
+    settle(&mut rt);
+    assert!(rt.find("rd-mentions").is_none());
+    assert!(rt.state.mention_options().is_empty());
+}

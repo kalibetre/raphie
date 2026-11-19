@@ -1,0 +1,83 @@
+---
+title: Handoffs
+description: Let one bot hand a task to another bot, follow the task, and know what the other bot may do with it.
+sidebar:
+  order: 7
+---
+
+import { Sequence } from "~/components/diagram";
+
+Any bot can hand a task to any other of your bots. The other bot works on the task in its own session, and its result comes back to the conversation the task came from as a new turn. The first bot then tells you what came back.
+
+There is nothing to turn on: once you have a second bot, every bot is offered the handoff tools.
+
+A bot is told each other bot's description, whether it can [search the web](/guides/web-search/) and its connected MCP tools, so it hands work only to a bot that can do it. When no bot can do a task, the bot says what is missing instead of handing it off. Give each bot a description that says what it is for.
+
+## Hand off a task
+
+Ask the bot in a conversation, for example "Ask @Research to compare Hindsight and Honcho for our memory layer". Type `@` in the composer to pick from your other bots; naming a bot with `@` tells the bot you are talking to that this one should do the task. Plain words work too ("ask Research to…"). The bot writes a brief with everything the other bot needs, since the other bot cannot see your conversation, and hands it off with its `handoff_create` tool. The tool returns at once, so you can keep talking while the task runs.
+
+<Sequence
+  actors={["You", "Chief of staff", "Research"]}
+  steps={[
+    ["You", "Chief of staff", "Ask for the comparison"],
+    ["Chief of staff", "Research", "Brief, in a new session"],
+    ["Chief of staff", "You", "Handed off", "reply"],
+    ["Research", "Research", "Work on the task"],
+    ["Research", "Chief of staff", "Result, as a new turn", "reply"],
+    ["Chief of staff", "You", "What came back", "reply"],
+  ]}
+/>
+
+## Follow a task
+
+You follow a task from the conversation you started it in:
+
+| Where                   | What you see                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Under the bot's reply   | A card with the other bot, the brief and its status: Working, Needs your approval, Done, Failed or Cancelled. **Cancel** stops it; **View in** opens its session.      |
+| In the composer         | One avatar per bot still working for this conversation, circled while it works and amber when it waits for you. Select it to list the tasks, review or jump to a card. |
+| When the result is back | A card in place of your message, with **Show report** for the other bot's reply as written, followed by the first bot's own summary.                                   |
+| In the other bot's list | The task's session, marked **From** the bot that sent it.                                                                                                              |
+
+When the other bot needs an approval, **Review** opens its session, where you approve or reject as usual.
+
+A conversation keeps one session with each bot it hands work to. Everything handed from that conversation to the same bot, whether a follow-up on a task or a new task, continues in that session, so the other bot keeps the context of earlier tasks. Each task still gets its own card, and each result returns the same way.
+
+## What the other bot may do
+
+A handed-off task does not carry your authority. The other bot receives the brief as a request from a named bot, not as your words.
+
+| Rule                     | Effect                                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Its own session          | One per conversation that hands it work, titled with the first task and marked with the bot that sent it.      |
+| Directed by the sender   | Only the sending bot sends messages into it. Its composer is replaced by a note saying so, with **Stop task**. |
+| Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, as for any other turn.      |
+| No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                              |
+| Separate memory and data | Each bot keeps its own memory, workspace and credentials. Only the brief and the reply cross.                  |
+
+## Cancel a task
+
+Choose **Cancel** on the task's card, or **Stop task** in the other bot's session. Either way, the other bot stops, and the first bot is told the task was cancelled and says so in its conversation.
+
+## Results, failures and restarts
+
+The other bot's reply returns as written, up to 32,000 characters. A longer reply is cut, with a note that the full reply is in the other bot's session. If the other bot's turn fails, or the bot is deleted, the first bot is told the task failed and why.
+
+Handoffs are durable. A task survives a restart of either bot: the other bot's turn recovers like any other turn, and the first bot keeps waiting for it, checking every 2 seconds. Delivering a brief or a result is tried four times in all, waiting 1, 2 and 4 seconds between attempts; each attempt reuses the same event ID, so the receiving bot admits one turn.
+
+## Limits
+
+| Limit                                     | Value                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| Open tasks from one bot to another        | 3                                                                               |
+| Brief                                     | 4,000 characters                                                                |
+| Task title                                | 80 characters                                                                   |
+| Result                                    | 32,000 characters                                                               |
+| Where results appear                      | The web workspace and the desktop app; they are not sent to Telegram or Discord |
+| Tasks handed on from a handed-off session | None                                                                            |
+
+## Related
+
+- [Bots](/guides/bots/)
+- [Security model](/architecture/security/)

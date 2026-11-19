@@ -16,6 +16,11 @@ import {
   TelegramConnections,
   type TelegramOptions,
 } from "../domains/channels/infrastructure/bot-telegram.ts";
+import {
+  BotHandoffs,
+  type HandoffPeers,
+} from "../domains/handoffs/infrastructure/bot-handoffs.ts";
+import { createHandoffTools } from "../domains/handoffs/infrastructure/handoff-tools.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { RuntimeMemory } from "../domains/memory/infrastructure/runtime-memory.ts";
 import { BotJobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
@@ -24,6 +29,7 @@ import type { SettingsService } from "../domains/settings/application/ports.ts";
 import { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
 import type { CredentialKeyStore } from "../domains/settings/infrastructure/credential-cipher.ts";
 import { BackendSettings } from "../domains/settings/infrastructure/runtime-settings.ts";
+import { webSearchRoute } from "../domains/web/infrastructure/web-search-tools.ts";
 import { ContainerWorkspace } from "../domains/workspaces/infrastructure/container-workspace.ts";
 import type { McpConnection } from "../infrastructure/mcp/client.ts";
 import { InputError } from "../shared/application/input-error.ts";
@@ -39,6 +45,7 @@ export type BotRuntime = {
   memory?: MemoryService;
   mcp?: BotMcp;
   jobs?: BotJobs;
+  handoffs?: BotHandoffs;
   channels?: BotChannels;
   telegram?: BotTelegram;
   close(): Promise<void>;
@@ -52,6 +59,8 @@ type Automation = {
   telegram?: TelegramOptions;
   /** The process's tracer. Each bot opened here records under its own id. */
   telemetry?: Telemetry;
+  /** How often a handoff checks the other bot's turn; tests shorten it. */
+  handoffPollMs?: number;
 };
 
 /** One process, separate storage and authorities. Only bootstrap holds every bot. */
@@ -148,6 +157,7 @@ export class BotHost implements BotProfiles {
       this.profiles.insert(profile);
       runtime.gateway.setPersonality(() => this.profiles.read(profile.id));
       this.runtimes.set(profile.id, runtime);
+      this.refreshHandoffs();
       runtime.gateway.harness.resume();
       return profile;
     } catch (error) {
@@ -218,6 +228,7 @@ export class BotHost implements BotProfiles {
     try {
       await runtime.close();
       this.runtimes.delete(id);
+      this.refreshHandoffs();
       await this.finishDeletion(id);
     } catch {
       throw new InputError(
@@ -237,6 +248,92 @@ export class BotHost implements BotProfiles {
     await ContainerWorkspace.reapForDeletion(directory);
     await rm(directory, { recursive: true, force: true });
     this.profiles.finishDeletion(id);
+  }
+
+  /** Whether a bot's default model connection can search the web. */
+  private canSearchWeb(id: string) {
+    const gateway = this.runtimes.get(id)?.gateway;
+    const ref = gateway?.chats.model;
+    const model = ref && gateway.models.getModel(ref.provider, ref.modelId);
+    return !!model && !!webSearchRoute(model, undefined);
+  }
+
+  /** Every bot can hand tasks to every other bot, so each one's offer follows the roster. */
+  private refreshHandoffs() {
+    for (const runtime of this.runtimes.values()) runtime.handoffs?.refresh();
+  }
+
+  /** One bot's view of the others: the only path between their separate stores. */
+  private peers(botId: string): HandoffPeers {
+    const other = (key: string) => {
+      const name = key.trim().toLowerCase();
+      return this.profiles
+        .list()
+        .find(
+          (profile) =>
+            profile.id !== botId &&
+            (profile.id === key || profile.name.toLowerCase() === name),
+        );
+    };
+    return {
+      self: () => ({ id: botId, name: this.profiles.read(botId).name }),
+      others: () =>
+        this.profiles
+          .list()
+          .filter((profile) => profile.id !== botId)
+          .map((profile) => ({ id: profile.id, name: profile.name })),
+      profiles: () =>
+        this.profiles
+          .list()
+          .filter((profile) => profile.id !== botId)
+          .map((profile) => ({
+            id: profile.id,
+            name: profile.name,
+            description: profile.description,
+            webSearch: this.canSearchWeb(profile.id),
+            connections:
+              this.runtimes
+                .get(profile.id)
+                ?.mcp?.read()
+                .filter(
+                  (connection) => connection.enabled && connection.connected,
+                )
+                .map((connection) => connection.name) ?? [],
+          })),
+      find: (key) => {
+        const profile = other(key);
+        return profile && { id: profile.id, name: profile.name };
+      },
+      submit: (id, input) => {
+        if (!other(id)) throw new InputError("Bot not found.", 404);
+        const { gateway } = this.runtime(id);
+        return gateway.sessions.submitHandoff(
+          gateway.actors.establish("web"),
+          input,
+        );
+      },
+      waiting: async (id, sessionId) => {
+        if (!other(id)) return false;
+        const { gateway } = this.runtime(id);
+        const session = (await gateway.chats.state()).conversations.find(
+          (item) => item.sessionId === sessionId,
+        );
+        return (
+          !!session &&
+          (await gateway.toolApprovals.state()).approvals.some(
+            (approval) =>
+              approval.conversationId === session.id &&
+              approval.status === "pending",
+          )
+        );
+      },
+      stop: async (id, sessionId) => {
+        if (!other(id)) throw new InputError("Bot not found.", 404);
+        await this.runtime(id).gateway.chats.control(sessionId, "stop");
+      },
+      turn: async (id, turnId) =>
+        other(id) ? this.runtime(id).gateway.chats.turn(turnId) : undefined,
+    };
   }
 
   private async attach(
@@ -288,10 +385,21 @@ export class BotHost implements BotProfiles {
       });
       const connections = mcp;
       gateway.install(createScheduleTools(jobs));
+      const handoffs = BotHandoffs.open({
+        root: gateway.root,
+        harness: gateway.harness,
+        install: (extension) => gateway.install(extension),
+        uninstall: (extension) => gateway.uninstall(extension),
+        tools: createHandoffTools,
+        peers: this.peers(gateway.options.botId ?? "default"),
+        report: (input) => gateway.sessions.submitHandoff(actor, input),
+        pollMs: this.automation.handoffPollMs,
+      });
       return {
         ...runtime,
         mcp,
         jobs,
+        handoffs,
         channels,
         telegram,
         close: async () => {

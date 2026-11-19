@@ -135,6 +135,7 @@ export class PiClientQueries implements ClientQueries {
           ).length,
           readReplyCount: c.readReplyCount ?? 0,
           ...(c.archivedAt ? { archivedAt: c.archivedAt } : {}),
+          ...(c.handedOffBy ? { handedOffBy: { ...c.handedOffBy } } : {}),
           replyPreview:
             turns
               .findLast((t) => t.status === "done" && t.answer !== null)
@@ -191,6 +192,7 @@ export class PiClientQueries implements ClientQueries {
       ...(t.scheduled
         ? { scheduled: t.scheduled, scheduledDelivery: t.scheduledDelivery }
         : {}),
+      ...(t.handoff ? { handoff: t.handoff } : {}),
     }));
     return { items, next: start > 0 ? items[0]!.id : null };
   }
@@ -290,6 +292,9 @@ export class PiClientQueries implements ClientQueries {
         ).length,
         readReplyCount: session.readReplyCount ?? 0,
         ...(session.archivedAt ? { archivedAt: session.archivedAt } : {}),
+        ...(session.handedOffBy
+          ? { handedOffBy: { ...session.handedOffBy } }
+          : {}),
         replyPreview:
           chats.turns
             .findLast(
