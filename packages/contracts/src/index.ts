@@ -118,6 +118,9 @@ export type ToolApprovalView = {
   decidedVia: Channel | null;
   /** Decided in the desktop app rather than the browser. */
   decidedApp?: "desktop";
+  /** Asked in a task another bot handed off, so it cannot be approved for
+   * the session. */
+  eachCall?: true;
   execution: "waiting" | "running" | "done" | "uncertain";
 };
 

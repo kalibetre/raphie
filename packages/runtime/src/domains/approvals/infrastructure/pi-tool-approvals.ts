@@ -50,9 +50,13 @@ export const ToolApprovals = defineDoc<ApprovalState>({
 });
 
 export function supportsCommandGrant(
-  item: Pick<ToolApproval, "server" | "tool" | "connectionIdentity">,
+  item: Pick<
+    ToolApproval,
+    "server" | "tool" | "connectionIdentity" | "eachCall"
+  >,
 ) {
   return (
+    !item.eachCall &&
     item.server === "workspace" &&
     item.connectionIdentity === "raphie.workspace.command" &&
     (item.tool === "bash" || item.tool === "workspace_exec")
@@ -171,6 +175,13 @@ export class ToolApprovalService {
       // Full access approves every tool call in its conversation: workspace
       // commands and MCP tools alike. The gate checks the mode again when it
       // claims the call, so switching back to Ask stops calls not yet sent.
+      // A task from another bot never carries a session grant: its owner
+      // approves each call, whatever the other bot asks for next.
+      if (
+        chats.conversations.find((c) => c.id === api.conversationId)
+          ?.handedOffBy
+      )
+        item.eachCall = true;
       if (state.commandModes?.[String(api.conversationId)] === "full-access") {
         item.status = "approved";
         item.fullAccess = true;
@@ -317,6 +328,16 @@ export class ToolApprovalService {
       if (!item) throw new InputError("Tool approval not found.", 404);
       if (scope === "session" && !supportsCommandGrant(item))
         throw new InputError("This tool requires approval of each call.", 403);
+      if (
+        scope === "session" &&
+        (await tx.doc(Chats)).conversations.find(
+          (c) => c.id === item.conversationId,
+        )?.handedOffBy
+      )
+        throw new InputError(
+          "Tasks from other bots need approval of each call.",
+          403,
+        );
       const destination =
         state.deliveries.find((d) => d.approvalId === id)?.threadId ?? null;
       const names = channelNames(via === "telegram" ? "telegram" : "discord");

@@ -577,6 +577,19 @@ fn only_command_approvals_offer_approve_for_session() {
             scope: Scope::Session,
         })
     );
+
+    // In a task another bot handed off, each call needs its own approval.
+    let rt = render(
+        |ui| {
+            scenes::command_approval(ui);
+            let conversation = ui.model.conversation.as_mut().unwrap();
+            let observation = conversation.observation.as_mut().unwrap();
+            observation.tool_approvals[0].each_call = true;
+        },
+        false,
+    );
+    assert!(rt.find(&format!("rd-approve-session-{id}")).is_none());
+    assert!(rt.find(&format!("rd-approve-{id}")).is_some());
 }
 
 #[test]
@@ -4993,4 +5006,16 @@ fn escape_closes_the_at_menu_until_another_at() {
     settle(&mut rt);
     assert!(rt.find("rd-mentions").is_none());
     assert!(rt.state.mention_options().is_empty());
+}
+
+#[test]
+fn a_named_bot_shows_as_its_name_without_the_at() {
+    let rt = render(scenes::handoff_several, false);
+    // Each chip's label is isolated for screen readers (U+2068 … U+2069).
+    let text = screen_text(&rt).replace(['\u{2068}', '\u{2069}'], "");
+    assert!(
+        text.contains("pricing from Research, a draft from Writer"),
+        "{text}"
+    );
+    assert!(!text.contains("@Writer"));
 }

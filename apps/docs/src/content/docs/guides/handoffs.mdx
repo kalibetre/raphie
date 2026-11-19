@@ -40,6 +40,8 @@ You follow a task from the conversation you started it in:
 | When the result is back | A card in place of your message, with **Show report** for the other bot's reply as written, followed by the first bot's own summary.                                   |
 | In the other bot's list | The task's session, marked **From** the bot that sent it.                                                                                                              |
 
+If you last wrote in that conversation from Telegram or Discord, the first bot's reply about the result is sent to that chat too, headed "Research finished:" and the task title. Once you carry on in the web workspace or the desktop app, results stay there. The other bot's report itself is not sent, only the first bot's reply.
+
 When the other bot needs an approval, **Review** opens its session, where you approve or reject as usual.
 
 A conversation keeps one session with each bot it hands work to. Everything handed from that conversation to the same bot, whether a follow-up on a task or a new task, continues in that session, so the other bot keeps the context of earlier tasks. Each task still gets its own card, and each result returns the same way.
@@ -48,13 +50,13 @@ A conversation keeps one session with each bot it hands work to. Everything hand
 
 A handed-off task does not carry your authority. The other bot receives the brief as a request from a named bot, not as your words.
 
-| Rule                     | Effect                                                                                                         |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| Its own session          | One per conversation that hands it work, titled with the first task and marked with the bot that sent it.      |
-| Directed by the sender   | Only the sending bot sends messages into it. Its composer is replaced by a note saying so, with **Stop task**. |
-| Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, as for any other turn.      |
-| No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                              |
-| Separate memory and data | Each bot keeps its own memory, workspace and credentials. Only the brief and the reply cross.                  |
+| Rule                     | Effect                                                                                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Its own session          | One per conversation that hands it work, titled with the first task and marked with the bot that sent it.                                                        |
+| Directed by the sender   | Only the sending bot sends messages into it. Its composer is replaced by a note saying so, with **Stop task**.                                                   |
+| Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, and each call is approved on its own: **Approve for session** is not offered. |
+| No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                                                                                |
+| Separate memory and data | Each bot keeps its own memory, workspace and credentials. Only the brief and the reply cross.                                                                    |
 
 ## Cancel a task
 
@@ -68,14 +70,14 @@ Handoffs are durable. A task survives a restart of either bot: the other bot's t
 
 ## Limits
 
-| Limit                                     | Value                                                                           |
-| ----------------------------------------- | ------------------------------------------------------------------------------- |
-| Open tasks from one bot to another        | 3                                                                               |
-| Brief                                     | 4,000 characters                                                                |
-| Task title                                | 80 characters                                                                   |
-| Result                                    | 32,000 characters                                                               |
-| Where results appear                      | The web workspace and the desktop app; they are not sent to Telegram or Discord |
-| Tasks handed on from a handed-off session | None                                                                            |
+| Limit                                     | Value                                                                               |
+| ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| Open tasks from one bot to another        | 3                                                                                   |
+| Brief                                     | 4,000 characters                                                                    |
+| Task title                                | 80 characters                                                                       |
+| Result                                    | 32,000 characters                                                                   |
+| Where results appear                      | The web workspace and the desktop app, and the chat you last wrote from (see below) |
+| Tasks handed on from a handed-off session | None                                                                                |
 
 ## Related
 

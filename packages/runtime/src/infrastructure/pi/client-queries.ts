@@ -214,6 +214,7 @@ export class PiClientQueries implements ClientQueries {
         status: a.status,
         decidedVia: a.decidedVia,
         ...(a.decidedApp ? { decidedApp: a.decidedApp } : {}),
+        ...(a.eachCall ? { eachCall: true as const } : {}),
         execution: a.execution,
       }));
   }

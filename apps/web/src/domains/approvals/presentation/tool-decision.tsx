@@ -46,7 +46,8 @@ export function ToolDecision({ approval }: { approval: Approval }) {
       >
         <Check /> Approve once
       </Button>
-      {approval.server === "workspace" &&
+      {!approval.eachCall &&
+        approval.server === "workspace" &&
         approval.connectionIdentity === "raphie.workspace.command" &&
         (approval.tool === "bash" || approval.tool === "workspace_exec") && (
           <Button
