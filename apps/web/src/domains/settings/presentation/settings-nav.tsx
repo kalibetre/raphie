@@ -44,7 +44,6 @@ const botEntries: readonly Section[] = [
   "sandbox",
   "workspace",
   "jobs",
-  "handoffs",
   "activity",
 ];
 // Diagnostics is here, not under a bot: one trace store serves every bot.

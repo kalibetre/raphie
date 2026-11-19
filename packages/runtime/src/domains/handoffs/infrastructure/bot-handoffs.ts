@@ -28,6 +28,8 @@ export type Peer = { id: string; name: string };
 /** The other bots, as the host that holds every bot exposes them to one. */
 export type HandoffPeers = {
   self(): Peer;
+  /** Every other live bot. */
+  others(): Peer[];
   /** Another live bot by ID or name; never this bot. */
   find(idOrName: string): Peer | undefined;
   submit(
@@ -63,7 +65,7 @@ type Options = {
   harness: Harness;
   install: (extension: Extension) => void;
   uninstall: (extension: Extension) => void;
-  /** Tools for this bot, offered only while it may hand off to someone. */
+  /** Tools for this bot, offered only while another bot exists. */
   tools: (handoffs: BotHandoffs) => Extension;
   peers: HandoffPeers;
   /** Delivers a result into this bot's session as a marked turn. */
@@ -77,12 +79,12 @@ type Options = {
   pollMs?: number;
 };
 
-const Handoffs = defineDoc<{ targets: string[]; items: Handoff[] }>({
+const Handoffs = defineDoc<{ items: Handoff[] }>({
   kind: "raphie.handoffs",
   version: 1,
   scope: "session",
   checkpointWhen: () => false,
-  initial: () => ({ targets: [], items: [] }),
+  initial: () => ({ items: [] }),
 });
 
 type Checkpoint =
@@ -109,7 +111,6 @@ export class BotHandoffs {
   private options: Options;
   private task: ReturnType<typeof this.createTask>;
   private tools: Extension;
-  private targetIds: string[] = [];
   private offered = false;
 
   private constructor(options: Options) {
@@ -122,33 +123,28 @@ export class BotHandoffs {
     this.tools = options.tools(this);
   }
 
-  static async open(options: Options) {
+  static open(options: Options) {
     const handoffs = new BotHandoffs(options);
-    handoffs.offer(
-      (await options.harness.snapshot(Handoffs, context))?.targets ?? [],
-    );
+    handoffs.refresh();
     return handoffs;
   }
 
-  /** The bots this bot may hand tasks to, as they are now. */
+  /** The bots this bot may hand tasks to: every other bot, as they are now. */
   targets(): Peer[] {
-    return this.targetIds.flatMap((id) => this.options.peers.find(id) ?? []);
+    return this.options.peers.others();
   }
 
   self() {
     return this.options.peers.self();
   }
 
-  async setTargets(ids: string[]) {
-    const unique = [...new Set(ids)];
-    for (const id of unique)
-      if (this.options.peers.find(id)?.id !== id)
-        throw new InputError("Choose bots that exist, other than this one.");
-    await this.options.root.commit(async (tx) => {
-      (await tx.doc(Handoffs)).targets = unique;
-    }, context);
-    this.offer(unique);
-    return this.targets();
+  /** Offers the tools while another bot exists. The host calls this as bots come and go. */
+  refresh() {
+    const offer = this.targets().length > 0;
+    if (offer === this.offered) return;
+    if (offer) this.options.install(this.tools);
+    else this.options.uninstall(this.tools);
+    this.offered = offer;
   }
 
   async read(): Promise<Handoff[]> {
@@ -203,9 +199,9 @@ export class BotHandoffs {
     const existing = doc.items.find((item) => item.id === input.id);
     if (existing) return existing;
     const to = this.options.peers.find(input.to);
-    if (!to || !doc.targets.includes(to.id))
+    if (!to)
       throw new InputError(
-        `You may not hand tasks to ${input.to}. You may hand tasks to: ${this.targets()
+        `There is no other bot named ${input.to}. You can hand tasks to: ${this.targets()
           .map((peer) => peer.name)
           .join(", ")}.`,
       );
@@ -252,10 +248,8 @@ export class BotHandoffs {
       throw new InputError(
         `${handoff.to.name} has not received the task yet. Wait for it to arrive.`,
       );
-    if (!doc.targets.includes(handoff.to.id))
-      throw new InputError(
-        `You may no longer hand tasks to ${handoff.to.name}.`,
-      );
+    if (!this.options.peers.find(handoff.to.id))
+      throw new InputError(`${handoff.to.name} no longer exists.`);
     handoff.requests.push({
       brief,
       fromTurnId: from.turnId,
@@ -279,15 +273,6 @@ export class BotHandoffs {
         background: true,
       },
     );
-  }
-
-  private offer(ids: string[]) {
-    this.targetIds = ids;
-    const offer = ids.length > 0;
-    if (offer === this.offered) return;
-    if (offer) this.options.install(this.tools);
-    else this.options.uninstall(this.tools);
-    this.offered = offer;
   }
 
   private createTask() {

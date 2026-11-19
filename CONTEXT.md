@@ -34,8 +34,8 @@ _Avoid_: Chat as a synonym for a single message or a temporary browser connectio
 owner's, but also a scheduled job's prompt or another bot's handoff. A turn may
 include several model responses and tool actions before it finishes.
 
-**Handoff**: A task one bot gives another bot the owner allows it to, with the
-brief, its follow-ups and the results that come back. The receiving bot works on
+**Handoff**: A task one bot gives another of the owner's bots, with the brief,
+its follow-ups and the results that come back. The receiving bot works on
 it in its own session, which only the sending bot directs. A handoff never
 carries the owner's authority.
 _Avoid_: Delegation or bot message as names for it.

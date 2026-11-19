@@ -5,24 +5,11 @@ sidebar:
   order: 7
 ---
 
-import { Steps } from "@astrojs/starlight/components";
-
 import { Sequence } from "~/components/diagram";
 
-A bot can hand a task to another of your bots, if you allow it. The other bot works on the task in its own session, and its result comes back to the conversation the task came from as a new turn. The first bot then tells you what came back.
+Any bot can hand a task to any other of your bots. The other bot works on the task in its own session, and its result comes back to the conversation the task came from as a new turn. The first bot then tells you what came back.
 
-Handoffs are off until you choose, for each bot, which other bots it may hand tasks to.
-
-## Allow a bot to hand off tasks
-
-<Steps>
-
-1. Open **Settings**, choose the bot that will hand off tasks, then **Handoffs**.
-2. Under **Can hand tasks to**, turn on each bot it may hand tasks to. The change saves at once.
-
-</Steps>
-
-A bot with no bots turned on is not offered the handoff tools at all. The same list is available over the [HTTP API](/architecture/http-api/#tools-channels-and-schedules) as `PUT /handoffs/targets`.
+There is nothing to turn on: once you have a second bot, every bot is offered the handoff tools.
 
 ## Hand off a task
 

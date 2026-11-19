@@ -25,17 +25,5 @@ export function useHandoffs() {
       workspace.api(`/api/handoffs/${encodeURIComponent(id)}/cancel`, {}),
     onSettled: () => client.invalidateQueries({ queryKey: ["handoffs"] }),
   });
-  const setTargets = useMutation({
-    mutationFn: (bots: string[]) =>
-      workspace.api<{ targets: Peer[] }>(
-        "/api/handoffs/targets",
-        { bots },
-        "PUT",
-      ),
-    onSuccess: ({ targets }) =>
-      client.setQueryData<Handoffs>(["handoffs"], (current) =>
-        current ? { ...current, targets } : current,
-      ),
-  });
-  return { ...query, cancel, setTargets };
+  return { ...query, cancel };
 }

@@ -156,6 +156,7 @@ export class BotHost implements BotProfiles {
       this.profiles.insert(profile);
       runtime.gateway.setPersonality(() => this.profiles.read(profile.id));
       this.runtimes.set(profile.id, runtime);
+      this.refreshHandoffs();
       runtime.gateway.harness.resume();
       return profile;
     } catch (error) {
@@ -226,6 +227,7 @@ export class BotHost implements BotProfiles {
     try {
       await runtime.close();
       this.runtimes.delete(id);
+      this.refreshHandoffs();
       await this.finishDeletion(id);
     } catch {
       throw new InputError(
@@ -247,6 +249,11 @@ export class BotHost implements BotProfiles {
     this.profiles.finishDeletion(id);
   }
 
+  /** Every bot can hand tasks to every other bot, so each one's offer follows the roster. */
+  private refreshHandoffs() {
+    for (const runtime of this.runtimes.values()) runtime.handoffs?.refresh();
+  }
+
   /** One bot's view of the others: the only path between their separate stores. */
   private peers(botId: string): HandoffPeers {
     const other = (key: string) => {
@@ -261,6 +268,11 @@ export class BotHost implements BotProfiles {
     };
     return {
       self: () => ({ id: botId, name: this.profiles.read(botId).name }),
+      others: () =>
+        this.profiles
+          .list()
+          .filter((profile) => profile.id !== botId)
+          .map((profile) => ({ id: profile.id, name: profile.name })),
       find: (key) => {
         const profile = other(key);
         return profile && { id: profile.id, name: profile.name };
@@ -346,7 +358,7 @@ export class BotHost implements BotProfiles {
       });
       const connections = mcp;
       gateway.install(createScheduleTools(jobs));
-      const handoffs = await BotHandoffs.open({
+      const handoffs = BotHandoffs.open({
         root: gateway.root,
         harness: gateway.harness,
         install: (extension) => gateway.install(extension),

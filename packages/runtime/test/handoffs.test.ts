@@ -228,11 +228,14 @@ async function twoBots(research: Parameters<typeof chatModel>[0] = {}) {
 test("a bot hands a task to another bot and the result returns to the session it came from", async () => {
   const { host, research, chief, handoffs, actor, close } = await twoBots();
   try {
-    await assert.rejects(handoffs.setTargets(["missing"]), /Choose bots/);
-    await assert.rejects(handoffs.setTargets(["default"]), /Choose bots/);
-    expect(await handoffs.setTargets([research.id])).toEqual([
-      { id: research.id, name: "Research" },
-    ]);
+    // Every other bot, including one created after this bot opened.
+    expect(handoffs.targets()).toEqual([{ id: research.id, name: "Research" }]);
+    expect(
+      host
+        .runtime(research.id)
+        .handoffs!.targets()
+        .map((peer) => peer.id),
+    ).toEqual(["default"]);
 
     const owner = await chief.gateway.sessions.submit(actor, {
       eventId: "owner-1",
@@ -286,11 +289,10 @@ test("a bot hands a task to another bot and the result returns to the session it
 });
 
 test("a task the other bot cannot finish comes back as a failure, said plainly", async () => {
-  const { research, chief, handoffs, actor, close } = await twoBots({
+  const { chief, handoffs, actor, close } = await twoBots({
     fail: true,
   });
   try {
-    await handoffs.setTargets([research.id]);
     await chief.gateway.sessions.submit(actor, {
       eventId: "owner-1",
       text: "Ask Research to compare memory backends.",
@@ -315,7 +317,6 @@ test("a handoff waiting on the other bot survives a restart of both", async () =
   const held = Promise.withResolvers<void>();
   const app = await twoBots({ pause: held.promise });
   try {
-    await app.handoffs.setTargets([app.research.id]);
     await app.chief.gateway.sessions.submit(app.actor, {
       eventId: "owner-1",
       text: "Ask Research to compare memory backends.",
@@ -324,7 +325,7 @@ test("a handoff waiting on the other bot survives a restart of both", async () =
       async () => !!(await app.handoffs.read())[0]?.requests[0]?.turnId,
     );
     await app.restart();
-    // Targets and the open handoff are durable; the other bot's turn recovers.
+    // The open handoff is durable; the other bot's turn recovers.
     expect(app.handoffs.targets()).toEqual([
       { id: app.research.id, name: "Research" },
     ]);
@@ -347,7 +348,7 @@ test("a handoff waiting on the other bot survives a restart of both", async () =
   }
 });
 
-test("the owner sets who a bot may hand off to, sees its handoffs and cancels one over HTTP", async () => {
+test("the owner sees which bots a bot can hand off to and its handoffs, and cancels one over HTTP", async () => {
   const held = Promise.withResolvers<void>();
   const app = await twoBots({ pause: held.promise });
   const server = await startServer(app.chief.gateway, {
@@ -366,21 +367,12 @@ test("the owner sets who a bot may hand off to, sees its handoffs and cancels on
     });
   try {
     expect(await (await call("GET", "/api/handoffs")).json()).toEqual({
-      targets: [],
+      targets: [{ id: app.research.id, name: "Research" }],
       items: [],
     });
     expect(
-      (await call("PUT", "/api/handoffs/targets", { bots: ["nobody"] })).status,
-    ).toBe(400);
-    expect(
-      await (
-        await call("PUT", "/api/handoffs/targets", { bots: [app.research.id] })
-      ).json(),
-    ).toEqual({ targets: [{ id: app.research.id, name: "Research" }] });
-    // Each bot keeps its own list.
-    expect(
       await (await call("GET", `/api/bots/${app.research.id}/handoffs`)).json(),
-    ).toEqual({ targets: [], items: [] });
+    ).toEqual({ targets: [{ id: "default", name: "Raphie" }], items: [] });
 
     await app.chief.gateway.sessions.submit(app.actor, {
       eventId: "owner-1",
@@ -438,7 +430,6 @@ test("a handoff shows when the other bot is waiting for the owner's approval", a
     tool: { name: "workspace_exec", args: { command: "echo checked" } },
   });
   try {
-    await app.handoffs.setTargets([app.research.id]);
     await app.chief.gateway.sessions.submit(app.actor, {
       eventId: "owner-1",
       text: "Ask Research to check something.",
@@ -449,6 +440,20 @@ test("a handoff shows when the other bot is waiting for the owner's approval", a
     const [approval] = (await recipient.toolApprovals.state()).approvals;
     expect(approval.status).toBe("pending");
     expect(approval.tool).toBe("workspace_exec");
+  } finally {
+    await app.close();
+  }
+});
+
+test("deleting the only other bot withdraws the handoff tools", async () => {
+  const app = await twoBots();
+  try {
+    expect(app.handoffs.targets()).toHaveLength(1);
+    await app.host.delete(app.research.id, {
+      name: app.research.name,
+      revision: app.research.revision,
+    });
+    expect(app.handoffs.targets()).toEqual([]);
   } finally {
     await app.close();
   }

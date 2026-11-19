@@ -7,7 +7,6 @@ import { AccountSettings } from "./account-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { BotSettings } from "./bot-settings";
 import { ChannelSettings } from "./channel-settings";
-import { HandoffSettings } from "./handoff-settings";
 import { JobSettings } from "./job-settings";
 import { McpSettings } from "./mcp-settings";
 import { MemoryBrowse } from "./memory-browse";
@@ -94,8 +93,6 @@ export function Settings({
           <WorkspaceFiles onSandbox={() => onParent("sandbox")} />
         ) : section === "jobs" ? (
           <JobSettings />
-        ) : section === "handoffs" ? (
-          <HandoffSettings />
         ) : section === "memory" ? (
           <MemorySettings />
         ) : section === "memory-browse" ? (
