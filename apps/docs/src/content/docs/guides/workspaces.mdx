@@ -89,7 +89,7 @@ Each container runs as the user and group ID of the account running Raphie (1000
 
 Shell commands (`workspace_exec` in just-bash, `bash` in Container) follow the conversation's permission mode:
 
-- **Ask** asks you to approve each command. **Approve for session** lets that exact command run again in the same conversation without asking.
+- **Ask** asks you to approve each command. **Approve for session** lets that exact command run again in the same conversation without asking. It is not offered in a task another bot [handed off](/guides/handoffs/).
 - **Full access** runs commands, and MCP tools, without asking in that conversation.
 
 File tools (`read`, `write`, `edit`) are not gated by the mode. Neither mode changes sandbox limits. See [conversations](/guides/conversations/) for where to set the mode.

@@ -529,3 +529,47 @@ test("a bot is told what each other bot can do: its description, web search and 
     await app.close();
   }
 });
+
+test("a command in a handed-off task is approved call by call, never for the session", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-handoff-grant-"));
+  const gateway = await Gateway.open({
+    directory,
+    ...chatModel({
+      tool: { name: "workspace_exec", args: { command: "echo granted" } },
+    }),
+  });
+  const actor = gateway.actors.establish("web");
+  try {
+    await gateway.sessions.submitHandoff(actor, {
+      eventId: "handoff:h1:1",
+      text: "Run the check.",
+      handoff: { id: "h1", kind: "task", bot: chief, title: "Run the check" },
+    });
+    let pending: { id: string; eachCall?: true } | undefined;
+    await until(async () => {
+      pending = (await gateway.toolApprovals.state()).approvals.find(
+        (a) => a.status === "pending",
+      );
+      return !!pending;
+    });
+    assert(pending);
+    expect(pending.eachCall).toBe(true);
+    const decide = (scope: "once" | "session") =>
+      gateway.toolApprovals.decide(
+        pending!.id,
+        "approved",
+        "owner",
+        "web",
+        undefined,
+        undefined,
+        undefined,
+        scope,
+      );
+    await assert.rejects(decide("session"), /each call/);
+    expect(await decide("once")).toBe("approved");
+    expect((await gateway.toolApprovals.state()).grants ?? []).toHaveLength(0);
+  } finally {
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

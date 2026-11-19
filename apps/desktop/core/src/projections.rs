@@ -550,6 +550,7 @@ mod tests {
             decided_app: None,
             execution: Execution::Done,
             connection_identity: None,
+            each_call: false,
         }
     }
 

@@ -14,6 +14,9 @@ export type ToolApproval = {
   connectionIdentity?: string;
   grantId?: string;
   fullAccess?: boolean;
+  /** Asked in a task another bot handed off: each call is approved on its
+   * own, never for the rest of the session. */
+  eachCall?: true;
   server: string;
   tool: string;
   argumentsJson: string;

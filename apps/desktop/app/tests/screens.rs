@@ -577,6 +577,19 @@ fn only_command_approvals_offer_approve_for_session() {
             scope: Scope::Session,
         })
     );
+
+    // In a task another bot handed off, each call needs its own approval.
+    let rt = render(
+        |ui| {
+            scenes::command_approval(ui);
+            let conversation = ui.model.conversation.as_mut().unwrap();
+            let observation = conversation.observation.as_mut().unwrap();
+            observation.tool_approvals[0].each_call = true;
+        },
+        false,
+    );
+    assert!(rt.find(&format!("rd-approve-session-{id}")).is_none());
+    assert!(rt.find(&format!("rd-approve-{id}")).is_some());
 }
 
 #[test]

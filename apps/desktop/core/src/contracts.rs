@@ -642,6 +642,10 @@ pub struct SessionApproval {
     /// `raphie.workspace.command`.
     #[serde(default)]
     pub connection_identity: Option<String>,
+    /// Asked in a task another bot handed off: each call is approved on its
+    /// own, never for the session.
+    #[serde(default)]
+    pub each_call: bool,
 }
 
 /// `ToolApprovalView["execution"]` in `packages/contracts/src/index.ts`.
@@ -660,9 +664,11 @@ pub enum Execution {
 
 impl SessionApproval {
     /// Whether "Approve for session" applies: the runtime grants session
-    /// scope for command approvals only (the web's `ToolDecision`).
+    /// scope for command approvals only, and never in a task another bot
+    /// handed off (the web's `ToolDecision`).
     pub fn allows_session_scope(&self) -> bool {
-        self.server == "workspace"
+        !self.each_call
+            && self.server == "workspace"
             && self.connection_identity.as_deref() == Some("raphie.workspace.command")
             && (self.tool == "bash" || self.tool == "workspace_exec")
     }

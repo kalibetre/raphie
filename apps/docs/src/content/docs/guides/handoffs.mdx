@@ -48,13 +48,13 @@ A conversation keeps one session with each bot it hands work to. Everything hand
 
 A handed-off task does not carry your authority. The other bot receives the brief as a request from a named bot, not as your words.
 
-| Rule                     | Effect                                                                                                         |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| Its own session          | One per conversation that hands it work, titled with the first task and marked with the bot that sent it.      |
-| Directed by the sender   | Only the sending bot sends messages into it. Its composer is replaced by a note saying so, with **Stop task**. |
-| Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, as for any other turn.      |
-| No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                              |
-| Separate memory and data | Each bot keeps its own memory, workspace and credentials. Only the brief and the reply cross.                  |
+| Rule                     | Effect                                                                                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Its own session          | One per conversation that hands it work, titled with the first task and marked with the bot that sent it.                                                        |
+| Directed by the sender   | Only the sending bot sends messages into it. Its composer is replaced by a note saying so, with **Stop task**.                                                   |
+| Always asks              | The session stays in Ask mode; Full access is refused. Tool approvals come to you, and each call is approved on its own: **Approve for session** is not offered. |
+| No handing on            | A bot working on a handed-off task cannot hand it to a third bot.                                                                                                |
+| Separate memory and data | Each bot keeps its own memory, workspace and credentials. Only the brief and the reply cross.                                                                    |
 
 ## Cancel a task
 
