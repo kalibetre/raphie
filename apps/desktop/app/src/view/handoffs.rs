@@ -20,7 +20,7 @@ use rune::{
 use rune_kit::{Markdown, Placement, popover, scrim};
 
 use super::Look;
-use crate::avatar::bot_avatar;
+use crate::avatar::{bot_avatar, bot_icon};
 use crate::format;
 use crate::icons;
 use crate::state::{MENTION_SCHEME, Ui};
@@ -542,39 +542,53 @@ pub fn linked_mentions(source: &str, bots: &[BotRef]) -> String {
 pub fn message_text(s: &Ui, content: &str, look: &Look) -> El {
     let t = &look.theme;
     let bots = s.bot_refs();
-    let mut message = text(content.to_owned())
+    // A named bot shows as its face and name, without the "@", as on the web.
+    let mut shown = String::with_capacity(content.len());
+    let mut chips = Vec::new();
+    for part in split_mentions(content, &bots) {
+        match part {
+            MentionPart::Text(text) => shown.push_str(text),
+            MentionPart::Mention(bot, written) => {
+                let start = shown.len();
+                shown.push_str(&written[1..]);
+                chips.push((start..shown.len(), bot.clone()));
+            }
+        }
+    }
+    let mut message = text(shown)
         .font(font(14.0, 400.0).lh(23.0))
         .color(t.foreground)
         .wrap()
         .selectable(true)
         .selection_color(t.selection());
-    let mut at = 0;
-    let mut linked = false;
-    for part in split_mentions(content, &bots) {
-        match part {
-            MentionPart::Text(text) => at += text.len(),
-            MentionPart::Mention(bot, written) => {
-                let range = at..at + written.len();
-                let tone = look.tones.of(&bot.id).body;
-                message = message
-                    .pill(
-                        range.clone(),
-                        PillStyle::new().bg(tone.alpha(0.26)).fg(t.foreground),
-                    )
-                    .link(
-                        Link::new(range, format!("{MENTION_SCHEME}{}", bot.id))
-                            .label(format!("Open {}", bot.name))
-                            .hover(LinkPaint::new().bg(tone.alpha(0.4))),
-                    );
-                linked = true;
-                at += written.len();
-            }
-        }
+    if chips.is_empty() {
+        return message;
     }
-    if linked {
-        message = message.on_link(|s: &mut Ui, url: &str, tx: &mut Tx| s.press_link(url, tx));
+    let names: Vec<Span> = chips
+        .iter()
+        .map(|(range, _)| Span::new(range.start, range.end).weight(500.0))
+        .collect();
+    message = message.spans(names);
+    for (range, bot) in chips {
+        let tone = look.tones.of(&bot.id);
+        message = message
+            .pill(
+                range.clone(),
+                PillStyle::new()
+                    .bg(tone.body.alpha(0.26))
+                    // A pill paints its face and its name in one colour:
+                    // the bot's, taken most of the way to the text's so the
+                    // name stays as readable as the sentence around it.
+                    .fg(tone.body.mix(t.foreground, 0.7))
+                    .icon(bot_icon(&bot.id)),
+            )
+            .link(
+                Link::new(range, format!("{MENTION_SCHEME}{}", bot.id))
+                    .label(format!("Open {}", bot.name))
+                    .hover(LinkPaint::new().bg(tone.body.alpha(0.4))),
+            );
     }
-    message
+    message.on_link(|s: &mut Ui, url: &str, tx: &mut Tx| s.press_link(url, tx))
 }
 
 /// The size of a bot's orbit in the composer, and its face inside it.

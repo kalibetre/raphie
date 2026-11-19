@@ -12,7 +12,10 @@
 
 use raphie_core::contracts::BotProfile;
 use rune::color::hex;
-use rune::{Color, El, Path, Shape, canvas};
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+use rune::{Color, El, Icon, Path, Shape, canvas};
 
 /// The geometry of one face in a 100×100 box.
 #[derive(Debug, PartialEq)]
@@ -230,6 +233,42 @@ pub fn bot_avatar(id: &str, tone: Tone, size: f32) -> El {
         shape = shape.fill_path(&circle(at(eye), EYE_RADIUS as f32), tone.eye);
     }
     canvas(shape).size(size, size).a11y_hidden()
+}
+
+/// The face as a one-colour icon, eyes cut out, for text that can carry
+/// an icon but not an element: a mention chip in a message, which paints it
+/// in the bot's colour. Each face is built once and kept for the life of
+/// the app (one per bot).
+pub fn bot_icon(id: &str) -> &'static Icon {
+    thread_local! {
+        static ICONS: RefCell<HashMap<String, &'static Icon>> = RefCell::new(HashMap::new());
+    }
+    ICONS.with(|icons| {
+        *icons.borrow_mut().entry(id.to_owned()).or_insert_with(|| {
+            let face = glance(id);
+            let mut path = format!("M{} {}", face.start[0], face.start[1]);
+            for (control, end) in face.curves {
+                path += &format!("Q{} {} {} {}", control[0], control[1], end[0], end[1]);
+            }
+            path.push('Z');
+            // Each eye as a circle of two arcs; even-odd filling cuts it out.
+            for [x, y] in face.eyes {
+                let r = EYE_RADIUS;
+                path += &format!(
+                    "M{} {y}a{r} {r} 0 1 0 {} 0a{r} {r} 0 1 0 {} 0Z",
+                    x - r,
+                    2.0 * r,
+                    -2.0 * r
+                );
+            }
+            let body = format!(r#"<path d="{path}" fill="currentColor" fill-rule="evenodd"/>"#);
+            Box::leak(Box::new(Icon {
+                name: Box::leak(format!("rd-bot-{id}").into_boxed_str()),
+                view: 100.0,
+                body: Box::leak(body.into_boxed_str()),
+            }))
+        })
+    })
 }
 
 /// A circle as four cubic curves, the usual approximation.

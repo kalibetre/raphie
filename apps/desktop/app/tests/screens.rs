@@ -5007,3 +5007,15 @@ fn escape_closes_the_at_menu_until_another_at() {
     assert!(rt.find("rd-mentions").is_none());
     assert!(rt.state.mention_options().is_empty());
 }
+
+#[test]
+fn a_named_bot_shows_as_its_name_without_the_at() {
+    let rt = render(scenes::handoff_several, false);
+    // Each chip's label is isolated for screen readers (U+2068 … U+2069).
+    let text = screen_text(&rt).replace(['\u{2068}', '\u{2069}'], "");
+    assert!(
+        text.contains("pricing from Research, a draft from Writer"),
+        "{text}"
+    );
+    assert!(!text.contains("@Writer"));
+}
