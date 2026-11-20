@@ -104,6 +104,7 @@ All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and tho
 | GET      | `/sessions/:id/grants`          | Active command session grants                                         |
 | DELETE   | `/sessions/:id/grants/:grantId` | Revoke a grant (204)                                                  |
 | GET      | `/tool-approvals/:id.json`      | Download an approval's exact server, tool and arguments               |
+| POST     | `/asks/:id`                     | Answer a bot's question: `{ choice: number }` or `{ text: string }`   |
 
 ### Attachments and workspace
 
@@ -219,10 +220,10 @@ Admission returns 503 `no_model` when no model is configured, and 400 when the c
 | Behaviour        | Detail                                                                                                                                                                             |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Page sizes       | 1 to 100 items; sessions and history default to 50, activity to 100                                                                                                                |
-| Observation size | Up to 50 recent turns (plus the first pending one if older), the latest 200 activity events and 100 approvals                                                                      |
+| Observation size | Up to 50 recent turns (plus the first pending one if older), the latest 200 activity events, 100 approvals and 100 questions (`asks`)                                              |
 | SSE              | Each stream starts with authoritative state, sends a replacement when it changes, and sends a heartbeat every 15 seconds while idle. There is no resume cursor.                    |
 | Disconnects      | Closing a stream never cancels or resubmits a turn                                                                                                                                 |
-| Phases           | `idle`, `queued`, `model`, `writing`, `tool`, `approval`, `failed`: observed evidence, not private model reasoning                                                                 |
+| Phases           | `idle`, `queued`, `model`, `writing`, `tool`, `approval`, `question`, `failed`: observed evidence, not private model reasoning                                                     |
 | IDs              | Public session IDs are UUIDs. The session, history, approval and activity routes never return internal Pi IDs or admission fingerprints; the compatibility `/chats` snapshot does. |
 
 Application errors are JSON `{ "code": "...", "error": "..." }`. The `code` follows the status (`invalid_request`, `forbidden`, `not_found`, `conflict`, `too_large`, `unavailable`) unless a more specific one applies, such as `no_model`. Any other error becomes a generic 400 `invalid_request` without internal detail. Schema validation failures (400), oversized bodies (413) and unknown routes (404) return only `{ "error": "..." }`.

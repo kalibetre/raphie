@@ -49,6 +49,11 @@ _Avoid_: Delegation or bot message as names for it.
 **Approval**: An owner decision about an exact proposed action and its arguments.
 Approval does not itself prove that the action executed successfully.
 
+**Question** (from a bot): Something a bot asks the owner mid-turn with
+`ask_owner`, offering two to six answers. The turn waits for the answer, which
+goes back to the bot as the tool's result. Unlike an approval, it settles no
+action: the bot decides what to do with the answer.
+
 **Command permission mode**: A conversation's Ask or Full access setting for
 workspace command tools. It does not authorize MCP calls or change sandbox limits.
 
