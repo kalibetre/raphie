@@ -839,66 +839,51 @@ fn delegate_list(groups: &[DelegateGroup<'_>], look: &Look) -> El {
     list
 }
 
-/// In place of the composer: a handed-off task is directed by the bot that
-/// sent it (the web's `.handoff-lock`).
-pub fn lock(s: &Ui, from: &BotRef, look: &Look) -> El {
+/// Above the composer in a task another bot handed off (the web's
+/// `.handoff-note`): the owner continues it here, while that bot's own
+/// requests still report back to it.
+pub fn note(_s: &Ui, from: &BotRef, look: &Look) -> El {
     let t = &look.theme;
     let id = from.id.clone();
-    let mut actions = row().gap(8.0);
-    if s.busy() {
-        actions = actions.child(
-            button(t, Kind::Outline, Size::Small, None, "Stop task")
-                .key("rd-lock-stop")
-                .on_press(|s: &mut Ui| s.stop()),
-        );
-    }
-    actions = actions.child(
-        button(
-            t,
-            Kind::Outline,
-            Size::Small,
-            None,
-            &format!("Open {}", from.name),
-        )
-        .key("rd-lock-open")
-        .on_press(move |s: &mut Ui| s.open_bot(&id, None)),
+    let words = format!(
+        "{} handed off this task and gets the results of its requests. What you write here stays here.",
+        from.name
     );
-    let mut note = row()
-        .key("rd-handoff-lock")
+    row()
+        .key("rd-handoff-note")
         .role("note")
         .w_full()
-        .px(14.0)
-        .py(12.0)
-        .gap(12.0)
+        .px(4.0)
+        .mb(8.0)
+        .gap(8.0)
         .center_y()
-        .flex_wrap()
-        .radius(14.0)
-        .fill(t.card)
-        .border(1.0, t.border)
-        .child(face(&from.id, 24.0, look))
+        .child(face(&from.id, 18.0, look))
         .child(
             rune::rich(
-                format!(
-                    "{} directs this task, and its results go back there. To change the task, ask {}.",
-                    from.name, from.name
-                ),
+                words,
                 vec![
                     Span::new(0, from.name.len())
                         .weight(600.0)
                         .color(t.foreground),
                 ],
             )
-            .font(font(13.0, 400.0).lh(19.5))
+            .font(font(12.0, 400.0).lh(17.5))
             .color(t.muted_foreground)
             .grow(1.0)
-            .min_w(240.0)
+            .min_w(0.0)
             .shrink(),
         )
-        .child(actions);
-    for shadow in t.composer_shadow {
-        note = note.box_shadow(shadow);
-    }
-    note
+        .child(
+            button(
+                t,
+                Kind::Ghost,
+                Size::Tiny,
+                None,
+                &format!("Open {}", from.name),
+            )
+            .key("rd-handoff-note-open")
+            .on_press(move |s: &mut Ui| s.open_bot(&id, None)),
+        )
 }
 
 /// The composer's "@" menu: the other bots matching what was typed, above

@@ -71,13 +71,29 @@ test("a handed-off task gets its own session that only the sending bot directs, 
     expect(await gateway.sessions.approvalMode(actor, receipt.sessionId)).toBe(
       "ask",
     );
+    // The owner can continue the task here. The bot hears it is the owner,
+    // and the reply stays here instead of going to Chief of staff.
+    const owner = await gateway.sessions.submit(actor, {
+      eventId: "owner-1",
+      text: "Actually, look at Mem0 instead.",
+      sessionId: receipt.sessionId,
+    });
+    expect(owner.sessionId).toBe(receipt.sessionId);
+    await until(async () =>
+      (await gateway.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    const ownerTurn = (await gateway.chats.state()).turns.find(
+      (t) => t.id === owner.id,
+    )!;
+    expect(ownerTurn.handoff).toBeUndefined();
+    expect(ownerTurn.text).toBe("Actually, look at Mem0 instead.");
+    expect(ownerTurn.answer).toContain(
+      "The owner writes to you directly in this task from Chief of staff. Reply to the owner; this reply does not go to Chief of staff.",
+    );
+    // Commands stay approved call by call, and full access stays off.
     await assert.rejects(
-      gateway.sessions.submit(actor, {
-        eventId: "owner-1",
-        text: "Actually, look at Mem0 instead.",
-        sessionId: receipt.sessionId,
-      }),
-      /Chief of staff directs this task/,
+      gateway.sessions.approvalMode(actor, receipt.sessionId, "full-access"),
+      /always ask before acting/,
     );
     await assert.rejects(
       gateway.sessions.submitHandoff(actor, {
@@ -289,6 +305,27 @@ test("a bot hands a task to another bot and the result returns to the session it
       outcome: "completed",
     });
     expect(results[0].text).toBe(received.turns[0].answer!);
+
+    // The owner continues the task in Research. The reply stays there:
+    // nothing new goes back to Chief of staff, and the handoff is unchanged.
+    const recipientActor = recipient.actors.establish("web");
+    const continued = await recipient.sessions.submit(recipientActor, {
+      eventId: "owner-in-research",
+      text: "Add Mem0 to the comparison.",
+      sessionId: handoff.toSessionId!,
+    });
+    await until(async () =>
+      (await recipient.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    expect(continued.sessionId).toBe(handoff.toSessionId!);
+    expect((await recipient.chats.state()).conversations).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(
+      (await chief.gateway.chats.state()).turns.filter(
+        (t) => t.handoff?.kind === "result",
+      ),
+    ).toHaveLength(1);
+    expect((await handoffs.read())[0].requests).toHaveLength(1);
   } finally {
     await close();
   }

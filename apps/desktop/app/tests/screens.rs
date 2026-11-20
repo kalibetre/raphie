@@ -4956,13 +4956,51 @@ fn the_composer_lists_every_bot_at_work_waiting_ones_first() {
 }
 
 #[test]
-fn a_handed_off_task_is_directed_by_the_bot_that_sent_it() {
+fn the_owner_can_continue_a_task_another_bot_handed_off() {
     let mut rt = render(scenes::handoff_task, false);
     let text = screen_text(&rt);
     assert!(text.contains("Handed off by"));
-    assert!(rt.find("rd-handoff-lock").is_some());
-    assert!(rt.find("rd-composer-card").is_none(), "no composer");
-    click(&mut rt, "rd-lock-open");
+    assert!(text.contains("What you write here stays here."));
+    // The composer is there, under the note.
+    let note = element(&rt, "rd-handoff-note");
+    let card = element(&rt, "rd-composer-card");
+    assert!(
+        note.rect[1] < card.rect[1],
+        "the note sits above the composer"
+    );
+    // Full access stays off: each command needs the owner's approval.
+    click(&mut rt, "rd-permissions");
+    assert!(screen_text(&rt).contains("Not in a task from Raphie"));
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-permissions-full");
+    assert_eq!(rt.state.sent.len(), before, "full access is not offered");
+    rt.update(|ui, _| ui.permissions_open = false);
+    settle(&mut rt);
+    // The task is done here, never handed on: "@" offers no bots, though
+    // Research could hand tasks to Raphie and Writer elsewhere.
+    rt.update(|ui, _| {
+        ui.model.apply(raphie_core::model::Event::Handoffs {
+            bot_id: "b-research".into(),
+            list: serde_json::from_value(serde_json::json!({
+                "targets": [
+                    { "id": "default", "name": "Raphie" },
+                    { "id": "b-writer", "name": "Writer" }
+                ],
+                "items": []
+            }))
+            .unwrap(),
+        });
+    });
+    settle(&mut rt);
+    assert!(!rt.state.handoff_targets().is_empty());
+    rt.update(|ui, _| {
+        ui.composer = rune::TextEdit::new("Ask @");
+        ui.composer.focused = true;
+    });
+    settle(&mut rt);
+    assert!(rt.state.mention_options().is_empty());
+    assert!(rt.find("rd-mentions").is_none());
+    click(&mut rt, "rd-handoff-note-open");
     assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
 }
 

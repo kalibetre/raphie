@@ -208,6 +208,10 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
                 .mb(8.0),
         );
     }
+    // A task another bot handed off: the owner continues it here.
+    if let Some(from) = s.handed_off_by() {
+        wrap = wrap.child(super::handoffs::note(s, from, look));
+    }
     wrap = wrap.child(card);
     if draft.uploading {
         wrap = wrap.child(

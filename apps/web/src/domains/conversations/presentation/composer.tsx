@@ -13,7 +13,7 @@ import { useRuntimeSettings } from "../../settings/infrastructure/use-runtime-se
 import { ComposerActions } from "./composer-actions";
 import { AttachmentChips, ComposerAttachments } from "./composer-attachments";
 import { ContextRing } from "./context-ring";
-import { HandoffDelegates } from "./handoffs/handoff-delegates";
+import { HandoffDelegates, HandoffNote } from "./handoffs/handoff-delegates";
 import { useMentions } from "./handoffs/mention-menu";
 import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
@@ -32,6 +32,7 @@ export function Composer({
   enabledPlugins,
   handoffs = [],
   mentionables = [],
+  handedOffBy,
   onSend,
   onStop,
   onChooseModel,
@@ -51,6 +52,8 @@ export function Composer({
   handoffs?: readonly Handoff[];
   /** The other bots, offered when the owner types @ to hand a task to one. */
   mentionables?: readonly { id: string; name: string }[];
+  /** The bot that handed this task off: the owner may continue it here. */
+  handedOffBy?: { id: string; name: string };
   onStop: () => Promise<void>;
   onSend: (
     text: string,
@@ -114,7 +117,8 @@ export function Composer({
   const { wrapper, input, revealCaret } = useComposerLayout(draft);
   const mentions = useMentions({
     draft,
-    bots: mentionables,
+    // A handed-off task is done here, never handed on.
+    bots: handedOffBy ? [] : mentionables,
     input,
     update,
   });
@@ -191,6 +195,7 @@ export function Composer({
           {error}
         </p>
       )}
+      {handedOffBy && <HandoffNote from={handedOffBy} />}
       <form
         className="composer"
         onSubmit={(event) => {
@@ -271,6 +276,11 @@ export function Composer({
               sessionId={conversationId}
               draftMode={draftMode}
               onDraftMode={(mode) => setPermission({ key, mode })}
+              askOnly={
+                handedOffBy
+                  ? `Not in a task from ${handedOffBy.name}: each command needs your approval.`
+                  : undefined
+              }
             />
           }
           <HandoffDelegates sessionId={conversationId} handoffs={handoffs} />

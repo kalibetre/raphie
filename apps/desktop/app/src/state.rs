@@ -1408,6 +1408,10 @@ impl Ui {
 
     /// The bots the composer's "@" menu offers now; empty when it is shut.
     pub fn mention_options(&self) -> Vec<BotRef> {
+        // A handed-off task is done here, never handed on.
+        if self.handed_off_by().is_some() {
+            return Vec::new();
+        }
         let Some(query) = self.typed_mention() else {
             return Vec::new();
         };

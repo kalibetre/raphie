@@ -15,10 +15,13 @@ export function McpPermissions({
   sessionId,
   draftMode = "ask",
   onDraftMode,
+  askOnly,
 }: {
   sessionId?: string;
   draftMode?: Mode;
   onDraftMode?: (mode: Mode) => void;
+  /** Why this conversation always asks; full access is then unavailable. */
+  askOnly?: string;
 }) {
   const { workspace } = useBackend();
   const path = `/api/sessions/${encodeURIComponent(sessionId ?? "")}`;
@@ -99,7 +102,12 @@ export function McpPermissions({
             <button
               key={value}
               type="button"
-              disabled={!mode.data || mode.isError || update.isPending}
+              disabled={
+                !mode.data ||
+                mode.isError ||
+                update.isPending ||
+                (!!askOnly && value === "full-access")
+              }
               aria-pressed={mode.data?.mode === value}
               onClick={() =>
                 sessionId ? update.mutate(value) : onDraftMode?.(value)
@@ -109,7 +117,7 @@ export function McpPermissions({
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium">{title}</span>
                 <span className="block text-xs leading-relaxed text-muted-foreground">
-                  {description}
+                  {askOnly && value === "full-access" ? askOnly : description}
                 </span>
               </span>
               {mode.data?.mode === value && (

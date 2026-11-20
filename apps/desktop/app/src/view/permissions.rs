@@ -123,9 +123,17 @@ fn panel(s: &Ui, mode: Option<ApprovalMode>, t: &Theme) -> El {
                     "rd-permissions-full",
                     ApprovalMode::FullAccess,
                     "Full access",
-                    "Run commands and tools without asking in this conversation.",
+                    &match s.handed_off_by() {
+                        Some(from) => format!(
+                            "Not in a task from {}: each command needs your approval.",
+                            from.name
+                        ),
+                        None => {
+                            "Run commands and tools without asking in this conversation.".to_owned()
+                        }
+                    },
                     mode,
-                    can_choose,
+                    can_choose && s.handed_off_by().is_none(),
                 )),
         )
         .child(note(
