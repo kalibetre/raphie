@@ -463,6 +463,17 @@ pub struct TurnHandoff {
     pub outcome: Option<HandoffOutcome>,
 }
 
+/// `ReadSession` in `packages/contracts/src/index.ts`: another bot's
+/// session a reply read with `handoff_read`.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadSession {
+    pub handoff_id: String,
+    pub bot: BotRef,
+    pub session_id: String,
+    pub title: String,
+}
+
 /// `TurnHandoff["kind"]`.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -587,6 +598,9 @@ pub struct SessionTurn {
     /// handed off, or the result of one coming back.
     #[serde(default)]
     pub handoff: Option<TurnHandoff>,
+    /// Other bots' sessions the reply read, for tasks it handed off.
+    #[serde(default)]
+    pub read_sessions: Vec<ReadSession>,
     /// Set while the message waits behind the run in progress.
     #[serde(default)]
     pub queue_mode: Option<QueueMode>,

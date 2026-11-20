@@ -359,6 +359,11 @@ fn reply(
     } else {
         handoffs::markdown(s, source, look)
     });
+    if turn.status == TurnStatus::Done
+        && let Some(sources) = handoffs::sources(turn, look)
+    {
+        reply = reply.child(sources);
+    }
     if turn.status == TurnStatus::Done {
         // "08:45 PM   88 tokens · $0.0000", from the run's model calls.
         let mut meta = row().key(format!("rd-meta-{}", turn.id)).mt(6.0).gap(10.0);

@@ -54,6 +54,7 @@ pub const SCENES: &[Scene] = &[
     ("handoff-result", handoff_result),
     ("handoff-several", handoff_several),
     ("handoff-task", handoff_task),
+    ("handoff-read", handoff_read),
     ("mentions", mentions),
     ("composer-full-access", composer_full_access),
     ("composer-context", composer_context),
@@ -2126,6 +2127,27 @@ pub fn handoff_result(ui: &mut Ui) {
     done["requests"][0]["outcome"] = json!("completed");
     handoffs(ui, vec![done]);
     ui.open_reports.insert("t2".into());
+}
+
+/// The owner asked what Research found in its own session; Raphie read it
+/// and says where the answer came from.
+pub fn handoff_read(ui: &mut Ui) {
+    let mut asked = turn(
+        "t2",
+        -20_000,
+        "I asked Research about open-source tools directly. What did it find?",
+        Some(
+            "Research named **Mem0**, **Zep/Graphiti**, **Letta** and **Cognee**. It suggests Mem0 or Zep/Graphiti on your own Postgres for self-hosting.",
+        ),
+        "done",
+    );
+    asked["readSessions"] = json!([{
+        "handoffId": "h-1",
+        "bot": { "id": "b-research", "name": "Research" },
+        "sessionId": "s-research",
+        "title": "Agent memory research"
+    }]);
+    handed_off(ui, vec![asked]);
 }
 
 /// One reply handed out three tasks while an earlier one still runs; the

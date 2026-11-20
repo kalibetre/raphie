@@ -3,6 +3,7 @@ import type {
   Channel as Source,
   ChannelOrigin,
   ModelSelection,
+  ReadSession,
   TurnFailure,
   TurnHandoff,
 } from "@raphie/contracts";
@@ -60,6 +61,8 @@ export type ChatTurn = {
   scheduledDelivery?: "home" | "web-only" | "home-unavailable";
   /** Started by another bot; its text is that bot's brief or result. */
   handoff?: TurnHandoff;
+  /** Other bots' sessions the reply read, for tasks it handed off. */
+  readSessions?: ReadSession[];
 };
 
 export type ChatDelivery = {

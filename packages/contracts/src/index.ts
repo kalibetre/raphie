@@ -81,6 +81,16 @@ export type Turn = {
   scheduled?: { name: string };
   /** Set when another bot, not the owner, started this turn. */
   handoff?: TurnHandoff;
+  /** Other bots' sessions this turn's reply read, for tasks it handed off. */
+  readSessions?: ReadSession[];
+};
+
+/** Another bot's session a reply read with `handoff_read`. */
+export type ReadSession = {
+  handoffId: string;
+  bot: { id: string; name: string };
+  sessionId: string;
+  title: string;
 };
 
 /**

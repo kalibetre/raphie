@@ -207,8 +207,32 @@ export function createHandoffTools(handoffs: BotHandoffs) {
         }),
         replay: "safe",
         outputLimits: { maxBytes: 200000, maxLines: 4000 },
-        execute: async (args) => {
+        execute: async (args, api, ctx) => {
           const { handoff, turns } = await handoffs.transcript(args.id);
+          // Noted on the reply, so the owner can go to the session it read.
+          await api.commit(async (tx) => {
+            const chats = await tx.doc(Chats);
+            const turn = chats.turns.findLast(
+              (item) =>
+                item.conversationId === api.conversationId &&
+                item.status === "pending" &&
+                !item.queueMode,
+            );
+            if (
+              turn &&
+              handoff.toSessionId &&
+              !turn.readSessions?.some((read) => read.handoffId === handoff.id)
+            )
+              turn.readSessions = [
+                ...(turn.readSessions ?? []),
+                {
+                  handoffId: handoff.id,
+                  bot: { ...handoff.to },
+                  sessionId: handoff.toSessionId,
+                  title: handoff.title,
+                },
+              ];
+          }, ctx);
           return {
             output: [{ type: "text", text: transcriptText(handoff, turns) }],
           };

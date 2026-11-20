@@ -193,6 +193,7 @@ export class PiClientQueries implements ClientQueries {
         ? { scheduled: t.scheduled, scheduledDelivery: t.scheduledDelivery }
         : {}),
       ...(t.handoff ? { handoff: t.handoff } : {}),
+      ...(t.readSessions?.length ? { readSessions: t.readSessions } : {}),
     }));
     return { items, next: start > 0 ? items[0]!.id : null };
   }

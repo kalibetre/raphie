@@ -5101,3 +5101,21 @@ fn choosing_a_bot_again_reopens_the_conversation_last_open_with_it() {
         session_id: Some("s-raphie".into()),
     }]));
 }
+
+#[test]
+fn a_reply_that_read_another_bots_session_links_to_it() {
+    let mut rt = render(scenes::handoff_read, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Read from Research"));
+    assert!(text.contains("Agent memory research"));
+    assert!(text.contains("View in Research"));
+    // Under the reply's text, above its time and tokens.
+    let pill = element(&rt, "rd-read-h-1");
+    let reply = element(&rt, "rd-reply-t2");
+    assert!(pill.rect[1] > reply.rect[1]);
+    click(&mut rt, "rd-read-h-1");
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("b-research"));
+    assert!(rt.state.sent.ends_with(&[Command::SelectSession {
+        session_id: Some("s-research".into()),
+    }]));
+}
