@@ -14,8 +14,8 @@ async function readPdfText(bytes: Uint8Array) {
   Object.assign(globalThis, { pdfjsWorker: pdfWorker });
   const { getDocument } = await import("pdfjs-dist/build/pdf.mjs");
   const loading = getDocument({
+    // PDF.js 6 never compiles fonts with eval, so there is no switch for it.
     data: new Uint8Array(bytes),
-    isEvalSupported: false,
     useSystemFonts: false,
     disableFontFace: true,
     stopAtErrors: true,

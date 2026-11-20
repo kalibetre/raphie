@@ -8,18 +8,18 @@
     "test": "bun test ./test --timeout 15000"
   },
   "dependencies": {
-    "@chat-adapter/discord": "4.44.0",
-    "@chat-adapter/state-memory": "4.44.0",
-    "@earendil-works/pi-durable": "1.5.0",
-    "@earendil-works/pi-mcp": "1.5.0",
-    "@earendil-works/pi-schema": "1.5.0",
-    "@firecrawl/anydoc-wasm": "0.2.4",
+    "@chat-adapter/discord": "4.45.0",
+    "@chat-adapter/state-memory": "4.45.0",
+    "@earendil-works/pi-durable": "1.6.0",
+    "@earendil-works/pi-mcp": "1.6.0",
+    "@earendil-works/pi-schema": "1.6.0",
+    "@firecrawl/anydoc-wasm": "0.2.5",
     "@raphie/contracts": "0.1.0",
-    "chat": "4.44.0",
-    "effect": "4.1.2",
-    "hono": "4.13.16",
-    "just-bash": "3.6.0",
-    "pdfjs-dist": "5.4.624",
+    "chat": "4.45.0",
+    "effect": "4.1.5",
+    "hono": "4.13.19",
+    "just-bash": "3.6.1",
+    "pdfjs-dist": "6.5.438",
     "zod": "4.6.7"
   }
 }

@@ -88,7 +88,7 @@ Six constraints shape the code. Each one has a concrete mechanism.
 | Execution         | just-bash 3.6 in a worker thread; the `docker` CLI (or `RAPHIE_CONTAINER_BINARY`); `anydoc-wasm` and `pdfjs-dist` in a worker | Workspace commands, the opt-in container sandbox, document reading                  |
 | Storage           | SQLite through `bun:sqlite` (WAL for most stores), FTS5, AES-256-GCM, `Bun.secrets`                                           | Every store, memory search, encrypted provider keys, the OS credential store        |
 | Desktop           | Rust, the Rune UI toolkit, `reqwest` on Tokio                                                                                 | The desktop app in `apps/desktop`, shipped with each release for Apple Silicon Macs |
-| Toolchain         | Bun 1.4.4, TypeScript 7.0.2, Oxlint (type-aware), `bun fmt`, `bun:test`, Varlock, `bun build --compile`                       | Build, checks, configuration and the standalone binaries                            |
+| Toolchain         | Bun 1.4.5, TypeScript 7.0.2, Oxlint (type-aware), `bun fmt`, `bun:test`, Varlock, `bun build --compile`                       | Build, checks, configuration and the standalone binaries                            |
 
 ## Code layering
 

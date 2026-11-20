@@ -24,14 +24,14 @@ publish = false
 [workspace.dependencies]
 # `native-file-dialog` is the system file picker behind the composer's
 # paperclip (the `rfd` crate on macOS and Windows).
-rune = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac", features = ["native-file-dialog"] }
-rune-kit = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac", features = ["markdown"] }
+rune = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143", features = ["native-file-dialog"] }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143", features = ["markdown"] }
 
 [patch.crates-io]
-winit = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
-parley_engine = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
-wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
-accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "09ab92a5c83b906adb6fbf92637323b49e86d7ac" }
+winit = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

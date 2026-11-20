@@ -5,7 +5,7 @@ import type { ToolApproval, ToolDelivery } from "../domain/tool-approval.ts";
 
 export type { ToolApproval, ToolResult } from "../domain/tool-approval.ts";
 
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { defineDoc } from "@earendil-works/pi-durable";

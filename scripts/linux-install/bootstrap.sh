@@ -7,7 +7,7 @@ command -v apt-get >/dev/null || { echo 'This installer currently supports Debia
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || id raphie >/dev/null 2>&1; then
   echo 'An existing Raphie installation or user was found; refusing to overwrite it.' >&2; exit 1
 fi
-if [ -e /usr/local/bin/bun ] && [ "$(/usr/local/bin/bun --version)" != 1.4.4 ]; then
+if [ -e /usr/local/bin/bun ] && [ "$(/usr/local/bin/bun --version)" != 1.4.5 ]; then
   echo 'A different Bun already exists at /usr/local/bin/bun; refusing to replace it.' >&2; exit 1
 fi
 apt-get update
@@ -16,11 +16,11 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 if [ ! -x /usr/local/bin/bun ]; then
   case "$(uname -m)" in
-    x86_64) platform=x64; checksum=bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c ;;
-    aarch64|arm64) platform=aarch64; checksum=baa6bb36f51d6e58561e02bbea825038a9df454f673d6d776e8bbf86f8c7850e ;;
+    x86_64) platform=x64; checksum=94559b3b528995a49452f9f2404cec74f2efd7d06e0a000a8cd214b02c3666eb ;;
+    aarch64|arm64) platform=aarch64; checksum=18656a3bf0ea5641f5796ae4213b75255579a70a0fded2f337933785568cdf84 ;;
     *) echo 'Unsupported Linux architecture.' >&2; exit 1 ;;
   esac
-  curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-$platform.zip" -o "$tmp/bun.zip"
+  curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-$platform.zip" -o "$tmp/bun.zip"
   printf '%s  %s\n' "$checksum" "$tmp/bun.zip" | sha256sum -c -
   unzip -q "$tmp/bun.zip" -d "$tmp"
   install -m 0755 "$tmp/bun-linux-$platform/bun" /usr/local/bin/bun
