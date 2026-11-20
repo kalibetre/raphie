@@ -407,10 +407,22 @@ pub struct SessionSummary {
     /// epoch); `None` while it is active.
     #[serde(default)]
     pub archived_at: Option<i64>,
-    /// The bot that handed this session's task off; only it sends messages
-    /// here.
+    /// The bot that handed this session's task off, and its session the
+    /// task came from.
     #[serde(default)]
-    pub handed_off_by: Option<BotRef>,
+    pub handed_off_by: Option<HandedOffBy>,
+}
+
+/// `SessionView["handedOffBy"]` in `packages/contracts`.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HandedOffBy {
+    pub id: String,
+    pub name: String,
+    /// The sending bot's session that handed the task off; `None` for
+    /// sessions from before it was recorded.
+    #[serde(default)]
+    pub session_id: Option<String>,
 }
 
 /// `Turn["status"]` in `packages/contracts/src/index.ts`.

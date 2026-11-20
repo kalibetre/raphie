@@ -12,8 +12,11 @@ import {
 import { useHandoffs } from "../../domains/conversations/infrastructure/use-handoffs";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
-import { HandoffLock } from "../../domains/conversations/presentation/handoffs/handoff-delegates";
 import { ConversationList } from "../../domains/conversations/presentation/sessions/conversation-list";
+import {
+  lastSessionKey,
+  useLastSession,
+} from "../../domains/conversations/presentation/sessions/last-session";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
@@ -25,10 +28,7 @@ import { Settings } from "../../domains/settings/presentation/settings";
 import { SettingsMain } from "../../domains/settings/presentation/settings-main";
 import { SettingsNav } from "../../domains/settings/presentation/settings-nav";
 import { useBackend } from "../../infrastructure/http/backend-context";
-import {
-  readLocal,
-  writeLocal,
-} from "../../infrastructure/preferences/storage";
+import { writeLocal } from "../../infrastructure/preferences/storage";
 import { Button } from "../../shared/ui/button";
 import {
   Sidebar,
@@ -104,11 +104,7 @@ export function Workspace({
   ].sort((a, b) => b.lastAt - a.lastAt);
   const unread = (session: (typeof summaries)[number]) =>
     inbox.unread(workspace.botId, session);
-  const lastSessionKey = useCallback(
-    (id: string) =>
-      `raphie:last-session:${encodeURIComponent(workspace.url)}:${id}`,
-    [workspace.url],
-  );
+  const lastSession = useLastSession();
   const conversation = data?.conversations.find(
     (c) => c.sessionId === (sessionId ?? legacySessionId),
   );
@@ -197,8 +193,8 @@ export function Workspace({
   }, [markInboxRead, workspace.botId, readSessionId, readCount]);
   useEffect(() => {
     if (readSessionId)
-      writeLocal(lastSessionKey(workspace.botId), readSessionId);
-  }, [workspace.botId, lastSessionKey, readSessionId]);
+      writeLocal(lastSessionKey(workspace.url, workspace.botId), readSessionId);
+  }, [workspace.url, workspace.botId, readSessionId]);
 
   async function send(
     text: string,
@@ -335,7 +331,7 @@ export function Workspace({
         const nextBot = id === "default" ? undefined : id;
         // A phone shows the bot's conversations; a wide screen reopens the
         // one you were in, with the list beside it.
-        const last = mobile ? undefined : readLocal(lastSessionKey(id));
+        const last = mobile ? undefined : lastSession(id);
         if (last)
           void navigate({
             to: "/sessions/$sessionId",
@@ -565,75 +561,62 @@ export function Workspace({
                         }
                       />
                     )}
-                    {conversation?.handedOffBy ? (
-                      <HandoffLock
-                        from={conversation.handedOffBy}
-                        busy={busy}
-                        onStop={async () => {
-                          await api(
-                            `/api/sessions/${conversation.id}/control`,
-                            { action: "stop" },
-                          );
-                          await refetch();
-                        }}
-                      />
-                    ) : (
-                      <Composer
-                        key={`composer-${conversationId ?? "new"}`}
-                        handoffs={handoffs}
-                        mentionables={handoffQuery.data?.targets}
-                        conversationId={conversationId}
-                        suggestion={suggestion}
-                        model={conversation?.model ?? data?.model ?? null}
-                        needsModel={!data?.model}
-                        usage={usage?.tokens ? usage : undefined}
-                        contextUsed={contextUsed}
-                        disabled={
-                          !connected ||
-                          !data?.model ||
-                          (!!conversationId && !conversation)
-                        }
-                        busy={busy}
-                        enabledPlugins={enabled}
-                        onStop={async () => {
-                          if (!conversationId) return;
-                          await api(`/api/sessions/${conversationId}/control`, {
-                            action: "stop",
+                    <Composer
+                      key={`composer-${conversationId ?? "new"}`}
+                      handoffs={handoffs}
+                      mentionables={handoffQuery.data?.targets}
+                      handedOffBy={conversation?.handedOffBy}
+                      conversationId={conversationId}
+                      suggestion={suggestion}
+                      model={conversation?.model ?? data?.model ?? null}
+                      needsModel={!data?.model}
+                      usage={usage?.tokens ? usage : undefined}
+                      contextUsed={contextUsed}
+                      disabled={
+                        !connected ||
+                        !data?.model ||
+                        (!!conversationId && !conversation)
+                      }
+                      busy={busy}
+                      enabledPlugins={enabled}
+                      onStop={async () => {
+                        if (!conversationId) return;
+                        await api(`/api/sessions/${conversationId}/control`, {
+                          action: "stop",
+                        });
+                        await refetch();
+                      }}
+                      onSend={send}
+                      onChooseModel={async (model) => {
+                        if (!conversationId) return;
+                        await api(
+                          `/api/sessions/${conversationId}/model`,
+                          model,
+                        );
+                        await refetch();
+                      }}
+                      onModelSettings={() => {
+                        if (conversation)
+                          void navigate({
+                            to: "/sessions/$sessionId",
+                            params: { sessionId: conversation.sessionId },
+                            search: {
+                              bot,
+                              view: "settings",
+                              section: "models",
+                            },
                           });
-                          await refetch();
-                        }}
-                        onSend={send}
-                        onChooseModel={async (model) => {
-                          if (!conversationId) return;
-                          await api(
-                            `/api/sessions/${conversationId}/model`,
-                            model,
-                          );
-                          await refetch();
-                        }}
-                        onModelSettings={() => {
-                          if (conversation)
-                            void navigate({
-                              to: "/sessions/$sessionId",
-                              params: { sessionId: conversation.sessionId },
-                              search: {
-                                bot,
-                                view: "settings",
-                                section: "models",
-                              },
-                            });
-                          else
-                            void navigate({
-                              to: "/",
-                              search: {
-                                bot,
-                                view: "settings",
-                                section: "models",
-                              },
-                            });
-                        }}
-                      />
-                    )}
+                        else
+                          void navigate({
+                            to: "/",
+                            search: {
+                              bot,
+                              view: "settings",
+                              section: "models",
+                            },
+                          });
+                      }}
+                    />
                   </div>
                 </>
               )}

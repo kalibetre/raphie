@@ -132,11 +132,7 @@ fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
             Some(conversation) => main.child(conversation::conversation(s, conversation, look)),
             None => main.child(welcome::welcome(s, look)),
         };
-        // A task another bot handed off is directed by that bot alone.
-        main = match s.handed_off_by() {
-            Some(from) => main.child(handoff_lock(s, from, look)),
-            None => main.child(composer::composer(s, look, overlays)),
-        };
+        main = main.child(composer::composer(s, look, overlays));
     }
 
     let mut shell = row()
@@ -223,19 +219,5 @@ fn notice_banner(notice: &str, t: &Theme) -> El {
                 true,
                 |s: &mut Ui| s.model.notice = None,
             )),
-    )
-}
-
-/// The note that takes the composer's place in a handed-off session, laid
-/// out as the composer is.
-fn handoff_lock(s: &Ui, from: &raphie_core::contracts::BotRef, look: &Look) -> El {
-    col().key("rd-composer-area").w_full().items_center().child(
-        col()
-            .w_full()
-            .max_w(conversation::READING_WIDTH)
-            .px(28.0)
-            .pt(4.0)
-            .pb(14.0)
-            .child(handoffs::lock(s, from, look)),
     )
 }

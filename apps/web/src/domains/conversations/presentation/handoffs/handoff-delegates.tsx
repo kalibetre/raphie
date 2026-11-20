@@ -136,65 +136,33 @@ export function HandoffDelegates({
   );
 }
 
-/** In place of the composer: a handed-off task is directed by the bot that sent it. */
-export function HandoffLock({
+/**
+ * Above the composer in a task another bot handed off: the owner can continue
+ * it here, while that bot's own requests still report back to it.
+ */
+export function HandoffNote({
   from,
-  busy,
-  onStop,
 }: {
-  from: { id: string; name: string };
-  busy: boolean;
-  onStop: () => Promise<void>;
+  from: { id: string; name: string; sessionId?: string };
 }) {
   const openSession = useOpenSession();
-  const [error, setError] = useState<string>();
-  const [stopping, setStopping] = useState(false);
-
-  async function stop() {
-    setError(undefined);
-    setStopping(true);
-    try {
-      await onStop();
-    } catch {
-      setError("Could not stop this task. Please retry.");
-    } finally {
-      setStopping(false);
-    }
-  }
-
   return (
-    <div className="composer-wrap">
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="handoff-lock" role="note">
-        <BotAvatar id={from.id} />
-        <p>
-          <strong>{from.name}</strong> directs this task, and its results go
-          back there. To change the task, ask {from.name}.
-        </p>
-        <div className="handoff-lock-actions">
-          {busy && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={stopping}
-              onClick={() => void stop()}
-            >
-              Stop task
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void openSession(from.id)}
-          >
-            Open {from.name}
-          </Button>
-        </div>
-      </div>
+    <div className="handoff-note" role="note">
+      <BotAvatar id={from.id} />
+      <p>
+        <strong>{from.name}</strong> handed off this task and gets the results
+        of its requests. What you write here stays here.
+      </p>
+      <Button
+        size="xs"
+        variant="ghost"
+        type="button"
+        // Back to the conversation that handed the task off. Sessions from
+        // before it was recorded open the bot's last conversation.
+        onClick={() => void openSession(from.id, from.sessionId)}
+      >
+        Open {from.name}
+      </Button>
     </div>
   );
 }

@@ -15,12 +15,13 @@ use raphie_core::contracts::{
     ApprovalMode, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
     RuntimeSettings, Scope, TurnStatus,
 };
-use raphie_core::contracts::{BotRef, Handoff, HandoffStatus};
+use raphie_core::contracts::{BotRef, HandedOffBy, Handoff, HandoffStatus};
 use raphie_core::contracts::{ProviderSignIn, SignInEvent, SignInStatus};
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::{self, Announcement, Announcements, Item, Target};
 use raphie_core::jobs::JobAction;
+use raphie_core::last_sessions::LastSessions;
 use raphie_core::local_install;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
@@ -375,6 +376,9 @@ pub struct Ui {
     pub posted: Vec<Announcement>,
     /// How many of each conversation's replies were read on this computer.
     pub read_replies: ReadReplies,
+    /// The conversation last open with each bot, reopened when the bot is
+    /// chosen again.
+    pub last_sessions: LastSessions,
     /// The conversation on screen is scrolled to its end.
     pub at_bottom: bool,
     /// This window is the one in front.
@@ -514,6 +518,9 @@ impl Ui {
         ui.read_replies = ReadReplies::default_path()
             .map(|path| ReadReplies::load(&path))
             .unwrap_or_default();
+        ui.last_sessions = LastSessions::default_path()
+            .map(|path| LastSessions::load(&path))
+            .unwrap_or_default();
         ui
     }
 
@@ -547,6 +554,7 @@ impl Ui {
             announced: Announcements::default(),
             posted: Vec::new(),
             read_replies: ReadReplies::default(),
+            last_sessions: LastSessions::default(),
             // A conversation opens at its end, in a window in front.
             at_bottom: true,
             window_focused: true,
@@ -637,6 +645,9 @@ impl Ui {
     }
 
     pub fn select_bot(&mut self, bot_id: &str) {
+        // What was open with the bot being left, including a conversation
+        // that started since it was chosen.
+        self.remember_session();
         self.inbox_open = false;
         // A model chosen for one bot's new conversation is not another's.
         self.new_model = None;
@@ -1300,7 +1311,7 @@ impl Ui {
 
     /// The bot that handed the open conversation's task off, if one did:
     /// only it sends messages there.
-    pub fn handed_off_by(&self) -> Option<&BotRef> {
+    pub fn handed_off_by(&self) -> Option<&HandedOffBy> {
         let conversation = self.model.conversation.as_ref()?;
         conversation
             .observation
@@ -1385,7 +1396,46 @@ impl Ui {
         self.delegates_open = false;
         match session_id {
             Some(session_id) => self.open_conversation(bot_id, session_id),
+            None => self.choose_bot(bot_id),
+        }
+    }
+
+    /// A bot chosen from the roster or a link: back to the conversation
+    /// last open with it, or a new one if there was none, as on the web.
+    pub fn choose_bot(&mut self, bot_id: &str) {
+        self.remember_session();
+        let last = self
+            .model
+            .origin
+            .as_ref()
+            .and_then(|origin| self.last_sessions.get(origin.as_str(), bot_id))
+            .map(str::to_owned);
+        match last {
+            Some(session_id) => self.open_conversation(bot_id, &session_id),
             None => self.select_bot(bot_id),
+        }
+    }
+
+    /// Notes the open conversation as the last one with its bot. A new
+    /// conversation with no session yet leaves the last one as it was.
+    fn remember_session(&mut self) {
+        let (Some(origin), Some(bot_id), Some(open)) = (
+            &self.model.origin,
+            &self.model.bot_id,
+            &self.model.conversation,
+        ) else {
+            return;
+        };
+        let changed = self
+            .last_sessions
+            .set(origin.as_str(), bot_id, &open.session_id);
+        // Tests and headless runs have no engine and must not write files.
+        if changed
+            && self.client.is_some()
+            && let Some(path) = LastSessions::default_path()
+        {
+            // Forgetting is harmless: the bot opens on a new conversation.
+            let _ = self.last_sessions.save(&path);
         }
     }
 
@@ -1408,6 +1458,10 @@ impl Ui {
 
     /// The bots the composer's "@" menu offers now; empty when it is shut.
     pub fn mention_options(&self) -> Vec<BotRef> {
+        // A handed-off task is done here, never handed on.
+        if self.handed_off_by().is_some() {
+            return Vec::new();
+        }
         let Some(query) = self.typed_mention() else {
             return Vec::new();
         };

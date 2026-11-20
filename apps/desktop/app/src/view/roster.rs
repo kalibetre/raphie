@@ -163,7 +163,7 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
     };
     // `move` gives the closure its own copy of `id`, since it outlives this
     // function.
-    pressable(row, true, move |s: &mut Ui| s.select_bot(&id))
+    pressable(row, true, move |s: &mut Ui| s.choose_bot(&id))
 }
 
 /// The small ghost button at the end of a roster label (the web's

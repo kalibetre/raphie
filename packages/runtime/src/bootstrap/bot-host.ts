@@ -333,6 +333,27 @@ export class BotHost implements BotProfiles {
       },
       turn: async (id, turnId) =>
         other(id) ? this.runtime(id).gateway.chats.turn(turnId) : undefined,
+      // Only a session this bot handed a task to, never another of that
+      // bot's conversations.
+      transcript: async (id, sessionId) => {
+        if (!other(id)) return undefined;
+        const state = await this.runtime(id).gateway.chats.state();
+        const session = state.conversations.find(
+          (item) => item.sessionId === sessionId,
+        );
+        if (session?.handedOffBy?.id !== botId) return undefined;
+        return state.turns
+          .filter((turn) => turn.conversationId === session.id)
+          .map((turn) => ({
+            from:
+              turn.handoff?.kind === "task"
+                ? ("you" as const)
+                : ("owner" as const),
+            text: turn.text,
+            status: turn.status,
+            answer: turn.answer,
+          }));
+      },
     };
   }
 

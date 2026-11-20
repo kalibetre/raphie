@@ -2206,9 +2206,10 @@ pub fn handoff_task(ui: &mut Ui) {
         vec![],
         vec![],
     );
-    observation.session.handed_off_by = Some(raphie_core::contracts::BotRef {
+    observation.session.handed_off_by = Some(raphie_core::contracts::HandedOffBy {
         id: "default".into(),
         name: "Raphie".into(),
+        session_id: Some("s-asked".into()),
     });
     ui.model.select_session(Some("s-1".into()));
     ui.model.apply(Event::Observation {

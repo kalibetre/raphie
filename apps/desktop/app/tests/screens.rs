@@ -4956,14 +4956,56 @@ fn the_composer_lists_every_bot_at_work_waiting_ones_first() {
 }
 
 #[test]
-fn a_handed_off_task_is_directed_by_the_bot_that_sent_it() {
+fn the_owner_can_continue_a_task_another_bot_handed_off() {
     let mut rt = render(scenes::handoff_task, false);
     let text = screen_text(&rt);
     assert!(text.contains("Handed off by"));
-    assert!(rt.find("rd-handoff-lock").is_some());
-    assert!(rt.find("rd-composer-card").is_none(), "no composer");
-    click(&mut rt, "rd-lock-open");
+    assert!(text.contains("What you write here stays here."));
+    // The composer is there, under the note.
+    let note = element(&rt, "rd-handoff-note");
+    let card = element(&rt, "rd-composer-card");
+    assert!(
+        note.rect[1] < card.rect[1],
+        "the note sits above the composer"
+    );
+    // Full access stays off: each command needs the owner's approval.
+    click(&mut rt, "rd-permissions");
+    assert!(screen_text(&rt).contains("Not in a task from Raphie"));
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-permissions-full");
+    assert_eq!(rt.state.sent.len(), before, "full access is not offered");
+    rt.update(|ui, _| ui.permissions_open = false);
+    settle(&mut rt);
+    // The task is done here, never handed on: "@" offers no bots, though
+    // Research could hand tasks to Raphie and Writer elsewhere.
+    rt.update(|ui, _| {
+        ui.model.apply(raphie_core::model::Event::Handoffs {
+            bot_id: "b-research".into(),
+            list: serde_json::from_value(serde_json::json!({
+                "targets": [
+                    { "id": "default", "name": "Raphie" },
+                    { "id": "b-writer", "name": "Writer" }
+                ],
+                "items": []
+            }))
+            .unwrap(),
+        });
+    });
+    settle(&mut rt);
+    assert!(!rt.state.handoff_targets().is_empty());
+    rt.update(|ui, _| {
+        ui.composer = rune::TextEdit::new("Ask @");
+        ui.composer.focused = true;
+    });
+    settle(&mut rt);
+    assert!(rt.state.mention_options().is_empty());
+    assert!(rt.find("rd-mentions").is_none());
+    // "Open Raphie" goes back to the conversation that handed it off.
+    click(&mut rt, "rd-handoff-note-open");
     assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+    assert!(rt.state.sent.ends_with(&[Command::SelectSession {
+        session_id: Some("s-asked".into()),
+    }]));
 }
 
 #[test]
@@ -5018,4 +5060,44 @@ fn a_named_bot_shows_as_its_name_without_the_at() {
         "{text}"
     );
     assert!(!text.contains("@Writer"));
+}
+
+#[test]
+fn choosing_a_bot_again_reopens_the_conversation_last_open_with_it() {
+    let mut rt = render(scenes::handoff_task, false);
+    let research = rt
+        .state
+        .model
+        .conversation
+        .as_ref()
+        .map(|c| c.session_id.clone())
+        .expect("a Research conversation is open");
+    // Raphie has no last conversation yet: it opens on a new one.
+    click(&mut rt, "rd-bot-default");
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+    assert!(rt.state.model.conversation.is_none());
+    // Back to Research: the conversation that was open, not a new one.
+    click(&mut rt, "rd-bot-b-research");
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("b-research"));
+    assert_eq!(
+        rt.state
+            .model
+            .conversation
+            .as_ref()
+            .map(|c| c.session_id.as_str()),
+        Some(research.as_str())
+    );
+    assert!(rt.state.sent.contains(&Command::SelectSession {
+        session_id: Some(research.clone()),
+    }));
+    // "Open Raphie" from a link goes the same way: back to the one last
+    // open there.
+    click(&mut rt, "rd-bot-default");
+    rt.update(|ui, _| ui.select_session(Some("s-raphie")));
+    rt.update(|ui, _| ui.choose_bot("b-research"));
+    rt.update(|ui, _| ui.open_bot("default", None));
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+    assert!(rt.state.sent.ends_with(&[Command::SelectSession {
+        session_id: Some("s-raphie".into()),
+    }]));
 }

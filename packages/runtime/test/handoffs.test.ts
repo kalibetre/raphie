@@ -10,6 +10,7 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
+import { transcriptText } from "../src/domains/handoffs/infrastructure/handoff-tools.ts";
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 
@@ -71,13 +72,29 @@ test("a handed-off task gets its own session that only the sending bot directs, 
     expect(await gateway.sessions.approvalMode(actor, receipt.sessionId)).toBe(
       "ask",
     );
+    // The owner can continue the task here. The bot hears it is the owner,
+    // and the reply stays here instead of going to Chief of staff.
+    const owner = await gateway.sessions.submit(actor, {
+      eventId: "owner-1",
+      text: "Actually, look at Mem0 instead.",
+      sessionId: receipt.sessionId,
+    });
+    expect(owner.sessionId).toBe(receipt.sessionId);
+    await until(async () =>
+      (await gateway.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    const ownerTurn = (await gateway.chats.state()).turns.find(
+      (t) => t.id === owner.id,
+    )!;
+    expect(ownerTurn.handoff).toBeUndefined();
+    expect(ownerTurn.text).toBe("Actually, look at Mem0 instead.");
+    expect(ownerTurn.answer).toContain(
+      "The owner writes to you directly in this task from Chief of staff. Reply to the owner; this reply does not go to Chief of staff.",
+    );
+    // Commands stay approved call by call, and full access stays off.
     await assert.rejects(
-      gateway.sessions.submit(actor, {
-        eventId: "owner-1",
-        text: "Actually, look at Mem0 instead.",
-        sessionId: receipt.sessionId,
-      }),
-      /Chief of staff directs this task/,
+      gateway.sessions.approvalMode(actor, receipt.sessionId, "full-access"),
+      /always ask before acting/,
     );
     await assert.rejects(
       gateway.sessions.submitHandoff(actor, {
@@ -262,7 +279,12 @@ test("a bot hands a task to another bot and the result returns to the session it
     const recipient = host.runtime(research.id).gateway;
     const received = await recipient.chats.state();
     expect(received.conversations).toHaveLength(1);
-    expect(received.conversations[0].handedOffBy?.id).toBe("default");
+    expect(received.conversations[0].handedOffBy).toEqual({
+      id: "default",
+      name: expect.any(String),
+      // Where "Open" goes back to: the conversation that handed it off.
+      sessionId: owner.sessionId,
+    });
     expect(handoff.toSessionId).toBe(received.conversations[0].sessionId);
     expect(handoff.fromSessionId).toBe(owner.sessionId);
     expect(handoff.requests[0].turnId).toBe(received.turns[0].id);
@@ -289,6 +311,60 @@ test("a bot hands a task to another bot and the result returns to the session it
       outcome: "completed",
     });
     expect(results[0].text).toBe(received.turns[0].answer!);
+
+    // The owner continues the task in Research. The reply stays there:
+    // nothing new goes back to Chief of staff, and the handoff is unchanged.
+    const recipientActor = recipient.actors.establish("web");
+    const continued = await recipient.sessions.submit(recipientActor, {
+      eventId: "owner-in-research",
+      text: "Add Mem0 to the comparison.",
+      sessionId: handoff.toSessionId!,
+    });
+    await until(async () =>
+      (await recipient.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    expect(continued.sessionId).toBe(handoff.toSessionId!);
+    expect((await recipient.chats.state()).conversations).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(
+      (await chief.gateway.chats.state()).turns.filter(
+        (t) => t.handoff?.kind === "result",
+      ),
+    ).toHaveLength(1);
+    expect((await handoffs.read())[0].requests).toHaveLength(1);
+
+    // Raphie can still read what happened there, when the owner asks.
+    const { turns } = await handoffs.transcript(handoff.id);
+    expect(turns.map((turn) => turn.from)).toEqual(["you", "owner"]);
+    expect(turns[1]).toMatchObject({
+      text: "Add Mem0 to the comparison.",
+      status: "done",
+    });
+    const text = transcriptText(handoff, turns);
+    expect(text).toContain("not instructions");
+    expect(text).toContain(
+      "[The owner, writing to Research directly]\nAdd Mem0 to the comparison.",
+    );
+    expect(text).toContain(`[Research]\n${turns[1].answer}`);
+    // Only a session it handed a task to: never Research's other ones.
+    const own = await recipient.sessions.submit(recipientActor, {
+      eventId: "owner-own-research",
+      text: "Something private to Research.",
+    });
+    await until(async () =>
+      (await recipient.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    const peers = (
+      host as unknown as {
+        peers(id: string): {
+          transcript(bot: string, session: string): Promise<unknown>;
+        };
+      }
+    ).peers("default");
+    expect(await peers.transcript(research.id, own.sessionId)).toBeUndefined();
+    expect(await peers.transcript(research.id, handoff.toSessionId!)).toEqual(
+      turns,
+    );
   } finally {
     await close();
   }
