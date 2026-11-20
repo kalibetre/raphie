@@ -8,6 +8,7 @@ import type {
   Turn,
   WorkspaceSnapshot,
 } from "../index.ts";
+import type { SessionAsk } from "./asks.ts";
 
 export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   id: string;
@@ -25,6 +26,8 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   /** Completed replies the owner has read in any client; optional for older runtimes. */
   readReplyCount?: number;
   waiting: boolean;
+  /** A bot is waiting for the owner to answer a question; optional for older runtimes. */
+  asking?: boolean;
   /** When the owner archived it; archived sessions are listed apart. */
   archivedAt?: number;
   /** The bot that handed this session's task off, and its session it came from. */
@@ -51,12 +54,22 @@ export type SessionActivity = Omit<ActivityEvent, "conversationId"> & {
 export type Page<T> = { items: T[]; next: string | null };
 
 export type RunPhase =
-  "idle" | "queued" | "model" | "writing" | "tool" | "approval" | "failed";
+  | "idle"
+  | "queued"
+  | "model"
+  | "writing"
+  | "tool"
+  | "approval"
+  /** A bot's question is waiting for the owner's answer. */
+  | "question"
+  | "failed";
 
 export type SessionObservation = {
   session: SessionSummary;
   turns: SessionTurn[];
   toolApprovals: SessionApproval[];
+  /** Questions the bot asked; optional for older runtimes. */
+  asks?: SessionAsk[];
   live: LiveConversation | null;
   activity: SessionActivity[];
   nextBefore: string | null;
@@ -74,6 +87,7 @@ export type ClientWorkspace = RuntimeInfo & {
   conversations: SessionSummary[];
   turns: SessionTurn[];
   toolApprovals: SessionApproval[];
+  asks: SessionAsk[];
   live: Record<string, LiveConversation>;
   activity: SessionActivity[];
 };

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 
 import { streamSnapshots } from "../domains/activity/presentation/http/events.ts";
 import { approvalRoutes } from "../domains/approvals/presentation/http/routes.ts";
+import { askRoutes } from "../domains/asks/presentation/http/routes.ts";
 import { attachmentRoutes } from "../domains/attachments/presentation/http/routes.ts";
 import type { BotChannels } from "../domains/channels/infrastructure/bot-channels.ts";
 import type { BotTelegram } from "../domains/channels/infrastructure/bot-telegram.ts";
@@ -101,6 +102,7 @@ export function runtimeRoutes(
       owner,
     ),
   );
+  app.route("/api", askRoutes(runtime.asks, runtime.actors, owner));
   app.route("/api", attachmentRoutes(runtime.files, runtime));
   return app;
 }

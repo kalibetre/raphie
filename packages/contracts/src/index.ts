@@ -199,6 +199,13 @@ export type {
 } from "./sessions/views.ts";
 
 export type {
+  AskAnswer,
+  AskOption,
+  AskStatus,
+  SessionAsk,
+} from "./sessions/asks.ts";
+
+export type {
   RuntimeSettings,
   UpdateRuntimeSettings,
   ProviderConnection,
