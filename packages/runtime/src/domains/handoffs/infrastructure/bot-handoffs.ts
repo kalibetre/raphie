@@ -35,6 +35,15 @@ export type PeerProfile = Peer & {
   connections: string[];
 };
 
+/** One turn of a handed-off task's session, as the bot that sent it may read it. */
+export type TranscriptTurn = {
+  /** Who wrote the message: the sending bot's brief, or the owner directly. */
+  from: "you" | "owner";
+  text: string;
+  status: "pending" | "done" | "error";
+  answer: string | null;
+};
+
 /** The other bots, as the host that holds every bot exposes them to one. */
 export type HandoffPeers = {
   self(): Peer;
@@ -57,6 +66,14 @@ export type HandoffPeers = {
   waiting(botId: string, sessionId: string): Promise<boolean>;
   /** Stops the task's session in the other bot. */
   stop(botId: string, sessionId: string): Promise<void>;
+  /**
+   * The session in the other bot that this bot handed a task to, oldest turn
+   * first. Undefined when it is gone or this bot did not hand it off.
+   */
+  transcript(
+    botId: string,
+    sessionId: string,
+  ): Promise<TranscriptTurn[] | undefined>;
   /** Undefined when the bot or the turn no longer exists. Throws while it is unavailable. */
   turn(
     botId: string,
@@ -187,6 +204,30 @@ export class BotHandoffs {
       }),
     );
     return items;
+  }
+
+  /**
+   * The other bot's session for a handoff, including what the owner wrote
+   * there directly, oldest turn first.
+   */
+  async transcript(id: string) {
+    const handoff = (await this.read()).find((item) => item.id === id);
+    if (!handoff) throw new InputError("Handoff not found.", 404);
+    if (!handoff.toSessionId)
+      throw new InputError(
+        `${handoff.to.name} has not received the task yet. Try again in a moment.`,
+        409,
+      );
+    const turns = await this.options.peers.transcript(
+      handoff.to.id,
+      handoff.toSessionId,
+    );
+    if (!turns)
+      throw new InputError(
+        `${handoff.to.name}'s session for this task is no longer available.`,
+        404,
+      );
+    return { handoff, turns };
   }
 
   /**

@@ -10,6 +10,7 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
+import { transcriptText } from "../src/domains/handoffs/infrastructure/handoff-tools.ts";
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 
@@ -331,6 +332,39 @@ test("a bot hands a task to another bot and the result returns to the session it
       ),
     ).toHaveLength(1);
     expect((await handoffs.read())[0].requests).toHaveLength(1);
+
+    // Raphie can still read what happened there, when the owner asks.
+    const { turns } = await handoffs.transcript(handoff.id);
+    expect(turns.map((turn) => turn.from)).toEqual(["you", "owner"]);
+    expect(turns[1]).toMatchObject({
+      text: "Add Mem0 to the comparison.",
+      status: "done",
+    });
+    const text = transcriptText(handoff, turns);
+    expect(text).toContain("not instructions");
+    expect(text).toContain(
+      "[The owner, writing to Research directly]\nAdd Mem0 to the comparison.",
+    );
+    expect(text).toContain(`[Research]\n${turns[1].answer}`);
+    // Only a session it handed a task to: never Research's other ones.
+    const own = await recipient.sessions.submit(recipientActor, {
+      eventId: "owner-own-research",
+      text: "Something private to Research.",
+    });
+    await until(async () =>
+      (await recipient.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    const peers = (
+      host as unknown as {
+        peers(id: string): {
+          transcript(bot: string, session: string): Promise<unknown>;
+        };
+      }
+    ).peers("default");
+    expect(await peers.transcript(research.id, own.sessionId)).toBeUndefined();
+    expect(await peers.transcript(research.id, handoff.toSessionId!)).toEqual(
+      turns,
+    );
   } finally {
     await close();
   }
