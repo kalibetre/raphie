@@ -219,6 +219,88 @@ fn waiting_row(handoff: &Handoff, t: &Theme) -> El {
     )
 }
 
+/// Under a reply that read another bot's session for a task (the web's
+/// `HandoffSources`): "Read from Research · task  [View in Research ›]",
+/// one pill per session, each opening it.
+pub fn sources(turn: &SessionTurn, look: &Look) -> Option<El> {
+    if turn.read_sessions.is_empty() {
+        return None;
+    }
+    let t = &look.theme;
+    let mut list = row()
+        .key(format!("rd-read-{}", turn.id))
+        .role("list")
+        .label("Sessions this reply read")
+        .mt(10.0)
+        .gap(6.0)
+        .flex_wrap();
+    for read in &turn.read_sessions {
+        let tone = look.tones.of(&read.bot.id).body;
+        let id = read.bot.id.clone();
+        let session = read.session_id.clone();
+        let words = format!("Read from {}", read.bot.name);
+        let from = words.len() - read.bot.name.len();
+        let action = row()
+            .gap(2.0)
+            .center_y()
+            .pl(10.0)
+            .pr(6.0)
+            .py(2.0)
+            .radius(999.0)
+            .fill(tone.alpha(0.22))
+            .child(
+                text(format!("View in {}", read.bot.name))
+                    .font(font(12.0, 500.0).lh(18.0))
+                    .color(t.foreground),
+            )
+            .child(
+                icon(&icons::CHEVRON_RIGHT, 14.0)
+                    .color(t.foreground)
+                    .a11y_hidden(),
+            );
+        let pill = row()
+            .key(format!("rd-read-{}", read.handoff_id))
+            .role("button")
+            .label(format!("View in {}: {}", read.bot.name, read.title))
+            .gap(8.0)
+            .center_y()
+            .pl(6.0)
+            .pr(4.0)
+            .py(4.0)
+            .radius(999.0)
+            .fill(t.card)
+            .border(1.0, t.border)
+            .hover(t.hover)
+            .press(t.hover)
+            .focus_ring(1.0, 2.0, t.accent)
+            .child(face(&read.bot.id, 20.0, look))
+            .child(
+                rune::rich(
+                    words.clone(),
+                    vec![
+                        Span::new(from, words.len())
+                            .weight(600.0)
+                            .color(t.foreground),
+                    ],
+                )
+                .font(font(12.0, 400.0).lh(18.0))
+                .color(t.muted_foreground)
+                .single_line(),
+            )
+            .child(
+                text(format!("· {}", read.title))
+                    .font(font(12.0, 400.0).lh(18.0))
+                    .color(t.muted_foreground)
+                    .truncate()
+                    .shrink(),
+            )
+            .child(action)
+            .on_press(move |s: &mut Ui| s.open_bot(&id, Some(&session)));
+        list = list.child(pill);
+    }
+    Some(list)
+}
+
 /// "View in Research ›": the other bot's session, once it has one.
 fn view_in(bot: &BotRef, session: Option<&str>, t: &Theme) -> El {
     let label = format!("View in {}", bot.name);

@@ -1,4 +1,4 @@
-import type { Handoff, TurnHandoff } from "@raphie/contracts";
+import type { Handoff, ReadSession, TurnHandoff } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronDown,
@@ -14,6 +14,7 @@ import remarkGfm from "remark-gfm";
 import { Button } from "../../../../shared/ui/button";
 import { useIsMobile } from "../../../../shared/ui/use-mobile";
 import { BotAvatar } from "../../../settings/presentation/bot-avatar";
+import { useBotStyle } from "../../../settings/presentation/bot-tones";
 import {
   requestsFromTurn,
   requestStatus,
@@ -311,6 +312,41 @@ export function HandoffResult({
         )}
       </footer>
     </article>
+  );
+}
+
+/**
+ * Under a reply that read another bot's session for a task: where the
+ * answer came from, and the way there.
+ */
+export function HandoffSources({ read }: { read: readonly ReadSession[] }) {
+  const open = useOpenSession();
+  const botStyle = useBotStyle();
+  if (!read.length) return null;
+  return (
+    <ul className="handoff-sources" aria-label="Sessions this reply read">
+      {read.map((session) => (
+        <li key={session.handoffId}>
+          <button
+            type="button"
+            className="handoff-source"
+            style={botStyle(session.bot.id)}
+            aria-label={`View in ${session.bot.name}: ${session.title}`}
+            onClick={() => void open(session.bot.id, session.sessionId)}
+          >
+            <BotAvatar id={session.bot.id} />
+            <span className="handoff-source-text">
+              Read from <strong>{session.bot.name}</strong>
+              <span className="handoff-source-title">{session.title}</span>
+            </span>
+            <span className="handoff-source-action">
+              View in {session.bot.name}
+              <ChevronRight size={14} aria-hidden="true" />
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

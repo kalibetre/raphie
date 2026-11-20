@@ -29,6 +29,7 @@ import {
   HandoffBrief,
   HandoffCards,
   HandoffResult,
+  HandoffSources,
 } from "./handoffs/handoff-cards";
 import { mentionComponents, remarkMentions } from "./handoffs/mention-markdown";
 
@@ -273,6 +274,9 @@ export function Chat({
                 {text}
               </ReactMarkdown>
             </div>
+            {turn?.status === "done" && (
+              <HandoffSources read={turn.readSessions ?? []} />
+            )}
             {turn?.status === "done" && (
               <footer className="message-meta">
                 {at && (

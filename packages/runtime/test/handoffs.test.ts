@@ -194,10 +194,12 @@ async function twoBots(
         botId,
         deferResume: true,
         // The default bot hands off; the other bot is configured by the test.
+        // The test's own object is kept, so it can change the chief's next
+        // tool call between turns.
         ...chatModel(
           botId === "default"
-            ? {
-                tool: {
+            ? Object.assign(chief, {
+                tool: chief.tool ?? {
                   name: "handoff_create",
                   args: {
                     bot: "research",
@@ -205,8 +207,7 @@ async function twoBots(
                     brief: "Compare Hindsight and Honcho.",
                   },
                 },
-                ...chief,
-              }
+              })
             : options,
         ),
       });
@@ -714,5 +715,69 @@ test("a result reports back to the chat the owner last wrote from", async () => 
   } finally {
     await gateway.close();
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a reply that read the other bot's session records which one, for the way there", async () => {
+  const tool: { name: string; args: Record<string, string> } = {
+    name: "handoff_create",
+    args: {
+      bot: "research",
+      title: "Compare memory backends",
+      brief: "Compare Hindsight and Honcho.",
+    },
+  };
+  const options: NonNullable<Parameters<typeof chatModel>[0]> = { tool };
+  const { research, chief, handoffs, actor, close } = await twoBots(
+    {},
+    options,
+  );
+  try {
+    const owner = await chief.gateway.sessions.submit(actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(async () => (await handoffs.read())[0]?.status === "completed");
+    await until(async () =>
+      (await chief.gateway.chats.state()).turns.every(
+        (t) => t.status !== "pending",
+      ),
+    );
+    const [handoff] = await handoffs.read();
+    // The owner asks what Research found; the chief reads its session.
+    tool.name = "handoff_read";
+    tool.args = { id: handoff!.id };
+    options.repeatTool = true;
+    const asked = await chief.gateway.sessions.submit(actor, {
+      eventId: "owner-2",
+      text: "What did Research find?",
+      sessionId: owner.sessionId,
+    });
+    await until(async () =>
+      (await chief.gateway.chats.state()).turns.every(
+        (t) => t.status !== "pending",
+      ),
+    );
+    const read = {
+      handoffId: handoff!.id,
+      bot: { id: research.id, name: "Research" },
+      sessionId: handoff!.toSessionId!,
+      title: "Compare memory backends",
+    };
+    const turn = (await chief.gateway.chats.state()).turns.find(
+      (t) => t.id === asked.id,
+    )!;
+    expect(turn.readSessions).toEqual([read]);
+    expect(turn.answer).toContain("Research's session for");
+    // Clients get it with the turn.
+    const history = await chief.gateway.queries.history(actor, owner.sessionId);
+    expect(history.items.find((t) => t.id === asked.id)?.readSessions).toEqual([
+      read,
+    ]);
+    expect(
+      history.items.find((t) => t.id === owner.id)?.readSessions,
+    ).toBeUndefined();
+  } finally {
+    await close();
   }
 });
