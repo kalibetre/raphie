@@ -23,14 +23,15 @@ use crate::contracts::JobNotifications;
 use crate::contracts::ModelSelection;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
-    Account, AddConnectionBody, ApprovalStatus, AuthStatus, BotList, BotProfile,
-    ChannelHomeSettings, ChannelSettings, ControlAction, ControlBody, Decision, DecisionBody,
-    DecisionResult, DefaultModelBody, DeviceCodeResponse, DeviceTokenResponse, EditConnectionBody,
-    ErrorBody, HandoffList, McpActionBody, McpConnection, McpList, MemoryPage, MemoryRecall,
-    MemoryStatus, Page, RecallBody, Receipt, ReviseMemoryBody, RuntimeSettings, SandboxInfo,
-    SandboxSettings, SaveDiscordBody, SaveMcpBody, SaveMemoryBody, SaveSandboxBody,
-    SaveTelegramBody, Scope, SelectHomeBody, SessionObservation, SessionSummary, SessionTurn,
-    SubmitMessage, TelegramPairingCode, TestConnectionBody, UnpairTelegramBody, UpdateBotProfile,
+    Account, AddConnectionBody, AnswerResult, ApprovalStatus, AskAnswer, AskStatus, AuthStatus,
+    BotList, BotProfile, ChannelHomeSettings, ChannelSettings, ControlAction, ControlBody,
+    Decision, DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse,
+    DeviceTokenResponse, EditConnectionBody, ErrorBody, HandoffList, McpActionBody, McpConnection,
+    McpList, MemoryPage, MemoryRecall, MemoryStatus, Page, RecallBody, Receipt, ReviseMemoryBody,
+    RuntimeSettings, SandboxInfo, SandboxSettings, SaveDiscordBody, SaveMcpBody, SaveMemoryBody,
+    SaveSandboxBody, SaveTelegramBody, Scope, SelectHomeBody, SessionObservation, SessionSummary,
+    SessionTurn, SubmitMessage, TelegramPairingCode, TestConnectionBody, UnpairTelegramBody,
+    UpdateBotProfile,
 };
 use crate::contracts::{ActivityEvent, TelemetryBody, TraceDiagnostics};
 use crate::contracts::{AnswerSignInBody, ProviderSignIn, StartSignInBody};
@@ -874,6 +875,18 @@ impl ApiClient {
         );
         let body = DecisionBody { decision, scope };
         let result: DecisionResult = self.post_json(&path, &body).await?;
+        Ok(result.status)
+    }
+
+    /// The owner's answer to a bot's question.
+    pub async fn answer(
+        &self,
+        bot_id: &str,
+        ask_id: &str,
+        answer: &AskAnswer,
+    ) -> Result<AskStatus, ApiError> {
+        let path = bot_path(bot_id, &format!("/api/asks/{}", encode(ask_id)));
+        let result: AnswerResult = self.post_json(&path, answer).await?;
         Ok(result.status)
     }
 

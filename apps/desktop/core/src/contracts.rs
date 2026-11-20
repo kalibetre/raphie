@@ -385,6 +385,9 @@ pub struct SessionSummary {
     pub working: bool,
     pub failed: bool,
     pub waiting: bool,
+    /// A bot waits for the owner to answer its question.
+    #[serde(default)]
+    pub asking: bool,
     pub preview: String,
     pub turn_count: u32,
     #[serde(default)]
@@ -689,6 +692,57 @@ pub struct SessionApproval {
     pub each_call: bool,
 }
 
+/// `AskOption` in `packages/contracts/src/sessions/asks.ts`.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct AskOption {
+    pub label: String,
+    #[serde(default)]
+    pub detail: Option<String>,
+}
+
+/// `AskAnswer`: one of the options by position, or the owner's own words.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum AskAnswer {
+    Choice { choice: usize },
+    Text { text: String },
+}
+
+/// `AskStatus`. "expired" also covers a turn that stopped before an answer.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AskStatus {
+    Pending,
+    Answered,
+    Expired,
+    #[serde(other)]
+    Unknown,
+}
+
+/// The answer of `POST /api/asks/<id>`.
+#[derive(Clone, Debug, Deserialize)]
+pub struct AnswerResult {
+    pub status: AskStatus,
+}
+
+/// `SessionAsk`: a question a bot asked mid-turn, which the turn waits on.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionAsk {
+    pub id: String,
+    /// The turn that is waiting.
+    pub turn_id: String,
+    pub question: String,
+    pub options: Vec<AskOption>,
+    /// The first option deletes, sends or spends something.
+    #[serde(default)]
+    pub danger: bool,
+    pub expires_at: i64,
+    pub status: AskStatus,
+    #[serde(default)]
+    pub answer: Option<AskAnswer>,
+}
+
 /// `ToolApprovalView["execution"]` in `packages/contracts/src/index.ts`.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -755,6 +809,8 @@ pub enum RunPhase {
     Writing,
     Tool,
     Approval,
+    /// A bot's question waits for the owner's answer.
+    Question,
     Failed,
     #[serde(other)]
     Unknown,
@@ -777,6 +833,9 @@ pub struct SessionObservation {
     /// The most recent turns, oldest first.
     pub turns: Vec<SessionTurn>,
     pub tool_approvals: Vec<SessionApproval>,
+    /// Questions the bot asked the owner; absent from older runtimes.
+    #[serde(default)]
+    pub asks: Vec<SessionAsk>,
     pub live: Option<LiveConversation>,
     /// The session's latest journal entries (at most 200), oldest first.
     #[serde(default)]
@@ -1648,4 +1707,34 @@ pub struct NewBot {
 pub(crate) struct DeleteBotBody<'a> {
     pub name: &'a str,
     pub revision: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn questions_and_answers_read_and_write_as_the_runtime_sends_them() {
+        let ask: SessionAsk = serde_json::from_value(serde_json::json!({
+            "id": "a", "conversationId": "s", "turnId": "t",
+            "question": "Which one?", "options": [{ "label": "Tue" }, { "label": "Wed", "detail": "Bole" }],
+            "createdAt": 1, "expiresAt": 2, "status": "answered",
+            "answer": { "text": "Any morning" }, "answeredVia": "web"
+        }))
+        .expect("a question parses");
+        assert_eq!(ask.options[1].detail.as_deref(), Some("Bole"));
+        assert!(!ask.danger);
+        assert_eq!(
+            ask.answer,
+            Some(AskAnswer::Text {
+                text: "Any morning".into()
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(AskAnswer::Choice { choice: 1 }).unwrap(),
+            serde_json::json!({ "choice": 1 })
+        );
+        let unknown: AskStatus = serde_json::from_value(serde_json::json!("withdrawn")).unwrap();
+        assert_eq!(unknown, AskStatus::Unknown);
+    }
 }

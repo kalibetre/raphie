@@ -141,7 +141,12 @@ pub fn steps_by_turn<'a>(
 ) -> Vec<(&'a SessionTurn, Vec<ToolStep>)> {
     let mut by_turn: Vec<(&SessionTurn, Vec<ToolStep>)> = turns
         .iter()
-        .map(|turn| (*turn, tool_steps(&turn.id, activity, approvals)))
+        .map(|turn| {
+            // A question shows as its own card, not as a tool step.
+            let mut steps = tool_steps(&turn.id, activity, approvals);
+            steps.retain(|step| step.tool != "ask_owner");
+            (*turn, steps)
+        })
         .collect();
     for approval in approvals {
         let shown = by_turn.iter().any(|(_, steps)| {

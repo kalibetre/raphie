@@ -291,6 +291,8 @@ fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, 
     // The most urgent status only; none when nothing needs saying.
     let status: Option<(String, Color)> = if session.waiting {
         Some(("Needs approval".into(), t.attention))
+    } else if session.asking {
+        Some(("Needs your answer".into(), t.attention))
     } else if session.working {
         Some(("Working…".into(), t.accent))
     } else if session.failed {

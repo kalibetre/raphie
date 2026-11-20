@@ -12,6 +12,7 @@ use crate::attachments::{AttachmentDraft, FileBytes, Previews};
 use crate::auth::DeviceCode;
 use crate::channels::{Channel, ChannelOutcome};
 use crate::contracts::ApprovalMode;
+use crate::contracts::AskAnswer;
 use crate::contracts::Attachment;
 use crate::contracts::ModelSelection;
 use crate::contracts::WorkspaceListing;
@@ -482,8 +483,23 @@ pub enum Event {
         approval_id: String,
         outcome: DecisionOutcome,
     },
+    /// The answer to a bot's question was sent, or could not be.
+    Answered {
+        ask_id: String,
+        outcome: AnswerOutcome,
+    },
     /// Something went wrong that the owner should know about.
     Problem(String),
+}
+
+/// How sending an answer ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AnswerOutcome {
+    Applied,
+    /// The question stopped waiting before the answer arrived.
+    Late,
+    Gone,
+    Failed(String),
 }
 
 /// How an approval decision ended.
@@ -845,6 +861,8 @@ pub struct Model {
     pub saving_attachment: Option<String>,
     /// Approvals with a decision on its way.
     pub deciding: HashSet<String>,
+    /// Answers sent to a bot's questions and not yet confirmed, by question.
+    pub answering: HashMap<String, AskAnswer>,
     /// A message for the owner, shown until dismissed or replaced.
     pub notice: Option<String>,
 }
@@ -936,6 +954,7 @@ impl Default for Model {
             attachments: AttachmentDraft::default(),
             saving_attachment: None,
             deciding: HashSet::new(),
+            answering: HashMap::new(),
             notice: None,
         }
     }
@@ -1478,6 +1497,17 @@ impl Model {
                     DecisionOutcome::Failed(message) => Some(message),
                 };
             }
+            Event::Answered { ask_id, outcome } => {
+                self.answering.remove(&ask_id);
+                self.notice = match outcome {
+                    AnswerOutcome::Applied => None,
+                    AnswerOutcome::Late => {
+                        Some("That question is no longer waiting for an answer.".to_owned())
+                    }
+                    AnswerOutcome::Gone => Some("That question is no longer available.".to_owned()),
+                    AnswerOutcome::Failed(message) => Some(message),
+                };
+            }
             Event::Problem(message) => self.notice = Some(message),
         }
         Vec::new()
@@ -1755,6 +1785,15 @@ impl Model {
 
     /// The owner decided an approval. Returns false if a decision for it is
     /// already on its way, so double clicks send one request.
+    /// Marks `ask_id` as being answered; false when an answer is on its way.
+    pub fn begin_answer(&mut self, ask_id: &str, answer: AskAnswer) -> bool {
+        if self.answering.contains_key(ask_id) {
+            return false;
+        }
+        self.answering.insert(ask_id.to_owned(), answer);
+        true
+    }
+
     pub fn begin_decide(&mut self, approval_id: &str) -> bool {
         self.deciding.insert(approval_id.to_owned())
     }

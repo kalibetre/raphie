@@ -9,6 +9,7 @@ use raphie_core::attachments::{TOO_MANY, Upload};
 use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome};
 use raphie_core::contracts::ApprovalMode;
+use raphie_core::contracts::AskAnswer;
 use raphie_core::contracts::{
     BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, ModelSelection,
     SandboxProvider, Scope, TelegramPairingCode,
@@ -5137,4 +5138,58 @@ fn a_summary_of_earlier_messages_shows_above_the_turn_and_opens() {
     assert!(text.contains("getting long for the model"));
     click(&mut rt, "rd-summary-t3");
     assert!(!screen_text(&rt).contains("Review the launch plan"));
+}
+
+#[test]
+fn a_bots_question_takes_one_press_and_sends_one_answer() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::ask, dark);
+        let text = screen_text(&rt);
+        assert!(text.contains("Waiting for your answer"));
+        assert!(text.contains("Dr. Amare has three openings next week. Which one?"));
+        assert!(text.contains("Answer in your own words"));
+
+        click(&mut rt, "rd-ask-ask-1-1");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::Answer {
+                ask_id: "ask-1".into(),
+                answer: AskAnswer::Choice { choice: 1 },
+            })
+        );
+        // The answer shows at once, and the buttons are gone.
+        let text = screen_text(&rt);
+        assert!(
+            text.contains("You picked") && text.contains("Wed 14:00"),
+            "{text}"
+        );
+        assert!(!text.contains("Tue 9:30"));
+    }
+}
+
+#[test]
+fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
+    let mut rt = render(scenes::ask_own_words, false);
+    click(&mut rt, "rd-ask-send-ask-1");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::Answer {
+            ask_id: "ask-1".into(),
+            answer: AskAnswer::Text {
+                text: "Any morning works".into()
+            },
+        })
+    );
+    assert!(screen_text(&rt).contains("You answered"));
+
+    let rt = render(scenes::ask_rows, true);
+    let text = screen_text(&rt);
+    assert!(text.contains("Bole") && text.contains("12 minutes away"));
+
+    let rt = render(scenes::ask_confirm, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Delete 214") && text.contains("Keep them"));
+
+    let text = screen_text(&render(scenes::ask_answered, false));
+    assert!(text.contains("You picked") && text.contains("Wed 14:00"));
 }

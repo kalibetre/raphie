@@ -6,7 +6,8 @@
 //! `active-run.tsx`, and the message rules in `chat.css`.
 
 use raphie_core::contracts::{
-    ControlAction, QueueMode, SessionActivity, SessionObservation, SessionTurn, TurnStatus,
+    AskStatus, ControlAction, QueueMode, SessionActivity, SessionAsk, SessionObservation,
+    SessionTurn, TurnStatus,
 };
 use raphie_core::model::Conversation;
 use raphie_core::projections::{
@@ -17,6 +18,7 @@ use rune::{El, LiveRegion, ScrollSpec, col, icon, row, text};
 use rune_kit::{Loader, Markdown};
 
 use super::Look;
+use super::asks;
 use super::attachments::{Action, file_card};
 use super::compaction;
 use super::handoffs;
@@ -114,7 +116,12 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
         if let Some(divider) = compaction::divider(s, turn, look) {
             items.push(divider);
         }
-        items.push(owner_turn(s, turn, steps, now, look));
+        let asks: Vec<&SessionAsk> = observation
+            .asks
+            .iter()
+            .filter(|ask| ask.turn_id == turn.id)
+            .collect();
+        items.push(owner_turn(s, turn, steps, &asks, now, look));
         let streaming = writing
             .is_some_and(|w| w.id == turn.id)
             .then_some(live)
@@ -139,7 +146,14 @@ fn is_running(turn: &SessionTurn) -> bool {
 
 /// The owner's side of a turn: the message, then what became of it (queue
 /// controls, the tools a finished run used, a stop or failure line).
-fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &Look) -> El {
+fn owner_turn(
+    s: &Ui,
+    turn: &SessionTurn,
+    steps: &[ToolStep],
+    asks: &[&SessionAsk],
+    now: i64,
+    look: &Look,
+) -> El {
     let t = &look.theme;
     // One file is saved at a time, so the buttons wait while one is.
     let can_save = s.model.saving_attachment.is_none();
@@ -158,6 +172,11 @@ fn owner_turn(s: &Ui, turn: &SessionTurn, steps: &[ToolStep], now: i64, look: &L
             working: None,
         };
         block = block.child(tool_steps(s, &run, now, look));
+    }
+    if !working {
+        for ask in asks {
+            block = block.child(asks::card(s, ask, look));
+        }
     }
     if turn.cancelled == Some(true) {
         block = block.child(
@@ -412,18 +431,32 @@ fn active_run(
         .filter(|event| event.run_id.as_deref() == Some(turn.id.as_str()))
         .cloned()
         .collect();
+    let asks: Vec<&SessionAsk> = observation
+        .asks
+        .iter()
+        .filter(|ask| ask.turn_id == turn.id)
+        .collect();
+    let waiting = asks.iter().any(|ask| ask.status == AskStatus::Pending);
     let run = Run {
         turn_id: &turn.id,
         steps,
         working: Some(Working {
-            label: active_run_label(observation.live.as_ref(), steps, &own),
+            label: if waiting {
+                "Waiting for your answer…".to_owned()
+            } else {
+                active_run_label(observation.live.as_ref(), steps, &own)
+            },
             elapsed: format_duration(now - turn.created_at),
         }),
     };
-    col()
+    let mut block = col()
         .key("rd-working")
         .w_full()
-        .child(tool_steps(s, &run, now, look))
+        .child(tool_steps(s, &run, now, look));
+    for ask in asks {
+        block = block.child(asks::card(s, ask, look));
+    }
+    block
 }
 
 fn error_line(key: &str, message: &str, t: &Theme) -> El {
