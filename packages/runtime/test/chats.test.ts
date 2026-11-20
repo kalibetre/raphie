@@ -244,6 +244,7 @@ test("the instructions stay the same from turn to turn; each message carries its
       (m) => m.sections,
     );
     assert.equal(sections.length, 1);
+    assert.match(system, /Replies: open with the answer/);
     assert.doesNotMatch(system, /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
     assert.equal(users.length, 2);
     assert.match(users[0]!, /^\[Sent \d{4}-\d{2}-\d{2}T[^\]]+\]\n\nFirst$/);

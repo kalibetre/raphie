@@ -72,6 +72,12 @@ When a reply cannot finish, the conversation says why under your message, for ex
 
 For a fuller record, open **Settings → [bot] → Activity**: the bot's latest 100 events across all sessions (model calls, tools, approvals, recovery), refreshed every five seconds, with JSON export. Model reasoning is never shown. More in [observability](/operate/observability/).
 
+## Replies
+
+Bots keep replies short. A reply opens with the answer, or the one question the bot needs answered, in a sentence or two. What follows is only what you need to act on it, as a short list or table rather than paragraphs, and most replies fit in under 80 words. A reply runs longer when you ask for detail or the work is long by nature, such as code or a draft you asked for.
+
+To change this for one bot, say how it should reply in its [`SOUL.md`](/guides/bots/); the bot follows that instead.
+
 ## Long conversations
 
 A session can go on as long as you like. When it grows close to the size the model can read at once, the bot summarizes its earlier messages and reads the summary instead of them from then on. Its most recent messages stay word for word.

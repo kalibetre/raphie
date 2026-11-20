@@ -515,7 +515,12 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
     )
       await delay(10);
     expect(
-      prompts.some((p) => p.includes(profile.soul) && p.includes("Research")),
+      prompts.some(
+        (p) =>
+          p.includes(profile.soul) &&
+          p.includes("Research") &&
+          p.includes("Replies: open with the answer"),
+      ),
     ).toBe(true);
     expect((await get(`/api/sessions/${childReceipt.sessionId}`)).status).toBe(
       404,
