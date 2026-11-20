@@ -23,6 +23,7 @@ import {
 } from "../application/run-projection";
 import { chatAdapter } from "../infrastructure/chat-adapter";
 import { ActiveRun } from "./active-run";
+import { AskCard } from "./ask-card";
 import { AttachmentCard } from "./attachment-card";
 import { CompactionDivider } from "./compaction-divider";
 import { Conversation } from "./conversation";
@@ -113,7 +114,13 @@ export function Chat({
       (a) => a.conversationId === conversationId,
     );
     const byTurn = new Map<string, ToolStep[]>(
-      turns.map((t) => [t.id, toolSteps(t.id, state.activity, approvals)]),
+      turns.map((t) => [
+        t.id,
+        // A question shows as its own card, not as a tool step.
+        toolSteps(t.id, state.activity, approvals).filter(
+          (step) => step.tool !== "ask_owner",
+        ),
+      ]),
     );
     // The journal is capped; approvals whose events rolled off still belong to
     // the turn that was active when they were requested.
@@ -133,6 +140,8 @@ export function Chat({
     }
     return byTurn;
   }, [turns, state.activity, state.toolApprovals, conversationId]);
+
+  const asks = state.asks.filter((a) => a.conversationId === conversationId);
 
   return (
     <Conversation onRead={onRead}>
@@ -316,6 +325,7 @@ export function Chat({
             turn={turn}
             state={state}
             steps={steps.get(turn.id) ?? []}
+            asks={asks.filter((a) => a.turnId === turn.id)}
           />
         ))}
     </Conversation>
@@ -330,6 +340,10 @@ export function Chat({
         {!working && steps.length > 0 && (
           <ToolSteps steps={steps} working={working} />
         )}
+        {!working &&
+          asks
+            .filter((a) => a.turnId === turn.id)
+            .map((ask) => <AskCard key={ask.id} ask={ask} />)}
         {turn.cancelled && (
           <p className="message-meta">Stopped · message not completed</p>
         )}

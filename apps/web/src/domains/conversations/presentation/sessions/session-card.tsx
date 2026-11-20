@@ -68,6 +68,8 @@ export function SessionCard({
 function sessionStatus(session: SessionSummary, unreadCount: number) {
   if (session.waiting)
     return { tone: "needs-approval", label: "Needs approval" };
+  if (session.asking)
+    return { tone: "needs-approval", label: "Needs your answer" };
   if (session.working) return { tone: "working", label: "Working…" };
   if (session.failed) return { tone: "failed", label: "Failed" };
   if (unreadCount > 0)
