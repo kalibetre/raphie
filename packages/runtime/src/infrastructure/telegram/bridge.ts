@@ -3,6 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { TelegramProblem } from "@raphie/contracts";
 
 import type { ChannelServices } from "../../application/channels/ports.ts";
+import { parseAskCallback } from "../../domains/asks/domain/ask.ts";
 import { createDeliveryWorker } from "../../domains/delivery/application/worker.ts";
 import { InputError } from "../../shared/application/input-error.ts";
 import { groupMessageText } from "./addressing.ts";
@@ -241,6 +242,37 @@ export function createTelegramBridge(
       !config.owners().includes(String(callback.from.id))
     )
       return answer("You are not authorized to decide this request.");
+    const asked = parseAskCallback(callback.data ?? "");
+    if (asked) {
+      if (!chat || chat.type !== "private" || chat.id !== callback.from.id)
+        return answer("This action is not supported.");
+      try {
+        const who = actor(chat.id, callback.from.id);
+        // A settled question keeps its first answer.
+        const status = await app.asks.answer(
+          asked.id,
+          { choice: asked.choice },
+          who.subject,
+          who.source,
+          undefined,
+          {
+            threadId: who.threadId!,
+            connectionId: who.connectionId!,
+            userId: who.discordUserId!,
+          },
+        );
+        await answer(
+          status === "answered" ? "Answer sent." : "That question has closed.",
+        );
+      } catch (error) {
+        await answer(
+          error instanceof InputError
+            ? error.message
+            : "I could not send that answer.",
+        );
+      }
+      return;
+    }
     const approve = callback.data?.startsWith(APPROVE);
     if (
       !chat ||

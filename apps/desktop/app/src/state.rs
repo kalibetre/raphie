@@ -12,7 +12,7 @@ use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome, is_telegram_token};
 use raphie_core::contracts::SessionSummary;
 use raphie_core::contracts::{
-    ApprovalMode, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
+    ApprovalMode, AskAnswer, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
     RuntimeSettings, Scope, TurnStatus,
 };
 use raphie_core::contracts::{BotRef, HandedOffBy, Handoff, HandoffStatus};
@@ -326,6 +326,8 @@ pub struct Ui {
     pub open_reports: HashSet<String>,
     /// Turns whose summary of earlier messages is shown.
     pub open_summaries: HashSet<String>,
+    /// The question being answered in the owner's own words, and the words.
+    pub own_answer: Option<(String, TextEdit)>,
     /// The highlighted bot in the composer's "@" menu.
     pub mention_active: usize,
     /// The "@" (its byte offset) Escape closed the menu for.
@@ -579,6 +581,7 @@ impl Ui {
             delegates_open: false,
             open_reports: HashSet::new(),
             open_summaries: HashSet::new(),
+            own_answer: None,
             mention_active: 0,
             mention_dismissed: None,
             handoffs_asked_at: 0.0,
@@ -1251,6 +1254,30 @@ impl Ui {
                 decision,
                 scope,
             });
+        }
+    }
+
+    /// Answers a bot's question: one of its options, or the owner's words.
+    pub fn answer(&mut self, ask_id: &str, answer: AskAnswer) {
+        if self.model.begin_answer(ask_id, answer.clone()) {
+            if self.own_answer.as_ref().is_some_and(|(id, _)| id == ask_id) {
+                self.own_answer = None;
+            }
+            self.command(Command::Answer {
+                ask_id: ask_id.to_owned(),
+                answer,
+            });
+        }
+    }
+
+    /// Sends the words typed for `ask_id`, if there are any.
+    pub fn answer_in_own_words(&mut self, ask_id: &str) {
+        let Some((id, edit)) = &self.own_answer else {
+            return;
+        };
+        let text = edit.text.trim().to_owned();
+        if id == ask_id && !text.is_empty() {
+            self.answer(ask_id, AskAnswer::Text { text });
         }
     }
 

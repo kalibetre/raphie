@@ -16,6 +16,7 @@ const state: Snapshot = {
   mcp: { connected: false, error: false, server: null, toolCount: 0 },
   uncertainToolDeliveries: [],
   toolApprovals: [],
+  asks: [],
   activity: [],
   turns: [
     {

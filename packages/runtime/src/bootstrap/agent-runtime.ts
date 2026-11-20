@@ -36,6 +36,11 @@ import {
   ToolApprovals,
   ToolApprovalService,
 } from "../domains/approvals/infrastructure/pi-tool-approvals.ts";
+import {
+  Asks,
+  AskService,
+  createAskTools,
+} from "../domains/asks/infrastructure/pi-asks.ts";
 import { Files } from "../domains/attachments/infrastructure/local-attachment-store.ts";
 import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.ts";
 import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
@@ -80,6 +85,8 @@ type Options = {
   discordThreadId?: string;
   discordConnectionId?: string;
   approvalTtlMs?: number;
+  /** How long a bot's question waits for the owner; an hour by default. */
+  askTtlMs?: number;
   beforeEffectCommit?: () => Promise<void>;
   models?: Models;
   model?: ModelRef;
@@ -133,6 +140,7 @@ export class Gateway {
   fileApprovals: FileApprovalService;
   chats: ChatService;
   toolApprovals: ToolApprovalService;
+  asks: AskService;
   observations: Observations;
 
   private constructor(options: Options) {
@@ -166,6 +174,7 @@ export class Gateway {
     );
     this.chats.homeAvailable = (address) => this.home.available(address);
     this.toolApprovals = new ToolApprovalService(this);
+    this.asks = new AskService(this);
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
     this.queries = new PiClientQueries(this);
@@ -227,6 +236,7 @@ export class Gateway {
         }),
       );
     registry.install(createWebSearchTools(() => app.models, options.webFetch));
+    registry.install(createAskTools(app.asks));
     if (options.mcp) {
       registry.install(createMcpTools(app, options.mcp));
       app.mcpConnections = [options.mcp];
@@ -321,6 +331,9 @@ export class Gateway {
       for (const delivery of chats.deliveries)
         if (delivery.status === "sending") delivery.status = "uncertain";
       const toolApprovals = await tx.doc(ToolApprovals);
+      // Created up front, as the approvals are, so a tool waiting on a
+      // question watches a doc that already exists.
+      const asks = await tx.doc(Asks);
       const legacyConnection = options.discordConnectionId ?? "legacy-discord";
       for (const delivery of [
         ...state.deliveries,
@@ -391,7 +404,7 @@ export class Gateway {
             { conversationId: item.conversationId, operationId: item.id },
           );
         }
-      for (const delivery of toolApprovals.deliveries)
+      for (const delivery of [...toolApprovals.deliveries, ...asks.deliveries])
         if (delivery.status === "sending") delivery.status = "uncertain";
     }, context);
     for (const conversation of (await app.chats.state()).conversations)

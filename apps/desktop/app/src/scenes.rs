@@ -70,6 +70,11 @@ pub const SCENES: &[Scene] = &[
     ("streaming", streaming),
     ("working", working),
     ("approval", approval),
+    ("ask", ask),
+    ("ask-rows", ask_rows),
+    ("ask-confirm", ask_confirm),
+    ("ask-own-words", ask_own_words),
+    ("ask-answered", ask_answered),
     ("command-approval", command_approval),
     ("settings-account", settings_account),
     ("settings-account-unreachable", settings_account_unreachable),
@@ -1785,6 +1790,109 @@ pub fn working(ui: &mut Ui) {
         ),
     );
     ui.open_runs.insert("t2".into());
+}
+
+/// A question a bot asked the owner, waiting for the answer.
+fn asking(ui: &mut Ui, question: Value) {
+    let mut seen = observation(
+        "Book the dentist",
+        vec![turn(
+            "t1",
+            -30_000,
+            "Book the dentist next week.",
+            None,
+            "pending",
+        )],
+        None,
+        "question",
+        vec![],
+        vec![],
+    );
+    seen.asks = vec![from_json(question)];
+    open(ui, "s-3", seen);
+}
+
+const DENTIST: &str = "Dr. Amare has three openings next week. Which one?";
+
+fn question(text: &str, options: Value, danger: bool) -> Value {
+    json!({
+        "id": "ask-1", "conversationId": "s-3", "turnId": "t1",
+        "question": text,
+        "options": options, "danger": danger,
+        "createdAt": now_ms() - 20_000, "expiresAt": now_ms() + 3_600_000,
+        "status": "pending", "answer": null, "answeredVia": null
+    })
+}
+
+pub fn ask(ui: &mut Ui) {
+    asking(
+        ui,
+        question(
+            DENTIST,
+            json!([{ "label": "Tue 9:30" }, { "label": "Wed 14:00" }, { "label": "Fri 11:15" }]),
+            false,
+        ),
+    );
+}
+
+/// Answers with details show as rows.
+pub fn ask_rows(ui: &mut Ui) {
+    asking(
+        ui,
+        question(
+            "Which clinic should I book?",
+            json!([
+                { "label": "Bole", "detail": "Tue 9:30 · 12 minutes away" },
+                { "label": "Kazanchis", "detail": "Fri 11:15 · 25 minutes away" }
+            ]),
+            false,
+        ),
+    );
+}
+
+/// Before something that can't be taken back, the action is the red button.
+pub fn ask_confirm(ui: &mut Ui) {
+    asking(
+        ui,
+        question(
+            "214 newsletters are over a year old. Delete them?",
+            json!([{ "label": "Delete 214" }, { "label": "Keep them" }]),
+            true,
+        ),
+    );
+}
+
+pub fn ask_own_words(ui: &mut Ui) {
+    ask(ui);
+    ui.own_answer = Some(("ask-1".to_owned(), TextEdit::new("Any morning works")));
+}
+
+/// After the answer: one line under the question, then the reply.
+pub fn ask_answered(ui: &mut Ui) {
+    let mut seen = observation(
+        "Book the dentist",
+        vec![turn(
+            "t1",
+            -30_000,
+            "Book the dentist next week.",
+            Some("Booked Wed 14:00 with Dr. Amare."),
+            "done",
+        )],
+        None,
+        "idle",
+        vec![],
+        finished_activity(),
+    );
+    let mut answered = question(
+        DENTIST,
+        json!([{ "label": "Tue 9:30" }, { "label": "Wed 14:00" }, { "label": "Fri 11:15" }]),
+        false,
+    );
+    answered["status"] = json!("answered");
+    answered["answer"] = json!({ "choice": 1 });
+    answered["answeredVia"] = json!("web");
+    seen.asks = vec![from_json(answered)];
+    open(ui, "s-3", seen);
 }
 
 pub fn approval(ui: &mut Ui) {

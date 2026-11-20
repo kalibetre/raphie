@@ -2,7 +2,7 @@ import type { AdapterPostableMessage, CardElement } from "chat";
 
 import type { AttachmentStore } from "../../domains/attachments/application/ports.ts";
 import type { RenderDelivery } from "../../domains/delivery/application/worker.ts";
-import { approvalCard, toolApprovalCard } from "./cards.ts";
+import { approvalCard, askCard, toolApprovalCard } from "./cards.ts";
 
 type DiscordOperation = {
   threadId: string;
@@ -32,7 +32,8 @@ export function discordRenderer(files: AttachmentStore): RenderDelivery {
         ? (intent.originalMessageId ?? undefined)
         : undefined;
     const operation: DiscordOperation = { ...base, messageId };
-    if (intent.source === "tool") {
+    if (intent.source === "ask") operation.card = askCard(intent.ask);
+    else if (intent.source === "tool") {
       operation.card = toolApprovalCard(intent.approval);
       if (!messageId)
         operation.files = [

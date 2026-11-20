@@ -40,12 +40,13 @@ use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
 };
+use crate::contracts::{AskAnswer, AskStatus};
 use crate::inbox::JobUpdates;
 use crate::jobs::{JobAction, NewJob};
 use crate::local_install;
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::MemoryUpdate;
-use crate::model::{DecisionOutcome, Event, Reach, StreamStatus};
+use crate::model::{AnswerOutcome, DecisionOutcome, Event, Reach, StreamStatus};
 use crate::origin::Origin;
 use crate::sandbox::SandboxUpdate;
 use crate::settings::Settings;
@@ -195,6 +196,11 @@ pub enum Command {
         approval_id: String,
         decision: Decision,
         scope: Scope,
+    },
+    /// Answer a bot's question.
+    Answer {
+        ask_id: String,
+        answer: AskAnswer,
     },
     /// Fetch the bot list again, to notice changes made in another client.
     RefreshBots,
@@ -712,6 +718,7 @@ impl Engine {
                 decision,
                 scope,
             } => self.decide(approval_id, decision, scope),
+            Command::Answer { ask_id, answer } => self.answer(ask_id, answer),
             Command::Control {
                 session_id,
                 action,
@@ -1429,6 +1436,27 @@ impl Engine {
                 approval_id,
                 outcome,
             });
+        });
+    }
+
+    fn answer(&mut self, ask_id: String, answer: AskAnswer) {
+        let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let outcome = match api.answer(&bot_id, &ask_id, &answer).await {
+                Ok(AskStatus::Answered) => AnswerOutcome::Applied,
+                Ok(_) => AnswerOutcome::Late,
+                Err(ApiError::NotFound(_)) => AnswerOutcome::Gone,
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                    return;
+                }
+                Err(error) => AnswerOutcome::Failed(error.to_string()),
+            };
+            emit.emit(Event::Answered { ask_id, outcome });
         });
     }
 

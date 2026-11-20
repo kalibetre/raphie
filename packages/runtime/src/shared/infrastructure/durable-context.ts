@@ -7,6 +7,11 @@ export interface DurableContext {
   harness: Harness;
   root: Conversation;
   authorize(actor: string): void;
-  options: { approvalTtlMs?: number; mcp?: unknown; memory?: unknown };
+  options: {
+    approvalTtlMs?: number;
+    askTtlMs?: number;
+    mcp?: unknown;
+    memory?: unknown;
+  };
   observations: { attach(id: number): Promise<void> };
 }

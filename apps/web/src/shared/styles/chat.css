@@ -864,4 +864,118 @@
   .compaction-summary .markdown ol {
     margin: 2px 0;
   }
+  /* A bot's question, answered with one press. */
+  .ask-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 8px 0 4px;
+  }
+  .ask-question {
+    margin: 0;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  .ask-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .ask-rows {
+    display: flex;
+    flex-direction: column;
+    max-width: 480px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+  }
+  .ask-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .ask-row:first-child {
+    border-top: 0;
+  }
+  .ask-row:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .ask-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .ask-row:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .ask-row-label {
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .ask-row[data-danger] .ask-row-label {
+    color: var(--error);
+  }
+  .ask-row-detail {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ask-own-toggle {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 12.5px;
+    text-decoration: underline;
+    text-decoration-color: var(--border);
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .ask-own-toggle:hover {
+    color: var(--foreground);
+  }
+  .ask-own {
+    display: flex;
+    gap: 6px;
+    max-width: 480px;
+  }
+  .ask-settled .ask-question {
+    color: var(--muted-foreground);
+    font-weight: 400;
+  }
+  .ask-outcome {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+  .ask-outcome strong {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+  .ask-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
 }

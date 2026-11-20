@@ -129,6 +129,7 @@ export function useLiveState(sessionId?: string, legacyId?: number) {
       conversations: [...byId.values()],
       turns: [...turns.values()].sort((a, b) => a.createdAt - b.createdAt),
       toolApprovals: observation?.toolApprovals ?? [],
+      asks: observation?.asks ?? [],
       live:
         selectedId && observation?.live
           ? { [selectedId]: observation.live }

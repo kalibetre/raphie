@@ -2,6 +2,7 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type {
   SessionActivity,
   SessionApproval,
+  SessionAsk,
   SessionObservation,
   SessionSummary,
   SessionTurn,
@@ -15,6 +16,8 @@ import type { ClientQueries } from "../../application/queries/ports.ts";
 import { Activity } from "../../domains/activity/infrastructure/pi-activity-journal.ts";
 import type { McpTools } from "../../domains/approvals/infrastructure/mcp-approval-gate.ts";
 import type { ToolApprovalService } from "../../domains/approvals/infrastructure/pi-tool-approvals.ts";
+import type { Ask } from "../../domains/asks/domain/ask.ts";
+import type { AskService } from "../../domains/asks/infrastructure/pi-asks.ts";
 import { ChannelBindings } from "../../domains/channels/infrastructure/pi-bindings.ts";
 import type { ChatService } from "../../domains/conversations/infrastructure/pi-conversation-service.ts";
 import type { Observations } from "../../domains/conversations/infrastructure/pi-observations.ts";
@@ -26,6 +29,7 @@ type QuerySource = DurableContext & {
   mcpConnections?: McpTools[];
   chats: ChatService;
   toolApprovals: ToolApprovalService;
+  asks: AskService;
   observations: Observations;
   options: {
     mcp?: McpTools;
@@ -33,6 +37,15 @@ type QuerySource = DurableContext & {
     identity?: { id: string; directory: string; kind?: "fixture" };
   };
 };
+
+/** A question still waits while it is unexpired and its turn is running. */
+function waitingFor(ask: Ask, turn?: { status: string }) {
+  return (
+    ask.status === "pending" &&
+    ask.expiresAt > Date.now() &&
+    turn?.status === "pending"
+  );
+}
 
 function pageSize(limit = 50) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100)
@@ -111,6 +124,7 @@ export class PiClientQueries implements ClientQueries {
     const size = pageSize(limit);
     const chats = await this.visible(actor);
     const tools = await this.app.toolApprovals.state();
+    const asks = (await this.app.asks.state()).asks;
     const items: SessionSummary[] = chats.conversations
       .filter((c) => !!c.archivedAt === archived)
       .map((c) => {
@@ -148,6 +162,14 @@ export class PiClientQueries implements ClientQueries {
               a.conversationId === c.id &&
               a.status === "pending" &&
               a.expiresAt > Date.now(),
+          ),
+          asking: asks.some(
+            (a) =>
+              a.conversationId === c.id &&
+              waitingFor(
+                a,
+                turns.find((t) => t.id === a.turnId),
+              ),
           ),
         };
       })
@@ -221,6 +243,35 @@ export class PiClientQueries implements ClientQueries {
       }));
   }
 
+  async asks(actor: ActorContext, id: string): Promise<SessionAsk[]> {
+    const { chats, session } = await this.selected(actor, id);
+    return (await this.app.asks.state()).asks
+      .filter((a) => a.conversationId === session.id)
+      .slice(-100)
+      .map((a) => ({
+        id: a.id,
+        conversationId: id,
+        turnId: a.turnId,
+        question: a.question,
+        options: a.options.map((o) => ({ ...o })),
+        ...(a.danger ? { danger: true as const } : {}),
+        createdAt: a.createdAt,
+        expiresAt: a.expiresAt,
+        // A question whose turn stopped can no longer be answered.
+        status:
+          a.status === "pending" &&
+          !waitingFor(
+            a,
+            chats.turns.find((t) => t.id === a.turnId),
+          )
+            ? ("expired" as const)
+            : a.status,
+        answer: a.answer ? { ...a.answer } : null,
+        answeredVia: a.answeredVia,
+        ...(a.answeredApp ? { answeredApp: a.answeredApp } : {}),
+      }));
+  }
+
   async activity(actor: ActorContext, before?: string, limit = 100) {
     const size = pageSize(limit);
     this.app.actors.require(actor);
@@ -251,6 +302,8 @@ export class PiClientQueries implements ClientQueries {
     const { chats, session } = await this.selected(actor, id);
     const history = await this.history(actor, id);
     const toolApprovals = await this.approvals(actor, id);
+    const asks = await this.asks(actor, id);
+    const asking = asks.some((a) => a.status === "pending");
     const journal = (await this.app.harness.snapshot(Activity, context))!
       .events;
     const activity = journal
@@ -314,6 +367,7 @@ export class PiClientQueries implements ClientQueries {
             t.answer !== null,
         )?.id,
         waiting,
+        asking,
       },
       turns:
         pending[0] && !history.items.some((t) => t.id === pending[0]!.id)
@@ -332,21 +386,24 @@ export class PiClientQueries implements ClientQueries {
           : history.items,
       nextBefore: history.next,
       toolApprovals,
+      asks,
       live,
       activity,
       phase: waiting
         ? "approval"
-        : !pending.length
-          ? last?.status === "error" && !last.cancelled
-            ? "failed"
-            : "idle"
-          : latest?.type === "tool.started"
-            ? "tool"
-            : live?.generating && live.text
-              ? "writing"
-              : latest
-                ? "model"
-                : "queued",
+        : asking
+          ? "question"
+          : !pending.length
+            ? last?.status === "error" && !last.cancelled
+              ? "failed"
+              : "idle"
+            : latest?.type === "tool.started"
+              ? "tool"
+              : live?.generating && live.text
+                ? "writing"
+                : latest
+                  ? "model"
+                  : "queued",
       error:
         last?.status === "error" && !last.cancelled
           ? {

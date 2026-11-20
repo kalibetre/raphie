@@ -19,6 +19,7 @@
 //! Element keys made here start with `rd-`, because Rune keys the parts of
 //! its own components (`label`, `value`, ...) in the same namespace.
 
+mod asks;
 mod attachments;
 mod compaction;
 mod composer;
