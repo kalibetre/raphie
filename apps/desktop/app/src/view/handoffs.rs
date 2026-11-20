@@ -7,7 +7,9 @@
 //! (`handoff-cards.tsx`, `handoff-delegates.tsx`, `mention-menu.tsx`,
 //! `mention-markdown.tsx`) and `apps/web/src/shared/styles/handoffs.css`.
 
-use raphie_core::contracts::{BotRef, Handoff, HandoffOutcome, SessionTurn, TurnHandoff};
+use raphie_core::contracts::{
+    BotRef, HandedOffBy, Handoff, HandoffOutcome, SessionTurn, TurnHandoff,
+};
 use raphie_core::handoffs::{
     DelegateGroup, RequestStatus, SentRequest, delegate_groups, delegate_label, duration,
     open_handoffs, request_status, requests_from_turn,
@@ -842,9 +844,12 @@ fn delegate_list(groups: &[DelegateGroup<'_>], look: &Look) -> El {
 /// Above the composer in a task another bot handed off (the web's
 /// `.handoff-note`): the owner continues it here, while that bot's own
 /// requests still report back to it.
-pub fn note(_s: &Ui, from: &BotRef, look: &Look) -> El {
+pub fn note(_s: &Ui, from: &HandedOffBy, look: &Look) -> El {
     let t = &look.theme;
     let id = from.id.clone();
+    // Back to the conversation that handed the task off. Sessions from
+    // before it was recorded open the bot's last conversation.
+    let session = from.session_id.clone();
     let words = format!(
         "{} handed off this task and gets the results of its requests. What you write here stays here.",
         from.name
@@ -882,7 +887,7 @@ pub fn note(_s: &Ui, from: &BotRef, look: &Look) -> El {
                 &format!("Open {}", from.name),
             )
             .key("rd-handoff-note-open")
-            .on_press(move |s: &mut Ui| s.open_bot(&id, None)),
+            .on_press(move |s: &mut Ui| s.open_bot(&id, session.as_deref())),
         )
 }
 

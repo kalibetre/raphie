@@ -13,6 +13,10 @@ import { useHandoffs } from "../../domains/conversations/infrastructure/use-hand
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
 import { ConversationList } from "../../domains/conversations/presentation/sessions/conversation-list";
+import {
+  lastSessionKey,
+  useLastSession,
+} from "../../domains/conversations/presentation/sessions/last-session";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
@@ -24,10 +28,7 @@ import { Settings } from "../../domains/settings/presentation/settings";
 import { SettingsMain } from "../../domains/settings/presentation/settings-main";
 import { SettingsNav } from "../../domains/settings/presentation/settings-nav";
 import { useBackend } from "../../infrastructure/http/backend-context";
-import {
-  readLocal,
-  writeLocal,
-} from "../../infrastructure/preferences/storage";
+import { writeLocal } from "../../infrastructure/preferences/storage";
 import { Button } from "../../shared/ui/button";
 import {
   Sidebar,
@@ -103,11 +104,7 @@ export function Workspace({
   ].sort((a, b) => b.lastAt - a.lastAt);
   const unread = (session: (typeof summaries)[number]) =>
     inbox.unread(workspace.botId, session);
-  const lastSessionKey = useCallback(
-    (id: string) =>
-      `raphie:last-session:${encodeURIComponent(workspace.url)}:${id}`,
-    [workspace.url],
-  );
+  const lastSession = useLastSession();
   const conversation = data?.conversations.find(
     (c) => c.sessionId === (sessionId ?? legacySessionId),
   );
@@ -196,8 +193,8 @@ export function Workspace({
   }, [markInboxRead, workspace.botId, readSessionId, readCount]);
   useEffect(() => {
     if (readSessionId)
-      writeLocal(lastSessionKey(workspace.botId), readSessionId);
-  }, [workspace.botId, lastSessionKey, readSessionId]);
+      writeLocal(lastSessionKey(workspace.url, workspace.botId), readSessionId);
+  }, [workspace.url, workspace.botId, readSessionId]);
 
   async function send(
     text: string,
@@ -334,7 +331,7 @@ export function Workspace({
         const nextBot = id === "default" ? undefined : id;
         // A phone shows the bot's conversations; a wide screen reopens the
         // one you were in, with the list beside it.
-        const last = mobile ? undefined : readLocal(lastSessionKey(id));
+        const last = mobile ? undefined : lastSession(id);
         if (last)
           void navigate({
             to: "/sessions/$sessionId",

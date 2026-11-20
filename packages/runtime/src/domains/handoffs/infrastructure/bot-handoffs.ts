@@ -345,6 +345,7 @@ export class BotHandoffs {
                   kind: "task",
                   bot: this.options.peers.self(),
                   title: handoff.title,
+                  sessionId: handoff.fromSessionId,
                 },
               });
               await runtime.commit(async (tx) => {

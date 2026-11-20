@@ -2,6 +2,7 @@ import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 
+import { lastSessionKey } from "../src/domains/conversations/presentation/sessions/last-session";
 import { BackendWorkspace } from "../src/infrastructure/http/backend-workspace";
 
 test("deleting a bot clears its text and attachment drafts without touching other bots or backends", () => {
@@ -19,7 +20,7 @@ test("deleting a bot clears its text and attachment drafts without touching othe
     workspace.draftKey(),
     workspace.draftKey("session"),
     `${workspace.draftKey("session")}:attachments`,
-    `raphie:last-session:${encodeURIComponent(workspace.url)}:${workspace.botId}`,
+    lastSessionKey(workspace.url, workspace.botId),
     `raphie:inspector-open:${workspace.botId}`,
   ];
   const preserved = [

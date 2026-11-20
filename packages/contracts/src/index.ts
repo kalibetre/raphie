@@ -93,6 +93,8 @@ export type TurnHandoff = {
   /** The other bot: the one that handed the task off, or the one that did it. */
   bot: { id: string; name: string };
   title: string;
+  /** On a task: the sending bot's session it was handed off from. */
+  sessionId?: string;
   /** How the task ended. Only on results. */
   outcome?: "completed" | "failed" | "cancelled";
 };

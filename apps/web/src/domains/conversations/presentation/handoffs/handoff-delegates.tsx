@@ -140,7 +140,11 @@ export function HandoffDelegates({
  * Above the composer in a task another bot handed off: the owner can continue
  * it here, while that bot's own requests still report back to it.
  */
-export function HandoffNote({ from }: { from: { id: string; name: string } }) {
+export function HandoffNote({
+  from,
+}: {
+  from: { id: string; name: string; sessionId?: string };
+}) {
   const openSession = useOpenSession();
   return (
     <div className="handoff-note" role="note">
@@ -153,7 +157,9 @@ export function HandoffNote({ from }: { from: { id: string; name: string } }) {
         size="xs"
         variant="ghost"
         type="button"
-        onClick={() => void openSession(from.id)}
+        // Back to the conversation that handed the task off. Sessions from
+        // before it was recorded open the bot's last conversation.
+        onClick={() => void openSession(from.id, from.sessionId)}
       >
         Open {from.name}
       </Button>

@@ -12,6 +12,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { Button } from "../../../../shared/ui/button";
+import { useIsMobile } from "../../../../shared/ui/use-mobile";
 import { BotAvatar } from "../../../settings/presentation/bot-avatar";
 import {
   requestsFromTurn,
@@ -20,6 +21,7 @@ import {
   statusLabel,
 } from "../../application/handoffs";
 import { markdownComponents } from "../markdown-components";
+import { useLastSession } from "../sessions/last-session";
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, {
@@ -33,11 +35,18 @@ const duration = (ms: number) => {
   return m < 60 ? `${m} min` : `${Math.round(m / 6) / 10} h`;
 };
 
-/** Opens a session of another bot, keeping the workspace's bot search value. */
+/**
+ * Opens a session of another bot, keeping the workspace's bot search value.
+ * With no session it goes back to the one last open with that bot, as the
+ * bot list does; a phone shows the bot's conversations instead.
+ */
 export function useOpenSession() {
   const navigate = useNavigate();
-  return (botId: string, sessionId?: string | null) =>
-    sessionId
+  const lastSession = useLastSession();
+  const mobile = useIsMobile();
+  return (botId: string, requested?: string | null) => {
+    const sessionId = requested ?? (mobile ? null : lastSession(botId));
+    return sessionId
       ? navigate({
           to: "/sessions/$sessionId",
           params: { sessionId },
@@ -47,6 +56,7 @@ export function useOpenSession() {
           to: "/",
           search: { bot: botId === "default" ? undefined : botId },
         });
+  };
 }
 
 export const handoffAnchor = (id: string, index: number) =>

@@ -278,7 +278,12 @@ test("a bot hands a task to another bot and the result returns to the session it
     const recipient = host.runtime(research.id).gateway;
     const received = await recipient.chats.state();
     expect(received.conversations).toHaveLength(1);
-    expect(received.conversations[0].handedOffBy?.id).toBe("default");
+    expect(received.conversations[0].handedOffBy).toEqual({
+      id: "default",
+      name: expect.any(String),
+      // Where "Open" goes back to: the conversation that handed it off.
+      sessionId: owner.sessionId,
+    });
     expect(handoff.toSessionId).toBe(received.conversations[0].sessionId);
     expect(handoff.fromSessionId).toBe(owner.sessionId);
     expect(handoff.requests[0].turnId).toBe(received.turns[0].id);

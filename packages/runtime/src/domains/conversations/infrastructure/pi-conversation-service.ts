@@ -571,7 +571,14 @@ export class ChatService implements ConversationCommands {
             createdAt: Date.now(),
             model: { ...(input.model ?? this.model!) },
             ...(input.handoff?.kind === "task"
-              ? { handedOffBy: { ...input.handoff.bot } }
+              ? {
+                  handedOffBy: {
+                    ...input.handoff.bot,
+                    ...(input.handoff.sessionId
+                      ? { sessionId: input.handoff.sessionId }
+                      : {}),
+                  },
+                }
               : {}),
           };
           state.conversations.push(conversation);

@@ -27,8 +27,8 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   waiting: boolean;
   /** When the owner archived it; archived sessions are listed apart. */
   archivedAt?: number;
-  /** The bot that handed this session's task off; only it sends messages here. */
-  handedOffBy?: { id: string; name: string };
+  /** The bot that handed this session's task off, and its session it came from. */
+  handedOffBy?: { id: string; name: string; sessionId?: string };
 };
 
 export type SessionTurn = Omit<

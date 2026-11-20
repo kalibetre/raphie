@@ -53,7 +53,7 @@ export function Composer({
   /** The other bots, offered when the owner types @ to hand a task to one. */
   mentionables?: readonly { id: string; name: string }[];
   /** The bot that handed this task off: the owner may continue it here. */
-  handedOffBy?: { id: string; name: string };
+  handedOffBy?: { id: string; name: string; sessionId?: string };
   onStop: () => Promise<void>;
   onSend: (
     text: string,

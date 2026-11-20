@@ -5000,8 +5000,12 @@ fn the_owner_can_continue_a_task_another_bot_handed_off() {
     settle(&mut rt);
     assert!(rt.state.mention_options().is_empty());
     assert!(rt.find("rd-mentions").is_none());
+    // "Open Raphie" goes back to the conversation that handed it off.
     click(&mut rt, "rd-handoff-note-open");
     assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+    assert!(rt.state.sent.ends_with(&[Command::SelectSession {
+        session_id: Some("s-asked".into()),
+    }]));
 }
 
 #[test]
@@ -5056,4 +5060,44 @@ fn a_named_bot_shows_as_its_name_without_the_at() {
         "{text}"
     );
     assert!(!text.contains("@Writer"));
+}
+
+#[test]
+fn choosing_a_bot_again_reopens_the_conversation_last_open_with_it() {
+    let mut rt = render(scenes::handoff_task, false);
+    let research = rt
+        .state
+        .model
+        .conversation
+        .as_ref()
+        .map(|c| c.session_id.clone())
+        .expect("a Research conversation is open");
+    // Raphie has no last conversation yet: it opens on a new one.
+    click(&mut rt, "rd-bot-default");
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+    assert!(rt.state.model.conversation.is_none());
+    // Back to Research: the conversation that was open, not a new one.
+    click(&mut rt, "rd-bot-b-research");
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("b-research"));
+    assert_eq!(
+        rt.state
+            .model
+            .conversation
+            .as_ref()
+            .map(|c| c.session_id.as_str()),
+        Some(research.as_str())
+    );
+    assert!(rt.state.sent.contains(&Command::SelectSession {
+        session_id: Some(research.clone()),
+    }));
+    // "Open Raphie" from a link goes the same way: back to the one last
+    // open there.
+    click(&mut rt, "rd-bot-default");
+    rt.update(|ui, _| ui.select_session(Some("s-raphie")));
+    rt.update(|ui, _| ui.choose_bot("b-research"));
+    rt.update(|ui, _| ui.open_bot("default", None));
+    assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
+    assert!(rt.state.sent.ends_with(&[Command::SelectSession {
+        session_id: Some("s-raphie".into()),
+    }]));
 }
