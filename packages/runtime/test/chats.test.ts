@@ -203,3 +203,54 @@ test("unfinished model generation resumes on reopen and yields one persisted rep
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("the instructions stay the same from turn to turn; each message carries its own time", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-chat-cache-"));
+  let system = "";
+  let users: string[] = [];
+  const app = await Gateway.open({
+    directory,
+    ...chatModel({
+      systemPrompt: (text) => {
+        system = text;
+      },
+      userMessages: (messages) => {
+        users = messages.map((m) =>
+          typeof m.content === "string" ? m.content : "",
+        );
+      },
+    }),
+  });
+  try {
+    const first = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "1",
+      text: "First",
+    });
+    await answered(app, first.id);
+    await delay(5);
+    const second = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "2",
+      text: "Second",
+      conversationId: first.conversationId,
+    });
+    await answered(app, second.id);
+    // One instructions section, written once: a patch per turn would be
+    // appended to the conversation and miss the prompt cache.
+    const sections = (JSON.parse(system) as { sections?: object }[]).filter(
+      (m) => m.sections,
+    );
+    assert.equal(sections.length, 1);
+    assert.doesNotMatch(system, /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
+    assert.equal(users.length, 2);
+    assert.match(users[0]!, /^\[Sent \d{4}-\d{2}-\d{2}T[^\]]+\]\n\nFirst$/);
+    assert.match(users[1]!, /^\[Sent \d{4}-\d{2}-\d{2}T[^\]]+\]\n\nSecond$/);
+    assert.notEqual(users[0]!.slice(0, 31), users[1]!.slice(0, 31));
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

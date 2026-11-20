@@ -158,11 +158,16 @@ test("scheduled turns freeze the bot home without linking sessions; ordinary web
 test("channel origins survive admission and client reads; ordinary messages register settings candidates", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-origin-"));
   let instructions = "";
+  let message = "";
   const app = await Gateway.open({
     directory,
     ...chatModel({
       systemPrompt: (value) => {
         instructions = value;
+      },
+      userMessages: (messages) => {
+        const content = messages.at(-1)?.content;
+        message = typeof content === "string" ? content : "";
       },
     }),
   });
@@ -192,7 +197,10 @@ test("channel origins survive admission and client reads; ordinary messages regi
       messageId: "message-id",
     };
     assert.deepEqual((await app.chats.state()).turns[0]!.origin, expected);
-    assert.match(instructions, /runtime-verified routing metadata/);
+    // The origin changes with every message, so it travels with the message.
+    assert.match(message, /^\[Sent [^\]]+\]\n\[Origin \(runtime-verified/);
+    assert.match(message, /"messageId":"message-id"/);
+    assert.doesNotMatch(instructions, /runtime-verified routing metadata/);
     const history = await app.queries.history(
       app.actors.establish("web"),
       receipt.sessionId,
