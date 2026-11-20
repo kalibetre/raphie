@@ -13,6 +13,7 @@ import type { ChannelServices } from "../../application/channels/ports.ts";
 import { InputError } from "../../domains/approvals/infrastructure/pi-file-approvals.ts";
 import { MAX_FILE_BYTES } from "../../domains/attachments/infrastructure/local-attachment-store.ts";
 import { createDeliveryWorker } from "../../domains/delivery/application/worker.ts";
+import { ASK_ACTION } from "./cards.ts";
 import { registerDiscordCommands } from "./commands.ts";
 import { decodeDiscordOperation, discordRenderer } from "./delivery.ts";
 
@@ -275,6 +276,31 @@ export function createDiscordBridge(
       event.value,
       event.actionId === "raphie-approve" ? "approved" : "rejected",
     );
+  });
+  chat.onAction([ASK_ACTION], async (event) => {
+    if (!authorized(event.user.userId, event.threadId) || !event.value) return;
+    const [id, choice] = event.value.split(":");
+    const who = app.actors.establish(
+      "discord",
+      event.threadId,
+      config.applicationId,
+      event.user.userId,
+    );
+    // A settled question keeps its first answer; a refused press changes nothing.
+    await app.asks
+      .answer(
+        id ?? "",
+        { choice: Number(choice) },
+        who.subject,
+        who.source,
+        undefined,
+        {
+          threadId: event.threadId,
+          connectionId: config.applicationId,
+          userId: event.user.userId,
+        },
+      )
+      .catch(() => {});
   });
   chat.onAction(
     ["raphie-tool-approve", "raphie-tool-reject"],

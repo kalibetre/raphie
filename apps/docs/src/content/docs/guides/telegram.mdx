@@ -91,6 +91,8 @@ When a bot you asked in a chat [hands a task](/guides/handoffs/) to another bot,
 
 A tool approval in a private chat shows the server, tool and exact arguments with **Approve once** and **Decline** buttons. Only the account that started the turn can decide in Telegram; you can always decide in the web workspace instead. The first decision wins: a repeated, stale or opposite press only reports the current state.
 
+When a bot needs you to decide something, its [question](/guides/conversations/#questions-from-a-bot) arrives in the private chat with one button per answer. Only the account that started the turn can answer there; the first answer wins, and the message then shows it without buttons. Questions are not posted to groups: there the bot asks in its reply.
+
 ## Delivery limits and recovery
 
 | Topic                     | Behaviour                                                                                                                                     |

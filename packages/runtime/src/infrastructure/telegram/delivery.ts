@@ -1,4 +1,9 @@
 import type { ToolApproval } from "../../domains/approvals/domain/tool-approval.ts";
+import {
+  type Ask,
+  askCallback,
+  askChatText,
+} from "../../domains/asks/domain/ask.ts";
 import { isSharedTelegramDestination } from "../../domains/channels/domain/binding.ts";
 import type { RenderDelivery } from "../../domains/delivery/application/worker.ts";
 import { retryRateLimited, type TelegramApi, TelegramApiError } from "./api.ts";
@@ -20,6 +25,8 @@ export type TelegramOperation = {
   text: string;
   html?: boolean;
   buttons?: { text: string; data: string }[];
+  /** Each button on its own row, for answers longer than a word. */
+  stacked?: true;
   document?: { filename: string; base64: string; caption: string };
 };
 
@@ -120,6 +127,29 @@ function toolOperation(
     : [operation];
 }
 
+/** A bot's question with one button per answer, or the settled question. */
+function askOperation(
+  chatId: string,
+  ask: Ask,
+  messageId?: string,
+): TelegramOperation {
+  const pending = ask.status === "pending" && Date.now() < ask.expiresAt;
+  return {
+    chatId,
+    ...(messageId ? { messageId } : {}),
+    text: askChatText(ask),
+    ...(pending
+      ? {
+          stacked: true as const,
+          buttons: ask.options.map((option, choice) => ({
+            text: option.label,
+            data: askCallback(ask, choice),
+          })),
+        }
+      : {}),
+  };
+}
+
 /** Store complete platform payloads before network I/O, as the Discord renderer does. */
 export function telegramRenderer(): RenderDelivery {
   return async (intent) => {
@@ -144,20 +174,30 @@ export function telegramRenderer(): RenderDelivery {
             chatId,
             text,
           }))
-        : intent.source === "tool"
-          ? toolOperation(
-              chatId,
-              intent.approval,
-              intent.kind === "resolved"
-                ? (intent.originalMessageId ?? undefined)
-                : undefined,
-            )
-          : [
-              {
+        : intent.source === "ask"
+          ? [
+              askOperation(
                 chatId,
-                text: "File approvals are not supported in Telegram. Use the web workspace.",
-              },
-            ];
+                intent.ask,
+                intent.kind === "resolved"
+                  ? (intent.originalMessageId ?? undefined)
+                  : undefined,
+              ),
+            ]
+          : intent.source === "tool"
+            ? toolOperation(
+                chatId,
+                intent.approval,
+                intent.kind === "resolved"
+                  ? (intent.originalMessageId ?? undefined)
+                  : undefined,
+              )
+            : [
+                {
+                  chatId,
+                  text: "File approvals are not supported in Telegram. Use the web workspace.",
+                },
+              ];
     return operations.map((operation) => JSON.stringify(operation));
   };
 }
@@ -177,6 +217,11 @@ export async function sendTelegramOperation(
     text: button.text,
     callback_data: button.data,
   }));
+  const rows = keyboard
+    ? operation.stacked
+      ? keyboard.map((button) => [button])
+      : [keyboard]
+    : [];
   const message = {
     chat_id: operation.chatId,
     text: operation.text,
@@ -190,7 +235,7 @@ export async function sendTelegramOperation(
             ...message,
             message_id: Number(operation.messageId),
             // An empty keyboard removes the buttons from a settled request.
-            reply_markup: { inline_keyboard: keyboard ? [keyboard] : [] },
+            reply_markup: { inline_keyboard: rows },
           }),
         sleep,
       );
@@ -219,9 +264,7 @@ export async function sendTelegramOperation(
         () =>
           api.sendMessage({
             ...message,
-            ...(keyboard
-              ? { reply_markup: { inline_keyboard: [keyboard] } }
-              : {}),
+            ...(keyboard ? { reply_markup: { inline_keyboard: rows } } : {}),
           }),
         sleep,
       );

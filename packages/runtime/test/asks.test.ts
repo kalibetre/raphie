@@ -157,17 +157,82 @@ test("the owner can answer in their own words, and an unanswered question expire
   }
 }, 20_000);
 
-test("a turn from a channel gets no buttons: the bot is told to ask in its reply", async () => {
+test("in a chat the question is posted where it was asked, and only its sender can answer", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-asks-channel-"));
   const app = await Gateway.open({ directory, ...asking() });
+  const thread = "discord:guild:channel:thread";
   try {
     const turn = await app.chats.send({
       source: "discord",
       actor: "owner",
       eventId: "1",
       text: "Book the dentist.",
-      discordThreadId: "discord:guild:channel:thread",
+      discordThreadId: thread,
       discordUserId: "initiator",
+    });
+    await until(async () => (await app.asks.state()).asks.length === 1);
+    const state = await app.asks.state();
+    const ask = state.asks[0]!;
+    expect(ask.replyTo?.conversation).toBe(thread);
+    expect(state.deliveries).toMatchObject([
+      { askId: ask.id, threadId: thread, kind: "question", status: "pending" },
+    ]);
+
+    const from = (userId: string, threadId = thread) => ({
+      threadId,
+      connectionId: "legacy-discord",
+      userId,
+    });
+    for (const sender of [
+      from("someone-else"),
+      from("initiator", "discord:guild:channel:other"),
+      undefined,
+    ]) {
+      const refused = await app.asks
+        .answer(ask.id, { choice: 0 }, "owner", "discord", undefined, sender)
+        .catch((error: unknown) => error);
+      expect(String(refused)).toMatch(
+        /Only the person this question was asked/,
+      );
+    }
+    expect(
+      await app.asks.answer(
+        ask.id,
+        { choice: 2 },
+        "owner",
+        "discord",
+        undefined,
+        from("initiator"),
+      ),
+    ).toBe("answered");
+    await until(
+      async () =>
+        (await app.chats.state()).turns.find((t) => t.id === turn.id)
+          ?.status === "done",
+    );
+    expect(
+      (await app.chats.state()).turns.find((t) => t.id === turn.id)!.answer,
+    ).toBe("The owner chose: Fri 11:15");
+    // The post is edited to show the answer and lose its buttons.
+    expect(
+      (await app.asks.state()).deliveries.map((d) => d.kind).sort(),
+    ).toEqual(["question", "resolved"]);
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 20_000);
+
+test("a scheduled turn gets no buttons: the bot is told to ask in its reply", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-asks-scheduled-"));
+  const app = await Gateway.open({ directory, ...asking() });
+  try {
+    const turn = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "1",
+      text: "Weekly check-in",
+      scheduled: { name: "Check-in" },
     });
     await until(
       async () =>

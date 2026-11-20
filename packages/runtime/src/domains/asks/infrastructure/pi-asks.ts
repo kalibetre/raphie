@@ -16,29 +16,50 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import { isSharedTelegramDestination } from "../../channels/domain/binding.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
+import type { ChannelSender } from "../application/ports.ts";
 import {
   answerStatus,
   type Ask,
+  type AskDelivery,
   askResult,
   validAnswer,
 } from "../domain/ask.ts";
 
-type AskState = { asks: Ask[] };
+export type AskState = { asks: Ask[]; deliveries: AskDelivery[] };
 
 export const Asks = defineDoc<AskState>({
   kind: "raphie.asks",
   version: 1,
   scope: "session",
   checkpointWhen: () => false,
-  initial: () => ({ asks: [] }),
+  initial: () => ({ asks: [], deliveries: [] }),
 });
 
 /** How long a question waits for the owner before the bot moves on. */
 const ASK_TTL_MS = 60 * 60_000;
 
 const NO_OWNER =
-  "Asking with buttons works only when the owner is in the web workspace or the desktop app, and this turn came from elsewhere. Ask your question in your reply instead.";
+  "Nobody can answer with buttons in this turn: it came from a schedule, another bot or a group chat. Ask your question in your reply instead.";
+
+/** Posts the question to its chat, or edits that post once it is settled. */
+function notify(state: AskState, ask: Ask, kind: AskDelivery["kind"]) {
+  const threadId = ask.replyTo?.conversation;
+  if (!threadId) return;
+  if (kind === "resolved" && !state.deliveries.some((d) => d.askId === ask.id))
+    return;
+  if (state.deliveries.some((d) => d.id === `${ask.id}:${kind}`)) return;
+  state.deliveries.push({
+    id: `${ask.id}:${kind}`,
+    askId: ask.id,
+    threadId,
+    connectionId: ask.replyTo?.connectionId,
+    kind,
+    status: "pending",
+    messageId: null,
+  });
+}
 
 /**
  * A plain copy of a stored question, usable after its transaction ends:
@@ -57,7 +78,12 @@ export class AskService {
 
   /** Every question asked; empty before the first. */
   async state(): Promise<Readonly<AskState>> {
-    return (await this.app.harness.snapshot(Asks, context)) ?? { asks: [] };
+    return (
+      (await this.app.harness.snapshot(Asks, context)) ?? {
+        asks: [],
+        deliveries: [],
+      }
+    );
   }
 
   /**
@@ -74,13 +100,26 @@ export class AskService {
       const existing = state.asks.find((a) => a.taskId === api.taskId);
       if (existing) return detached(existing);
       const chats = await tx.doc(Chats);
-      const turn = chats.turns.find(
+      const pending = chats.turns.filter(
         (t) =>
           t.conversationId === api.conversationId && t.status === "pending",
       );
-      // A channel, a schedule or another bot started this turn: nobody is
-      // looking at a card to press.
-      if (!turn || turn.source !== "web" || turn.scheduled || turn.handoff)
+      const turn = pending[0];
+      // Nobody is there to press a button for a schedule or another bot. In
+      // a chat, the question goes where the message came from, and only to
+      // the one person who sent it: never to a group, and never when queued
+      // messages make the sender unclear.
+      const chat = turn?.source !== "web";
+      if (
+        !turn ||
+        turn.scheduled ||
+        turn.handoff ||
+        (chat &&
+          (!turn.replyTo ||
+            isSharedTelegramDestination(turn.replyTo) ||
+            pending.length > 1 ||
+            !turn.discordUserId))
+      )
         return null;
       const now = Date.now();
       const ask: Ask = {
@@ -88,6 +127,9 @@ export class AskService {
         taskId: api.taskId,
         conversationId: api.conversationId,
         turnId: turn.id,
+        ...(chat
+          ? { replyTo: turn.replyTo, discordUserId: turn.discordUserId }
+          : {}),
         question: question.question,
         options: question.options,
         ...(question.danger ? { danger: true as const } : {}),
@@ -98,6 +140,7 @@ export class AskService {
         answeredVia: null,
       };
       state.asks.push(ask);
+      notify(state, ask, "question");
       record(await tx.doc(Activity), "ask.requested", "Asked the owner", {
         conversationId: ask.conversationId,
         runId: turn.id,
@@ -143,9 +186,11 @@ export class AskService {
       await watch.stop();
     }
     return api.commit(async (tx) => {
-      const current = (await tx.doc(Asks)).asks.find((a) => a.id === ask.id)!;
+      const state = await tx.doc(Asks);
+      const current = state.asks.find((a) => a.id === ask.id)!;
       if (current.status === "pending") {
         current.status = "expired";
+        notify(state, current, "resolved");
         record(await tx.doc(Activity), "ask.expired", "No answer in time", {
           conversationId: current.conversationId,
           runId: current.turnId,
@@ -163,11 +208,32 @@ export class AskService {
     actor: string,
     via: Channel,
     app?: "desktop",
+    from?: ChannelSender,
   ) {
     this.app.authorize(actor);
     return this.app.root.commit(async (tx) => {
-      const ask = (await tx.doc(Asks)).asks.find((a) => a.id === id);
+      const state = await tx.doc(Asks);
+      const ask = state.asks.find((a) => a.id === id);
       if (!ask) throw new InputError("Question not found.", 404);
+      if (via !== "web") {
+        // A press in a chat counts only from the chat the question was
+        // posted to, through the same connection, by the person who asked.
+        const posted = state.deliveries.find(
+          (d) => d.askId === id && d.kind === "question",
+        );
+        if (
+          !ask.replyTo ||
+          !from ||
+          posted?.threadId !== from.threadId ||
+          (ask.replyTo.connectionId ?? "legacy-discord") !==
+            from.connectionId ||
+          ask.discordUserId !== from.userId
+        )
+          throw new InputError(
+            "Only the person this question was asked can answer it, where it was asked.",
+            403,
+          );
+      }
       const valid = validAnswer(ask, answer);
       if (!valid)
         throw new InputError("That is not an answer to this question.");
@@ -177,6 +243,7 @@ export class AskService {
       ask.answer = valid;
       ask.answeredVia = via;
       if (app) ask.answeredApp = app;
+      notify(state, ask, "resolved");
       record(await tx.doc(Activity), "ask.answered", "The owner answered", {
         conversationId: ask.conversationId,
         runId: ask.turnId,

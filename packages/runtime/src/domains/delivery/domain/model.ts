@@ -1,5 +1,6 @@
 import type { Approval } from "../../approvals/domain/file-approval.ts";
 import type { ToolApproval } from "../../approvals/domain/tool-approval.ts";
+import type { Ask } from "../../asks/domain/ask.ts";
 
 export type DeliveryIntent = { id: string; threadId: string } & (
   | { source: "chat"; text: string }
@@ -7,6 +8,12 @@ export type DeliveryIntent = { id: string; threadId: string } & (
       source: "tool";
       kind: "approval" | "resolved";
       approval: ToolApproval;
+      originalMessageId: string | null;
+    }
+  | {
+      source: "ask";
+      kind: "question" | "resolved";
+      ask: Ask;
       originalMessageId: string | null;
     }
   | {

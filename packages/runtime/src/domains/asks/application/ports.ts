@@ -1,6 +1,13 @@
 import type { AskAnswer, AskStatus, Channel } from "@raphie/contracts";
 
-/** Answering a bot's question, for the routes that take the owner's answer. */
+/** Who pressed a button in a chat, as the bridge verified it. */
+export type ChannelSender = {
+  threadId: string;
+  connectionId: string;
+  userId: string;
+};
+
+/** Answering a bot's question, for the routes and chats that take the answer. */
 export type AskCommands = {
   answer(
     id: string,
@@ -8,5 +15,6 @@ export type AskCommands = {
     actor: string,
     via: Channel,
     app?: "desktop",
+    from?: ChannelSender,
   ): Promise<AskStatus>;
 };

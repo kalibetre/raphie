@@ -1,3 +1,4 @@
+import type { AskCommands } from "../../domains/asks/application/ports.ts";
 import type { AttachmentStore } from "../../domains/attachments/application/ports.ts";
 import type { ChannelHome } from "../../domains/channels/application/home.ts";
 import type { ChannelDeliveryQueues } from "../../domains/delivery/application/worker.ts";
@@ -12,4 +13,5 @@ export interface ChannelServices {
   sessions: SessionOperations;
   files: AttachmentStore;
   deliveries: ChannelDeliveryQueues;
+  asks: AskCommands;
 }

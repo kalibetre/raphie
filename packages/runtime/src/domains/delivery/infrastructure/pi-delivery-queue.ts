@@ -4,6 +4,7 @@ import { defineDoc } from "@earendil-works/pi-durable";
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
 import { State } from "../../approvals/infrastructure/pi-file-approvals.ts";
 import { ToolApprovals } from "../../approvals/infrastructure/pi-tool-approvals.ts";
+import { Asks } from "../../asks/infrastructure/pi-asks.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import type { DeliveryQueue, RenderDelivery } from "../application/worker.ts";
 import type { DeliveryIntent, DeliveryPlan } from "../domain/model.ts";
@@ -52,8 +53,12 @@ export class PiDeliveryQueue implements DeliveryQueue {
         const chat = chats.deliveries.find(
           (d) => d.status === "pending" && inScope(d),
         );
+        const asks = await tx.doc(Asks);
+        const question = asks.deliveries.find(
+          (d) => d.status === "pending" && inScope(d),
+        );
         let intent: DeliveryIntent;
-        const original = tool ?? file ?? chat;
+        const original = tool ?? question ?? file ?? chat;
         if (tool)
           intent = {
             ...tool,
@@ -63,6 +68,16 @@ export class PiDeliveryQueue implements DeliveryQueue {
               tools.deliveries.find(
                 (d) =>
                   d.approvalId === tool.approvalId && d.kind === "approval",
+              )?.messageId ?? null,
+          };
+        else if (question)
+          intent = {
+            ...question,
+            source: "ask",
+            ask: asks.asks.find((a) => a.id === question.askId)!,
+            originalMessageId:
+              asks.deliveries.find(
+                (d) => d.askId === question.askId && d.kind === "question",
               )?.messageId ?? null,
           };
         else if (file)
@@ -120,9 +135,11 @@ export class PiDeliveryQueue implements DeliveryQueue {
       const deliveries =
         plan.source === "tool"
           ? (await tx.doc(ToolApprovals)).deliveries
-          : plan.source === "file"
-            ? (await tx.doc(State)).deliveries
-            : (await tx.doc(Chats)).deliveries;
+          : plan.source === "ask"
+            ? (await tx.doc(Asks)).deliveries
+            : plan.source === "file"
+              ? (await tx.doc(State)).deliveries
+              : (await tx.doc(Chats)).deliveries;
       const original = deliveries.find((d) => d.id === plan.id)!;
       original.status = plan.operations.every((op) => op.status === "sent")
         ? "sent"

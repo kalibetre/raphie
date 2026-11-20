@@ -2,6 +2,38 @@ import type { CardElement } from "chat";
 
 import type { Approval } from "../../domains/approvals/domain/file-approval.ts";
 import type { ToolApproval } from "../../domains/approvals/domain/tool-approval.ts";
+import { type Ask, askChatText } from "../../domains/asks/domain/ask.ts";
+
+/** The action id of a question's buttons; the value is "<id>:<choice>". */
+export const ASK_ACTION = "raphie-ask";
+
+/** A bot's question with one button per answer, or the settled question. */
+export function askCard(ask: Ask): CardElement {
+  const pending = ask.status === "pending" && Date.now() < ask.expiresAt;
+  return {
+    type: "card",
+    children: [
+      { type: "text", content: askChatText(ask) },
+      ...(pending
+        ? [
+            {
+              type: "actions" as const,
+              children: ask.options.map((option, choice) => ({
+                type: "button" as const,
+                id: ASK_ACTION,
+                value: `${ask.id}:${choice}`,
+                label: option.label,
+                style:
+                  ask.danger && choice === 0
+                    ? ("danger" as const)
+                    : ("default" as const),
+              })),
+            },
+          ]
+        : []),
+    ],
+  };
+}
 
 export function toolApprovalCard(item: ToolApproval): CardElement {
   const pending = item.status === "pending" && Date.now() < item.expiresAt;

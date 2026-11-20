@@ -59,7 +59,7 @@ function mcp(calls: unknown[]) {
   return { client, identity: "fixture" };
 }
 
-async function setup(options: { tool?: boolean } = {}) {
+async function setup(options: { tool?: boolean; ask?: boolean } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "raphie-telegram-"));
   const fake = new FakeTelegram();
   const calls: unknown[] = [];
@@ -69,9 +69,22 @@ async function setup(options: { tool?: boolean } = {}) {
     Gateway.open({
       directory,
       ...chatModel(
-        options.tool
-          ? { tool: { name: "mcp_fixture_execute", args: ARGS } }
-          : {},
+        options.ask
+          ? {
+              tool: {
+                name: "ask_owner",
+                args: {
+                  question: "Which day works?",
+                  options: [
+                    { label: "Tue 9:30" },
+                    { label: "Wed 14:00", detail: "Bole clinic" },
+                  ],
+                },
+              },
+            }
+          : options.tool
+            ? { tool: { name: "mcp_fixture_execute", args: ARGS } }
+            : {},
       ),
       mcp: mcp(calls),
     });
@@ -1210,6 +1223,71 @@ test("a group can be home, survives restart, and bot removal prevents new schedu
       )?.replyTo,
       null,
     );
+  } finally {
+    await t.close();
+  }
+});
+
+test("a bot's question arrives with a button per answer, and only the owner's press answers it", async () => {
+  const t = await setup({ ask: true });
+  try {
+    await t.pair();
+    t.fake.text(OWNER, "book the dentist");
+    await until(
+      () =>
+        t.fake
+          .sent()
+          .some((call) =>
+            call.body.reply_markup?.inline_keyboard[0]?.[0]?.callback_data?.startsWith(
+              "qa:",
+            ),
+          ),
+      "question",
+    );
+    const post = t.fake
+      .sent()
+      .find((call) => call.body.reply_markup?.inline_keyboard.length)!;
+    assert.match(post.body.text, /^Which day works\?/);
+    assert.match(post.body.text, /Wed 14:00: Bole clinic/);
+    const rows = post.body.reply_markup!.inline_keyboard;
+    assert.deepEqual(
+      rows.map((row) => row.map((button) => button.text)),
+      [["Tue 9:30"], ["Wed 14:00"]],
+      "one answer per row",
+    );
+    const wednesday = rows[1]![0]!.callback_data!;
+    // A stranger and a group press change nothing.
+    t.fake.press(99, wednesday);
+    t.fake.press(OWNER, wednesday, 1, -1001);
+    await until(
+      () => t.fake.sent("answerCallbackQuery").length === 2,
+      "refusals",
+    );
+    assert.equal((await t.app.asks.state()).asks[0]!.status, "pending");
+
+    t.fake.press(OWNER, wednesday);
+    await until(
+      () =>
+        toText(t.fake).some((text) => text === "The owner chose: Wed 14:00"),
+      "reply",
+    );
+    assert.equal(
+      t.fake.sent("answerCallbackQuery").at(-1)!.body.text,
+      "Answer sent.",
+    );
+    await until(
+      () =>
+        t.fake
+          .sent("editMessageText")
+          .some((call) => /You picked: Wed 14:00/.test(call.body.text)),
+      "post edit",
+    );
+    const edit = t.fake
+      .sent("editMessageText")
+      .find((call) => /You picked/.test(call.body.text))!;
+    assert.deepEqual(edit.body.reply_markup, { inline_keyboard: [] });
+    const settled = (await t.app.asks.state()).asks[0]!;
+    assert.equal(settled.answeredVia, "telegram");
   } finally {
     await t.close();
   }

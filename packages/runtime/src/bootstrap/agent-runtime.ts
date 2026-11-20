@@ -333,7 +333,7 @@ export class Gateway {
       const toolApprovals = await tx.doc(ToolApprovals);
       // Created up front, as the approvals are, so a tool waiting on a
       // question watches a doc that already exists.
-      await tx.doc(Asks);
+      const asks = await tx.doc(Asks);
       const legacyConnection = options.discordConnectionId ?? "legacy-discord";
       for (const delivery of [
         ...state.deliveries,
@@ -404,7 +404,7 @@ export class Gateway {
             { conversationId: item.conversationId, operationId: item.id },
           );
         }
-      for (const delivery of toolApprovals.deliveries)
+      for (const delivery of [...toolApprovals.deliveries, ...asks.deliveries])
         if (delivery.status === "sending") delivery.status = "uncertain";
     }, context);
     for (const conversation of (await app.chats.state()).conversations)
