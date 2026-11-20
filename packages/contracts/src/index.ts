@@ -83,6 +83,20 @@ export type Turn = {
   handoff?: TurnHandoff;
   /** Other bots' sessions this turn's reply read, for tasks it handed off. */
   readSessions?: ReadSession[];
+  /** Set when the session's earlier messages were summarized during this turn. */
+  compaction?: TurnCompaction;
+};
+
+/**
+ * Earlier messages of a session replaced, in the model's context, by a
+ * summary: the bot reads the summary instead of them from then on. The
+ * transcript still shows every message.
+ */
+export type TurnCompaction = {
+  at: number;
+  /** A size threshold was reached, the model rejected the request as too long, or it was asked for. */
+  reason: "threshold" | "overflow" | "manual";
+  summary: string;
 };
 
 /** Another bot's session a reply read with `handoff_read`. */

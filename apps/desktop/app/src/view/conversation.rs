@@ -18,6 +18,7 @@ use rune_kit::{Loader, Markdown};
 
 use super::Look;
 use super::attachments::{Action, file_card};
+use super::compaction;
 use super::handoffs;
 use super::steps::{Run, Working, code_box, tool_steps};
 use crate::format;
@@ -109,6 +110,10 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
         .find(|turn| is_running(turn));
 
     for (turn, steps) in &runs {
+        // Above the turn whose run summarized the messages before it.
+        if let Some(divider) = compaction::divider(s, turn, look) {
+            items.push(divider);
+        }
         items.push(owner_turn(s, turn, steps, now, look));
         let streaming = writing
             .is_some_and(|w| w.id == turn.id)

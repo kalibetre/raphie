@@ -4,6 +4,7 @@ import type {
   ChannelOrigin,
   ModelSelection,
   ReadSession,
+  TurnCompaction,
   TurnFailure,
   TurnHandoff,
 } from "@raphie/contracts";
@@ -63,6 +64,8 @@ export type ChatTurn = {
   handoff?: TurnHandoff;
   /** Other bots' sessions the reply read, for tasks it handed off. */
   readSessions?: ReadSession[];
+  /** Earlier messages were summarized during this turn. */
+  compaction?: TurnCompaction;
 };
 
 export type ChatDelivery = {

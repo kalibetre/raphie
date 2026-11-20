@@ -324,6 +324,8 @@ pub struct Ui {
     pub delegates_open: bool,
     /// Result cards whose report is unfolded, by turn id.
     pub open_reports: HashSet<String>,
+    /// Turns whose summary of earlier messages is shown.
+    pub open_summaries: HashSet<String>,
     /// The highlighted bot in the composer's "@" menu.
     pub mention_active: usize,
     /// The "@" (its byte offset) Escape closed the menu for.
@@ -576,6 +578,7 @@ impl Ui {
             jobs_asked_at: 0.0,
             delegates_open: false,
             open_reports: HashSet::new(),
+            open_summaries: HashSet::new(),
             mention_active: 0,
             mention_dismissed: None,
             handoffs_asked_at: 0.0,

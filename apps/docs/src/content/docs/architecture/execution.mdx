@@ -113,6 +113,18 @@ One `raphie.chat-reply` task runs per turn. It submits the input to the Pi conve
 
 When the loop ends, one commit settles the turn: it stores the answer (or an error), finishes any linked scheduled run, writes `run.completed`, `run.failed` or `run.cancelled`, and queues a delivery if the turn has a reply destination (a channel turn, or a scheduled turn sent to the home destination).
 
+### Summarizing long sessions
+
+Pi summarizes a conversation's earlier entries before a model request when its estimated size, the newest reply's reported usage plus estimates of the entries since, crosses a threshold. Raphie sets the thresholds per model from its context window (`compactionPolicy` in `domains/conversations/domain/compaction.ts`), as fractions capped at Pi's defaults:
+
+| Setting                                | Value                     | 200k window | 32k window |
+| -------------------------------------- | ------------------------- | ----------- | ---------- |
+| Reply waits for a summary above        | window − min(16,384, 10%) | ~184k       | ~29k       |
+| Summary starts in the background above | that − min(32,768, 15%)   | ~154k       | ~24k       |
+| Kept word for word                     | min(20,000, 25%)          | 20k         | 8k         |
+
+A context-overflow error from the provider also starts a summary, which the reply waits for before it retries. The summary is written by the session's own model and placed as a `pi.compaction` entry; the model's context starts from it after that. The observer records `compaction.started`, `compaction.completed` and `compaction.failed` in the activity journal (with `blocking` for a summary the reply waits for) and stores the summary on the turn it happened in as `Turn.compaction`, which clients show as a divider.
+
 ### Queue, steer and stop
 
 | Control                | Effect                                                                                 |

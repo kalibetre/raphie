@@ -72,6 +72,17 @@ When a reply cannot finish, the conversation says why under your message, for ex
 
 For a fuller record, open **Settings → [bot] → Activity**: the bot's latest 100 events across all sessions (model calls, tools, approvals, recovery), refreshed every five seconds, with JSON export. Model reasoning is never shown. More in [observability](/operate/observability/).
 
+## Long conversations
+
+A session can go on as long as you like. When it grows close to the size the model can read at once, the bot summarizes its earlier messages and reads the summary instead of them from then on. Its most recent messages stay word for word.
+
+- **When:** a summary starts in the background once the conversation fills most of the model's context window (about 154k tokens of a 200k window), and the reply waits for one only when it is nearly full (about 184k). If the provider still rejects a request as too long, the bot summarizes and tries again. A model with no known context window is summarized only after such a rejection.
+- **What you see:** while a reply waits for a summary, it says **Summarizing earlier messages…**. Afterwards a line above your message reads **Earlier messages summarized**; **View summary** opens what the bot now reads. The desktop app shows the same.
+- **What stays:** your transcript keeps every message, tool step and reply. Only the model's context is shortened.
+- **What it costs:** the summary is one more call to the session's model, about the size of the conversation, and that turn can't read the earlier messages from the provider's prompt cache.
+
+A summary is a record of what was said, not new instructions. Whatever it says another bot, a tool or the web wrote is still data, and it never grants permissions or approves a tool call.
+
 ## Tool approvals
 
 When a bot wants to run something that needs your say-so, the turn pauses and an approval card shows the exact tool and arguments.

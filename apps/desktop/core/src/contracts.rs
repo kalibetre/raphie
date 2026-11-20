@@ -474,6 +474,18 @@ pub struct ReadSession {
     pub title: String,
 }
 
+/// `TurnCompaction` in `packages/contracts/src/index.ts`: the session's
+/// earlier messages were summarized during this turn, and the bot reads the
+/// summary instead of them from then on.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnCompaction {
+    pub at: i64,
+    /// "threshold", "overflow" or "manual".
+    pub reason: String,
+    pub summary: String,
+}
+
 /// `TurnHandoff["kind"]`.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -601,6 +613,9 @@ pub struct SessionTurn {
     /// Other bots' sessions the reply read, for tasks it handed off.
     #[serde(default)]
     pub read_sessions: Vec<ReadSession>,
+    /// Set when the session's earlier messages were summarized in this turn.
+    #[serde(default)]
+    pub compaction: Option<TurnCompaction>,
     /// Set while the message waits behind the run in progress.
     #[serde(default)]
     pub queue_mode: Option<QueueMode>,

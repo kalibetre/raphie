@@ -5119,3 +5119,22 @@ fn a_reply_that_read_another_bots_session_links_to_it() {
         session_id: Some("s-research".into()),
     }]));
 }
+
+#[test]
+fn a_summary_of_earlier_messages_shows_above_the_turn_and_opens() {
+    let mut rt = render(scenes::compaction, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Earlier messages summarized"));
+    assert!(text.contains("View summary"));
+    assert!(!text.contains("Review the launch plan"));
+    // Between the earlier turn and the one that summarized it.
+    let pill = element(&rt, "rd-summary-t3");
+    assert!(pill.rect[1] > element(&rt, "rd-reply-t2").rect[1]);
+    click(&mut rt, "rd-summary-t3");
+    let text = screen_text(&rt);
+    assert!(text.contains("Hide summary"));
+    assert!(text.contains("Review the launch plan question by question."));
+    assert!(text.contains("getting long for the model"));
+    click(&mut rt, "rd-summary-t3");
+    assert!(!screen_text(&rt).contains("Review the launch plan"));
+}

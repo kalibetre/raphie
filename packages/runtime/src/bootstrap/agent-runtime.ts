@@ -39,6 +39,7 @@ import {
 import { Files } from "../domains/attachments/infrastructure/local-attachment-store.ts";
 import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.ts";
 import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
+import { compactionPolicy } from "../domains/conversations/domain/compaction.ts";
 import {
   Chats,
   ChatService,
@@ -240,6 +241,10 @@ export class Gateway {
           followUpMode: "one-at-a-time",
           stream: { timeoutMs: 120_000 },
           retry: { enabled: true, maxRetries: 1 },
+          // Read at every request, so models added later get theirs too.
+          get compaction() {
+            return { modelOverrides: compactionOverrides(app.models) };
+          },
         },
       },
       context,
@@ -468,4 +473,17 @@ export class Gateway {
   settleDelivery(...args: Parameters<FileApprovalService["settleDelivery"]>) {
     return this.fileApprovals.settleDelivery(...args);
   }
+}
+
+/** Each model's summary thresholds, scaled to its context window. */
+function compactionOverrides(models: Models) {
+  return Object.fromEntries(
+    models
+      .getModels()
+      .filter((model) => model.contextWindow > 0)
+      .map((model) => [
+        `${model.provider}/${model.id}`,
+        compactionPolicy(model.contextWindow),
+      ]),
+  );
 }

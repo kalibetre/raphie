@@ -5,15 +5,18 @@ import type {
   ConversationView,
   ConversationWatch,
   EntryId,
+  EntryRecord,
   LiveState,
   UsageState,
 } from "@earendil-works/pi-durable";
+import type { TurnCompaction } from "@raphie/contracts";
 
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
 import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import { summaryText } from "../domain/compaction.ts";
 import { Chats } from "./pi-conversation-service.ts";
 import { ExecutionTraces } from "./pi-execution-traces.ts";
 
@@ -71,13 +74,12 @@ export class Observations {
         turnId = (await submission?.status(context))?.requestId;
       }
       const previousEntryId = this.entryIds.get(id);
+      const newEntries = view.entries.filter(
+        (entry) => previousEntryId === undefined || entry.id > previousEntryId,
+      );
       const completedMessage =
         previous?.generation && !next?.generation
-          ? view.entries
-              .filter(
-                (entry) =>
-                  previousEntryId === undefined || entry.id > previousEntryId,
-              )
+          ? newEntries
               .flatMap((entry) => entry.model ?? [])
               .findLast(
                 (message): message is AssistantMessage =>
@@ -100,9 +102,26 @@ export class Observations {
       });
       this.states.set(id, next);
 
+      const compaction = initial
+        ? undefined
+        : newEntries.map(compactionOf).findLast((item) => item !== undefined);
       const rows = initial
         ? []
         : this.activityRows(previous, next, completedMessage);
+      if (compaction)
+        rows.push({
+          type: "compaction.completed",
+          summary: "Earlier messages summarized",
+          details: {
+            reason: compaction.reason,
+            // A summary the reply waited for ends in the commit that places it.
+            blocking: (previous?.compactions ?? []).some(
+              (item) =>
+                item.blocking &&
+                !next?.compactions?.some((n) => n.taskId === item.taskId),
+            ),
+          },
+        });
       if (rows.length)
         await this.app.root.commit(async (tx) => {
           const journal = await tx.doc(Activity);
@@ -112,6 +131,12 @@ export class Observations {
               (turn) => turn.conversationId === id && turn.status === "pending",
             )?.id ??
             chats.turns.findLast((turn) => turn.conversationId === id)?.id;
+          // The turn that was running, or the latest one: the summary covers
+          // the messages before it.
+          const turn =
+            chats.turns.find((t) => t.id === runId) ??
+            chats.turns.findLast((t) => t.conversationId === id);
+          if (compaction && turn) turn.compaction = compaction;
           for (const row of rows)
             record(journal, row.type, row.summary, {
               ...row,
@@ -200,6 +225,33 @@ export class Observations {
           operationId: callId,
         });
 
+    const priorCompactions = new Map(
+      (previous?.compactions ?? []).map((item) => [item.taskId, item]),
+    );
+    for (const item of next?.compactions ?? [])
+      if (!priorCompactions.has(item.taskId))
+        rows.push({
+          type: "compaction.started",
+          summary: "Summarizing earlier messages",
+          operationId: String(item.taskId),
+          details: { reason: item.trigger, blocking: item.blocking },
+        });
+    if (
+      next?.compactionFailure &&
+      previous?.compactionFailure?.taskId !== next.compactionFailure.taskId
+    )
+      rows.push({
+        type: "compaction.failed",
+        summary: "Summarizing earlier messages failed",
+        operationId: String(next.compactionFailure.taskId),
+        details: {
+          reason: next.compactionFailure.trigger,
+          error: next.compactionFailure.error,
+          blocking: !!priorCompactions.get(next.compactionFailure.taskId)
+            ?.blocking,
+        },
+      });
+
     if (
       next?.runFailure &&
       previous?.runFailure?.taskId !== next.runFailure.taskId
@@ -225,4 +277,24 @@ export class Observations {
     this.states.clear();
     this.entryIds.clear();
   }
+}
+
+/** A summary the harness placed, as the turn records it. */
+function compactionOf(entry: EntryRecord): TurnCompaction | undefined {
+  if (entry.kind !== "pi.compaction") return undefined;
+  const message = entry.model?.[0];
+  const text =
+    message?.role === "user"
+      ? typeof message.content === "string"
+        ? message.content
+        : message.content
+            .flatMap((c) => (c.type === "text" ? [c.text] : []))
+            .join("")
+      : "";
+  const reason = (entry.data as { reason?: string } | undefined)?.reason;
+  return {
+    at: message?.timestamp ?? Date.now(),
+    reason: reason === "overflow" || reason === "manual" ? reason : "threshold",
+    summary: summaryText(text),
+  };
 }

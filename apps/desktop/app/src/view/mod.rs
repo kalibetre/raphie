@@ -20,6 +20,7 @@
 //! its own components (`label`, `value`, ...) in the same namespace.
 
 mod attachments;
+mod compaction;
 mod composer;
 mod conversation;
 mod handoffs;

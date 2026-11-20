@@ -20,11 +20,16 @@ export function activeRunLabel(
   steps: ToolStep[],
   activity: ActivityEvent[],
 ) {
-  const latest = activity.findLast((e) =>
-    /^(model\.(started|completed|retry)|tool\.(started|completed))$/.test(
-      e.type,
-    ),
+  const latest = activity.findLast(
+    (e) =>
+      /^(model\.(started|completed|retry)|tool\.(started|completed))$/.test(
+        e.type,
+      ) ||
+      // A summary the reply waits for; one in the background doesn't hold it up.
+      (e.type.startsWith("compaction.") && details(e).blocking === true),
   );
+  if (latest?.type === "compaction.started")
+    return "Summarizing earlier messages…";
   if (latest?.type === "model.retry") return "Retrying model…";
   if (latest?.type === "tool.started") {
     const step = steps.find((s) => s.id === latest.operationId);
