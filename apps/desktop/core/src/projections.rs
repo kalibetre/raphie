@@ -282,9 +282,14 @@ pub fn active_run_label(
         matches!(
             event.kind.as_str(),
             "model.started" | "model.completed" | "model.retry" | "tool.started" | "tool.completed"
-        )
+        ) ||
+            // A summary the reply waits for; one in the background doesn't hold it up.
+            (event.kind.starts_with("compaction.") && details(event)["blocking"] == true)
     });
     let kind = latest.map(|event| event.kind.as_str());
+    if kind == Some("compaction.started") {
+        return "Summarizing earlier messages…".into();
+    }
     if kind == Some("model.retry") {
         return "Retrying model…".into();
     }
@@ -759,6 +764,35 @@ mod tests {
             "Waiting for model…"
         );
         assert_eq!(active_run_label(None, &[], &retry), "Retrying model…");
+        let summary = |id: i64, kind: &str, blocking: bool| {
+            event(
+                id,
+                id,
+                Some("t"),
+                None,
+                kind,
+                kind,
+                serde_json::json!({ "blocking": blocking }),
+            )
+        };
+        assert_eq!(
+            active_run_label(None, &[], &[summary(1, "compaction.started", true)]),
+            "Summarizing earlier messages…"
+        );
+        assert_eq!(
+            active_run_label(
+                None,
+                &[],
+                &[
+                    summary(1, "compaction.started", true),
+                    summary(2, "compaction.completed", true)
+                ]
+            ),
+            "Waiting for model…"
+        );
+        let mut busy = started.to_vec();
+        busy.push(summary(2, "compaction.started", false));
+        assert_eq!(active_run_label(None, &[], &busy), "Running tool…");
         assert_eq!(active_run_label(None, &[], &started), "Running tool…");
         assert_eq!(
             active_run_label(None, &tool_steps("t", &started, &[]), &started),

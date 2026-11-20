@@ -24,6 +24,7 @@ import {
 import { chatAdapter } from "../infrastructure/chat-adapter";
 import { ActiveRun } from "./active-run";
 import { AttachmentCard } from "./attachment-card";
+import { CompactionDivider } from "./compaction-divider";
 import { Conversation } from "./conversation";
 import {
   HandoffBrief,
@@ -143,12 +144,17 @@ export function Chat({
       {messages.map((message) => {
         const turnId = message.id.replace(/:reply$/, "");
         const turn = turns.find((t) => t.id === turnId);
+        // Above the turn whose run summarized the messages before it.
+        const divider = turn?.compaction && (
+          <CompactionDivider compaction={turn.compaction} />
+        );
         const text = message.parts
           .flatMap((p) => (p.type === "text" ? [p.content] : []))
           .join("");
         if (message.role === "user" && turn?.handoff)
           return (
             <div key={message.id} className="turn-user">
+              {divider}
               {turn.handoff.kind === "task" ? (
                 <HandoffBrief
                   handoff={turn.handoff}
@@ -176,6 +182,7 @@ export function Chat({
         if (message.role === "user" && turn?.scheduled)
           return (
             <div key={message.id} className="turn-user">
+              {divider}
               <ScheduledMarker
                 name={turn.scheduled.name}
                 at={turn.createdAt}
@@ -187,6 +194,7 @@ export function Chat({
         if (message.role === "user")
           return (
             <div key={message.id} className="turn-user">
+              {divider}
               <article
                 className="message message-user"
                 data-queued={turn?.queueMode ? true : undefined}

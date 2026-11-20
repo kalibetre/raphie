@@ -34,6 +34,12 @@ _Avoid_: Chat as a synonym for a single message or a temporary browser connectio
 owner's, but also a scheduled job's prompt or another bot's handoff. A turn may
 include several model responses and tool actions before it finishes.
 
+**Summary** (of earlier messages): What a session's model reads in place of
+its earlier messages once the session grows near the model's context window.
+The transcript keeps every message; only the model's context is shortened.
+Pi calls the step compaction.
+_Avoid_: Memory, which is what a bot keeps across sessions.
+
 **Handoff**: A task one bot gives another of the owner's bots, with the brief,
 its follow-ups and the results that come back. The receiving bot works on
 it in its own session, which only the sending bot directs. A handoff never

@@ -282,6 +282,16 @@ if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
         text: `Question ${n + 1}: review the plan`,
         createdAt: now + n,
         status: "done",
+        ...(n === 56
+          ? {
+              compaction: {
+                at: now + n,
+                reason: "threshold" as const,
+                summary:
+                  "## Goal\nReview the launch plan question by question.\n\n## Constraints & Preferences\n- Keep replies short; tables over prose.\n\n## Progress\n### Done\n- [x] Questions 1–55 reviewed\n\n### In Progress\n- [ ] The remaining questions\n\n## Key Decisions\n- **Ship Thursday**: the owner confirmed the date in question 12.\n\n## Next Steps\n1. Answer question 57\n\n## Critical Context\n- (none)",
+              },
+            }
+          : {}),
         answer: `Reply ${n + 1}. Here is a longer response to exercise transcript scrolling.\n\n${"A useful paragraph with enough detail to wrap across the available width. ".repeat(6)}\n\n\`\`\`ts\n${"const value = 'a deliberately wide code sample for horizontal scrolling'; ".repeat(8)}\n\`\`\`\n\n| Step | Result |\n| --- | --- |\n| Check | Passed |`,
       });
       record(

@@ -45,6 +45,8 @@ pub const SCENES: &[Scene] = &[
     ("inbox-empty", inbox_empty),
     ("conversation", conversation),
     ("conversation-archived", conversation_archived),
+    ("compaction", compaction),
+    ("compaction-open", compaction_open),
     ("attachments", attachments),
     ("image-viewer", image_viewer),
     ("permissions", permissions),
@@ -1429,6 +1431,57 @@ fn conversation_with(ui: &mut Ui, activity: Vec<Value>) {
             activity,
         ),
     );
+}
+
+/// A long conversation whose earlier messages were summarized before its
+/// latest question.
+pub fn compaction(ui: &mut Ui) {
+    let mut asked = turn(
+        "t3",
+        -60_000,
+        "And question 57?",
+        Some("Question 57 is fine as written."),
+        "done",
+    );
+    asked["compaction"] = json!({
+        "at": now_ms() - 60_000,
+        "reason": "threshold",
+        "summary": "## Goal\nReview the launch plan question by question.\n\n## Progress\n### Done\n- [x] Questions 1–56 reviewed\n\n## Key Decisions\n- **Ship Thursday**: the owner confirmed the date.\n\n## Next Steps\n1. Answer question 57"
+    });
+    open(
+        ui,
+        "s-1",
+        observation(
+            "Launch plan review",
+            vec![
+                turn(
+                    "t1",
+                    -600_000,
+                    "What should I focus on today?",
+                    Some(PLAN),
+                    "done",
+                ),
+                turn(
+                    "t2",
+                    -300_000,
+                    "Question 56: the rollout order?",
+                    Some("Staging first, then everyone."),
+                    "done",
+                ),
+                asked,
+            ],
+            None,
+            "idle",
+            vec![],
+            vec![],
+        ),
+    );
+}
+
+/// The same, with the summary open.
+pub fn compaction_open(ui: &mut Ui) {
+    compaction(ui);
+    ui.open_summaries.insert("t3".into());
 }
 
 /// The conversation with the composer's command permissions open, set

@@ -19,6 +19,12 @@ export function chatModel(
     streamChunkPause?: Promise<void>;
     tool?: { name: string; args: JsonObject };
     repeatTool?: boolean;
+    /**
+     * A model with this window that reports realistic usage (about four
+     * characters a token) and replies only to the newest message, so a long
+     * conversation reaches the summary thresholds.
+     */
+    contextWindow?: number;
   } = {},
 ) {
   const models = createModels();
@@ -26,6 +32,7 @@ export function chatModel(
     ...openrouterProvider().getModels()[0],
     id: "history",
     provider: "fixture",
+    ...(options.contextWindow ? { contextWindow: options.contextWindow } : {}),
     input: options.images
       ? (["text", "image"] as ("text" | "image")[])
       : (["text"] as ("text" | "image")[]),
@@ -44,7 +51,7 @@ export function chatModel(
       JSON.stringify(context.messages.filter((m) => m.role === "system")),
     );
     const stream = createAssistantMessageEventStream();
-    const answer = context.messages
+    const texts = context.messages
       .filter((m) => m.role === "user")
       .map((m) =>
         withoutContext(
@@ -55,8 +62,21 @@ export function chatModel(
                 .map((c) => c.text)
                 .join(""),
         ),
-      )
-      .join(" | ");
+      );
+    const summarizing = context.messages.some(
+      (m) =>
+        m.role === "system" &&
+        JSON.stringify(m.content).includes("context summarization assistant"),
+    );
+    const answer = !options.contextWindow
+      ? texts.join(" | ")
+      : summarizing
+        ? "Fixture summary of the earlier messages."
+        : `Noted: ${texts.at(-1)?.slice(0, 40) ?? ""}`;
+    const input = options.contextWindow
+      ? Math.ceil(JSON.stringify(context.messages).length / 4)
+      : 1;
+    const output = options.contextWindow ? Math.ceil(answer.length / 4) : 1;
     const message: AssistantMessage = {
       role: "assistant",
       content: [{ type: "text", text: answer }],
@@ -66,9 +86,9 @@ export function chatModel(
       stopReason: options.fail ? "error" : "stop",
       timestamp: Date.now(),
       usage: {
-        input: 1,
-        output: 1,
-        totalTokens: 2,
+        input,
+        output,
+        totalTokens: input + output,
         cacheRead: 0,
         cacheWrite: 0,
         cost: { input: 0, output: 0, total: 0, cacheRead: 0, cacheWrite: 0 },

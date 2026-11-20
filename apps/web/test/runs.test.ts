@@ -62,6 +62,32 @@ test("pending activity distinguishes model output, tool execution, and the next 
   );
 });
 
+test("a summary the reply waits for shows, and one in the background does not", () => {
+  const waiting = { generating: false, text: "" };
+  const blocking = (type: string) =>
+    event(type, "run", "task", type, JSON.stringify({ blocking: true }));
+  const background = (type: string) =>
+    event(type, "run", "task", type, JSON.stringify({ blocking: false }));
+  const start = event("tool.started", "run", "tool", "search started");
+  const steps = toolSteps("run", [start], []);
+  assert.equal(
+    activeRunLabel(waiting, [], [blocking("compaction.started")]),
+    "Summarizing earlier messages…",
+  );
+  assert.equal(
+    activeRunLabel(
+      waiting,
+      [],
+      [blocking("compaction.started"), blocking("compaction.completed")],
+    ),
+    "Waiting for model…",
+  );
+  assert.equal(
+    activeRunLabel(waiting, steps, [start, background("compaction.started")]),
+    "Running search…",
+  );
+});
+
 test("tool steps join the journal with approvals and post-decision results", () => {
   const approval = { id: "ap1", status: "approved" } as Approval;
   const steps = toolSteps(
