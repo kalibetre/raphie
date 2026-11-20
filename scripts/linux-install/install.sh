@@ -13,7 +13,7 @@ for executable in git tar runuser useradd systemctl systemd-creds dbus-run-sessi
   command -v "$executable" >/dev/null || { echo "Missing required command: $executable" >&2; exit 1; }
 done
 test -x /usr/local/bin/bun || { echo 'Install the pinned Bun version at /usr/local/bin/bun first.' >&2; exit 1; }
-test "$(/usr/local/bin/bun --version)" = "1.4.4" || { echo 'Bun 1.4.4 is required.' >&2; exit 1; }
+test "$(/usr/local/bin/bun --version)" = "1.4.5" || { echo 'Bun 1.4.5 is required.' >&2; exit 1; }
 source_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
 test -z "$(git -C "$source_dir" status --porcelain)" || { echo 'The source checkout must be clean.' >&2; exit 1; }
 if [ -e /etc/raphie ] || [ -e /opt/raphie ] || [ -e /var/lib/raphie ] || [ -e /usr/local/bin/raphie ] || id raphie >/dev/null 2>&1; then

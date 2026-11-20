@@ -127,6 +127,16 @@
   .markdown ol {
     padding-left: 22px;
   }
+  /* Tailwind's reset removes list markers; Markdown lists need them. */
+  .markdown ul {
+    list-style: disc;
+  }
+  .markdown ol {
+    list-style: decimal;
+  }
+  .markdown li.task-list-item {
+    list-style: none;
+  }
   .markdown li + li {
     margin-top: 3px;
   }
