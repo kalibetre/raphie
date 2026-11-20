@@ -19,7 +19,7 @@ use rune::{
     Color, El, Link, LinkPaint, LoopSpec, Path, PillStyle, Shape, Span, Tx, canvas, col, el, icon,
     row, text,
 };
-use rune_kit::{Markdown, Placement, popover, scrim};
+use rune_kit::{Markdown, MarkdownStyle, Placement, popover, scrim};
 
 use super::Look;
 use crate::avatar::{bot_avatar, bot_icon};
@@ -572,6 +572,11 @@ fn result(s: &Ui, turn: &SessionTurn, handoff: &TurnHandoff, look: &Look) -> El 
 
 /// Markdown with "@Name" for known bots linked, so they show as the bot.
 pub fn markdown(s: &Ui, source: &str, look: &Look) -> El {
+    styled_markdown(s, source, look.theme.markdown(&look.kit), look)
+}
+
+/// [`markdown`] in `style`.
+pub fn styled_markdown(s: &Ui, source: &str, style: MarkdownStyle, look: &Look) -> El {
     let bots = s.bot_refs();
     let tones: Vec<(String, Color)> = bots
         .iter()
@@ -579,7 +584,7 @@ pub fn markdown(s: &Ui, source: &str, look: &Look) -> El {
         .collect();
     let ink = look.theme.foreground;
     Markdown::new(linked_mentions(source, &bots))
-        .style(look.theme.markdown(&look.kit))
+        .style(style)
         .selectable(true)
         .link_style(move |url| {
             let id = url.strip_prefix(MENTION_SCHEME)?;

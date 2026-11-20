@@ -12,6 +12,7 @@
 //! - [`memory`]: what a save of a bot's memory settings carries, and its checks.
 //! - [`handoffs`]: tasks a bot handed to others, as cards and the composer show them.
 //! - [`mentions`]: "@Name" for another bot, typed and shown.
+//! - [`footnotes`]: a reply's sources, numbered and listed apart.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
 //! - [`settings`]: non-secret preferences.
 //! - [`last_sessions`]: the conversation last open with each bot.
@@ -32,6 +33,7 @@ pub mod channels;
 pub mod contracts;
 pub mod engine;
 pub mod flavor;
+pub mod footnotes;
 pub mod handoffs;
 pub mod inbox;
 pub mod inspection;

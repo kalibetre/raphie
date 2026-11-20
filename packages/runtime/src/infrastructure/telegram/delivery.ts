@@ -1,5 +1,6 @@
 import type { ToolApproval } from "../../domains/approvals/domain/tool-approval.ts";
 import { isSharedTelegramDestination } from "../../domains/channels/domain/binding.ts";
+import { plainFootnotes } from "../../domains/channels/domain/footnotes.ts";
 import type { RenderDelivery } from "../../domains/delivery/application/worker.ts";
 import { retryRateLimited, type TelegramApi, TelegramApiError } from "./api.ts";
 
@@ -140,10 +141,12 @@ export function telegramRenderer(): RenderDelivery {
       ];
     const operations: TelegramOperation[] =
       intent.source === "chat"
-        ? chunkText(intent.text || "(empty reply)").map((text) => ({
-            chatId,
-            text,
-          }))
+        ? chunkText(plainFootnotes(intent.text) || "(empty reply)").map(
+            (text) => ({
+              chatId,
+              text,
+            }),
+          )
         : intent.source === "tool"
           ? toolOperation(
               chatId,

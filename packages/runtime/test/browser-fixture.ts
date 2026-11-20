@@ -54,7 +54,10 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
       ? toolResult.content
           .flatMap((p) => (p.type === "text" ? [p.text] : []))
           .join("")
-      : `Let’s make some room for the day.\n\n1. **Choose one priority.** Start with the work that matters most.\n2. **Leave a little breathing room.** Keep a gap between meetings.\n3. **Close the loop.** Write down your next step before you finish.\n\nWhat would you like to focus on first?`;
+      : // "compare" shows a reply with a table and sources.
+        /compare/i.test(input)
+        ? `Get the Air 15. It is as fast as the Pro for 600 less.[^review]\n\n| Laptop | Price | Battery |\n| --- | --- | --- |\n| **Air 15** | 1,299 | 18h |\n| XPS 14 | 1,499 | 13h |\n| Pro 14 | 1,899 | 22h |\n\nBattery times are the makers' figures.[^specs]\n\n[^review]: Fixture Labs, Thin laptops tested, fixture.example\n[^specs]: Maker spec sheets, fixture.example/specs`
+        : `Let’s make some room for the day.\n\n1. **Choose one priority.** Start with the work that matters most.\n2. **Leave a little breathing room.** Keep a gap between meetings.\n3. **Close the loop.** Write down your next step before you finish.\n\nWhat would you like to focus on first?`;
   const message: AssistantMessage = {
     role: "assistant",
     content: useTool

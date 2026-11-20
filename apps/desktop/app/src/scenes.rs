@@ -46,6 +46,7 @@ pub const SCENES: &[Scene] = &[
     ("conversation", conversation),
     ("conversation-archived", conversation_archived),
     ("compaction", compaction),
+    ("sources", sources),
     ("compaction-open", compaction_open),
     ("attachments", attachments),
     ("image-viewer", image_viewer),
@@ -1432,6 +1433,30 @@ fn conversation_with(ui: &mut Ui, activity: Vec<Value>) {
         ),
     );
 }
+
+/// A reply that compares options in a table and cites its sources.
+pub fn sources(ui: &mut Ui) {
+    open(
+        ui,
+        "s-1",
+        observation(
+            "Laptop",
+            vec![turn(
+                "t1",
+                -60_000,
+                "Compare thin laptops for me.",
+                Some(SOURCES),
+                "done",
+            )],
+            None,
+            "idle",
+            vec![],
+            finished_activity(),
+        ),
+    );
+}
+
+const SOURCES: &str = "Get the Air 15. It is as fast as the Pro for 600 less.[^review]\n\n| Laptop | Price | Battery |\n| --- | --- | --- |\n| **Air 15** | 1,299 | 18h |\n| XPS 14 | 1,499 | 13h |\n| Pro 14 | 1,899 | 22h |\n\nBattery times are the makers' figures.[^specs]\n\n[^review]: Fixture Labs, Thin laptops tested, fixture.example\n[^specs]: Maker spec sheets, fixture.example/specs";
 
 /// A long conversation whose earlier messages were summarized before its
 /// latest question.

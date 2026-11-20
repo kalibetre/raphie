@@ -15,6 +15,7 @@ import type { ClientQueries } from "../../application/queries/ports.ts";
 import { Activity } from "../../domains/activity/infrastructure/pi-activity-journal.ts";
 import type { McpTools } from "../../domains/approvals/infrastructure/mcp-approval-gate.ts";
 import type { ToolApprovalService } from "../../domains/approvals/infrastructure/pi-tool-approvals.ts";
+import { plainFootnotes } from "../../domains/channels/domain/footnotes.ts";
 import { ChannelBindings } from "../../domains/channels/infrastructure/pi-bindings.ts";
 import type { ChatService } from "../../domains/conversations/infrastructure/pi-conversation-service.ts";
 import type { Observations } from "../../domains/conversations/infrastructure/pi-observations.ts";
@@ -125,10 +126,9 @@ export class PiClientQueries implements ClientQueries {
           lastAt: latest?.createdAt ?? c.createdAt,
           working: turns.some((t) => t.status === "pending"),
           failed: latest?.status === "error" && !latest.cancelled,
-          preview: (latest?.answer ?? latest?.text ?? "No messages yet").slice(
-            0,
-            280,
-          ),
+          preview: plainFootnotes(
+            latest?.answer ?? latest?.text ?? "No messages yet",
+          ).slice(0, 280),
           turnCount: turns.length,
           replyCount: turns.filter(
             (t) => t.status === "done" && t.answer !== null,
@@ -281,10 +281,9 @@ export class PiClientQueries implements ClientQueries {
         lastAt: last?.createdAt ?? session.createdAt,
         working: !!pending.length,
         failed: last?.status === "error" && !last.cancelled,
-        preview: (last?.answer ?? last?.text ?? "No messages yet").slice(
-          0,
-          280,
-        ),
+        preview: plainFootnotes(
+          last?.answer ?? last?.text ?? "No messages yet",
+        ).slice(0, 280),
         turnCount: chats.turns.filter((t) => t.conversationId === session.id)
           .length,
         replyCount: chats.turns.filter(

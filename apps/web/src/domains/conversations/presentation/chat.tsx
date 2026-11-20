@@ -278,6 +278,8 @@ export function Chat({
               <ReactMarkdown
                 components={mentions.components}
                 remarkPlugins={mentions.plugins}
+                // Footnote anchors are per reply, so two replies' notes don't collide.
+                remarkRehypeOptions={{ clobberPrefix: `${turnId}-` }}
               >
                 {text}
               </ReactMarkdown>

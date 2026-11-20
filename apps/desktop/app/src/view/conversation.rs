@@ -8,6 +8,7 @@
 use raphie_core::contracts::{
     ControlAction, QueueMode, SessionActivity, SessionObservation, SessionTurn, TurnStatus,
 };
+use raphie_core::footnotes;
 use raphie_core::model::Conversation;
 use raphie_core::projections::{
     ToolStep, active_run_label, completed_at, format_cost, format_duration, format_tokens,
@@ -355,15 +356,36 @@ fn reply(
     if let Some(cards) = handoffs::cards(s, &turn.id, look) {
         reply = reply.child(cards.mb(10.0));
     }
+    // Sources: numbers in the text, the notes small under a rule.
+    let cited = footnotes::cite(source);
     reply = reply.child(if streaming {
-        Markdown::new(source)
+        Markdown::new(cited.body.as_str())
             .style(t.markdown(&look.kit))
             .streaming(true)
             .selectable(true)
             .build(&look.kit)
     } else {
-        handoffs::markdown(s, source, look)
+        handoffs::markdown(s, &cited.body, look)
     });
+    if !cited.notes.is_empty() {
+        let mut notes = col()
+            .key(format!("rd-notes-{}", turn.id))
+            .w_full()
+            .mt(12.0)
+            .pt(6.0)
+            .gap(2.0)
+            .child(col().h(1.0).w_full().fill(t.border).mb(4.0));
+        for (n, note) in cited.notes.iter().enumerate() {
+            let line = format!("{} {note}", footnotes::superscript(n + 1));
+            notes = notes.child(handoffs::styled_markdown(
+                s,
+                &line,
+                t.notes(&look.kit),
+                look,
+            ));
+        }
+        reply = reply.child(notes);
+    }
     if turn.status == TurnStatus::Done
         && let Some(sources) = handoffs::sources(turn, look)
     {

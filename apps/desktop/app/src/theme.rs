@@ -139,8 +139,22 @@ impl Theme {
             .strong_weight(700.0)
             .list(22.0, 3.0)
             .rule(self.border)
-            .table(self.border, self.muted)
+            // Hairline rules between rows, no frame, as the web's tables.
+            .table(self.border, self.background)
+            .table_outline(None)
+            .table_header_text(self.muted_foreground)
+            .table_header_weight(500.0)
+            .table_font(font(13.0, 400.0))
+            .table_tabular_figures(true)
+            .table_flush_left(true)
             .selection(self.selection())
+    }
+
+    /// A reply's sources, as `.footnotes` in the web's `chat.css`.
+    pub fn notes(&self, kit: &Kit) -> MarkdownStyle {
+        self.markdown(kit)
+            .text(self.muted_foreground)
+            .body_font(font(12.0, 400.0).lh(18.0))
     }
 }
 

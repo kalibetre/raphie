@@ -1,6 +1,7 @@
 import type { AdapterPostableMessage, CardElement } from "chat";
 
 import type { AttachmentStore } from "../../domains/attachments/application/ports.ts";
+import { plainFootnotes } from "../../domains/channels/domain/footnotes.ts";
 import type { RenderDelivery } from "../../domains/delivery/application/worker.ts";
 import { approvalCard, toolApprovalCard } from "./cards.ts";
 
@@ -18,11 +19,12 @@ export function discordRenderer(files: AttachmentStore): RenderDelivery {
     const base = { threadId: intent.threadId };
     if (intent.source === "chat") {
       const parts = [];
-      for (let offset = 0; offset < intent.text.length; offset += 1900)
+      const text = plainFootnotes(intent.text);
+      for (let offset = 0; offset < text.length; offset += 1900)
         parts.push(
           JSON.stringify({
             ...base,
-            raw: intent.text.slice(offset, offset + 1900),
+            raw: text.slice(offset, offset + 1900),
           }),
         );
       return parts;
