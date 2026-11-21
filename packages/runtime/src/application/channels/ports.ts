@@ -14,4 +14,6 @@ export interface ChannelServices {
   files: AttachmentStore;
   deliveries: ChannelDeliveryQueues;
   asks: AskCommands;
+  /** The bot's usable skills, offered as channel commands such as `/weekly_report`. */
+  skillCommands?(): Promise<{ name: string; description: string }[]>;
 }

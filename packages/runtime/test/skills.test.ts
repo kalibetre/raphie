@@ -167,6 +167,7 @@ test("skills are saved in the workspace, offered to the bot and read with read_s
   const directory = await mkdtemp(join(tmpdir(), "raphie-skills-"));
   const prompts: string[] = [];
   const tools: string[][] = [];
+  const messages: string[] = [];
   const gateway = await Gateway.open({
     directory,
     botId: "default",
@@ -174,6 +175,7 @@ test("skills are saved in the workspace, offered to the bot and read with read_s
     ...chatModel({
       systemPrompt: (text) => prompts.push(text),
       offeredTools: (names) => tools.push(names),
+      userMessages: (sent) => messages.push(JSON.stringify(sent.at(-1))),
     }),
   });
   const server = await startServer(gateway, { port: 0 });
@@ -256,6 +258,19 @@ test("skills are saved in the workspace, offered to the bot and read with read_s
       await gateway.skills.read("weekly-report", "assets/template.md"),
     ).toBe("# Week\n");
 
+    // Typing /name loads the skill into that message, as Telegram spells it too.
+    await turn("/weekly-report for the design team");
+    expect(messages.at(-1)).toContain(
+      'The owner invoked your skill \\"weekly-report\\"',
+    );
+    expect(messages.at(-1)).toContain("Fill assets/template.md.");
+    expect(messages.at(-1)).toContain("for the design team");
+    await turn("/weekly_report@raphie_bot again");
+    expect(messages.at(-1)).toContain("Fill assets/template.md.");
+    // Paths and unknown names stay plain text.
+    await turn("/tmp is full");
+    expect(messages.at(-1)).not.toContain("invoked your skill");
+
     // Turned off, it stays in the workspace but is not offered or read.
     expect(
       (await call("PUT", "/weekly-report/enabled", { enabled: false })).status,
@@ -269,6 +284,9 @@ test("skills are saved in the workspace, offered to the bot and read with read_s
       refused = String(error);
     }
     expect(refused).toContain("turned off");
+    // The owner can still invoke it by name.
+    await turn("/weekly-report now");
+    expect(messages.at(-1)).toContain("invoked your skill");
 
     // A skill the bot writes itself is found on its next turn.
     await gateway.workspace.replaceTree("/workspace/skills/bot-notes", [

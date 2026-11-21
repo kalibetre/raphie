@@ -329,14 +329,48 @@ export function createTelegramBridge(
     return "network";
   }
 
+  /**
+   * The bot's skills as Telegram commands: Telegram allows lowercase
+   * letters, digits and underscores up to 32 characters, so
+   * `weekly-report` is `/weekly_report`. Never fails the poll.
+   */
+  async function skillCommands() {
+    try {
+      const skills = (await app.skillCommands?.()) ?? [];
+      return skills
+        .map((skill) => ({
+          command: skill.name.replaceAll("-", "_"),
+          description: skill.description.slice(0, 256) || skill.name,
+        }))
+        .filter(
+          (item) =>
+            item.command.length <= 32 &&
+            !COMMANDS.some((base) => base.command === item.command),
+        )
+        .slice(0, 100 - COMMANDS.length);
+    } catch {
+      return [];
+    }
+  }
+
   /** Long polling: each update is handled, then its offset is committed. */
   async function poll(signal: AbortSignal) {
     let backoff = 1000;
     let commandsRegistered = false;
+    let registeredSkills = "";
     while (!signal.aborted) {
       try {
+        // Skills join the private-chat menu; checked each poll, so a new or
+        // deleted skill shows within one poll.
+        const skills = await skillCommands();
+        const signature = JSON.stringify(skills);
+        if (commandsRegistered && signature !== registeredSkills) {
+          await api.setMyCommands([...COMMANDS, ...skills], signal);
+          registeredSkills = signature;
+        }
         if (!commandsRegistered) {
-          await api.setMyCommands(COMMANDS, signal);
+          await api.setMyCommands([...COMMANDS, ...skills], signal);
+          registeredSkills = signature;
           await api.setMyCommands(
             COMMANDS.filter((item) =>
               ["ask", "home", "help"].includes(item.command),

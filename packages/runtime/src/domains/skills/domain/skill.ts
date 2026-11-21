@@ -69,6 +69,23 @@ export function checkFrontmatter(
   return { header: { name, description: description.trim() } };
 }
 
+/**
+ * The skill a message asks for by starting with `/name`: `/weekly-report`
+ * or, as Telegram spells commands, `/weekly_report`, optionally followed by
+ * `@BotName`. Null when the message does not start that way.
+ */
+export function invokedSkill(text: string): string | null {
+  const match = /^\/([a-z0-9][a-z0-9_-]{0,63})(?:@\w+)?(?=\s|$)/.exec(
+    text.trimStart(),
+  );
+  return match ? match[1]!.replaceAll("_", "-") : null;
+}
+
+/** A skill as the turn that invoked it is told to follow it. */
+export function invokedInstructions(name: string, skill: string) {
+  return `The owner invoked your skill "${name}" for this message. Follow it:\n<skill name="${name}">\n${skill.trim()}\n</skill>\n\n`;
+}
+
 /** Why `path` (inside a skill folder) is not a file a skill may hold. */
 export function skillPathProblem(path: string): string | null {
   const parts = path.split("/");

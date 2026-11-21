@@ -279,6 +279,7 @@ export class Gateway {
     app.chats.skills = {
       instructions: () => app.skills.instructions(),
       refresh: () => app.skills.refresh(),
+      invoke: (text) => app.skills.invoke(text),
     };
     const previousChats = await app.harness.snapshot(Chats, context);
     const previousModels = new Map<number, ModelRef>();
@@ -467,6 +468,13 @@ export class Gateway {
   }
 
   /** Who the owner is, read at the start of every turn. */
+  /** The bot's usable skills, on or off: each can be invoked by name. */
+  async skillCommands() {
+    return (await this.skills.list())
+      .filter((skill) => !skill.problem)
+      .map(({ name, description }) => ({ name, description }));
+  }
+
   setOwner(read: () => OwnerProfile) {
     this.chats.owner = read;
   }
