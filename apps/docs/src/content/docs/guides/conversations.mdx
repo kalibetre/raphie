@@ -50,6 +50,20 @@ Archiving puts a conversation away without deleting anything. It leaves the list
 | Context donut | How full the model's context is. Hover it for the numbers, and the tokens and cost of the session so far; it turns amber past 80%. |
 | Send / Stop   | Send turns into Stop while the bot is working and the draft is empty. With text in the draft, **Stop task** is under the ⋯ menu.   |
 
+### Commands and skills
+
+Type **/** at the start of the draft for a menu of commands and the bot's [skills](/guides/skills/). Arrow keys and **Enter** choose; **Escape** closes it.
+
+| Entry           | Does                                                                        |
+| --------------- | --------------------------------------------------------------------------- |
+| `/new`          | Starts a new conversation with this bot                                     |
+| `/model`        | Opens the model picker                                                      |
+| `/stop`         | Stops the reply in progress (only while the bot is working)                 |
+| `/handoff`      | Writes `@` so you can choose a bot to [hand the task to](/guides/handoffs/) |
+| `/<skill-name>` | Writes `/<skill-name> ` so your message invokes that skill                  |
+
+Commands act at once and send nothing. A `/` later in a message, or a word that matches nothing, is plain text.
+
 You can keep sending while the bot works. A waiting message shows as **Queued**; choose **Steer** to have the bot pick it up after its current tool step, or **Keep queued** to leave it until the current reply finishes.
 
 Stopping withdraws queued messages, marks the interrupted reply as stopped and expires any approval request still waiting in the session. It does not undo anything a tool has already done.

@@ -29,8 +29,23 @@ Each bot has its own skills. They live in the bot's workspace, at `skills/<name>
 - `read_skill` reads a skill's `SKILL.md` or another text file in its folder without asking for approval.
 - Scripts a skill bundles run with `workspace_exec`, under the bot's [sandbox](/guides/workspaces/) and its approval rules.
 - Skills are read again before each message, so a change applies from the bot's next reply.
+- You can also invoke a skill by name; see [below](#invoke-a-skill-yourself).
 
 Skills are instructions. Like a [personality](/guides/bots/#edit-identity-and-personality), they never grant tools, access or permissions.
+
+## Invoke a skill yourself
+
+Start a message with `/` and the skill's name to have the bot follow it for that message, whether or not it would have chosen it:
+
+```txt
+/weekly-report for the design team, include the launch slip
+```
+
+- In the web and desktop apps, typing **/** offers the bot's skills. See [commands and skills](/guides/conversations/#commands-and-skills).
+- In Telegram, skills appear in the bot's command menu with underscores, such as `/weekly_report`, because Telegram commands cannot contain hyphens. Either spelling works anywhere.
+- A skill that is turned off can still be invoked by name. Off means the bot does not use it on its own.
+
+The skill is loaded into that one message, so the bot does not need to call `read_skill` first.
 
 ## What a skill looks like
 
