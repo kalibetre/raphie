@@ -1604,11 +1604,8 @@ impl Ui {
         self.composer.replace_text("");
         self.composer.set_caret(0);
         match item.kind {
-            SlashKind::New => {
-                if let Some(bot_id) = self.model.bot_id.clone() {
-                    self.select_bot(&bot_id);
-                }
-            }
+            // The same as the New conversation buttons.
+            SlashKind::New => self.select_session(None),
             SlashKind::Model => self.model_picker.open = true,
             SlashKind::Stop => self.stop(),
             SlashKind::Handoff => {

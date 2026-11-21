@@ -5716,3 +5716,31 @@ fn the_slash_menu_says_what_return_does_and_links_to_skills() {
     );
     assert_eq!(rt.state.composer.text, "", "the / is not left behind");
 }
+
+#[test]
+fn slash_new_leaves_an_open_conversation_for_a_new_one() {
+    let mut rt = render(scenes::conversation_skill, false);
+    rt.update(|ui, _| {
+        ui.model.apply(Event::Skills {
+            bot_id: "default".into(),
+            items: scenes::skill_list(),
+        });
+    });
+    assert!(
+        rt.state.model.conversation.is_some(),
+        "a conversation is open"
+    );
+    click(&mut rt, "rd-composer");
+    rt.paste("/new");
+    settle(&mut rt);
+    rt.key(KeyEvent {
+        key: Key::Enter,
+        mods: Default::default(),
+    });
+    settle(&mut rt);
+    assert!(
+        rt.state.model.conversation.is_none(),
+        "/new opens a new conversation, as the button does"
+    );
+    assert_eq!(rt.state.composer.text, "");
+}
