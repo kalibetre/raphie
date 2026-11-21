@@ -14,7 +14,7 @@ use raphie_core::contracts::{
     BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, ModelSelection,
     SandboxProvider, Scope, TelegramPairingCode,
 };
-use raphie_core::contracts::{ReplyLength, ReplyStyle};
+use raphie_core::contracts::{ReplyLength, ReplyStyle, ReplyWarmth};
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::Target;
@@ -5241,4 +5241,45 @@ fn a_reply_style_is_chosen_and_saved_with_the_profile() {
             }
         );
     }
+}
+
+#[test]
+fn a_reply_slider_follows_a_drag_along_its_track() {
+    let mut rt = render_sized(research_profile, false, (1280.0, 1800.0));
+    let [x, y, w, h] = element(&rt, "rd-reply-warmth-track").rect;
+    let mid = y + h / 2.0;
+    // From the middle stop, dragged past the right end: Warm.
+    rt.pointer_down(x + w / 2.0, mid);
+    rt.pointer_move(x + w / 2.0 + 20.0, mid);
+    rt.pointer_move(x + w + 30.0, mid);
+    rt.pointer_up(x + w + 30.0, mid);
+    settle(&mut rt);
+    assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Warm);
+    // Then dragged back towards the left end: Plain.
+    rt.pointer_down(x + w - 12.0, mid);
+    rt.pointer_move(x + w - 40.0, mid);
+    rt.pointer_move(x + 4.0, mid);
+    rt.pointer_up(x + 4.0, mid);
+    settle(&mut rt);
+    assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Plain);
+    assert_eq!(
+        element(&rt, "rd-reply-warmth-value").text.as_deref(),
+        Some("Plain")
+    );
+    // The press focused the slider; the arrow keys step it.
+    assert!(element(&rt, "rd-reply-warmth-track").focused);
+    for key in [Key::Right, Key::Right, Key::Right] {
+        rt.key(KeyEvent {
+            key,
+            mods: Default::default(),
+        });
+        settle(&mut rt);
+    }
+    assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Warm);
+    rt.key(KeyEvent {
+        key: Key::Home,
+        mods: Default::default(),
+    });
+    settle(&mut rt);
+    assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Plain);
 }

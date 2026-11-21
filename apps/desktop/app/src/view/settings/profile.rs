@@ -9,7 +9,7 @@
 
 use raphie_core::contracts::{BotProfile, ReplyFormatting, ReplyLength, ReplyStyle, ReplyWarmth};
 use rune::color::hex;
-use rune::{Color, El, Tx, col, el, icon, row, text, text_input};
+use rune::{Color, Cursor, Drag, El, Key, KeyEvent, Tx, col, el, icon, row, text, text_input};
 use rune_kit::Dialog;
 
 use super::parts::{SaveBar, Scope, page, save_bar as save_bar_of};
@@ -236,7 +236,9 @@ fn replies(s: &Ui, t: &Theme) -> El {
 }
 
 /// One reply setting as a slider with three stops: a track, the chosen
-/// stop as a handle, and the two ends named beneath. Each stop is a button.
+/// stop as a handle, and the two ends named beneath. The track is one
+/// focusable control: a press or drag anywhere on it picks the nearest
+/// stop, and the arrow keys (or Home and End) step between them.
 fn slider(t: &Theme, key: &str, name: &str, stops: &Stops, at: usize, saving: bool) -> El {
     let small = |content: &str| {
         text(content.to_owned())
@@ -244,13 +246,19 @@ fn slider(t: &Theme, key: &str, name: &str, stops: &Stops, at: usize, saving: bo
             .color(t.muted_foreground)
     };
     let mut track = row()
-        .role("group")
+        .key(format!("rd-reply-{key}-track"))
+        .role("slider")
         .label(name)
+        .a11y_value(stops[at].0)
         .w_full()
         .h(20.0)
         .center_y()
-        .px(2.0);
-    for (index, (label, set)) in stops.iter().enumerate() {
+        .px(2.0)
+        .radius(10.0)
+        .cursor(Cursor::Pointer)
+        .focusable(!saving)
+        .focus_ring(2.0, 2.0, t.accent);
+    for (index, (label, _)) in stops.iter().enumerate() {
         if index > 0 {
             // The track between two stops: filled up to the chosen one.
             let filled = index <= at;
@@ -263,8 +271,7 @@ fn slider(t: &Theme, key: &str, name: &str, stops: &Stops, at: usize, saving: bo
             }
             track = track.child(line.a11y_hidden());
         }
-        let chosen = index == at;
-        let mark = if chosen {
+        let mark = if index == at {
             el().key(format!("rd-reply-{key}-handle"))
                 .size(16.0, 16.0)
                 .radius(8.0)
@@ -275,25 +282,47 @@ fn slider(t: &Theme, key: &str, name: &str, stops: &Stops, at: usize, saving: bo
                 .radius(3.0)
                 .fill(if index < at { t.accent } else { t.border })
         };
-        let set = *set;
-        track = track.child(pressable(
+        track = track.child(
             row()
                 .key(format!(
                     "rd-reply-{key}-{}",
                     label.to_lowercase().replace(' ', "-")
                 ))
-                .role("button")
-                .label(format!("{name}: {label}"))
-                .checked(chosen)
                 .size(20.0, 20.0)
                 .center()
-                .child(mark.a11y_hidden()),
-            !saving,
-            move |s: &mut Ui| {
-                set(&mut s.profile.reply_style);
+                .child(mark)
+                .a11y_hidden(),
+        );
+    }
+    if saving {
+        track = track.layer_opacity(0.5);
+    } else {
+        let stops = *stops;
+        let choose = move |s: &mut Ui, index: usize| {
+            let before = s.profile.reply_style;
+            stops[index].1(&mut s.profile.reply_style);
+            if s.profile.reply_style != before {
                 s.profile.message = None;
-            },
-        ));
+            }
+        };
+        track = track
+            // The stops' centres sit 12 points in from either end.
+            .on_drag(move |s: &mut Ui, drag: &mut Drag, _: &mut Tx| {
+                let span = (drag.w - 24.0).max(1.0);
+                let index = (((drag.x - 12.0) / span) * 2.0).round().clamp(0.0, 2.0);
+                choose(s, index as usize);
+            })
+            .on_key(move |s: &mut Ui, event: &KeyEvent, _: &mut Tx| {
+                let index = match event.key {
+                    Key::Left | Key::Down => at.saturating_sub(1),
+                    Key::Right | Key::Up => (at + 1).min(2),
+                    Key::Home => 0,
+                    Key::End => 2,
+                    _ => return false,
+                };
+                choose(s, index);
+                true
+            });
     }
     col()
         .w_full()
