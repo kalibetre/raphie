@@ -5577,3 +5577,37 @@ fn skills_are_imported_from_a_github_link() {
         "the dialog closes"
     );
 }
+
+#[test]
+fn the_skill_editor_grows_with_its_text_and_links_back_from_the_header() {
+    let mut rt = render(scenes::settings_skills_editor, false);
+    click(&mut rt, "rd-skill-file-0");
+    let short = element(&rt, "rd-skill-text-box").rect[3];
+    let long: String = (1..=120)
+        .map(|n| format!("{n}. A step of the skill.\n"))
+        .collect();
+    rt.update(move |ui, _| {
+        if let Some(editor) = &mut ui.skills.editor {
+            editor.files[0].1 = TextEdit::new(long.clone());
+        }
+    });
+    settle(&mut rt);
+    let tall = element(&rt, "rd-skill-text-box").rect[3];
+    assert!(
+        tall > short * 3.0,
+        "{short} → {tall}: the box grows with the text"
+    );
+    // The way back is in the page header, above the skill's name.
+    let back = element(&rt, "rd-skills-back");
+    let title = rt
+        .elements()
+        .into_iter()
+        .find(|e| e.text.as_deref() == Some("weekly-report"))
+        .expect("the header names the skill");
+    assert!(back.rect[1] < title.rect[1]);
+    click(&mut rt, "rd-skills-back");
+    assert!(
+        rt.state.skills.editor.is_some(),
+        "unsaved edits keep the editor open"
+    );
+}

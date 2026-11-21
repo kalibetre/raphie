@@ -14,10 +14,6 @@
     display: grid;
     gap: 28px;
   }
-  .skill-back {
-    justify-self: start;
-    margin-bottom: -16px;
-  }
   .skill-editor {
     display: grid;
     grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
@@ -53,7 +49,6 @@
   .skill-add-file {
     display: grid;
     gap: 6px;
-    margin-top: auto;
     padding-top: 12px;
   }
   .skill-file-editor {

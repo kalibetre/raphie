@@ -6,11 +6,11 @@
 
 use raphie_core::contracts::SkillSummary;
 use raphie_core::engine::Command;
-use rune::{El, Tx, col, el, row, text, text_input};
+use rune::{El, Tx, col, row, text, text_input};
 use rune_kit::Dialog;
 
 use super::parts::{
-    SaveBar, Scope, group, group_heading, group_with, page, save_bar, setting, status,
+    SaveBar, Scope, back_link, group_heading, group_with, page, save_bar, setting, status, sub_page,
 };
 use crate::sections::BotSection;
 use crate::skills::{SkillEditor, SkillsMode};
@@ -33,10 +33,38 @@ pub fn skills(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
             vec![list(s, items, t), how_they_work(t)]
         }
         (SkillsMode::List, None) => vec![loading(s, bot_id, t)],
-        (mode, _) => match &s.skills.editor {
-            Some(editor) => editor_page(s, mode, editor, look, overlays),
-            None => vec![back(t), opening(s, t)],
-        },
+        (mode, _) => {
+            let body = match &s.skills.editor {
+                Some(editor) => editor_page(s, mode, editor, look, overlays),
+                None => vec![opening(s, t)],
+            };
+            // An open skill is a sub-page: the header names it and links back.
+            let (title, lede) = match mode {
+                SkillsMode::Edit(skill) => (
+                    skill.clone(),
+                    format!("skills/{skill}/ in this bot's workspace."),
+                ),
+                _ => (
+                    "New skill".to_owned(),
+                    "The name in SKILL.md becomes the folder: lowercase letters, digits and hyphens."
+                        .to_owned(),
+                ),
+            };
+            let back = pressable(
+                back_link(t, BotSection::Skills.label()).key("rd-skills-back"),
+                true,
+                |s: &mut Ui| s.back_to_skills(),
+            );
+            return sub_page(
+                "rd-page-skill",
+                &title,
+                &lede,
+                Scope::Bot { id: bot_id, name },
+                Some(back),
+                body,
+                look,
+            );
+        }
     };
     page(
         "rd-page-skills",
@@ -206,15 +234,6 @@ fn how_they_work(t: &Theme) -> El {
     )
 }
 
-fn back(t: &Theme) -> El {
-    pressable(
-        button(t, Kind::Ghost, Size::Small, None, "← All skills").key("rd-skills-back"),
-        true,
-        |s: &mut Ui| s.back_to_skills(),
-    )
-    .self_start()
-}
-
 /// The editor: the skill's files on the left, the open one on the right.
 fn editor_page(
     s: &Ui,
@@ -225,20 +244,6 @@ fn editor_page(
 ) -> Vec<El> {
     let t = &look.theme;
     let busy = s.model.changing_skill;
-    let (title, note) = match mode {
-        SkillsMode::Edit(name) => (
-            name.clone(),
-            format!("skills/{name}/ in this bot's workspace."),
-        ),
-        _ => (
-            match editor.name() {
-                name if name.is_empty() => "New skill".to_owned(),
-                name => name,
-            },
-            "The name in SKILL.md becomes the folder: lowercase letters, digits and hyphens."
-                .to_owned(),
-        ),
-    };
     let mut files = col()
         .key("rd-skill-files")
         .w(200.0)
@@ -284,8 +289,9 @@ fn editor_page(
             ),
         );
     }
-    // The new-file field sits at the bottom of the column.
-    files = files.child(el().grow(1.0)).child(
+    // The new-file field follows the list, so a long skill does not push
+    // it out of sight.
+    files = files.child(
         col()
             .w_full()
             .gap(6.0)
@@ -387,7 +393,22 @@ fn editor_page(
             ),
         );
     }
-    let mut out = vec![back(t), group(t, &title, &note, card)];
+    // The card alone: the page header already names the skill.
+    let mut boxed = col()
+        .w_full()
+        .radius(14.0)
+        .fill(t.card)
+        .border(1.0, t.border)
+        .border_layout()
+        .clip_rounded(13.0);
+    for (index, part) in card.into_iter().enumerate() {
+        boxed = boxed.child(if index == 0 {
+            part
+        } else {
+            part.border_sides([1.0, 0.0, 0.0, 0.0], t.border)
+        });
+    }
+    let mut out = vec![boxed];
     if let SkillsMode::Edit(name) = mode {
         out.push(group_heading(
             t,

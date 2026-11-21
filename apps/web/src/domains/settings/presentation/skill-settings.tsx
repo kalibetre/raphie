@@ -1,6 +1,6 @@
 import type { SkillDetail, SkillSummary } from "@raphie/contracts";
-import { ArrowLeft, Plus, Upload } from "lucide-react";
-import { useState } from "react";
+import { Plus, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import {
@@ -46,16 +46,55 @@ function skillName(text: string) {
   return /^name:\s*["']?([^"'\r\n]*?)["']?\s*$/m.exec(front)?.[1] ?? "";
 }
 
-type View = { mode: "list" } | { mode: "edit"; name: string } | { mode: "new" };
+export type SkillView =
+  { mode: "list" } | { mode: "edit"; name: string } | { mode: "new" };
+
+/**
+ * Asked before the page header's "Skills" link leaves an editor: false
+ * keeps the editor open, which it does while it holds unsaved edits.
+ */
+export type SkillLeave = { current: (() => boolean) | null };
+
+/** The page header for a view: an open skill names itself. */
+export function skillHeader(view: SkillView) {
+  if (view.mode === "edit")
+    return {
+      title: view.name,
+      lede: `skills/${view.name}/ in this bot's workspace.`,
+    };
+  if (view.mode === "new")
+    return {
+      title: "New skill",
+      lede: "The name in SKILL.md becomes the folder: lowercase letters, digits and hyphens.",
+    };
+  return null;
+}
 
 /** Settings → Skills: what this bot knows how to do, kept in its workspace. */
-export function SkillSettings() {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function SkillSettings({
+  view,
+  onView,
+  leaveRef,
+}: {
+  view: SkillView;
+  onView: (view: SkillView) => void;
+  leaveRef: SkillLeave;
+}) {
+  const setView = onView;
   if (view.mode === "new")
-    return <SkillEditor onDone={() => setView({ mode: "list" })} />;
+    return (
+      <SkillEditor
+        leaveRef={leaveRef}
+        onDone={() => setView({ mode: "list" })}
+      />
+    );
   if (view.mode === "edit")
     return (
-      <LoadedEditor name={view.name} onDone={() => setView({ mode: "list" })} />
+      <LoadedEditor
+        name={view.name}
+        leaveRef={leaveRef}
+        onDone={() => setView({ mode: "list" })}
+      />
     );
   return (
     <SkillList
@@ -193,7 +232,15 @@ function SkillRow({
   );
 }
 
-function LoadedEditor({ name, onDone }: { name: string; onDone: () => void }) {
+function LoadedEditor({
+  name,
+  leaveRef,
+  onDone,
+}: {
+  name: string;
+  leaveRef: SkillLeave;
+  onDone: () => void;
+}) {
   const skill = useSkill(name);
   if (!skill.data)
     return (
@@ -203,7 +250,7 @@ function LoadedEditor({ name, onDone }: { name: string; onDone: () => void }) {
         onRetry={skill.error ? () => void skill.refetch() : undefined}
       />
     );
-  return <SkillEditor saved={skill.data} onDone={onDone} />;
+  return <SkillEditor saved={skill.data} leaveRef={leaveRef} onDone={onDone} />;
 }
 
 type Draft = { path: string; text: string }[];
@@ -218,9 +265,11 @@ const draftOf = (saved?: SkillDetail): Draft =>
 /** A skill's text files: SKILL.md and anything it bundles. */
 function SkillEditor({
   saved,
+  leaveRef,
   onDone,
 }: {
   saved?: SkillDetail;
+  leaveRef: SkillLeave;
   onDone: () => void;
 }) {
   const skills = useSkills();
@@ -236,6 +285,15 @@ function SkillEditor({
   const current = draft.find((file) => file.path === open) ?? draft[0]!;
   const name = saved?.name ?? skillName(draft[0]?.text ?? "");
   const binaries = saved?.contents.filter((file) => file.text === null) ?? [];
+  useEffect(() => {
+    leaveRef.current = () => {
+      if (dirty || pending) setStatus("Save or discard your changes first.");
+      return !dirty && !pending;
+    };
+    return () => {
+      leaveRef.current = null;
+    };
+  }, [leaveRef, dirty, pending]);
 
   const edit = (text: string) => {
     setStatus("");
@@ -269,27 +327,7 @@ function SkillEditor({
         void save();
       }}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="skill-back"
-        onClick={() => {
-          if (dirty) setStatus("Save or discard your changes first.");
-          else onDone();
-        }}
-      >
-        <ArrowLeft aria-hidden="true" />
-        All skills
-      </Button>
-      <Group
-        title={saved ? saved.name : name || "New skill"}
-        note={
-          saved
-            ? `skills/${saved.name}/ in this bot's workspace.`
-            : "The name in SKILL.md becomes the folder: lowercase letters, digits and hyphens."
-        }
-      >
+      <div className="settings-card">
         <div className="skill-editor">
           <nav className="skill-files-nav" aria-label="Skill files">
             {draft.map((file) => (
@@ -372,7 +410,7 @@ function SkillEditor({
             workspace.
           </p>
         )}
-      </Group>
+      </div>
       {saved && (
         <Group
           title="Delete skill"
