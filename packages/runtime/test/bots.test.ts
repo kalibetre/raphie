@@ -9,10 +9,21 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost, type BotRuntime } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { BotProfileStore } from "../src/domains/bots/infrastructure/bot-profiles.ts";
+import {
+  DEFAULT_REPLY_STYLE,
+  replyInstructions,
+} from "../src/domains/conversations/domain/reply-style.ts";
 import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memory.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
+
+const detailed = {
+  length: "detailed",
+  warmth: "warm",
+  formatting: "structured",
+  emoji: true,
+} as const;
 
 const profile = {
   name: "Research",
@@ -560,10 +571,13 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
       ...profile,
       personality: "Use a calm, direct voice.",
       color: "#DDA6B5",
+      replyStyle: detailed,
       revision: 1,
     });
     expect(revised.status).toBe(200);
     expect(host.read(bot.id).color).toBe("#dda6b5");
+    expect(host.read(bot.id).replyStyle).toEqual(detailed);
+    expect(host.history(bot.id)[1]!.replyStyle).toEqual(DEFAULT_REPLY_STYLE);
     expect(
       (await post(`${base}/profile`, { ...profile, revision: 1 })).status,
     ).toBe(409);
@@ -600,6 +614,17 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
         .status,
     ).toBe(200);
     expect(host.read(bot.id).color).toBeNull();
+    // A save that leaves the style out keeps it.
+    expect(host.read(bot.id).replyStyle).toEqual(detailed);
+    expect(
+      (
+        await post(`${base}/profile`, {
+          ...profile,
+          replyStyle: { ...detailed, length: "endless" },
+          revision: 3,
+        })
+      ).status,
+    ).toBe(400);
     expect(
       (await original.gateway.chats.state()).conversations[0]?.sessionId,
     ).toBe(receipt.sessionId);
@@ -755,4 +780,23 @@ test("profiles saved with a `soul` keep their personality after the rename", asy
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("a bot's reply style changes how it is told to write, and the defaults keep replies short", () => {
+  expect(replyInstructions()).toBe(
+    "Replies: open with the answer, or the one question you need answered, in one or two sentences as their own paragraph. Add only what the owner needs to act on it, as a short list or table rather than paragraphs. No preamble, no restating the request, no closing summary or offers of more help. Most replies fit in under 80 words; go longer only when the owner asks for detail or the work itself is long, such as code or a draft they asked for. If the personality the owner wrote asks for a different length or format, follow it.\n",
+  );
+  const text = replyInstructions(detailed);
+  expect(text).toContain("Explain fully when it helps");
+  expect(text).toContain("short headings, lists and tables");
+  expect(text).toContain("Write warmly");
+  expect(text).toContain("emoji");
+  expect(text).not.toContain("under 80 words");
+  expect(
+    replyInstructions({
+      ...DEFAULT_REPLY_STYLE,
+      warmth: "plain",
+      formatting: "prose",
+    }),
+  ).toMatch(/plain and matter-of-fact.*|short plain paragraphs/);
 });

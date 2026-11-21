@@ -12,6 +12,15 @@ const profile = z
     name: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500),
     personality: z.string().trim().min(1).max(16000),
+    replyStyle: z
+      .object({
+        length: z.enum(["short", "balanced", "detailed"]),
+        warmth: z.enum(["plain", "default", "warm"]),
+        formatting: z.enum(["prose", "default", "structured"]),
+        emoji: z.boolean(),
+      })
+      .strict()
+      .optional(),
     color: z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)
