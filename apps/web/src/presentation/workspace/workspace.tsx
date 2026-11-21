@@ -587,6 +587,7 @@ export function Workspace({
                         await refetch();
                       }}
                       onSend={send}
+                      onNewConversation={() => select()}
                       onChooseModel={async (model) => {
                         if (!conversationId) return;
                         await api(

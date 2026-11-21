@@ -546,3 +546,32 @@
     vertical-align: -2px;
   }
 }
+
+@layer components {
+  /* The / menu: commands and skills, sharing the @ menu's frame. */
+  .slash-menu {
+    width: min(460px, calc(100% - 24px));
+  }
+  .slash-heading {
+    margin: 6px 8px 2px;
+    font-size: 11px;
+    color: var(--faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .slash-option {
+    min-width: 0;
+  }
+  .slash-name {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+  .slash-description {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
