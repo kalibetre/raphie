@@ -23,6 +23,7 @@ import {
   type Section,
   sectionOf,
 } from "./settings-sections";
+import { SkillSettings } from "./skill-settings";
 import { TelemetrySettings } from "./telemetry-settings";
 import { WorkspaceFiles } from "./workspace-files";
 
@@ -86,6 +87,8 @@ export function Settings({
           <ModelSettings />
         ) : section === "mcp" ? (
           <McpSettings />
+        ) : section === "skills" ? (
+          <SkillSettings />
         ) : section === "channels" ? (
           <ChannelSettings />
         ) : section === "sandbox" ? (
