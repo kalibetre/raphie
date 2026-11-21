@@ -1640,6 +1640,19 @@ impl Ui {
         true
     }
 
+    /// Opens the selected bot's Skills settings, from the "/" menu.
+    pub fn manage_skills(&mut self) {
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            return;
+        };
+        self.composer.replace_text("");
+        self.composer.set_caret(0);
+        self.open_settings(Some(Page::Bot {
+            bot_id,
+            section: BotSection::Skills,
+        }));
+    }
+
     /// The selected bot's skills a message can invoke: on, and usable.
     pub fn invocable_skills(&self) -> Vec<&str> {
         self.model

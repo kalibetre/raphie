@@ -1,3 +1,10 @@
+import {
+  CornerUpRight,
+  type LucideIcon,
+  Sparkles,
+  Square,
+  SquarePen,
+} from "lucide-react";
 import { type KeyboardEvent, type RefObject, useId, useState } from "react";
 
 import {
@@ -6,6 +13,14 @@ import {
   slashMatches,
   slashQuery,
 } from "../application/slash";
+
+/** Each command's glyph, as the buttons that do the same show it. */
+const commandIcons: Record<string, LucideIcon> = {
+  new: SquarePen,
+  model: Sparkles,
+  stop: Square,
+  handoff: CornerUpRight,
+};
 
 /** A command the composer can run, with what it does. */
 export type SlashCommand = SlashItem & { kind: "command"; run: () => void };
@@ -21,12 +36,15 @@ export function useSlashMenu({
   skills,
   input,
   update,
+  onManageSkills,
 }: {
   draft: string;
   commands: readonly SlashCommand[];
   skills: readonly SlashItem[];
   input: RefObject<HTMLTextAreaElement | null>;
   update: (text: string) => void;
+  /** Opens this bot's Skills settings from the menu's footer. */
+  onManageSkills?: () => void;
 }) {
   const id = useId();
   const [caret, setCaret] = useState(0);
@@ -82,23 +100,35 @@ export function useSlashMenu({
     return false;
   }
 
-  const option = (item: SlashItem, i: number) => (
-    <div
-      key={`${item.kind}-${item.name}`}
-      id={`${id}-${item.kind}-${item.name}`}
-      role="option"
-      aria-selected={i === index}
-      className="mention-option slash-option"
-      // Keep the caret in the draft while choosing.
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => choose(item)}
-    >
-      <span className="slash-name">/{item.name}</span>
-      <span className="slash-description">{item.description}</span>
-    </div>
-  );
-  const commandMatches = matches.filter((item) => item.kind === "command");
-  const skillMatches = matches.filter((item) => item.kind === "skill");
+  const option = (item: SlashItem, i: number) => {
+    const Glyph = item.kind === "command" ? commandIcons[item.name] : undefined;
+    return (
+      <div
+        key={`${item.kind}-${item.name}`}
+        id={`${id}-${item.kind}-${item.name}`}
+        role="option"
+        aria-selected={i === index}
+        className="mention-option slash-option"
+        // Keep the caret in the draft while choosing.
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => choose(item)}
+      >
+        {item.kind === "command" ? (
+          <span className="slash-icon" aria-hidden="true">
+            {Glyph && <Glyph />}
+          </span>
+        ) : (
+          <span className="slash-tag">skill</span>
+        )}
+        <span className="slash-name">{item.name}</span>
+        <span className="slash-description">{item.description}</span>
+        {/* What Enter does: a command runs now, a skill waits for words. */}
+        <kbd className="slash-enter">
+          ↵ {item.kind === "command" ? "run" : "use"}
+        </kbd>
+      </div>
+    );
+  };
   const menu = open ? (
     <div
       className="mention-menu slash-menu"
@@ -106,20 +136,20 @@ export function useSlashMenu({
       id={id}
       aria-label="Commands and skills"
     >
-      {commandMatches.length > 0 && (
-        <div role="group" aria-label="Commands">
-          <p className="slash-heading">Commands</p>
-          {commandMatches.map((item, i) => option(item, i))}
-        </div>
-      )}
-      {skillMatches.length > 0 && (
-        <div role="group" aria-label="Skills">
-          <p className="slash-heading">Skills</p>
-          {skillMatches.map((item, i) =>
-            option(item, commandMatches.length + i),
-          )}
-        </div>
-      )}
+      {matches.map((item, i) => option(item, i))}
+      <div className="slash-foot">
+        <span>↑↓ choose · esc close</span>
+        {onManageSkills && (
+          <button
+            type="button"
+            className="slash-manage"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={onManageSkills}
+          >
+            Manage skills →
+          </button>
+        )}
+      </div>
     </div>
   ) : null;
 

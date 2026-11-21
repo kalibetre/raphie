@@ -5697,3 +5697,22 @@ fn a_message_that_invoked_a_skill_shows_the_skill() {
     );
     assert!(!shown.contains("/weekly-report"));
 }
+
+#[test]
+fn the_slash_menu_says_what_return_does_and_links_to_skills() {
+    let mut rt = render(with_skills, false);
+    click(&mut rt, "rd-composer");
+    rt.paste("/");
+    settle(&mut rt);
+    let text = screen_text(&rt);
+    assert!(text.contains("↵ run") && text.contains("↵ use"));
+    click(&mut rt, "rd-slash-manage");
+    assert_eq!(
+        rt.state.screen,
+        Screen::Settings(Page::Bot {
+            bot_id: "default".into(),
+            section: BotSection::Skills,
+        })
+    );
+    assert_eq!(rt.state.composer.text, "", "the / is not left behind");
+}

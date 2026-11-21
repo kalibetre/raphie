@@ -40,6 +40,7 @@ export function Composer({
   onChooseModel,
   onModelSettings,
   onNewConversation,
+  onManageSkills,
 }: {
   conversationId?: string;
   suggestion?: { text: string; at: number };
@@ -69,6 +70,8 @@ export function Composer({
   onModelSettings: () => void;
   /** The /new command: open a new conversation with this bot. */
   onNewConversation?: () => void;
+  /** Opens this bot's Skills settings, from the / menu. */
+  onManageSkills?: () => void;
 }) {
   const [permission, setPermission] = useState<{
     key: string;
@@ -187,6 +190,12 @@ export function Composer({
       })),
     input,
     update,
+    onManageSkills: onManageSkills
+      ? () => {
+          update("");
+          onManageSkills();
+        }
+      : undefined,
   });
   const menuProps = slash.open ? slash.inputProps : mentions.inputProps;
   const track = () => {

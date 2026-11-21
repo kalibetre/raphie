@@ -605,6 +605,12 @@ export function Workspace({
                       }}
                       onSend={send}
                       onNewConversation={() => select()}
+                      onManageSkills={() =>
+                        void navigate({
+                          to: "/",
+                          search: { bot, view: "settings", section: "skills" },
+                        })
+                      }
                       onChooseModel={async (model) => {
                         if (!conversationId) return;
                         await api(
