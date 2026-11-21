@@ -274,7 +274,7 @@ export const watchJobRun = defineTask<
 export class ChatService implements ConversationCommands {
   personality?: () => Pick<
     BotProfile,
-    "name" | "description" | "soul" | "revision"
+    "name" | "description" | "personality" | "revision"
   >;
   app: DurableContext;
   model: ModelRef | undefined;
@@ -655,7 +655,7 @@ export class ChatService implements ConversationCommands {
           )
             homes.destinations.push(address);
         }
-        const personality = this.personality?.();
+        const profile = this.personality?.();
         await configure(tx, conversation.id as ConversationId, {
           model,
           tools: null, // The registry owns current tools, including deferred MCP discovery.
@@ -663,8 +663,8 @@ export class ChatService implements ConversationCommands {
             memoryInstructions(
               this.memory?.read().configuration.enabled ?? false,
             ) +
-            (personality
-              ? `Your name is ${personality.name}. ${personality.description}\nOwner-authored SOUL.md (revision ${personality.revision}):\n${personality.soul}\n`
+            (profile
+              ? `Your name is ${profile.name}. ${profile.description}\nYour personality, as the owner wrote it (revision ${profile.revision}):\n${profile.personality}\n`
               : "You are Raphie, a concise and thoughtful personal assistant. ") +
             REPLY_STYLE +
             (isSharedTelegramDestination(destination)

@@ -956,7 +956,7 @@ fn research(description: &str, revision: u32) -> BotProfile {
         name: "Research".into(),
         description: description.into(),
         color: None,
-        soul: "Be brief.".into(),
+        personality: "Be brief.".into(),
         revision,
     }
 }
@@ -1000,12 +1000,12 @@ fn revision_history_lists_saved_versions_and_unfolds_them() {
     assert!(text.contains("Current"));
     assert!(text.contains("Prefer the primary source"));
     assert!(text.contains("Research · Reads and summarises. · Color: Automatic"));
-    assert!(rt.find("rd-revision-2-soul").is_none());
+    assert!(rt.find("rd-revision-2-personality").is_none());
     click(&mut rt, "rd-revision-2");
     let text = screen_text(&rt);
     assert!(text.contains("Research · Reads papers · Color: #83bcb4"));
     click(&mut rt, "rd-revision-3");
-    assert!(rt.find("rd-revision-3-soul").is_none());
+    assert!(rt.find("rd-revision-3-personality").is_none());
 
     // The link over the title goes back to Profile, where the nav stayed.
     click(&mut rt, "rd-history-back");
@@ -1027,7 +1027,13 @@ fn a_bot_is_created_from_a_form_that_keeps_its_draft() {
         Some("Independent configuration. No settings are copied.")
     );
     // The starter personality is there; an untouched form is not nagged.
-    assert!(rt.state.profile.soul.text.starts_with("Be thoughtful"));
+    assert!(
+        rt.state
+            .profile
+            .personality
+            .text
+            .starts_with("Be thoughtful")
+    );
     assert!(rt.find("rd-profile-error").is_none());
     let before = rt.state.sent.len();
     click(&mut rt, "rd-profile-save");
@@ -1201,7 +1207,7 @@ fn a_profile_is_edited_saved_and_shown_at_its_new_revision() {
             (update.revision, update.color.as_deref()),
             (3, Some("#83bcb4"))
         );
-        assert_eq!(update.soul, "Be brief.");
+        assert_eq!(update.personality, "Be brief.");
         // A second press while saving sends nothing more.
         click(&mut rt, "rd-profile-save");
         let saves = rt

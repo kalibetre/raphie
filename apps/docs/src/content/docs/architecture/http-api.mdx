@@ -119,13 +119,13 @@ All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and tho
 
 ### Bots (host-level)
 
-| Method    | Path                | Purpose                                                                                                                   |
-| --------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| GET, POST | `/bots`             | List bots; create one from `{ name, description, soul, color? }` (201)                                                    |
-| GET, POST | `/bots/:id/profile` | Read; update with the current `revision`                                                                                  |
-| GET       | `/bots/:id/history` | Profile revisions                                                                                                         |
-| GET       | `/bots/:id/soul.md` | Download SOUL.md                                                                                                          |
-| DELETE    | `/bots/:id`         | Delete a named bot (204); body confirms its `name` and `revision`. 409 for `default`, a stale confirmation or active work |
+| Method    | Path                       | Purpose                                                                                                                   |
+| --------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| GET, POST | `/bots`                    | List bots; create one from `{ name, description, personality, color? }` (201)                                             |
+| GET, POST | `/bots/:id/profile`        | Read; update with the current `revision`                                                                                  |
+| GET       | `/bots/:id/history`        | Profile revisions                                                                                                         |
+| GET       | `/bots/:id/personality.md` | Download the personality                                                                                                  |
+| DELETE    | `/bots/:id`                | Delete a named bot (204); body confirms its `name` and `revision`. 409 for `default`, a stale confirmation or active work |
 
 ### Settings, providers and memory
 

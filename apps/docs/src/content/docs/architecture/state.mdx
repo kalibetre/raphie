@@ -33,14 +33,14 @@ A bot is the ownership boundary for configuration, sessions, memory, tools and f
   </Row>
 </Flow>
 
-| Part        | How it works                                                                                                                                                                                                  |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default bot | Built first. It keeps the original flat data layout at the data directory root, and it cannot be deleted (409). Unprefixed `/api/*` routes address it.                                                        |
-| Named bots  | Get runtime-issued UUIDs and a private directory under `bots/<id>/`. They start with no inherited tools, keys or channels.                                                                                    |
-| Routing     | `/api/bots/:botId/*` resolves exactly one bot and rewrites to that bot's route table. Each route factory receives one bot's runtime and cannot resolve its peers. An unavailable bot returns 503.             |
-| Actors      | Each bot has its own actor authority. A request context is a frozen object registered with that authority, so it cannot be forged, rebuilt from JSON or reused for another bot.                               |
-| Personality | Name, description and SOUL.md are stored with optimistic revisions; the last 50 are retrievable. Edits are refused (409) while the bot has pending turns. Each turn snapshots the personality at admission.   |
-| Startup     | All bots attach before any harness resumes, so recovered tasks always find their tools. A deleted bot's directory is removed only after its work is idle; an interrupted deletion finishes on the next start. |
+| Part        | How it works                                                                                                                                                                                                    |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Default bot | Built first. It keeps the original flat data layout at the data directory root, and it cannot be deleted (409). Unprefixed `/api/*` routes address it.                                                          |
+| Named bots  | Get runtime-issued UUIDs and a private directory under `bots/<id>/`. They start with no inherited tools, keys or channels.                                                                                      |
+| Routing     | `/api/bots/:botId/*` resolves exactly one bot and rewrites to that bot's route table. Each route factory receives one bot's runtime and cannot resolve its peers. An unavailable bot returns 503.               |
+| Actors      | Each bot has its own actor authority. A request context is a frozen object registered with that authority, so it cannot be forged, rebuilt from JSON or reused for another bot.                                 |
+| Personality | Name, description and personality are stored with optimistic revisions; the last 50 are retrievable. Edits are refused (409) while the bot has pending turns. Each turn snapshots the personality at admission. |
+| Startup     | All bots attach before any harness resumes, so recovered tasks always find their tools. A deleted bot's directory is removed only after its work is idle; an interrupted deletion finishes on the next start.   |
 
 ### What is and isn't isolated
 

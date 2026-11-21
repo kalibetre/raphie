@@ -6,7 +6,7 @@ import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Group } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
 
-/** Saved personality revisions as a timeline; open one to read its SOUL.md. */
+/** Saved personality revisions as a timeline; open one to read it. */
 export function PersonalityHistory({ profile }: { profile: BotProfile }) {
   const { workspace } = useBackend();
   const history = useQuery({
@@ -51,9 +51,9 @@ export function PersonalityHistory({ profile }: { profile: BotProfile }) {
                 </p>
                 <ScrollArea
                   className="bot-history"
-                  viewportLabel={`SOUL.md revision ${revision.revision}`}
+                  viewportLabel={`Personality revision ${revision.revision}`}
                 >
-                  <pre>{revision.soul}</pre>
+                  <pre>{revision.personality}</pre>
                 </ScrollArea>
               </details>
             </li>

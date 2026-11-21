@@ -183,7 +183,7 @@ fn entry(
             .child(
                 // The personality as it was, scrolling once it is tall.
                 col()
-                    .key(format!("rd-revision-{number}-soul"))
+                    .key(format!("rd-revision-{number}-personality"))
                     .w_full()
                     .max_h(240.0)
                     .mb(16.0)
@@ -193,7 +193,7 @@ fn entry(
                     .radius(10.0)
                     .fill(t.muted)
                     .child(
-                        text(revision.soul.clone())
+                        text(revision.personality.clone())
                             .font(mono(12.0).lh(20.4))
                             .color(t.foreground)
                             .selectable(true)

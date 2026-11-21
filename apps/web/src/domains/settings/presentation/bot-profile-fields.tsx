@@ -11,12 +11,12 @@ export function BotProfileFields({
   onColor,
   name,
   description,
-  soul,
+  personality,
   saved,
   pending,
   onName,
   onDescription,
-  onSoul,
+  onPersonality,
 }: {
   botId: string;
   color: string | null;
@@ -24,12 +24,12 @@ export function BotProfileFields({
   onColor: (color: string | null) => void;
   name: string;
   description: string;
-  soul: string;
+  personality: string;
   saved?: BotProfile;
   pending: boolean;
   onName: (value: string) => void;
   onDescription: (value: string) => void;
-  onSoul: (value: string) => void;
+  onPersonality: (value: string) => void;
 }) {
   return (
     <>
@@ -72,28 +72,28 @@ export function BotProfileFields({
           conversations.
         </p>
         <div className="bot-form settings-form">
-          <label htmlFor="bot-soul" className="sr-only">
+          <label htmlFor="bot-personality" className="sr-only">
             Personality
           </label>
-          <div className="soul-editor">
-            <div className="soul-editor-heading">
-              <strong>SOUL.md</strong>
+          <div className="personality-editor">
+            <div className="personality-editor-heading">
+              <strong>In your words</strong>
               <span>
                 {saved ? `Revision ${saved.revision}` : "Starting personality"}
               </span>
             </div>
             <Textarea
-              id="bot-soul"
-              className="bot-soul min-h-64 resize-y rounded-none border-0 p-4 font-mono text-xs leading-loose shadow-none md:min-h-72"
+              id="bot-personality"
+              className="bot-personality min-h-64 resize-y rounded-none border-0 p-4 text-sm leading-relaxed shadow-none md:min-h-72"
               required
               maxLength={16000}
-              value={soul}
-              onChange={(e) => onSoul(e.target.value)}
+              value={personality}
+              onChange={(e) => onPersonality(e.target.value)}
               disabled={pending}
-              aria-describedby="bot-soul-note"
+              aria-describedby="bot-personality-note"
             />
           </div>
-          <p id="bot-soul-note">
+          <p id="bot-personality-note">
             Personality guides behavior. Models, connections and memory are
             configured separately.
           </p>

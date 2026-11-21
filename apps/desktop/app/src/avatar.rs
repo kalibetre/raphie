@@ -329,7 +329,7 @@ mod tests {
             name: id.into(),
             description: String::new(),
             color: color.map(str::to_owned),
-            soul: String::new(),
+            personality: String::new(),
             revision: 1,
         }
     }

@@ -17,7 +17,7 @@ import { memoryCredentialKeyStore } from "./credential-store.ts";
 const profile = {
   name: "Research",
   description: "Study sources carefully.",
-  soul: "Explain evidence and uncertainty. Speak precisely.",
+  personality: "Explain evidence and uncertainty. Speak precisely.",
   color: "#83bcb4",
 };
 
@@ -517,7 +517,7 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
     expect(
       prompts.some(
         (p) =>
-          p.includes(profile.soul) &&
+          p.includes(profile.personality) &&
           p.includes("Research") &&
           p.includes("Replies: open with the answer"),
       ),
@@ -558,7 +558,7 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
     });
     const revised = await post(`${base}/profile`, {
       ...profile,
-      soul: "Use a calm, direct voice.",
+      personality: "Use a calm, direct voice.",
       color: "#DDA6B5",
       revision: 1,
     });
@@ -608,7 +608,7 @@ test("bot containers preserve default data and isolate APIs, actors, credentials
         ?.content,
     ).toBe("Child private fact");
     expect(
-      (await get(`${base}/soul.md`)).headers.get("content-type"),
+      (await get(`${base}/personality.md`)).headers.get("content-type"),
     ).toContain("text/plain");
     expect(
       (await post("/api/bots", { ...profile, id: "../default" })).status,
@@ -710,6 +710,49 @@ test("external memory requests use separate bot namespaces even with the same us
     a.close();
     b.close();
     await server.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("profiles saved with a `soul` keep their personality after the rename", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-personality-"));
+  const path = join(directory, "bots.sqlite");
+  try {
+    const old = new Database(path, { create: true, strict: true });
+    old.exec(
+      "CREATE TABLE bot_profiles (id TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE bot_revisions (id TEXT NOT NULL, revision INTEGER NOT NULL, value TEXT NOT NULL, PRIMARY KEY(id,revision))",
+    );
+    for (const revision of [1, 2]) {
+      const value = JSON.stringify({
+        id: "default",
+        name: "Raphie",
+        description: "",
+        soul: `Be brief. (${revision})`,
+        revision,
+        createdAt: 1,
+        updatedAt: revision,
+      });
+      old
+        .query("INSERT INTO bot_revisions(id,revision,value) VALUES(?,?,?)")
+        .run("default", revision, value);
+      if (revision === 2)
+        old
+          .query("INSERT INTO bot_profiles(id,value) VALUES(?,?)")
+          .run("default", value);
+    }
+    old.close();
+
+    const store = new BotProfileStore(path);
+    expect(store.read("default")).toMatchObject({
+      personality: "Be brief. (2)",
+    });
+    expect(store.read("default")).not.toHaveProperty("soul");
+    expect(store.history("default").map((p) => p.personality)).toEqual([
+      "Be brief. (2)",
+      "Be brief. (1)",
+    ]);
+    store.close();
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });

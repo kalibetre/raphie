@@ -11,7 +11,7 @@ const profile = z
   .object({
     name: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500),
-    soul: z.string().trim().min(1).max(16000),
+    personality: z.string().trim().min(1).max(16000),
     color: z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)
@@ -55,9 +55,9 @@ export function botRoutes(bots: BotProfiles) {
     .get("/:id/history", (c) =>
       c.json({ items: bots.history(c.req.param("id")) }),
     )
-    .get("/:id/soul.md", (c) => {
+    .get("/:id/personality.md", (c) => {
       c.header("Content-Type", "text/plain; charset=utf-8");
-      c.header("Content-Disposition", 'attachment; filename="SOUL.md"');
-      return c.body(bots.read(c.req.param("id")).soul);
+      c.header("Content-Disposition", 'attachment; filename="personality.md"');
+      return c.body(bots.read(c.req.param("id")).personality);
     });
 }
