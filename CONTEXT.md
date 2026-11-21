@@ -12,6 +12,11 @@ _Avoid_: Runtime or session as a synonym for a bot.
 **Personality**: A bot's owner-authored voice, values and interaction style.
 Personality guides its behavior without granting capabilities or access.
 
+**Skill**: Instructions for one kind of task in the standard Agent Skills
+format: a folder in a bot's workspace, `skills/<name>/`, holding a `SKILL.md`.
+A bot sees every skill's name and description and reads a skill only when a
+task matches it. Skills never grant capabilities.
+
 **Owner profile**: What the owner tells every bot about themselves: their
 name, what to call them, their time zone and a few lines about them. Shared by
 every bot; it describes the owner and grants nothing.
