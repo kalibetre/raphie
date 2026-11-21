@@ -1115,7 +1115,7 @@ fn a_bot_is_deleted_only_after_its_name_is_typed() {
     let rt = render_sized(scenes::settings_profile, false, (1280.0, 1700.0));
     assert!(rt.find("rd-delete-bot").is_none());
 
-    let mut rt = render_sized(research_profile, false, (1280.0, 1700.0));
+    let mut rt = render_sized(research_profile, false, (1280.0, 2100.0));
     // Unsaved edits block it: the confirmation must name the saved bot.
     rt.update(|ui, _| ui.profile.description = TextEdit::new("Edited"));
     settle(&mut rt);
