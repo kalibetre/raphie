@@ -12,6 +12,11 @@ _Avoid_: Runtime or session as a synonym for a bot.
 **Personality**: A bot's owner-authored voice, values and interaction style.
 Personality guides its behavior without granting capabilities or access.
 
+**Owner profile**: What the owner tells every bot about themselves: their
+name, what to call them, their time zone and a few lines about them. Shared by
+every bot; it describes the owner and grants nothing.
+_Avoid_: User profile, account.
+
 **Workspace**: A bot's persistent working files and artifacts, shared by its
 sessions and preserved when its execution environment stops.
 _Avoid_: Web workspace when referring to stored bot files; that names the client UI.

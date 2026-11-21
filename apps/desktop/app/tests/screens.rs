@@ -5307,3 +5307,92 @@ fn a_profile_opened_before_its_bot_loads_fills_in_when_it_arrives() {
     click(&mut rt, "rd-reply-length-detailed");
     assert!(rt.state.can_save_profile());
 }
+
+#[test]
+fn about_you_is_listed_first_under_the_app_and_loads_the_owner() {
+    let mut rt = render(scenes::settings_account, false);
+    let owner = element(&rt, "rd-nav-owner");
+    let account = element(&rt, "rd-nav-account");
+    assert!(owner.rect[1] < account.rect[1], "About you comes first");
+    click(&mut rt, "rd-nav-owner");
+    assert_eq!(rt.state.screen, Screen::Settings(Page::Owner));
+    assert_eq!(rt.state.sent.last(), Some(&Command::LoadOwner));
+    assert!(screen_text(&rt).contains("Loading…"));
+    deliver(&mut rt, Event::Owner(scenes::owner_profile()));
+    assert_eq!(rt.state.owner.name.text, "Hana Girma");
+    assert!(rt.find("rd-save-bar").is_none(), "a clean page is quiet");
+    assert!(screen_text(&rt).contains("Africa/Addis Ababa"));
+}
+
+#[test]
+fn about_you_is_edited_saved_and_shown_as_saved() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::settings_owner, dark);
+        click(&mut rt, "rd-owner-call-me-input");
+        rt.key(KeyEvent {
+            key: Key::Text("!".into()),
+            mods: Default::default(),
+        });
+        settle(&mut rt);
+        assert_eq!(rt.state.owner.call_me.text, "Hana!");
+        assert_eq!(
+            element(&rt, "rd-owner-status").text.as_deref(),
+            Some("Unsaved changes")
+        );
+        click(&mut rt, "rd-owner-save");
+        let Some(Command::SaveOwner { owner }) = rt.state.sent.last().cloned() else {
+            panic!("no save was sent");
+        };
+        assert_eq!(owner.call_me, "Hana!");
+        assert_eq!(owner.time_zone, "Africa/Addis_Ababa");
+        // A second press while saving sends nothing more.
+        click(&mut rt, "rd-owner-save");
+        let saves = rt
+            .state
+            .sent
+            .iter()
+            .filter(|c| matches!(c, Command::SaveOwner { .. }))
+            .count();
+        assert_eq!(saves, 1);
+
+        let mut saved = scenes::owner_profile();
+        saved.call_me = "Hana!".into();
+        saved.updated_at = Some(1_794_650_100_000.0);
+        deliver(&mut rt, Event::OwnerSaved(saved));
+        assert_eq!(
+            element(&rt, "rd-owner-status").text.as_deref(),
+            Some("Saved. Every bot uses it from its next reply.")
+        );
+        assert!(!rt.state.owner.is_dirty());
+    }
+}
+
+#[test]
+fn a_time_zone_is_chosen_from_the_list_and_discard_restores_it() {
+    let mut rt = render(scenes::settings_owner, false);
+    click(&mut rt, "rd-owner-time-zone-value-trigger");
+    assert!(rt.state.owner.zones.is_open());
+    click(&mut rt, "rd-owner-time-zone-option-none");
+    assert_eq!(rt.state.owner.time_zone, "");
+    assert!(rt.state.owner.is_dirty());
+    click(&mut rt, "rd-owner-discard");
+    assert_eq!(rt.state.owner.time_zone, "Africa/Addis_Ababa");
+    assert!(rt.find("rd-save-bar").is_none());
+}
+
+#[test]
+fn a_failed_owner_save_says_why_and_keeps_the_draft() {
+    let mut rt = render(scenes::settings_owner_edited, false);
+    click(&mut rt, "rd-owner-save");
+    deliver(
+        &mut rt,
+        Event::OwnerSaveFailed {
+            message: "Raphie refused the profile.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-owner-error").text.as_deref(),
+        Some("Raphie refused the profile.")
+    );
+    assert_eq!(rt.state.owner.time_zone, "Europe/Berlin");
+}

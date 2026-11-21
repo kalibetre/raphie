@@ -31,6 +31,10 @@ pub fn nav(s: &Ui, current: &Page, look: &Look) -> El {
         .w_full()
         .gap(3.5)
         .child(
+            entry(t, "rd-nav-owner", "About you", *current == Page::Owner, 7.0)
+                .on_press(|s: &mut Ui| s.open_settings(Some(Page::Owner))),
+        )
+        .child(
             entry(
                 t,
                 "rd-nav-account",

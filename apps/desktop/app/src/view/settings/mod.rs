@@ -19,6 +19,7 @@ mod memories;
 mod memory;
 mod models;
 mod nav;
+mod owner;
 mod parts;
 mod profile;
 mod providers;
@@ -38,6 +39,7 @@ use crate::widgets::{icon_button, one_line, pressable};
 pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
     let content = match page {
+        Page::Owner => owner::owner(s, look, overlays),
         Page::Account => account::account(s, look),
         Page::Appearance => appearance::appearance(s, look),
         Page::About => about::about(s, look),
@@ -99,6 +101,7 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             ..
         }
         | Page::NewBot => profile::save_bar(s, look),
+        Page::Owner => owner::owner_save_bar(s, look),
         Page::Bot {
             section: BotSection::Memory,
             ..
@@ -266,6 +269,7 @@ fn top_bar(s: &Ui, page: &Page, look: &Look) -> El {
 /// The icon the web shows beside each page's name.
 pub fn page_icon(page: &Page) -> &'static Icon {
     match page {
+        Page::Owner => &icons::CIRCLE_USER_ROUND,
         Page::Account => &icons::LOG_OUT,
         Page::Appearance => &icons::PALETTE,
         Page::About => &icons::INFO,

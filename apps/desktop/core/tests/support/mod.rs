@@ -14,7 +14,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use futures_util::{Stream, StreamExt};
 use raphie_core::engine::{Client, Command, EngineConfig};
@@ -133,6 +133,8 @@ pub struct Host {
     pub sandbox: Option<Value>,
     /// Sandbox saves, as received.
     pub sandbox_saves: Vec<Value>,
+    /// The owner profile, once a test saved one.
+    pub owner: Option<Value>,
     /// The Discord and Telegram settings, as the runtime answers them.
     pub discord: Option<Value>,
     pub telegram: Option<Value>,
@@ -261,6 +263,8 @@ fn router(fake: Fake) -> Router {
         )
         .route("/api/memory", get(memory).post(save_memory))
         .route("/api/memory/test", post(test_memory))
+        .route("/api/owner", get(owner))
+        .route("/api/owner", put(save_owner))
         .route("/api/workspace", get(sandbox))
         .route("/api/workspace/settings", post(save_sandbox))
         .route("/api/diagnostics/traces", get(traces))
@@ -858,6 +862,43 @@ async fn workspace_download(
         Some((_, bytes)) => bytes.clone().into_response(),
         None => refused(StatusCode::NOT_FOUND, "Workspace file not found."),
     }
+}
+
+/// The owner profile: empty until a test saves one.
+async fn owner(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    let saved = fake.host.lock().unwrap().owner.clone();
+    Json(saved.unwrap_or_else(
+        || json!({ "name": "", "callMe": "", "timeZone": "", "about": "", "updatedAt": null }),
+    ))
+    .into_response()
+}
+
+/// Saves the owner profile, refusing a time zone it does not know.
+async fn save_owner(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "PUT", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    if body["timeZone"] == "Mars/Olympus" {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Choose a time zone from the list." })),
+        )
+            .into_response();
+    }
+    let mut saved = body;
+    saved["updatedAt"] = json!(1_794_650_100_000_i64);
+    fake.host.lock().unwrap().owner = Some(saved.clone());
+    Json(saved).into_response()
 }
 
 /// The sandbox settings as the runtime holds them: just-bash at revision 1

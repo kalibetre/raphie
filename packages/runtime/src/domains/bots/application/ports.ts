@@ -1,6 +1,8 @@
 import type {
   BotProfile,
+  OwnerProfile,
   SaveBotProfile,
+  SaveOwnerProfile,
   UpdateBotProfile,
 } from "@raphie/contracts";
 
@@ -11,4 +13,7 @@ export interface BotProfiles {
   create(input: SaveBotProfile): Promise<BotProfile>;
   update(id: string, input: UpdateBotProfile): Promise<BotProfile>;
   delete(id: string, input: { name: string; revision: number }): Promise<void>;
+  /** The owner, as every bot knows them. */
+  owner(): OwnerProfile;
+  saveOwner(input: SaveOwnerProfile): OwnerProfile;
 }

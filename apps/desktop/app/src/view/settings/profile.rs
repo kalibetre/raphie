@@ -549,7 +549,7 @@ fn delete_dialog(s: &Ui, bot: &BotProfile, look: &Look, overlays: &mut Vec<El>) 
 
 /// A card with a heading and a line of explanation over its fields (the
 /// web's `.bot-editor-section`).
-fn section(t: &Theme, title: &str, note: &str, body: El) -> El {
+pub(super) fn section(t: &Theme, title: &str, note: &str, body: El) -> El {
     col()
         .w_full()
         .padding(18.0)
@@ -573,7 +573,7 @@ fn section(t: &Theme, title: &str, note: &str, body: El) -> El {
         .child(body)
 }
 
-fn label(t: &Theme, content: &str) -> El {
+pub(super) fn label(t: &Theme, content: &str) -> El {
     text(content)
         .font(font(12.0, 560.0))
         .color(t.foreground)

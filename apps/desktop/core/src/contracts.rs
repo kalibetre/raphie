@@ -95,6 +95,37 @@ pub enum ReplyFormatting {
     Structured,
 }
 
+/// `OwnerProfile` in `packages/contracts/src/bots/views.ts`: who every bot
+/// is talking to, as `GET /api/owner` answers. Shared by every bot.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnerProfile {
+    #[serde(default)]
+    pub name: String,
+    /// What bots call the owner.
+    #[serde(default)]
+    pub call_me: String,
+    /// An IANA time zone such as `Africa/Addis_Ababa`, or empty.
+    #[serde(default)]
+    pub time_zone: String,
+    #[serde(default)]
+    pub about: String,
+    /// When it was last saved, in milliseconds; `None` before the first save.
+    #[serde(default)]
+    pub updated_at: Option<f64>,
+}
+
+/// `SaveOwnerProfile`: the body of `PUT /api/owner`
+/// (`packages/runtime/src/domains/bots/presentation/http/owner-routes.ts`).
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveOwnerProfile {
+    pub name: String,
+    pub call_me: String,
+    pub time_zone: String,
+    pub about: String,
+}
+
 /// Body of `POST /api/bots/<id>/profile`
 /// (`packages/runtime/src/domains/bots/presentation/http/routes.ts`).
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]

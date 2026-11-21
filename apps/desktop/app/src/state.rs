@@ -44,6 +44,7 @@ use crate::jobs::JobForm;
 use crate::mcp::McpForm;
 use crate::memory::MemoryDraft;
 use crate::notify;
+use crate::owner::OwnerDraft;
 use crate::profile::{NEW_BOT, ProfileDraft};
 use crate::sandbox::SandboxDraft;
 use crate::sections::{BotSection, Page};
@@ -422,6 +423,8 @@ pub struct Ui {
     jobs_asked_at: f64,
     /// The frame clock when the Workspace page last asked for its folder.
     files_asked_at: f64,
+    /// Settings → About you: its form.
+    pub owner: OwnerDraft,
     /// Settings → Sandbox: its form.
     pub sandbox: SandboxDraft,
     /// The frame clock when the Sandbox page last asked for its details.
@@ -588,6 +591,7 @@ impl Ui {
             handoffs_bot: None,
             handoff_signal: String::new(),
             files_asked_at: 0.0,
+            owner: OwnerDraft::empty(),
             sandbox: SandboxDraft::empty(),
             sandbox_asked_at: 0.0,
             discord: DiscordForm::new(),
@@ -1669,6 +1673,20 @@ impl Ui {
         if page == Page::NewBot {
             self.show_new_bot();
         }
+        if page == Page::Owner {
+            // Unsaved edits stay; otherwise show what was last loaded
+            // while asking for what the host has now.
+            if !self.owner.is_dirty() {
+                self.owner = match &self.model.owner {
+                    Some(saved) => OwnerDraft::of(saved),
+                    None => OwnerDraft::empty(),
+                };
+            }
+            self.model.owner_message = None;
+            self.model.owner_save_error = None;
+            self.model.owner_error = None;
+            self.command(Command::LoadOwner);
+        }
         if page == Page::Diagnostics {
             self.spans = InspectView::new();
             self.model.export_saved = None;
@@ -2608,6 +2626,45 @@ impl Ui {
         true
     }
 
+    /// After news from the host: an About you form with no edits shows what
+    /// the host has now.
+    fn follow_owner(&mut self) {
+        let Some(saved) = &self.model.owner else {
+            return;
+        };
+        let shown = self.owner.saved.as_ref() == Some(saved);
+        if !shown && !self.owner.is_dirty() && !self.model.saving_owner {
+            self.owner = OwnerDraft::of(saved);
+        }
+    }
+
+    /// Whether About you may be saved now: it has valid edits and no save
+    /// is on its way.
+    pub fn can_save_owner(&self) -> bool {
+        self.owner.is_dirty() && self.owner.problem().is_none() && !self.model.saving_owner
+    }
+
+    pub fn save_owner(&mut self) {
+        if !self.can_save_owner() {
+            return;
+        }
+        let Some(owner) = self.owner.update() else {
+            return;
+        };
+        if self.model.begin_save_owner() {
+            self.command(Command::SaveOwner { owner });
+        }
+    }
+
+    /// Throws the edits away and shows the profile the host has now.
+    pub fn discard_owner(&mut self) {
+        if let Some(saved) = &self.model.owner {
+            self.owner = OwnerDraft::of(saved);
+        }
+        self.model.owner_save_error = None;
+        self.model.owner_message = None;
+    }
+
     /// Puts `bot_id`'s sandbox settings in the form. Unsaved edits for the
     /// same bot stay; edits for another bot are dropped.
     fn show_sandbox(&mut self, bot_id: &str) {
@@ -3339,6 +3396,12 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     // The job is scheduled: close its dialog and empty it.
                     ui.job = JobForm::new_at(now_ms());
                 }
+                Effect::OwnerSaved => {
+                    // Show what was saved.
+                    if let Some(saved) = &ui.model.owner {
+                        ui.owner = OwnerDraft::of(saved);
+                    }
+                }
                 Effect::SandboxSaved(bot_id) => {
                     // Show what was saved, at its new revision.
                     if ui.sandbox.bot_id() == Some(bot_id.as_str())
@@ -3393,6 +3456,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_memory();
     ui.follow_memories();
     ui.follow_sandbox();
+    ui.follow_owner();
     ui.ensure_models();
     ui.ensure_command_mode();
     ui.ask_previews();

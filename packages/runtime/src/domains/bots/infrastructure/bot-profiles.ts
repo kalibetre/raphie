@@ -4,7 +4,9 @@ import { dirname } from "node:path";
 
 import type {
   BotProfile,
+  OwnerProfile,
   SaveBotProfile,
+  SaveOwnerProfile,
   UpdateBotProfile,
 } from "@raphie/contracts";
 
@@ -13,6 +15,7 @@ import {
   DEFAULT_REPLY_STYLE,
   replyStyleOf,
 } from "../../conversations/domain/reply-style.ts";
+import { EMPTY_OWNER } from "../domain/owner.ts";
 
 /** A stored profile, with a reply style even if it was saved before one. */
 function parse(value: string): BotProfile {
@@ -41,6 +44,9 @@ export class BotProfileStore {
     );
     this.db.exec(
       "CREATE TABLE IF NOT EXISTS bot_deletions (id TEXT PRIMARY KEY)",
+    );
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS owner_profile (id INTEGER PRIMARY KEY CHECK (id = 1), value TEXT NOT NULL)",
     );
     // Profiles saved before the personality had its own name kept it as
     // `soul`; rename it in place, current profile and revisions alike.
@@ -140,6 +146,26 @@ export class BotProfileStore {
         .run(id, next.revision, value);
       return next;
     })();
+  }
+
+  /** The owner as every bot knows them; empty until they say something. */
+  owner(): OwnerProfile {
+    const row = this.db
+      .query<{ value: string }, []>("SELECT value FROM owner_profile")
+      .get();
+    return row
+      ? { ...EMPTY_OWNER, ...(JSON.parse(row.value) as OwnerProfile) }
+      : EMPTY_OWNER;
+  }
+
+  saveOwner(input: SaveOwnerProfile): OwnerProfile {
+    const owner = { ...input, updatedAt: Date.now() };
+    this.db
+      .query(
+        "INSERT INTO owner_profile(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+      )
+      .run(JSON.stringify(owner));
+    return owner;
   }
 
   close() {

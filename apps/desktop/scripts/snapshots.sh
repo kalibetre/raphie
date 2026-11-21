@@ -22,6 +22,7 @@ for scene in sign-in sign-in-this-mac device-code new-conversation conversations
   settings-workspace settings-workspace-folder \
   settings-jobs settings-jobs-create \
   settings-account settings-account-unreachable settings-account-runtime-down \
+  settings-owner settings-owner-edited \
   settings-diagnostics settings-activity settings-about settings-about-update settings-about-nightly dev-build nightly-build \
   settings-history settings-new-bot settings-delete-bot; do
   for theme in light dark; do

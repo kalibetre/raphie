@@ -15,6 +15,7 @@ use crate::contracts::ApprovalMode;
 use crate::contracts::AskAnswer;
 use crate::contracts::Attachment;
 use crate::contracts::ModelSelection;
+use crate::contracts::OwnerProfile;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, HandoffList,
@@ -119,6 +120,16 @@ pub enum Event {
         bot_id: String,
     },
     BotDeleteFailed {
+        message: String,
+    },
+    /// Who every bot is talking to.
+    Owner(OwnerProfile),
+    OwnerFailed {
+        message: String,
+    },
+    /// The owner profile was saved; this is it as saved.
+    OwnerSaved(OwnerProfile),
+    OwnerSaveFailed {
         message: String,
     },
     /// A bot's sandbox settings, provider, limits and usage.
@@ -570,6 +581,8 @@ pub enum Effect {
     BotDeleted(String),
     /// A job was scheduled: close its form and empty it.
     JobAdded,
+    /// The owner profile was saved: its form should show it.
+    OwnerSaved,
     /// This bot's sandbox settings were saved: its form should show them.
     SandboxSaved(String),
     /// A change to a bot's channels was made: forget what was typed for
@@ -726,6 +739,16 @@ pub struct Model {
     pub memory_message: Option<String>,
     /// The saved memories on "Browse memory".
     pub memories: MemoryBrowser,
+    /// Who every bot is talking to, once loaded.
+    pub owner: Option<OwnerProfile>,
+    /// Why the owner profile could not be loaded.
+    pub owner_error: Option<String>,
+    /// A save of the owner profile is on its way.
+    pub saving_owner: bool,
+    /// Why the last save of the owner profile failed, until the next attempt.
+    pub owner_save_error: Option<String>,
+    /// What the last save of the owner profile said.
+    pub owner_message: Option<String>,
     /// Each bot's sandbox details, once loaded.
     pub sandbox: HashMap<String, SandboxInfo>,
     /// The bot whose sandbox details could not be loaded, and why. Details
@@ -887,6 +910,11 @@ impl Default for Model {
             testing_memory: false,
             memory_message: None,
             memories: MemoryBrowser::default(),
+            owner: None,
+            owner_error: None,
+            saving_owner: false,
+            owner_save_error: None,
+            owner_message: None,
             sandbox: HashMap::new(),
             sandbox_error: None,
             saving_sandbox: false,
@@ -1096,6 +1124,22 @@ impl Model {
             Event::BotDeleteFailed { message } => {
                 self.deleting_bot = false;
                 self.delete_bot_error = Some(message);
+            }
+            Event::Owner(owner) => {
+                self.owner_error = None;
+                self.owner = Some(owner);
+            }
+            Event::OwnerFailed { message } => self.owner_error = Some(message),
+            Event::OwnerSaved(owner) => {
+                self.saving_owner = false;
+                self.owner_save_error = None;
+                self.owner_message = Some("Saved. Every bot uses it from its next reply.".into());
+                self.owner = Some(owner);
+                return vec![Effect::OwnerSaved];
+            }
+            Event::OwnerSaveFailed { message } => {
+                self.saving_owner = false;
+                self.owner_save_error = Some(message);
             }
             Event::Sandbox { bot_id, info } => {
                 self.sandbox_error = None;
@@ -1692,6 +1736,18 @@ impl Model {
         }
         self.deleting_bot = true;
         self.delete_bot_error = None;
+        true
+    }
+
+    /// The owner saved their profile. Returns false while a save is
+    /// already on its way.
+    pub fn begin_save_owner(&mut self) -> bool {
+        if self.saving_owner {
+            return false;
+        }
+        self.saving_owner = true;
+        self.owner_save_error = None;
+        self.owner_message = None;
         true
     }
 
