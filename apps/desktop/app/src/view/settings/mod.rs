@@ -24,6 +24,7 @@ mod parts;
 mod profile;
 mod providers;
 mod sandbox;
+mod skills;
 mod workspace;
 
 use rune::{El, Icon, ScrollSpec, col, icon, row, text};
@@ -91,6 +92,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
         } => mcp::mcp(s, bot_id, look, overlays),
         Page::Bot {
             bot_id,
+            section: BotSection::Skills,
+        } => skills::skills(s, bot_id, look, overlays),
+        Page::Bot {
+            bot_id,
             section: BotSection::MemoryBrowse,
         } => memories::memories(s, bot_id, look),
     };
@@ -102,6 +107,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
         }
         | Page::NewBot => profile::save_bar(s, look),
         Page::Owner => owner::owner_save_bar(s, look),
+        Page::Bot {
+            section: BotSection::Skills,
+            ..
+        } => skills::skill_save_bar(s, look),
         Page::Bot {
             section: BotSection::Memory,
             ..
@@ -283,6 +292,7 @@ pub fn page_icon(page: &Page) -> &'static Icon {
             BotSection::Memory => &icons::BOOK_OPEN,
             BotSection::MemoryBrowse => &icons::LIBRARY,
             BotSection::Mcp => &icons::PLUG,
+            BotSection::Skills => &icons::GRADUATION_CAP,
             BotSection::Channels => &icons::MESSAGES_SQUARE,
             BotSection::Sandbox => &icons::BOX,
             BotSection::Workspace => &icons::FOLDER_OPEN,

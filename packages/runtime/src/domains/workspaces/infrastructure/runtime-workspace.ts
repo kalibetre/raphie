@@ -286,6 +286,58 @@ export class RuntimeWorkspace {
       });
   }
 
+  /**
+   * Replaces everything under `directory` with `files`, or removes it when
+   * `files` is null. For owner edits such as skills; the bot's own writes
+   * go through its tools.
+   */
+  async replaceTree(
+    directory: string,
+    files: readonly { path: string; bytes: Uint8Array }[] | null,
+  ) {
+    this.requireFiles();
+    for (const path of [directory, ...(files ?? []).map((f) => f.path)])
+      if (path !== directory && !path.startsWith(`${directory}/`))
+        throw new InputError(`${path} is outside ${directory}.`);
+    if (this.settings().provider === "just-bash")
+      return this.checkpoint.replaceTree(directory, files);
+    return this.views.run(async () => {
+      const container = this.selectedContainer();
+      if (!container) return this.checkpoint.replaceTree(directory, files);
+      // Through the guest, so a link the bot planted cannot lead the write
+      // outside its workspace.
+      const env = container.env("/workspace");
+      const check = (result: { ok: boolean }, what: string) => {
+        if (!result.ok)
+          throw new InputError(`Could not ${what} in the workspace.`, 409);
+      };
+      check(
+        await env.remove(directory, { recursive: true, force: true }, context),
+        `clear ${directory}`,
+      );
+      for (const file of files ?? []) {
+        const parent = file.path.slice(0, file.path.lastIndexOf("/"));
+        check(
+          await env.createDir(parent, { recursive: true }, context),
+          `create ${parent}`,
+        );
+        check(
+          await env.writeFile(file.path, file.bytes, context),
+          `write ${file.path}`,
+        );
+      }
+    });
+  }
+
+  /** A value the runtime keeps beside this workspace's files, never in them. */
+  metadata(key: string) {
+    return this.checkpoint.metadata(key);
+  }
+
+  setMetadata(key: string, value: string) {
+    this.checkpoint.setMetadata(key, value);
+  }
+
   async info(): Promise<SandboxInfo> {
     return this.views.run(async () => {
       const base = this.checkpoint.info();

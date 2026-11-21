@@ -546,3 +546,101 @@
     vertical-align: -2px;
   }
 }
+
+@layer components {
+  /* The / menu: commands and skills, sharing the @ menu's frame. */
+  .slash-menu {
+    width: min(480px, calc(100% - 24px));
+  }
+  .slash-option {
+    min-width: 0;
+    min-height: 36px;
+    gap: 9px;
+  }
+  .slash-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+  .slash-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+  .slash-tag {
+    flex: none;
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--foreground);
+  }
+  .slash-name {
+    flex: none;
+    font-weight: 500;
+  }
+  .slash-description {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .slash-enter {
+    flex: none;
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 10.5px;
+    color: var(--muted-foreground);
+  }
+  .slash-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 6px 8px 2px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .slash-manage {
+    border: 0;
+    background: none;
+    color: var(--muted-foreground);
+    font: inherit;
+    cursor: pointer;
+  }
+  .slash-manage:hover {
+    color: var(--foreground);
+  }
+}
+
+@layer components {
+  /* "/name" at the start of a message: the skill it invoked. */
+  .skill-chip {
+    display: inline-block;
+    margin: 0 1px 0 0;
+    padding: 0 7px 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: var(--foreground);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .skill-chip svg {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    vertical-align: -2px;
+  }
+}

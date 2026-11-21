@@ -1292,3 +1292,38 @@ test("a bot's question arrives with a button per answer, and only the owner's pr
     await t.close();
   }
 });
+
+test("a bot's skills join its private Telegram menu, spelled as Telegram commands", async () => {
+  const t = await setup();
+  try {
+    await until(() => privateCommands(t.fake).length >= 1, "first menu");
+    await t.app.skills.save(
+      "weekly-report",
+      {
+        files: [
+          {
+            path: "SKILL.md",
+            text: "---\nname: weekly-report\ndescription: Write the Friday report.\n---\n",
+          },
+        ],
+      },
+      true,
+    );
+    await until(
+      () =>
+        privateCommands(t.fake).some((call) =>
+          call.body.commands?.some((c) => c.command === "weekly_report"),
+        ),
+      "skill in the menu",
+    );
+    const latest = privateCommands(t.fake).at(-1)!.body.commands!;
+    assert.deepEqual(
+      latest.find((c) => c.command === "weekly_report"),
+      { command: "weekly_report", description: "Write the Friday report." },
+    );
+    // The built-in commands stay.
+    assert.ok(latest.some((c) => c.command === "pair"));
+  } finally {
+    await t.close();
+  }
+}, 20_000);

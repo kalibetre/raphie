@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
@@ -23,6 +23,12 @@ import {
   type Section,
   sectionOf,
 } from "./settings-sections";
+import {
+  skillHeader,
+  type SkillLeave,
+  SkillSettings,
+  type SkillView,
+} from "./skill-settings";
 import { TelemetrySettings } from "./telemetry-settings";
 import { WorkspaceFiles } from "./workspace-files";
 
@@ -58,20 +64,39 @@ export function Settings({
   const name = profile?.name ?? "this bot";
   const scoped = !isAppSection(section) && section !== "new-bot";
   const parent = parentSection[section];
+  // An open skill is a sub-page of Skills, kept here so the page header can
+  // name it and link back. It starts on the list whenever Skills opens.
+  const [skills, setSkills] = useState<{ section: Section; view: SkillView }>({
+    section,
+    view: { mode: "list" },
+  });
+  const skillView: SkillView =
+    skills.section === section ? skills.view : { mode: "list" };
+  const setSkillView = (view: SkillView) => setSkills({ section, view });
+  const leaveSkillRef = useRef<SkillLeave["current"]>(null);
+  const skill = section === "skills" ? skillHeader(skillView) : null;
   return (
     <ScrollArea className="settings-scroll" viewportLabel="Settings">
       <SettingsPage
-        title={page.label}
-        lede={page.lede(name)}
+        title={skill?.title ?? page.label}
+        lede={skill?.lede ?? page.lede(name)}
         bot={scoped ? { id: workspace.botId, name } : undefined}
         scope={section === "new-bot" ? "New bot" : "App-wide"}
         back={
-          parent
+          skill
             ? {
-                label: sectionOf(parent).label,
-                onClick: () => onParent(parent),
+                label: page.label,
+                onClick: () => {
+                  if (leaveSkillRef.current?.() !== false)
+                    setSkillView({ mode: "list" });
+                },
               }
-            : undefined
+            : parent
+              ? {
+                  label: sectionOf(parent).label,
+                  onClick: () => onParent(parent),
+                }
+              : undefined
         }
       >
         {section === "bot" || section === "personality" ? (
@@ -86,6 +111,12 @@ export function Settings({
           <ModelSettings />
         ) : section === "mcp" ? (
           <McpSettings />
+        ) : section === "skills" ? (
+          <SkillSettings
+            view={skillView}
+            onView={setSkillView}
+            leaveRef={leaveSkillRef}
+          />
         ) : section === "channels" ? (
           <ChannelSettings />
         ) : section === "sandbox" ? (

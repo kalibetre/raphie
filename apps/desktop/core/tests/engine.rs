@@ -14,7 +14,8 @@ use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
     UpdateBotProfile, WorkspaceKind,
 };
-use raphie_core::engine::{Command, ConnectionChange, EngineConfig};
+use raphie_core::contracts::{SaveSkill, SkillText};
+use raphie_core::engine::{Command, ConnectionChange, EngineConfig, SkillSource};
 use raphie_core::inspection::{pretty_json, span_matches};
 use raphie_core::jobs::{JobAction, NewJob, job_badge, job_interval, run_description};
 use raphie_core::mcp::{McpAction, NewMcpConnection, summary};
@@ -1109,6 +1110,100 @@ fn workspace_folders_are_listed_and_a_file_is_saved_without_replacing_one() {
     let error = driver.model.files.error.clone().unwrap_or_default();
     assert!(error.contains("not found"), "{error}");
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn skills_load_save_toggle_import_and_delete() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::LoadSkills {
+        bot_id: "default".into(),
+    });
+    driver.until("the skills", |m, _| m.skills.contains_key("default"));
+    assert!(driver.model.skills["default"].is_empty());
+
+    let change = |driver: &mut Driver, command: Command| {
+        assert!(driver.model.begin_change_skill());
+        driver.send(command);
+        driver.until("the change", |m, _| !m.changing_skill);
+    };
+    let save = |create: bool| Command::SaveSkill {
+        bot_id: "default".into(),
+        name: "notes".into(),
+        skill: SaveSkill {
+            files: vec![SkillText {
+                path: "SKILL.md".into(),
+                text: "---\nname: notes\ndescription: Notes.\n---\n".into(),
+            }],
+        },
+        create,
+    };
+    change(&mut driver, save(true));
+    assert_eq!(
+        driver.model.skill_message.as_deref(),
+        Some("Saved. The bot uses it from its next message.")
+    );
+    driver.until("the list", |m, _| m.skills["default"].len() == 1);
+    // Creating it again is refused and says why.
+    change(&mut driver, save(true));
+    assert!(
+        driver
+            .model
+            .skill_change_error
+            .as_deref()
+            .is_some_and(|e| e.contains("already exists"))
+    );
+    change(&mut driver, save(false));
+    assert!(driver.model.skill_change_error.is_none());
+
+    change(
+        &mut driver,
+        Command::EnableSkill {
+            bot_id: "default".into(),
+            name: "notes".into(),
+            enabled: false,
+        },
+    );
+    driver.until("the toggle", |m, _| !m.skills["default"][0].enabled);
+
+    change(
+        &mut driver,
+        Command::ImportSkills {
+            bot_id: "default".into(),
+            source: SkillSource::GitHub {
+                url: "https://github.com/acme/skills".into(),
+            },
+            replace: true,
+        },
+    );
+    assert_eq!(driver.model.skill_message.as_deref(), Some("Imported pdf."));
+    let zip = std::env::temp_dir().join(format!("raphie-skills-{}.zip", std::process::id()));
+    std::fs::write(&zip, b"PK fake").unwrap();
+    change(
+        &mut driver,
+        Command::ImportSkills {
+            bot_id: "default".into(),
+            source: SkillSource::Zip { path: zip.clone() },
+            replace: false,
+        },
+    );
+    std::fs::remove_file(&zip).ok();
+    host.with(|h| {
+        assert!(h.skill_imports[0].contains("\"replace\":true"));
+        assert!(h.skill_imports[1].contains("name=\"replace\"\r\n\r\nfalse"));
+        assert!(h.skill_imports[1].contains("PK fake"));
+    });
+
+    change(
+        &mut driver,
+        Command::RemoveSkill {
+            bot_id: "default".into(),
+            name: "notes".into(),
+        },
+    );
+    driver.until("the delete", |m, _| {
+        m.skills["default"].iter().all(|s| s.name != "notes")
+    });
 }
 
 #[test]

@@ -1,0 +1,104 @@
+---
+title: Skills
+description: Give a bot standard Agent Skills, written in Settings, imported from a .zip or GitHub, or written by the bot itself, and read only when a task needs them.
+sidebar:
+  order: 5.2
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+import { Arrow, Box, Flow } from "~/components/diagram";
+
+A skill is a set of instructions for one kind of task, such as writing the weekly report or pulling tables out of PDFs. Raphie uses the standard [Agent Skills](https://agentskills.io) format, so a skill written for another agent works here unchanged.
+
+Each bot has its own skills. They live in the bot's workspace, at `skills/<name>/`.
+
+## How a bot uses skills
+
+<Flow>
+  <Box title="Instructions">every skill's name and description</Box>
+  <Arrow />
+  <Box title="A task matches">the bot calls read_skill</Box>
+  <Arrow />
+  <Box title="It follows SKILL.md">
+    reading or running bundled files as needed
+  </Box>
+</Flow>
+
+- The bot always sees the name and description of every skill that is on. It reads a whole skill only when a task matches its description, so skills cost little until they are used.
+- `read_skill` reads a skill's `SKILL.md` or another text file in its folder without asking for approval.
+- Scripts a skill bundles run with `workspace_exec`, under the bot's [sandbox](/guides/workspaces/) and its approval rules.
+- Skills are read again before each message, so a change applies from the bot's next reply.
+- You can also invoke a skill by name; see [below](#invoke-a-skill-yourself).
+
+Skills are instructions. Like a [personality](/guides/bots/#edit-identity-and-personality), they never grant tools, access or permissions.
+
+## Invoke a skill yourself
+
+Start a message with `/` and the skill's name to have the bot follow it for that message, whether or not it would have chosen it. The message shows the skill as a chip.
+
+```txt
+/weekly-report for the design team, include the launch slip
+```
+
+- In the web and desktop apps, typing **/** offers the bot's skills. See [commands and skills](/guides/conversations/#commands-and-skills).
+- In Telegram, skills appear in the bot's command menu with underscores, such as `/weekly_report`, because Telegram commands cannot contain hyphens. Either spelling works anywhere.
+- Only skills that are on can be invoked. A skill that is off is not offered anywhere, and `/its-name` is sent as plain text.
+
+The skill is loaded into that one message, so the bot does not need to call `read_skill` first.
+
+## What a skill looks like
+
+A skill is a folder whose `SKILL.md` starts with frontmatter naming and describing it:
+
+```md title="skills/weekly-report/SKILL.md"
+---
+name: weekly-report
+description: Write the Friday status report from this week's notes, in the team template.
+---
+
+1. Read this week's notes in the workspace.
+2. Fill assets/template.md section by section.
+```
+
+| Rule        | Limit                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------- |
+| Name        | Lowercase letters, digits and single hyphens, up to 64 characters; matches its folder |
+| Description | Required, up to 1,024 characters                                                      |
+| Folder      | Up to 100 files and 2 MiB; no hidden files                                            |
+
+The folder can also hold `references/`, `assets/` and `scripts/` with anything the skill points to. Settings lists a skill that breaks a rule with what is wrong, and the bot does not see it until it is fixed.
+
+## Add a skill
+
+Open **Settings → _bot_ → Skills**.
+
+- **New skill** opens an editor on a template. Change its name and description, then **Create skill**. **Add file** adds another text file to the folder.
+- **Import** installs every folder with a `SKILL.md` from:
+  - a **.zip** of up to 8 MiB, with or without the skill's own folder at its top; or
+  - a **GitHub link** to a public repository, or to a folder in one, such as `https://github.com/owner/repo/tree/main/skills/pdf`. Raphie downloads the repository's archive, up to 25 MiB.
+
+  An import refuses a skill whose name already exists unless **Replace skills with the same name** is on.
+
+- The bot can write its own: any folder it creates under `skills/` in its workspace is listed and offered from its next message.
+
+## Change, turn off or delete a skill
+
+<Steps>
+
+1. Choose **Edit** beside the skill.
+2. Edit its text files and **Save changes**. Files that are not text, such as images, are kept as they are.
+3. To remove it, choose **Delete…** below the editor. Its folder is deleted from the workspace.
+
+</Steps>
+
+The switch beside each skill turns it off without deleting it: the bot no longer sees, reads or offers it, you cannot invoke it, and the folder stays in the workspace.
+
+:::caution
+The bot can change files in its workspace, including its skills. Check a skill in Settings before you rely on it, and keep secrets out of skills, because the model reads them.
+:::
+
+## Related
+
+- [Workspaces](/guides/workspaces/): where skills are kept, and how their scripts run.
+- [HTTP API](/architecture/http-api/): the `/skills` routes.

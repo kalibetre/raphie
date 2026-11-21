@@ -6,6 +6,7 @@ import {
   CircleUserRound,
   Clock,
   FolderOpen,
+  GraduationCap,
   History,
   KeyRound,
   Library,
@@ -45,6 +46,13 @@ export const sections = [
     icon: Plug,
     lede: (bot: string) =>
       `Connect the tools ${bot} can use. Every connection belongs to this bot.`,
+  },
+  {
+    id: "skills",
+    label: "Skills",
+    icon: GraduationCap,
+    lede: (bot: string) =>
+      `Instructions ${bot} reads when a task needs them, kept in its workspace.`,
   },
   {
     id: "channels",

@@ -288,6 +288,74 @@ export class BotWorkspace {
     return run;
   }
 
+  /**
+   * Replaces everything under `directory` with `files` (paths below it), or
+   * removes it when `files` is null. Parent directories are created.
+   */
+  replaceTree(
+    directory: string,
+    files: readonly { path: string; bytes: Uint8Array }[] | null,
+  ) {
+    const run = this.tail.then(() => {
+      this.current();
+      const inside = (path: string) =>
+        path === directory || path.startsWith(`${directory}/`);
+      const entries = this.snapshot().filter((e) => !inside(e.path));
+      if (files) {
+        const now = Date.now();
+        const directories = new Set<string>();
+        for (const file of files) {
+          const parts = file.path.split("/");
+          for (let i = 2; i < parts.length; i++)
+            directories.add(parts.slice(0, i).join("/"));
+        }
+        for (const path of [...directories].sort()) {
+          const existing = entries.find((e) => e.path === path);
+          if (existing && existing.kind !== "directory")
+            throw new InputError(`${path} is a file, not a folder.`, 409);
+          if (!existing)
+            entries.push({
+              path,
+              kind: "directory",
+              content: "",
+              mode: 0o755,
+              mtime: now,
+            });
+        }
+        for (const file of files)
+          entries.push({
+            path: file.path,
+            kind: "file",
+            content: Buffer.from(file.bytes).toString("base64"),
+            mode: 0o644,
+            mtime: now,
+          });
+      }
+      this.replaceFiles(entries);
+    });
+    this.tail = run.catch(() => {});
+    return run;
+  }
+
+  /** A value the runtime keeps beside the files, never in them. */
+  metadata(key: string) {
+    this.current();
+    return (
+      this.db
+        .query<{ value: string }, [string]>(
+          "SELECT value FROM workspace_metadata WHERE key=?",
+        )
+        .get(key)?.value ?? null
+    );
+  }
+
+  setMetadata(key: string, value: string) {
+    this.current();
+    this.db
+      .query("INSERT OR REPLACE INTO workspace_metadata VALUES(?,?)")
+      .run(key, value);
+  }
+
   list(path = "/workspace") {
     const state = this.current();
     return listWorkspace(

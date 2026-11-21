@@ -95,6 +95,65 @@ pub enum ReplyFormatting {
     Structured,
 }
 
+/// `SkillSummary` in `packages/contracts/src/skills/views.ts`: one of a
+/// bot's skills, kept in its workspace at `skills/<name>/SKILL.md`.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillSummary {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    /// Off skills stay in the workspace but are not offered to the bot.
+    pub enabled: bool,
+    /// Paths inside the skill's folder, `SKILL.md` first.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// Why the bot cannot use it, if it cannot.
+    #[serde(default)]
+    pub problem: Option<String>,
+}
+
+/// `GET /api/skills`.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct SkillList {
+    pub items: Vec<SkillSummary>,
+}
+
+/// `SkillFile`: one file of a skill; files that are not text have none.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct SkillFile {
+    pub path: String,
+    pub bytes: u64,
+    pub text: Option<String>,
+}
+
+/// `SkillDetail`: a skill with its files, for the editor.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct SkillDetail {
+    #[serde(flatten)]
+    pub summary: SkillSummary,
+    pub contents: Vec<SkillFile>,
+}
+
+/// One text file the editor saves.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct SkillText {
+    pub path: String,
+    pub text: String,
+}
+
+/// `SaveSkill`: the body of `POST` (create) or `PUT` (save) `/api/skills/<name>`.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct SaveSkill {
+    pub files: Vec<SkillText>,
+}
+
+/// `SkillImport`: what an import installed.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct SkillImport {
+    pub installed: Vec<String>,
+}
+
 /// `OwnerProfile` in `packages/contracts/src/bots/views.ts`: who every bot
 /// is talking to, as `GET /api/owner` answers. Shared by every bot.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]

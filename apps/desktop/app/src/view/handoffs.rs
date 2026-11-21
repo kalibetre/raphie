@@ -15,6 +15,7 @@ use raphie_core::handoffs::{
     open_handoffs, request_status, requests_from_turn,
 };
 use raphie_core::mentions::{MentionPart, split_mentions};
+use raphie_core::slash::{SlashKind, leading_skill};
 use rune::{
     Color, El, Link, LinkPaint, LoopSpec, Path, PillStyle, Shape, Span, Tx, canvas, col, el, icon,
     row, text,
@@ -26,7 +27,7 @@ use crate::avatar::{bot_avatar, bot_icon};
 use crate::format;
 use crate::icons;
 use crate::state::{MENTION_SCHEME, Ui};
-use crate::theme::{Theme, font};
+use crate::theme::{Theme, font, mono};
 use crate::widgets::{Kind, Size, button, one_line, pressable};
 
 /// A brief's or a result's status, in its colours (the web's
@@ -629,7 +630,14 @@ pub fn message_text(s: &Ui, content: &str, look: &Look) -> El {
     // A named bot shows as its face and name, without the "@", as on the web.
     let mut shown = String::with_capacity(content.len());
     let mut chips = Vec::new();
-    for part in split_mentions(content, &bots) {
+    // A skill the message starts with shows as the skill, without the "/".
+    let skill = leading_skill(content, &s.invocable_skills());
+    let mut body = content;
+    if let Some((name, typed)) = &skill {
+        shown.push_str(name);
+        body = &content[*typed..];
+    }
+    for part in split_mentions(body, &bots) {
         match part {
             MentionPart::Text(text) => shown.push_str(text),
             MentionPart::Mention(bot, written) => {
@@ -645,13 +653,25 @@ pub fn message_text(s: &Ui, content: &str, look: &Look) -> El {
         .wrap()
         .selectable(true)
         .selection_color(t.selection());
+    if let Some((name, _)) = &skill {
+        message = message.pill(
+            0..name.len(),
+            PillStyle::new()
+                .bg(t.accent.alpha(0.22))
+                .fg(t.foreground)
+                .icon(&icons::GRADUATION_CAP),
+        );
+    }
     if chips.is_empty() {
         return message;
     }
-    let names: Vec<Span> = chips
+    let mut names: Vec<Span> = chips
         .iter()
         .map(|(range, _)| Span::new(range.start, range.end).weight(500.0))
         .collect();
+    if let Some((name, _)) = &skill {
+        names.push(Span::new(0, name.len()).weight(500.0));
+    }
     message = message.spans(names);
     for (range, bot) in chips {
         let tone = look.tones.of(&bot.id);
@@ -1035,4 +1055,130 @@ pub fn mention_menu(s: &Ui, look: &Look, overlays: &mut Vec<El>) {
         Placement::TopStart,
         8.0,
     ));
+}
+
+/// The composer's "/" menu: commands, then the bot's skills. Each row says
+/// what Return does: a command runs now, a skill waits for the message.
+/// Returns whether it is open, so the "@" menu stays shut meanwhile.
+pub fn slash_menu(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> bool {
+    let t = &look.theme;
+    let options = s.slash_options();
+    if options.is_empty() {
+        return false;
+    }
+    let active = s.slash_highlight(options.len());
+    let mut list = col()
+        .key("rd-slash")
+        .role("listbox")
+        .label("Commands and skills")
+        .w(480.0)
+        .padding(4.0);
+    for (i, item) in options.iter().enumerate() {
+        let chosen = item.clone();
+        // A command wears its glyph in a tile; a skill a tinted "skill" tag.
+        let lead = match command_icon(item.kind) {
+            Some(glyph) => row()
+                .size(24.0, 24.0)
+                .center()
+                .radius(7.0)
+                .fill(t.muted)
+                .child(icon(glyph, 14.0).color(t.muted_foreground))
+                .a11y_hidden(),
+            None => row()
+                .px(6.0)
+                .py(1.0)
+                .radius(5.0)
+                .fill(t.accent.alpha(0.24))
+                .child(text("skill").font(mono(10.5)).color(t.foreground)),
+        };
+        let enter = row().px(5.0).radius(5.0).border(1.0, t.border).child(
+            text(if item.is_command() {
+                "↵ run"
+            } else {
+                "↵ use"
+            })
+            .font(font(10.5, 400.0))
+            .color(t.muted_foreground),
+        );
+        let mut option = row()
+            .key(format!("rd-slash-{}", item.name))
+            .role("option")
+            .label(format!("{} {}", item.name, item.description))
+            .checked(i == active)
+            .w_full()
+            .h(36.0)
+            .px(8.0)
+            .gap(9.0)
+            .center_y()
+            .radius(8.0)
+            .hover(t.hover)
+            .child(lead)
+            .child(
+                text(item.name.clone())
+                    .font(font(13.0, 500.0))
+                    .color(t.foreground),
+            )
+            .child(
+                one_line(
+                    item.description.clone(),
+                    font(12.5, 400.0),
+                    t.muted_foreground,
+                )
+                .grow(1.0),
+            )
+            .child(enter)
+            .on_press_tx(move |s: &mut Ui, tx: &mut Tx| {
+                s.choose_slash(&chosen);
+                tx.focus("rd-composer", false);
+            });
+        if i == active {
+            option = option.fill(t.hover);
+        }
+        list = list.child(option);
+    }
+    let foot = row()
+        .w_full()
+        .mt(4.0)
+        .px(8.0)
+        .pt(6.0)
+        .pb(2.0)
+        .justify_between()
+        .center_y()
+        .border_sides([1.0, 0.0, 0.0, 0.0], t.border)
+        .child(
+            text("↑↓ choose · esc close")
+                .font(font(11.0, 400.0))
+                .color(t.faint),
+        )
+        .child(
+            text("Manage skills →")
+                .key("rd-slash-manage")
+                .role("button")
+                .font(font(11.0, 400.0))
+                .color(t.muted_foreground)
+                .on_press(|s: &mut Ui| s.manage_skills()),
+        );
+    list = list.child(foot);
+    let surface = popover::raised(&look.kit, list, 12.0)
+        .fill(t.card)
+        .border(1.0, t.border);
+    overlays.push(popover::anchored(
+        &look.kit,
+        surface,
+        "rd-composer-card",
+        Placement::TopStart,
+        8.0,
+    ));
+    true
+}
+
+/// Each command's glyph, as the buttons that do the same show it.
+fn command_icon(kind: SlashKind) -> Option<&'static rune::Icon> {
+    match kind {
+        SlashKind::New => Some(&icons::SQUARE_PEN),
+        SlashKind::Model => Some(&icons::SPARKLES),
+        SlashKind::Stop => Some(&icons::SQUARE),
+        SlashKind::Handoff => Some(&icons::CORNER_UP_RIGHT),
+        SlashKind::Skill => None,
+    }
 }

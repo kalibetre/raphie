@@ -10,6 +10,7 @@ import { ScrollArea } from "../../../shared/ui/scroll-area";
 import { Textarea } from "../../../shared/ui/textarea";
 import { ComposerPlugins } from "../../settings/infrastructure/plugins/index";
 import { useRuntimeSettings } from "../../settings/infrastructure/use-runtime-settings";
+import { useSkills } from "../../settings/infrastructure/use-skills";
 import { ComposerActions } from "./composer-actions";
 import { AttachmentChips, ComposerAttachments } from "./composer-attachments";
 import { ContextRing } from "./context-ring";
@@ -17,6 +18,7 @@ import { HandoffDelegates, HandoffNote } from "./handoffs/handoff-delegates";
 import { useMentions } from "./handoffs/mention-menu";
 import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
+import { type SlashCommand, useSlashMenu } from "./slash-menu";
 import { useComposerAttachments } from "./use-composer-attachments";
 import { useComposerLayout } from "./use-composer-layout";
 
@@ -37,6 +39,8 @@ export function Composer({
   onStop,
   onChooseModel,
   onModelSettings,
+  onNewConversation,
+  onManageSkills,
 }: {
   conversationId?: string;
   suggestion?: { text: string; at: number };
@@ -64,6 +68,10 @@ export function Composer({
   ) => Promise<void>;
   onChooseModel: (model: ModelSelection) => Promise<void>;
   onModelSettings: () => void;
+  /** The /new command: open a new conversation with this bot. */
+  onNewConversation?: () => void;
+  /** Opens this bot's Skills settings, from the / menu. */
+  onManageSkills?: () => void;
 }) {
   const [permission, setPermission] = useState<{
     key: string;
@@ -122,6 +130,78 @@ export function Composer({
     input,
     update,
   });
+
+  const [modelRequest, setModelRequest] = useState(0);
+  const skills = useSkills().list.data?.items ?? [];
+  const commands: SlashCommand[] = [
+    ...(onNewConversation
+      ? [
+          {
+            kind: "command" as const,
+            name: "new",
+            description: "Start a new conversation",
+            run: onNewConversation,
+          },
+        ]
+      : []),
+    {
+      kind: "command",
+      name: "model",
+      description: "Choose the model for this conversation",
+      run: () => setModelRequest((n) => n + 1),
+    },
+    ...(busy
+      ? [
+          {
+            kind: "command" as const,
+            name: "stop",
+            description: "Stop the reply in progress",
+            run: () => void stop(),
+          },
+        ]
+      : []),
+    ...(!handedOffBy && mentionables.length
+      ? [
+          {
+            kind: "command" as const,
+            name: "handoff",
+            description: "Give this task to another bot",
+            run: () => {
+              update("@");
+              requestAnimationFrame(() => {
+                input.current?.focus();
+                input.current?.setSelectionRange(1, 1);
+                mentions.track();
+              });
+            },
+          },
+        ]
+      : []),
+  ];
+  const slash = useSlashMenu({
+    draft,
+    commands,
+    skills: skills
+      .filter((skill) => skill.enabled && !skill.problem)
+      .map((skill) => ({
+        kind: "skill" as const,
+        name: skill.name,
+        description: skill.description,
+      })),
+    input,
+    update,
+    onManageSkills: onManageSkills
+      ? () => {
+          update("");
+          onManageSkills();
+        }
+      : undefined,
+  });
+  const menuProps = slash.open ? slash.inputProps : mentions.inputProps;
+  const track = () => {
+    mentions.track();
+    slash.track();
+  };
 
   function update(text: string) {
     setDraft(text);
@@ -203,7 +283,7 @@ export function Composer({
           void send();
         }}
       >
-        {mentions.menu}
+        {slash.menu ?? mentions.menu}
         <AttachmentChips
           files={files}
           workspace={workspace}
@@ -221,26 +301,27 @@ export function Composer({
             placeholder="Message Raphie…"
             value={draft}
             maxLength={4000}
-            {...mentions.inputProps}
+            {...menuProps}
             onSelect={() => {
               revealCaret();
-              mentions.track();
+              track();
             }}
             onKeyUp={(event) => {
               revealCaret();
               // Arrow keys move through an open menu, not the caret.
-              if (!mentions.inputProps["aria-expanded"]) mentions.track();
-              else if (!/^Arrow(Up|Down)$/.test(event.key)) mentions.track();
+              if (!menuProps["aria-expanded"]) track();
+              else if (!/^Arrow(Up|Down)$/.test(event.key)) track();
             }}
             onPointerUp={() => {
               revealCaret();
-              mentions.track();
+              track();
             }}
             onChange={(event) => {
               update(event.target.value);
-              mentions.track();
+              track();
             }}
             onKeyDown={(event) => {
+              if (slash.onKeyDown(event)) return;
               if (mentions.onKeyDown(event)) return;
               if (
                 event.key === "Enter" &&
@@ -269,6 +350,7 @@ export function Composer({
               else setNewModel(selected);
             }}
             onSettings={onModelSettings}
+            openRequest={modelRequest}
           />
           {
             <McpPermissions

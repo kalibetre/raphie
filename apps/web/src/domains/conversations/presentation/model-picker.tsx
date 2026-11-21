@@ -33,10 +33,24 @@ type Props = {
   disabled: boolean;
   onChoose: (model: ModelSelection) => Promise<void>;
   onSettings: () => void;
+  /** Changes each time something else (the /model command) opens the picker. */
+  openRequest?: number;
 };
 
-export function ModelPicker({ model, disabled, onChoose, onSettings }: Props) {
+export function ModelPicker({
+  model,
+  disabled,
+  onChoose,
+  onSettings,
+  openRequest,
+}: Props) {
   const [open, setOpen] = useState(false);
+  const [handled, setHandled] = useState(openRequest);
+  // Opened from outside: adjust state during render rather than in an effect.
+  if (openRequest !== handled) {
+    setHandled(openRequest);
+    if (openRequest && !disabled) setOpen(true);
+  }
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [saving, setSaving] = useState(false);

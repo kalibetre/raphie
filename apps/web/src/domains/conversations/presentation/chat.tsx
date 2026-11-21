@@ -33,9 +33,14 @@ import {
   HandoffResult,
   HandoffSources,
 } from "./handoffs/handoff-cards";
-import { mentionComponents, remarkMentions } from "./handoffs/mention-markdown";
+import {
+  mentionComponents,
+  remarkMentions,
+  remarkSkills,
+} from "./handoffs/mention-markdown";
 
 const noBots: readonly { id: string; name: string }[] = [];
+const noSkills: readonly string[] = [];
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, {
@@ -50,6 +55,7 @@ export function Chat({
   handoffs: handoffItems = [],
   onCancelHandoff,
   bots = noBots,
+  skills = noSkills,
 }: {
   state: Snapshot;
   conversationId: string;
@@ -60,13 +66,15 @@ export function Chat({
   onCancelHandoff?: (id: string) => Promise<unknown>;
   /** Every bot, so "@Name" shows as the bot it names. */
   bots?: readonly { id: string; name: string }[];
+  /** This bot's skills, so a message starting "/name" shows the skill. */
+  skills?: readonly string[];
 }) {
   const mentions = useMemo(
     () => ({
       components: mentionComponents(bots),
-      plugins: [remarkGfm, remarkMentions(bots)],
+      plugins: [remarkGfm, remarkMentions(bots), remarkSkills(skills)],
     }),
-    [bots],
+    [bots, skills],
   );
   const query = useQueryClient();
   const { workspace } = useBackend();

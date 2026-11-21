@@ -133,6 +133,10 @@ pub struct Host {
     pub sandbox: Option<Value>,
     /// Sandbox saves, as received.
     pub sandbox_saves: Vec<Value>,
+    /// Skills by name, as `SkillSummary` JSON.
+    pub skills: Vec<Value>,
+    /// Bodies of skill imports: the GitHub JSON, or the .zip form as text.
+    pub skill_imports: Vec<String>,
     /// The owner profile, once a test saved one.
     pub owner: Option<Value>,
     /// The Discord and Telegram settings, as the runtime answers them.
@@ -263,6 +267,17 @@ fn router(fake: Fake) -> Router {
         )
         .route("/api/memory", get(memory).post(save_memory))
         .route("/api/memory/test", post(test_memory))
+        .route("/api/skills", get(skills))
+        .route("/api/skills/import", post(import_skills))
+        .route("/api/skills/import/github", post(import_skills))
+        .route(
+            "/api/skills/{name}",
+            get(skill)
+                .post(save_skill)
+                .put(save_skill)
+                .delete(remove_skill),
+        )
+        .route("/api/skills/{name}/enabled", put(enable_skill))
         .route("/api/owner", get(owner))
         .route("/api/owner", put(save_owner))
         .route("/api/workspace", get(sandbox))
@@ -862,6 +877,140 @@ async fn workspace_download(
         Some((_, bytes)) => bytes.clone().into_response(),
         None => refused(StatusCode::NOT_FOUND, "Workspace file not found."),
     }
+}
+
+fn skill_list(fake: &Fake) -> Value {
+    json!({ "items": fake.host.lock().unwrap().skills })
+}
+
+async fn skills(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    Json(skill_list(&fake)).into_response()
+}
+
+fn skill_detail(summary: &Value, text: &str) -> Value {
+    let mut detail = summary.clone();
+    detail["contents"] = json!([{ "path": "SKILL.md", "bytes": text.len(), "text": text }]);
+    detail
+}
+
+async fn skill(
+    State(fake): State<Fake>,
+    Path(name): Path<String>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", uri.path().to_owned(), &headers);
+    let host = fake.host.lock().unwrap();
+    match host.skills.iter().find(|s| s["name"] == name.as_str()) {
+        Some(summary) => Json(skill_detail(summary, "---\nname: x\n---\n")).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "No such skill." })),
+        )
+            .into_response(),
+    }
+}
+
+/// Creates or saves a skill from its SKILL.md text.
+async fn save_skill(
+    State(fake): State<Fake>,
+    Path(name): Path<String>,
+    method: axum::http::Method,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    let verb = if method == axum::http::Method::POST {
+        "POST"
+    } else {
+        "PUT"
+    };
+    record(&fake, verb, uri.path().to_owned(), &headers);
+    let mut host = fake.host.lock().unwrap();
+    let exists = host.skills.iter().any(|s| s["name"] == name.as_str());
+    if method == axum::http::Method::POST && exists {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": format!("A skill named {name} already exists.") })),
+        )
+            .into_response();
+    }
+    let text = body["files"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let summary = json!({
+        "name": name, "description": "Saved.", "enabled": true,
+        "files": body["files"].as_array().map(|f| f.iter().map(|f| f["path"].clone()).collect::<Vec<_>>()),
+        "problem": null,
+    });
+    host.skills.retain(|s| s["name"] != name.as_str());
+    host.skills.push(summary.clone());
+    let status = if exists {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    (status, Json(skill_detail(&summary, &text))).into_response()
+}
+
+async fn enable_skill(
+    State(fake): State<Fake>,
+    Path(name): Path<String>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    record(&fake, "PUT", uri.path().to_owned(), &headers);
+    {
+        let mut host = fake.host.lock().unwrap();
+        for skill in host
+            .skills
+            .iter_mut()
+            .filter(|s| s["name"] == name.as_str())
+        {
+            skill["enabled"] = body["enabled"].clone();
+        }
+    }
+    Json(skill_list(&fake)).into_response()
+}
+
+async fn remove_skill(
+    State(fake): State<Fake>,
+    Path(name): Path<String>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "DELETE", uri.path().to_owned(), &headers);
+    fake.host
+        .lock()
+        .unwrap()
+        .skills
+        .retain(|s| s["name"] != name.as_str());
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// Installs one skill named `pdf`, keeping the body to check.
+async fn import_skills(
+    State(fake): State<Fake>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    let mut host = fake.host.lock().unwrap();
+    host.skill_imports
+        .push(String::from_utf8_lossy(&body).into_owned());
+    host.skills.retain(|s| s["name"] != "pdf");
+    host.skills.push(json!({
+        "name": "pdf", "description": "PDFs.", "enabled": true,
+        "files": ["SKILL.md"], "problem": null,
+    }));
+    (StatusCode::CREATED, Json(json!({ "installed": ["pdf"] }))).into_response()
 }
 
 /// The owner profile: empty until a test saves one.

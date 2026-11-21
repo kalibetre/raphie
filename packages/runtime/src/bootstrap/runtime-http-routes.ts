@@ -22,6 +22,7 @@ import type { SettingsService } from "../domains/settings/application/ports.ts";
 import type { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
 import { mcpRoutes } from "../domains/settings/presentation/http/mcp-routes.ts";
 import { settingsRoutes } from "../domains/settings/presentation/http/routes.ts";
+import { skillRoutes } from "../domains/skills/presentation/http/routes.ts";
 import { workspaceRoutes } from "../domains/workspaces/presentation/http/routes.ts";
 import { clientRoutes } from "../infrastructure/http/client-routes.ts";
 import { snapshot } from "../infrastructure/pi/workspace-snapshot.ts";
@@ -64,6 +65,7 @@ export function runtimeRoutes(
       }),
     ),
   );
+  app.route("/api/skills", skillRoutes(runtime.skills));
   if (options.channels)
     app.route(
       "/api/channels",

@@ -49,6 +49,8 @@ pub mod projections;
 pub mod replies;
 pub mod sandbox;
 pub mod settings;
+pub mod skills;
+pub mod slash;
 pub mod sse;
 pub mod updates;
 pub mod workspace;

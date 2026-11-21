@@ -23,6 +23,15 @@ export type {
 } from "./bots/handoffs.ts";
 
 export type {
+  SaveSkill,
+  SkillDetail,
+  SkillFile,
+  SkillImport,
+  SkillList,
+  SkillSummary,
+} from "./skills/views.ts";
+
+export type {
   BotProfile,
   OwnerProfile,
   ReplyStyle,
