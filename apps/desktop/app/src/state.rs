@@ -2943,6 +2943,18 @@ impl Ui {
     /// After news from the host: a form with no edits follows the bot when
     /// it was saved elsewhere; a form with edits keeps them.
     fn follow_profile(&mut self) {
+        // A Profile opened before its bot was known (as when the app opens
+        // on it) fills in once the bot arrives.
+        if !self.profile.creating
+            && self.profile.saved.is_none()
+            && let Screen::Settings(Page::Bot {
+                bot_id,
+                section: BotSection::Profile,
+            }) = &self.screen
+            && let Some(bot) = self.model.bots.iter().find(|bot| &bot.id == bot_id)
+        {
+            self.profile = ProfileDraft::of(bot);
+        }
         let stale = self
             .profile_bot()
             .is_some_and(|latest| self.profile.changed_elsewhere(latest));

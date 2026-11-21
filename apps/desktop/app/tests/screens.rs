@@ -5283,3 +5283,27 @@ fn a_reply_slider_follows_a_drag_along_its_track() {
     settle(&mut rt);
     assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Plain);
 }
+
+#[test]
+fn a_profile_opened_before_its_bot_loads_fills_in_when_it_arrives() {
+    fn opened_early(ui: &mut Ui) {
+        scenes::settings_account(ui);
+        let bots = ui.model.bots.clone();
+        let others = bots.into_iter().filter(|b| b.id != "b-research").collect();
+        ui.model.apply(Event::Bots(others));
+        ui.open_settings(Some(Page::Bot {
+            bot_id: "b-research".into(),
+            section: BotSection::Profile,
+        }));
+    }
+    let mut rt = render_sized(opened_early, false, (1280.0, 1800.0));
+    assert!(rt.state.profile.saved.is_none());
+    let mut bots = rt.state.model.bots.clone();
+    bots.push(research("Reads and summarises.", 3));
+    deliver(&mut rt, Event::Bots(bots));
+    assert_eq!(rt.state.profile.personality.text, "Be brief.");
+    assert_eq!(rt.state.profile.problem(), None);
+    // A change can be saved straight away.
+    click(&mut rt, "rd-reply-length-detailed");
+    assert!(rt.state.can_save_profile());
+}
