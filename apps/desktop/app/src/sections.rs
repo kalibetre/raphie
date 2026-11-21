@@ -9,6 +9,9 @@
 pub enum Page {
     /// A page of one bot's settings.
     Bot { bot_id: String, section: BotSection },
+    /// Who every bot is talking to: the owner's name, time zone and a few
+    /// lines about them. Shared by every bot.
+    Owner,
     /// Who is signed in, and signing out.
     Account,
     /// A new bot, before it exists.
@@ -153,6 +156,7 @@ impl Page {
     pub fn label(&self) -> &'static str {
         match self {
             Page::Bot { section, .. } => section.label(),
+            Page::Owner => "About you",
             Page::Account => "Account",
             Page::NewBot => "Create a bot",
             Page::Appearance => "Appearance",
@@ -164,6 +168,7 @@ impl Page {
     /// The query that opens this page in the web workspace.
     pub fn web_query(&self) -> String {
         match self {
+            Page::Owner => "view=settings&section=owner".to_owned(),
             Page::Account => "view=settings&section=account".to_owned(),
             Page::NewBot => "view=settings&section=new-bot".to_owned(),
             // The web's version sits under Appearance (`general`).

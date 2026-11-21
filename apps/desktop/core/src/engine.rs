@@ -36,6 +36,7 @@ use crate::channels::{Channel, ChannelChange};
 use crate::contracts::ApprovalMode;
 use crate::contracts::ModelSelection;
 use crate::contracts::NewBot;
+use crate::contracts::SaveOwnerProfile;
 use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
@@ -251,6 +252,12 @@ pub enum Command {
         bot_id: String,
         name: String,
         revision: u32,
+    },
+    /// Load who every bot is talking to.
+    LoadOwner,
+    /// Save who every bot is talking to.
+    SaveOwner {
+        owner: SaveOwnerProfile,
     },
     /// Load a bot's sandbox settings, provider, limits and usage.
     LoadSandbox {
@@ -737,6 +744,8 @@ impl Engine {
                 name,
                 revision,
             } => self.delete_bot(bot_id, name, revision),
+            Command::LoadOwner => self.load_owner(),
+            Command::SaveOwner { owner } => self.save_owner(owner),
             Command::LoadSandbox { bot_id } => self.load_sandbox(bot_id),
             Command::SaveSandbox { bot_id, update } => self.save_sandbox(bot_id, update),
             Command::LoadTraces { bot_id, hours } => self.load_traces(bot_id, hours),
@@ -1684,6 +1693,44 @@ impl Engine {
                         message: error.to_string(),
                     });
                 }
+            }
+        });
+    }
+
+    fn load_owner(&mut self) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.owner().await {
+                Ok(owner) => emit.emit(Event::Owner(owner)),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::OwnerFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn save_owner(&mut self, owner: SaveOwnerProfile) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.save_owner(&owner).await {
+                Ok(owner) => emit.emit(Event::OwnerSaved(owner)),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::OwnerSaveFailed {
+                    message: error.to_string(),
+                }),
             }
         });
     }

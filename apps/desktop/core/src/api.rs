@@ -38,6 +38,7 @@ use crate::contracts::{AnswerSignInBody, ProviderSignIn, StartSignInBody};
 use crate::contracts::{ApprovalMode, ApprovalModeBody, ArchiveBody};
 use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
+use crate::contracts::{OwnerProfile, SaveOwnerProfile};
 use crate::jobs::{JobAction, NewJob};
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::{KeyChange, MemoryUpdate};
@@ -266,6 +267,16 @@ impl ApiClient {
     pub async fn bots(&self) -> Result<Vec<BotProfile>, ApiError> {
         let list: BotList = self.get_json("/api/bots").await?;
         Ok(list.items)
+    }
+
+    /// Who every bot is talking to.
+    pub async fn owner(&self) -> Result<OwnerProfile, ApiError> {
+        self.get_json("/api/owner").await
+    }
+
+    /// Saves who every bot is talking to and returns it as saved.
+    pub async fn save_owner(&self, owner: &SaveOwnerProfile) -> Result<OwnerProfile, ApiError> {
+        self.put_json("/api/owner", owner).await
     }
 
     /// Saves a bot's profile and returns it at its new revision. Fails with
@@ -1069,6 +1080,18 @@ impl ApiClient {
     ) -> Result<T, ApiError> {
         let request = self
             .authorized(self.http.post(self.origin.url(path)))
+            .header("x-raphie-client", "web")
+            .json(body);
+        read_json(send(request).await?).await
+    }
+
+    async fn put_json<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T, ApiError> {
+        let request = self
+            .authorized(self.http.put(self.origin.url(path)))
             .header("x-raphie-client", "web")
             .json(body);
         read_json(send(request).await?).await

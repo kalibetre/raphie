@@ -7,6 +7,7 @@
 use raphie_core::attachments::FileBytes;
 use raphie_core::auth::DeviceCode;
 use raphie_core::contracts::ApprovalMode;
+use raphie_core::contracts::OwnerProfile;
 use raphie_core::contracts::{
     Account, BotProfile, ChannelHomeSettings, ChannelSettings, McpConnection, MemoryEvidence,
     MemoryPage, MemoryStatus, Page as Paged, RuntimeSettings, SandboxInfo, SessionActivity,
@@ -132,6 +133,9 @@ pub const SCENES: &[Scene] = &[
     ("settings-mcp-command", settings_mcp_command),
     ("settings-mcp-empty", settings_mcp_empty),
     ("settings-mcp-loading", settings_mcp_loading),
+    ("settings-owner", settings_owner),
+    ("settings-owner-edited", settings_owner_edited),
+    ("settings-owner-loading", settings_owner_loading),
     ("settings-diagnostics", settings_diagnostics),
     (
         "settings-diagnostics-unavailable",
@@ -499,6 +503,42 @@ pub fn bot_events() -> Vec<ActivityEvent> {
         },
     ]))
     .expect("the scene's events match the contract")
+}
+
+/// A made-up owner who has filled in About you.
+pub fn owner_profile() -> OwnerProfile {
+    OwnerProfile {
+        name: "Hana Girma".into(),
+        call_me: "Hana".into(),
+        time_zone: "Africa/Addis_Ababa".into(),
+        about: "I run a small design studio. Mornings are for deep work, so keep anything non-urgent until after lunch.".into(),
+        updated_at: Some(1_794_650_049_530.0),
+    }
+}
+
+/// Opens Settings → About you with `owner` loaded, or still loading.
+fn open_owner(ui: &mut Ui, owner: Option<OwnerProfile>) {
+    settings_account(ui);
+    if let Some(owner) = owner {
+        ui.model.apply(Event::Owner(owner));
+    }
+    ui.open_settings(Some(Page::Owner));
+}
+
+/// Settings → About you, filled in, nothing edited.
+pub fn settings_owner(ui: &mut Ui) {
+    open_owner(ui, Some(owner_profile()));
+}
+
+/// About you with the time zone changed, so the save bar shows.
+pub fn settings_owner_edited(ui: &mut Ui) {
+    open_owner(ui, Some(owner_profile()));
+    ui.owner.time_zone = "Europe/Berlin".into();
+}
+
+/// About you before the profile has arrived.
+pub fn settings_owner_loading(ui: &mut Ui) {
+    open_owner(ui, None);
 }
 
 /// Opens Settings → Diagnostics with `traces` for the last hour.

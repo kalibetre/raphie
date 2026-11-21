@@ -78,7 +78,7 @@ Ownership is taken before any product store is opened, which is what prevents tw
 | ------------------------------------ | -------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `runtime-owner.sqlite`               | Host     | Owning process ID and token                                                                  | Liveness-checked ownership lock                            |
 | `workspace-identity.json`            | Host     | Stable installation ID                                                                       | Restore it from backup; never reset it                     |
-| `bots.sqlite`                        | Host     | Bot registry and profile revisions                                                           | `synchronous=FULL`                                         |
+| `bots.sqlite`                        | Host     | Bot registry, profile revisions and the owner profile                                        | `synchronous=FULL`                                         |
 | `traces.sqlite`                      | Host     | OTLP trace spans                                                                             | Best-effort; may be lost                                   |
 | `auth.sqlite`, `auth.secret`         | Web host | Administrator, sessions, passkeys, devices; the session signing secret                       | Only the web host opens these                              |
 | `gateway.sqlite`                     | Per bot  | Pi Durable journal and every `raphie.*` document                                             | One writer connection, WAL                                 |

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use raphie_core::attachments::{FileBytes, Preview, TOO_LARGE, Upload};
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
+use raphie_core::contracts::SaveOwnerProfile;
 use raphie_core::contracts::{ApprovalMode, HandoffStatus, ModelSelection, NewBot, TraceState};
 use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
@@ -1108,6 +1109,48 @@ fn workspace_folders_are_listed_and_a_file_is_saved_without_replacing_one() {
     let error = driver.model.files.error.clone().unwrap_or_default();
     assert!(error.contains("not found"), "{error}");
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn the_owner_profile_loads_saves_and_reports_a_refusal() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::LoadOwner);
+    driver.until("the owner", |m, _| m.owner.is_some());
+    let empty = driver.model.owner.clone().unwrap();
+    assert_eq!((empty.name.as_str(), empty.updated_at), ("", None));
+
+    let save = |driver: &mut Driver, owner: SaveOwnerProfile| {
+        assert!(driver.model.begin_save_owner());
+        driver.send(Command::SaveOwner { owner });
+        driver.until("the save", |m, _| !m.saving_owner);
+    };
+    let owner = |time_zone: &str| SaveOwnerProfile {
+        name: "Hana Girma".into(),
+        call_me: "Hana".into(),
+        time_zone: time_zone.into(),
+        about: "Mornings are for deep work.".into(),
+    };
+
+    save(&mut driver, owner("Mars/Olympus"));
+    let error = driver.model.owner_save_error.clone().unwrap_or_default();
+    assert!(error.contains("time zone"), "{error}");
+    assert_eq!(driver.model.owner.as_ref().unwrap().name, "");
+
+    save(&mut driver, owner("Africa/Addis_Ababa"));
+    let saved = driver.model.owner.clone().unwrap();
+    assert_eq!(saved.time_zone, "Africa/Addis_Ababa");
+    assert!(saved.updated_at.is_some());
+    assert_eq!(
+        driver.model.owner_message.as_deref(),
+        Some("Saved. Every bot uses it from its next reply.")
+    );
+    // The profile belongs to the owner, not a bot: one unscoped path.
+    host.with(|h| {
+        let body = h.owner.as_ref().unwrap();
+        assert_eq!(body["callMe"], "Hana");
+        assert_eq!(body["timeZone"], "Africa/Addis_Ababa");
+    });
 }
 
 #[test]

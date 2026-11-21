@@ -126,6 +126,7 @@ All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and tho
 | GET       | `/bots/:id/history`        | Profile revisions                                                                                                         |
 | GET       | `/bots/:id/personality.md` | Download the personality                                                                                                  |
 | DELETE    | `/bots/:id`                | Delete a named bot (204); body confirms its `name` and `revision`. 409 for `default`, a stale confirmation or active work |
+| GET, PUT  | `/owner`                   | The owner profile every bot shares: `{ name, callMe, timeZone, about }`. A time zone must be one the runtime knows (400)  |
 
 ### Settings, providers and memory
 
