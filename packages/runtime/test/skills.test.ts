@@ -284,9 +284,9 @@ test("skills are saved in the workspace, offered to the bot and read with read_s
       refused = String(error);
     }
     expect(refused).toContain("turned off");
-    // The owner can still invoke it by name.
+    // Off means off: invoking it by name is plain text.
     await turn("/weekly-report now");
-    expect(messages.at(-1)).toContain("invoked your skill");
+    expect(messages.at(-1)).not.toContain("invoked your skill");
 
     // A skill the bot writes itself is found on its next turn.
     await gateway.workspace.replaceTree("/workspace/skills/bot-notes", [

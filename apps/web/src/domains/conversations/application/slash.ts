@@ -23,6 +23,20 @@ export function slashMatches(items: readonly SlashItem[], query: string) {
   return items.filter((item) => item.name.startsWith(query));
 }
 
+/**
+ * The skill a message starts with, as the runtime reads it: "/name", or
+ * "/name_with_underscores" as Telegram spells it, then a space or the end.
+ * Only names in `skills` count, so "/tmp" stays text.
+ */
+export function leadingSkill(text: string, skills: readonly string[]) {
+  const match = /^\/([a-z0-9][a-z0-9_-]{0,63})(?=\s|$)/.exec(text);
+  if (!match) return null;
+  const name = match[1]!.replaceAll("_", "-");
+  return skills.includes(name)
+    ? { name, typed: match[0], rest: text.slice(match[0].length) }
+    : null;
+}
+
 /** The draft once a skill is chosen: "/name " and whatever followed. */
 export function insertSkill(text: string, name: string) {
   const rest = text.replace(/^\/\S*\s?/, "");

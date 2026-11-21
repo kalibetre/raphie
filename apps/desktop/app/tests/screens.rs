@@ -3554,7 +3554,8 @@ fn files_wait_in_the_composer_and_go_with_the_message() {
     let mut rt = render(scenes::attachments, false);
     let c = "c".repeat(64);
     let d = "d".repeat(64);
-    let shown = screen_text(&rt);
+    // A pill's text is set apart with invisible direction marks.
+    let shown = screen_text(&rt).replace(['\u{2068}', '\u{2069}'], "");
     assert!(shown.contains("site-photo.png") && shown.contains("2.2 MB"));
     assert!(shown.contains("measurements.csv") && shown.contains("812 B"));
 
@@ -5630,8 +5631,8 @@ fn typing_slash_offers_commands_and_skills() {
         settle(&mut rt);
         assert!(rt.find("rd-slash").is_some());
         assert!(rt.find("rd-slash-new").is_some() && rt.find("rd-slash-model").is_some());
-        // Off skills can still be invoked; broken ones cannot.
-        assert!(rt.find("rd-slash-literature-review").is_some());
+        // Skills that are off or broken are not offered.
+        assert!(rt.find("rd-slash-literature-review").is_none());
         assert!(rt.find("rd-slash-notes").is_none());
         rt.paste("we");
         settle(&mut rt);
@@ -5683,4 +5684,16 @@ fn slash_commands_act_without_sending() {
         rt.find("rd-slash-new").is_some(),
         "typing more opens it again"
     );
+}
+
+#[test]
+fn a_message_that_invoked_a_skill_shows_the_skill() {
+    let rt = render(scenes::conversation_skill, false);
+    // A pill's text is set apart with invisible direction marks.
+    let shown = screen_text(&rt).replace(['\u{2068}', '\u{2069}'], "");
+    assert!(
+        shown.contains("weekly-report for the design team"),
+        "the skill is named without its slash"
+    );
+    assert!(!shown.contains("/weekly-report"));
 }

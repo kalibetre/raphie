@@ -15,6 +15,7 @@ use raphie_core::handoffs::{
     open_handoffs, request_status, requests_from_turn,
 };
 use raphie_core::mentions::{MentionPart, split_mentions};
+use raphie_core::slash::leading_skill;
 use rune::{
     Color, El, Link, LinkPaint, LoopSpec, Path, PillStyle, Shape, Span, Tx, canvas, col, el, icon,
     row, text,
@@ -629,7 +630,14 @@ pub fn message_text(s: &Ui, content: &str, look: &Look) -> El {
     // A named bot shows as its face and name, without the "@", as on the web.
     let mut shown = String::with_capacity(content.len());
     let mut chips = Vec::new();
-    for part in split_mentions(content, &bots) {
+    // A skill the message starts with shows as the skill, without the "/".
+    let skill = leading_skill(content, &s.invocable_skills());
+    let mut body = content;
+    if let Some((name, typed)) = &skill {
+        shown.push_str(name);
+        body = &content[*typed..];
+    }
+    for part in split_mentions(body, &bots) {
         match part {
             MentionPart::Text(text) => shown.push_str(text),
             MentionPart::Mention(bot, written) => {
@@ -645,13 +653,25 @@ pub fn message_text(s: &Ui, content: &str, look: &Look) -> El {
         .wrap()
         .selectable(true)
         .selection_color(t.selection());
+    if let Some((name, _)) = &skill {
+        message = message.pill(
+            0..name.len(),
+            PillStyle::new()
+                .bg(t.accent.alpha(0.22))
+                .fg(t.foreground)
+                .icon(&icons::GRADUATION_CAP),
+        );
+    }
     if chips.is_empty() {
         return message;
     }
-    let names: Vec<Span> = chips
+    let mut names: Vec<Span> = chips
         .iter()
         .map(|(range, _)| Span::new(range.start, range.end).weight(500.0))
         .collect();
+    if let Some((name, _)) = &skill {
+        names.push(Span::new(0, name.len()).weight(500.0));
+    }
     message = message.spans(names);
     for (range, bot) in chips {
         let tone = look.tones.of(&bot.id);

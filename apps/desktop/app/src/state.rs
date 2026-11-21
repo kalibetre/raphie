@@ -1578,8 +1578,9 @@ impl Ui {
             .bot_id
             .as_ref()
             .and_then(|bot_id| self.model.skills.get(bot_id));
+        // Only skills that are on: off means the bot never uses it.
         for skill in skills.into_iter().flatten() {
-            if skill.problem.is_none() {
+            if skill.enabled && skill.problem.is_none() {
                 items.push(command(SlashKind::Skill, &skill.name, &skill.description));
             }
         }
@@ -1637,6 +1638,19 @@ impl Ui {
             _ => return false,
         }
         true
+    }
+
+    /// The selected bot's skills a message can invoke: on, and usable.
+    pub fn invocable_skills(&self) -> Vec<&str> {
+        self.model
+            .bot_id
+            .as_ref()
+            .and_then(|bot_id| self.model.skills.get(bot_id))
+            .into_iter()
+            .flatten()
+            .filter(|skill| skill.enabled && skill.problem.is_none())
+            .map(|skill| skill.name.as_str())
+            .collect()
     }
 
     /// Asks once per bot for its skills, which the "/" menu offers.

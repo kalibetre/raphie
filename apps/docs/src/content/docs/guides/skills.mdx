@@ -35,7 +35,7 @@ Skills are instructions. Like a [personality](/guides/bots/#edit-identity-and-pe
 
 ## Invoke a skill yourself
 
-Start a message with `/` and the skill's name to have the bot follow it for that message, whether or not it would have chosen it:
+Start a message with `/` and the skill's name to have the bot follow it for that message, whether or not it would have chosen it. The message shows the skill as a chip.
 
 ```txt
 /weekly-report for the design team, include the launch slip
@@ -43,7 +43,7 @@ Start a message with `/` and the skill's name to have the bot follow it for that
 
 - In the web and desktop apps, typing **/** offers the bot's skills. See [commands and skills](/guides/conversations/#commands-and-skills).
 - In Telegram, skills appear in the bot's command menu with underscores, such as `/weekly_report`, because Telegram commands cannot contain hyphens. Either spelling works anywhere.
-- A skill that is turned off can still be invoked by name. Off means the bot does not use it on its own.
+- Only skills that are on can be invoked. A skill that is off is not offered anywhere, and `/its-name` is sent as plain text.
 
 The skill is loaded into that one message, so the bot does not need to call `read_skill` first.
 
@@ -92,7 +92,7 @@ Open **Settings → _bot_ → Skills**.
 
 </Steps>
 
-The switch beside each skill turns it off without deleting it: the bot no longer sees it or reads it, and the folder stays in the workspace.
+The switch beside each skill turns it off without deleting it: the bot no longer sees, reads or offers it, you cannot invoke it, and the folder stays in the workspace.
 
 :::caution
 The bot can change files in its workspace, including its skills. Check a skill in Settings before you rely on it, and keep secrets out of skills, because the model reads them.

@@ -55,6 +55,27 @@ pub fn slash_matches(items: &[SlashItem], query: &str) -> Vec<SlashItem> {
         .collect()
 }
 
+/// The skill a message starts with, as the runtime reads it: "/name", or
+/// "/name_with_underscores" as Telegram spells it, then a space or the end.
+/// Only names in `skills` count, so "/tmp" stays text. Returns the skill's
+/// name and how many bytes the typed "/name" takes.
+pub fn leading_skill(text: &str, skills: &[&str]) -> Option<(String, usize)> {
+    let rest = text.strip_prefix('/')?;
+    let typed = rest.split(char::is_whitespace).next().unwrap_or("");
+    let valid = !typed.is_empty()
+        && typed.len() <= 64
+        && typed
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    if !valid {
+        return None;
+    }
+    let name = typed.replace('_', "-");
+    skills
+        .contains(&name.as_str())
+        .then(|| (name, typed.len() + 1))
+}
+
 /// The text once a skill is chosen: "/name " and whatever followed the
 /// typed word, with the caret after the space.
 pub fn insert_skill(text: &str, name: &str) -> (String, usize) {
@@ -83,6 +104,21 @@ mod tests {
         assert_eq!(slash_query("/weekly-report now", 18), None);
         assert_eq!(slash_query("see /tmp", 8), None);
         assert_eq!(slash_query("", 0), None);
+    }
+
+    #[test]
+    fn a_leading_skill_is_read_as_the_runtime_reads_it() {
+        let skills = ["weekly-report"];
+        assert_eq!(
+            leading_skill("/weekly-report for the team", &skills),
+            Some(("weekly-report".into(), 14))
+        );
+        assert_eq!(
+            leading_skill("/weekly_report", &skills),
+            Some(("weekly-report".into(), 14))
+        );
+        assert_eq!(leading_skill("/tmp is full", &skills), None);
+        assert_eq!(leading_skill("see /weekly-report", &skills), None);
     }
 
     #[test]

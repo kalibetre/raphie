@@ -73,16 +73,16 @@ export class WorkspaceSkills {
   }
 
   /**
-   * When `text` starts with `/name` for one of this bot's usable skills,
-   * on or off, the text that loads it for the turn. Undefined otherwise,
-   * so `/tmp` and unknown names stay plain text.
+   * When `text` starts with `/name` for one of this bot's usable skills
+   * that is on, the text that loads it for the turn. Undefined otherwise,
+   * so `/tmp`, unknown names and skills turned off stay plain text.
    */
   async invoke(text: string): Promise<string | undefined> {
     const name = invokedSkill(text);
     if (!name) return undefined;
     try {
       const skill = (await this.scan()).find((item) => item.name === name);
-      if (!skill?.header) return undefined;
+      if (!skill?.header || !skill.enabled) return undefined;
       const body = asText(
         await this.download(`${SKILLS_ROOT}/${name}/SKILL.md`),
       );

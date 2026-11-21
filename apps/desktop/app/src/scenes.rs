@@ -134,6 +134,7 @@ pub const SCENES: &[Scene] = &[
     ("settings-mcp", settings_mcp),
     ("settings-skills", settings_skills),
     ("composer-slash", composer_slash),
+    ("conversation-skill", conversation_skill),
     ("settings-skills-empty", settings_skills_empty),
     ("settings-skills-editor", settings_skills_editor),
     ("settings-skills-new", settings_skills_new),
@@ -1081,6 +1082,32 @@ fn open_skills(ui: &mut Ui, items: Option<Vec<SkillSummary>>) {
         bot_id: "default".into(),
         section: BotSection::Skills,
     }));
+}
+
+/// A conversation whose message invoked a skill: it shows as the skill.
+pub fn conversation_skill(ui: &mut Ui) {
+    open(
+        ui,
+        "s-1",
+        observation(
+            "Weekly report",
+            vec![turn(
+                "t1",
+                -60_000,
+                "/weekly-report for the design team",
+                Some("Here is this week's report."),
+                "done",
+            )],
+            None,
+            "idle",
+            vec![],
+            vec![],
+        ),
+    );
+    ui.model.apply(Event::Skills {
+        bot_id: "default".into(),
+        items: skill_list(),
+    });
 }
 
 /// A new conversation with "/" typed: commands, then the bot's skills.

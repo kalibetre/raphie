@@ -179,7 +179,7 @@ export function Composer({
     draft,
     commands,
     skills: skills
-      .filter((skill) => !skill.problem)
+      .filter((skill) => skill.enabled && !skill.problem)
       .map((skill) => ({
         kind: "skill" as const,
         name: skill.name,

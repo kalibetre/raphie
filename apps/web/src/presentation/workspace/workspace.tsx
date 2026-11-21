@@ -2,7 +2,13 @@ import type { ModelSelection, Page, SessionSummary } from "@raphie/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, SquarePen } from "lucide-react";
-import { type CSSProperties, useCallback, useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
 import {
@@ -20,6 +26,7 @@ import {
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
+import { useSkills } from "../../domains/settings/infrastructure/use-skills";
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
 import { BotTonesProvider } from "../../domains/settings/presentation/bot-tones";
@@ -81,6 +88,15 @@ export function Workspace({
   const active = data?.conversations.filter((c) => !c.archivedAt);
   const inbox = useBotInbox(active);
   const notificationBots = inbox.bots.data?.items ?? [];
+  const skillItems = useSkills().list.data?.items;
+  // Skills a message can invoke, so "/name" at its start shows as a skill.
+  const skillNames = useMemo(
+    () =>
+      (skillItems ?? [])
+        .filter((skill) => skill.enabled && !skill.problem)
+        .map((skill) => skill.name),
+    [skillItems],
+  );
   const jobNotifications = useJobNotifications(notificationBots);
   const notifications = notificationItems(
     notificationBots,
@@ -548,6 +564,7 @@ export function Workspace({
                         onRead={markRead}
                         handoffs={handoffs}
                         bots={notificationBots}
+                        skills={skillNames}
                         onCancelHandoff={(id) =>
                           handoffQuery.cancel.mutateAsync(id)
                         }

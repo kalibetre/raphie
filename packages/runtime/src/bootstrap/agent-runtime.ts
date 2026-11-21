@@ -468,10 +468,10 @@ export class Gateway {
   }
 
   /** Who the owner is, read at the start of every turn. */
-  /** The bot's usable skills, on or off: each can be invoked by name. */
+  /** The bot's usable skills that are on: each can be invoked by name. */
   async skillCommands() {
     return (await this.skills.list())
-      .filter((skill) => !skill.problem)
+      .filter((skill) => skill.enabled && !skill.problem)
       .map(({ name, description }) => ({ name, description }));
   }
 

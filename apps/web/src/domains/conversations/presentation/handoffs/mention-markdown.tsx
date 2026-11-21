@@ -1,8 +1,10 @@
+import { GraduationCap } from "lucide-react";
 import type { Components } from "react-markdown";
 
 import { BotAvatar } from "../../../settings/presentation/bot-avatar";
 import { useBotStyle } from "../../../settings/presentation/bot-tones";
 import { splitMentions } from "../../application/mentions";
+import { leadingSkill } from "../../application/slash";
 import { markdownComponents } from "../markdown-components";
 import { useOpenSession } from "./handoff-cards";
 
@@ -39,6 +41,32 @@ function mark(node: Node, bots: readonly Bot[]) {
   });
 }
 
+const SKILL = "#skill-";
+
+/**
+ * A remark plugin: a message that starts with "/name" for one of the bot's
+ * skills shows that as a chip, as the runtime read it.
+ */
+export function remarkSkills(skills: readonly string[]) {
+  return () => (tree: Node) => {
+    const first = tree.children?.[0];
+    const text = first?.type === "paragraph" ? first.children?.[0] : undefined;
+    if (!first?.children || text?.type !== "text") return;
+    const found = leadingSkill(text.value ?? "", skills);
+    if (!found) return;
+    first.children.splice(
+      0,
+      1,
+      {
+        type: "link",
+        url: `${SKILL}${found.name}`,
+        children: [{ type: "text", value: found.typed }],
+      },
+      { type: "text", value: found.rest },
+    );
+  };
+}
+
 /** A remark plugin: "@Name" for a known bot becomes a link the chip renders. */
 export function remarkMentions(bots: readonly Bot[]) {
   return () => (tree: Node) => mark(tree, bots);
@@ -66,6 +94,13 @@ export function mentionComponents(bots: readonly Bot[]): Components {
   return {
     ...markdownComponents,
     a: ({ href, children, node: _node, ...props }) => {
+      if (href?.startsWith(SKILL))
+        return (
+          <span className="skill-chip" title="Skill">
+            <GraduationCap aria-hidden="true" />
+            {href.slice(SKILL.length)}
+          </span>
+        );
       const bot = href?.startsWith(PREFIX)
         ? bots.find((item) => item.id === href.slice(PREFIX.length))
         : undefined;

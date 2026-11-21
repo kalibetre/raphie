@@ -575,3 +575,24 @@
     white-space: nowrap;
   }
 }
+
+@layer components {
+  /* "/name" at the start of a message: the skill it invoked. */
+  .skill-chip {
+    display: inline-block;
+    margin: 0 1px 0 0;
+    padding: 0 7px 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: var(--foreground);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .skill-chip svg {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    vertical-align: -2px;
+  }
+}
