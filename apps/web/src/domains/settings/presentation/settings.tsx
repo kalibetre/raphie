@@ -12,6 +12,7 @@ import { McpSettings } from "./mcp-settings";
 import { MemoryBrowse } from "./memory-browse";
 import { MemorySettings } from "./memory-settings";
 import { ModelSettings } from "./model-settings";
+import { OwnerSettings } from "./owner-settings";
 import { PluginSettings } from "./plugin-settings";
 import { ProviderSettings } from "./provider-settings";
 import { SandboxSettings } from "./sandbox-settings";
@@ -101,6 +102,8 @@ export function Settings({
           <TelemetrySettings traces={traces} />
         ) : section === "activity" ? (
           activity
+        ) : section === "owner" ? (
+          <OwnerSettings />
         ) : section === "account" ? (
           <AccountSettings />
         ) : section === "general" ? (

@@ -3,6 +3,7 @@ import {
   Bot,
   Box,
   Brain,
+  CircleUserRound,
   Clock,
   FolderOpen,
   History,
@@ -87,6 +88,13 @@ export const sections = [
       "A separate assistant with its own personality, memory and model connections.",
   },
   {
+    id: "owner",
+    label: "About you",
+    icon: CircleUserRound,
+    lede: () =>
+      "Who every bot is talking to: your name, your time zone and a few lines about you.",
+  },
+  {
     id: "account",
     label: "Account",
     icon: LogOut,
@@ -155,7 +163,7 @@ export const isSection = (value: unknown): value is Section =>
   sections.some((section) => section.id === value);
 
 export const isAppSection = (section: string) =>
-  ["account", "general", "telemetry", "plugins"].includes(section);
+  ["owner", "account", "general", "telemetry", "plugins"].includes(section);
 
 export const sectionOf = (id: Section) =>
   sections.find((section) => section.id === id)!;

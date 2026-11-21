@@ -48,6 +48,7 @@ const botEntries: readonly Section[] = [
 ];
 // Diagnostics is here, not under a bot: one trace store serves every bot.
 const appEntries: readonly Section[] = [
+  "owner",
   "account",
   "general",
   "telemetry",

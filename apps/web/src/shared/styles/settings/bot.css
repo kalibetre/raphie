@@ -343,3 +343,15 @@
     }
   }
 }
+@layer components {
+  .owner-time-zone {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .owner-time-zone [data-slot="select-trigger"] {
+    flex: 1 1 240px;
+    width: auto;
+  }
+}
