@@ -10,7 +10,7 @@ import { BotProfileFields } from "./bot-profile-fields";
 import { DeleteBot } from "./delete-bot";
 import { SaveBar } from "./save-bar";
 import { useSettingsGuard } from "./use-settings-guard";
-const starterSoul =
+const starterPersonality =
   "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
 
 export function BotForm({
@@ -27,7 +27,9 @@ export function BotForm({
   const [name, setName] = useState(profile?.name ?? "");
   const [description, setDescription] = useState(profile?.description ?? "");
   const [color, setColor] = useState<string | null>(profile?.color ?? null);
-  const [soul, setSoul] = useState(profile?.soul ?? starterSoul);
+  const [personality, setPersonality] = useState(
+    profile?.personality ?? starterPersonality,
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const pending =
@@ -35,9 +37,12 @@ export function BotForm({
   const dirty = saved
     ? name !== saved.name ||
       description !== saved.description ||
-      soul !== saved.soul ||
+      personality !== saved.personality ||
       color !== (saved.color ?? null)
-    : !!name || !!description || soul !== starterSoul || color !== null;
+    : !!name ||
+      !!description ||
+      personality !== starterPersonality ||
+      color !== null;
   const guard = useSettingsGuard(dirty, pending);
   const changedElsewhere =
     !!profile && !!saved && profile.revision !== saved.revision;
@@ -53,7 +58,7 @@ export function BotForm({
     setSaved(profile);
     setName(profile.name);
     setDescription(profile.description);
-    setSoul(profile.soul);
+    setPersonality(profile.personality);
     setColor(profile.color ?? null);
     setError("");
   }, [profile, saved, dirty, pending]);
@@ -63,7 +68,7 @@ export function BotForm({
     setSaved(latest);
     setName(latest?.name ?? "");
     setDescription(latest?.description ?? "");
-    setSoul(latest?.soul ?? starterSoul);
+    setPersonality(latest?.personality ?? starterPersonality);
     setColor(latest?.color ?? null);
     setError("");
     setMessage("");
@@ -88,7 +93,7 @@ export function BotForm({
     const input = {
       name: name.trim(),
       description: description.trim(),
-      soul: soul.trim(),
+      personality: personality.trim(),
       color,
     };
     try {
@@ -100,7 +105,7 @@ export function BotForm({
         setSaved(updated);
         setName(updated.name);
         setDescription(updated.description);
-        setSoul(updated.soul);
+        setPersonality(updated.personality);
         setColor(updated.color ?? null);
         setMessage(`Saved revision ${updated.revision}.`);
       } else {
@@ -140,12 +145,12 @@ export function BotForm({
         onColor={setColor}
         name={name}
         description={description}
-        soul={soul}
+        personality={personality}
         saved={saved}
         pending={pending}
         onName={setName}
         onDescription={setDescription}
-        onSoul={setSoul}
+        onPersonality={setPersonality}
       />
       {saved && (
         <Button
@@ -208,7 +213,7 @@ export function BotForm({
         canSave={
           !changedElsewhere &&
           !!name.trim() &&
-          !!soul.trim() &&
+          !!personality.trim() &&
           (!saved || dirty)
         }
         canDiscard={dirty}

@@ -12,10 +12,10 @@ use rune::TextEdit;
 /// http/routes.ts`), checked here so the owner hears before sending.
 const NAME_LIMIT: usize = 80;
 const DESCRIPTION_LIMIT: usize = 500;
-const SOUL_LIMIT: usize = 16_000;
+const PERSONALITY_LIMIT: usize = 16_000;
 
 /// The personality a new bot starts with, as the web offers it.
-pub const STARTER_SOUL: &str = "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
+pub const STARTER_PERSONALITY: &str = "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
 
 /// Where an unsaved "Create a bot" form is kept while the owner looks at
 /// another page. Bot ids never look like this.
@@ -28,8 +28,8 @@ pub struct ProfileDraft {
     pub saved: Option<BotProfile>,
     pub name: TextEdit,
     pub description: TextEdit,
-    /// The personality (SOUL.md).
-    pub soul: TextEdit,
+    /// The personality the owner wrote.
+    pub personality: TextEdit,
     /// The chosen colour as `#rrggbb`, or `None` to let Raphie pick.
     pub color: Option<String>,
     /// A custom colour being typed.
@@ -47,7 +47,7 @@ impl ProfileDraft {
             saved: None,
             name: TextEdit::new(""),
             description: TextEdit::new(""),
-            soul: TextEdit::new(""),
+            personality: TextEdit::new(""),
             color: None,
             custom_color: TextEdit::new(""),
             message: None,
@@ -59,7 +59,7 @@ impl ProfileDraft {
     /// nothing else filled in.
     pub fn new_bot() -> ProfileDraft {
         ProfileDraft {
-            soul: TextEdit::new(STARTER_SOUL),
+            personality: TextEdit::new(STARTER_PERSONALITY),
             creating: true,
             ..ProfileDraft::empty()
         }
@@ -71,7 +71,7 @@ impl ProfileDraft {
             saved: Some(profile.clone()),
             name: TextEdit::new(profile.name.clone()),
             description: TextEdit::new(profile.description.clone()),
-            soul: TextEdit::new(profile.soul.clone()),
+            personality: TextEdit::new(profile.personality.clone()),
             color: profile.color.clone(),
             custom_color: TextEdit::new(profile.color.clone().unwrap_or_default()),
             message: None,
@@ -100,14 +100,14 @@ impl ProfileDraft {
         if self.creating {
             return !self.name.text.is_empty()
                 || !self.description.text.is_empty()
-                || self.soul.text != STARTER_SOUL
+                || self.personality.text != STARTER_PERSONALITY
                 || self.color.is_some();
         }
         // `is_some_and` is false for `None`: an empty form has no changes.
         self.saved.as_ref().is_some_and(|saved| {
             self.name.text != saved.name
                 || self.description.text != saved.description
-                || self.soul.text != saved.soul
+                || self.personality.text != saved.personality
                 || self.color != saved.color
         })
     }
@@ -130,9 +130,9 @@ impl ProfileDraft {
             Some("A name can be at most 80 characters.")
         } else if length(&self.description) > DESCRIPTION_LIMIT {
             Some("A description can be at most 500 characters.")
-        } else if length(&self.soul) == 0 {
+        } else if length(&self.personality) == 0 {
             Some("Give this bot a personality.")
-        } else if length(&self.soul) > SOUL_LIMIT {
+        } else if length(&self.personality) > PERSONALITY_LIMIT {
             Some("A personality can be at most 16,000 characters.")
         } else {
             None
@@ -145,7 +145,7 @@ impl ProfileDraft {
         Some(UpdateBotProfile {
             name: self.name.text.trim().to_owned(),
             description: self.description.text.trim().to_owned(),
-            soul: self.soul.text.trim().to_owned(),
+            personality: self.personality.text.trim().to_owned(),
             color: self.color.clone(),
             revision: saved.revision,
         })
@@ -157,7 +157,7 @@ impl ProfileDraft {
         self.creating.then(|| NewBot {
             name: self.name.text.trim().to_owned(),
             description: self.description.text.trim().to_owned(),
-            soul: self.soul.text.trim().to_owned(),
+            personality: self.personality.text.trim().to_owned(),
             color: self.color.clone(),
         })
     }
@@ -186,7 +186,7 @@ mod tests {
             name: "Research".into(),
             description: "Reads papers".into(),
             color: None,
-            soul: "Be brief.".into(),
+            personality: "Be brief.".into(),
             revision: 3,
         }
     }
@@ -213,7 +213,7 @@ mod tests {
         assert!(draft.problem().unwrap().contains("80 characters"));
         draft.name = TextEdit::new("é".repeat(80));
         assert_eq!(draft.problem(), None, "80 characters, not 80 bytes");
-        draft.soul = TextEdit::new("");
+        draft.personality = TextEdit::new("");
         assert_eq!(draft.problem(), Some("Give this bot a personality."));
     }
 
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(draft.problem(), None);
         let bot = draft.new_bot_request().expect("a bot to create");
         assert_eq!((bot.name.as_str(), bot.color), ("Travel", None));
-        assert_eq!(bot.soul, STARTER_SOUL);
+        assert_eq!(bot.personality, STARTER_PERSONALITY);
         // A form for an existing bot creates nothing.
         assert_eq!(ProfileDraft::of(&research()).new_bot_request(), None);
     }

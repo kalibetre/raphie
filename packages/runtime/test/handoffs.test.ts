@@ -222,7 +222,7 @@ async function twoBots(
   const bot = await host.create({
     name: "Research",
     description: "Study sources carefully.",
-    soul: "Cite sources.",
+    personality: "Cite sources.",
   });
   const app = {
     host,

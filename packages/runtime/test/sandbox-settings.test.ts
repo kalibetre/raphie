@@ -131,7 +131,7 @@ test("sandbox HTTP validates owner edits, requires container acknowledgement and
     const other = await host.create({
       name: "Other",
       description: "",
-      soul: "",
+      personality: "",
     });
     const otherBase = `/api/bots/${other.id}/workspace`;
     const [one, two] = await Promise.all([

@@ -1405,10 +1405,10 @@ async fn bots(State(fake): State<Fake>, headers: HeaderMap) -> Response {
 fn bot_list(host: &Host) -> Vec<Value> {
     let revision = host.profile_revision.max(1);
     let mut items = vec![
-        json!({ "id": "default", "name": "Raphie", "description": "", "soul": "", "color": null,
+        json!({ "id": "default", "name": "Raphie", "description": "", "personality": "", "color": null,
                 "revision": 1, "createdAt": 1, "updatedAt": 1 }),
         json!({ "id": "b-research", "name": "Research", "description": "Reads papers",
-                "soul": "Be brief.", "revision": revision, "createdAt": 2, "updatedAt": 2 }),
+                "personality": "Be brief.", "revision": revision, "createdAt": 2, "updatedAt": 2 }),
     ];
     items.extend(host.created_bots.iter().cloned());
     items.retain(|bot| {
@@ -1441,7 +1441,7 @@ async fn create_bot(
     }
     let created = json!({
         "id": format!("b-new-{}", host.created_bots.len() + 1),
-        "name": body["name"], "description": body["description"], "soul": body["soul"],
+        "name": body["name"], "description": body["description"], "personality": body["personality"],
         "color": body["color"], "revision": 1, "createdAt": 5, "updatedAt": 5,
     });
     host.created_bots.push(created.clone());
@@ -1503,7 +1503,7 @@ async fn bot_history(
         .map(|revision| {
             json!({
                 "id": id, "name": "Research", "description": "Reads papers", "color": null,
-                "soul": format!("Be brief. (revision {revision})"), "revision": revision,
+                "personality": format!("Be brief. (revision {revision})"), "revision": revision,
                 "createdAt": 2, "updatedAt": 1_700_000_000_000_i64 + i64::from(revision),
             })
         })
@@ -1662,7 +1662,7 @@ async fn save_profile(
     host.profile_revision = current + 1;
     Json(json!({
         "id": id, "name": body["name"], "description": body["description"],
-        "soul": body["soul"], "color": body["color"],
+        "personality": body["personality"], "color": body["color"],
         "revision": current + 1, "createdAt": 2, "updatedAt": 3
     }))
     .into_response()

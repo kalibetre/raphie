@@ -385,18 +385,18 @@ pub fn bot_revisions() -> Vec<BotRevision> {
         {
             "id": "b-research", "revision": 3, "name": "Research",
             "description": "Reads and summarises.", "color": null,
-            "soul": "Read the source before summarising it.\nSay what is uncertain, and why.\nPrefer the primary source to a write-up of it.",
+            "personality": "Read the source before summarising it.\nSay what is uncertain, and why.\nPrefer the primary source to a write-up of it.",
             "createdAt": 1_794_200_400_000_i64, "updatedAt": 1_794_650_100_000_i64,
         },
         {
             "id": "b-research", "revision": 2, "name": "Research",
             "description": "Reads papers", "color": "#83bcb4",
-            "soul": "Read the source before summarising it.\nSay what is uncertain.",
+            "personality": "Read the source before summarising it.\nSay what is uncertain.",
             "createdAt": 1_794_200_400_000_i64, "updatedAt": 1_794_563_700_000_i64,
         },
         {
             "id": "b-research", "revision": 1, "name": "Reader",
-            "description": "", "color": null, "soul": "Be brief.",
+            "description": "", "color": null, "personality": "Be brief.",
             "createdAt": 1_794_200_400_000_i64, "updatedAt": 1_794_200_400_000_i64,
         },
     ]))
@@ -1998,7 +1998,7 @@ pub const COMMAND_APPROVAL_ID: &str = "0b7c1a52-93de-4c1f-8a44-5d6e7f809a1b";
 // ───────────────────────── builders ─────────────────────────
 
 /// A bot's personality, as Settings → Profile shows it.
-const SOUL: &str = "Be thoughtful and candid. Explain uncertainty.\n\nNever claim an action succeeded without confirmation.";
+const PERSONALITY: &str = "Be thoughtful and candid. Explain uncertainty.\n\nNever claim an action succeeded without confirmation.";
 
 const PLAN: &str = "Let’s make some room for the day.\n\n1. **Choose one priority.** Start with the work that matters most.\n2. **Leave a little breathing room.** Keep a gap between meetings.\n3. **Close the loop.** Write down your next step before you finish.\n\nWhat would you like to focus on first?";
 
@@ -2019,7 +2019,7 @@ fn bot(id: &str, name: &str, description: &str, color: Option<&str>) -> BotProfi
         name: name.into(),
         description: description.into(),
         color: color.map(str::to_owned),
-        soul: SOUL.into(),
+        personality: PERSONALITY.into(),
         revision: 3,
     }
 }

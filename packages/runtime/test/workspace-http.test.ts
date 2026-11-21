@@ -102,7 +102,7 @@ test("workspace browsing and downloads expose only the selected bot's committed 
     const other = await host.create({
       name: "Other",
       description: "",
-      soul: "",
+      personality: "",
     });
     const otherBase = `/api/bots/${other.id}/workspace`;
     expect(

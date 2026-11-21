@@ -374,7 +374,7 @@ mod tests {
             name: name.into(),
             description: String::new(),
             color: None,
-            soul: String::new(),
+            personality: String::new(),
             revision: 1,
         }
     }

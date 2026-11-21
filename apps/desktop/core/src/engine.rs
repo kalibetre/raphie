@@ -2692,7 +2692,7 @@ mod tests {
             name: id.into(),
             description: String::new(),
             color: None,
-            soul: String::new(),
+            personality: String::new(),
             revision: 1,
         };
         assert_eq!(

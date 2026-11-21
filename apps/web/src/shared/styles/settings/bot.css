@@ -203,12 +203,12 @@
     background: var(--card);
     cursor: pointer;
   }
-  .soul-editor {
+  .personality-editor {
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
   }
-  .soul-editor-heading {
+  .personality-editor-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -219,18 +219,17 @@
     font-size: 10px;
     color: var(--muted-foreground);
   }
-  .soul-editor-heading strong {
-    font-family: monospace;
-    font-weight: 450;
+  .personality-editor-heading strong {
+    font-weight: 500;
     color: var(--foreground);
   }
-  .bot-editor .bot-soul {
+  .bot-editor .bot-personality {
     border: 0;
     border-radius: 0;
     box-shadow: none;
     min-height: 270px;
-    font-size: 12px;
-    line-height: 1.9;
+    font-size: 13px;
+    line-height: 1.7;
     padding: 16px;
     background: var(--card);
   }
@@ -266,9 +265,9 @@
       padding: 24px 16px;
       gap: 24px;
     }
-    .bot-editor .bot-soul {
+    .bot-editor .bot-personality {
       min-height: 240px;
-      font-size: 11px;
+      font-size: 13px;
       padding: 12px;
     }
     .bot-editor-section {

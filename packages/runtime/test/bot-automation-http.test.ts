@@ -61,7 +61,7 @@ test("owner APIs isolate MCP inventories and scheduled prompt results between bo
     const other = await host.create({
       name: "Other",
       description: "Independent",
-      soul: "Be precise.",
+      personality: "Be precise.",
     });
     const connected = await post("/api/mcp", {
       name: "Tools",

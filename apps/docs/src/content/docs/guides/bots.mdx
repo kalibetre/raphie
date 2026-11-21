@@ -1,6 +1,6 @@
 ---
 title: Bots
-description: Create, switch, edit and delete bots, and give each its own personality in SOUL.md.
+description: Create, switch, edit and delete bots, and give each its own personality.
 sidebar:
   order: 2
 ---
@@ -19,7 +19,7 @@ All bots run in the same runtime and answer to you. Separation between them is l
   <Box title="Runtime" />
   <Arrow />
   <Row label="A bot" accent>
-    <Box title="Profile">and `SOUL.md`</Box>
+    <Box title="Profile">and personality</Box>
     <Box title="Providers">and default model</Box>
     <Box title="Sessions" />
     <Box title="Memory" tone="store" />
@@ -30,15 +30,15 @@ All bots run in the same runtime and answer to you. Separation between them is l
   </Row>
 </Flow>
 
-| Separate for each bot                                      | Shared by all bots                                    |
-| ---------------------------------------------------------- | ----------------------------------------------------- |
-| Name, description, colour and `SOUL.md` with its revisions | The runtime process and data directory                |
-| Sessions and their attachments                             | Your admin sign-in, passkeys and connected devices    |
-| Provider connections, keys and default model               | Diagnostics traces                                    |
-| Memory configuration and stored memories                   | Browser preferences: theme, sidebar width, UI plugins |
-| Workspace files and sandbox settings                       |                                                       |
-| MCP tools, channels and scheduled jobs                     |                                                       |
-| Activity                                                   |                                                       |
+| Separate for each bot                                        | Shared by all bots                                    |
+| ------------------------------------------------------------ | ----------------------------------------------------- |
+| Name, description, colour and personality with its revisions | The runtime process and data directory                |
+| Sessions and their attachments                               | Your admin sign-in, passkeys and connected devices    |
+| Provider connections, keys and default model                 | Diagnostics traces                                    |
+| Memory configuration and stored memories                     | Browser preferences: theme, sidebar width, UI plugins |
+| Workspace files and sandbox settings                         |                                                       |
+| MCP tools, channels and scheduled jobs                       |                                                       |
+| Activity                                                     |                                                       |
 
 A session belongs to exactly one bot and cannot be opened through another.
 
@@ -73,21 +73,21 @@ Open **Profile** by clicking the bot's name in the title bar, or from Settings. 
 | Name        | 80 characters                                | A display label. The bot's ID never changes.     |
 | Description | 500 characters                               | Optional.                                        |
 | Colour      | 8 presets, a custom colour, or **Automatic** | Automatic avoids colours other bots already use. |
-| `SOUL.md`   | 16,000 characters                            | The personality.                                 |
+| Personality | 16,000 characters                            | In your own words.                               |
 
-`SOUL.md` is your description of the bot's voice, values and way of working. The runtime adds it to the model's instructions when a turn starts, so a turn already running keeps the version it started with. Every bot keeps [replies short](/guides/conversations/#replies) unless its `SOUL.md` asks for a different length or format.
+The personality is your description of the bot's voice, values and way of working. The runtime adds it to the model's instructions when a turn starts, so a turn already running keeps the version it started with. Every bot keeps [replies short](/guides/conversations/#replies) unless its personality asks for a different length or format.
 
-Personality is owner configuration. A bot has no tool to edit its own profile, and nothing in `SOUL.md` can grant tools, access or permissions. If a bot suggests a change to its personality, it is only text until you save it.
+Personality is owner configuration. A bot has no tool to edit its own profile, and nothing in its personality can grant tools, access or permissions. If a bot suggests a change to its personality, it is only text until you save it.
 
 :::caution
-Don't put credentials in `SOUL.md`. The model receives it as instructions, and every revision is kept. Keys belong under **Providers** or the relevant settings page, where they are encrypted.
+Don't put credentials in a personality. The model receives it as instructions, and every revision is kept. Keys belong under **Providers** or the relevant settings page, where they are encrypted.
 :::
 
 ### Revisions
 
-Every save creates a revision. **View revision history**, below the editor, opens the latest 50 with their name, description, colour and `SOUL.md`. To roll back, copy older text into the editor and save it as a new revision.
+Every save creates a revision. **View revision history**, below the editor, opens the latest 50 with their name, description, colour and personality. To roll back, copy older text into the editor and save it as a new revision.
 
-The runtime also serves the active personality as a plain `SOUL.md` file; see the [HTTP API](/architecture/http-api/).
+The runtime also serves the active personality as a plain `personality.md` file; see the [HTTP API](/architecture/http-api/).
 
 A save is refused while the bot has a turn in progress, or if someone saved a newer revision in another window. Wait for the turn to finish, or refresh, then save again.
 

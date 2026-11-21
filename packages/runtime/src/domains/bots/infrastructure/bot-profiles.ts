@@ -14,7 +14,8 @@ export const defaultBot = {
   id: "default",
   name: "Raphie",
   description: "Your personal assistant.",
-  soul: "Be concise, thoughtful and candid. Use a warm, natural voice. Ask when important context is missing. Distinguish evidence from inference, and never claim an action succeeded without confirmation.",
+  personality:
+    "Be concise, thoughtful and candid. Use a warm, natural voice. Ask when important context is missing. Distinguish evidence from inference, and never claim an action succeeded without confirmation.",
 };
 
 /** Trusted configuration, separate from the bot's files and agent-editable memory. */
@@ -31,6 +32,12 @@ export class BotProfileStore {
     this.db.exec(
       "CREATE TABLE IF NOT EXISTS bot_deletions (id TEXT PRIMARY KEY)",
     );
+    // Profiles saved before the personality had its own name kept it as
+    // `soul`; rename it in place, current profile and revisions alike.
+    for (const table of ["bot_profiles", "bot_revisions"])
+      this.db.exec(
+        `UPDATE ${table} SET value=json_remove(json_set(value,'$.personality',json_extract(value,'$.soul')),'$.soul') WHERE json_type(value,'$.soul') IS NOT NULL`,
+      );
     if (
       !this.db.query("SELECT id FROM bot_profiles WHERE id='default'").get()
     ) {

@@ -42,9 +42,9 @@ pub struct BotProfile {
     /// Six-digit hex colour chosen by the owner, if any.
     #[serde(default)]
     pub color: Option<String>,
-    /// The bot's personality (its SOUL.md): tone, values, working style.
+    /// The bot's personality: tone, values, working style.
     #[serde(default)]
-    pub soul: String,
+    pub personality: String,
     /// Counts saves. A save names the revision it was edited from, so two
     /// clients cannot silently overwrite each other.
     #[serde(default)]
@@ -57,7 +57,7 @@ pub struct BotProfile {
 pub struct UpdateBotProfile {
     pub name: String,
     pub description: String,
-    pub soul: String,
+    pub personality: String,
     /// `None` is sent as `null`: let Raphie pick a colour.
     pub color: Option<String>,
     /// The revision these edits started from.
@@ -1676,9 +1676,9 @@ pub struct BotRevision {
     pub description: String,
     #[serde(default)]
     pub color: Option<String>,
-    /// The personality (SOUL.md) as it was at this revision.
+    /// The personality as it was at this revision.
     #[serde(default)]
-    pub soul: String,
+    pub personality: String,
     /// When it was saved, in milliseconds since the Unix epoch.
     #[serde(default)]
     pub updated_at: i64,
@@ -1695,7 +1695,7 @@ pub(crate) struct BotHistory {
 pub struct NewBot {
     pub name: String,
     pub description: String,
-    pub soul: String,
+    pub personality: String,
     /// `None` is sent as `null`: let Raphie pick a colour.
     pub color: Option<String>,
 }

@@ -453,7 +453,10 @@ export class Gateway {
   }
 
   setPersonality(
-    read: () => Pick<BotProfile, "name" | "description" | "soul" | "revision">,
+    read: () => Pick<
+      BotProfile,
+      "name" | "description" | "personality" | "revision"
+    >,
   ) {
     this.chats.personality = read;
   }

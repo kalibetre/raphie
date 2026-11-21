@@ -12,9 +12,8 @@
     font-size: 13px;
     font-weight: 560;
   }
-  .bot-form .bot-soul {
+  .bot-form .bot-personality {
     min-height: 220px;
-    font-family: var(--font-mono, monospace);
     line-height: 1.6;
   }
   .bot-form p,

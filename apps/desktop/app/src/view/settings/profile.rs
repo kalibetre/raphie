@@ -3,7 +3,7 @@
 //!
 //! Mirrors `bot-profile-form.tsx`, `bot-profile-fields.tsx`,
 //! `bot-color-picker.tsx` and `save-bar.tsx`, and the `.bot-editor-*`,
-//! `.bot-color-*`, `.soul-editor` and `.save-bar` rules in
+//! `.bot-color-*`, `.personality-editor` and `.save-bar` rules in
 //! `shared/styles/settings/`. The form's rules live in `crate::profile`.
 
 use raphie_core::contracts::BotProfile;
@@ -17,7 +17,7 @@ use crate::icons;
 use crate::profile::NEW_BOT;
 use crate::sections::{BotSection, Page};
 use crate::state::Ui;
-use crate::theme::{Theme, font, mono};
+use crate::theme::{Theme, font};
 use crate::view::Look;
 use crate::widgets::{Field, Kind, Size, button, pressable, text_field};
 
@@ -146,7 +146,7 @@ fn fields(s: &Ui, id: &str, look: &Look) -> (El, El) {
         t,
         "Personality",
         "Tone, values and working style, shared across this bot’s conversations.",
-        col().w_full().gap(10.0).child(soul_editor(s, t)).child(
+        col().w_full().gap(10.0).child(personality_editor(s, t)).child(
             text("Personality guides behavior. Models, connections and memory are configured separately.")
                 .font(font(11.0, 400.0))
                 .color(t.muted_foreground)
@@ -342,7 +342,7 @@ fn color_picker(s: &Ui, id: &str, look: &Look) -> El {
                 name: String::new(),
                 description: String::new(),
                 color: None,
-                soul: String::new(),
+                personality: String::new(),
                 revision: 0,
             }),
         }
@@ -479,13 +479,13 @@ fn hue(literal: &str) -> Color {
     hex(literal).unwrap_or(Color::BLACK)
 }
 
-/// The personality as a text file: a "SOUL.md" bar over a monospaced editor.
-fn soul_editor(s: &Ui, t: &Theme) -> El {
+/// The personality as the owner writes it: a bar with its revision over the editor.
+fn personality_editor(s: &Ui, t: &Theme) -> El {
     let revision = s.profile.saved.as_ref().map_or(String::new(), |saved| {
         format!("Revision {}", saved.revision)
     });
-    let mut editor = text_input(&s.profile.soul, mono(12.0).lh(22.8))
-        .key("rd-profile-soul")
+    let mut editor = text_input(&s.profile.personality, font(13.0, 400.0).lh(22.0))
+        .key("rd-profile-personality")
         .label("Personality")
         .w_full()
         .color(t.foreground)
@@ -493,9 +493,9 @@ fn soul_editor(s: &Ui, t: &Theme) -> El {
         .disabled(s.model.saving_profile);
     if !s.model.saving_profile {
         editor = editor
-            .on_edit(|s: &mut Ui| &mut s.profile.soul)
+            .on_edit(|s: &mut Ui| &mut s.profile.personality)
             // In a document, Return starts a new line instead of submitting.
-            .on_submit(|s: &mut Ui, _: &mut Tx| s.profile.soul.insert("\n"));
+            .on_submit(|s: &mut Ui, _: &mut Tx| s.profile.personality.insert("\n"));
     }
     col()
         .w_full()
@@ -513,7 +513,11 @@ fn soul_editor(s: &Ui, t: &Theme) -> El {
                 .center_y()
                 .fill(t.muted)
                 .border_sides([0.0, 0.0, 1.0, 0.0], t.border)
-                .child(text("SOUL.md").font(mono(10.0)).color(t.foreground))
+                .child(
+                    text("In your words")
+                        .font(font(10.0, 500.0))
+                        .color(t.foreground),
+                )
                 .child(
                     text(revision)
                         .key("rd-profile-revision")
@@ -523,14 +527,14 @@ fn soul_editor(s: &Ui, t: &Theme) -> El {
         )
         .child(
             col()
-                .key("rd-profile-soul-box")
+                .key("rd-profile-personality-box")
                 .w_full()
                 .min_h(270.0)
                 .padding(16.0)
                 .fill(t.card)
                 .child(editor)
                 // A press on the empty part of the box puts the caret in.
-                .on_press_tx(|_: &mut Ui, tx: &mut Tx| tx.focus("rd-profile-soul", false)),
+                .on_press_tx(|_: &mut Ui, tx: &mut Tx| tx.focus("rd-profile-personality", false)),
         )
 }
 

@@ -458,7 +458,7 @@ fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
     let update = |revision| UpdateBotProfile {
         name: "Research".into(),
         description: "Reads and summarises".into(),
-        soul: "Be brief.".into(),
+        personality: "Be brief.".into(),
         color: None,
         revision,
     };
@@ -755,7 +755,7 @@ fn a_bot_is_created_its_history_read_and_it_is_deleted_only_as_confirmed() {
     let history = driver.model.bot_history["b-research"].clone();
     let revisions: Vec<u32> = history.iter().map(|item| item.revision).collect();
     assert_eq!(revisions, [3, 2, 1]);
-    assert_eq!(history[0].soul, "Be brief. (revision 3)");
+    assert_eq!(history[0].personality, "Be brief. (revision 3)");
     assert!(history[0].updated_at > history[2].updated_at);
 
     let create = |driver: &mut Driver, name: &str| {
@@ -764,7 +764,7 @@ fn a_bot_is_created_its_history_read_and_it_is_deleted_only_as_confirmed() {
             bot: NewBot {
                 name: name.into(),
                 description: "Plans trips".into(),
-                soul: "Be practical.".into(),
+                personality: "Be practical.".into(),
                 color: None,
             },
         });
