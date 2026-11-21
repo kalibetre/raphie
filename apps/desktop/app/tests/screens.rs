@@ -14,6 +14,7 @@ use raphie_core::contracts::{
     BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, ModelSelection,
     SandboxProvider, Scope, TelegramPairingCode,
 };
+use raphie_core::contracts::{ReplyLength, ReplyStyle, ReplyWarmth};
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::Target;
@@ -957,6 +958,7 @@ fn research(description: &str, revision: u32) -> BotProfile {
         description: description.into(),
         color: None,
         personality: "Be brief.".into(),
+        reply_style: Default::default(),
         revision,
     }
 }
@@ -1113,7 +1115,7 @@ fn a_bot_is_deleted_only_after_its_name_is_typed() {
     let rt = render_sized(scenes::settings_profile, false, (1280.0, 1700.0));
     assert!(rt.find("rd-delete-bot").is_none());
 
-    let mut rt = render_sized(research_profile, false, (1280.0, 1700.0));
+    let mut rt = render_sized(research_profile, false, (1280.0, 2100.0));
     // Unsaved edits block it: the confirmation must name the saved bot.
     rt.update(|ui, _| ui.profile.description = TextEdit::new("Edited"));
     settle(&mut rt);
@@ -5198,4 +5200,110 @@ fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
 
     let text = screen_text(&render(scenes::ask_answered, false));
     assert!(text.contains("You picked") && text.contains("Wed 14:00"));
+}
+
+#[test]
+fn a_reply_style_is_chosen_and_saved_with_the_profile() {
+    for dark in [false, true] {
+        // Tall enough to show the Replies card under the personality.
+        let mut rt = render_sized(research_profile, dark, (1280.0, 1800.0));
+        assert_eq!(
+            rt.state.profile.reply_style,
+            ReplyStyle::default(),
+            "a bot starts with short replies"
+        );
+        click(&mut rt, "rd-reply-length-detailed");
+        click(&mut rt, "rd-reply-emoji");
+        assert_eq!(
+            element(&rt, "rd-reply-length-value").text.as_deref(),
+            Some("Detailed")
+        );
+        // The sample reply follows the settings.
+        assert_eq!(
+            element(&rt, "rd-reply-sample-lead").text.as_deref(),
+            Some("Wed 14:00 at Bole clinic works. 🦷")
+        );
+        assert!(screen_text(&rt).contains("he's away from Friday"));
+        assert_eq!(
+            element(&rt, "rd-profile-status").text.as_deref(),
+            Some("Unsaved changes")
+        );
+        click(&mut rt, "rd-profile-save");
+        let Some(Command::SaveProfile { update, .. }) = rt.state.sent.last().cloned() else {
+            panic!("no save was sent");
+        };
+        assert_eq!(
+            update.reply_style,
+            ReplyStyle {
+                length: ReplyLength::Detailed,
+                emoji: true,
+                ..ReplyStyle::default()
+            }
+        );
+    }
+}
+
+#[test]
+fn a_reply_slider_follows_a_drag_along_its_track() {
+    let mut rt = render_sized(research_profile, false, (1280.0, 1800.0));
+    let [x, y, w, h] = element(&rt, "rd-reply-warmth-track").rect;
+    let mid = y + h / 2.0;
+    // From the middle stop, dragged past the right end: Warm.
+    rt.pointer_down(x + w / 2.0, mid);
+    rt.pointer_move(x + w / 2.0 + 20.0, mid);
+    rt.pointer_move(x + w + 30.0, mid);
+    rt.pointer_up(x + w + 30.0, mid);
+    settle(&mut rt);
+    assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Warm);
+    // Then dragged back towards the left end: Plain.
+    rt.pointer_down(x + w - 12.0, mid);
+    rt.pointer_move(x + w - 40.0, mid);
+    rt.pointer_move(x + 4.0, mid);
+    rt.pointer_up(x + 4.0, mid);
+    settle(&mut rt);
+    assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Plain);
+    assert_eq!(
+        element(&rt, "rd-reply-warmth-value").text.as_deref(),
+        Some("Plain")
+    );
+    // The press focused the slider; the arrow keys step it.
+    assert!(element(&rt, "rd-reply-warmth-track").focused);
+    for key in [Key::Right, Key::Right, Key::Right] {
+        rt.key(KeyEvent {
+            key,
+            mods: Default::default(),
+        });
+        settle(&mut rt);
+    }
+    assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Warm);
+    rt.key(KeyEvent {
+        key: Key::Home,
+        mods: Default::default(),
+    });
+    settle(&mut rt);
+    assert_eq!(rt.state.profile.reply_style.warmth, ReplyWarmth::Plain);
+}
+
+#[test]
+fn a_profile_opened_before_its_bot_loads_fills_in_when_it_arrives() {
+    fn opened_early(ui: &mut Ui) {
+        scenes::settings_account(ui);
+        let bots = ui.model.bots.clone();
+        let others = bots.into_iter().filter(|b| b.id != "b-research").collect();
+        ui.model.apply(Event::Bots(others));
+        ui.open_settings(Some(Page::Bot {
+            bot_id: "b-research".into(),
+            section: BotSection::Profile,
+        }));
+    }
+    let mut rt = render_sized(opened_early, false, (1280.0, 1800.0));
+    assert!(rt.state.profile.saved.is_none());
+    let mut bots = rt.state.model.bots.clone();
+    bots.push(research("Reads and summarises.", 3));
+    deliver(&mut rt, Event::Bots(bots));
+    assert_eq!(rt.state.profile.personality.text, "Be brief.");
+    assert_eq!(rt.state.profile.problem(), None);
+    // A change can be saved straight away.
+    click(&mut rt, "rd-reply-length-detailed");
+    assert!(rt.state.can_save_profile());
 }

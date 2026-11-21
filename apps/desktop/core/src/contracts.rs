@@ -45,10 +45,54 @@ pub struct BotProfile {
     /// The bot's personality: tone, values, working style.
     #[serde(default)]
     pub personality: String,
+    /// How it writes its replies. Older runtimes omit it: the defaults.
+    #[serde(default)]
+    pub reply_style: ReplyStyle,
     /// Counts saves. A save names the revision it was edited from, so two
     /// clients cannot silently overwrite each other.
     #[serde(default)]
     pub revision: u32,
+}
+
+/// `ReplyStyle` in `packages/contracts/src/bots/views.ts`: how a bot writes
+/// its replies. The defaults keep them short and plain.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ReplyStyle {
+    pub length: ReplyLength,
+    pub warmth: ReplyWarmth,
+    pub formatting: ReplyFormatting,
+    pub emoji: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ReplyLength {
+    /// The answer first; most replies under 80 words.
+    #[default]
+    Short,
+    Balanced,
+    Detailed,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ReplyWarmth {
+    Plain,
+    #[default]
+    Default,
+    Warm,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ReplyFormatting {
+    /// Short plain paragraphs.
+    Prose,
+    /// Short lists or tables rather than paragraphs.
+    #[default]
+    Default,
+    /// Headings, lists and tables.
+    Structured,
 }
 
 /// Body of `POST /api/bots/<id>/profile`
@@ -58,6 +102,8 @@ pub struct UpdateBotProfile {
     pub name: String,
     pub description: String,
     pub personality: String,
+    #[serde(rename = "replyStyle")]
+    pub reply_style: ReplyStyle,
     /// `None` is sent as `null`: let Raphie pick a colour.
     pub color: Option<String>,
     /// The revision these edits started from.
@@ -1696,6 +1742,8 @@ pub struct NewBot {
     pub name: String,
     pub description: String,
     pub personality: String,
+    #[serde(rename = "replyStyle")]
+    pub reply_style: ReplyStyle,
     /// `None` is sent as `null`: let Raphie pick a colour.
     pub color: Option<String>,
 }

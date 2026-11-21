@@ -24,6 +24,7 @@ export type {
 
 export type {
   BotProfile,
+  ReplyStyle,
   SaveBotProfile,
   UpdateBotProfile,
 } from "./bots/views.ts";

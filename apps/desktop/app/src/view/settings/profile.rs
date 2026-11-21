@@ -2,13 +2,14 @@
 //! with a save bar that appears once something changed.
 //!
 //! Mirrors `bot-profile-form.tsx`, `bot-profile-fields.tsx`,
-//! `bot-color-picker.tsx` and `save-bar.tsx`, and the `.bot-editor-*`,
-//! `.bot-color-*`, `.personality-editor` and `.save-bar` rules in
+//! `bot-color-picker.tsx`, `reply-style-fields.tsx` and `save-bar.tsx`, and
+//! the `.bot-editor-*`, `.bot-color-*`, `.personality-editor`,
+//! `.reply-style-*` and `.save-bar` rules in
 //! `shared/styles/settings/`. The form's rules live in `crate::profile`.
 
-use raphie_core::contracts::BotProfile;
+use raphie_core::contracts::{BotProfile, ReplyFormatting, ReplyLength, ReplyStyle, ReplyWarmth};
 use rune::color::hex;
-use rune::{Color, El, Tx, col, el, icon, row, text, text_input};
+use rune::{Color, Cursor, Drag, El, Key, KeyEvent, Tx, col, el, icon, row, text, text_input};
 use rune_kit::Dialog;
 
 use super::parts::{SaveBar, Scope, page, save_bar as save_bar_of};
@@ -19,7 +20,7 @@ use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
 use crate::view::Look;
-use crate::widgets::{Field, Kind, Size, button, pressable, text_field};
+use crate::widgets::{Field, Kind, Size, button, pressable, switch, text_field};
 
 pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
@@ -62,7 +63,7 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El 
         )
         .self_start()
     };
-    let mut groups = vec![identity, personality, history];
+    let mut groups = vec![identity, personality, replies(s, t), history];
     // The default bot stays: the runtime refuses to delete it.
     if bot.id != "default" {
         groups.push(delete_section(s, bot, t));
@@ -94,7 +95,7 @@ pub fn new_bot(s: &Ui, look: &Look) -> El {
         "Create a bot",
         "A separate assistant with its own personality, memory and model connections.",
         Scope::NewBot,
-        vec![identity, personality, note],
+        vec![identity, personality, replies(s, t), note],
         look,
     )
 }
@@ -154,6 +155,260 @@ fn fields(s: &Ui, id: &str, look: &Look) -> (El, El) {
         ),
     );
     (identity, personality)
+}
+
+/// A reply slider's stops, left to right, and how each sets the style.
+type Stops = [(&'static str, fn(&mut ReplyStyle)); 3];
+
+/// The Replies card: length, warmth and formatting as three-stop sliders
+/// and emoji as a switch, beside a sample reply that follows them. Mirrors
+/// `reply-style-fields.tsx`.
+fn replies(s: &Ui, t: &Theme) -> El {
+    let style = s.profile.reply_style;
+    let saving = s.model.saving_profile || s.model.creating_bot;
+    let length: Stops = [
+        ("Short", |r| r.length = ReplyLength::Short),
+        ("Balanced", |r| r.length = ReplyLength::Balanced),
+        ("Detailed", |r| r.length = ReplyLength::Detailed),
+    ];
+    let warmth: Stops = [
+        ("Plain", |r| r.warmth = ReplyWarmth::Plain),
+        ("Default", |r| r.warmth = ReplyWarmth::Default),
+        ("Warm", |r| r.warmth = ReplyWarmth::Warm),
+    ];
+    let formatting: Stops = [
+        ("Prose", |r| r.formatting = ReplyFormatting::Prose),
+        ("Default", |r| r.formatting = ReplyFormatting::Default),
+        ("Lists & tables", |r| {
+            r.formatting = ReplyFormatting::Structured
+        }),
+    ];
+    let at = |stops: &Stops| {
+        stops
+            .iter()
+            .position(|(_, set)| {
+                let mut probe = style;
+                set(&mut probe);
+                probe == style
+            })
+            .unwrap_or(1)
+    };
+    let emoji = style.emoji;
+    let controls = col()
+        .grow(1.1)
+        .min_w(0.0)
+        .gap(14.0)
+        .child(slider(t, "length", "Length", &length, at(&length), saving))
+        .child(slider(t, "warmth", "Warmth", &warmth, at(&warmth), saving))
+        .child(slider(
+            t,
+            "formatting",
+            "Formatting",
+            &formatting,
+            at(&formatting),
+            saving,
+        ))
+        .child(
+            row()
+                .w_full()
+                .justify_between()
+                .center_y()
+                .child(text("Emoji").font(font(13.0, 500.0)).color(t.foreground))
+                .child(pressable(
+                    switch(t, emoji, "Emoji").key("rd-reply-emoji"),
+                    !saving,
+                    move |s: &mut Ui| {
+                        s.profile.reply_style.emoji = !emoji;
+                        s.profile.message = None;
+                    },
+                )),
+        );
+    section(
+        t,
+        "Replies",
+        "How this bot writes back. Its personality can still ask for more.",
+        row()
+            .w_full()
+            .gap(20.0)
+            .child(controls)
+            .child(sample(t, &style)),
+    )
+}
+
+/// One reply setting as a slider with three stops: a track, the chosen
+/// stop as a handle, and the two ends named beneath. The track is one
+/// focusable control: a press or drag anywhere on it picks the nearest
+/// stop, and the arrow keys (or Home and End) step between them.
+fn slider(t: &Theme, key: &str, name: &str, stops: &Stops, at: usize, saving: bool) -> El {
+    let small = |content: &str| {
+        text(content.to_owned())
+            .font(font(11.5, 400.0))
+            .color(t.muted_foreground)
+    };
+    let mut track = row()
+        .key(format!("rd-reply-{key}-track"))
+        .role("slider")
+        .label(name)
+        .a11y_value(stops[at].0)
+        .w_full()
+        .h(20.0)
+        .center_y()
+        .px(2.0)
+        .radius(10.0)
+        .cursor(Cursor::Pointer)
+        .focusable(!saving)
+        .focus_ring(2.0, 2.0, t.accent);
+    for (index, (label, _)) in stops.iter().enumerate() {
+        if index > 0 {
+            // The track between two stops: filled up to the chosen one.
+            let filled = index <= at;
+            let mut line = el()
+                .grow(1.0)
+                .h(4.0)
+                .fill(if filled { t.accent } else { t.muted });
+            if !filled {
+                line = line.border(1.0, t.border);
+            }
+            track = track.child(line.a11y_hidden());
+        }
+        let mark = if index == at {
+            el().key(format!("rd-reply-{key}-handle"))
+                .size(16.0, 16.0)
+                .radius(8.0)
+                .fill(t.card)
+                .border(2.0, t.accent)
+        } else {
+            el().size(6.0, 6.0)
+                .radius(3.0)
+                .fill(if index < at { t.accent } else { t.border })
+        };
+        track = track.child(
+            row()
+                .key(format!(
+                    "rd-reply-{key}-{}",
+                    label.to_lowercase().replace(' ', "-")
+                ))
+                .size(20.0, 20.0)
+                .center()
+                .child(mark)
+                .a11y_hidden(),
+        );
+    }
+    if saving {
+        track = track.layer_opacity(0.5);
+    } else {
+        let stops = *stops;
+        let choose = move |s: &mut Ui, index: usize| {
+            let before = s.profile.reply_style;
+            stops[index].1(&mut s.profile.reply_style);
+            if s.profile.reply_style != before {
+                s.profile.message = None;
+            }
+        };
+        track = track
+            // The stops' centres sit 12 points in from either end.
+            .on_drag(move |s: &mut Ui, drag: &mut Drag, _: &mut Tx| {
+                let span = (drag.w - 24.0).max(1.0);
+                let index = (((drag.x - 12.0) / span) * 2.0).round().clamp(0.0, 2.0);
+                choose(s, index as usize);
+            })
+            .on_key(move |s: &mut Ui, event: &KeyEvent, _: &mut Tx| {
+                let index = match event.key {
+                    Key::Left | Key::Down => at.saturating_sub(1),
+                    Key::Right | Key::Up => (at + 1).min(2),
+                    Key::Home => 0,
+                    Key::End => 2,
+                    _ => return false,
+                };
+                choose(s, index);
+                true
+            });
+    }
+    col()
+        .w_full()
+        .gap(4.0)
+        .child(
+            row()
+                .w_full()
+                .justify_between()
+                .center_y()
+                .child(
+                    text(name.to_owned())
+                        .font(font(13.0, 500.0))
+                        .color(t.foreground),
+                )
+                .child(small(stops[at].0).key(format!("rd-reply-{key}-value"))),
+        )
+        .child(track)
+        .child(
+            row()
+                .w_full()
+                .justify_between()
+                .child(small(stops[0].0))
+                .child(small(stops[2].0)),
+        )
+}
+
+/// The sample reply beside the sliders, as `reply-sample.ts` writes it.
+fn sample(t: &Theme, style: &ReplyStyle) -> El {
+    let line = |content: String, weight: f32| {
+        text(content)
+            .font(font(12.5, weight).lh(20.0))
+            .color(t.foreground)
+            .wrap()
+    };
+    let lead = match style.warmth {
+        ReplyWarmth::Plain => "Wed 14:00, Bole clinic. It works.",
+        ReplyWarmth::Default => "Wed 14:00 at Bole clinic works.",
+        ReplyWarmth::Warm => "Good news: Wed 14:00 at Bole clinic works for Dr. Amare!",
+    };
+    let lead = if style.emoji {
+        format!("{lead} 🦷")
+    } else {
+        lead.to_owned()
+    };
+    let context = match style.length {
+        ReplyLength::Short => None,
+        ReplyLength::Balanced => Some("Dr. Amare has a 30-minute slot."),
+        ReplyLength::Detailed => Some(
+            "Dr. Amare has a 30-minute slot. Tuesday was earlier but clashes with your 9:00 call, and he's away from Friday.",
+        ),
+    };
+    let mut body = col()
+        .key("rd-reply-sample")
+        .role("figure")
+        .label("Sample reply")
+        .grow(1.0)
+        .min_w(0.0)
+        .gap(6.0)
+        .padding(14.0)
+        .radius(12.0)
+        .fill(t.background)
+        .border(1.0, t.border)
+        .child(
+            text("SAMPLE REPLY")
+                .font(font(10.5, 500.0))
+                .color(t.muted_foreground),
+        )
+        .child(line(lead, 600.0).key("rd-reply-sample-lead"));
+    if let Some(context) = context {
+        body = body.child(line(context.to_owned(), 400.0));
+    }
+    if style.formatting == ReplyFormatting::Structured {
+        body = body.child(line("Before you go".to_owned(), 600.0));
+    }
+    if style.formatting == ReplyFormatting::Prose {
+        body.child(line(
+            "Bring last year's X-ray; parking is behind the building.".to_owned(),
+            400.0,
+        ))
+    } else {
+        ["Bring last year's X-ray", "Parking is behind the building"]
+            .into_iter()
+            .fold(body, |body, note| {
+                body.child(line(format!("•  {note}"), 400.0))
+            })
+    }
 }
 
 /// "Delete bot", under the form: what it removes, and the button that asks
@@ -343,6 +598,7 @@ fn color_picker(s: &Ui, id: &str, look: &Look) -> El {
                 description: String::new(),
                 color: None,
                 personality: String::new(),
+                reply_style: Default::default(),
                 revision: 0,
             }),
         }

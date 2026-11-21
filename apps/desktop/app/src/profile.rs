@@ -5,7 +5,7 @@
 //! bot-profile-form.tsx`: what counts as a change, when saving is allowed,
 //! and what happens when the bot was changed somewhere else meanwhile.
 
-use raphie_core::contracts::{BotProfile, NewBot, UpdateBotProfile};
+use raphie_core::contracts::{BotProfile, NewBot, ReplyStyle, UpdateBotProfile};
 use rune::TextEdit;
 
 /// The runtime's limits (`packages/runtime/src/domains/bots/presentation/
@@ -32,6 +32,8 @@ pub struct ProfileDraft {
     pub personality: TextEdit,
     /// The chosen colour as `#rrggbb`, or `None` to let Raphie pick.
     pub color: Option<String>,
+    /// How the bot writes its replies.
+    pub reply_style: ReplyStyle,
     /// A custom colour being typed.
     pub custom_color: TextEdit,
     /// What the last save said, until the next edit ("Saved revision 4.").
@@ -49,6 +51,7 @@ impl ProfileDraft {
             description: TextEdit::new(""),
             personality: TextEdit::new(""),
             color: None,
+            reply_style: ReplyStyle::default(),
             custom_color: TextEdit::new(""),
             message: None,
             creating: false,
@@ -73,6 +76,7 @@ impl ProfileDraft {
             description: TextEdit::new(profile.description.clone()),
             personality: TextEdit::new(profile.personality.clone()),
             color: profile.color.clone(),
+            reply_style: profile.reply_style,
             custom_color: TextEdit::new(profile.color.clone().unwrap_or_default()),
             message: None,
             creating: false,
@@ -101,7 +105,8 @@ impl ProfileDraft {
             return !self.name.text.is_empty()
                 || !self.description.text.is_empty()
                 || self.personality.text != STARTER_PERSONALITY
-                || self.color.is_some();
+                || self.color.is_some()
+                || self.reply_style != ReplyStyle::default();
         }
         // `is_some_and` is false for `None`: an empty form has no changes.
         self.saved.as_ref().is_some_and(|saved| {
@@ -109,6 +114,7 @@ impl ProfileDraft {
                 || self.description.text != saved.description
                 || self.personality.text != saved.personality
                 || self.color != saved.color
+                || self.reply_style != saved.reply_style
         })
     }
 
@@ -146,6 +152,7 @@ impl ProfileDraft {
             name: self.name.text.trim().to_owned(),
             description: self.description.text.trim().to_owned(),
             personality: self.personality.text.trim().to_owned(),
+            reply_style: self.reply_style,
             color: self.color.clone(),
             revision: saved.revision,
         })
@@ -158,6 +165,7 @@ impl ProfileDraft {
             name: self.name.text.trim().to_owned(),
             description: self.description.text.trim().to_owned(),
             personality: self.personality.text.trim().to_owned(),
+            reply_style: self.reply_style,
             color: self.color.clone(),
         })
     }
@@ -187,6 +195,7 @@ mod tests {
             description: "Reads papers".into(),
             color: None,
             personality: "Be brief.".into(),
+            reply_style: Default::default(),
             revision: 3,
         }
     }

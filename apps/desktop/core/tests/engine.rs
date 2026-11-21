@@ -459,6 +459,7 @@ fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
         name: "Research".into(),
         description: "Reads and summarises".into(),
         personality: "Be brief.".into(),
+        reply_style: Default::default(),
         color: None,
         revision,
     };
@@ -765,6 +766,7 @@ fn a_bot_is_created_its_history_read_and_it_is_deleted_only_as_confirmed() {
                 name: name.into(),
                 description: "Plans trips".into(),
                 personality: "Be practical.".into(),
+                reply_style: Default::default(),
                 color: None,
             },
         });

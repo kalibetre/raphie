@@ -9,6 +9,16 @@ import type {
 } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
+import {
+  DEFAULT_REPLY_STYLE,
+  replyStyleOf,
+} from "../../conversations/domain/reply-style.ts";
+
+/** A stored profile, with a reply style even if it was saved before one. */
+function parse(value: string): BotProfile {
+  const profile = JSON.parse(value) as BotProfile;
+  return { ...profile, replyStyle: replyStyleOf(profile.replyStyle) };
+}
 
 export const defaultBot = {
   id: "default",
@@ -42,7 +52,13 @@ export class BotProfileStore {
       !this.db.query("SELECT id FROM bot_profiles WHERE id='default'").get()
     ) {
       const at = Date.now();
-      this.insert({ ...defaultBot, revision: 1, createdAt: at, updatedAt: at });
+      this.insert({
+        ...defaultBot,
+        replyStyle: DEFAULT_REPLY_STYLE,
+        revision: 1,
+        createdAt: at,
+        updatedAt: at,
+      });
     }
   }
 
@@ -52,7 +68,7 @@ export class BotProfileStore {
         "SELECT value FROM bot_profiles WHERE id NOT IN (SELECT id FROM bot_deletions) ORDER BY CASE WHEN id='default' THEN 0 ELSE 1 END, rowid",
       )
       .all()
-      .map((row) => JSON.parse(row.value) as BotProfile);
+      .map((row) => parse(row.value));
   }
 
   read(id: string): BotProfile {
@@ -62,7 +78,7 @@ export class BotProfileStore {
       )
       .get(id);
     if (!row) throw new InputError("Bot not found.", 404);
-    return JSON.parse(row.value) as BotProfile;
+    return parse(row.value);
   }
 
   history(id: string): BotProfile[] {
@@ -72,13 +88,14 @@ export class BotProfileStore {
         "SELECT value FROM bot_revisions WHERE id=? ORDER BY revision DESC LIMIT 50",
       )
       .all(id)
-      .map((row) => JSON.parse(row.value) as BotProfile);
+      .map((row) => parse(row.value));
   }
 
   draft(input: SaveBotProfile): BotProfile {
     const at = Date.now();
     return {
       ...input,
+      replyStyle: replyStyleOf(input.replyStyle),
       id: crypto.randomUUID(),
       revision: 1,
       createdAt: at,
@@ -110,6 +127,7 @@ export class BotProfileStore {
       const next = {
         ...previous,
         ...input,
+        replyStyle: input.replyStyle ?? previous.replyStyle,
         revision: previous.revision + 1,
         updatedAt: Date.now(),
       };

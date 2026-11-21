@@ -2693,6 +2693,7 @@ mod tests {
             description: String::new(),
             color: None,
             personality: String::new(),
+            reply_style: Default::default(),
             revision: 1,
         };
         assert_eq!(
