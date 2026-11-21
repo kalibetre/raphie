@@ -14,6 +14,7 @@ use raphie_core::contracts::{
     BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, ModelSelection,
     SandboxProvider, Scope, TelegramPairingCode,
 };
+use raphie_core::contracts::{ReplyLength, ReplyStyle};
 use raphie_core::engine::{Command, ConnectionChange};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::Target;
@@ -957,6 +958,7 @@ fn research(description: &str, revision: u32) -> BotProfile {
         description: description.into(),
         color: None,
         personality: "Be brief.".into(),
+        reply_style: Default::default(),
         revision,
     }
 }
@@ -5198,4 +5200,39 @@ fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
 
     let text = screen_text(&render(scenes::ask_answered, false));
     assert!(text.contains("You picked") && text.contains("Wed 14:00"));
+}
+
+#[test]
+fn a_reply_style_is_chosen_and_saved_with_the_profile() {
+    for dark in [false, true] {
+        // Tall enough to show the Replies card under the personality.
+        let mut rt = render_sized(research_profile, dark, (1280.0, 1800.0));
+        assert_eq!(
+            rt.state.profile.reply_style,
+            ReplyStyle::default(),
+            "a bot starts with short replies"
+        );
+        click(&mut rt, "rd-reply-length-detailed");
+        click(&mut rt, "rd-reply-emoji-on");
+        assert_eq!(
+            element(&rt, "rd-reply-note").text.as_deref(),
+            Some("The answer first, then the reasoning and caveats you'd want.")
+        );
+        assert_eq!(
+            element(&rt, "rd-profile-status").text.as_deref(),
+            Some("Unsaved changes")
+        );
+        click(&mut rt, "rd-profile-save");
+        let Some(Command::SaveProfile { update, .. }) = rt.state.sent.last().cloned() else {
+            panic!("no save was sent");
+        };
+        assert_eq!(
+            update.reply_style,
+            ReplyStyle {
+                length: ReplyLength::Detailed,
+                emoji: true,
+                ..ReplyStyle::default()
+            }
+        );
+    }
 }

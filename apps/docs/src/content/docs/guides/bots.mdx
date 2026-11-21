@@ -75,13 +75,26 @@ Open **Profile** by clicking the bot's name in the title bar, or from Settings. 
 | Colour      | 8 presets, a custom colour, or **Automatic** | Automatic avoids colours other bots already use. |
 | Personality | 16,000 characters                            | In your own words.                               |
 
-The personality is your description of the bot's voice, values and way of working. The runtime adds it to the model's instructions when a turn starts, so a turn already running keeps the version it started with. Every bot keeps [replies short](/guides/conversations/#replies) unless its personality asks for a different length or format.
+The personality is your description of the bot's voice, values and way of working. The runtime adds it to the model's instructions when a turn starts, so a turn already running keeps the version it started with. Its [reply style](#reply-style) sets how it writes back, unless the personality asks for a different length or format.
 
 Personality is owner configuration. A bot has no tool to edit its own profile, and nothing in its personality can grant tools, access or permissions. If a bot suggests a change to its personality, it is only text until you save it.
 
 :::caution
 Don't put credentials in a personality. The model receives it as instructions, and every revision is kept. Keys belong under **Providers** or the relevant settings page, where they are encrypted.
 :::
+
+### Reply style
+
+Under **Replies**, four settings shape how the bot writes back. The defaults keep [replies short](/guides/conversations/#replies).
+
+| Setting    | Choices                                            | Default |
+| ---------- | -------------------------------------------------- | ------- |
+| Length     | Short (under ~80 words), Balanced (~150), Detailed | Short   |
+| Warmth     | Plain, Default, Warm                               | Default |
+| Formatting | Prose, Default (short lists), Lists & tables       | Default |
+| Emoji      | Off, On                                            | Off     |
+
+Whatever the settings, a reply opens with the answer and skips preamble and closing summaries. The style is saved with the profile, so each revision keeps it.
 
 ### Revisions
 

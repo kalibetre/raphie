@@ -330,6 +330,7 @@ mod tests {
             description: String::new(),
             color: color.map(str::to_owned),
             personality: String::new(),
+            reply_style: Default::default(),
             revision: 1,
         }
     }

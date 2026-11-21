@@ -2020,6 +2020,7 @@ fn bot(id: &str, name: &str, description: &str, color: Option<&str>) -> BotProfi
         description: description.into(),
         color: color.map(str::to_owned),
         personality: PERSONALITY.into(),
+        reply_style: Default::default(),
         revision: 3,
     }
 }

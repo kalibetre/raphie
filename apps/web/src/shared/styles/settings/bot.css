@@ -237,6 +237,31 @@
     font-size: 11px;
     color: var(--muted-foreground);
   }
+  .reply-style {
+    display: grid;
+    gap: 10px;
+  }
+  .reply-style-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .reply-style-label {
+    width: 92px;
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .reply-style-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .bot-editor .reply-style-note {
+    margin: 4px 0 0;
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
   @media (min-width: 768px) and (max-width: 1100px) {
     .main-panel .settings-page {
       padding: 28px 24px;
@@ -264,6 +289,11 @@
     .main-panel .settings-page {
       padding: 24px 16px;
       gap: 24px;
+    }
+    .reply-style-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
     }
     .bot-editor .bot-personality {
       min-height: 240px;

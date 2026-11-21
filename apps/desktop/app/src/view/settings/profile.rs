@@ -2,11 +2,12 @@
 //! with a save bar that appears once something changed.
 //!
 //! Mirrors `bot-profile-form.tsx`, `bot-profile-fields.tsx`,
-//! `bot-color-picker.tsx` and `save-bar.tsx`, and the `.bot-editor-*`,
-//! `.bot-color-*`, `.personality-editor` and `.save-bar` rules in
+//! `bot-color-picker.tsx`, `reply-style-fields.tsx` and `save-bar.tsx`, and
+//! the `.bot-editor-*`, `.bot-color-*`, `.personality-editor`,
+//! `.reply-style-*` and `.save-bar` rules in
 //! `shared/styles/settings/`. The form's rules live in `crate::profile`.
 
-use raphie_core::contracts::BotProfile;
+use raphie_core::contracts::{BotProfile, ReplyFormatting, ReplyLength, ReplyStyle, ReplyWarmth};
 use rune::color::hex;
 use rune::{Color, El, Tx, col, el, icon, row, text, text_input};
 use rune_kit::Dialog;
@@ -62,7 +63,7 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El 
         )
         .self_start()
     };
-    let mut groups = vec![identity, personality, history];
+    let mut groups = vec![identity, personality, replies(s, t), history];
     // The default bot stays: the runtime refuses to delete it.
     if bot.id != "default" {
         groups.push(delete_section(s, bot, t));
@@ -94,7 +95,7 @@ pub fn new_bot(s: &Ui, look: &Look) -> El {
         "Create a bot",
         "A separate assistant with its own personality, memory and model connections.",
         Scope::NewBot,
-        vec![identity, personality, note],
+        vec![identity, personality, replies(s, t), note],
         look,
     )
 }
@@ -154,6 +155,140 @@ fn fields(s: &Ui, id: &str, look: &Look) -> (El, El) {
         ),
     );
     (identity, personality)
+}
+
+/// One choice on a reply dial: its label, and the style it sets.
+type Choice = (&'static str, fn(&mut ReplyStyle));
+
+/// A dial: its key, its label, and its choices with whether each is chosen.
+type Dial = (&'static str, &'static str, Vec<(Choice, bool)>);
+
+/// The Replies card: length, warmth, formatting and emoji as small rows of
+/// buttons, saved with the profile.
+fn replies(s: &Ui, t: &Theme) -> El {
+    let style = s.profile.reply_style;
+    let saving = s.model.saving_profile || s.model.creating_bot;
+    let dials: [Dial; 4] = [
+        (
+            "length",
+            "Length",
+            vec![
+                (
+                    ("Short", |r| r.length = ReplyLength::Short),
+                    style.length == ReplyLength::Short,
+                ),
+                (
+                    ("Balanced", |r| r.length = ReplyLength::Balanced),
+                    style.length == ReplyLength::Balanced,
+                ),
+                (
+                    ("Detailed", |r| r.length = ReplyLength::Detailed),
+                    style.length == ReplyLength::Detailed,
+                ),
+            ],
+        ),
+        (
+            "warmth",
+            "Warmth",
+            vec![
+                (
+                    ("Plain", |r| r.warmth = ReplyWarmth::Plain),
+                    style.warmth == ReplyWarmth::Plain,
+                ),
+                (
+                    ("Default", |r| r.warmth = ReplyWarmth::Default),
+                    style.warmth == ReplyWarmth::Default,
+                ),
+                (
+                    ("Warm", |r| r.warmth = ReplyWarmth::Warm),
+                    style.warmth == ReplyWarmth::Warm,
+                ),
+            ],
+        ),
+        (
+            "formatting",
+            "Formatting",
+            vec![
+                (
+                    ("Prose", |r| r.formatting = ReplyFormatting::Prose),
+                    style.formatting == ReplyFormatting::Prose,
+                ),
+                (
+                    ("Default", |r| r.formatting = ReplyFormatting::Default),
+                    style.formatting == ReplyFormatting::Default,
+                ),
+                (
+                    ("Lists & tables", |r| {
+                        r.formatting = ReplyFormatting::Structured
+                    }),
+                    style.formatting == ReplyFormatting::Structured,
+                ),
+            ],
+        ),
+        (
+            "emoji",
+            "Emoji",
+            vec![
+                (("Off", |r| r.emoji = false), !style.emoji),
+                (("On", |r| r.emoji = true), style.emoji),
+            ],
+        ),
+    ];
+    let mut body = col().w_full().gap(10.0);
+    for (key, name, choices) in dials {
+        let mut buttons = row()
+            .role("group")
+            .label(name)
+            .gap(4.0)
+            .center_y()
+            .flex_wrap();
+        for ((label, set), chosen) in choices {
+            let mut choice = button(t, Kind::Ghost, Size::Small, None, label)
+                .key(format!(
+                    "rd-reply-{key}-{}",
+                    label.to_lowercase().replace(' ', "-")
+                ))
+                .checked(chosen);
+            if chosen {
+                choice = choice.fill(t.muted);
+            }
+            buttons = buttons.child(pressable(choice, !saving, move |s: &mut Ui| {
+                set(&mut s.profile.reply_style);
+                s.profile.message = None;
+            }));
+        }
+        body = body.child(
+            row()
+                .w_full()
+                .gap(12.0)
+                .center_y()
+                .child(
+                    text(name)
+                        .font(font(13.0, 500.0))
+                        .color(t.foreground)
+                        .w(92.0),
+                )
+                .child(buttons),
+        );
+    }
+    let note = match style.length {
+        ReplyLength::Short => "The answer first; most replies under 80 words.",
+        ReplyLength::Balanced => "The answer first, with a line of context; most under 150 words.",
+        ReplyLength::Detailed => "The answer first, then the reasoning and caveats you'd want.",
+    };
+    section(
+        t,
+        "Replies",
+        "How this bot writes back. Its personality can still ask for more.",
+        body.child(
+            text(note)
+                .key("rd-reply-note")
+                .font(font(11.0, 400.0))
+                .color(t.muted_foreground)
+                .mt(4.0)
+                .wrap(),
+        ),
+    )
 }
 
 /// "Delete bot", under the form: what it removes, and the button that asks
@@ -343,6 +478,7 @@ fn color_picker(s: &Ui, id: &str, look: &Look) -> El {
                 description: String::new(),
                 color: None,
                 personality: String::new(),
+                reply_style: Default::default(),
                 revision: 0,
             }),
         }
