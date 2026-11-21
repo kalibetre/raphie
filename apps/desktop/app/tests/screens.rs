@@ -5213,11 +5213,17 @@ fn a_reply_style_is_chosen_and_saved_with_the_profile() {
             "a bot starts with short replies"
         );
         click(&mut rt, "rd-reply-length-detailed");
-        click(&mut rt, "rd-reply-emoji-on");
+        click(&mut rt, "rd-reply-emoji");
         assert_eq!(
-            element(&rt, "rd-reply-note").text.as_deref(),
-            Some("The answer first, then the reasoning and caveats you'd want.")
+            element(&rt, "rd-reply-length-value").text.as_deref(),
+            Some("Detailed")
         );
+        // The sample reply follows the settings.
+        assert_eq!(
+            element(&rt, "rd-reply-sample-lead").text.as_deref(),
+            Some("Wed 14:00 at Bole clinic works. 🦷")
+        );
+        assert!(screen_text(&rt).contains("he's away from Friday"));
         assert_eq!(
             element(&rt, "rd-profile-status").text.as_deref(),
             Some("Unsaved changes")

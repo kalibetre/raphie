@@ -239,28 +239,65 @@
   }
   .reply-style {
     display: grid;
-    gap: 10px;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
   }
-  .reply-style-row {
+  .reply-style-controls {
+    display: grid;
+    gap: 14px;
+  }
+  .reply-style-slider {
+    display: grid;
+    gap: 4px;
+  }
+  .reply-style-top,
+  .reply-style-ends,
+  .reply-style-emoji {
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: space-between;
   }
-  .reply-style-label {
-    width: 92px;
-    flex-shrink: 0;
+  .reply-style-top,
+  .reply-style-emoji {
     font-size: 13px;
     font-weight: 500;
   }
-  .reply-style-choices {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-  .bot-editor .reply-style-note {
-    margin: 4px 0 0;
-    font-size: 11px;
+  .reply-style-value,
+  .reply-style-ends {
+    font-size: 11.5px;
+    font-weight: 400;
     color: var(--muted-foreground);
+  }
+  .bot-editor .reply-sample {
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--background);
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  .reply-sample figcaption {
+    margin-bottom: 6px;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .bot-editor .reply-sample p {
+    margin: 0 0 6px;
+    font-size: 12.5px;
+    color: var(--foreground);
+  }
+  .bot-editor .reply-sample .reply-sample-lead,
+  .bot-editor .reply-sample .reply-sample-heading {
+    font-weight: 600;
+  }
+  .reply-sample ul {
+    margin: 0;
+    padding-left: 16px;
+    list-style: disc;
   }
   @media (min-width: 768px) and (max-width: 1100px) {
     .main-panel .settings-page {
@@ -290,10 +327,8 @@
       padding: 24px 16px;
       gap: 24px;
     }
-    .reply-style-row {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
+    .reply-style {
+      grid-template-columns: minmax(0, 1fr);
     }
     .bot-editor .bot-personality {
       min-height: 240px;

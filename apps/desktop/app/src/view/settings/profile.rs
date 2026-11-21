@@ -20,7 +20,7 @@ use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
 use crate::view::Look;
-use crate::widgets::{Field, Kind, Size, button, pressable, text_field};
+use crate::widgets::{Field, Kind, Size, button, pressable, switch, text_field};
 
 pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
@@ -157,138 +157,229 @@ fn fields(s: &Ui, id: &str, look: &Look) -> (El, El) {
     (identity, personality)
 }
 
-/// One choice on a reply dial: its label, and the style it sets.
-type Choice = (&'static str, fn(&mut ReplyStyle));
+/// A reply slider's stops, left to right, and how each sets the style.
+type Stops = [(&'static str, fn(&mut ReplyStyle)); 3];
 
-/// A dial: its key, its label, and its choices with whether each is chosen.
-type Dial = (&'static str, &'static str, Vec<(Choice, bool)>);
-
-/// The Replies card: length, warmth, formatting and emoji as small rows of
-/// buttons, saved with the profile.
+/// The Replies card: length, warmth and formatting as three-stop sliders
+/// and emoji as a switch, beside a sample reply that follows them. Mirrors
+/// `reply-style-fields.tsx`.
 fn replies(s: &Ui, t: &Theme) -> El {
     let style = s.profile.reply_style;
     let saving = s.model.saving_profile || s.model.creating_bot;
-    let dials: [Dial; 4] = [
-        (
-            "length",
-            "Length",
-            vec![
-                (
-                    ("Short", |r| r.length = ReplyLength::Short),
-                    style.length == ReplyLength::Short,
-                ),
-                (
-                    ("Balanced", |r| r.length = ReplyLength::Balanced),
-                    style.length == ReplyLength::Balanced,
-                ),
-                (
-                    ("Detailed", |r| r.length = ReplyLength::Detailed),
-                    style.length == ReplyLength::Detailed,
-                ),
-            ],
-        ),
-        (
-            "warmth",
-            "Warmth",
-            vec![
-                (
-                    ("Plain", |r| r.warmth = ReplyWarmth::Plain),
-                    style.warmth == ReplyWarmth::Plain,
-                ),
-                (
-                    ("Default", |r| r.warmth = ReplyWarmth::Default),
-                    style.warmth == ReplyWarmth::Default,
-                ),
-                (
-                    ("Warm", |r| r.warmth = ReplyWarmth::Warm),
-                    style.warmth == ReplyWarmth::Warm,
-                ),
-            ],
-        ),
-        (
+    let length: Stops = [
+        ("Short", |r| r.length = ReplyLength::Short),
+        ("Balanced", |r| r.length = ReplyLength::Balanced),
+        ("Detailed", |r| r.length = ReplyLength::Detailed),
+    ];
+    let warmth: Stops = [
+        ("Plain", |r| r.warmth = ReplyWarmth::Plain),
+        ("Default", |r| r.warmth = ReplyWarmth::Default),
+        ("Warm", |r| r.warmth = ReplyWarmth::Warm),
+    ];
+    let formatting: Stops = [
+        ("Prose", |r| r.formatting = ReplyFormatting::Prose),
+        ("Default", |r| r.formatting = ReplyFormatting::Default),
+        ("Lists & tables", |r| {
+            r.formatting = ReplyFormatting::Structured
+        }),
+    ];
+    let at = |stops: &Stops| {
+        stops
+            .iter()
+            .position(|(_, set)| {
+                let mut probe = style;
+                set(&mut probe);
+                probe == style
+            })
+            .unwrap_or(1)
+    };
+    let emoji = style.emoji;
+    let controls = col()
+        .grow(1.1)
+        .min_w(0.0)
+        .gap(14.0)
+        .child(slider(t, "length", "Length", &length, at(&length), saving))
+        .child(slider(t, "warmth", "Warmth", &warmth, at(&warmth), saving))
+        .child(slider(
+            t,
             "formatting",
             "Formatting",
-            vec![
-                (
-                    ("Prose", |r| r.formatting = ReplyFormatting::Prose),
-                    style.formatting == ReplyFormatting::Prose,
-                ),
-                (
-                    ("Default", |r| r.formatting = ReplyFormatting::Default),
-                    style.formatting == ReplyFormatting::Default,
-                ),
-                (
-                    ("Lists & tables", |r| {
-                        r.formatting = ReplyFormatting::Structured
-                    }),
-                    style.formatting == ReplyFormatting::Structured,
-                ),
-            ],
-        ),
-        (
-            "emoji",
-            "Emoji",
-            vec![
-                (("Off", |r| r.emoji = false), !style.emoji),
-                (("On", |r| r.emoji = true), style.emoji),
-            ],
-        ),
-    ];
-    let mut body = col().w_full().gap(10.0);
-    for (key, name, choices) in dials {
-        let mut buttons = row()
-            .role("group")
-            .label(name)
-            .gap(4.0)
-            .center_y()
-            .flex_wrap();
-        for ((label, set), chosen) in choices {
-            let mut choice = button(t, Kind::Ghost, Size::Small, None, label)
-                .key(format!(
-                    "rd-reply-{key}-{}",
-                    label.to_lowercase().replace(' ', "-")
-                ))
-                .checked(chosen);
-            if chosen {
-                choice = choice.fill(t.muted);
-            }
-            buttons = buttons.child(pressable(choice, !saving, move |s: &mut Ui| {
-                set(&mut s.profile.reply_style);
-                s.profile.message = None;
-            }));
-        }
-        body = body.child(
+            &formatting,
+            at(&formatting),
+            saving,
+        ))
+        .child(
             row()
                 .w_full()
-                .gap(12.0)
+                .justify_between()
                 .center_y()
-                .child(
-                    text(name)
-                        .font(font(13.0, 500.0))
-                        .color(t.foreground)
-                        .w(92.0),
-                )
-                .child(buttons),
+                .child(text("Emoji").font(font(13.0, 500.0)).color(t.foreground))
+                .child(pressable(
+                    switch(t, emoji, "Emoji").key("rd-reply-emoji"),
+                    !saving,
+                    move |s: &mut Ui| {
+                        s.profile.reply_style.emoji = !emoji;
+                        s.profile.message = None;
+                    },
+                )),
         );
-    }
-    let note = match style.length {
-        ReplyLength::Short => "The answer first; most replies under 80 words.",
-        ReplyLength::Balanced => "The answer first, with a line of context; most under 150 words.",
-        ReplyLength::Detailed => "The answer first, then the reasoning and caveats you'd want.",
-    };
     section(
         t,
         "Replies",
         "How this bot writes back. Its personality can still ask for more.",
-        body.child(
-            text(note)
-                .key("rd-reply-note")
-                .font(font(11.0, 400.0))
-                .color(t.muted_foreground)
-                .mt(4.0)
-                .wrap(),
-        ),
+        row()
+            .w_full()
+            .gap(20.0)
+            .child(controls)
+            .child(sample(t, &style)),
     )
+}
+
+/// One reply setting as a slider with three stops: a track, the chosen
+/// stop as a handle, and the two ends named beneath. Each stop is a button.
+fn slider(t: &Theme, key: &str, name: &str, stops: &Stops, at: usize, saving: bool) -> El {
+    let small = |content: &str| {
+        text(content.to_owned())
+            .font(font(11.5, 400.0))
+            .color(t.muted_foreground)
+    };
+    let mut track = row()
+        .role("group")
+        .label(name)
+        .w_full()
+        .h(20.0)
+        .center_y()
+        .px(2.0);
+    for (index, (label, set)) in stops.iter().enumerate() {
+        if index > 0 {
+            // The track between two stops: filled up to the chosen one.
+            let filled = index <= at;
+            let mut line = el()
+                .grow(1.0)
+                .h(4.0)
+                .fill(if filled { t.accent } else { t.muted });
+            if !filled {
+                line = line.border(1.0, t.border);
+            }
+            track = track.child(line.a11y_hidden());
+        }
+        let chosen = index == at;
+        let mark = if chosen {
+            el().key(format!("rd-reply-{key}-handle"))
+                .size(16.0, 16.0)
+                .radius(8.0)
+                .fill(t.card)
+                .border(2.0, t.accent)
+        } else {
+            el().size(6.0, 6.0)
+                .radius(3.0)
+                .fill(if index < at { t.accent } else { t.border })
+        };
+        let set = *set;
+        track = track.child(pressable(
+            row()
+                .key(format!(
+                    "rd-reply-{key}-{}",
+                    label.to_lowercase().replace(' ', "-")
+                ))
+                .role("button")
+                .label(format!("{name}: {label}"))
+                .checked(chosen)
+                .size(20.0, 20.0)
+                .center()
+                .child(mark.a11y_hidden()),
+            !saving,
+            move |s: &mut Ui| {
+                set(&mut s.profile.reply_style);
+                s.profile.message = None;
+            },
+        ));
+    }
+    col()
+        .w_full()
+        .gap(4.0)
+        .child(
+            row()
+                .w_full()
+                .justify_between()
+                .center_y()
+                .child(
+                    text(name.to_owned())
+                        .font(font(13.0, 500.0))
+                        .color(t.foreground),
+                )
+                .child(small(stops[at].0).key(format!("rd-reply-{key}-value"))),
+        )
+        .child(track)
+        .child(
+            row()
+                .w_full()
+                .justify_between()
+                .child(small(stops[0].0))
+                .child(small(stops[2].0)),
+        )
+}
+
+/// The sample reply beside the sliders, as `reply-sample.ts` writes it.
+fn sample(t: &Theme, style: &ReplyStyle) -> El {
+    let line = |content: String, weight: f32| {
+        text(content)
+            .font(font(12.5, weight).lh(20.0))
+            .color(t.foreground)
+            .wrap()
+    };
+    let lead = match style.warmth {
+        ReplyWarmth::Plain => "Wed 14:00, Bole clinic. It works.",
+        ReplyWarmth::Default => "Wed 14:00 at Bole clinic works.",
+        ReplyWarmth::Warm => "Good news: Wed 14:00 at Bole clinic works for Dr. Amare!",
+    };
+    let lead = if style.emoji {
+        format!("{lead} 🦷")
+    } else {
+        lead.to_owned()
+    };
+    let context = match style.length {
+        ReplyLength::Short => None,
+        ReplyLength::Balanced => Some("Dr. Amare has a 30-minute slot."),
+        ReplyLength::Detailed => Some(
+            "Dr. Amare has a 30-minute slot. Tuesday was earlier but clashes with your 9:00 call, and he's away from Friday.",
+        ),
+    };
+    let mut body = col()
+        .key("rd-reply-sample")
+        .role("figure")
+        .label("Sample reply")
+        .grow(1.0)
+        .min_w(0.0)
+        .gap(6.0)
+        .padding(14.0)
+        .radius(12.0)
+        .fill(t.background)
+        .border(1.0, t.border)
+        .child(
+            text("SAMPLE REPLY")
+                .font(font(10.5, 500.0))
+                .color(t.muted_foreground),
+        )
+        .child(line(lead, 600.0).key("rd-reply-sample-lead"));
+    if let Some(context) = context {
+        body = body.child(line(context.to_owned(), 400.0));
+    }
+    if style.formatting == ReplyFormatting::Structured {
+        body = body.child(line("Before you go".to_owned(), 600.0));
+    }
+    if style.formatting == ReplyFormatting::Prose {
+        body.child(line(
+            "Bring last year's X-ray; parking is behind the building.".to_owned(),
+            400.0,
+        ))
+    } else {
+        ["Bring last year's X-ray", "Parking is behind the building"]
+            .into_iter()
+            .fold(body, |body, note| {
+                body.child(line(format!("•  {note}"), 400.0))
+            })
+    }
 }
 
 /// "Delete bot", under the form: what it removes, and the button that asks
