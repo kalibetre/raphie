@@ -63,6 +63,8 @@ import {
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
+import { createSkillTools } from "../domains/skills/infrastructure/skill-tools.ts";
+import { WorkspaceSkills } from "../domains/skills/infrastructure/workspace-skills.ts";
 import { createWebSearchTools } from "../domains/web/infrastructure/web-search-tools.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
 import { createDocumentTools } from "../domains/workspaces/infrastructure/document-tools.ts";
@@ -138,6 +140,8 @@ export class Gateway {
   files: Files;
   harness!: Harness;
   workspace!: RuntimeWorkspace;
+  /** This bot's skills, kept in its workspace. */
+  skills!: WorkspaceSkills;
   root!: Conversation;
   options: Options;
   workflow: ReturnType<typeof deliveryWorkflow>;
@@ -270,6 +274,12 @@ export class Gateway {
       namePrefix: options.containerNamePrefix,
     });
     app.installWorkspaceTools();
+    app.skills = new WorkspaceSkills(app.workspace);
+    registry.install(createSkillTools(app.skills));
+    app.chats.skills = {
+      instructions: () => app.skills.instructions(),
+      refresh: () => app.skills.refresh(),
+    };
     const previousChats = await app.harness.snapshot(Chats, context);
     const previousModels = new Map<number, ModelRef>();
     for (const session of previousChats?.conversations ?? []) {

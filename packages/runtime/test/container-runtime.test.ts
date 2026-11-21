@@ -471,3 +471,64 @@ containerTest(
   },
   30_000,
 );
+
+containerTest(
+  "skills are written and read through the container guest",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "raphie-test-skills-"));
+    const gateway = await Gateway.open({
+      directory,
+      containerNamePrefix: "raphie-test",
+      deferResume: true,
+    });
+    try {
+      const defaults = (await gateway.workspace.info()).settings;
+      await gateway.saveSandboxSettings({
+        ...defaults,
+        provider: "container",
+        hostNetworkAcknowledged: true,
+        idleMinutes: 1,
+      });
+      expect((await gateway.workspace.info()).provider.id).toBe("container");
+      await gateway.skills.save(
+        "notes",
+        {
+          files: [
+            {
+              path: "SKILL.md",
+              text: "---\nname: notes\ndescription: Keep notes.\n---\nWrite them down.\n",
+            },
+            { path: "references/style.md", text: "Short lines.\n" },
+          ],
+        },
+        true,
+      );
+      expect(await gateway.skills.list()).toMatchObject([
+        { name: "notes", files: ["SKILL.md", "references/style.md"] },
+      ]);
+      expect(await gateway.skills.read("notes", "references/style.md")).toBe(
+        "Short lines.\n",
+      );
+      // Saving again replaces the folder, so a dropped file is gone.
+      await gateway.skills.save(
+        "notes",
+        {
+          files: [
+            {
+              path: "SKILL.md",
+              text: "---\nname: notes\ndescription: Keep notes.\n---\n",
+            },
+          ],
+        },
+        false,
+      );
+      expect((await gateway.skills.list())[0]?.files).toEqual(["SKILL.md"]);
+      await gateway.skills.remove("notes");
+      expect(await gateway.skills.list()).toEqual([]);
+    } finally {
+      await gateway.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  60_000,
+);
