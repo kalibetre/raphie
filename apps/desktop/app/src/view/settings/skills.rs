@@ -30,7 +30,7 @@ pub fn skills(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
     let body = match (&s.skills.mode, s.model.skills.get(bot_id)) {
         (SkillsMode::List, Some(items)) => {
             import_dialog(s, look, overlays);
-            vec![list(s, items, t), how_they_work(t)]
+            vec![list(s, items, t)]
         }
         (SkillsMode::List, None) => vec![loading(s, bot_id, t)],
         (mode, _) => {
@@ -223,15 +223,6 @@ fn skill_row(skill: &SkillSummary, busy: bool, t: &Theme) -> El {
         .center_y()
         .child(copy)
         .child(actions)
-}
-
-fn how_they_work(t: &Theme) -> El {
-    group_heading(
-        t,
-        "How skills work",
-        "Each skill is a folder in this bot's workspace, skills/<name>/, holding a SKILL.md in the standard Agent Skills format. The bot sees every skill's name and description, reads a whole skill only when a task matches, and runs its scripts in the sandbox. Skills never grant tools or permissions.",
-        None,
-    )
 }
 
 /// The editor: the skill's files on the left, the open one on the right.

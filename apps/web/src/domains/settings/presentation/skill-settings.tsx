@@ -183,10 +183,6 @@ function SkillList({
           {error}
         </p>
       )}
-      <Group
-        title="How skills work"
-        note="Each skill is a folder in this bot's workspace, skills/<name>/, holding a SKILL.md in the standard Agent Skills format. The bot sees every skill's name and description, reads a whole skill only when a task matches, and runs its scripts in the sandbox. Skills never grant tools or permissions."
-      />
       <ImportDialog open={importing} onOpenChange={setImporting} />
     </>
   );
