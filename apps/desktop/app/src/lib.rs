@@ -16,6 +16,7 @@
 //! - [`channels`]: what is typed on a bot's Channels page.
 //! - [`mcp`]: the "Add a connection" form on a bot's MCP tools page.
 //! - [`memory`]: the edits in progress on a bot's Memory page.
+//! - [`skills`]: what is open and typed on a bot's Skills page.
 //! - [`owner`]: the edits in progress on About you, shared by every bot.
 //! - [`scenes`]: fixture states for headless snapshots and tests.
 //! - [`format`]: small text helpers.
@@ -34,6 +35,7 @@ pub mod profile;
 pub mod sandbox;
 pub mod scenes;
 pub mod sections;
+pub mod skills;
 pub mod state;
 pub mod theme;
 pub mod view;

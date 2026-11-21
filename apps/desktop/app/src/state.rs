@@ -26,7 +26,7 @@ use raphie_core::local_install;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
 use raphie_core::mentions::{MentionQuery, insert_mention, mention_matches, mention_query};
-use raphie_core::model::{AuthState, Effect, Event, Model};
+use raphie_core::model::{AuthState, Effect, Event, Model, SkillOutcome};
 use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
 use raphie_core::replies::ReadReplies;
@@ -48,6 +48,7 @@ use crate::owner::OwnerDraft;
 use crate::profile::{NEW_BOT, ProfileDraft};
 use crate::sandbox::SandboxDraft;
 use crate::sections::{BotSection, Page};
+use crate::skills::{SkillEditor, SkillsMode, SkillsView};
 
 /// The fixture's web host: the default for a first launch from a checkout.
 /// The test fixture's web host (`bun run dev:web:fixture`), which the dev
@@ -437,6 +438,8 @@ pub struct Ui {
     channels_asked_at: (f64, f64),
     /// Settings → MCP tools: the "Add a connection" form.
     pub mcp: McpForm,
+    /// Settings → Skills: the list, an open skill and the import dialog.
+    pub skills: SkillsView,
     /// The frame clock when the MCP tools page last asked for its
     /// connections.
     mcp_asked_at: f64,
@@ -598,6 +601,7 @@ impl Ui {
             telegram: TelegramForm::new(),
             channels_asked_at: (0.0, 0.0),
             mcp: McpForm::new(),
+            skills: SkillsView::new(),
             mcp_asked_at: 0.0,
             sign_in_asked_at: 0.0,
             sign_in_opened: None,
@@ -1651,6 +1655,15 @@ impl Ui {
                     bot_id: bot_id.clone(),
                 });
             }
+            if *section == BotSection::Skills {
+                self.skills = SkillsView::new();
+                self.model.skill = None;
+                self.model.skill_message = None;
+                self.model.skill_change_error = None;
+                self.command(Command::LoadSkills {
+                    bot_id: bot_id.clone(),
+                });
+            }
             if *section == BotSection::Mcp {
                 // A fresh form each time: a typed token is never kept for
                 // a page that is not on screen.
@@ -2626,6 +2639,176 @@ impl Ui {
         true
     }
 
+    /// The bot whose Skills page is on screen.
+    fn skills_bot(&self) -> Option<String> {
+        match &self.screen {
+            Screen::Settings(Page::Bot {
+                bot_id,
+                section: BotSection::Skills,
+            }) => Some(bot_id.clone()),
+            _ => None,
+        }
+    }
+
+    /// Opens a saved skill in the editor.
+    pub fn open_skill(&mut self, name: &str) {
+        let Some(bot_id) = self.skills_bot() else {
+            return;
+        };
+        self.skills.mode = SkillsMode::Edit(name.to_owned());
+        self.skills.editor = None;
+        self.model.skill = None;
+        self.model.skill_error = None;
+        self.model.skill_message = None;
+        self.model.skill_change_error = None;
+        self.command(Command::LoadSkill {
+            bot_id,
+            name: name.to_owned(),
+        });
+    }
+
+    /// Opens the editor on a new skill.
+    pub fn new_skill(&mut self) {
+        self.skills.mode = SkillsMode::New;
+        self.skills.editor = Some(SkillEditor::new_skill());
+        self.model.skill_message = None;
+        self.model.skill_change_error = None;
+    }
+
+    /// Back to the list, unless the editor holds unsaved edits.
+    pub fn back_to_skills(&mut self) {
+        if let Some(editor) = &mut self.skills.editor
+            && editor.is_dirty()
+        {
+            editor.note = Some("Save or discard your changes first.".into());
+            return;
+        }
+        self.skills.mode = SkillsMode::List;
+        self.skills.editor = None;
+        self.model.skill_message = None;
+        self.model.skill_change_error = None;
+    }
+
+    /// The editor, once its saved skill has arrived, shows it.
+    fn follow_skill(&mut self) {
+        let (Some(bot_id), SkillsMode::Edit(name)) = (self.skills_bot(), &self.skills.mode) else {
+            return;
+        };
+        if self.skills.editor.is_none()
+            && let Some((id, detail)) = &self.model.skill
+            && *id == bot_id
+            && detail.summary.name == *name
+        {
+            self.skills.editor = Some(SkillEditor::of(detail));
+        }
+    }
+
+    pub fn can_save_skill(&self) -> bool {
+        self.skills.editor.as_ref().is_some_and(|editor| {
+            (editor.is_dirty() || self.skills.mode == SkillsMode::New) && !editor.name().is_empty()
+        }) && !self.model.changing_skill
+    }
+
+    pub fn save_skill(&mut self) {
+        if !self.can_save_skill() {
+            return;
+        }
+        let (Some(bot_id), Some(editor)) = (self.skills_bot(), &self.skills.editor) else {
+            return;
+        };
+        let create = self.skills.mode == SkillsMode::New;
+        let name = match &self.skills.mode {
+            SkillsMode::Edit(name) => name.clone(),
+            _ => editor.name(),
+        };
+        let skill = editor.save();
+        if self.model.begin_change_skill() {
+            self.command(Command::SaveSkill {
+                bot_id,
+                name,
+                skill,
+                create,
+            });
+        }
+    }
+
+    pub fn discard_skill(&mut self) {
+        self.skills.editor = match (&self.skills.mode, &self.model.skill) {
+            (SkillsMode::New, _) => Some(SkillEditor::new_skill()),
+            (SkillsMode::Edit(_), Some((_, detail))) => Some(SkillEditor::of(detail)),
+            _ => None,
+        };
+        self.model.skill_change_error = None;
+        self.model.skill_message = None;
+    }
+
+    pub fn enable_skill(&mut self, name: &str, enabled: bool) {
+        let Some(bot_id) = self.skills_bot() else {
+            return;
+        };
+        if self.model.begin_change_skill() {
+            self.command(Command::EnableSkill {
+                bot_id,
+                name: name.to_owned(),
+                enabled,
+            });
+        }
+    }
+
+    pub fn remove_skill(&mut self) {
+        let (Some(bot_id), SkillsMode::Edit(name)) = (self.skills_bot(), &self.skills.mode) else {
+            return;
+        };
+        let name = name.clone();
+        if self.model.begin_change_skill() {
+            self.command(Command::RemoveSkill { bot_id, name });
+        }
+    }
+
+    /// Opens the system's file picker for a .zip of skills.
+    pub fn choose_skill_zip(tx: &mut Tx) {
+        let options = FileDialogOptions {
+            title: "Import skills from a .zip".into(),
+            ..FileDialogOptions::default()
+        };
+        tx.open_file(options, |s: &mut Ui, answer, _: &mut Tx| match answer {
+            Ok(Some(path)) => s.skills.import.zip = Some(path),
+            Ok(None) => {}
+            Err(error) => {
+                s.model.skill_change_error =
+                    Some(format!("Could not open the file picker: {error}"));
+            }
+        });
+    }
+
+    pub fn import_skills(&mut self) {
+        let Some(bot_id) = self.skills_bot() else {
+            return;
+        };
+        let form = &self.skills.import;
+        if !form.ready() {
+            return;
+        }
+        let source = if form.github {
+            raphie_core::engine::SkillSource::GitHub {
+                url: form.url.text.trim().to_owned(),
+            }
+        } else {
+            let Some(path) = form.zip.clone() else {
+                return;
+            };
+            raphie_core::engine::SkillSource::Zip { path }
+        };
+        let replace = form.replace;
+        if self.model.begin_change_skill() {
+            self.command(Command::ImportSkills {
+                bot_id,
+                source,
+                replace,
+            });
+        }
+    }
+
     /// After news from the host: an About you form with no edits shows what
     /// the host has now.
     fn follow_owner(&mut self) {
@@ -3396,6 +3579,24 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     // The job is scheduled: close its dialog and empty it.
                     ui.job = JobForm::new_at(now_ms());
                 }
+                Effect::SkillChanged(outcome) => match outcome {
+                    SkillOutcome::Saved(detail) => {
+                        if ui.skills.mode == SkillsMode::New {
+                            ui.skills.mode = SkillsMode::List;
+                            ui.skills.editor = None;
+                        } else {
+                            ui.skills.editor = Some(SkillEditor::of(&detail));
+                        }
+                    }
+                    SkillOutcome::Removed => {
+                        ui.skills.mode = SkillsMode::List;
+                        ui.skills.editor = None;
+                    }
+                    SkillOutcome::Imported(_) => {
+                        ui.skills.import = crate::skills::SkillImportForm::new();
+                    }
+                    SkillOutcome::Changed => {}
+                },
                 Effect::OwnerSaved => {
                     // Show what was saved.
                     if let Some(saved) = &ui.model.owner {
@@ -3457,6 +3658,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_memories();
     ui.follow_sandbox();
     ui.follow_owner();
+    ui.follow_skill();
     ui.ensure_models();
     ui.ensure_command_mode();
     ui.ask_previews();

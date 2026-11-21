@@ -15,13 +15,13 @@ use raphie_core::contracts::{
     SandboxProvider, Scope, TelegramPairingCode,
 };
 use raphie_core::contracts::{ReplyLength, ReplyStyle, ReplyWarmth};
-use raphie_core::engine::{Command, ConnectionChange};
+use raphie_core::engine::{Command, ConnectionChange, SkillSource};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::Target;
 use raphie_core::jobs::JobAction;
 use raphie_core::mcp::{McpAction, NewMcpConnection};
 use raphie_core::memory::{KeyChange, MemoryUpdate};
-use raphie_core::model::{AuthState, Event, Reach};
+use raphie_core::model::{AuthState, Event, Reach, SkillOutcome};
 use raphie_core::model_library::PickerFilter;
 use raphie_core::sandbox::SandboxUpdate;
 use raphie_core::settings::ThemeChoice;
@@ -5395,4 +5395,185 @@ fn a_failed_owner_save_says_why_and_keeps_the_draft() {
         Some("Raphie refused the profile.")
     );
     assert_eq!(rt.state.owner.time_zone, "Europe/Berlin");
+}
+
+#[test]
+fn skills_are_listed_after_mcp_tools_and_turned_on_or_off() {
+    let mut rt = render(scenes::settings_account, false);
+    let mcp = element(&rt, "rd-nav-default-mcp");
+    let skills = element(&rt, "rd-nav-default-skills");
+    assert!(mcp.rect[1] < skills.rect[1], "Skills follows MCP tools");
+    click(&mut rt, "rd-nav-default-skills");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadSkills {
+            bot_id: "default".into()
+        })
+    );
+    deliver(
+        &mut rt,
+        Event::Skills {
+            bot_id: "default".into(),
+            items: scenes::skill_list(),
+        },
+    );
+    assert!(screen_text(&rt).contains("3 skills · 1 on."));
+    assert!(screen_text(&rt).contains("SKILL.md has no description."));
+    click(&mut rt, "rd-skill-literature-review-toggle");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::EnableSkill {
+            bot_id: "default".into(),
+            name: "literature-review".into(),
+            enabled: true,
+        })
+    );
+    // A broken skill cannot be turned on.
+    rt.state.model.changing_skill = false;
+    let before = rt.state.sent.len();
+    click(&mut rt, "rd-skill-notes-toggle");
+    assert_eq!(rt.state.sent.len(), before);
+}
+
+#[test]
+fn a_skill_is_opened_edited_and_saved() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::settings_skills, dark);
+        click(&mut rt, "rd-skill-weekly-report-edit");
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::LoadSkill {
+                bot_id: "default".into(),
+                name: "weekly-report".into(),
+            })
+        );
+        assert!(screen_text(&rt).contains("Loading skill…"));
+        deliver(
+            &mut rt,
+            Event::Skill {
+                bot_id: "default".into(),
+                detail: Box::new(scenes::skill_detail()),
+            },
+        );
+        assert!(rt.find("rd-save-bar").is_none(), "a clean editor is quiet");
+        click(&mut rt, "rd-skill-file-1");
+        assert_eq!(
+            element(&rt, "rd-skill-open-path").text.as_deref(),
+            Some("assets/template.md")
+        );
+        click(&mut rt, "rd-skill-text");
+        rt.key(KeyEvent {
+            key: Key::Text("!".into()),
+            mods: Default::default(),
+        });
+        settle(&mut rt);
+        // Back is refused while there are edits.
+        click(&mut rt, "rd-skills-back");
+        assert_eq!(
+            element(&rt, "rd-skill-status").text.as_deref(),
+            Some("Save or discard your changes first.")
+        );
+        click(&mut rt, "rd-skill-save");
+        let Some(Command::SaveSkill {
+            bot_id,
+            name,
+            skill,
+            create,
+        }) = rt.state.sent.last().cloned()
+        else {
+            panic!("no save was sent");
+        };
+        assert_eq!(
+            (bot_id.as_str(), name.as_str(), create),
+            ("default", "weekly-report", false)
+        );
+        // Files that are not text are not sent; the runtime keeps them.
+        let paths: Vec<_> = skill.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, vec!["SKILL.md", "assets/template.md"]);
+        deliver(
+            &mut rt,
+            Event::SkillChanged {
+                bot_id: "default".into(),
+                outcome: SkillOutcome::Saved(Box::new(scenes::skill_detail())),
+            },
+        );
+        assert_eq!(
+            element(&rt, "rd-skill-status").text.as_deref(),
+            Some("Saved. The bot uses it from its next message.")
+        );
+        click(&mut rt, "rd-skills-back");
+        assert!(
+            rt.find("rd-skill-weekly-report").is_some(),
+            "back on the list"
+        );
+    }
+}
+
+#[test]
+fn a_new_skill_is_created_from_the_template() {
+    let mut rt = render(scenes::settings_skills_new, false);
+    assert_eq!(
+        element(&rt, "rd-skill-status").text.as_deref(),
+        Some("A new skill")
+    );
+    click(&mut rt, "rd-skill-save");
+    let Some(Command::SaveSkill { name, create, .. }) = rt.state.sent.last().cloned() else {
+        panic!("no create was sent");
+    };
+    assert_eq!((name.as_str(), create), ("my-skill", true));
+    deliver(
+        &mut rt,
+        Event::SkillChangeFailed {
+            message: "A skill named my-skill already exists.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-skill-error").text.as_deref(),
+        Some("A skill named my-skill already exists.")
+    );
+    click(&mut rt, "rd-skill-save");
+    let mut created = scenes::skill_detail();
+    created.summary.name = "my-skill".into();
+    deliver(
+        &mut rt,
+        Event::SkillChanged {
+            bot_id: "default".into(),
+            outcome: SkillOutcome::Saved(Box::new(created)),
+        },
+    );
+    assert_eq!(
+        rt.state.skills.mode,
+        raphie_desktop::skills::SkillsMode::List
+    );
+}
+
+#[test]
+fn skills_are_imported_from_a_github_link() {
+    let mut rt = render(scenes::settings_skills_import, false);
+    click(&mut rt, "rd-skills-import-replace");
+    click(&mut rt, "rd-skills-import-confirm");
+    let Some(Command::ImportSkills {
+        source, replace, ..
+    }) = rt.state.sent.last().cloned()
+    else {
+        panic!("no import was sent");
+    };
+    assert_eq!(
+        source,
+        SkillSource::GitHub {
+            url: "https://github.com/acme/skills/tree/main/skills/pdf".into()
+        }
+    );
+    assert!(replace);
+    deliver(
+        &mut rt,
+        Event::SkillChanged {
+            bot_id: "default".into(),
+            outcome: SkillOutcome::Imported(vec!["pdf".into()]),
+        },
+    );
+    assert!(
+        rt.find("rd-skills-import-dialog").is_none(),
+        "the dialog closes"
+    );
 }

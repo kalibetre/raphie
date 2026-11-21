@@ -37,6 +37,7 @@ use crate::contracts::ApprovalMode;
 use crate::contracts::ModelSelection;
 use crate::contracts::NewBot;
 use crate::contracts::SaveOwnerProfile;
+use crate::contracts::SaveSkill;
 use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
@@ -47,7 +48,7 @@ use crate::jobs::{JobAction, NewJob};
 use crate::local_install;
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::MemoryUpdate;
-use crate::model::{AnswerOutcome, DecisionOutcome, Event, Reach, StreamStatus};
+use crate::model::{AnswerOutcome, DecisionOutcome, Event, Reach, SkillOutcome, StreamStatus};
 use crate::origin::Origin;
 use crate::sandbox::SandboxUpdate;
 use crate::settings::Settings;
@@ -59,6 +60,35 @@ use crate::workspace::save_download;
 /// Rune's `Waker`, which schedules the UI's `poll`. Same shape as
 /// `rune::Waker`, so the core does not need to depend on Rune.
 pub type Notify = Arc<dyn Fn() + Send + Sync>;
+
+/// Where imported skills come from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SkillSource {
+    /// A .zip of skill folders on this machine.
+    Zip { path: std::path::PathBuf },
+    /// A link to a GitHub repository or a folder in one.
+    GitHub { url: String },
+}
+
+/// One change to a bot's skills, as the engine carries it out.
+enum SkillChange {
+    Save {
+        name: String,
+        skill: SaveSkill,
+        create: bool,
+    },
+    Enable {
+        name: String,
+        enabled: bool,
+    },
+    Remove {
+        name: String,
+    },
+    Import {
+        source: SkillSource,
+        replace: bool,
+    },
+}
 
 /// What the owner asked for.
 #[derive(Clone, Debug, PartialEq)]
@@ -252,6 +282,39 @@ pub enum Command {
         bot_id: String,
         name: String,
         revision: u32,
+    },
+    /// Load a bot's skills.
+    LoadSkills {
+        bot_id: String,
+    },
+    /// Load one skill with its files, for the editor.
+    LoadSkill {
+        bot_id: String,
+        name: String,
+    },
+    /// Create (`create`) or save a skill's text files.
+    SaveSkill {
+        bot_id: String,
+        name: String,
+        skill: SaveSkill,
+        create: bool,
+    },
+    /// Turn a skill on or off.
+    EnableSkill {
+        bot_id: String,
+        name: String,
+        enabled: bool,
+    },
+    /// Delete a skill's folder.
+    RemoveSkill {
+        bot_id: String,
+        name: String,
+    },
+    /// Install the skills in a .zip, or under a GitHub link.
+    ImportSkills {
+        bot_id: String,
+        source: SkillSource,
+        replace: bool,
     },
     /// Load who every bot is talking to.
     LoadOwner,
@@ -744,6 +807,34 @@ impl Engine {
                 name,
                 revision,
             } => self.delete_bot(bot_id, name, revision),
+            Command::LoadSkills { bot_id } => self.load_skills(bot_id),
+            Command::LoadSkill { bot_id, name } => self.load_skill(bot_id, name),
+            Command::SaveSkill {
+                bot_id,
+                name,
+                skill,
+                create,
+            } => self.change_skill(
+                bot_id,
+                SkillChange::Save {
+                    name,
+                    skill,
+                    create,
+                },
+            ),
+            Command::EnableSkill {
+                bot_id,
+                name,
+                enabled,
+            } => self.change_skill(bot_id, SkillChange::Enable { name, enabled }),
+            Command::RemoveSkill { bot_id, name } => {
+                self.change_skill(bot_id, SkillChange::Remove { name })
+            }
+            Command::ImportSkills {
+                bot_id,
+                source,
+                replace,
+            } => self.change_skill(bot_id, SkillChange::Import { source, replace }),
             Command::LoadOwner => self.load_owner(),
             Command::SaveOwner { owner } => self.save_owner(owner),
             Command::LoadSandbox { bot_id } => self.load_sandbox(bot_id),
@@ -1693,6 +1784,106 @@ impl Engine {
                         message: error.to_string(),
                     });
                 }
+            }
+        });
+    }
+
+    fn load_skills(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.skills(&bot_id).await {
+                Ok(items) => emit.emit(Event::Skills { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::SkillsFailed {
+                    bot_id,
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    fn load_skill(&mut self, bot_id: String, name: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.skill(&bot_id, &name).await {
+                Ok(detail) => emit.emit(Event::Skill {
+                    bot_id,
+                    detail: Box::new(detail),
+                }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::SkillFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
+    /// Any change to a bot's skills; the list is read again afterwards.
+    fn change_skill(&mut self, bot_id: String, change: SkillChange) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let outcome = match change {
+                SkillChange::Save {
+                    name,
+                    skill,
+                    create,
+                } => api
+                    .save_skill(&bot_id, &name, &skill, create)
+                    .await
+                    .map(|detail| SkillOutcome::Saved(Box::new(detail))),
+                SkillChange::Enable { name, enabled } => api
+                    .enable_skill(&bot_id, &name, enabled)
+                    .await
+                    .map(|_| SkillOutcome::Changed),
+                SkillChange::Remove { name } => api
+                    .remove_skill(&bot_id, &name)
+                    .await
+                    .map(|()| SkillOutcome::Removed),
+                SkillChange::Import { source, replace } => match source {
+                    SkillSource::Zip { path } => match read_zip(&path).await {
+                        Ok((name, bytes)) => {
+                            api.import_skills_zip(&bot_id, &name, &bytes, replace).await
+                        }
+                        Err(error) => Err(error),
+                    },
+                    SkillSource::GitHub { url } => {
+                        api.import_skills_github(&bot_id, &url, replace).await
+                    }
+                }
+                .map(|import| SkillOutcome::Imported(import.installed)),
+            };
+            match outcome {
+                Ok(outcome) => {
+                    emit.emit(Event::SkillChanged {
+                        bot_id: bot_id.clone(),
+                        outcome,
+                    });
+                    if let Ok(items) = api.skills(&bot_id).await {
+                        emit.emit(Event::Skills { bot_id, items });
+                    }
+                }
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::SkillChangeFailed {
+                    message: error.to_string(),
+                }),
             }
         });
     }
@@ -2677,6 +2868,35 @@ fn reach_of(result: Result<(), ApiError>) -> Option<Reach> {
         Err(ApiError::Locked) => Some(Reach::RuntimeDown(ApiError::Locked.to_string())),
         _ => Some(Reach::Up),
     }
+}
+
+/// The file name and bytes of a .zip chosen to import, refused past the
+/// runtime's 8 MiB limit before it is sent.
+async fn read_zip(path: &std::path::Path) -> Result<(String, Vec<u8>), ApiError> {
+    let too_large = || ApiError::Rejected {
+        status: 413,
+        message: "A .zip is at most 8 MiB.".into(),
+    };
+    let meta = tokio::fs::metadata(path)
+        .await
+        .map_err(|error| ApiError::Rejected {
+            status: 400,
+            message: format!("Could not read the file: {error}"),
+        })?;
+    if meta.len() > 8 * 1024 * 1024 {
+        return Err(too_large());
+    }
+    let bytes = tokio::fs::read(path)
+        .await
+        .map_err(|error| ApiError::Rejected {
+            status: 400,
+            message: format!("Could not read the file: {error}"),
+        })?;
+    let name = path.file_name().map_or_else(
+        || "skills.zip".to_owned(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    Ok((name, bytes))
 }
 
 #[cfg(test)]

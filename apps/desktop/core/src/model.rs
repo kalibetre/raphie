@@ -26,6 +26,7 @@ use crate::contracts::{
 use crate::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use crate::contracts::{JobRun, ScheduledJob};
 use crate::contracts::{ProviderSignIn, SignInStatus};
+use crate::contracts::{SkillDetail, SkillSummary};
 use crate::inbox::{Inbox, JobUpdates};
 use crate::inspection::TraceView;
 use crate::jobs::RunHistory;
@@ -120,6 +121,31 @@ pub enum Event {
         bot_id: String,
     },
     BotDeleteFailed {
+        message: String,
+    },
+    /// A bot's skills.
+    Skills {
+        bot_id: String,
+        items: Vec<SkillSummary>,
+    },
+    SkillsFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// One skill with its files, for the editor.
+    Skill {
+        bot_id: String,
+        detail: Box<SkillDetail>,
+    },
+    SkillFailed {
+        message: String,
+    },
+    /// A change to a bot's skills went through.
+    SkillChanged {
+        bot_id: String,
+        outcome: SkillOutcome,
+    },
+    SkillChangeFailed {
         message: String,
     },
     /// Who every bot is talking to.
@@ -561,6 +587,18 @@ pub enum AuthState {
     SignedIn,
 }
 
+/// What a change to a bot's skills did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SkillOutcome {
+    /// Created or saved; this is the skill as saved.
+    Saved(Box<SkillDetail>),
+    /// Turned on or off.
+    Changed,
+    Removed,
+    /// Imported; these are the skills installed.
+    Imported(Vec<String>),
+}
+
 /// Something the UI should do once, beyond redrawing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
@@ -581,6 +619,8 @@ pub enum Effect {
     BotDeleted(String),
     /// A job was scheduled: close its form and empty it.
     JobAdded,
+    /// A change to a bot's skills went through: the editor follows it.
+    SkillChanged(SkillOutcome),
     /// The owner profile was saved: its form should show it.
     OwnerSaved,
     /// This bot's sandbox settings were saved: its form should show them.
@@ -739,6 +779,20 @@ pub struct Model {
     pub memory_message: Option<String>,
     /// The saved memories on "Browse memory".
     pub memories: MemoryBrowser,
+    /// Each bot's skills, once loaded.
+    pub skills: HashMap<String, Vec<SkillSummary>>,
+    /// The bot whose skills could not be loaded, and why.
+    pub skills_error: Option<(String, String)>,
+    /// The skill open in the editor, with the bot it belongs to.
+    pub skill: Option<(String, SkillDetail)>,
+    /// Why the skill for the editor could not be loaded.
+    pub skill_error: Option<String>,
+    /// A change to a skill is on its way.
+    pub changing_skill: bool,
+    /// Why the last change to a skill failed, until the next attempt.
+    pub skill_change_error: Option<String>,
+    /// What the last change to a skill said.
+    pub skill_message: Option<String>,
     /// Who every bot is talking to, once loaded.
     pub owner: Option<OwnerProfile>,
     /// Why the owner profile could not be loaded.
@@ -910,6 +964,13 @@ impl Default for Model {
             testing_memory: false,
             memory_message: None,
             memories: MemoryBrowser::default(),
+            skills: HashMap::new(),
+            skills_error: None,
+            skill: None,
+            skill_error: None,
+            changing_skill: false,
+            skill_change_error: None,
+            skill_message: None,
             owner: None,
             owner_error: None,
             saving_owner: false,
@@ -1124,6 +1185,45 @@ impl Model {
             Event::BotDeleteFailed { message } => {
                 self.deleting_bot = false;
                 self.delete_bot_error = Some(message);
+            }
+            Event::Skills { bot_id, items } => {
+                if self
+                    .skills_error
+                    .as_ref()
+                    .is_some_and(|(id, _)| *id == bot_id)
+                {
+                    self.skills_error = None;
+                }
+                self.skills.insert(bot_id, items);
+            }
+            Event::SkillsFailed { bot_id, message } => {
+                self.skills_error = Some((bot_id, message));
+            }
+            Event::Skill { bot_id, detail } => {
+                self.skill_error = None;
+                self.skill = Some((bot_id, *detail));
+            }
+            Event::SkillFailed { message } => self.skill_error = Some(message),
+            Event::SkillChanged { bot_id, outcome } => {
+                self.changing_skill = false;
+                self.skill_change_error = None;
+                self.skill_message = match &outcome {
+                    SkillOutcome::Saved(_) => {
+                        Some("Saved. The bot uses it from its next message.".into())
+                    }
+                    SkillOutcome::Imported(names) => {
+                        Some(format!("Imported {}.", names.join(", ")))
+                    }
+                    SkillOutcome::Removed | SkillOutcome::Changed => None,
+                };
+                if let SkillOutcome::Saved(detail) = &outcome {
+                    self.skill = Some((bot_id, (**detail).clone()));
+                }
+                return vec![Effect::SkillChanged(outcome)];
+            }
+            Event::SkillChangeFailed { message } => {
+                self.changing_skill = false;
+                self.skill_change_error = Some(message);
             }
             Event::Owner(owner) => {
                 self.owner_error = None;
@@ -1736,6 +1836,18 @@ impl Model {
         }
         self.deleting_bot = true;
         self.delete_bot_error = None;
+        true
+    }
+
+    /// The owner changed a skill. Returns false while another change is on
+    /// its way.
+    pub fn begin_change_skill(&mut self) -> bool {
+        if self.changing_skill {
+            return false;
+        }
+        self.changing_skill = true;
+        self.skill_change_error = None;
+        self.skill_message = None;
         true
     }
 

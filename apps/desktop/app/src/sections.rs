@@ -39,6 +39,8 @@ pub enum BotSection {
     /// The saved memories, reached from Memory.
     MemoryBrowse,
     Mcp,
+    /// The bot's skills, kept in its workspace.
+    Skills,
     Channels,
     Sandbox,
     Workspace,
@@ -48,12 +50,13 @@ pub enum BotSection {
 
 impl BotSection {
     /// The pages the navigation lists, in its order.
-    pub const ALL: [BotSection; 10] = [
+    pub const ALL: [BotSection; 11] = [
         BotSection::Profile,
         BotSection::Providers,
         BotSection::Models,
         BotSection::Memory,
         BotSection::Mcp,
+        BotSection::Skills,
         BotSection::Channels,
         BotSection::Sandbox,
         BotSection::Workspace,
@@ -70,6 +73,7 @@ impl BotSection {
             BotSection::Memory => "Memory",
             BotSection::MemoryBrowse => "Browse memory",
             BotSection::Mcp => "MCP tools",
+            BotSection::Skills => "Skills",
             BotSection::Channels => "Channels",
             BotSection::Sandbox => "Sandbox",
             BotSection::Workspace => "Workspace",
@@ -88,6 +92,7 @@ impl BotSection {
             BotSection::Memory => "memory",
             BotSection::MemoryBrowse => "memory-browse",
             BotSection::Mcp => "mcp",
+            BotSection::Skills => "skills",
             BotSection::Channels => "channels",
             BotSection::Sandbox => "sandbox",
             BotSection::Workspace => "workspace",
@@ -129,6 +134,9 @@ impl BotSection {
             }
             BotSection::MemoryBrowse => {
                 format!("What {bot} remembers, with sources. Correct or forget anything.")
+            }
+            BotSection::Skills => {
+                format!("Instructions {bot} reads when a task needs them, kept in its workspace.")
             }
             BotSection::Mcp => {
                 format!("Connect the tools {bot} can use. Every connection belongs to this bot.")

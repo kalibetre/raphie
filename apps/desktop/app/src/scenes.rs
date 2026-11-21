@@ -15,6 +15,7 @@ use raphie_core::contracts::{
 };
 use raphie_core::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use raphie_core::contracts::{JobRun, ScheduledJob};
+use raphie_core::contracts::{SkillDetail, SkillSummary};
 use raphie_core::engine::Command;
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::JobUpdates;
@@ -28,6 +29,7 @@ use serde_json::{Value, json};
 
 use crate::format::now_ms;
 use crate::sections::{BotSection, Page};
+use crate::skills::SkillEditor;
 use crate::state::{BACKEND, Dropdown, Filter, Ui};
 
 /// A named change to a fresh [`Ui`], as `AppSpec::scenes` takes them.
@@ -130,6 +132,11 @@ pub const SCENES: &[Scene] = &[
     ("settings-channels-empty", settings_channels_empty),
     ("settings-channels-loading", settings_channels_loading),
     ("settings-mcp", settings_mcp),
+    ("settings-skills", settings_skills),
+    ("settings-skills-empty", settings_skills_empty),
+    ("settings-skills-editor", settings_skills_editor),
+    ("settings-skills-new", settings_skills_new),
+    ("settings-skills-import", settings_skills_import),
     ("settings-mcp-command", settings_mcp_command),
     ("settings-mcp-empty", settings_mcp_empty),
     ("settings-mcp-loading", settings_mcp_loading),
@@ -1020,6 +1027,98 @@ pub fn mcp_connections() -> Vec<McpConnection> {
         },
     ]))
     .expect("the scene's MCP connections match the contract")
+}
+
+/// Made-up skills: one on, one off, and one with a broken SKILL.md.
+pub fn skill_list() -> Vec<SkillSummary> {
+    serde_json::from_value(json!([
+        {
+            "name": "literature-review", "enabled": false, "problem": null,
+            "description": "Find, read and compare papers on a topic; cite every claim.",
+            "files": ["SKILL.md"],
+        },
+        {
+            "name": "notes", "enabled": true, "description": "",
+            "problem": "SKILL.md has no description.", "files": ["SKILL.md"],
+        },
+        {
+            "name": "weekly-report", "enabled": true, "problem": null,
+            "description": "Write the Friday status report from this week's notes, in the team template.",
+            "files": ["SKILL.md", "assets/template.md", "assets/logo.png"],
+        },
+    ]))
+    .expect("the scene's skills match the contract")
+}
+
+/// The weekly-report skill with its files, as the editor loads it.
+pub fn skill_detail() -> SkillDetail {
+    serde_json::from_value(json!({
+        "name": "weekly-report", "enabled": true, "problem": null,
+        "description": "Write the Friday status report from this week's notes, in the team template.",
+        "files": ["SKILL.md", "assets/template.md", "assets/logo.png"],
+        "contents": [
+            {
+                "path": "SKILL.md", "bytes": 240,
+                "text": "---\nname: weekly-report\ndescription: Write the Friday status report from this week's notes, in the team template.\n---\n\n# Weekly report\n\n1. Read this week's notes in the workspace.\n2. Fill assets/template.md section by section.\n3. Keep each section under five bullets.\n",
+            },
+            { "path": "assets/template.md", "bytes": 30, "text": "# Week of …\n\n## Done\n\n## Next\n" },
+            { "path": "assets/logo.png", "bytes": 2048, "text": null },
+        ],
+    }))
+    .expect("the scene's skill matches the contract")
+}
+
+fn open_skills(ui: &mut Ui, items: Option<Vec<SkillSummary>>) {
+    settings_account(ui);
+    if let Some(items) = items {
+        ui.model.apply(Event::Skills {
+            bot_id: "default".into(),
+            items,
+        });
+    }
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Skills,
+    }));
+}
+
+/// Settings → Skills with one skill on, one off and one broken.
+pub fn settings_skills(ui: &mut Ui) {
+    open_skills(ui, Some(skill_list()));
+}
+
+/// Skills before the bot has any.
+pub fn settings_skills_empty(ui: &mut Ui) {
+    open_skills(ui, Some(Vec::new()));
+}
+
+/// The editor on weekly-report, with its template open and edited.
+pub fn settings_skills_editor(ui: &mut Ui) {
+    open_skills(ui, Some(skill_list()));
+    ui.open_skill("weekly-report");
+    ui.model.apply(Event::Skill {
+        bot_id: "default".into(),
+        detail: Box::new(skill_detail()),
+    });
+    ui.skills.editor = Some(SkillEditor::of(&skill_detail()));
+    if let Some(editor) = &mut ui.skills.editor {
+        editor.open = 1;
+        editor.files[1].1 = TextEdit::new("# Week of …\n\n## Done\n\n## Next\n\n## Risks\n");
+    }
+}
+
+/// The editor on a new skill, from the template.
+pub fn settings_skills_new(ui: &mut Ui) {
+    open_skills(ui, Some(skill_list()));
+    ui.new_skill();
+}
+
+/// The import dialog on its GitHub tab, with a link typed.
+pub fn settings_skills_import(ui: &mut Ui) {
+    open_skills(ui, Some(skill_list()));
+    ui.skills.import.open = true;
+    ui.skills.import.github = true;
+    ui.skills.import.url = TextEdit::new("https://github.com/acme/skills/tree/main/skills/pdf");
 }
 
 fn open_mcp(ui: &mut Ui, connections: Option<Vec<McpConnection>>) {

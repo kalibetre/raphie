@@ -39,6 +39,7 @@ use crate::contracts::{ApprovalMode, ApprovalModeBody, ArchiveBody};
 use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
 use crate::contracts::{OwnerProfile, SaveOwnerProfile};
+use crate::contracts::{SaveSkill, SkillDetail, SkillImport, SkillList, SkillSummary};
 use crate::jobs::{JobAction, NewJob};
 use crate::mcp::{McpAction, NewMcpConnection};
 use crate::memory::{KeyChange, MemoryUpdate};
@@ -267,6 +268,109 @@ impl ApiClient {
     pub async fn bots(&self) -> Result<Vec<BotProfile>, ApiError> {
         let list: BotList = self.get_json("/api/bots").await?;
         Ok(list.items)
+    }
+
+    /// A bot's skills.
+    pub async fn skills(&self, bot_id: &str) -> Result<Vec<SkillSummary>, ApiError> {
+        let list: SkillList = self.get_json(&bot_path(bot_id, "/api/skills")).await?;
+        Ok(list.items)
+    }
+
+    /// One skill with its files.
+    pub async fn skill(&self, bot_id: &str, name: &str) -> Result<SkillDetail, ApiError> {
+        let path = format!("/api/skills/{}", encode(name));
+        self.get_json(&bot_path(bot_id, &path)).await
+    }
+
+    /// Creates (`create`) or saves a skill's text files and returns it.
+    pub async fn save_skill(
+        &self,
+        bot_id: &str,
+        name: &str,
+        skill: &SaveSkill,
+        create: bool,
+    ) -> Result<SkillDetail, ApiError> {
+        let path = bot_path(bot_id, &format!("/api/skills/{}", encode(name)));
+        if create {
+            return self.post_json(&path, skill).await;
+        }
+        self.put_json(&path, skill).await
+    }
+
+    /// Turns a skill on or off and returns the bot's skills.
+    pub async fn enable_skill(
+        &self,
+        bot_id: &str,
+        name: &str,
+        enabled: bool,
+    ) -> Result<Vec<SkillSummary>, ApiError> {
+        let path = bot_path(bot_id, &format!("/api/skills/{}/enabled", encode(name)));
+        let list: SkillList = self
+            .put_json(&path, &serde_json::json!({ "enabled": enabled }))
+            .await?;
+        Ok(list.items)
+    }
+
+    /// Deletes a skill's folder.
+    pub async fn remove_skill(&self, bot_id: &str, name: &str) -> Result<(), ApiError> {
+        let path = bot_path(bot_id, &format!("/api/skills/{}", encode(name)));
+        let request = self
+            .authorized(self.http.delete(self.origin.url(&path)))
+            .header("x-raphie-client", "web");
+        send(request).await?;
+        Ok(())
+    }
+
+    /// Installs the skills in a .zip.
+    pub async fn import_skills_zip(
+        &self,
+        bot_id: &str,
+        name: &str,
+        bytes: &[u8],
+        replace: bool,
+    ) -> Result<SkillImport, ApiError> {
+        let boundary = format!("raphie-{}", uuid::Uuid::new_v4().simple());
+        let (content_type, body) = crate::skills::import_form(&boundary, name, bytes, replace);
+        let request = self
+            .authorized(
+                self.http
+                    .post(self.origin.url(&bot_path(bot_id, "/api/skills/import"))),
+            )
+            .header("x-raphie-client", "web")
+            .header("content-type", content_type)
+            .body(body);
+        let response = request
+            .timeout(UPLOAD_TIMEOUT)
+            .send()
+            .await
+            .map_err(network)?;
+        read_json(check(response).await?).await
+    }
+
+    /// Installs the skills under a GitHub folder link.
+    pub async fn import_skills_github(
+        &self,
+        bot_id: &str,
+        url: &str,
+        replace: bool,
+    ) -> Result<SkillImport, ApiError> {
+        let body = serde_json::json!({ "url": url, "replace": replace });
+        let request = self
+            .authorized(
+                self.http.post(
+                    self.origin
+                        .url(&bot_path(bot_id, "/api/skills/import/github")),
+                ),
+            )
+            .header("x-raphie-client", "web")
+            .json(&body);
+        // GitHub's archive can take a while to fetch.
+        let response = request
+            .timeout(UPLOAD_TIMEOUT)
+            .send()
+            .await
+            .map_err(network)?;
+        read_json(check(response).await?).await
     }
 
     /// Who every bot is talking to.
