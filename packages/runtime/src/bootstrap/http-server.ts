@@ -4,6 +4,7 @@ import { secureHeaders } from "hono/secure-headers";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 import { webOrigins } from "../../../../shared/web-origins.ts";
+import { ownerRoutes } from "../domains/bots/presentation/http/owner-routes.ts";
 import { botRoutes } from "../domains/bots/presentation/http/routes.ts";
 import type { TraceReader } from "../domains/diagnostics/application/trace-reader.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
@@ -114,6 +115,7 @@ export async function startServer(
   );
   if (options.bots) {
     app.route("/api/bots", botRoutes(options.bots));
+    app.route("/api/owner", ownerRoutes(options.bots));
     // Cached routes must not keep a deleted bot's closed runtime alive.
     const scoped = new WeakMap<
       ReturnType<BotHost["runtime"]>,

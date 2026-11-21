@@ -30,3 +30,20 @@ export type SaveBotProfile = Pick<
 };
 
 export type UpdateBotProfile = SaveBotProfile & { revision: number };
+
+/**
+ * The owner as every bot knows them: one profile, shared by all bots.
+ * Empty fields are simply not told to the bots.
+ */
+export type OwnerProfile = {
+  name: string;
+  /** What bots call the owner, when not their name ("Kal"). */
+  callMe: string;
+  /** An IANA time zone ("Africa/Addis_Ababa"), or "" when not set. */
+  timeZone: string;
+  /** A few lines about the owner, in their words. */
+  about: string;
+  updatedAt: number | null;
+};
+
+export type SaveOwnerProfile = Omit<OwnerProfile, "updatedAt">;

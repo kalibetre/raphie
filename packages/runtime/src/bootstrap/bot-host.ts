@@ -3,7 +3,11 @@ import { join } from "node:path";
 
 import { createModels } from "@earendil-works/pi-ai/models";
 import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
-import type { SaveBotProfile, UpdateBotProfile } from "@raphie/contracts";
+import type {
+  SaveBotProfile,
+  SaveOwnerProfile,
+  UpdateBotProfile,
+} from "@raphie/contracts";
 
 import type { BotProfiles } from "../domains/bots/application/ports.ts";
 import { BotProfileStore } from "../domains/bots/infrastructure/bot-profiles.ts";
@@ -133,6 +137,15 @@ export class BotHost implements BotProfiles {
 
   history(id: string) {
     return this.profiles.history(id);
+  }
+
+  owner() {
+    return this.profiles.owner();
+  }
+
+  /** Every bot reads the owner afresh on its next turn. */
+  saveOwner(input: SaveOwnerProfile) {
+    return this.profiles.saveOwner(input);
   }
 
   runtime(id: string) {
@@ -362,6 +375,7 @@ export class BotHost implements BotProfiles {
     directory: string,
   ): Promise<BotRuntime> {
     const { gateway } = runtime;
+    gateway.setOwner(() => this.profiles.owner());
     gateway.options.identity =
       this.runtimes.get("default")?.gateway.options.identity ??
       gateway.options.identity;

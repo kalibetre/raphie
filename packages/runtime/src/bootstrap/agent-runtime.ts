@@ -16,7 +16,11 @@ import {
   Harness,
 } from "@earendil-works/pi-durable";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
-import type { BotProfile, SaveSandboxSettings } from "@raphie/contracts";
+import type {
+  BotProfile,
+  OwnerProfile,
+  SaveSandboxSettings,
+} from "@raphie/contracts";
 
 import { ActorAuthority } from "../application/access/actors.ts";
 import { Sessions } from "../application/sessions/operations.ts";
@@ -450,6 +454,11 @@ export class Gateway {
     const saved = await this.workspace.saveSettings(input);
     this.installWorkspaceTools();
     return saved;
+  }
+
+  /** Who the owner is, read at the start of every turn. */
+  setOwner(read: () => OwnerProfile) {
+    this.chats.owner = read;
   }
 
   setPersonality(
