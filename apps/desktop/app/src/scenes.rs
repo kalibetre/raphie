@@ -133,6 +133,7 @@ pub const SCENES: &[Scene] = &[
     ("settings-channels-loading", settings_channels_loading),
     ("settings-mcp", settings_mcp),
     ("settings-skills", settings_skills),
+    ("composer-slash", composer_slash),
     ("settings-skills-empty", settings_skills_empty),
     ("settings-skills-editor", settings_skills_editor),
     ("settings-skills-new", settings_skills_new),
@@ -1080,6 +1081,18 @@ fn open_skills(ui: &mut Ui, items: Option<Vec<SkillSummary>>) {
         bot_id: "default".into(),
         section: BotSection::Skills,
     }));
+}
+
+/// A new conversation with "/" typed: commands, then the bot's skills.
+pub fn composer_slash(ui: &mut Ui) {
+    new_conversation(ui);
+    ui.model.apply(Event::Skills {
+        bot_id: "default".into(),
+        items: skill_list(),
+    });
+    ui.composer = TextEdit::new("/");
+    ui.composer.focused = true;
+    ui.composer.set_caret(1);
 }
 
 /// Settings → Skills with one skill on, one off and one broken.

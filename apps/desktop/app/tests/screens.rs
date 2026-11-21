@@ -5611,3 +5611,76 @@ fn the_skill_editor_grows_with_its_text_and_links_back_from_the_header() {
         "unsaved edits keep the editor open"
     );
 }
+
+/// A new conversation with the default bot's skills loaded.
+fn with_skills(ui: &mut Ui) {
+    scenes::new_conversation(ui);
+    ui.model.apply(Event::Skills {
+        bot_id: "default".into(),
+        items: scenes::skill_list(),
+    });
+}
+
+#[test]
+fn typing_slash_offers_commands_and_skills() {
+    for dark in [false, true] {
+        let mut rt = render(with_skills, dark);
+        click(&mut rt, "rd-composer");
+        rt.paste("/");
+        settle(&mut rt);
+        assert!(rt.find("rd-slash").is_some());
+        assert!(rt.find("rd-slash-new").is_some() && rt.find("rd-slash-model").is_some());
+        // Off skills can still be invoked; broken ones cannot.
+        assert!(rt.find("rd-slash-literature-review").is_some());
+        assert!(rt.find("rd-slash-notes").is_none());
+        rt.paste("we");
+        settle(&mut rt);
+        assert!(rt.find("rd-slash-new").is_none(), "the list narrows");
+        rt.key(KeyEvent {
+            key: Key::Enter,
+            mods: Default::default(),
+        });
+        settle(&mut rt);
+        assert_eq!(rt.state.composer.text, "/weekly-report ");
+        assert!(rt.find("rd-slash").is_none(), "a space closes the menu");
+    }
+}
+
+#[test]
+fn slash_commands_act_without_sending() {
+    let mut rt = render(with_skills, false);
+    click(&mut rt, "rd-composer");
+    rt.paste("/mo");
+    settle(&mut rt);
+    rt.key(KeyEvent {
+        key: Key::Enter,
+        mods: Default::default(),
+    });
+    settle(&mut rt);
+    assert!(rt.state.model_picker.open, "/model opens the picker");
+    assert_eq!(rt.state.composer.text, "");
+    assert!(
+        !rt.state
+            .sent
+            .iter()
+            .any(|c| matches!(c, Command::Send { .. })),
+        "nothing was sent"
+    );
+    rt.update(|ui, _| ui.model_picker.open = false);
+    settle(&mut rt);
+    click(&mut rt, "rd-composer");
+    rt.paste("/");
+    settle(&mut rt);
+    rt.key(KeyEvent {
+        key: Key::Escape,
+        mods: Default::default(),
+    });
+    settle(&mut rt);
+    assert!(rt.find("rd-slash").is_none(), "Escape closes it");
+    rt.paste("n");
+    settle(&mut rt);
+    assert!(
+        rt.find("rd-slash-new").is_some(),
+        "typing more opens it again"
+    );
+}

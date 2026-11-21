@@ -26,7 +26,7 @@ use crate::avatar::{bot_avatar, bot_icon};
 use crate::format;
 use crate::icons;
 use crate::state::{MENTION_SCHEME, Ui};
-use crate::theme::{Theme, font};
+use crate::theme::{Theme, font, mono};
 use crate::widgets::{Kind, Size, button, one_line, pressable};
 
 /// A brief's or a result's status, in its colours (the web's
@@ -1035,4 +1035,79 @@ pub fn mention_menu(s: &Ui, look: &Look, overlays: &mut Vec<El>) {
         Placement::TopStart,
         8.0,
     ));
+}
+
+/// The composer's "/" menu: commands, then the bot's skills. Returns whether
+/// it is open, so the "@" menu stays shut meanwhile.
+pub fn slash_menu(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> bool {
+    let t = &look.theme;
+    let options = s.slash_options();
+    if options.is_empty() {
+        return false;
+    }
+    let active = s.slash_highlight(options.len());
+    let mut list = col()
+        .key("rd-slash")
+        .role("listbox")
+        .label("Commands and skills")
+        .w(440.0)
+        .padding(4.0);
+    let heading = |label: &str| {
+        text(label.to_uppercase())
+            .font(font(10.5, 500.0).tracking(0.6))
+            .color(t.faint)
+            .mx(8.0)
+            .mt(6.0)
+            .mb(2.0)
+    };
+    let mut last_group: Option<bool> = None;
+    for (i, item) in options.iter().enumerate() {
+        let command = item.is_command();
+        if last_group != Some(command) {
+            list = list.child(heading(if command { "Commands" } else { "Skills" }));
+            last_group = Some(command);
+        }
+        let chosen = item.clone();
+        let mut option = row()
+            .key(format!("rd-slash-{}", item.name))
+            .role("option")
+            .label(format!("/{} {}", item.name, item.description))
+            .checked(i == active)
+            .w_full()
+            .px(8.0)
+            .py(6.0)
+            .gap(8.0)
+            .center_y()
+            .radius(8.0)
+            .hover(t.hover)
+            .child(
+                text(format!("/{}", item.name))
+                    .font(mono(12.5))
+                    .color(t.foreground),
+            )
+            .child(one_line(
+                item.description.clone(),
+                font(12.5, 400.0),
+                t.muted_foreground,
+            ))
+            .on_press_tx(move |s: &mut Ui, tx: &mut Tx| {
+                s.choose_slash(&chosen);
+                tx.focus("rd-composer", false);
+            });
+        if i == active {
+            option = option.fill(t.hover);
+        }
+        list = list.child(option);
+    }
+    let surface = popover::raised(&look.kit, list, 12.0)
+        .fill(t.card)
+        .border(1.0, t.border);
+    overlays.push(popover::anchored(
+        &look.kit,
+        surface,
+        "rd-composer-card",
+        Placement::TopStart,
+        8.0,
+    ));
+    true
 }

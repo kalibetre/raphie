@@ -31,6 +31,7 @@ use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
 use raphie_core::replies::ReadReplies;
 use raphie_core::settings::{Settings, ThemeChoice};
+use raphie_core::slash::{SlashItem, SlashKind, insert_skill, slash_matches, slash_query};
 use raphie_core::updates::ReleaseChannel;
 use raphie_core::updates::UpdateStatus;
 use raphie_core::workspace::{self, ROOT};
@@ -334,6 +335,13 @@ pub struct Ui {
     pub mention_active: usize,
     /// The "@" (its byte offset) Escape closed the menu for.
     pub mention_dismissed: Option<usize>,
+    /// The highlighted entry of the composer's "/" menu.
+    pub slash_active: usize,
+    /// What was typed after "/" when Escape closed the menu; typing more
+    /// opens it again.
+    pub slash_dismissed: Option<String>,
+    /// The bot whose skills were last asked for, for the "/" menu.
+    skills_asked: Option<String>,
     /// When the selected bot's handoffs were last asked for, which bot that
     /// was, and what its conversation looked like then: a settled turn or a
     /// finished tool step asks again at once, so a new handoff's card comes
@@ -590,6 +598,9 @@ impl Ui {
             own_answer: None,
             mention_active: 0,
             mention_dismissed: None,
+            slash_active: 0,
+            slash_dismissed: None,
+            skills_asked: None,
             handoffs_asked_at: 0.0,
             handoffs_bot: None,
             handoff_signal: String::new(),
@@ -1524,6 +1535,121 @@ impl Ui {
         self.composer.replace_text(text);
         self.composer.set_caret(caret);
         self.mention_active = 0;
+    }
+
+    /// The commands and skills the composer's "/" menu offers now; empty
+    /// when it is shut.
+    pub fn slash_options(&self) -> Vec<SlashItem> {
+        let Some(query) = slash_query(&self.composer.text, self.composer.focus) else {
+            return Vec::new();
+        };
+        if self.slash_dismissed.as_deref() == Some(query.as_str()) {
+            return Vec::new();
+        }
+        let command = |kind, name: &str, description: &str| SlashItem {
+            kind,
+            name: name.to_owned(),
+            description: description.to_owned(),
+        };
+        let mut items = vec![
+            command(SlashKind::New, "new", "Start a new conversation"),
+            command(
+                SlashKind::Model,
+                "model",
+                "Choose the model for this conversation",
+            ),
+        ];
+        if self.busy() {
+            items.push(command(
+                SlashKind::Stop,
+                "stop",
+                "Stop the reply in progress",
+            ));
+        }
+        if self.handed_off_by().is_none() && !self.handoff_targets().is_empty() {
+            items.push(command(
+                SlashKind::Handoff,
+                "handoff",
+                "Give this task to another bot",
+            ));
+        }
+        let skills = self
+            .model
+            .bot_id
+            .as_ref()
+            .and_then(|bot_id| self.model.skills.get(bot_id));
+        for skill in skills.into_iter().flatten() {
+            if skill.problem.is_none() {
+                items.push(command(SlashKind::Skill, &skill.name, &skill.description));
+            }
+        }
+        slash_matches(&items, &query)
+    }
+
+    /// The highlighted "/" entry, kept within the list as it narrows.
+    pub fn slash_highlight(&self, count: usize) -> usize {
+        self.slash_active.min(count.saturating_sub(1))
+    }
+
+    /// Runs a command, or writes "/name " for a skill.
+    pub fn choose_slash(&mut self, item: &SlashItem) {
+        self.slash_active = 0;
+        if item.kind == SlashKind::Skill {
+            let (text, caret) = insert_skill(&self.composer.text, &item.name);
+            self.composer.replace_text(text);
+            self.composer.set_caret(caret);
+            return;
+        }
+        self.composer.replace_text("");
+        self.composer.set_caret(0);
+        match item.kind {
+            SlashKind::New => {
+                if let Some(bot_id) = self.model.bot_id.clone() {
+                    self.select_bot(&bot_id);
+                }
+            }
+            SlashKind::Model => self.model_picker.open = true,
+            SlashKind::Stop => self.stop(),
+            SlashKind::Handoff => {
+                self.composer.replace_text("@");
+                self.composer.set_caret(1);
+                self.mention_dismissed = None;
+            }
+            SlashKind::Skill => {}
+        }
+    }
+
+    /// The keys the open "/" menu takes before the composer, as the "@"
+    /// menu does. Returns whether it took the key.
+    pub fn slash_key(&mut self, key: &KeyEvent) -> bool {
+        let options = self.slash_options();
+        if options.is_empty() {
+            return false;
+        }
+        let active = self.slash_highlight(options.len());
+        match key.key {
+            Key::Down => self.slash_active = (active + 1) % options.len(),
+            Key::Up => self.slash_active = (active + options.len() - 1) % options.len(),
+            Key::Enter | Key::Tab => self.choose_slash(&options[active]),
+            Key::Escape => {
+                self.slash_dismissed = slash_query(&self.composer.text, self.composer.focus);
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// Asks once per bot for its skills, which the "/" menu offers.
+    fn ensure_skills(&mut self) {
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            return;
+        };
+        let wanted = matches!(self.model.auth, AuthState::SignedIn)
+            && matches!(self.screen, Screen::Workspace);
+        if wanted && self.skills_asked.as_deref() != Some(bot_id.as_str()) {
+            self.skills_asked = Some(bot_id.clone());
+            self.command(Command::LoadSkills { bot_id });
+        }
     }
 
     /// The keys the open "@" menu takes before the composer: arrows move,
@@ -3258,6 +3384,8 @@ impl Ui {
 
     pub fn close_settings(&mut self) {
         self.screen = Screen::Workspace;
+        // Skills may have changed in Settings: the "/" menu asks again.
+        self.skills_asked = None;
     }
 
     /// Chooses light, dark or the system's appearance, and remembers it.
@@ -3660,6 +3788,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_owner();
     ui.follow_skill();
     ui.ensure_models();
+    ui.ensure_skills();
     ui.ensure_command_mode();
     ui.ask_previews();
     ui.open_announced_sign_in_page(tx);

@@ -22,7 +22,7 @@ use rune::{
 use super::Look;
 use super::attachments::{Action, file_card};
 use super::conversation::READING_WIDTH;
-use super::handoffs::{delegates, mention_menu};
+use super::handoffs::{delegates, mention_menu, slash_menu};
 use super::model_picker::model_picker;
 use super::permissions::permissions;
 use crate::icons;
@@ -57,7 +57,9 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
             s.paste_attachment(content)
         })
         // An open "@" menu takes its keys first: arrows, Return, Tab, Escape.
-        .on_input_key(|s: &mut Ui, key: &rune::KeyEvent, _: &mut Tx| s.mention_key(key))
+        .on_input_key(|s: &mut Ui, key: &rune::KeyEvent, _: &mut Tx| {
+            s.slash_key(key) || s.mention_key(key)
+        })
         // Return sends; Shift-Return types a new line.
         .on_submit(|s: &mut Ui, _: &mut Tx| s.send());
 
@@ -189,7 +191,9 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     for shadow in t.composer_shadow {
         card = card.box_shadow(shadow);
     }
-    mention_menu(s, look, overlays);
+    if !slash_menu(s, look, overlays) {
+        mention_menu(s, look, overlays);
+    }
 
     let mut wrap = col()
         .w_full()
