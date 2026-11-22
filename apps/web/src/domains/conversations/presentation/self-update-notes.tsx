@@ -29,15 +29,17 @@ export function SelfUpdateNotes({ steps }: { steps: ToolStep[] }) {
   if (!notes.length) return null;
   return (
     <div className="self-update-notes">
-      {notes.map((note) =>
-        note.kind === "personality" ? (
-          <PersonalityNote key={note.id} note={note} />
+      {notes.map((note) => {
+        // A provider may reuse call ids; the start tells them apart.
+        const key = `${note.id}@${note.startedAt}`;
+        return note.kind === "personality" ? (
+          <PersonalityNote key={key} note={note} />
         ) : note.kind === "skill" ? (
-          <SkillNote key={note.id} note={note} />
+          <SkillNote key={key} note={note} />
         ) : (
-          <OwnerNote key={note.id} note={note} />
-        ),
-      )}
+          <OwnerNote key={key} note={note} />
+        );
+      })}
     </div>
   );
 }
