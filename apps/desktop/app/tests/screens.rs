@@ -196,7 +196,7 @@ fn the_roster_lists_bots_and_says_which_need_the_owner() {
         // The name over what the bot is doing, 5 points above and below.
         let row = element(&rt, "rd-bot-default").rect;
         assert!((row[3] - 50.75).abs() < 0.5, "{row:?}");
-        assert!(text.contains("What’s on your mind?"), "the welcome screen");
+        assert!(text.contains("I’m ready when you are."), "the empty desk");
 
         click(&mut rt, "rd-bot-b-research");
         assert_eq!(
@@ -270,6 +270,34 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
         // The team's last row creates a bot.
         click(&mut rt, "rd-add-teammate");
         assert_eq!(rt.state.screen, Screen::Settings(Page::NewBot));
+    }
+}
+
+#[test]
+fn a_job_on_the_empty_desk_puts_its_request_in_the_composer() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::new_conversation, dark);
+        let text = screen_text(&rt);
+        for job in [
+            "Send me a morning briefing",
+            "Keep an eye on my inbox",
+            "Research something",
+            "Help me think something through",
+        ] {
+            assert!(text.contains(job), "{job}: {text}");
+        }
+        click(&mut rt, &format!("rd-job-{}", "Research something".len()));
+        assert_eq!(
+            rt.state.composer.text,
+            "Research this for me and write up what you find: "
+        );
+        // Nothing is sent until the owner sends it.
+        assert!(
+            !rt.state
+                .sent
+                .iter()
+                .any(|c| matches!(c, Command::Send { .. }))
+        );
     }
 }
 
@@ -502,15 +530,6 @@ fn the_title_bar_archives_and_unarchives_the_open_conversation() {
             Some("Archive conversation")
         );
     }
-}
-
-#[test]
-fn a_suggestion_fills_the_composer_without_sending() {
-    let mut rt = render(scenes::new_conversation, false);
-    let key = element_with_label(&rt, "Help me plan my day");
-    click(&mut rt, &key);
-    assert_eq!(rt.state.composer.text, "Help me plan my day");
-    assert!(rt.state.sent.is_empty(), "the owner still chooses to send");
 }
 
 /// The key of the element whose accessible label is `label`.
