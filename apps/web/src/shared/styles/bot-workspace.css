@@ -30,31 +30,7 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    padding: 0 12px 16px;
-  }
-  /* As tall as the bar beside it (`.bot-workspace-header`), so the brand
-     and the bar's content sit level. */
-  .roster-brand {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex: none;
-    height: 44px;
-    margin-bottom: 10px;
-    padding: 0 8px;
-  }
-  .roster-brand .brand {
-    gap: 9px;
-    font-size: 17px;
-  }
-  .roster-brand .bot-avatar {
-    width: 30px;
-    height: 30px;
-  }
-  .roster-brand-avatar {
-    display: inline-flex;
-    /* Center the drawn blob with the lettering, rather than its SVG box. */
-    transform: translateY(1px);
+    padding: 12px 12px 14px;
   }
   .roster-label {
     display: flex;
@@ -126,31 +102,94 @@
     fill: var(--bot-eye, #273329);
   }
   .bot-roster-copy {
-    display: block;
+    display: grid;
     min-width: 0;
     flex: 1;
-  }
-  .bot-roster-name {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    justify-content: space-between;
     font-size: 13px;
-    font-weight: 550;
   }
   .bot-roster-title {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 550;
   }
-  .bot-roster-preview {
-    display: block;
+  .bot-roster-status {
+    font-size: 11.5px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bot-roster-status.needs-you {
+    color: var(--attention);
+  }
+  .bot-roster-status.replied {
+    color: var(--accent);
+  }
+  /* A presence dot on the avatar's corner, ringed in the sidebar's color. */
+  .roster-avatar {
+    position: relative;
+  }
+  .roster-presence {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--sidebar);
+    background: var(--accent);
+  }
+  .roster-presence.needs-you {
+    background: var(--attention);
+  }
+  .roster-presence.working {
+    background: var(--info, #4a6fa5);
+  }
+  .roster-add {
+    color: var(--muted-foreground);
+  }
+  .roster-add-icon,
+  .bot-roster-item[aria-current] .roster-add-icon {
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .roster-requests {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .roster-request {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--attention) 35%, var(--border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--attention-soft) 55%, var(--card));
+    text-align: left;
+    font-size: 12px;
+  }
+  .roster-request .bot-avatar {
+    width: 22px;
+    height: 22px;
+  }
+  .roster-request-copy {
+    display: grid;
+    min-width: 0;
+  }
+  .roster-request-copy strong {
+    font-weight: 600;
+  }
+  .roster-request-copy span {
+    color: var(--muted-foreground);
     font-size: 11px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--muted-foreground);
   }
   .reply-count {
     display: inline-flex;
@@ -186,9 +225,7 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    margin: 8px -12px 0;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
+    margin: 14px -12px 0;
   }
   .roster-conversations > .roster-label {
     padding: 0 22px 4px;
@@ -203,41 +240,59 @@
   .roster-conversations .library-search {
     padding: 7px 10px;
   }
+  /* In the sidebar an empty list is a line of text, not a panel. */
+  .roster-conversations .library-empty {
+    align-items: flex-start;
+    padding: 4px 10px;
+    border: 0;
+    font-size: 12px;
+  }
+  .roster-conversations .library-empty svg {
+    display: none;
+  }
   .roster-conversations .library-filters {
     margin: 8px 0 6px;
   }
-  .mobile-conversations {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-  }
-  .mobile-conversations-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px 4px;
-  }
-  .mobile-conversations-header h1 {
-    font-size: 21px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-  }
-  .mobile-conversations-new {
-    border-radius: 999px;
-  }
+  /* The brand marks where the team lives; the gear is the mark's size. */
   .roster-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
-    margin: 18px -12px 0;
-    padding: 12px 22px 0;
-    border-top: 0;
+    margin: 12px -2px 0;
+    padding: 0 0 0 6px;
+  }
+  .roster-brand-mark {
+    width: 22px;
+    height: 22px;
+    flex: none;
+  }
+  .roster-brand-name {
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
   }
   .roster-footer .runtime-status {
-    font-size: 11px;
+    min-width: 0;
+    margin-left: 4px;
+    font-size: 12px;
     color: var(--muted-foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .roster-footer .status-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    box-shadow: none;
+  }
+  .roster-settings {
+    margin-left: auto;
+    color: var(--muted-foreground);
+  }
+  .roster-settings svg {
+    width: 22px;
+    height: 22px;
   }
   /* As short as the bar over a Settings page (`.settings-topbar`). */
   .bot-workspace-header {
@@ -764,69 +819,16 @@
     }
   }
   @media (max-width: 767px) {
-    /* Mobile chat shows the roster as a strip above the conversation. */
+    /* A phone's home is the sidebar itself, at full width. */
     .bot-roster {
-      flex: none;
-      height: 88px;
-      padding: 8px;
-      flex-direction: row;
+      flex: 1;
+      height: auto;
+      padding: 14px 14px 16px;
       background: var(--sidebar);
-      border-bottom: 1px solid var(--border);
-      overflow: hidden;
     }
-    .bot-roster .roster-brand,
-    .bot-roster .roster-label,
-    .roster-footer {
-      display: none;
-    }
-    .bot-roster-scroll {
-      max-height: none;
-      margin: 0;
-    }
-    .bot-roster-list {
-      display: flex;
-      gap: 5px;
-      min-width: min-content;
-    }
-    .bot-roster-item {
-      position: relative;
-      border-radius: 12px;
-      flex-direction: column;
-      justify-content: center;
-      gap: 7px;
-      padding: 7px 12px;
-      min-width: 78px;
-      width: auto;
-    }
-    .roster-avatar,
-    .bot-roster-item[aria-current] .roster-avatar {
-      width: 32px;
-      height: 32px;
-      background: transparent;
-    }
-    .bot-roster-name {
-      margin: 0;
-      font-size: 9px;
-      display: block;
-      max-width: 100px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .bot-roster-name .reply-count {
-      position: absolute;
-      right: 8px;
-      top: 5px;
-      font-size: 8px;
-      min-width: 14px;
-      padding: 0 4px;
-    }
-    .bot-roster-preview {
-      display: none;
-    }
-    .bot-roster-list .bot-avatar {
-      width: 28px;
-      height: 28px;
+    .bot-roster-scroll,
+    .bot-roster-scroll .scroll-area-viewport {
+      max-height: 45vh;
     }
     .bot-workspace-header {
       min-height: 44px;
@@ -877,25 +879,6 @@
     }
     .reply-card-symbol {
       display: none;
-    }
-  }
-}
-@layer components {
-  .mobile-create-bot {
-    display: none;
-  }
-  @media (max-width: 767px) {
-    .mobile-create-bot {
-      display: grid;
-      align-self: center;
-      place-items: center;
-      min-width: 36px;
-      height: 40px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: none;
-      color: var(--muted-foreground);
-      margin: 0 8px;
     }
   }
 }

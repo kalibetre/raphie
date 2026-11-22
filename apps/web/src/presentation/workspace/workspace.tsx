@@ -1,7 +1,7 @@
 import type { ModelSelection, Page, SessionSummary } from "@raphie/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, SquarePen } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import {
   type CSSProperties,
   useCallback,
@@ -341,8 +341,15 @@ export function Workspace({
       connected={connected}
       error={!!inbox.bots.error}
       onRetry={() => void inbox.bots.refetch()}
-      conversations={mobile ? undefined : conversationList}
+      conversations={conversationList}
       onNew={() => select()}
+      onOpen={(botId, id) =>
+        void navigate({
+          to: "/sessions/$sessionId",
+          params: { sessionId: id },
+          search: { bot: botId === "default" ? undefined : botId },
+        })
+      }
       onSelect={(id) => {
         const nextBot = id === "default" ? undefined : id;
         // A phone shows the bot's conversations; a wide screen reopens the
@@ -356,7 +363,6 @@ export function Workspace({
           });
         else void navigate({ to: "/", search: { bot: nextBot } });
       }}
-      onAccount={() => openSettings("account")}
       onSettings={() => {
         openSettings("bot");
       }}
@@ -426,26 +432,8 @@ export function Workspace({
             </SettingsMain>
           ) : (
             <>
-              {listScreen && roster}
               {listScreen ? (
-                <section
-                  className="mobile-conversations"
-                  aria-label={`${botProfile?.name ?? "Raphie"}’s conversations`}
-                >
-                  <header className="mobile-conversations-header">
-                    <h1>Conversations</h1>
-                    <Button
-                      size="icon-sm"
-                      className="mobile-conversations-new"
-                      aria-label="New conversation"
-                      title="New conversation"
-                      onClick={() => select()}
-                    >
-                      <SquarePen size={15} />
-                    </Button>
-                  </header>
-                  {conversationList}
-                </section>
+                roster
               ) : view === "notifications" ? (
                 <header className="workspace-header notifications-global-header">
                   <Button
