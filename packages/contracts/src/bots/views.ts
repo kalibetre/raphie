@@ -33,8 +33,11 @@ export type SaveBotProfile = Pick<
 > & {
   /** Omitted: a new bot starts at the defaults, an edit keeps its style. */
   replyStyle?: ReplyStyle;
-  /** Omitted: a new bot starts at the defaults, an edit keeps them. */
-  selfUpdates?: SelfUpdates;
+  /**
+   * Omitted: a new bot starts at the defaults, an edit keeps them. A field
+   * left out, as from a client older than it, keeps its value too.
+   */
+  selfUpdates?: Partial<SelfUpdates>;
 };
 
 /**
@@ -46,6 +49,8 @@ export type SelfUpdates = {
   personality: boolean;
   /** The owner's profile, shared by every bot. */
   owner: boolean;
+  /** Its own skills: writing new ones and editing any of them. */
+  skills: boolean;
 };
 
 /** A built-in personality to start a bot from. */

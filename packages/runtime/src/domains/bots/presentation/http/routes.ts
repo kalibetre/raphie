@@ -23,7 +23,11 @@ const profile = z
       .strict()
       .optional(),
     selfUpdates: z
-      .object({ personality: z.boolean(), owner: z.boolean() })
+      .object({
+        personality: z.boolean(),
+        owner: z.boolean(),
+        skills: z.boolean().optional(),
+      })
       .strict()
       .optional(),
     color: z

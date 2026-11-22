@@ -63,7 +63,10 @@ import {
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
-import { createSkillTools } from "../domains/skills/infrastructure/skill-tools.ts";
+import {
+  createSkillTools,
+  createSkillWriter,
+} from "../domains/skills/infrastructure/skill-tools.ts";
 import { WorkspaceSkills } from "../domains/skills/infrastructure/workspace-skills.ts";
 import { createWebSearchTools } from "../domains/web/infrastructure/web-search-tools.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
@@ -276,8 +279,15 @@ export class Gateway {
     app.installWorkspaceTools();
     app.skills = new WorkspaceSkills(app.workspace);
     registry.install(createSkillTools(app.skills));
+    // Read at each call: the owner can turn it off between turns.
+    registry.install(
+      createSkillWriter(
+        app.skills,
+        () => app.chats.personality?.().selfUpdates.skills ?? false,
+      ),
+    );
     app.chats.skills = {
-      instructions: () => app.skills.instructions(),
+      instructions: (canWrite) => app.skills.instructions(canWrite),
       refresh: () => app.skills.refresh(),
       invoke: (text) => app.skills.invoke(text),
     };

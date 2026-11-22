@@ -15,8 +15,8 @@ allows its self-updates. Personality guides its behavior without granting
 capabilities or access.
 
 **Self-updates**: What a bot may change by itself, per bot: its own
-personality, and the owner profile. Each change is saved at once and can be
-undone.
+personality, the owner profile, and its skills. Each change is saved at once
+and can be undone.
 
 **Skill**: Instructions for one kind of task in the standard Agent Skills
 format: a folder in a bot's workspace, `skills/<name>/`, holding a `SKILL.md`.

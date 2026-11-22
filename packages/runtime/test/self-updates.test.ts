@@ -24,7 +24,11 @@ test("the default bot may update the owner's profile, new bots only their person
   const store = new BotProfileStore(join(directory, "bots.sqlite"));
   try {
     const first = store.read("default");
-    expect(first.selfUpdates).toEqual({ personality: true, owner: true });
+    expect(first.selfUpdates).toEqual({
+      personality: true,
+      owner: true,
+      skills: true,
+    });
     expect(first.preset).toBe("candid");
     const other = store.insert(
       store.draft({
@@ -33,7 +37,11 @@ test("the default bot may update the owner's profile, new bots only their person
         personality: PERSONALITY_PRESETS[4]!.personality,
       }),
     );
-    expect(other.selfUpdates).toEqual({ personality: true, owner: false });
+    expect(other.selfUpdates).toEqual({
+      personality: true,
+      owner: false,
+      skills: true,
+    });
     expect(other.preset).toBe("analyst");
     expect(other.changedBy).toBe("owner");
   } finally {
@@ -93,7 +101,7 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
         formatting: "default",
         emoji: false,
       },
-      selfUpdates: allowed,
+      selfUpdates: { ...allowed, skills: false },
       revision: 1,
       createdAt: 0,
       updatedAt: 0,
@@ -156,10 +164,13 @@ test("the tools change only what the owner allows, and keep what they are not se
 
 test("a bot is told what it may change, and asks lightly for what it does not know", () => {
   expect(
-    selfUpdateInstructions({ personality: false, owner: false }, EMPTY_OWNER),
+    selfUpdateInstructions(
+      { personality: false, owner: false, skills: false },
+      EMPTY_OWNER,
+    ),
   ).toBe("");
   const lacking = selfUpdateInstructions(
-    { personality: true, owner: true },
+    { personality: true, owner: true, skills: true },
     { ...EMPTY_OWNER, name: "Hana Girma" },
   );
   expect(lacking).toContain("update_personality");
@@ -168,7 +179,7 @@ test("a bot is told what it may change, and asks lightly for what it does not kn
   );
   expect(lacking).not.toContain("what to call them");
   const known = selfUpdateInstructions(
-    { personality: false, owner: true },
+    { personality: false, owner: true, skills: true },
     {
       name: "Hana Girma",
       callMe: "",
@@ -224,9 +235,11 @@ test("presets are served, and a bot's self-updates are saved with its profile", 
       revision: 1,
     });
     expect(saved.status).toBe(200);
+    // A client that does not send `skills` keeps it as it was.
     expect(host.read("default").selfUpdates).toEqual({
       personality: false,
       owner: true,
+      skills: true,
     });
   } finally {
     await server.close();

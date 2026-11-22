@@ -159,6 +159,9 @@ Secrets are write-only: keys and tokens are accepted but never returned.
 | PUT       | `/skills/:name/enabled`                                   | `{ enabled }`; turns a skill on or off                                        |
 | DELETE    | `/skills/:name`                                           | Delete the skill's folder (204)                                               |
 | POST      | `/skills/import`, `/skills/import/github`                 | Install from a .zip (multipart `file`, `replace`) or `{ url, replace }` (201) |
+| GET       | `/skills/changes?call=&from=&to=`                         | The change a `save_skill` call made while it ran (404 if none)                |
+| GET       | `/skills/changes/:id`                                     | One change the bot made with `save_skill`                                     |
+| POST      | `/skills/changes/:id/undo`                                | Undo the bot's change (409 if the skill changed since)                        |
 | GET       | `/channels`                                               | Discord and Telegram settings for the bot                                     |
 | POST      | `/channels/discord`, `/channels/discord/remove`           | Save or remove the Discord connection                                         |
 | POST      | `/channels/telegram`, `/channels/telegram/remove`         | Save or remove the Telegram connection                                        |

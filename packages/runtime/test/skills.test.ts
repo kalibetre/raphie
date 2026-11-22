@@ -16,6 +16,7 @@ import {
   gitHubFiles,
   gitHubSource,
 } from "../src/domains/skills/infrastructure/github-skills.ts";
+import { createSkillWriter } from "../src/domains/skills/infrastructure/skill-tools.ts";
 import {
   frontmatter,
   skillsIn,
@@ -362,6 +363,218 @@ test("skills are saved in the workspace, offered to the bot and read with read_s
     ).toBe(200);
     expect((await call("DELETE", "/weekly-report")).status).toBe(204);
     expect((await call("GET", "/weekly-report")).status).toBe(404);
+  } finally {
+    await server.close();
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("a bot writes and improves skills with save_skill, and the owner can undo each change", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-skills-"));
+  const prompts: string[] = [];
+  const gateway = await Gateway.open({
+    directory,
+    botId: "default",
+    deferResume: true,
+    ...chatModel({ systemPrompt: (text) => prompts.push(text) }),
+  });
+  let allowed = true;
+  gateway.setPersonality(() => ({
+    name: "Ada",
+    description: "",
+    personality: "Be kind.",
+    replyStyle: {
+      length: "short",
+      warmth: "default",
+      formatting: "default",
+      emoji: false,
+    },
+    revision: 1,
+    selfUpdates: { personality: true, owner: false, skills: allowed },
+  }));
+  const server = await startServer(gateway, { port: 0 });
+  const call = async (method: string, path: string, body?: unknown) => {
+    const response = await fetch(`${server.url}/api/skills${path}`, {
+      method,
+      headers: {
+        "x-raphie-client": "web",
+        "content-type": "application/json",
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    return {
+      status: response.status,
+      body: (await response.json().catch(() => null)) as never,
+    };
+  };
+  const tool = createSkillWriter(gateway.skills, () => allowed).tools![0]!;
+  // Providers may reuse call ids, as the fixture model does.
+  const callId = "call-1";
+  const save = async (args: Record<string, unknown>) => {
+    const from = Date.now();
+    const result = (await tool.execute(
+      args as never,
+      { callId } as never,
+      {} as never,
+    )) as { isError: boolean; output: { text: string }[] };
+    // The reply finds the change by its call and when the call ran.
+    const found = await call(
+      "GET",
+      `/changes?call=${callId}&from=${from}&to=${Date.now()}`,
+    );
+    return {
+      error: result.isError,
+      text: result.output[0]!.text,
+      id: (found.body as { id?: string } | null)?.id,
+    };
+  };
+  const turn = async (text: string) => {
+    const sent = await gateway.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: crypto.randomUUID(),
+      text,
+    });
+    for (
+      let n = 0;
+      n < 300 &&
+      (await gateway.chats.state()).turns.find((t) => t.id === sent.id)
+        ?.status === "pending";
+      n++
+    )
+      await delay(10);
+  };
+  try {
+    // With no skills yet, the bot is still told it can write one.
+    await turn("Hello");
+    expect(prompts.at(-1)).toContain("You can write your own skills");
+
+    const created = await save({
+      name: "release-notes",
+      description: "Write release notes from merged pull requests.",
+      body: "1. List merged PRs.\n2. Group them by area.",
+      files: [{ path: "assets/template.md", text: "# Release\n" }],
+    });
+    expect(created.error).toBe(false);
+    expect(created.text).toContain("Created the skill release-notes");
+    const skill = await gateway.skills.read("release-notes");
+    expect(frontmatter(skill)).toEqual({
+      name: "release-notes",
+      description: "Write release notes from merged pull requests.",
+    });
+    expect(skill).toContain("2. Group them by area.");
+    expect(await call("GET", `/changes/${created.id}`)).toEqual({
+      status: 200,
+      body: {
+        id: created.id,
+        callId,
+        name: "release-notes",
+        kind: "created",
+        at: expect.any(Number),
+        undoable: true,
+        undone: false,
+      } as never,
+    });
+    await turn("Again");
+    expect(prompts.at(-1)).toContain("<name>release-notes</name>");
+
+    // Checked like the owner's skills; the bot gets the reason back.
+    const bad = await save({
+      name: "Release Notes",
+      description: "x",
+      body: "x",
+    });
+    expect(bad.error).toBe(true);
+    expect(bad.text).toContain("lowercase");
+    expect(
+      (
+        await save({
+          name: "escape",
+          description: "x",
+          body: "x",
+          files: [{ path: "../up.md", text: "x" }],
+        })
+      ).text,
+    ).toContain("not a valid path");
+
+    // An edit keeps the files it does not send, and the same text saves nothing.
+    const edited = await save({
+      name: "release-notes",
+      description: "Write release notes from merged pull requests.",
+      body: "1. List merged PRs.\n2. Group them by area.\n3. Lead with fixes.",
+    });
+    expect(edited.text).toContain("Updated the skill release-notes");
+    expect(
+      await gateway.skills.read("release-notes", "assets/template.md"),
+    ).toBe("# Release\n");
+    expect(
+      (
+        await save({
+          name: "release-notes",
+          description: "Write release notes from merged pull requests.",
+          body: "1. List merged PRs.\n2. Group them by area.\n3. Lead with fixes.",
+        })
+      ).text,
+    ).toContain("nothing changed");
+    const listed = (await call("GET", "")).body as {
+      items: { name: string; botChange: { kind: string } | null }[];
+    };
+    expect(listed.items[0]!.botChange?.kind).toBe("edited");
+
+    // Only the latest change can be undone; undoing it restores the text.
+    expect((await call("GET", `/changes/${created.id}`)).body).toMatchObject({
+      undoable: false,
+    });
+    expect((await call("POST", `/changes/${created.id}/undo`)).status).toBe(
+      409,
+    );
+    expect((await call("POST", `/changes/${edited.id}/undo`)).status).toBe(200);
+    expect(await gateway.skills.read("release-notes")).not.toContain(
+      "Lead with fixes",
+    );
+    // The reply still finds it, to say it was undone.
+    expect((await call("GET", `/changes/${edited.id}`)).body).toMatchObject({
+      undoable: false,
+      undone: true,
+    });
+    expect((await call("POST", `/changes/${edited.id}/undo`)).status).toBe(409);
+
+    // An owner's edit makes the skill theirs: no badge, nothing to undo.
+    const own = await save({
+      name: "owner-notes",
+      description: "Notes.",
+      body: "Write them.",
+    });
+    expect(
+      (
+        await call("PUT", "/owner-notes", {
+          files: [{ path: "SKILL.md", text: skillMd("owner-notes", "Mine.") }],
+        })
+      ).status,
+    ).toBe(200);
+    expect((await call("GET", `/changes/${own.id}`)).status).toBe(404);
+
+    // A skill the bot created is deleted by its undo.
+    const fresh = await save({
+      name: "standup",
+      description: "Post the standup.",
+      body: "Post it.",
+    });
+    expect((await call("POST", `/changes/${fresh.id}/undo`)).status).toBe(200);
+    expect((await call("GET", "/standup")).status).toBe(404);
+
+    // Turned off, the bot is not told how and cannot write one.
+    allowed = false;
+    await turn("Once more");
+    expect(prompts.at(-1)).not.toContain("You can write your own skills");
+    const refused = await save({
+      name: "standup",
+      description: "Post the standup.",
+      body: "Post it.",
+    });
+    expect(refused.error).toBe(true);
+    expect((await call("GET", "/standup")).status).toBe(404);
   } finally {
     await server.close();
     await gateway.close();

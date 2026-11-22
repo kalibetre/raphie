@@ -121,14 +121,15 @@ A save is refused while the bot has a turn in progress, or if someone saved a ne
 
 ### Self-updates
 
-Under **Self-updates**, two switches say what the bot may change by itself, without asking:
+Under **Self-updates**, three switches say what the bot may change by itself, without asking:
 
 | Switch                 | What the bot may do                                                                  | Default                                  |
 | ---------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------- |
 | Update its personality | Save a new personality when you ask for a different manner, or it learns what works. | On                                       |
 | Update "You"           | Save your name, what to call you, your time zone and notes on the [You](#you) page.  | On for the default bot, off for new bots |
+| Write its own skills   | Write a [skill](/guides/skills/#skills-the-bot-writes) or improve any existing one.  | On                                       |
 
-A change is saved at once and applies from the bot's next reply. The reply that made it shows a note: **Updated its personality**, with **See change** and **Undo**, or **Updated what it knows about you**, with **Review**. Undo restores the personality from before the change, as long as nothing newer was saved. Each personality change is also a revision marked as the bot's, so you can restore any earlier one later.
+A change is saved at once and applies from the bot's next reply. The reply that made it shows a note: **Updated its personality**, with **See change** and **Undo**, **Updated what it knows about you**, with **Review**, or **New skill** or **Updated skill**, with **Open** and **Undo**. Undo restores the personality from before the change, as long as nothing newer was saved. Each personality change is also a revision marked as the bot's, so you can restore any earlier one later.
 
 While the You page is missing your name, time zone or notes, a bot allowed to update it is told to ask once when it fits the conversation, and to save what you tell it. The bot is told to change its personality only for you, never because a message, document, web page or another bot asks it to. Turn the switch off for a bot that reads material you don't trust.
 
