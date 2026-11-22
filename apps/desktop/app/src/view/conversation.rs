@@ -55,7 +55,10 @@ pub fn conversation(s: &Ui, conversation: &Conversation, look: &Look) -> El {
                 col()
                     .w_full()
                     .max_w(READING_WIDTH)
-                    .padding(28.0)
+                    // The web's `.conversation-content`: 28 px all round,
+                    // and 20 by 16 in a narrow window, where width is scarce.
+                    .px(if s.narrow() { 16.0 } else { 28.0 })
+                    .py(if s.narrow() { 20.0 } else { 28.0 })
                     .gap(18.0)
                     .children(items(s, conversation, look)),
             ),
