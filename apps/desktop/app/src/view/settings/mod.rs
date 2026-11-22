@@ -147,7 +147,20 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
         .key("rd-settings")
         .w_full()
         .h_full()
-        .fill(t.background);
+        .fill(t.background)
+        // The width decides whether the navigation docks beside the page.
+        .on_layout(|s: &mut Ui, rect: [f32; 4]| {
+            s.workspace_width = rect[2];
+            s.workspace_height = rect[3];
+        });
+    // A narrow window shows the navigation or a page, one at a time.
+    if s.narrow() {
+        return if s.settings_nav_home {
+            shell.child(nav::nav(s, page, look))
+        } else {
+            shell.child(main)
+        };
+    }
     if s.roster_open {
         shell = shell.child(nav::nav(s, page, look));
     }
@@ -157,7 +170,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
 /// The bar over the page: sidebar toggle, "Settings › Bot › Page", close.
 fn top_bar(s: &Ui, page: &Page, look: &Look) -> El {
     let t = &look.theme;
-    let toggle = if s.roster_open {
+    let narrow = s.narrow();
+    let toggle = if narrow {
+        icon_button(t, &icons::ARROW_LEFT, 16.0, "Back to Settings (⌘B)")
+    } else if s.roster_open {
         icon_button(
             t,
             &icons::CHEVRONS_LEFT,
@@ -241,8 +257,20 @@ fn top_bar(s: &Ui, page: &Page, look: &Look) -> El {
                     .color(t.foreground),
             ),
     );
+    // A narrow bar names only the page: the way back says where it is.
+    if narrow {
+        crumbs = row()
+            .role("navigation")
+            .label("Settings location")
+            .grow(1.0)
+            .min_w(0.0)
+            .child(
+                one_line(page.label(), font(13.0, 560.0), t.foreground)
+                    .key("rd-settings-page-name"),
+            );
+    }
     // With the navigation hidden, the bar starts right of the window's buttons.
-    let left = if s.roster_open {
+    let left = if s.roster_open && !narrow {
         24.0
     } else {
         (look.lights + 16.0).max(24.0)
@@ -264,7 +292,11 @@ fn top_bar(s: &Ui, page: &Page, look: &Look) -> El {
             toggle.key("rd-toggle-settings-nav"),
             true,
             |s: &mut Ui| {
-                s.roster_open = !s.roster_open;
+                if s.narrow() {
+                    s.settings_nav_home = true;
+                } else {
+                    s.roster_open = !s.roster_open;
+                }
             },
         ))
         .child(crumbs)

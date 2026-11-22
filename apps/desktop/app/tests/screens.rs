@@ -274,6 +274,55 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
 }
 
 #[test]
+fn a_narrow_window_shows_one_column_at_a_time() {
+    const PHONE: (f32, f32) = (390.0, 780.0);
+    for dark in [false, true] {
+        // Home is the roster, the window's whole width.
+        let mut rt = render_sized(scenes::conversations, dark, PHONE);
+        assert!(rt.state.narrow());
+        let roster = element(&rt, "rd-roster").rect;
+        assert!((roster[2] - PHONE.0).abs() < 0.5, "{roster:?}");
+        assert!(rt.find("rd-main").is_none() && rt.find("rd-roster-resize").is_none());
+
+        // A conversation takes its place, with a way back.
+        click(&mut rt, "rd-session-s-2");
+        assert!(!rt.state.narrow_home);
+        assert!(rt.find("rd-roster").is_none() && rt.find("rd-main").is_some());
+        click(&mut rt, "rd-back-home");
+        assert!(rt.find("rd-roster").is_some() && rt.find("rd-main").is_none());
+
+        // So does a new conversation, from the pen above the list.
+        click(&mut rt, "rd-new-conversation");
+        assert!(rt.find("rd-main").is_some() && rt.find("rd-back-home").is_some());
+    }
+}
+
+#[test]
+fn narrow_settings_show_the_navigation_or_a_page() {
+    let mut rt = render_sized(scenes::new_conversation, false, (390.0, 780.0));
+    click(&mut rt, "rd-settings");
+    // The gear opens on the navigation, which closes Settings itself.
+    assert!(rt.find("rd-settings-nav").is_some() && rt.find("rd-settings-main").is_none());
+    click(&mut rt, "rd-nav-appearance");
+    assert!(rt.find("rd-settings-nav").is_none() && rt.find("rd-settings-main").is_some());
+    assert_eq!(
+        element(&rt, "rd-settings-page-name").text.as_deref(),
+        Some("Appearance")
+    );
+    click(&mut rt, "rd-toggle-settings-nav");
+    assert!(rt.find("rd-settings-nav").is_some());
+    click(&mut rt, "rd-close-settings");
+    assert_eq!(rt.state.screen, Screen::Workspace);
+}
+
+#[test]
+fn a_wide_window_keeps_both_columns() {
+    let rt = render_sized(scenes::conversations, false, (960.0, 560.0));
+    assert!(!rt.state.narrow());
+    assert!(rt.find("rd-roster").is_some() && rt.find("rd-main").is_some());
+}
+
+#[test]
 fn a_job_on_the_empty_desk_puts_its_request_in_the_composer() {
     for dark in [false, true] {
         let mut rt = render(scenes::new_conversation, dark);
@@ -4574,9 +4623,10 @@ fn a_window_too_small_for_the_chosen_widths_draws_them_narrower() {
     settle(&mut rt);
     // 1100 less the conversation's 320 leaves 780: 480 fits.
     assert_eq!(rt.state.visible_roster_width(), 480.0);
-    // The chosen width is kept while a narrower window draws less.
-    rt.update(|ui, _| ui.workspace_width = 700.0);
-    assert_eq!(rt.state.visible_roster_width(), 380.0);
+    // The chosen width is kept while a narrower window draws less. (Below
+    // 768 the window shows one column at a time instead.)
+    rt.update(|ui, _| ui.workspace_width = 790.0);
+    assert_eq!(rt.state.visible_roster_width(), 470.0);
     assert_eq!(rt.state.roster_width, 480.0);
 }
 

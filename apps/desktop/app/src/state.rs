@@ -361,6 +361,12 @@ pub struct Ui {
     pub drop_hover: bool,
     /// Whether the bot roster on the left shows (⌘B).
     pub roster_open: bool,
+    /// In a narrow window, where one column shows at a time: whether it is
+    /// the roster (home) rather than the conversation.
+    pub narrow_home: bool,
+    /// In a narrow window, whether Settings shows its navigation rather
+    /// than a page.
+    pub settings_nav_home: bool,
     /// The workspace's size in points, as last laid out; 0 before the
     /// first layout. The width bounds the roster's, and the height the
     /// share the bots take of it.
@@ -501,6 +507,10 @@ pub const ROSTER_WIDTH: f32 = 264.0;
 pub const ROSTER_MIN: f32 = 220.0;
 pub const ROSTER_MAX: f32 = 480.0;
 
+/// Below this width one column shows at a time, as on a phone: the roster
+/// as home, or the conversation with a way back (the web's 768).
+pub const NARROW: f32 = 768.0;
+
 /// The narrowest the conversation is squeezed to when the window is too
 /// small for the chosen widths: the columns give way first (the web's 320).
 const CONVERSATION_FLOOR: f32 = 320.0;
@@ -563,6 +573,8 @@ impl Ui {
             composer: TextEdit::new(""),
             drop_hover: false,
             roster_open: true,
+            narrow_home: true,
+            settings_nav_home: false,
             workspace_width: 0.0,
             workspace_height: 0.0,
             roster_width: ROSTER_WIDTH,
@@ -723,8 +735,32 @@ impl Ui {
         if self.workspace_width <= 0.0 {
             return self.roster_width;
         }
+        // In a narrow window the roster, when it shows, is the whole width.
+        if self.narrow() {
+            return self.workspace_width;
+        }
         let room = self.workspace_width - CONVERSATION_FLOOR;
         self.roster_width.min(room.max(ROSTER_MIN))
+    }
+
+    /// True when the window is too narrow for two columns.
+    pub fn narrow(&self) -> bool {
+        self.workspace_width > 0.0 && self.workspace_width < NARROW
+    }
+
+    /// The width of the pane beside the roster: the window's in a narrow one.
+    pub fn main_width(&self) -> f32 {
+        if self.narrow() || !self.roster_open {
+            self.workspace_width
+        } else {
+            self.workspace_width - self.visible_roster_width()
+        }
+    }
+
+    /// In a narrow window, back from a conversation to the roster.
+    pub fn go_home(&mut self) {
+        self.narrow_home = true;
+        self.inbox_open = false;
     }
 
     /// Sets the roster's width from a drag, within its limits.
@@ -748,6 +784,8 @@ impl Ui {
     }
 
     pub fn select_session(&mut self, session_id: Option<&str>) {
+        // In a narrow window the conversation takes the roster's place.
+        self.narrow_home = false;
         self.inbox_open = false;
         self.new_model = None;
         self.model_picker.open = false;
@@ -1800,6 +1838,9 @@ impl Ui {
 
     /// Opens Settings on `page`, or on the selected bot's Profile.
     pub fn open_settings(&mut self, page: Option<Page>) {
+        // In a narrow window, the gear opens on the navigation; a link to
+        // one page opens that page.
+        self.settings_nav_home = page.is_none();
         let page = page.unwrap_or_else(|| Page::Bot {
             bot_id: self
                 .model

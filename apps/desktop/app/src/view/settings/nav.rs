@@ -14,7 +14,7 @@ use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
 use crate::view::Look;
-use crate::widgets::{icon_button, one_line};
+use crate::widgets::{icon_button, one_line, pressable};
 
 /// As wide as the bot roster it replaces.
 const WIDTH: f32 = 264.0;
@@ -68,33 +68,43 @@ pub fn nav(s: &Ui, current: &Page, look: &Look) -> El {
             entry(t, "rd-nav-about", "About", *current == Page::About, 7.0)
                 .on_press(|s: &mut Ui| s.open_settings(Some(Page::About))),
         );
-    col()
+    // In a narrow window the navigation is a screen of its own, and closes
+    // Settings from its title row.
+    let narrow = s.narrow();
+    let mut title = row()
+        .w_full()
+        .h(53.0)
+        .pt(7.0)
+        .pl(title_inset)
+        .pr(14.0)
+        .pb(16.0)
+        .gap(9.0)
+        .center_y()
+        .window_drag()
+        .child(bot_avatar("default", look.tones.of("default"), 22.0))
+        .child(
+            text("Settings")
+                .font(font(15.75, 600.0).tracking(-0.2))
+                .color(t.foreground)
+                .grow(1.0),
+        );
+    if narrow {
+        title = title.child(pressable(
+            icon_button(t, &icons::X, 16.0, "Close settings").key("rd-close-settings"),
+            true,
+            |s: &mut Ui| s.close_settings(),
+        ));
+    }
+    let nav = col()
         .key("rd-settings-nav")
         .role("navigation")
-        .label("Settings")
-        .w(WIDTH)
-        .h_full()
+        .label("Settings");
+    let nav = if narrow { nav.w_full() } else { nav.w(WIDTH) };
+    nav.h_full()
         .fill(t.sidebar)
         .border_sides([0.0, 1.0, 0.0, 0.0], t.border)
-        .child(
-            // Level with the window's buttons, like the roster's brand.
-            row()
-                .w_full()
-                .h(53.0)
-                .pt(7.0)
-                .pl(title_inset)
-                .pr(14.0)
-                .pb(16.0)
-                .gap(9.0)
-                .center_y()
-                .window_drag()
-                .child(bot_avatar("default", look.tones.of("default"), 22.0))
-                .child(
-                    text("Settings")
-                        .font(font(15.75, 600.0).tracking(-0.2))
-                        .color(t.foreground),
-                ),
-        )
+        // Level with the window's buttons, like the roster's brand.
+        .child(title)
         .child(
             col()
                 .w_full()

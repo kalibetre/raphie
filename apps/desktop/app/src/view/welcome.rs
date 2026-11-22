@@ -50,12 +50,7 @@ pub fn welcome(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     let bot_id = s.model.selected_bot().map_or("default", |b| b.id.as_str());
     // The pane beside the roster, less its padding, up to the jobs' width.
-    let pane = s.workspace_width
-        - if s.roster_open {
-            s.visible_roster_width()
-        } else {
-            0.0
-        };
+    let pane = s.main_width();
     let room = (pane - 64.0).clamp(0.0, 560.0);
     let columns = if pane >= TWO_COLUMNS { 2 } else { 1 };
     // Equal columns: a flexible row would size each card by its text.

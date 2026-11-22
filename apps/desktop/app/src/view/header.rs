@@ -25,27 +25,34 @@ pub fn header(s: &Ui, look: &Look) -> El {
         .or_else(|| conversation.map(|_| "Loading…".to_owned()))
         .unwrap_or_else(|| "New conversation".to_owned());
 
-    let toggle = if s.roster_open {
-        icon_button(t, &icons::CHEVRONS_LEFT, 16.0, "Hide sidebar (⌘B)")
-    } else {
-        icon_button(t, &icons::CHEVRONS_RIGHT, 16.0, "Show sidebar (⌘B)")
-    };
-    let mut identity = row()
-        .gap(10.0)
-        .center_y()
-        .child(pressable(
-            toggle.key("rd-toggle-roster"),
+    let narrow = s.narrow();
+    // In a narrow window the roster is a screen of its own: back to it.
+    let toggle = if narrow {
+        pressable(
+            icon_button(t, &icons::ARROW_LEFT, 16.0, "Back to your team (⌘B)").key("rd-back-home"),
             true,
-            |s: &mut Ui| {
-                s.roster_open = !s.roster_open;
-            },
-        ))
-        .child(bot_avatar(bot_id, look.tones.of(bot_id), 24.0));
+            |s: &mut Ui| s.go_home(),
+        )
+    } else {
+        let button = if s.roster_open {
+            icon_button(t, &icons::CHEVRONS_LEFT, 16.0, "Hide sidebar (⌘B)")
+        } else {
+            icon_button(t, &icons::CHEVRONS_RIGHT, 16.0, "Show sidebar (⌘B)")
+        };
+        pressable(button.key("rd-toggle-roster"), true, |s: &mut Ui| {
+            s.roster_open = !s.roster_open;
+        })
+    };
+    let mut identity = row().gap(10.0).center_y().child(toggle);
+    // A narrow bar keeps its room for the title; the name says who it is.
+    if !narrow {
+        identity = identity.child(bot_avatar(bot_id, look.tones.of(bot_id), 24.0));
+    }
     if let Some(bot) = bot {
         // One line: the bar is as short as the one over a Settings page.
         // The bot's description is in the roster, and here on hover.
         let mut name = row()
-            .max_w(180.0)
+            .max_w(if narrow { 110.0 } else { 180.0 })
             .child(one_line(bot.name.clone(), font(13.0, 550.0), t.foreground).shrink());
         if !bot.description.is_empty() {
             name = name.help(bot.description.clone());
@@ -114,7 +121,7 @@ pub fn header(s: &Ui, look: &Look) -> El {
     }
 
     // With the roster hidden, the bar starts right of the window's buttons.
-    let left = if s.roster_open {
+    let left = if s.roster_open && !narrow {
         24.0
     } else {
         (look.lights + 16.0).max(24.0)
@@ -126,8 +133,8 @@ pub fn header(s: &Ui, look: &Look) -> El {
         // with the window's buttons.
         .h(44.0)
         .pl(left)
-        .pr(24.0)
-        .gap(16.0)
+        .pr(if narrow { 12.0 } else { 24.0 })
+        .gap(if narrow { 8.0 } else { 16.0 })
         .center_y()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.border)
         // Empty parts of the bar move the window; its buttons still press.
