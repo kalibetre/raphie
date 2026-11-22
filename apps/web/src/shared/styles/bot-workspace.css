@@ -30,7 +30,9 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    padding: 12px 12px 14px;
+    /* One inset for everything with a background (cards, rows, search):
+       10px from the edge, with text a further 10px in. */
+    padding: 12px 10px 14px;
   }
   .roster-label {
     display: flex;
@@ -46,7 +48,6 @@
      selected bot's conversations fill the rest. */
   .bot-roster-scroll {
     flex: none;
-    margin: 0 -12px;
   }
   /* A percentage of an auto height would not bound the viewport, so the
      bots are capped by the window's height and scroll past it. */
@@ -59,7 +60,6 @@
   .bot-roster-list {
     display: grid;
     gap: 2px;
-    padding: 0 10px;
   }
   .bot-roster-item {
     display: flex;
@@ -227,13 +227,16 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    margin: 14px -12px 0;
+    margin: 14px 0 0;
   }
   .roster-conversations > .roster-label {
-    padding: 0 22px 4px;
+    padding: 0 10px 4px;
   }
   .roster-conversations .library-page {
-    padding: 6px 12px 12px;
+    padding: 6px 0 12px;
+  }
+  .roster-conversations .conversation-list {
+    padding: 2px 0 12px;
   }
   /* The filters already say what is shown; the sidebar keeps the room. */
   .roster-conversations .library-results {
@@ -260,8 +263,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 12px -2px 0;
-    padding: 0 0 0 6px;
+    margin: 12px 0 0;
+    padding: 0 0 0 10px;
   }
   .roster-brand-mark {
     width: 22px;
@@ -827,7 +830,7 @@
     .bot-roster {
       flex: 1;
       height: auto;
-      padding: 14px 14px 16px;
+      padding: 14px 10px 16px;
       background: var(--sidebar);
     }
     .bot-roster-scroll,
