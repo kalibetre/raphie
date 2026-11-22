@@ -162,16 +162,17 @@ Snapshots are for comparing by eye and attaching to a pull request. Do not commi
 
 Each file names its web source at the top. When you change the web side, change the desktop side in the same pull request.
 
-| Desktop                     | Web source                                                                              |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| `app/src/theme.rs`          | `apps/web/src/shared/styles/tokens.css`                                                 |
-| `app/src/avatar.rs`         | `bot-glance.ts` and `bot-tone.ts` in `domains/settings/application`                     |
-| `app/src/icons.rs`          | the Lucide icons the web components import                                              |
-| `app/src/sections.rs`       | `settings-sections.ts` and `settings-nav.tsx`                                           |
-| `app/src/widgets.rs`        | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                           |
-| `core/src/projections.rs`   | `packages/contracts/src/sessions/projections.ts`                                        |
-| `core/src/model_library.rs` | `domains/settings/application/model-library.ts`                                         |
-| `app/src/view/*.rs`         | the matching component and its rules in `chat.css`, `sessions.css`, `bot-workspace.css` |
+| Desktop                     | Web source                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `app/src/theme.rs`          | `apps/web/src/shared/styles/tokens.css`                                                                 |
+| `app/src/avatar.rs`         | `bot-glance.ts` and `bot-tone.ts` in `domains/settings/application`                                     |
+| `app/src/icons.rs`          | the Lucide icons the web components import                                                              |
+| `app/src/sections.rs`       | `settings-sections.ts` and `settings-nav.tsx`                                                           |
+| `app/src/widgets.rs`        | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                                           |
+| `core/src/projections.rs`   | `packages/contracts/src/sessions/projections.ts`                                                        |
+| `core/src/model_library.rs` | `domains/settings/application/model-library.ts`                                                         |
+| `core/src/cards.rs`         | `card-timeline.ts` and `card-facts.ts` in `domains/conversations/application`                           |
+| `app/src/view/*.rs`         | the matching component and its rules in `chat.css`, `cards.css`, `sessions.css` and `bot-workspace.css` |
 
 The web's root font size is 14 px, so its Tailwind rem sizes are 14/16 of their usual pixels: `h-8` is 28 pt here and `text-sm` is 12.25 pt.
 

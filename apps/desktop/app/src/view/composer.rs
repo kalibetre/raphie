@@ -209,9 +209,10 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let mut wrap = col()
         .w_full()
         .max_w(READING_WIDTH)
-        .px(28.0)
+        // The web's `.composer-wrap`, which is 12 px a side in a narrow window.
+        .px(if s.narrow() { 12.0 } else { 28.0 })
         .pt(4.0)
-        .pb(14.0);
+        .pb(if s.narrow() { 12.0 } else { 14.0 });
     if let Some(error) = &draft.error {
         wrap = wrap.child(
             text(error.clone())

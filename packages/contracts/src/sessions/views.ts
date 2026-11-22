@@ -9,6 +9,7 @@ import type {
   WorkspaceSnapshot,
 } from "../index.ts";
 import type { SessionAsk } from "./asks.ts";
+import type { SessionCard } from "./cards.ts";
 
 export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   id: string;
@@ -70,6 +71,8 @@ export type SessionObservation = {
   toolApprovals: SessionApproval[];
   /** Questions the bot asked; optional for older runtimes. */
   asks?: SessionAsk[];
+  /** Cards the bot showed; optional for older runtimes. */
+  cards?: SessionCard[];
   live: LiveConversation | null;
   activity: SessionActivity[];
   nextBefore: string | null;
@@ -88,6 +91,7 @@ export type ClientWorkspace = RuntimeInfo & {
   turns: SessionTurn[];
   toolApprovals: SessionApproval[];
   asks: SessionAsk[];
+  cards: SessionCard[];
   live: Record<string, LiveConversation>;
   activity: SessionActivity[];
 };

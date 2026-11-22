@@ -13,6 +13,7 @@
 //! - [`handoffs`]: tasks a bot handed to others, as cards and the composer show them.
 //! - [`mentions`]: "@Name" for another bot, typed and shown.
 //! - [`self_updates`]: what a bot changed about itself or the owner in a reply.
+//! - [`cards`]: a timeline card as it reads now: what is over, and where the present falls.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
 //! - [`settings`]: non-secret preferences.
 //! - [`last_sessions`]: the conversation last open with each bot.
@@ -29,6 +30,7 @@
 pub mod api;
 pub mod attachments;
 pub mod auth;
+pub mod cards;
 pub mod channels;
 pub mod contracts;
 pub mod engine;

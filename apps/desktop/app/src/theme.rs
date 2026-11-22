@@ -6,6 +6,7 @@
 //! in both places. Sizes that the web sets per component (a 72 pt header, a
 //! 264 pt roster) live next to the component in `view/`.
 
+use raphie_core::contracts::CardColor;
 use rune::color::hex;
 use rune::{Color, Family, Shadow, TextStyle};
 use rune_kit::{Kit, MarkdownStyle, PaletteSeed};
@@ -41,6 +42,12 @@ pub struct Theme {
     pub night: Color,
     pub night_soft: Color,
     pub error: Color,
+    /// `--source-1` to `--source-4`: where a card's items came from, when
+    /// it mixes several sources.
+    pub sources: [Color; 4],
+    /// `--column-gray` to `--column-purple`: a board column's colour, in
+    /// the order of `CardColor`.
+    pub columns: [Color; 8],
     /// `--shadow`: cards.
     pub shadow: [Shadow; 2],
     /// `--composer-shadow`: the floating composer.
@@ -73,6 +80,22 @@ impl Theme {
             night: color("#454a9c"),
             night_soft: color("#e2e3f3"),
             error: color("#b13e32"),
+            sources: [
+                color("#4a7a57"),
+                color("#4f7396"),
+                color("#8a5a8c"),
+                color("#a2670f"),
+            ],
+            columns: [
+                color("#a8a396"),
+                color("#4f7396"),
+                color("#4a7a57"),
+                color("#b08a1e"),
+                color("#b8692a"),
+                color("#b13e32"),
+                color("#b05a80"),
+                color("#8a5a8c"),
+            ],
             shadow: [drop(1.0, 2.0, "#2a24140a"), drop(8.0, 24.0, "#2a24140d")],
             composer_shadow: [drop(2.0, 4.0, "#2a24141a"), drop(12.0, 32.0, "#2a24142e")],
         }
@@ -99,9 +122,44 @@ impl Theme {
             night: color("#aeb3f2"),
             night_soft: color("#262842"),
             error: color("#e07a6e"),
+            sources: [
+                color("#7fb08b"),
+                color("#8aaed0"),
+                color("#c39ac5"),
+                color("#e0a54a"),
+            ],
+            columns: [
+                color("#6b675e"),
+                color("#8aaed0"),
+                color("#7fb08b"),
+                color("#d9bc5a"),
+                color("#e0a06a"),
+                color("#e07a6e"),
+                color("#dc94b4"),
+                color("#c39ac5"),
+            ],
             shadow: [drop(1.0, 2.0, "#00000066"), drop(8.0, 24.0, "#00000055")],
             composer_shadow: [drop(2.0, 4.0, "#00000099"), drop(12.0, 32.0, "#000000aa")],
         }
+    }
+
+    /// The colour of a card's source at `position`; they repeat after four.
+    pub fn source(&self, position: usize) -> Color {
+        self.sources[position % self.sources.len()]
+    }
+
+    /// This theme's shade of a board column's colour.
+    pub fn column(&self, color: CardColor) -> Color {
+        self.columns[match color {
+            CardColor::Gray | CardColor::Unknown => 0,
+            CardColor::Blue => 1,
+            CardColor::Green => 2,
+            CardColor::Yellow => 3,
+            CardColor::Orange => 4,
+            CardColor::Red => 5,
+            CardColor::Pink => 6,
+            CardColor::Purple => 7,
+        }]
     }
 
     /// The highlight behind selected text.

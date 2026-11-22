@@ -38,6 +38,7 @@ import {
   remarkSkills,
 } from "./handoffs/mention-markdown";
 import { SelfUpdateNotes } from "./self-update-notes";
+import { ShownCard } from "./shown-card";
 
 const noBots: readonly { id: string; name: string }[] = [];
 const noSkills: readonly string[] = [];
@@ -182,6 +183,7 @@ export function Chat({
   }, [turns, state.activity, state.toolApprovals, conversationId]);
 
   const asks = state.asks.filter((a) => a.conversationId === conversationId);
+  const cards = state.cards.filter((c) => c.conversationId === conversationId);
   const runs = failedRuns(turns);
   // A turn with a reply shows its tool work under the reply, signed by the
   // bot; one without (stopped, failed or still working) shows it in place.
@@ -373,6 +375,10 @@ export function Chat({
                 {text}
               </ReactMarkdown>
             </div>
+            {turn?.status === "done" &&
+              cards
+                .filter((c) => c.turnId === turnId)
+                .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
             {turn?.status === "done" && (
               <HandoffSources read={turn.readSessions ?? []} />
             )}
@@ -392,6 +398,7 @@ export function Chat({
             state={state}
             steps={steps.get(turn.id) ?? []}
             asks={asks.filter((a) => a.turnId === turn.id)}
+            cards={cards.filter((c) => c.turnId === turn.id)}
           />
         ))}
     </Conversation>
@@ -412,6 +419,11 @@ export function Chat({
           asks
             .filter((a) => a.turnId === turn.id)
             .map((ask) => <AskCard key={ask.id} ask={ask} />)}
+        {!working &&
+          !inReply &&
+          cards
+            .filter((c) => c.turnId === turn.id)
+            .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
         {turn.cancelled && (
           <p className="message-meta">Stopped · message not completed</p>
         )}

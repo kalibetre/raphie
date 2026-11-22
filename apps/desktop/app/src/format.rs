@@ -36,6 +36,41 @@ pub fn clock(at: i64) -> String {
     }
 }
 
+/// A span of local time: "02:00 – 03:00 PM", or "11:30 AM – 12:15 PM"
+/// across noon.
+pub fn clock_range(start: i64, end: i64) -> String {
+    let (from, to) = (clock(start), clock(end));
+    match (from.rsplit_once(' '), to.rsplit_once(' ')) {
+        (Some((time, half)), Some((_, same))) if half == same => format!("{time} – {to}"),
+        _ => format!("{from} – {to}"),
+    }
+}
+
+/// The local calendar day of `at`, as days since 1970-01-01.
+pub fn local_day(at: i64) -> i64 {
+    chrono::DateTime::from_timestamp_millis(at).map_or(0, |utc| {
+        let day = utc.with_timezone(&chrono::Local).date_naive();
+        (day - chrono::NaiveDate::default()).num_days()
+    })
+}
+
+/// The weekday and date of a calendar date written YYYY-MM-DD:
+/// "Monday 23 November". The date as given when it cannot be read.
+pub fn weekday_date(date: &str) -> String {
+    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").map_or_else(
+        |_| date.to_owned(),
+        |day| day.format("%A %-d %B").to_string(),
+    )
+}
+
+/// A calendar date written YYYY-MM-DD, in short: "Mon, Nov 23".
+pub fn short_date(date: &str) -> String {
+    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").map_or_else(
+        |_| date.to_owned(),
+        |day| day.format("%a, %b %-d").to_string(),
+    )
+}
+
 /// The local month and day of `at`: "Nov 14".
 pub fn month_day(at: i64) -> String {
     match chrono::DateTime::from_timestamp_millis(at) {
@@ -147,6 +182,32 @@ mod tests {
         // The local forms depend on this machine's zone; their shape does not.
         assert_eq!(time_millis(1_700_000_000_123).len(), "20:55:03.123".len());
         assert!(time_seconds(1_700_000_000_123).contains(":20 "));
+    }
+
+    #[test]
+    fn a_span_of_time_names_its_half_of_the_day_once() {
+        // Built from local times, so the test reads the same in any zone.
+        let local = |hour: u32, minute: u32| {
+            chrono::Local::now()
+                .date_naive()
+                .and_hms_opt(hour, minute, 0)
+                .and_then(|naive| naive.and_local_timezone(chrono::Local).single())
+                .expect("a local time today")
+                .timestamp_millis()
+        };
+        assert_eq!(clock_range(local(14, 0), local(15, 0)), "02:00 – 03:00 PM");
+        assert_eq!(
+            clock_range(local(11, 30), local(12, 15)),
+            "11:30 AM – 12:15 PM"
+        );
+        assert_eq!(weekday_date("2026-11-23"), "Monday 23 November");
+        assert_eq!(weekday_date("soon"), "soon");
+        assert_eq!(short_date("2026-11-23"), "Mon, Nov 23");
+        assert_eq!(local_day(local(23, 59)), local_day(local(0, 1)));
+        assert_eq!(
+            local_day(local(12, 0) + 86_400_000) - local_day(local(12, 0)),
+            1
+        );
     }
 
     #[test]

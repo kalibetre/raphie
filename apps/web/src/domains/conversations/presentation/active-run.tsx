@@ -1,4 +1,4 @@
-import type { SessionAsk } from "@raphie/contracts";
+import type { SessionAsk, SessionCard } from "@raphie/contracts";
 import { useEffect, useState } from "react";
 
 import type { Snapshot } from "../../../infrastructure/http/api-client";
@@ -9,18 +9,22 @@ import {
   type ToolStep,
 } from "../application/run-projection";
 import { AskCard } from "./ask-card";
+import { ShownCard } from "./shown-card";
 
 export function ActiveRun({
   turn,
   state,
   steps,
   asks = [],
+  cards = [],
 }: {
   turn: Snapshot["turns"][number];
   state: Snapshot;
   steps: ToolStep[];
   /** Questions this turn asked the owner. */
   asks?: SessionAsk[];
+  /** Cards this turn has shown so far. */
+  cards?: SessionCard[];
 }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -47,6 +51,9 @@ export function ActiveRun({
         }
         elapsed={formatDuration(now - turn.createdAt)}
       />
+      {cards.map((shown) => (
+        <ShownCard key={shown.id} shown={shown} />
+      ))}
       {asks.map((ask) => (
         <AskCard key={ask.id} ask={ask} />
       ))}
