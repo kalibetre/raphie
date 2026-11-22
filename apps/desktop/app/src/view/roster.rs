@@ -120,12 +120,9 @@ pub fn roster(s: &Ui, look: &Look) -> El {
         .fill(t.sidebar)
         // Only a right edge: `[top, right, bottom, left]` widths.
         .border_sides([0.0, 1.0, 0.0, 0.0], t.border)
-        // A band the window's own buttons sit in, which also moves the window.
-        .child(
-            el().w_full()
-                .h(if look.lights > 0.0 { 38.0 } else { 12.0 })
-                .window_drag(),
-        )
+        // A band as tall as the header beside it, which holds the window's
+        // own buttons and the build badge, and moves the window.
+        .child(band(s, look, width))
         .children(requests(s, look))
         .child(row().w_full().px(22.0).pb(8.0).child(label(t, "Your team")))
         .child(bots_list)
@@ -335,18 +332,6 @@ fn footer(s: &Ui, look: &Look) -> El {
         _ => "This Mac".to_owned(),
     };
     let wordmark = font(13.0, 650.0).tracking(-0.1);
-    // The build badge says its word only when the footer has room for it.
-    let needed = 6.0
-        + MARK
-        + 8.0
-        + rune::text::measure("raphie", &[], wordmark, None).0
-        + 8.0
-        + build_badge_width(s.flavor, s.release_channel)
-        // Room for a short place name, then the gear.
-        + 8.0
-        + 72.0
-        + 28.0;
-    let compact = needed > s.visible_roster_width();
     let brand = tone_of("#b5c99b").unwrap_or_else(|| look.tones.of("default"));
     row()
         .key("rd-account")
@@ -358,8 +343,6 @@ fn footer(s: &Ui, look: &Look) -> El {
         .center_y()
         .child(bot_avatar("default", brand, MARK))
         .child(text("raphie").font(wordmark).color(t.foreground))
-        // An `Option` is a list of none or one, which is what `children` takes.
-        .children(build_badge(t, s.flavor, s.release_channel, compact))
         .child(
             row()
                 .grow(1.0)
@@ -396,6 +379,26 @@ fn footer(s: &Ui, look: &Look) -> El {
                 .key("rd-settings")
                 .on_press(|s: &mut Ui| s.open_settings(None)),
         )
+}
+
+/// The top band: the window's buttons, then a dev or nightly build's badge,
+/// which says its word only when the roster has room for it.
+fn band(s: &Ui, look: &Look, width: f32) -> El {
+    let t = &look.theme;
+    let inset = if look.lights > 0.0 {
+        look.lights + 12.0
+    } else {
+        20.0
+    };
+    let compact = inset + build_badge_width(s.flavor, s.release_channel) + 12.0 > width;
+    row()
+        .w_full()
+        .h(if look.lights > 0.0 { 44.0 } else { 14.0 })
+        .pl(inset)
+        .center_y()
+        .window_drag()
+        // An `Option` is a list of none or one, which is what `children` takes.
+        .children(build_badge(t, s.flavor, s.release_channel, compact))
 }
 
 /// The brand mark's box. Its blob fills about four fifths of it, so the

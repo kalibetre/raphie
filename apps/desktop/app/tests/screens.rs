@@ -843,9 +843,8 @@ fn a_nightly_says_nightly_beside_the_brand_and_on_about() {
     });
     settle(&mut rt);
     assert!(has(&rt, "rd-dev-badge") && !has(&rt, "rd-nightly-badge"));
-    // A roster too narrow for the word keeps the badge inside it, as an icon
-    // a screen reader still names; so does the dev build's. The brand starts
-    // after macOS's window buttons, which end about 76 points in.
+    // The badge sits after macOS's window buttons, which end about 76
+    // points in, and stays inside the roster at any width.
     rt.set_titlebar_inset(76.0);
     let inside = |rt: &Runtime<Ui>, key: &str| {
         let [x, _, w, _] = element(rt, key).rect;
@@ -853,10 +852,10 @@ fn a_nightly_says_nightly_beside_the_brand_and_on_about() {
         x + w <= rx + rw - 12.0
     };
     for flavor in [Flavor::Release, Flavor::Dev] {
-        let (key, word, name) = if flavor.is_dev() {
-            ("rd-dev-badge", "DEV", "Dev build")
+        let (key, word) = if flavor.is_dev() {
+            ("rd-dev-badge", "DEV")
         } else {
-            ("rd-nightly-badge", "NIGHTLY", "Nightly")
+            ("rd-nightly-badge", "NIGHTLY")
         };
         rt.update(|ui, _| {
             ui.flavor = flavor;
@@ -867,11 +866,12 @@ fn a_nightly_says_nightly_beside_the_brand_and_on_about() {
             inside(&rt, key) && screen_text(&rt).contains(word),
             "{word} in full"
         );
+        // The badge has the band beside the window's buttons to itself, so
+        // even the narrowest roster keeps its word.
         rt.update(|ui, _| ui.roster_width = state::ROSTER_MIN);
         settle(&mut rt);
         assert!(inside(&rt, key), "{word} stays inside the narrowest roster");
-        assert!(!screen_text(&rt).contains(word));
-        assert_eq!(element(&rt, key).label.as_deref(), Some(name));
+        assert!(screen_text(&rt).contains(word));
     }
     rt.update(|ui, _| {
         ui.flavor = Flavor::Release;
