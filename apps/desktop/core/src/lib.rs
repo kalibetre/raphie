@@ -54,5 +54,6 @@ pub mod settings;
 pub mod skills;
 pub mod slash;
 pub mod sse;
+pub mod tool_phrases;
 pub mod updates;
 pub mod workspace;

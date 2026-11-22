@@ -11,8 +11,8 @@ use raphie_core::contracts::{
 };
 use raphie_core::model::Conversation;
 use raphie_core::projections::{
-    ToolStep, active_run_label, completed_at, format_cost, format_duration, format_tokens,
-    run_usage, steps_by_turn,
+    ToolStep, active_run_label, completed_at, format_cost, format_duration, run_usage,
+    steps_by_turn,
 };
 use rune::{El, LiveRegion, ScrollSpec, col, icon, row, text};
 use rune_kit::{Loader, Markdown};
@@ -24,6 +24,7 @@ use super::compaction;
 use super::handoffs;
 use super::self_updates;
 use super::steps::{Run, Working, code_box, tool_steps};
+use crate::avatar::bot_avatar;
 use crate::format;
 use crate::icons;
 use crate::state::Ui;
@@ -112,10 +113,20 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
         .map(|(turn, _)| *turn)
         .find(|turn| is_running(turn));
 
+    let failed = failed_runs(runs.iter().map(|(turn, _)| *turn));
     for (turn, steps) in &runs {
         // Above the turn whose run summarized the messages before it.
         if let Some(divider) = compaction::divider(s, turn, look) {
             items.push(divider);
+        }
+        // Failed runs of one scheduled job in a row read as one failure.
+        match failed.get(turn.id.as_str()) {
+            Some(Failed::Hidden) => continue,
+            Some(Failed::Latest { attempts, first }) => {
+                items.push(scheduled_failure(s, turn, *attempts, *first, look));
+                continue;
+            }
+            None => {}
         }
         let asks: Vec<&SessionAsk> = observation
             .asks
@@ -127,7 +138,7 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             .is_some_and(|w| w.id == turn.id)
             .then_some(live)
             .flatten();
-        if let Some(reply) = reply(s, turn, streaming, &observation.activity, look) {
+        if let Some(reply) = reply(s, turn, steps, streaming, &observation.activity, now, look) {
             items.push(reply);
         }
     }
@@ -166,7 +177,10 @@ fn owner_turn(
         block = block.child(queue_controls(turn, mode, t));
     }
     let working = turn.status == TurnStatus::Pending;
-    if !working && !steps.is_empty() {
+    // A turn with a reply shows its tool work under the reply, signed by
+    // the bot; one without shows it here.
+    let in_reply = turn.status == TurnStatus::Done && turn.answer.is_some();
+    if !working && !in_reply && !steps.is_empty() {
         let run = Run {
             turn_id: &turn.id,
             steps,
@@ -174,7 +188,10 @@ fn owner_turn(
         };
         block = block.child(tool_steps(s, &run, now, look));
     }
-    if !working && let Some(notes) = self_updates::notes(s, steps, t) {
+    if !working
+        && !in_reply
+        && let Some(notes) = self_updates::notes(s, steps, t)
+    {
         block = block.child(notes);
     }
     if !working {
@@ -194,19 +211,18 @@ fn owner_turn(
             "Check Diagnostics, then send a new message to retry.",
             |failure| failure.message.as_str(),
         );
-        block = block.child(error_line(
-            &format!("rd-failed-{}", turn.id),
-            &format!("Raphie could not complete this reply. {reason}"),
-            t,
-        ));
-        if let Some(detail) = turn.failure.as_ref().and_then(|f| f.detail.clone()) {
-            // The provider's own words, under the sentence and in line with it.
-            block = block.child(row().w_full().pl(20.0).child(code_box(
-                &format!("rd-failed-detail-{}", turn.id),
-                detail,
-                t,
-            )));
-        }
+        block = block.child(
+            col()
+                .w_full()
+                .gap(6.0)
+                .child(signature(s, Some(turn.created_at), None, look))
+                .child(error_line(
+                    &format!("rd-failed-{}", turn.id),
+                    &format!("I couldn’t finish this reply. {reason}"),
+                    t,
+                ))
+                .children(failure_details(s, turn, look)),
+        );
     }
     block
 }
@@ -358,13 +374,16 @@ fn queue_controls(turn: &SessionTurn, mode: QueueMode, t: &Theme) -> El {
         )
 }
 
-/// What Raphie answered to `turn`, if there is anything to show yet: the
-/// finished reply with its time and cost, or the text written so far.
+/// What the bot answered to `turn`, if there is anything to show yet: the
+/// finished reply signed with the bot's name and time, then what it did, or
+/// the text written so far.
 fn reply(
     s: &Ui,
     turn: &SessionTurn,
+    steps: &[ToolStep],
     live: Option<&str>,
     activity: &[SessionActivity],
+    now: i64,
     look: &Look,
 ) -> Option<El> {
     let t = &look.theme;
@@ -373,7 +392,24 @@ fn reply(
         (None, Some(text)) if !text.is_empty() => (text, true),
         _ => return None,
     };
+    let done = turn.status == TurnStatus::Done;
     let mut reply = col().key(format!("rd-reply-{}", turn.id)).w_full().px(2.0);
+    if done {
+        // Tokens and cost are for the curious, not the conversation.
+        let usage = run_usage(&turn.id, activity).map(|usage| {
+            let calls = if usage.calls == 1 { "call" } else { "calls" };
+            format!(
+                "{} tokens across {} model {calls} · {}, provider-reported",
+                usage.tokens,
+                usage.calls,
+                format_cost(usage.cost)
+            )
+        });
+        reply = reply.child(
+            signature(s, completed_at(&turn.id, activity), usage, look)
+                .key(format!("rd-meta-{}", turn.id)),
+        );
+    }
     // The briefs this turn handed off, above what it said about them.
     if let Some(cards) = handoffs::cards(s, &turn.id, look) {
         reply = reply.child(cards.mb(10.0));
@@ -387,35 +423,213 @@ fn reply(
     } else {
         handoffs::markdown(s, source, look)
     });
-    if turn.status == TurnStatus::Done
-        && let Some(sources) = handoffs::sources(turn, look)
-    {
+    if done && let Some(sources) = handoffs::sources(turn, look) {
         reply = reply.child(sources);
     }
-    if turn.status == TurnStatus::Done {
-        // "08:45 PM   88 tokens · $0.0000", from the run's model calls.
-        let mut meta = row().key(format!("rd-meta-{}", turn.id)).mt(6.0).gap(10.0);
-        let small = |content: String| text(content).font(font(11.5, 400.0)).color(t.faint);
-        if let Some(at) = completed_at(&turn.id, activity) {
-            meta = meta.child(small(format::clock(at)));
-        }
-        if let Some(usage) = run_usage(&turn.id, activity) {
-            let calls = if usage.calls == 1 { "call" } else { "calls" };
-            meta = meta.child(
-                small(format!(
-                    "{} tokens · {}",
-                    format_tokens(usage.tokens),
-                    format_cost(usage.cost)
-                ))
-                .help(format!(
-                    "{} tokens across {} model {calls}, provider-reported",
-                    usage.tokens, usage.calls
-                )),
-            );
-        }
-        reply = reply.child(meta);
+    if done && !steps.is_empty() {
+        let run = Run {
+            turn_id: &turn.id,
+            steps,
+            working: None,
+        };
+        reply = reply.child(tool_steps(s, &run, now, look).mt(6.0));
+    }
+    if done && let Some(notes) = self_updates::notes(s, steps, t) {
+        reply = reply.child(notes);
     }
     Some(reply)
+}
+
+/// A reply's signature: the bot's face, its name and the time, with what the
+/// reply cost on hover when it is known.
+fn signature(s: &Ui, at: Option<i64>, usage: Option<String>, look: &Look) -> El {
+    let t = &look.theme;
+    let (id, name) = s.model.selected_bot().map_or(("default", "Raphie"), |bot| {
+        (bot.id.as_str(), bot.name.as_str())
+    });
+    let mut header = row()
+        .gap(8.0)
+        .mb(4.0)
+        .center_y()
+        .child(bot_avatar(id, look.tones.of(id), 22.0))
+        .child(
+            text(name.to_owned())
+                .font(font(13.5, 600.0))
+                .color(t.foreground),
+        );
+    if let Some(at) = at {
+        let mut time = text(format::clock(at))
+            .font(font(11.5, 400.0))
+            .color(t.faint);
+        if let Some(usage) = usage {
+            time = time.help(usage);
+        }
+        header = header.child(time);
+    }
+    header
+}
+
+/// The provider's own words about a failure, folded under "Details".
+fn failure_details(s: &Ui, turn: &SessionTurn, look: &Look) -> Option<El> {
+    let t = &look.theme;
+    let detail = turn.failure.as_ref().and_then(|f| f.detail.clone())?;
+    let id = format!("failure:{}", turn.id);
+    let open = s.open_steps.contains(&id);
+    let toggle_id = id.clone();
+    let mut block = col().w_full().gap(6.0).child(
+        row()
+            .key(format!("rd-failed-more-{}", turn.id))
+            .role("button")
+            .label("Details")
+            .gap(4.0)
+            .center_y()
+            .child(
+                icon(
+                    if open {
+                        &icons::CHEVRON_DOWN
+                    } else {
+                        &icons::CHEVRON_RIGHT
+                    },
+                    12.0,
+                )
+                .color(t.faint)
+                .a11y_hidden(),
+            )
+            .child(text("Details").font(font(12.0, 400.0)).color(t.faint))
+            .on_press(move |s: &mut Ui| Ui::toggle(&mut s.open_steps, &toggle_id)),
+    );
+    if open {
+        block = block.child(code_box(
+            &format!("rd-failed-detail-{}", turn.id),
+            detail,
+            t,
+        ));
+    }
+    Some(block)
+}
+
+/// How a run of a scheduled job that failed is shown.
+enum Failed {
+    /// An earlier failure of a run of failures: said by the latest.
+    Hidden,
+    /// The latest failure, and how many tries the run had since `first`.
+    Latest { attempts: usize, first: i64 },
+}
+
+/// Consecutive failed runs of one scheduled job read as one failure.
+fn failed_runs<'a>(
+    turns: impl Iterator<Item = &'a SessionTurn>,
+) -> std::collections::HashMap<&'a str, Failed> {
+    let mut out = std::collections::HashMap::new();
+    let mut group: Vec<&SessionTurn> = Vec::new();
+    let mut close = |group: &mut Vec<&'a SessionTurn>| {
+        if let (Some(first), Some(latest)) = (group.first(), group.last()) {
+            let first = first.created_at;
+            let attempts = group.len();
+            for turn in &group[..group.len() - 1] {
+                out.insert(turn.id.as_str(), Failed::Hidden);
+            }
+            out.insert(latest.id.as_str(), Failed::Latest { attempts, first });
+        }
+        group.clear();
+    };
+    for turn in turns {
+        let failed = turn.scheduled.is_some()
+            && turn.status == TurnStatus::Error
+            && turn.cancelled != Some(true);
+        let same = group
+            .first()
+            .and_then(|g| g.scheduled.as_ref())
+            .map(|j| &j.name)
+            == turn.scheduled.as_ref().map(|j| &j.name);
+        if !failed || !same {
+            close(&mut group);
+        }
+        if failed {
+            group.push(turn);
+        }
+    }
+    close(&mut group);
+    out
+}
+
+/// A scheduled job that failed, once or several times in a row, said once.
+fn scheduled_failure(s: &Ui, turn: &SessionTurn, attempts: usize, first: i64, look: &Look) -> El {
+    let t = &look.theme;
+    let name = turn
+        .scheduled
+        .as_ref()
+        .map_or("A scheduled job", |job| job.name.as_str());
+    let tries = if attempts > 1 {
+        format!(", after {attempts} tries.")
+    } else {
+        ".".to_owned()
+    };
+    let when = if attempts > 1 {
+        if format::clock(first) == format::clock(turn.created_at) {
+            format!("{attempts} attempts at {}", format::clock(first))
+        } else {
+            format!(
+                "{attempts} attempts, {} to {}",
+                format::clock(first),
+                format::clock(turn.created_at)
+            )
+        }
+    } else {
+        format!("Due {}", format::clock(turn.created_at))
+    };
+    let why = turn
+        .failure
+        .as_ref()
+        .map(|failure| format!(" · {}", failure.message))
+        .unwrap_or_default();
+    col()
+        .key(format!("rd-scheduled-failure-{}", turn.id))
+        .w_full()
+        .gap(6.0)
+        .live_region(LiveRegion::Polite)
+        .child(signature(s, Some(turn.created_at), None, look))
+        .child(
+            text(format!("I couldn’t run {name}{tries}"))
+                .font(font(14.0, 400.0))
+                .color(t.foreground)
+                .wrap(),
+        )
+        .child(
+            row()
+                .w_full()
+                .px(12.0)
+                .py(10.0)
+                .gap(10.0)
+                .items_start()
+                .radius(10.0)
+                .fill(t.attention_soft.mix(t.card, 0.55))
+                .border(1.0, t.attention.mix(t.border, 0.65))
+                .child(
+                    icon(&icons::CALENDAR_CLOCK, 14.0)
+                        .color(t.attention)
+                        .mt(2.0)
+                        .a11y_hidden(),
+                )
+                .child(
+                    col()
+                        .grow(1.0)
+                        .min_w(0.0)
+                        .gap(2.0)
+                        .child(
+                            text(format!("{name} didn’t run"))
+                                .font(font(13.0, 600.0))
+                                .color(t.foreground),
+                        )
+                        .child(
+                            text(format!("{when}{why}"))
+                                .font(font(12.0, 400.0))
+                                .color(t.muted_foreground)
+                                .wrap(),
+                        ),
+                ),
+        )
+        .children(failure_details(s, turn, look))
 }
 
 /// What a running turn is doing: its label, how long it has been going, and

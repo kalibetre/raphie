@@ -42,6 +42,7 @@ pub const SCENES: &[Scene] = &[
     ("sign-in-this-mac", sign_in_this_mac),
     ("device-code", device_code),
     ("new-conversation", new_conversation),
+    ("scheduled-failures", scheduled_failures),
     ("bot-setup", bot_setup),
     ("conversations", conversations),
     ("conversations-archived", conversations_archived),
@@ -2116,6 +2117,39 @@ pub fn reply_failed(ui: &mut Ui) {
                     "done",
                 ),
                 failed,
+            ],
+            None,
+            "failed",
+            vec![],
+            vec![],
+        ),
+    );
+}
+
+/// A daily briefing that failed three times in a row this morning, after a
+/// run that worked: the failures read as one, said by the bot.
+pub fn scheduled_failures(ui: &mut Ui) {
+    let job = |id: &str, ago: i64, status: &str, message: Option<&str>| {
+        let mut t = turn(id, ago, "Brief me on today.", None, status);
+        t["scheduled"] = json!({ "name": "Daily calendar briefing" });
+        if let Some(message) = message {
+            t["failure"] =
+                json!({ "message": message, "detail": "getaddrinfo ENOTFOUND openrouter.ai" });
+        } else {
+            t["answer"] = json!("Two meetings today: design review at 10 and a call at 3.");
+        }
+        t
+    };
+    open(
+        ui,
+        "s-1",
+        observation(
+            "Daily calendar briefing",
+            vec![
+                job("t1", -86_400_000, "done", None),
+                job("t2", -3_000_000, "error", Some("Request timed out.")),
+                job("t3", -2_000_000, "error", Some("Connection error.")),
+                job("t4", -1_000_000, "error", Some("Request timed out.")),
             ],
             None,
             "failed",

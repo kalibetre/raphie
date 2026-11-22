@@ -628,10 +628,14 @@ fn finished_replies_show_their_tools_time_and_cost() {
     for dark in [false, true] {
         let mut rt = render(scenes::conversation, dark);
         let text = screen_text(&rt);
-        assert!(text.contains("88 tokens · $0.0004"), "{text}");
-        // 640 + 1,210 tokens over the run's two model calls.
-        assert!(text.contains("1.9k tokens · $0.01"), "{text}");
-        assert!(text.contains("Used 2 tools · 3s"), "{text}");
+        // Each reply is signed; its tokens and cost are on hover, not drawn.
+        assert!(rt.find("rd-meta-t2").is_some());
+        assert!(!text.contains("tokens"), "{text}");
+        // What the bot did, in its words, under the reply.
+        assert!(text.contains("Used read_file, used docs"), "{text}");
+        let reply = element(&rt, "rd-reply-t2").rect;
+        let toggle = element(&rt, "rd-steps-toggle-t2").rect;
+        assert!(toggle[1] > reply[1], "the steps are inside the reply");
         assert!(rt.find("rd-step-op-1").is_none(), "steps start folded");
 
         click(&mut rt, "rd-steps-toggle-t2");
@@ -666,15 +670,39 @@ fn a_failed_reply_says_why_once() {
         let rt = render(scenes::reply_failed, dark);
         let text = screen_text(&rt);
         assert!(
-            text.contains("Raphie could not complete this reply. The model returned an error."),
+            text.contains("I couldn’t finish this reply. The model returned an error."),
             "{text}"
         );
-        assert!(text.contains("429 Too Many Requests"), "{text}");
         // Said under the message only, not again at the end.
-        assert_eq!(text.matches("could not complete").count(), 1, "{text}");
+        assert_eq!(text.matches("couldn’t finish").count(), 1, "{text}");
+        // The provider's own words are folded under Details.
+        assert!(!text.contains("429 Too Many Requests"), "{text}");
+        let mut rt = rt;
+        click(&mut rt, "rd-failed-more-t2");
+        assert!(screen_text(&rt).contains("429 Too Many Requests"));
         let line = element(&rt, "rd-failed-t2").rect;
         let detail = element(&rt, "rd-failed-detail-t2").rect;
         assert!(detail[1] >= line[1] + line[3], "the detail sits below");
+    }
+}
+
+#[test]
+fn failed_runs_of_a_scheduled_job_in_a_row_read_as_one() {
+    for dark in [false, true] {
+        let rt = render(scenes::scheduled_failures, dark);
+        let text = screen_text(&rt);
+        assert!(
+            text.contains("I couldn’t run Daily calendar briefing, after 3 tries."),
+            "{text}"
+        );
+        assert_eq!(text.matches("didn’t run").count(), 1, "{text}");
+        assert!(text.contains("3 attempts"), "{text}");
+        // The latest failure says it; the earlier two are not drawn.
+        assert!(rt.find("rd-scheduled-failure-t4").is_some());
+        assert!(rt.find("rd-scheduled-failure-t2").is_none());
+        assert!(rt.find("rd-turn-t3").is_none());
+        // The run that worked keeps its marker and reply.
+        assert!(rt.find("rd-turn-t1").is_some() && rt.find("rd-reply-t1").is_some());
     }
 }
 
