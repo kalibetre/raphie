@@ -1,0 +1,270 @@
+@layer components {
+  /* A card the bot showed under its reply: rows or a day's events. */
+  .shown-card {
+    container-type: inline-size;
+    max-width: 520px;
+    margin: 8px 0 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .shown-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+    padding: 10px 12px;
+  }
+  .shown-card-heading {
+    min-width: 0;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .shown-card-out {
+    color: inherit;
+    text-decoration: none;
+  }
+  .shown-card-out:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .shown-card-out svg {
+    display: inline;
+    margin-left: 3px;
+    color: var(--muted-foreground);
+    vertical-align: -1px;
+  }
+  .shown-card-meta {
+    margin-left: auto;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .shown-card-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin: 0;
+    padding: 0 12px 10px;
+    list-style: none;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .shown-card-legend li {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .shown-card-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .shown-card-dot[data-source="0"],
+  .shown-card-bar[data-source="0"] {
+    background: var(--source-1);
+  }
+  .shown-card-dot[data-source="1"],
+  .shown-card-bar[data-source="1"] {
+    background: var(--source-2);
+  }
+  .shown-card-dot[data-source="2"],
+  .shown-card-bar[data-source="2"] {
+    background: var(--source-3);
+  }
+  .shown-card-dot[data-source="3"],
+  .shown-card-bar[data-source="3"] {
+    background: var(--source-4);
+  }
+  .shown-card-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin: 0;
+    padding: 0 12px 10px;
+  }
+  .shown-card-stat {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .shown-card-stat dd {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
+  .shown-card-stat dt {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .shown-card-warning {
+    margin: 0;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--attention-soft);
+    color: var(--attention);
+    font-size: 12.5px;
+  }
+  .shown-card-rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .shown-card-group {
+    margin: 0;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .shown-card-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .shown-card-key {
+    flex: none;
+    min-width: 44px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .shown-card-time {
+    flex: none;
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .shown-card-bars {
+    display: flex;
+    flex: none;
+    align-self: stretch;
+    gap: 2px;
+    width: 8px;
+    min-height: 20px;
+  }
+  .shown-card-bar {
+    width: 3px;
+    border-radius: 2px;
+  }
+  .shown-card-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .shown-card-title,
+  .shown-card-detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .shown-card-detail {
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+  }
+  .shown-card-extras {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .shown-card-trailing {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .shown-card-row[data-past] .shown-card-title,
+  .shown-card-gap[data-past] {
+    color: var(--muted-foreground);
+  }
+  .shown-card-row[data-past] .shown-card-bar {
+    opacity: 0.45;
+  }
+  /* A timeline's rows share columns, so times of any width line up. */
+  .shown-card-timeline {
+    display: grid;
+    grid-template-columns: max-content max-content minmax(0, 1fr) max-content;
+    column-gap: 10px;
+  }
+  .shown-card-timeline .shown-card-row,
+  .shown-card-gap {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+  }
+  .shown-card-timeline .shown-card-group,
+  .shown-card-now {
+    grid-column: 1 / -1;
+  }
+  .shown-card-timeline .shown-card-extras {
+    grid-column: 4;
+    justify-self: end;
+  }
+  .shown-card-gap {
+    padding: 4px 12px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .shown-card-gap-text {
+    grid-column: 3 / -1;
+  }
+  .shown-card-now {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 12px;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .shown-card-now-line {
+    flex: 1;
+    height: 1px;
+    background: var(--accent);
+  }
+  .shown-card-more {
+    display: block;
+    margin: 0;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+  }
+  /* In a narrow card a row's badge, link and age go under its title. */
+  @container (max-width: 400px) {
+    .shown-card-row {
+      flex-wrap: wrap;
+      row-gap: 4px;
+    }
+    .shown-card-title,
+    .shown-card-detail {
+      white-space: normal;
+    }
+    .shown-card-extras {
+      flex-basis: 100%;
+    }
+    .shown-card-timeline {
+      grid-template-columns: max-content max-content minmax(0, 1fr);
+    }
+    .shown-card-timeline .shown-card-row {
+      align-items: start;
+    }
+    .shown-card-timeline .shown-card-extras {
+      grid-column: 3;
+      justify-self: start;
+    }
+  }
+}

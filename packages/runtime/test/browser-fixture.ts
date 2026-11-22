@@ -38,6 +38,185 @@ const model = {
   id: "acceptance",
   provider: "openrouter",
 };
+
+/** Today at `hour:minute` on this machine, with its UTC offset. */
+function today(hour: number, minute = 0) {
+  const at = new Date();
+  at.setHours(hour, minute, 0, 0);
+  const offset = -at.getTimezoneOffset();
+  const two = (n: number) => String(Math.abs(n)).padStart(2, "0");
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(hour)}:${two(minute)}:00${offset < 0 ? "-" : "+"}${two(Math.trunc(offset / 60))}:${two(offset % 60)}`;
+}
+
+/** The card a message asks for, and the short reply that goes with it. */
+function fixtureCard(
+  input: string,
+): { arguments: JsonObject; reply: string } | null {
+  if (/my schedule/i.test(input))
+    return {
+      reply:
+        "Five things today. Sprint planning overlaps the dentist, and I couldn't read the side-project calendar.",
+      arguments: {
+        title: new Date().toLocaleDateString("en-GB", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        }),
+        warning: "Side-project calendar couldn't be read",
+        events: [
+          {
+            title: "Standup",
+            detail: "Meet · 6 people",
+            start: today(9, 30),
+            end: today(9, 45),
+            source: "Work calendar",
+            url: "https://calendar.example.com/e/1",
+          },
+          {
+            title: "1:1 with Mara",
+            detail: "Room Baobab",
+            start: today(13),
+            end: today(13, 30),
+            source: "Work calendar",
+            url: "https://calendar.example.com/e/2",
+          },
+          {
+            title: "Sprint planning",
+            detail: "Meet · 9 people",
+            start: today(14),
+            end: today(15),
+            source: "Work calendar",
+            url: "https://calendar.example.com/e/3",
+            link: { label: "Join", url: "https://meet.example.com/abc" },
+          },
+          {
+            title: "Dentist",
+            detail: "Bole Road clinic",
+            start: today(14, 30),
+            end: today(15, 15),
+            source: "Personal calendar",
+            url: "https://calendar.example.com/e/4",
+          },
+          {
+            title: "Team farewell call",
+            detail: "Zoom",
+            start: today(23),
+            end: today(23, 30),
+            source: "Work calendar",
+            link: { label: "Join", url: "https://zoom.example.com/j/1" },
+          },
+          {
+            title: "Team farewell call",
+            start: today(23),
+            end: today(23, 30),
+            source: "Personal calendar",
+            url: "https://calendar.example.com/e/5",
+          },
+        ],
+      },
+    };
+  if (/AF board/i.test(input))
+    return {
+      reply: "Seven open, one blocked on the vendor.",
+      arguments: {
+        title: "AF board · open",
+        url: "https://example.atlassian.net/boards/7",
+        source: "Jira",
+        stats: [
+          { label: "Open", value: "7" },
+          { label: "In progress", value: "2" },
+          { label: "Blocked", value: "1" },
+        ],
+        more: {
+          label: "and 3 more in To do · Open in Jira",
+          url: "https://example.atlassian.net/boards/7?status=todo",
+        },
+        groups: [
+          {
+            label: "In progress",
+            rows: [
+              {
+                key: "AF-512",
+                title: "Retry failed webhook deliveries",
+                url: "https://example.atlassian.net/browse/AF-512",
+                badge: { label: "High", tone: "bad" },
+                trailing: "2d",
+              },
+              {
+                key: "AF-498",
+                title: "Export report as CSV",
+                url: "https://example.atlassian.net/browse/AF-498",
+                badge: { label: "Medium" },
+                trailing: "5d",
+              },
+            ],
+          },
+          {
+            label: "Blocked",
+            rows: [
+              {
+                key: "AF-471",
+                title: "Rotate payment provider keys",
+                detail: "Waiting on vendor",
+                url: "https://example.atlassian.net/browse/AF-471",
+                badge: { label: "Blocked", tone: "attention" },
+                trailing: "9d",
+              },
+            ],
+          },
+          {
+            label: "To do",
+            rows: [
+              {
+                key: "AF-520",
+                title: "Paginate the audit log",
+                url: "https://example.atlassian.net/browse/AF-520",
+                badge: { label: "Medium" },
+                trailing: "1d",
+              },
+            ],
+          },
+        ],
+      },
+    };
+  if (/my review/i.test(input))
+    return {
+      reply: "Two. The oldest has waited three days.",
+      arguments: {
+        title: "Waiting for your review",
+        groups: [
+          {
+            rows: [
+              {
+                key: "#214",
+                title: "Cache board queries per sprint",
+                detail: "acme/billing · by tesfa · +182 −40",
+                url: "https://github.example.com/acme/billing/pull/214",
+                badge: { label: "Checks pass", tone: "good" },
+                trailing: "3d",
+                source: "GitHub",
+              },
+              {
+                key: "#87",
+                title: "Drop the legacy export endpoint",
+                detail: "acme/reports · by lior · +12 −310",
+                url: "https://bitbucket.example.com/acme/reports/pull-requests/87",
+                badge: { label: "Checks fail", tone: "bad" },
+                link: {
+                  label: "Checks",
+                  url: "https://bitbucket.example.com/acme/reports/pipelines/87",
+                },
+                trailing: "5h",
+                source: "Bitbucket",
+              },
+            ],
+          },
+        ],
+      },
+    };
+  return null;
+}
+
 const reply: Provider["streamSimple"] = (_model, context, options) => {
   const stream = createAssistantMessageEventStream();
   const latestUser = context.messages.findLastIndex((m) => m.role === "user");
@@ -79,6 +258,8 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
             },
           }
         : null;
+  // "my schedule", "AF board" and "my review" show the kinds of card.
+  const card = fixtureCard(input);
   // "dentist", "clinic" and "inbox" show the three kinds of question.
   const ask: JsonObject | null = /dentist/i.test(input)
     ? {
@@ -109,14 +290,17 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
       remember ||
       useNative ||
       !!ask ||
+      !!card ||
       !!self) &&
     !toolResult;
   const text =
-    toolResult?.role === "toolResult"
-      ? toolResult.content
-          .flatMap((p) => (p.type === "text" ? [p.text] : []))
-          .join("")
-      : `Let’s make some room for the day.\n\n1. **Choose one priority.** Start with the work that matters most.\n2. **Leave a little breathing room.** Keep a gap between meetings.\n3. **Close the loop.** Write down your next step before you finish.\n\nWhat would you like to focus on first?`;
+    toolResult?.role === "toolResult" && card
+      ? card.reply
+      : toolResult?.role === "toolResult"
+        ? toolResult.content
+            .flatMap((p) => (p.type === "text" ? [p.text] : []))
+            .join("")
+        : `Let’s make some room for the day.\n\n1. **Choose one priority.** Start with the work that matters most.\n2. **Leave a little breathing room.** Keep a gap between meetings.\n3. **Close the loop.** Write down your next step before you finish.\n\nWhat would you like to focus on first?`;
   const message: AssistantMessage = {
     role: "assistant",
     content: useTool
@@ -126,27 +310,31 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
             id: "test-call",
             name: self
               ? self.name
-              : ask
-                ? "ask_owner"
-                : useNative
-                  ? "bash"
-                  : remember
-                    ? "memory_retain"
-                    : "mcp_fixture_execute",
+              : card
+                ? "show_card"
+                : ask
+                  ? "ask_owner"
+                  : useNative
+                    ? "bash"
+                    : remember
+                      ? "memory_retain"
+                      : "mcp_fixture_execute",
             arguments: self
               ? self.arguments
-              : ask
-                ? ask
-                : useNative
-                  ? {
-                      command:
-                        "echo 'Created through Pi bash' > /workspace/from-chat.txt; cat /workspace/from-chat.txt",
-                    }
-                  : remember
-                    ? { content: "Owner prefers jasmine tea", kind: "fact" }
-                    : {
-                        code: 'return calendar.events.list({ date: "2026-10-21" });',
-                      },
+              : card
+                ? card.arguments
+                : ask
+                  ? ask
+                  : useNative
+                    ? {
+                        command:
+                          "echo 'Created through Pi bash' > /workspace/from-chat.txt; cat /workspace/from-chat.txt",
+                      }
+                    : remember
+                      ? { content: "Owner prefers jasmine tea", kind: "fact" }
+                      : {
+                          code: 'return calendar.events.list({ date: "2026-10-21" });',
+                        },
           },
         ]
       : [{ type: "text", text: "" }],

@@ -172,10 +172,12 @@ function merged(events: TimedEvent[]) {
     }
     for (const position of event.positions)
       if (!first.positions.includes(position)) first.positions.push(position);
-    first.url ??= event.url;
-    first.link ??= event.link;
-    first.detail ??= event.detail;
-    first.badge ??= event.badge;
+    // Only what the first reading lacks, and never an undefined: a card is
+    // stored as strict JSON.
+    if (!first.url && event.url) first.url = event.url;
+    if (!first.link && event.link) first.link = event.link;
+    if (!first.detail && event.detail) first.detail = event.detail;
+    if (!first.badge && event.badge) first.badge = event.badge;
   }
   return [...seen.values()];
 }

@@ -64,6 +64,11 @@
   --attention: #a2670f;
   --attention-soft: #f6e8cc;
   --error: #b13e32;
+  /* Where a card's items came from, when it mixes several sources. */
+  --source-1: #4a7a57;
+  --source-2: #4f7396;
+  --source-3: #8a5a8c;
+  --source-4: #a2670f;
   --shadow: 0 1px 2px #2a24140a, 0 8px 24px #2a24140d;
   --composer-shadow: 0 2px 4px #2a24141a, 0 12px 32px #2a24142e;
   color-scheme: light;
@@ -96,6 +101,10 @@
     --attention: #e0a54a;
     --attention-soft: #3a2f1b;
     --error: #e07a6e;
+    --source-1: #7fb08b;
+    --source-2: #8aaed0;
+    --source-3: #c39ac5;
+    --source-4: #e0a54a;
     --shadow: 0 1px 2px #0006, 0 8px 24px #0005;
     --composer-shadow: 0 2px 4px #0009, 0 12px 32px #000a;
     color-scheme: dark;
@@ -118,6 +127,10 @@
   --attention: #e0a54a;
   --attention-soft: #3a2f1b;
   --error: #e07a6e;
+  --source-1: #7fb08b;
+  --source-2: #8aaed0;
+  --source-3: #c39ac5;
+  --source-4: #e0a54a;
   --shadow: 0 1px 2px #0006, 0 8px 24px #0005;
   --composer-shadow: 0 2px 4px #0009, 0 12px 32px #000a;
   color-scheme: dark;

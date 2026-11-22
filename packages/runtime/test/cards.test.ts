@@ -261,6 +261,8 @@ test("a timeline sorts a day, merges an event read twice, and marks overlaps and
     ],
   });
   expect(card.sources).toEqual(["Work", "Personal"]);
+  // Stored as strict JSON: no property may be undefined.
+  expect(card).toStrictEqual(JSON.parse(JSON.stringify(card)));
   expect(card.type === "timeline" && card.items).toEqual([
     {
       kind: "event",
