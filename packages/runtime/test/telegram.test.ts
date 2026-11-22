@@ -1160,6 +1160,10 @@ test("a group can be home, survives restart, and bot removal prevents new schedu
     await t.pair();
     t.fake.text(OWNER, `/home@${BOT}`, { chat: GROUP, type: "group" });
     await until(async () => (await t.app.home.read()).selected !== null);
+    // The confirmation is sent after the choice is saved, so wait for it.
+    await until(async () =>
+      /visible to everyone/.test(toText(t.fake, GROUP).join(" ")),
+    );
     assert.match(toText(t.fake, GROUP).join(" "), /visible to everyone/);
     await t.reopen();
     t.app.home.available = (address) => t.telegram.acceptsHome(address);
