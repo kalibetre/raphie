@@ -65,10 +65,7 @@ RAPHIE_VERSION=v0.0.5 scripts/dmg.sh     # target/dist/Raphie-macos-arm64.dmg
 
 `RAPHIE_VERSION` (for example `v0.0.5` or a nightly tag) stamps the version the app shows in **About** and compares in its update check. The image is signed ad hoc only, with no Developer ID or notarisation, which is why users need **Open Anyway** on first launch; see [desktop app](/guides/desktop/#install).
 
-| Workflow                            | When                                                                                             | What it does with the image                                                                                                                                         |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Desktop app** (`desktop-app.yml`) | Pull requests touching `apps/desktop/**`, `VERSION` or the workflow itself                       | Runs `scripts/dmg.sh` on a macOS runner and keeps the image as a run artifact for seven days, for trying out.                                                       |
-| **Release** (`release.yml`)         | A pushed `vX.Y.Z` tag (a draft stable release) or a manual run on `main` (a nightly pre-release) | Runs `scripts/dmg.sh` with the release's `RAPHIE_VERSION`, attests its provenance, and publishes `Raphie-macos-arm64.dmg` with the release, listed in `SHA256SUMS`. |
+Only the release workflow (`release.yml`) builds the image, for a pushed `vX.Y.Z` tag (a draft stable release) or a manual run on `main` (a nightly pre-release). It runs `scripts/dmg.sh` with the release's `RAPHIE_VERSION`, attests the image's provenance, and publishes `Raphie-macos-arm64.dmg` with the release, listed in `SHA256SUMS`. Pull requests don't build it; CI's `desktop` job compiles and tests the app on each one.
 
 ## Use the fixture
 
