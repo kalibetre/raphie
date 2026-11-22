@@ -50,6 +50,8 @@ import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
 import { notificationItems } from "./notification-items";
 import { Notifications, useJobNotifications } from "./notifications";
+import { Onboarding } from "./onboarding";
+import { showsOnboarding } from "./onboarding-gate";
 import { PanelResizeHandle } from "./panel-resize-handle";
 import { useBotInbox } from "./use-bot-inbox";
 import { useWorkspaceLayout } from "./use-workspace-layout";
@@ -157,6 +159,9 @@ export function Workspace({
   const [enabled, setEnabled] = useEnabledPlugins();
   // A bot without a model asks for one instead of offering an empty chat.
   const needsSetup = useNeedsSetup();
+  // A fresh install, one bot without a model and nothing said yet, starts
+  // with onboarding; skipping it shows the bot's own setup instead.
+  const [skippedOnboarding, setSkippedOnboarding] = useState(false);
   const mobile = useIsMobile();
   // A phone opens on the bot's conversation list; this is a new conversation
   // started from it, before its first message gives it an address.
@@ -665,6 +670,26 @@ export function Workspace({
       </SidebarProvider>
     </TooltipProvider>
   );
+  const onboarding =
+    botProfile &&
+    showsOnboarding({
+      loaded: !!data,
+      needsSetup,
+      bots: inbox.bots.data?.items.length ?? 0,
+      conversations: summaries.length,
+      settingsOpen: !!view,
+      skipped: skippedOnboarding,
+    });
+  if (onboarding)
+    return (
+      <BotTonesProvider bots={inbox.bots.data?.items ?? []}>
+        <Onboarding
+          bot={botProfile}
+          onProviders={() => openSettings("providers")}
+          onSkip={() => setSkippedOnboarding(true)}
+        />
+      </BotTonesProvider>
+    );
   return (
     <BotTonesProvider bots={inbox.bots.data?.items ?? []}>
       {content}
