@@ -9,8 +9,14 @@ apply consistently to the web workspace and the agent runtime.
 permissions, configuration, sessions, memory scope and workspace.
 _Avoid_: Runtime or session as a synonym for a bot.
 
-**Personality**: A bot's owner-authored voice, values and interaction style.
-Personality guides its behavior without granting capabilities or access.
+**Personality**: A bot's voice, values and interaction style, written by the
+owner, picked from a built-in one, or saved by the bot itself when the owner
+allows its self-updates. Personality guides its behavior without granting
+capabilities or access.
+
+**Self-updates**: What a bot may change by itself, per bot: its own
+personality, and the owner profile. Each change is saved at once and can be
+undone.
 
 **Skill**: Instructions for one kind of task in the standard Agent Skills
 format: a folder in a bot's workspace, `skills/<name>/`, holding a `SKILL.md`.
@@ -19,8 +25,9 @@ task matches it. Skills never grant capabilities.
 
 **Owner profile**: What the owner tells every bot about themselves: their
 name, what to call them, their time zone and a few lines about them. Shared by
-every bot; it describes the owner and grants nothing.
-_Avoid_: User profile, account.
+every bot; it describes the owner and grants nothing. Shown as **You** in
+Settings.
+_Avoid_: User profile, account, About you.
 
 **Workspace**: A bot's persistent working files and artifacts, shared by its
 sessions and preserved when its execution environment stops.

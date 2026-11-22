@@ -121,8 +121,9 @@ All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and tho
 
 | Method    | Path                       | Purpose                                                                                                                   |
 | --------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| GET, POST | `/bots`                    | List bots; create one from `{ name, description, personality, color?, replyStyle? }` (201)                                |
-| GET, POST | `/bots/:id/profile`        | Read; update with the current `revision`; an omitted `replyStyle` is kept                                                 |
+| GET, POST | `/bots`                    | List bots; create one from `{ name, description, personality, color?, replyStyle?, selfUpdates? }` (201)                  |
+| GET       | `/bots/personalities`      | The built-in personalities: `{ items: [{ id, name, summary, personality }] }`                                             |
+| GET, POST | `/bots/:id/profile`        | Read; update with the current `revision`; an omitted `replyStyle` or `selfUpdates` is kept                                |
 | GET       | `/bots/:id/history`        | Profile revisions                                                                                                         |
 | GET       | `/bots/:id/personality.md` | Download the personality                                                                                                  |
 | DELETE    | `/bots/:id`                | Delete a named bot (204); body confirms its `name` and `revision`. 409 for `default`, a stale confirmation or active work |
