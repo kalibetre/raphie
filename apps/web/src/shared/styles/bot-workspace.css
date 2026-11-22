@@ -54,9 +54,12 @@
   .bot-roster-scroll .scroll-area-viewport {
     max-height: 40vh;
   }
+  /* Rows sit inside the sidebar's edges, rounded, in neutral greys: the
+     hover a wash, the selected row the full hover colour. */
   .bot-roster-list {
     display: grid;
-    gap: 0;
+    gap: 2px;
+    padding: 0 10px;
   }
   .bot-roster-item {
     display: flex;
@@ -64,30 +67,25 @@
     align-items: center;
     text-align: left;
     border: 0;
-    border-radius: 0;
-    padding: 5px 22px;
+    border-radius: 9px;
+    padding: 7px 10px;
     background: transparent;
     min-width: 0;
     width: 100%;
     transition: background-color 150ms;
   }
   .bot-roster-item:hover {
-    background: var(--hover);
+    background: color-mix(in srgb, var(--hover) 55%, transparent);
   }
   .bot-roster-item[aria-current] {
-    background: color-mix(in srgb, var(--tone) 22%, transparent);
+    background: var(--hover);
   }
   .roster-avatar {
     display: grid;
     place-items: center;
     flex: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--tone) 12%, transparent);
-  }
-  .bot-roster-item[aria-current] .roster-avatar {
-    background: color-mix(in srgb, var(--tone) 22%, transparent);
+    width: 30px;
+    height: 30px;
   }
   .bot-avatar {
     display: inline-flex;
@@ -143,6 +141,9 @@
     border: 2px solid var(--sidebar);
     background: var(--accent);
   }
+  .bot-roster-item[aria-current] .roster-presence {
+    border-color: var(--hover);
+  }
   .roster-presence.setup {
     background: var(--muted-foreground);
   }
@@ -155,8 +156,7 @@
   .roster-add {
     color: var(--muted-foreground);
   }
-  .roster-add-icon,
-  .bot-roster-item[aria-current] .roster-add-icon {
+  .roster-add-icon {
     border-radius: 50%;
     background: var(--muted);
   }
@@ -208,11 +208,9 @@
     background: var(--accent-soft);
     color: var(--accent);
   }
-  @media (min-width: 768px) {
-    .bot-roster-list .roster-avatar .bot-avatar {
-      width: 24px;
-      height: 24px;
-    }
+  .bot-roster-list .roster-avatar .bot-avatar {
+    width: 30px;
+    height: 30px;
   }
   .roster-label-action {
     margin: -6px -4px;
@@ -716,9 +714,11 @@
     padding: 8px 10px;
     border-radius: 8px;
   }
+  /* The open conversation is lifted onto the card colour, like the
+     composer; others wash grey under the pointer. */
   .library-list .conversation-entry.selected {
-    background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
-    box-shadow: none;
+    background: var(--card);
+    box-shadow: 0 1px 2px #2a241410;
   }
   .conversation-row-top {
     display: flex;
