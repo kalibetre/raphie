@@ -205,6 +205,7 @@ mod tests {
                 enabled: true,
                 files: vec!["SKILL.md".into(), "assets/logo.png".into()],
                 problem: None,
+                bot_change: None,
             },
             contents: vec![
                 SkillFile {

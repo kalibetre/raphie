@@ -279,6 +279,8 @@ fn router(fake: Fake) -> Router {
                 .delete(remove_skill),
         )
         .route("/api/skills/{name}/enabled", put(enable_skill))
+        .route("/api/skills/changes", get(skill_change))
+        .route("/api/skills/changes/{id}/undo", post(undo_skill_change))
         .route("/api/owner", get(owner))
         .route("/api/owner", put(save_owner))
         .route("/api/workspace", get(sandbox))
@@ -882,6 +884,62 @@ async fn workspace_download(
 
 fn skill_list(fake: &Fake) -> Value {
     json!({ "items": fake.host.lock().unwrap().skills })
+}
+
+/// The bot's save_skill call `op-s1` wrote release-notes; any other call
+/// saved nothing.
+async fn skill_change(
+    State(fake): State<Fake>,
+    Query(query): Query<HashMap<String, String>>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "GET", uri.to_string(), &headers);
+    let listed = fake
+        .host
+        .lock()
+        .unwrap()
+        .skills
+        .iter()
+        .any(|s| s["name"] == "release-notes");
+    if query.get("call").map(String::as_str) != Some("op-s1") {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "That change is no longer kept." })),
+        )
+            .into_response();
+    }
+    Json(json!({
+        "id": "c-1", "callId": "op-s1", "name": "release-notes", "kind": "created",
+        "at": 10_200, "undoable": listed, "undone": !listed,
+    }))
+    .into_response()
+}
+
+/// Undoing `c-1` deletes release-notes; a second undo is refused.
+async fn undo_skill_change(
+    State(fake): State<Fake>,
+    Path(id): Path<String>,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+) -> Response {
+    record(&fake, "POST", uri.path().to_owned(), &headers);
+    let removed = {
+        let mut host = fake.host.lock().unwrap();
+        let before = host.skills.len();
+        host.skills.retain(|s| s["name"] != "release-notes");
+        id == "c-1" && host.skills.len() < before
+    };
+    if !removed {
+        return (
+            StatusCode::CONFLICT,
+            Json(
+                json!({ "error": "This skill has changed since, so the change cannot be undone." }),
+            ),
+        )
+            .into_response();
+    }
+    Json(skill_list(&fake)).into_response()
 }
 
 async fn skills(State(fake): State<Fake>, uri: axum::http::Uri, headers: HeaderMap) -> Response {

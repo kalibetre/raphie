@@ -21,6 +21,7 @@ use crate::contracts::Attachment;
 use crate::contracts::HostBuild;
 use crate::contracts::JobNotifications;
 use crate::contracts::ModelSelection;
+use crate::contracts::SkillChange;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, AddConnectionBody, AnswerResult, ApprovalStatus, AskAnswer, AskStatus, AuthStatus,
@@ -309,6 +310,38 @@ impl ApiClient {
         let list: SkillList = self
             .put_json(&path, &serde_json::json!({ "enabled": enabled }))
             .await?;
+        Ok(list.items)
+    }
+
+    /// The change `save_skill` call `call` made while it ran, from `from` to
+    /// `to` as its step saw it; `None` when it saved nothing, or the owner
+    /// has saved the skill since.
+    pub async fn skill_change(
+        &self,
+        bot_id: &str,
+        call: &str,
+        from: i64,
+        to: i64,
+    ) -> Result<Option<SkillChange>, ApiError> {
+        let path = format!(
+            "/api/skills/changes?call={}&from={from}&to={to}",
+            encode(call)
+        );
+        match self.get_json(&bot_path(bot_id, &path)).await {
+            Ok(change) => Ok(Some(change)),
+            Err(ApiError::NotFound(_)) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Undoes the bot's change `id` and returns the skills as they are now.
+    pub async fn undo_skill_change(
+        &self,
+        bot_id: &str,
+        id: &str,
+    ) -> Result<Vec<SkillSummary>, ApiError> {
+        let path = bot_path(bot_id, &format!("/api/skills/changes/{}/undo", encode(id)));
+        let list: SkillList = self.post_json(&path, &serde_json::json!({})).await?;
         Ok(list.items)
     }
 

@@ -241,7 +241,7 @@ fn presets(s: &Ui, t: &Theme) -> Option<El> {
     Some(grid)
 }
 
-/// "Self-updates": what the bot may change by itself, as two switches.
+/// "Self-updates": what the bot may change by itself, as three switches.
 /// Left out for a runtime too old to say. Mirrors `self-update-fields.tsx`
 /// and the `.self-update*` rules.
 fn self_updates(s: &Ui, t: &Theme) -> Option<El> {
@@ -298,15 +298,24 @@ fn self_updates(s: &Ui, t: &Theme) -> Option<El> {
         |value, on| value.owner = on,
     )
     .border_sides([1.0, 0.0, 0.0, 0.0], t.border);
+    let skills = line(
+        "skills",
+        "Write its own skills",
+        "When it notices a task you repeat, or works out how something of yours is done. It can improve your skills too.",
+        value.skills,
+        |value, on| value.skills = on,
+    )
+    .border_sides([1.0, 0.0, 0.0, 0.0], t.border);
     Some(section(
         t,
         "Self-updates",
-        "Changes are saved right away and shown in the conversation. Undo any of them from revision history or the You page.",
+        "Changes are saved right away and shown in the conversation, where you can undo them. Earlier ones are in revision history, the You page and Skills.",
         col()
             .key("rd-self-updates")
             .w_full()
             .child(personality)
-            .child(owner),
+            .child(owner)
+            .child(skills),
     ))
 }
 

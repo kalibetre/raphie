@@ -209,6 +209,7 @@ mod tests {
             self_updates: Some(SelfUpdates {
                 personality: true,
                 owner: true,
+                skills: true,
             }),
             changed_by: Some("bot".into()),
             revision: 3,
@@ -282,7 +283,8 @@ mod tests {
             update.self_updates,
             Some(SelfUpdates {
                 personality: true,
-                owner: false
+                owner: false,
+                skills: true,
             })
         );
         // A runtime too old to say has none, and a save leaves them out.
@@ -300,6 +302,7 @@ mod tests {
         draft.self_updates = Some(SelfUpdates {
             personality: false,
             owner: false,
+            skills: true,
         });
         assert!(draft.is_dirty(), "turning a switch off is an edit");
     }

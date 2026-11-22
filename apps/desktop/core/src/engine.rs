@@ -289,6 +289,20 @@ pub enum Command {
     LoadSkills {
         bot_id: String,
     },
+    /// Find what a reply's `save_skill` step changed, for its note `note`:
+    /// the change call `call` made between `from` and `to`.
+    LoadSkillChange {
+        bot_id: String,
+        note: String,
+        call: String,
+        from: i64,
+        to: i64,
+    },
+    /// Undo the bot's skill change `id`, then reload the bot's skills.
+    UndoSkillChange {
+        bot_id: String,
+        id: String,
+    },
     /// Load one skill with its files, for the editor.
     LoadSkill {
         bot_id: String,
@@ -812,6 +826,14 @@ impl Engine {
             } => self.delete_bot(bot_id, name, revision),
             Command::LoadSkills { bot_id } => self.load_skills(bot_id),
             Command::LoadSkill { bot_id, name } => self.load_skill(bot_id, name),
+            Command::LoadSkillChange {
+                bot_id,
+                note,
+                call,
+                from,
+                to,
+            } => self.load_skill_change(bot_id, note, call, from, to),
+            Command::UndoSkillChange { bot_id, id } => self.undo_skill_change(bot_id, id),
             Command::SaveSkill {
                 bot_id,
                 name,
@@ -1853,6 +1875,60 @@ impl Engine {
     }
 
     /// Any change to a bot's skills; the list is read again afterwards.
+    fn load_skill_change(
+        &mut self,
+        bot_id: String,
+        note: String,
+        call: String,
+        from: i64,
+        to: i64,
+    ) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.skill_change(&bot_id, &call, from, to).await {
+                Ok(change) => emit.emit(Event::SkillChangeFound { note, change }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                // The note waits for the next try; it shows nothing meanwhile.
+                Err(_) => {}
+            }
+        });
+    }
+
+    fn undo_skill_change(&mut self, bot_id: String, id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let error = match api.undo_skill_change(&bot_id, &id).await {
+                Ok(items) => {
+                    emit.emit(Event::Skills {
+                        bot_id: bot_id.clone(),
+                        items,
+                    });
+                    None
+                }
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                    return;
+                }
+                Err(error) => Some(error.to_string()),
+            };
+            emit.emit(Event::SkillChangeUndone { error });
+            // Refused or not, show the skills as they are now.
+            if let Ok(items) = api.skills(&bot_id).await {
+                emit.emit(Event::Skills { bot_id, items });
+            }
+        });
+    }
+
     fn change_skill(&mut self, bot_id: String, change: SkillChange) {
         let Some(api) = self.api.clone() else {
             return;

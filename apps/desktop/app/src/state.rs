@@ -31,7 +31,7 @@ use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
 use raphie_core::projections::tool_steps;
 use raphie_core::replies::ReadReplies;
-use raphie_core::self_updates::{SelfUpdateNote, self_update_notes};
+use raphie_core::self_updates::{SelfUpdateKind, SelfUpdateNote, self_update_notes};
 use raphie_core::settings::{Settings, ThemeChoice};
 use raphie_core::slash::{SlashItem, SlashKind, insert_skill, slash_matches, slash_query};
 use raphie_core::updates::ReleaseChannel;
@@ -347,6 +347,13 @@ pub struct Ui {
     /// Self-update steps (by tool step id) whose saves have been asked for:
     /// a new one asks for the bot's history and the owner's profile again.
     self_updates_asked: HashSet<String>,
+    /// Skill notes (by note key) whose change has been asked for, with the
+    /// bot's skills as they were then: when those change, a note may no
+    /// longer be undoable, so it asks again.
+    skill_changes_asked: HashMap<String, String>,
+    /// Bot changes (by change id) the skills list did not show yet; the list
+    /// was reloaded once for each, so earlier notes learn they are stale.
+    skill_changes_seen: HashSet<String>,
     /// The save on its way restores a revision or undoes a bot's change,
     /// not the Profile form: unsaved edits in the form stay.
     restoring_profile: bool,
@@ -622,6 +629,8 @@ impl Ui {
             slash_dismissed: None,
             skills_asked: None,
             self_updates_asked: HashSet::new(),
+            skill_changes_asked: HashMap::new(),
+            skill_changes_seen: HashSet::new(),
             restoring_profile: false,
             handoffs_asked_at: 0.0,
             handoffs_bot: None,
@@ -1753,14 +1762,98 @@ impl Ui {
         if !wanted {
             return;
         }
+        let notes = self.self_update_notes();
         let mut new = false;
-        for note in self.self_update_notes() {
-            new |= self.self_updates_asked.insert(note.id);
+        for note in notes
+            .iter()
+            .filter(|note| note.kind != SelfUpdateKind::Skill)
+        {
+            new |= self.self_updates_asked.insert(note.id.clone());
         }
         if new {
-            self.command(Command::LoadBotHistory { bot_id });
+            self.command(Command::LoadBotHistory {
+                bot_id: bot_id.clone(),
+            });
             self.command(Command::LoadOwner);
         }
+        self.ensure_skill_changes(&bot_id, &notes);
+    }
+
+    /// Each `save_skill` note asks the runtime what its call changed, and
+    /// asks again once the bot's skills change. A change the skills list
+    /// has not caught up with reloads the list, so the skill's earlier
+    /// notes stop offering an undo.
+    fn ensure_skill_changes(&mut self, bot_id: &str, notes: &[SelfUpdateNote]) {
+        let skills = self.model.skills.get(bot_id);
+        let version = format!(
+            "{:?}",
+            skills.map(|items| {
+                items
+                    .iter()
+                    .map(|item| (&item.name, item.bot_change))
+                    .collect::<Vec<_>>()
+            })
+        );
+        let mut reload = false;
+        for note in notes
+            .iter()
+            .filter(|note| note.kind == SelfUpdateKind::Skill)
+        {
+            let key = note.key();
+            if self.skill_changes_asked.get(&key) != Some(&version) {
+                self.skill_changes_asked
+                    .insert(key.clone(), version.clone());
+                self.command(Command::LoadSkillChange {
+                    bot_id: bot_id.to_owned(),
+                    note: key.clone(),
+                    call: note.id.clone(),
+                    from: note.started_at,
+                    to: note.done_at,
+                });
+            }
+            let Some(Some(found)) = self.model.skill_changes.get(&key) else {
+                continue;
+            };
+            let listed = self
+                .model
+                .skills
+                .get(bot_id)
+                .and_then(|items| items.iter().find(|item| item.name == found.name))
+                .and_then(|item| item.bot_change);
+            let unseen = found.undoable
+                && listed.is_none_or(|change| change.at != found.at || change.kind != found.kind);
+            if unseen && self.skill_changes_seen.insert(found.id.clone()) {
+                reload = true;
+            }
+        }
+        if reload {
+            self.command(Command::LoadSkills {
+                bot_id: bot_id.to_owned(),
+            });
+        }
+    }
+
+    /// "Open" under a reply: the skill in Settings → Skills.
+    pub fn open_bot_skill(&mut self, bot_id: &str, name: &str) {
+        self.open_settings(Some(Page::Bot {
+            bot_id: bot_id.to_owned(),
+            section: BotSection::Skills,
+        }));
+        self.open_skill(name);
+    }
+
+    /// "Undo" under a reply: puts the skill back as it was before the
+    /// bot's change `id`.
+    pub fn undo_skill_change(&mut self, bot_id: &str, id: &str) {
+        if self.model.undoing_skill_change {
+            return;
+        }
+        self.model.undoing_skill_change = true;
+        self.model.skill_undo_error = None;
+        self.command(Command::UndoSkillChange {
+            bot_id: bot_id.to_owned(),
+            id: id.to_owned(),
+        });
     }
 
     /// Saves `bot_id`'s profile as the host has it, with `personality` in
