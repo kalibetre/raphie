@@ -34,13 +34,7 @@ const sameSelfUpdates = (a: SelfUpdates, b: SelfUpdates) =>
 const starterPersonality =
   "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
 
-export function BotForm({
-  profile,
-  mode,
-}: {
-  profile?: BotProfile;
-  mode: "profile" | "create";
-}) {
+export function BotForm({ profile }: { profile: BotProfile }) {
   const { workspace } = useBackend();
   const navigate = useNavigate();
   const bots = useBots();
@@ -109,19 +103,6 @@ export function BotForm({
     setMessage("");
   }
 
-  /** Leave without saving; an explicit Cancel is an intentional discard. */
-  function cancel() {
-    guard.allowNavigation();
-    void navigate({
-      to: "/",
-      search: {
-        bot: workspace.botId === "default" ? undefined : workspace.botId,
-        view: "settings",
-        section: "bot",
-      },
-    });
-  }
-
   async function save() {
     setError("");
     setMessage("");
@@ -147,14 +128,6 @@ export function BotForm({
         setReplyStyle(updated.replyStyle);
         setSelfUpdates(updated.selfUpdates);
         setMessage(`Saved revision ${updated.revision}.`);
-      } else {
-        const created = await bots.create.mutateAsync(input);
-        workspace.assertActive();
-        guard.allowNavigation();
-        await navigate({
-          to: "/",
-          search: { bot: created.id, view: "settings", section: "providers" },
-        });
       }
     } catch (cause) {
       void bots.refetch();
@@ -173,14 +146,13 @@ export function BotForm({
       }}
     >
       <BotProfileFields
-        botId={profile?.id ?? "new-bot"}
+        botId={profile.id}
         color={color}
-        automatic={botColors([
-          ...(bots.data?.items ?? []).map((bot) =>
-            bot.id === profile?.id ? { ...bot, color: null } : bot,
+        automatic={botColors(
+          (bots.data?.items ?? []).map((bot) =>
+            bot.id === profile.id ? { ...bot, color: null } : bot,
           ),
-          ...(!profile ? [{ id: "new-bot" }] : []),
-        ]).get(profile?.id ?? "new-bot")!}
+        ).get(profile.id)!}
         onColor={setColor}
         name={name}
         description={description}
@@ -221,12 +193,6 @@ export function BotForm({
           View revision history ↗
         </Button>
       )}
-      {mode === "create" && (
-        <p className="bot-note">
-          New bots start with their own memory and an empty workspace. Add a
-          provider connection after creation.
-        </p>
-      )}
       {saved && saved.id !== "default" && (
         <DeleteBot
           profile={saved}
@@ -266,15 +232,8 @@ export function BotForm({
           (!saved || dirty)
         }
         canDiscard={dirty}
-        label={saved ? "Save changes" : "Create bot"}
+        label="Save changes"
         onDiscard={discard}
-        extra={
-          mode === "create" ? (
-            <Button type="button" variant="ghost" onClick={cancel}>
-              Cancel
-            </Button>
-          ) : undefined
-        }
       />
     </form>
   );

@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, Plus } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -14,7 +14,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
@@ -107,13 +106,6 @@ export function SettingsNav({
         <nav aria-label="Settings">
           <SidebarGroup>
             <SidebarGroupLabel>Bots</SidebarGroupLabel>
-            <SidebarGroupAction
-              aria-label="Create a bot"
-              title="Create a bot"
-              onClick={() => select(botId, "new-bot")}
-            >
-              <Plus />
-            </SidebarGroupAction>
             <SidebarMenu>
               {bots.map((bot) => {
                 const open = expanded.includes(bot.id);

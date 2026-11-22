@@ -48,6 +48,7 @@ import {
 } from "../../shared/ui/sidebar";
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
+import { AddTeammate } from "./add-teammate";
 import { notificationItems } from "./notification-items";
 import { Notifications, useJobNotifications } from "./notifications";
 import { Onboarding } from "./onboarding";
@@ -680,6 +681,17 @@ export function Workspace({
       settingsOpen: !!view,
       skipped: skippedOnboarding,
     });
+  // Adding a teammate takes the window, as onboarding does; once created,
+  // the new bot opens and asks for a way to think.
+  if (view === "settings" && section === "new-bot")
+    return (
+      <BotTonesProvider bots={inbox.bots.data?.items ?? []}>
+        <AddTeammate
+          onClose={() => select(conversationId)}
+          onCreated={(id) => void navigate({ to: "/", search: { bot: id } })}
+        />
+      </BotTonesProvider>
+    );
   if (onboarding)
     return (
       <BotTonesProvider bots={inbox.bots.data?.items ?? []}>

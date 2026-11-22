@@ -89,8 +89,10 @@ export const sections = [
       `Every saved version of ${bot}’s personality, newest first.`,
   },
   {
+    // Not a settings page: the address opens the "Add a teammate" flow,
+    // kept so older links still lead there.
     id: "new-bot",
-    label: "Create a bot",
+    label: "Add a teammate",
     icon: Bot,
     lede: () =>
       "A separate assistant with its own personality, memory and model connections.",
