@@ -1,10 +1,14 @@
 import type {
   Card,
   CardBadge,
+  CardColor,
+  CardColumn,
   CardEvent,
+  CardField,
   CardGroup,
   CardLink,
   CardRow,
+  CardSteps,
   CardTimelineItem,
   CardTone,
 } from "@raphie/contracts";
@@ -19,12 +23,50 @@ type ItemInput = {
   title: string;
   url?: string;
   detail?: string;
-  badge?: { label: string; tone?: CardTone };
+  badge?: BadgeInput;
   link?: { label: string; url: string };
   source?: string;
 };
 
-export type RowInput = ItemInput & { key?: string; trailing?: string };
+type BadgeInput = { label: string; tone?: CardTone };
+
+export type RowInput = ItemInput & {
+  key?: string;
+  trailing?: string;
+  people?: string[];
+  tags?: string[];
+  progress?: { done: number; total: number };
+  due?: string;
+};
+
+export type FieldInput = {
+  label: string;
+  value?: string;
+  badge?: BadgeInput;
+  people?: string[];
+  tags?: string[];
+  due?: string;
+};
+
+/** Rows one column of a board shows; its count says how many it holds. */
+export const MAX_COLUMN_ROWS = 10;
+
+/** Steps of an item's checklist a card lists; the rest are only counted. */
+export const MAX_ITEM_STEPS = 5;
+
+/** How much of an item's description a card shows. */
+const MAX_BODY_LENGTH = 600;
+
+/** Colours given in turn to columns the bot did not colour. */
+const COLUMN_COLORS: CardColor[] = [
+  "blue",
+  "green",
+  "yellow",
+  "purple",
+  "orange",
+  "pink",
+  "red",
+];
 
 export type EventInput = ItemInput & { start: string; end?: string };
 
@@ -38,6 +80,18 @@ export type CardInput = {
   more?: { label: string; url?: string };
   groups?: { label?: string; rows: RowInput[] }[];
   events?: EventInput[];
+  columns?: {
+    label?: string;
+    color?: CardColor;
+    count?: number;
+    rows: RowInput[];
+  }[];
+  item?: {
+    key?: string;
+    fields?: FieldInput[];
+    body?: string;
+    steps?: { label: string; done?: boolean }[];
+  };
 };
 
 /** A card a bot showed, as the runtime stores it. */
@@ -121,7 +175,64 @@ function moment(value: string, zone: string | undefined): Moment | null {
   return { at, ...(zone ? inZone(at, zone) : { date, clock: match[2] }) };
 }
 
-type Tally = { sources: string[]; droppedLinks: number };
+type Tally = {
+  sources: string[];
+  droppedLinks: number;
+  droppedDates: number;
+  timeZone?: string;
+};
+
+const badgeOf = (badge: BadgeInput | undefined): CardBadge | undefined =>
+  badge?.label.trim()
+    ? { label: badge.label.trim(), tone: badge.tone ?? "neutral" }
+    : undefined;
+
+/** Names or tags, trimmed, without blanks or repeats. */
+function names(values: string[] | undefined, most: number) {
+  const kept = [
+    ...new Set((values ?? []).map((v) => v.trim()).filter(Boolean)),
+  ].slice(0, most);
+  return kept.length ? kept : undefined;
+}
+
+/** The day something is due, on the owner's calendar when their zone is known. */
+function dueDate(value: string | undefined, t: Tally) {
+  if (!value?.trim()) return undefined;
+  const read = moment(value, t.timeZone);
+  if (!read) t.droppedDates++;
+  return read?.date;
+}
+
+/** What a row and an item's field can both carry beyond text. */
+function facts(
+  input: Pick<RowInput, "people" | "tags" | "due">,
+  t: Tally,
+): Pick<CardRow, "people" | "tags" | "due"> {
+  const people = names(input.people, 4);
+  const tags = names(input.tags, 4);
+  const due = dueDate(input.due, t);
+  return {
+    ...(people ? { people } : {}),
+    ...(tags ? { tags } : {}),
+    ...(due ? { due } : {}),
+  };
+}
+
+/** One row of a list or a board. */
+function row(input: RowInput, fallbackSource: string | undefined, t: Tally) {
+  const total = Math.trunc(input.progress?.total ?? 0);
+  const done = Math.min(
+    total,
+    Math.max(0, Math.trunc(input.progress?.done ?? 0)),
+  );
+  return {
+    ...(input.key?.trim() ? { key: input.key.trim() } : {}),
+    ...item(input, sourcesOf(input, fallbackSource), t),
+    ...(input.trailing?.trim() ? { trailing: input.trailing.trim() } : {}),
+    ...facts(input, t),
+    ...(total > 0 ? { progress: { done, total } } : {}),
+  };
+}
 
 /** The parts every row and event share, with unsafe links left out. */
 function item(input: ItemInput, from: string[], t: Tally) {
@@ -135,9 +246,7 @@ function item(input: ItemInput, from: string[], t: Tally) {
     if (position < 0) position = t.sources.push(source) - 1;
     if (!positions.includes(position)) positions.push(position);
   }
-  const badge: CardBadge | undefined = input.badge?.label.trim()
-    ? { label: input.badge.label.trim(), tone: input.badge.tone ?? "neutral" }
-    : undefined;
+  const badge = badgeOf(input.badge);
   const link: CardLink | undefined =
     linkUrl && input.link?.label.trim()
       ? { label: input.link.label.trim(), url: linkUrl }
@@ -182,6 +291,10 @@ function line(
     [lead, it.title].filter(Boolean).join(" "),
     it.detail,
     it.badge?.label,
+    it.due && `due ${it.due}`,
+    it.progress && `${it.progress.done}/${it.progress.total} steps`,
+    it.people?.join(", "),
+    it.tags?.join(", "),
     it.trailing,
     sources.length > 1 && positions.length
       ? positions.map((p) => sources[p]).join(" + ")
@@ -275,14 +388,24 @@ export function buildCard(
 ): BuiltCard {
   const hasGroups = !!input.groups?.length;
   const hasEvents = !!input.events?.length;
-  if (hasGroups && hasEvents)
+  const hasColumns = !!input.columns?.length;
+  const kinds = [hasGroups, hasEvents, hasColumns, !!input.item].filter(
+    Boolean,
+  ).length;
+  if (kinds > 1)
     return {
-      error: "Pass groups for a list or events for a timeline, not both.",
+      error:
+        "Pass one of groups for a list, events for a timeline, columns for a board or item for one task, not several.",
     };
-  if (!hasGroups && !hasEvents) return { error: NOTHING };
+  if (!kinds) return { error: NOTHING };
   const title = input.title.trim();
   if (!title) return { error: "A card needs a title." };
-  const tally: Tally = { sources: [], droppedLinks: 0 };
+  const tally: Tally = {
+    sources: [],
+    droppedLinks: 0,
+    droppedDates: 0,
+    ...(options.timeZone ? { timeZone: options.timeZone } : {}),
+  };
   const notes: string[] = [];
   const url = safeUrl(input.url);
   if (input.url && !url) tally.droppedLinks++;
@@ -298,7 +421,15 @@ export function buildCard(
   const body: string[] = [];
   let shape:
     | { type: "list"; groups: CardGroup[] }
-    | { type: "timeline"; items: CardTimelineItem[] };
+    | { type: "timeline"; items: CardTimelineItem[] }
+    | { type: "board"; columns: CardColumn[] }
+    | {
+        type: "item";
+        key?: string;
+        fields: CardField[];
+        body?: string;
+        steps?: CardSteps;
+      };
   let left = 0;
 
   if (hasGroups) {
@@ -307,11 +438,9 @@ export function buildCard(
     for (const group of input.groups!) {
       const titled = group.rows.filter((row) => row.title.trim());
       // Only rows that are shown count towards sources and dropped links.
-      const rows = titled.slice(0, room).map((row) => ({
-        ...(row.key?.trim() ? { key: row.key.trim() } : {}),
-        ...item(row, sourcesOf(row, input.source), tally),
-        ...(row.trailing?.trim() ? { trailing: row.trailing.trim() } : {}),
-      }));
+      const rows = titled
+        .slice(0, room)
+        .map((each) => row(each, input.source, tally));
       left += titled.length - rows.length;
       room -= rows.length;
       if (rows.length)
@@ -333,6 +462,111 @@ export function buildCard(
       if (group.label) body.push("", group.label);
       for (const { positions, ...row } of group.rows)
         body.push(line(row.key ?? "", row, tally.sources, positions));
+    }
+  } else if (hasColumns) {
+    const free = COLUMN_COLORS.filter(
+      (color) => !input.columns!.some((column) => column.color === color),
+    );
+    let next = 0;
+    const columns = input.columns!.map((column) => {
+      const titled = column.rows.filter((each) => each.title.trim());
+      const label = column.label?.trim();
+      return {
+        label: label || "No column",
+        // A column without a name is the board's leftovers, in gray.
+        color:
+          column.color ??
+          (label
+            ? (free[next++ % Math.max(free.length, 1)] ?? "blue")
+            : ("gray" as const)),
+        count: Math.max(Math.trunc(column.count ?? 0), titled.length),
+        rows: titled
+          .slice(0, MAX_COLUMN_ROWS)
+          .map((each) => row(each, input.source, tally)),
+      };
+    });
+    if (!columns.some((column) => column.count > 0)) return { error: NOTHING };
+    const several = tally.sources.length > 1;
+    shape = {
+      type: "board",
+      columns: columns.map((column) => ({
+        ...column,
+        rows: column.rows.map((each) => withSources(each, several)),
+      })),
+    };
+    for (const column of columns) {
+      body.push("", `${column.label} (${column.count})`);
+      for (const { positions, ...each } of column.rows)
+        body.push(line(each.key ?? "", each, tally.sources, positions));
+      if (column.count > column.rows.length)
+        body.push(`…and ${column.count - column.rows.length} more`);
+    }
+  } else if (input.item) {
+    const fields: CardField[] = [];
+    for (const field of (input.item.fields ?? []).slice(0, 8)) {
+      const label = field.label.trim();
+      const value = field.value?.trim();
+      const badge = badgeOf(field.badge);
+      const rest = facts(field, tally);
+      if (!label || (!value && !badge && !Object.keys(rest).length)) continue;
+      fields.push({
+        label,
+        ...(value ? { value } : {}),
+        ...(badge ? { badge } : {}),
+        ...rest,
+      });
+    }
+    const whole = input.item.body?.trim();
+    const text =
+      whole && whole.length > MAX_BODY_LENGTH
+        ? `${whole.slice(0, MAX_BODY_LENGTH).trimEnd()}…`
+        : whole;
+    const listed = (input.item.steps ?? [])
+      .map((step) => ({ label: step.label.trim(), done: !!step.done }))
+      .filter((step) => step.label);
+    const steps: CardSteps | undefined = listed.length
+      ? {
+          done: listed.filter((step) => step.done).length,
+          total: listed.length,
+          items: listed.slice(0, MAX_ITEM_STEPS).map((step) => ({
+            label: step.label,
+            ...(step.done ? { done: true as const } : {}),
+          })),
+        }
+      : undefined;
+    if (!fields.length && !text && !steps)
+      return {
+        error:
+          "An item card needs fields, a body or steps. With only a title, say it in your reply instead.",
+      };
+    const key = input.item.key?.trim();
+    if (input.source?.trim()) tally.sources.push(input.source.trim());
+    shape = {
+      type: "item",
+      ...(key ? { key } : {}),
+      fields,
+      ...(text ? { body: text } : {}),
+      ...(steps ? { steps } : {}),
+    };
+    for (const field of fields)
+      body.push(
+        `${field.label}: ${[
+          field.value,
+          field.badge?.label,
+          field.due,
+          field.people?.join(", "),
+          field.tags?.join(", "),
+        ]
+          .filter(Boolean)
+          .join(" · ")}`,
+      );
+    if (text) body.push("", text);
+    if (steps) {
+      body.push("", `Steps: ${steps.done} of ${steps.total}`);
+      for (const step of steps.items)
+        body.push(`${step.done ? "☑" : "☐"} ${step.label}`);
+      if (steps.total > steps.items.length)
+        body.push(`…and ${steps.total - steps.items.length} more`);
     }
   } else {
     const read: ReadEvent[] = [];
@@ -420,6 +654,10 @@ export function buildCard(
       `Only the first ${MAX_CARD_ITEMS} were shown; ${left === 1 ? "1 was" : `${left} were`} left out.`,
     );
   }
+  if (tally.droppedDates)
+    notes.push(
+      `${tally.droppedDates === 1 ? "A due date was" : `${tally.droppedDates} due dates were`} left out: give a date as "2026-11-27".`,
+    );
   if (tally.droppedLinks)
     notes.push(
       `${tally.droppedLinks} ${tally.droppedLinks === 1 ? "link was" : "links were"} left out: a link must be a full http or https address.`,
@@ -434,7 +672,7 @@ export function buildCard(
     ...shape,
   };
   const head = [
-    `${title}${tally.sources.length === 1 ? ` (${tally.sources[0]})` : ""}${suffix(url)}`,
+    `${shape.type === "item" && shape.key ? `${shape.key} ` : ""}${title}${tally.sources.length === 1 ? ` (${tally.sources[0]})` : ""}${suffix(url)}`,
     ...(stats.length
       ? [stats.map((s) => `${s.value} ${s.label}`).join(" · ")]
       : []),

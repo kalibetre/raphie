@@ -22,15 +22,56 @@ type CardItem = {
   sources?: number[];
 };
 
-/** One row of a list card. */
+/** How far a task's checklist has got. */
+export type CardProgress = { done: number; total: number };
+
+/** One row of a list or board card. */
 export type CardRow = CardItem & {
   /** A short identifier before the title, such as "AF-512" or "#214". */
   key?: string;
   /** A short value at the end of the row, such as its age. */
   trailing?: string;
+  /** Who it is assigned to, by name. Clients draw their initials. */
+  people?: string[];
+  tags?: string[];
+  progress?: CardProgress;
+  /** The calendar date it is due, as YYYY-MM-DD. */
+  due?: string;
 };
 
 export type CardGroup = { label?: string; rows: CardRow[] };
+
+/**
+ * A column's colour, by name. Each client draws its own shade of it for
+ * light and dark, so a colour from another service never clashes.
+ */
+export type CardColor =
+  "gray" | "blue" | "green" | "yellow" | "orange" | "red" | "pink" | "purple";
+
+/** One column of a board card, such as a status. */
+export type CardColumn = {
+  label: string;
+  color: CardColor;
+  /** Every item in the column, which may be more than the rows shown. */
+  count: number;
+  rows: CardRow[];
+};
+
+/** One labelled fact about an item: text, a badge, people, tags or a due date. */
+export type CardField = {
+  label: string;
+  value?: string;
+  badge?: CardBadge;
+  people?: string[];
+  tags?: string[];
+  /** A calendar date, as YYYY-MM-DD. */
+  due?: string;
+};
+
+/** An item's checklist: how far it has got, and its first few steps. */
+export type CardSteps = CardProgress & {
+  items: { label: string; done?: true }[];
+};
 
 /** One event of a timeline card. Times are in milliseconds since the epoch. */
 export type CardEvent = CardItem & {
@@ -70,6 +111,18 @@ export type Card = {
 } & (
   | { type: "list"; groups: CardGroup[] }
   | { type: "timeline"; items: CardTimelineItem[] }
+  /** The columns of a board, each with its count and its first rows. */
+  | { type: "board"; columns: CardColumn[] }
+  /** One task or ticket opened up. */
+  | {
+      type: "item";
+      /** A short identifier above the title, such as "#107". */
+      key?: string;
+      fields: CardField[];
+      /** The start of its description, as plain text. */
+      body?: string;
+      steps?: CardSteps;
+    }
 );
 
 /** A card a bot showed in a session, under the reply of the turn that made it. */

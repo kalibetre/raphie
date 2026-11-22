@@ -217,7 +217,7 @@ test("a card needs rows or events, and not both", () => {
       groups: [{ rows: [{ title: "A" }] }],
       events: [{ title: "B", start: "2026-11-23" }],
     }),
-  ).toEqual({ error: expect.stringMatching(/not both/) });
+  ).toEqual({ error: expect.stringMatching(/not several/) });
 });
 
 test("a timeline sorts a day, merges an event read twice, and marks overlaps and free time", () => {
@@ -569,6 +569,203 @@ test("an event time without an offset is refused, with what to send instead", ()
   ).toEqual({
     error: expect.stringMatching(/Event 1 \("Standup"\).*UTC offset/),
   });
+});
+
+const board: CardInput = {
+  title: "ALX - FIT",
+  url: "https://app.fizzy.example/boards/3",
+  source: "Fizzy",
+  columns: [
+    {
+      label: "Priority",
+      color: "orange",
+      rows: [
+        {
+          key: "#107",
+          title: "Update the document with the AI update notes",
+          url: "https://app.fizzy.example/cards/107",
+          people: ["Kalkidan Betre", " ", "Kalkidan Betre"],
+          tags: ["docs"],
+          progress: { done: 2, total: 5 },
+          due: "2026-11-27",
+        },
+        { title: "  " },
+      ],
+    },
+    { label: "In Review", count: 14, rows: [{ key: "#94", title: "SE 202" }] },
+    { label: "Done", rows: [] },
+    { rows: [{ key: "#96", title: "Course overview", due: "soon" }] },
+  ],
+};
+
+test("a board keeps every column with its colour and count, and reads as text", () => {
+  const { card, text, notes } = built(board);
+  expect(card).toStrictEqual(JSON.parse(JSON.stringify(card)));
+  expect(card).toEqual({
+    type: "board",
+    title: "ALX - FIT",
+    url: "https://app.fizzy.example/boards/3",
+    sources: ["Fizzy"],
+    columns: [
+      {
+        label: "Priority",
+        color: "orange",
+        count: 1,
+        rows: [
+          {
+            key: "#107",
+            title: "Update the document with the AI update notes",
+            url: "https://app.fizzy.example/cards/107",
+            people: ["Kalkidan Betre"],
+            tags: ["docs"],
+            due: "2026-11-27",
+            progress: { done: 2, total: 5 },
+          },
+        ],
+      },
+      // Columns the bot did not colour take the free colours in turn.
+      {
+        label: "In Review",
+        color: "blue",
+        count: 14,
+        rows: [{ key: "#94", title: "SE 202" }],
+      },
+      { label: "Done", color: "green", count: 0, rows: [] },
+      {
+        label: "No column",
+        color: "gray",
+        count: 1,
+        rows: [{ key: "#96", title: "Course overview" }],
+      },
+    ],
+  });
+  expect(notes).toEqual([
+    'A due date was left out: give a date as "2026-11-27".',
+  ]);
+  expect(text).toBe(
+    [
+      "ALX - FIT (Fizzy) — https://app.fizzy.example/boards/3",
+      "",
+      "Priority (1)",
+      "• #107 Update the document with the AI update notes · due 2026-11-27 · 2/5 steps · Kalkidan Betre · docs — https://app.fizzy.example/cards/107",
+      "",
+      "In Review (14)",
+      "• #94 SE 202",
+      "…and 13 more",
+      "",
+      "Done (0)",
+      "",
+      "No column (1)",
+      "• #96 Course overview",
+    ].join("\n"),
+  );
+});
+
+test("a board column shows its first rows and counts the rest; an empty board is refused", () => {
+  const { card } = built({
+    title: "Big",
+    columns: [
+      {
+        label: "To do",
+        rows: Array.from({ length: 25 }, (_, n) => ({ title: `Task ${n}` })),
+      },
+    ],
+  });
+  if (card.type !== "board") throw new Error("Expected a board.");
+  expect(card.columns[0]!.rows).toHaveLength(10);
+  expect(card.columns[0]!.count).toBe(25);
+  expect(
+    buildCard({ title: "Empty", columns: [{ label: "To do", rows: [] }] }),
+  ).toEqual({ error: expect.stringMatching(/at least one row or event/) });
+});
+
+test("an item card carries its fields, the start of its description and its first steps", () => {
+  const { card, text } = built({
+    title: "Update the document with the AI update notes",
+    url: "https://app.fizzy.example/cards/107",
+    source: "Fizzy",
+    more: { label: "4 comments · last from Mara" },
+    item: {
+      key: "#107",
+      fields: [
+        { label: "Column", badge: { label: "Priority", tone: "attention" } },
+        { label: "Assigned", people: ["Kalkidan Betre"] },
+        { label: "Due", due: "2026-11-27T09:00:00+03:00" },
+        { label: "Tags", tags: ["docs", "ai"] },
+        { label: "Empty" },
+        { label: "Board", value: "ALX - FIT" },
+      ],
+      body: `Fold the notes in. ${"x".repeat(700)}`,
+      steps: [
+        { label: "Collect the notes", done: true },
+        { label: "Draft section 3", done: true },
+        { label: "Update the glossary" },
+        { label: "Ask for a read" },
+        { label: "Publish" },
+        { label: "Announce" },
+      ],
+    },
+  });
+  expect(card).toStrictEqual(JSON.parse(JSON.stringify(card)));
+  if (card.type !== "item") throw new Error("Expected an item.");
+  expect(card.key).toBe("#107");
+  expect(card.sources).toEqual(["Fizzy"]);
+  expect(card.fields).toEqual([
+    { label: "Column", badge: { label: "Priority", tone: "attention" } },
+    { label: "Assigned", people: ["Kalkidan Betre"] },
+    { label: "Due", due: "2026-11-27" },
+    { label: "Tags", tags: ["docs", "ai"] },
+    { label: "Board", value: "ALX - FIT" },
+  ]);
+  expect(card.body).toHaveLength(601);
+  expect(card.body!.endsWith("…")).toBe(true);
+  expect(card.steps).toEqual({
+    done: 2,
+    total: 6,
+    items: [
+      { label: "Collect the notes", done: true },
+      { label: "Draft section 3", done: true },
+      { label: "Update the glossary" },
+      { label: "Ask for a read" },
+      { label: "Publish" },
+    ],
+  });
+  const lines = text.split("\n");
+  expect(lines[0]).toBe(
+    "#107 Update the document with the AI update notes (Fizzy) — https://app.fizzy.example/cards/107",
+  );
+  expect(lines.slice(2, 7)).toEqual([
+    "Column: Priority",
+    "Assigned: Kalkidan Betre",
+    "Due: 2026-11-27",
+    "Tags: docs, ai",
+    "Board: ALX - FIT",
+  ]);
+  expect(lines.slice(-10)).toEqual([
+    "",
+    "Steps: 2 of 6",
+    "☑ Collect the notes",
+    "☑ Draft section 3",
+    "☐ Update the glossary",
+    "☐ Ask for a read",
+    "☐ Publish",
+    "…and 1 more",
+    "",
+    "4 comments · last from Mara",
+  ]);
+});
+
+test("an item with nothing but a title is refused, and so are two kinds at once", () => {
+  expect(buildCard({ title: "Bare", item: {} })).toEqual({
+    error: expect.stringMatching(/needs fields, a body or steps/),
+  });
+  expect(
+    buildCard({
+      title: "Both",
+      columns: [{ label: "A", rows: [{ title: "x" }] }],
+      item: { body: "y" },
+    }),
+  ).toEqual({ error: expect.stringMatching(/not several/) });
 });
 
 const showing = (args: CardInput) =>
