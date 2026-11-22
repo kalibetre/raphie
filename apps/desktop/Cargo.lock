@@ -38,8 +38,7 @@ dependencies = [
 [[package]]
 name = "accesskit_macos"
 version = "0.27.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "123828ceeec755b05255e3976cb0852993202de98a0626c97dd8d34246991f84"
+source = "git+https://github.com/anomalyco/rune?rev=01096f25021fb356b867c1b1868363467deb5143#01096f25021fb356b867c1b1868363467deb5143"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -3972,8 +3971,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "sctk-adwaita"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6277f0217056f77f1d8f49f2950ac6c278c0d607c45f5ee99328d792ede24ec"
+source = "git+https://github.com/anomalyco/rune?rev=01096f25021fb356b867c1b1868363467deb5143#01096f25021fb356b867c1b1868363467deb5143"
 dependencies = [
  "log",
  "smithay-client-toolkit",
