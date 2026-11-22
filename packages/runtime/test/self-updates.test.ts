@@ -106,7 +106,7 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
     saveOwner: (input) => (owner = { ...input, updatedAt: 1 }),
   });
   const run = async (name: string, args: Record<string, unknown>) => {
-    const tool = extension.tools.find((t) => t.name === name)!;
+    const tool = extension.tools!.find((t) => t.name === name)!;
     const result = (await tool.execute(
       args as never,
       {} as never,
