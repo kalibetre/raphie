@@ -16,6 +16,12 @@ export type BotProfile = {
   replyStyle: ReplyStyle;
   /** Six-digit hex color; absent/null keeps automatic roster allocation. */
   color?: string | null;
+  /** What the bot may change by itself. */
+  selfUpdates: SelfUpdates;
+  /** Who saved this revision; absent on revisions saved before bots could. */
+  changedBy?: "owner" | "bot";
+  /** The built-in personality this revision's text is, unchanged. */
+  preset?: string;
   revision: number;
   createdAt: number;
   updatedAt: number;
@@ -27,6 +33,28 @@ export type SaveBotProfile = Pick<
 > & {
   /** Omitted: a new bot starts at the defaults, an edit keeps its style. */
   replyStyle?: ReplyStyle;
+  /** Omitted: a new bot starts at the defaults, an edit keeps them. */
+  selfUpdates?: SelfUpdates;
+};
+
+/**
+ * What a bot may change by itself, without asking: each change is saved at
+ * once, shown in the conversation, and can be undone.
+ */
+export type SelfUpdates = {
+  /** Its own personality, saved as a new revision. */
+  personality: boolean;
+  /** The owner's profile, shared by every bot. */
+  owner: boolean;
+};
+
+/** A built-in personality to start a bot from. */
+export type PersonalityPreset = {
+  id: string;
+  name: string;
+  /** One line on what the personality is like. */
+  summary: string;
+  personality: string;
 };
 
 export type UpdateBotProfile = SaveBotProfile & { revision: number };

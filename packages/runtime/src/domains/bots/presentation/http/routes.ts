@@ -6,6 +6,7 @@ import {
   limitBody,
 } from "../../../../infrastructure/http/validation.ts";
 import type { BotProfiles } from "../../application/ports.ts";
+import { PERSONALITY_PRESETS } from "../../domain/personalities.ts";
 
 const profile = z
   .object({
@@ -21,6 +22,10 @@ const profile = z
       })
       .strict()
       .optional(),
+    selfUpdates: z
+      .object({ personality: z.boolean(), owner: z.boolean() })
+      .strict()
+      .optional(),
     color: z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)
@@ -34,6 +39,7 @@ const profile = z
 export function botRoutes(bots: BotProfiles) {
   return new Hono()
     .get("/", (c) => c.json({ items: bots.list() }))
+    .get("/personalities", (c) => c.json({ items: PERSONALITY_PRESETS }))
     .post("/", limitBody(100_000), jsonInput(profile), async (c) =>
       c.json(await bots.create(c.req.valid("json")), 201),
     )

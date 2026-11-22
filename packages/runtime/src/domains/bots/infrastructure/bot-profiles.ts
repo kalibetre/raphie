@@ -7,6 +7,7 @@ import type {
   OwnerProfile,
   SaveBotProfile,
   SaveOwnerProfile,
+  SelfUpdates,
   UpdateBotProfile,
 } from "@raphie/contracts";
 
@@ -16,19 +17,34 @@ import {
   replyStyleOf,
 } from "../../conversations/domain/reply-style.ts";
 import { EMPTY_OWNER } from "../domain/owner.ts";
+import { PERSONALITY_PRESETS, presetOf } from "../domain/personalities.ts";
 
-/** A stored profile, with a reply style even if it was saved before one. */
+/**
+ * What a bot may change by itself until the owner says otherwise: every bot
+ * its own personality, and only the default bot the owner's profile.
+ */
+export function defaultSelfUpdates(id: string): SelfUpdates {
+  return { personality: true, owner: id === "default" };
+}
+
+/**
+ * A stored profile, with a reply style and self-updates even if it was
+ * saved before either.
+ */
 function parse(value: string): BotProfile {
   const profile = JSON.parse(value) as BotProfile;
-  return { ...profile, replyStyle: replyStyleOf(profile.replyStyle) };
+  return {
+    ...profile,
+    replyStyle: replyStyleOf(profile.replyStyle),
+    selfUpdates: profile.selfUpdates ?? defaultSelfUpdates(profile.id),
+  };
 }
 
 export const defaultBot = {
   id: "default",
   name: "Raphie",
   description: "Your personal assistant.",
-  personality:
-    "Be concise, thoughtful and candid. Use a warm, natural voice. Ask when important context is missing. Distinguish evidence from inference, and never claim an action succeeded without confirmation.",
+  personality: PERSONALITY_PRESETS[0]!.personality,
 };
 
 /** Trusted configuration, separate from the bot's files and agent-editable memory. */
@@ -61,6 +77,9 @@ export class BotProfileStore {
       this.insert({
         ...defaultBot,
         replyStyle: DEFAULT_REPLY_STYLE,
+        selfUpdates: defaultSelfUpdates("default"),
+        changedBy: "owner",
+        preset: presetOf(defaultBot.personality),
         revision: 1,
         createdAt: at,
         updatedAt: at,
@@ -99,10 +118,14 @@ export class BotProfileStore {
 
   draft(input: SaveBotProfile): BotProfile {
     const at = Date.now();
+    const id = crypto.randomUUID();
     return {
       ...input,
       replyStyle: replyStyleOf(input.replyStyle),
-      id: crypto.randomUUID(),
+      selfUpdates: input.selfUpdates ?? defaultSelfUpdates(id),
+      changedBy: "owner",
+      preset: presetOf(input.personality),
+      id,
       revision: 1,
       createdAt: at,
       updatedAt: at,
@@ -130,22 +153,45 @@ export class BotProfileStore {
           "This bot was changed elsewhere. Reload before saving.",
           409,
         );
-      const next = {
+      return this.write({
         ...previous,
         ...input,
         replyStyle: input.replyStyle ?? previous.replyStyle,
-        revision: previous.revision + 1,
-        updatedAt: Date.now(),
-      };
-      const value = JSON.stringify(next);
-      this.db
-        .query("UPDATE bot_profiles SET value=? WHERE id=?")
-        .run(value, id);
-      this.db
-        .query("INSERT INTO bot_revisions(id,revision,value) VALUES(?,?,?)")
-        .run(id, next.revision, value);
-      return next;
+        selfUpdates: input.selfUpdates ?? previous.selfUpdates,
+        changedBy: "owner",
+      });
     })();
+  }
+
+  /**
+   * The bot changes its own personality: a new revision, saved by it.
+   * Unchanged text saves nothing, so a repeated call adds no revision.
+   */
+  updatePersonality(id: string, personality: string) {
+    return this.db.transaction(() => {
+      const previous = this.read(id);
+      return previous.personality === personality
+        ? previous
+        : this.write({ ...previous, personality, changedBy: "bot" });
+    })();
+  }
+
+  /** Saves `profile` as the next revision. */
+  private write(profile: BotProfile) {
+    const next = {
+      ...profile,
+      preset: presetOf(profile.personality),
+      revision: profile.revision + 1,
+      updatedAt: Date.now(),
+    };
+    const value = JSON.stringify(next);
+    this.db
+      .query("UPDATE bot_profiles SET value=? WHERE id=?")
+      .run(value, next.id);
+    this.db
+      .query("INSERT INTO bot_revisions(id,revision,value) VALUES(?,?,?)")
+      .run(next.id, next.revision, value);
+    return next;
   }
 
   /** The owner as every bot knows them; empty until they say something. */

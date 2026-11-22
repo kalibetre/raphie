@@ -34,9 +34,11 @@ export type {
 export type {
   BotProfile,
   OwnerProfile,
+  PersonalityPreset,
   ReplyStyle,
   SaveOwnerProfile,
   SaveBotProfile,
+  SelfUpdates,
   UpdateBotProfile,
 } from "./bots/views.ts";
 
