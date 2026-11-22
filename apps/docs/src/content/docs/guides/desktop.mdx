@@ -118,7 +118,7 @@ Your sign-in and settings are kept.
 
 ## When Raphie stops answering
 
-While signed in, the app asks Raphie every 10 seconds whether it is running, through the web host's `/api/runtime`, the same check `raphie status` makes. When the check fails, the bottom of the bot list says **Not answering** instead of **Connected**, and **Settings → Account** explains which part did not answer:
+While signed in, the app asks Raphie every 10 seconds whether it is running, through the web host's `/api/runtime`, the same check `raphie status` makes. When the check fails, the bottom of the sidebar says **Not answering** instead of where Raphie runs (**This Mac**, or the host's name), and **Settings → Account** explains which part did not answer:
 
 | Warning                   | Meaning                                                                                                                  |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -133,11 +133,11 @@ While signed in, the app asks Raphie every 10 seconds whether it is running, thr
 
 ## Sign out or disconnect
 
-| Action                                                           | What happens                                                                                     |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Change address** (**Settings → Account**)                      | Returns to sign-in to connect elsewhere. Keeps the token for this address.                       |
-| **Sign out** (bottom of the bot list, or **Settings → Account**) | Forgets the token on this Mac. The device stays listed in the web workspace.                     |
-| **Disconnect** in the web workspace's **Settings → Account**     | Revokes the device's token on the server. Use this for a lost Mac or a device you no longer use. |
+| Action                                                       | What happens                                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **Change address** (**Settings → Account**)                  | Returns to sign-in to connect elsewhere. Keeps the token for this address.                       |
+| **Sign out** (**Settings → Account**)                        | Forgets the token on this Mac. The device stays listed in the web workspace.                     |
+| **Disconnect** in the web workspace's **Settings → Account** | Revokes the device's token on the server. Use this for a lost Mac or a device you no longer use. |
 
 If Raphie rejects the token, for example because you disconnected the device, the app deletes it and returns to sign-in with an explanation.
 

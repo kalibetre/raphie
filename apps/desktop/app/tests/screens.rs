@@ -187,15 +187,15 @@ fn the_roster_lists_bots_and_says_which_need_the_owner() {
         let mut rt = render(scenes::new_conversation, dark);
         assert!(rt.find("rd-bot-default").is_some() && rt.find("rd-bot-b-research").is_some());
         let text = screen_text(&rt);
-        assert_eq!(
-            needs_you(&rt, "default").as_deref(),
-            Some("1 conversation needs you")
-        );
-        assert_eq!(needs_you(&rt, "b-research"), None);
-        // One line per bot, no preview under the name: a 28-point tile
-        // and 5 points above and below.
+        assert_eq!(needs_you(&rt, "default").as_deref(), Some("Needs you"));
+        assert_eq!(needs_you(&rt, "b-research").as_deref(), Some("Available"));
+        // What waits on the owner is pinned above the team, and opens.
+        assert!(inside(&rt, "rd-requests", "rd-roster"));
+        let bots = element(&rt, "rd-bots").rect;
+        assert!(element(&rt, "rd-requests").rect[1] < bots[1]);
+        // The name over what the bot is doing, 5 points above and below.
         let row = element(&rt, "rd-bot-default").rect;
-        assert!((row[3] - 38.0).abs() < 0.5, "{row:?}");
+        assert!((row[3] - 46.75).abs() < 0.5, "{row:?}");
         assert!(text.contains("What’s on your mind?"), "the welcome screen");
 
         click(&mut rt, "rd-bot-b-research");
@@ -208,13 +208,12 @@ fn the_roster_lists_bots_and_says_which_need_the_owner() {
     }
 }
 
-/// What a bot's count badge in the roster says to a screen reader; `None`
-/// when it has no badge.
+/// What a bot's row in the roster says it is doing.
 fn needs_you(rt: &Runtime<Ui>, bot_id: &str) -> Option<String> {
     rt.elements()
         .into_iter()
-        .find(|e| e.key.as_deref() == Some(&format!("rd-bot-{bot_id}-count")))
-        .and_then(|e| e.label)
+        .find(|e| e.key.as_deref() == Some(&format!("rd-bot-{bot_id}-status")))
+        .and_then(|e| e.text)
 }
 
 /// True when the element keyed `key` lies inside the one keyed `outer`.
@@ -250,7 +249,7 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
         let bots = element(&rt, "rd-bots").rect;
         let list = element(&rt, "rd-conversations").rect;
         assert!(list[1] >= bots[1] + bots[3], "{bots:?} {list:?}");
-        assert!(screen_text(&rt).contains("Raphie’s conversations"));
+        assert!(screen_text(&rt).contains("With Raphie"));
         assert!(!screen_text(&rt).contains("Most recent first"));
 
         // A row opens its conversation; the pen starts a new one.
@@ -266,8 +265,8 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
             rt.state.sent.last(),
             Some(&Command::SelectSession { session_id: None })
         );
-        // The label's "+" creates a bot.
-        click(&mut rt, "rd-new-bot");
+        // The team's last row creates a bot.
+        click(&mut rt, "rd-add-teammate");
         assert_eq!(rt.state.screen, Screen::Settings(Page::NewBot));
     }
 }
@@ -714,7 +713,11 @@ fn settings_open_in_the_app_and_close_back_to_conversations() {
         click(&mut rt, "rd-close-settings");
         assert_eq!(rt.state.screen, Screen::Workspace);
 
-        click(&mut rt, "rd-account-settings");
+        // Account, with sign-out, is a settings page; the roster has no
+        // account buttons of its own.
+        assert!(rt.find("rd-account-settings").is_none() && rt.find("rd-sign-out").is_none());
+        click(&mut rt, "rd-settings");
+        click(&mut rt, "rd-nav-account");
         assert_eq!(rt.state.screen, Screen::Settings(Page::Account));
         click(&mut rt, "rd-back-to-conversations");
         assert!(rt.find("rd-roster").is_some());
@@ -774,10 +777,10 @@ fn account_warns_when_raphie_stops_answering_and_offers_another_address() {
     assert_eq!(rt.state.sent.last(), Some(&Command::ChangeAddress));
     assert_eq!(rt.state.screen, Screen::Workspace);
 
-    // The roster's status says so too, instead of "Connected".
+    // The roster's status says so too, instead of where Raphie runs.
     let status = |rt: &Runtime<Ui>| element(rt, "rd-stream-status").text.unwrap_or_default();
     let mut rt = render(scenes::conversations, false);
-    assert_eq!(status(&rt), "Connected");
+    assert_eq!(status(&rt), "raphie.example.ts.net");
     rt.update(|ui, _| {
         ui.model.apply(Event::Reach(Reach::Unreachable(
             "error sending request".into(),
@@ -4024,10 +4027,7 @@ fn replies_not_read_yet_are_marked_counted_and_filtered() {
         assert!(rt.find("rd-session-s-3-dot").is_none());
         // Two conversations have something for the owner: one with new
         // replies, one waiting for approval.
-        assert_eq!(
-            needs_you(&rt, "default").as_deref(),
-            Some("2 conversations need you")
-        );
+        assert_eq!(needs_you(&rt, "default").as_deref(), Some("Needs you"));
 
         click(&mut rt, "rd-filter-new");
         assert_eq!(rt.state.filter, Filter::NewReplies);
@@ -4148,10 +4148,7 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
         assert!(shown.contains(expected), "missing: {expected}");
     }
     // The other bot's row in the roster counts its conversation too.
-    assert_eq!(
-        needs_you(&rt, "b-research").as_deref(),
-        Some("1 conversation needs you")
-    );
+    assert_eq!(needs_you(&rt, "b-research").as_deref(), Some("1 new reply"));
 
     click(&mut rt, "rd-inbox-jobs");
     assert_eq!(rt.state.inbox_filter, InboxFilter::Jobs);

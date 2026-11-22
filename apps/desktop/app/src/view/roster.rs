@@ -1,51 +1,107 @@
-//! The bot roster down the left edge: the brand, one row per bot, the
-//! selected bot's conversations, and the connection status with sign-out.
+//! The team down the left edge: requests that wait on the owner, one row
+//! per bot with what it is doing, the selected bot's conversations, and the
+//! brand with where Raphie runs and the settings gear.
 //!
 //! Mirrors `apps/web/src/domains/settings/presentation/bot-sidebar.tsx` and
 //! the `.bot-roster` rules in `bot-workspace.css`.
 
-use raphie_core::contracts::BotProfile;
-use raphie_core::engine::Command;
+use raphie_core::contracts::{BotProfile, SessionSummary};
 use raphie_core::model::StreamStatus;
-use rune::{El, Icon, LiveRegion, ScrollSpec, TextCase, col, icon, row, text};
+use rune::color::hex;
+use rune::{Color, El, Icon, LiveRegion, ScrollSpec, TextCase, col, el, icon, row, text};
 
 use super::Look;
 use super::sessions::sessions;
-use crate::avatar::bot_avatar;
+use crate::avatar::{bot_avatar, tone_of};
 use crate::icons;
 use crate::sections::Page;
 use crate::state::Ui;
 use crate::theme::{Theme, font};
-use crate::widgets::{
-    build_badge, build_badge_width, count_badge, icon_button, one_line, pressable, status_dot,
-};
+use crate::widgets::{build_badge, build_badge_width, icon_button, one_line, pressable};
+
+/// What a teammate is doing, from its conversations as last heard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Presence {
+    NeedsYou,
+    Working,
+    Replied(usize),
+    Available,
+}
+
+impl Presence {
+    pub fn label(self) -> String {
+        match self {
+            Presence::NeedsYou => "Needs you".into(),
+            Presence::Working => "Working".into(),
+            Presence::Replied(1) => "1 new reply".into(),
+            Presence::Replied(n) => format!("{n} new replies"),
+            Presence::Available => "Available".into(),
+        }
+    }
+
+    fn color(self, t: &Theme) -> Color {
+        match self {
+            Presence::NeedsYou => t.attention,
+            Presence::Replied(_) => t.accent,
+            _ => t.muted_foreground,
+        }
+    }
+
+    fn dot(self, t: &Theme) -> Color {
+        match self {
+            Presence::NeedsYou => t.attention,
+            // The web's `--info` fallback, a calm blue.
+            Presence::Working => hex("#4a6fa5").unwrap_or(t.accent),
+            _ => t.accent,
+        }
+    }
+}
+
+/// A conversation that waits on the owner: an approval or a question.
+pub fn needs_you(session: &SessionSummary) -> bool {
+    session.waiting || session.asking
+}
+
+pub fn presence(s: &Ui, bot_id: &str) -> Presence {
+    let sessions = s.sessions_of(bot_id);
+    if sessions.iter().any(|session| needs_you(session)) {
+        Presence::NeedsYou
+    } else if sessions.iter().any(|session| session.working) {
+        Presence::Working
+    } else {
+        match sessions
+            .iter()
+            .filter(|session| s.unread_in(bot_id, session) > 0)
+            .count()
+        {
+            0 => Presence::Available,
+            n => Presence::Replied(n),
+        }
+    }
+}
+
+/// The section label above a group (the web's `.roster-label`).
+fn label(t: &Theme, words: &str) -> El {
+    text(words)
+        .font(font(10.0, 400.0).tracking(1.0))
+        .color(t.muted_foreground)
+        // Drawn in capitals; screen readers hear the words as written.
+        .text_case(TextCase::Uppercase)
+}
 
 pub fn roster(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
-    // The brand starts right of the window's own buttons when there are any.
-    let brand_inset = (look.lights + 12.0).max(20.0);
     let width = s.visible_roster_width();
-    let wordmark = font(17.0, 650.0).tracking(-0.2);
-    // The build badge says its word only when the brand has room for it; a
-    // narrow roster shows the badge's icon alone rather than run past its edge.
-    let brand_width = brand_inset
-        + 30.0
-        + 9.0
-        + rune::text::measure("raphie", &[], wordmark, None).0
-        + 9.0
-        + build_badge_width(s.flavor, s.release_channel)
-        // At least this much of the roster stays clear to the badge's right.
-        + 12.0;
-    let compact = brand_width > width;
     let bots = &s.model.bots;
     let mut list = col().w_full();
     for bot in bots {
         list = list.child(bot_row(s, bot, look));
     }
+    list = list.child(add_row(t));
     let mut bots_list = col()
         .key("rd-bots")
         .role("navigation")
-        .label("Your bots")
+        .label("Your team")
         .w_full()
         .scroll(ScrollSpec {
             stick_bottom: false,
@@ -60,86 +116,101 @@ pub fn roster(s: &Ui, look: &Look) -> El {
         .key("rd-roster")
         .w(width)
         .h_full()
-        .pb(16.0)
+        .pb(14.0)
         .fill(t.sidebar)
         // Only a right edge: `[top, right, bottom, left]` widths.
         .border_sides([0.0, 1.0, 0.0, 0.0], t.border)
+        // A band the window's own buttons sit in, which also moves the window.
         .child(
-            // The brand band also moves the window. It is tighter than the
-            // web's (24 above and below) so the brand sits level with the
-            // window's buttons, like a title bar.
-            row()
-                .w_full()
-                .pt(7.0)
-                .pl(brand_inset)
-                .pr(20.0)
-                .pb(16.0)
-                .gap(9.0)
-                .center_y()
-                .window_drag()
-                .child(bot_avatar("default", look.tones.of("default"), 30.0))
-                .child(text("raphie").font(wordmark).color(t.foreground))
-                // An `Option` is a list of none or one, which is what
-                // `children` takes.
-                .children(build_badge(t, s.flavor, s.release_channel, compact)),
+            el().w_full()
+                .h(if look.lights > 0.0 { 38.0 } else { 12.0 })
+                .window_drag(),
         )
-        .child(
-            row()
-                .w_full()
-                .px(22.0)
-                .pb(12.0)
-                .justify_between()
-                .center_y()
-                .child(
-                    text("Your bots")
-                        .font(font(10.0, 400.0).tracking(1.0))
-                        .color(t.muted_foreground)
-                        // Drawn in capitals; screen readers get "Your bots".
-                        .text_case(TextCase::Uppercase),
-                )
-                .child(pressable(
-                    label_action(t, &icons::PLUS, "New bot").key("rd-new-bot"),
-                    true,
-                    |s: &mut Ui| s.open_settings(Some(Page::NewBot)),
-                )),
-        )
+        .children(requests(s, look))
+        .child(row().w_full().px(22.0).pb(8.0).child(label(t, "Your team")))
         .child(bots_list)
         .child(sessions(s, look))
         .child(footer(s, look))
+}
+
+/// Conversations waiting on the owner, from every bot, newest first.
+fn requests(s: &Ui, look: &Look) -> Option<El> {
+    let t = &look.theme;
+    let mut waiting: Vec<(&BotProfile, &SessionSummary)> = s
+        .model
+        .bots
+        .iter()
+        .flat_map(|bot| {
+            s.sessions_of(&bot.id)
+                .into_iter()
+                .filter(|session| needs_you(session))
+                .map(move |session| (bot, session))
+        })
+        .collect();
+    if waiting.is_empty() {
+        return None;
+    }
+    waiting.sort_by_key(|(_, session)| std::cmp::Reverse(session.last_at));
+    let mut list = col()
+        .key("rd-requests")
+        .role("region")
+        .label("Needs you")
+        .w_full()
+        .px(12.0)
+        .pb(14.0)
+        .gap(6.0);
+    for (bot, session) in waiting.into_iter().take(3) {
+        let headline = format!(
+            "{} {}",
+            bot.name,
+            if session.asking {
+                "has a question"
+            } else {
+                "needs your OK"
+            }
+        );
+        let card = row()
+            .key(format!("rd-request-{}", session.id))
+            .role("button")
+            .label(format!("{headline}: {}", session.title))
+            .w_full()
+            .px(10.0)
+            .py(8.0)
+            .gap(10.0)
+            .center_y()
+            .radius(10.0)
+            .fill(t.attention_soft.mix(t.card, 0.45))
+            .border(1.0, t.attention.mix(t.border, 0.65))
+            .child(bot_avatar(&bot.id, look.tones.of(&bot.id), 22.0))
+            .child(
+                col()
+                    .grow(1.0)
+                    .min_w(0.0)
+                    .child(one_line(headline, font(12.0, 600.0), t.foreground))
+                    .child(one_line(
+                        session.title.clone(),
+                        font(11.0, 400.0),
+                        t.muted_foreground,
+                    )),
+            );
+        let (bot_id, session_id) = (bot.id.clone(), session.id.clone());
+        list = list.child(pressable(card, true, move |s: &mut Ui| {
+            s.open_conversation(&bot_id, &session_id)
+        }));
+    }
+    Some(list)
 }
 
 fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
     let t = &look.theme;
     let tone = look.tones.of(&bot.id);
     let selected = s.model.bot_id.as_deref() == Some(bot.id.as_str());
-    // How many of this bot's conversations have something for the owner.
-    // Another bot's are known from the inbox's last round.
-    let waiting = s.attention_in(&bot.id);
-
-    let mut name = row()
-        .w_full()
-        .gap(8.0)
-        .justify_between()
-        .center_y()
-        .child(one_line(bot.name.clone(), font(13.0, 550.0), t.foreground).shrink());
-    if waiting > 0 {
-        // The web shows the number alone; a screen reader hears what it counts.
-        let needs = if waiting == 1 {
-            "1 conversation needs you".to_owned()
-        } else {
-            format!("{waiting} conversations need you")
-        };
-        name = name.child(
-            count_badge(t, waiting)
-                .key(format!("rd-bot-{}-count", bot.id))
-                .label(needs),
-        );
-    }
+    let status = presence(s, &bot.id);
     let id = bot.id.clone();
     let row = row()
         .key(format!("rd-bot-{}", bot.id))
         .role("button")
-        .label(bot.name.clone())
+        .label(format!("{}, {}", bot.name, status.label()))
         .w_full()
         .px(22.0)
         .py(5.0)
@@ -151,9 +222,28 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
                 .center()
                 .radius(8.0)
                 .fill(tone.body.alpha(if selected { 0.22 } else { 0.12 }))
-                .child(bot_avatar(&bot.id, tone, 24.0)),
+                .child(bot_avatar(&bot.id, tone, 24.0))
+                // A presence dot on the corner, ringed in the sidebar's colour.
+                .child(
+                    el().key(format!("rd-bot-{}-presence", bot.id))
+                        .size(10.0, 10.0)
+                        .radius(5.0)
+                        .fill(status.dot(t))
+                        .border(2.0, t.sidebar)
+                        .absolute(20.0, 20.0)
+                        .a11y_hidden(),
+                ),
         )
-        .child(col().grow(1.0).min_w(0.0).child(name));
+        .child(
+            col()
+                .grow(1.0)
+                .min_w(0.0)
+                .child(one_line(bot.name.clone(), font(13.0, 550.0), t.foreground))
+                .child(
+                    one_line(status.label(), font(11.5, 400.0), status.color(t))
+                        .key(format!("rd-bot-{}-status", bot.id)),
+                ),
+        );
     // The selected row is washed in the bot's own colour; the others show
     // the hover colour under the pointer.
     let row = if selected {
@@ -164,6 +254,38 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
     // `move` gives the closure its own copy of `id`, since it outlives this
     // function.
     pressable(row, true, move |s: &mut Ui| s.choose_bot(&id))
+}
+
+/// "Add a teammate", the last row of the team.
+fn add_row(t: &Theme) -> El {
+    let row = row()
+        .key("rd-add-teammate")
+        .role("button")
+        .label("Add a teammate")
+        .w_full()
+        .px(22.0)
+        .py(5.0)
+        .gap(12.0)
+        .center_y()
+        .hover(t.hover)
+        .child(
+            row()
+                .size(28.0, 28.0)
+                .center()
+                .radius(14.0)
+                .fill(t.muted)
+                .child(
+                    icon(&icons::PLUS, 15.0)
+                        .color(t.muted_foreground)
+                        .a11y_hidden(),
+                ),
+        )
+        .child(one_line(
+            "Add a teammate",
+            font(13.0, 400.0),
+            t.muted_foreground,
+        ));
+    pressable(row, true, |s: &mut Ui| s.open_settings(Some(Page::NewBot)))
 }
 
 /// The small ghost button at the end of a roster label (the web's
@@ -195,12 +317,11 @@ pub fn plain(preview: &str) -> String {
         .join(" ")
 }
 
-/// Connection status on the left; account, settings and sign-out on the
-/// right.
+/// The brand, where Raphie runs, and the settings gear at the brand mark's
+/// size. "Not answering" when the last check found Raphie down, and
+/// "Reconnecting…" while the open conversation's stream is down.
 fn footer(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
-    // "Not answering" when the last check found Raphie down, and
-    // "Reconnecting…" while the open conversation's stream is down.
     let answering = s.model.reach.is_up();
     let streaming = s
         .model
@@ -208,59 +329,76 @@ fn footer(s: &Ui, look: &Look) -> El {
         .as_ref()
         .is_none_or(|c| c.stream != StreamStatus::Reconnecting);
     let online = answering && streaming;
-    let origin = s
-        .model
-        .origin
-        .as_ref()
-        .map(ToString::to_string)
-        .unwrap_or_default();
+    let origin = s.model.origin.as_ref();
+    let place = match origin {
+        Some(origin) if !origin.is_local() => origin.host(),
+        _ => "This Mac".to_owned(),
+    };
+    let wordmark = font(13.0, 650.0).tracking(-0.1);
+    // The build badge says its word only when the footer has room for it.
+    let needed = 6.0
+        + MARK
+        + 8.0
+        + rune::text::measure("raphie", &[], wordmark, None).0
+        + 8.0
+        + build_badge_width(s.flavor, s.release_channel)
+        // Room for a short place name, then the gear.
+        + 8.0
+        + 72.0
+        + 28.0;
+    let compact = needed > s.visible_roster_width();
+    let brand = tone_of("#b5c99b").unwrap_or_else(|| look.tones.of("default"));
     row()
         .key("rd-account")
         .w_full()
-        .mt(18.0)
-        .px(22.0)
-        .pt(12.0)
+        .mt(12.0)
+        .pl(16.0)
+        .pr(10.0)
         .gap(8.0)
-        .justify_between()
         .center_y()
+        .child(bot_avatar("default", brand, MARK))
+        .child(text("raphie").font(wordmark).color(t.foreground))
+        // An `Option` is a list of none or one, which is what `children` takes.
+        .children(build_badge(t, s.flavor, s.release_channel, compact))
         .child(
             row()
-                .gap(7.0)
+                .grow(1.0)
+                .min_w(0.0)
+                .ml(4.0)
+                .gap(6.0)
                 .center_y()
-                .help(origin)
-                .child(status_dot(t, online))
+                .help(origin.map(ToString::to_string).unwrap_or_default())
                 .child(
-                    text(if !answering {
-                        "Not answering"
-                    } else if streaming {
-                        "Connected"
-                    } else {
-                        "Reconnecting…"
-                    })
+                    el().size(6.0, 6.0)
+                        .radius(3.0)
+                        .fill(if online { t.accent } else { t.attention })
+                        .a11y_hidden(),
+                )
+                .child(
+                    one_line(
+                        if !answering {
+                            "Not answering".to_owned()
+                        } else if streaming {
+                            place
+                        } else {
+                            "Reconnecting…".to_owned()
+                        },
+                        font(12.0, 400.0),
+                        t.muted_foreground,
+                    )
                     .key("rd-stream-status")
-                    .font(font(11.0, 400.0))
-                    .color(t.muted_foreground)
+                    .shrink()
                     .live_region(LiveRegion::Polite),
                 ),
         )
         .child(
-            row()
-                .gap(4.0)
-                .center_y()
-                .child(
-                    icon_button(t, &icons::USER_ROUND, 15.0, "Account")
-                        .key("rd-account-settings")
-                        .on_press(|s: &mut Ui| s.open_settings(Some(Page::Account))),
-                )
-                .child(
-                    icon_button(t, &icons::SETTINGS, 15.0, "Settings (⌘,)")
-                        .key("rd-settings")
-                        .on_press(|s: &mut Ui| s.open_settings(None)),
-                )
-                .child(pressable(
-                    icon_button(t, &icons::LOG_OUT, 15.0, "Sign out").key("rd-sign-out"),
-                    true,
-                    |s: &mut Ui| s.command(Command::SignOut),
-                )),
+            icon_button(t, &icons::SETTINGS, GEAR, "Settings (⌘,)")
+                .key("rd-settings")
+                .on_press(|s: &mut Ui| s.open_settings(None)),
         )
 }
+
+/// The brand mark's box. Its blob fills about four fifths of it, so the
+/// gear's glyph is drawn that size to look as large.
+const MARK: f32 = 22.0;
+const GEAR: f32 = 18.0;
