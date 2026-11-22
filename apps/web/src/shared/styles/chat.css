@@ -217,6 +217,65 @@
     display: flex;
     align-items: flex-start;
     gap: 6px;
+    margin: 0;
+    color: var(--error);
+    font-size: 13px;
+  }
+  .turn-error-lede {
+    margin: 0;
+    line-height: 1.6;
+  }
+  /* What did not happen, as a card the owner can act on. */
+  .turn-failure-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--attention) 35%, var(--border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--attention-soft) 45%, var(--card));
+    color: var(--attention);
+  }
+  .turn-failure-card span {
+    display: grid;
+    gap: 2px;
+  }
+  .turn-failure-card strong {
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .turn-failure-card small {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .turn-error-more summary {
+    width: fit-content;
+    color: var(--faint);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .turn-error-more .turn-error-detail {
+    margin: 6px 0 0;
+  }
+  /* A reply is signed: the bot's face, its name and the time. */
+  .message-author {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .message-author .bot-avatar {
+    width: 22px;
+    height: 22px;
+  }
+  .message-author strong {
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .message-author time {
+    color: var(--faint);
+    font-size: 11.5px;
   }
   .turn-error-icon {
     flex: none;
@@ -269,6 +328,13 @@
   .steps-attention .steps-header {
     color: var(--attention);
     font-weight: 560;
+  }
+  .steps-done {
+    color: var(--accent);
+  }
+  .message-assistant .steps {
+    display: block;
+    margin-top: 6px;
   }
   .steps-chevron {
     transition: transform 0.15s;
@@ -355,6 +421,9 @@
     gap: 6px;
     min-width: 0;
     color: var(--muted-foreground);
+  }
+  .step-phrase {
+    color: var(--foreground);
   }
   .step-name code {
     color: var(--foreground);
@@ -562,57 +631,61 @@
     text-align: center;
     padding: 32px 32px calc(var(--composer-height, 150px) + 32px);
   }
-  .eyebrow {
-    font-size: 11px;
-    letter-spacing: 1.4px;
-    color: var(--faint);
-  }
   .welcome h2 {
     margin: 8px 0 6px;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 600;
-    letter-spacing: -0.6px;
+    letter-spacing: -0.5px;
   }
   .welcome > p {
     margin: 0;
     color: var(--muted-foreground);
     line-height: 1.6;
   }
-  .suggestions {
-    display: flex;
+  /* Work the bot can take on: two columns, one on a narrow screen. */
+  .welcome-jobs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    margin-top: 26px;
-    flex-wrap: wrap;
-    justify-content: center;
+    width: min(100%, 560px);
+    margin-top: 24px;
   }
-  .suggestions button {
+  .welcome-job {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
+    padding: 12px 14px;
     border: 1px solid var(--border);
+    border-radius: 11px;
     background: var(--card);
-    padding: 9px 12px;
-    border-radius: 10px;
-    font-size: 13px;
+    color: var(--muted-foreground);
+    text-align: left;
+    transition: background-color 150ms;
   }
-  .suggestions button:hover:not(:disabled) {
+  .welcome-job:hover:not(:disabled) {
     background: var(--hover);
   }
-  .suggestions button span {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .welcome-job svg {
+    flex: none;
+    margin-top: 2px;
   }
-  .suggestions button svg {
-    color: var(--faint);
+  .welcome-job span {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
   }
-  .welcome-note {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 22px;
+  .welcome-job strong {
+    color: var(--foreground);
+    font-size: 13.5px;
+    font-weight: 550;
+  }
+  .welcome-job small {
     font-size: 12px;
-    color: var(--faint);
+  }
+  @media (max-width: 520px) {
+    .welcome-jobs {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 }
 

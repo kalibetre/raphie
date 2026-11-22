@@ -33,6 +33,8 @@ Its address depends on how you installed Raphie:
 
 On a phone the sidebar is the home screen, at full width. Opening one fills the screen; the arrow at the top left goes back to the list.
 
+A new conversation opens on the bot's empty desk: **I'm ready when you are.** with four things to ask, such as a morning briefing or research. Choosing one puts the request in the composer to finish and send; nothing is sent until you send it.
+
 Each session has its own link, `/sessions/<id>`. Links to a bot other than the default carry `?bot=<id>`, so a bookmarked session always opens with the right bot.
 
 Read state is shared through the runtime: a reply you read on the desktop app is marked read here too.
@@ -82,9 +84,9 @@ If the bot has no provider yet, the workspace prompts you to connect one; see [f
 
 ## Following progress
 
-Replies stream as text with Markdown, code and Mermaid diagrams rendered. While a turn runs, tool steps appear in the reply; expand one to see its arguments and result. Each reply also reports its time, tokens and cost when the provider supplies them.
+Replies stream as text with Markdown, code and Mermaid diagrams rendered. Each reply is signed with the bot's avatar, name and time; pointing at the time shows the reply's tokens and cost when the provider supplies them. While a turn runs, tool steps appear in the reply. Once it finishes, they fold into one line under the reply that says what the bot did, such as **Updated a scheduled job, noted something to remember**; expand it to see each tool with its arguments and result.
 
-When a reply cannot finish, the conversation says why under your message, for example that the model returned an error, that no model is chosen, or that the bot used its limit of tool rounds. A model error also shows the provider's own message, such as a rate limit; anything shaped like a key is masked. The desktop app shows the same. A channel such as Telegram gets the reason without the provider's message. The **Reply failed** event in Activity records both.
+When a reply cannot finish, the bot says so under your message ("I couldn't finish this reply.") with the reason: for example, that the model returned an error, that no model is chosen, or that the bot used its limit of tool rounds. For a model error, **Details** shows the provider's own message, such as a rate limit; anything shaped like a key is masked. The desktop app shows the same. A channel such as Telegram gets the reason without the provider's message. The **Reply failed** event in Activity records both.
 
 For a fuller record, open **Settings → [bot] → Activity**: the bot's latest 100 events across all sessions (model calls, tools, approvals, recovery), refreshed every five seconds, with JSON export. Model reasoning is never shown. More in [observability](/operate/observability/).
 

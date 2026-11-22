@@ -196,7 +196,7 @@ fn the_roster_lists_bots_and_says_which_need_the_owner() {
         // The name over what the bot is doing, 5 points above and below.
         let row = element(&rt, "rd-bot-default").rect;
         assert!((row[3] - 50.75).abs() < 0.5, "{row:?}");
-        assert!(text.contains("What’s on your mind?"), "the welcome screen");
+        assert!(text.contains("I’m ready when you are."), "the empty desk");
 
         click(&mut rt, "rd-bot-b-research");
         assert_eq!(
@@ -270,6 +270,34 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
         // The team's last row creates a bot.
         click(&mut rt, "rd-add-teammate");
         assert_eq!(rt.state.screen, Screen::Settings(Page::NewBot));
+    }
+}
+
+#[test]
+fn a_job_on_the_empty_desk_puts_its_request_in_the_composer() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::new_conversation, dark);
+        let text = screen_text(&rt);
+        for job in [
+            "Send me a morning briefing",
+            "Keep an eye on my inbox",
+            "Research something",
+            "Help me think something through",
+        ] {
+            assert!(text.contains(job), "{job}: {text}");
+        }
+        click(&mut rt, &format!("rd-job-{}", "Research something".len()));
+        assert_eq!(
+            rt.state.composer.text,
+            "Research this for me and write up what you find: "
+        );
+        // Nothing is sent until the owner sends it.
+        assert!(
+            !rt.state
+                .sent
+                .iter()
+                .any(|c| matches!(c, Command::Send { .. }))
+        );
     }
 }
 
@@ -504,15 +532,6 @@ fn the_title_bar_archives_and_unarchives_the_open_conversation() {
     }
 }
 
-#[test]
-fn a_suggestion_fills_the_composer_without_sending() {
-    let mut rt = render(scenes::new_conversation, false);
-    let key = element_with_label(&rt, "Help me plan my day");
-    click(&mut rt, &key);
-    assert_eq!(rt.state.composer.text, "Help me plan my day");
-    assert!(rt.state.sent.is_empty(), "the owner still chooses to send");
-}
-
 /// The key of the element whose accessible label is `label`.
 fn element_with_label(rt: &Runtime<Ui>, label: &str) -> String {
     rt.elements()
@@ -628,10 +647,14 @@ fn finished_replies_show_their_tools_time_and_cost() {
     for dark in [false, true] {
         let mut rt = render(scenes::conversation, dark);
         let text = screen_text(&rt);
-        assert!(text.contains("88 tokens · $0.0004"), "{text}");
-        // 640 + 1,210 tokens over the run's two model calls.
-        assert!(text.contains("1.9k tokens · $0.01"), "{text}");
-        assert!(text.contains("Used 2 tools · 3s"), "{text}");
+        // Each reply is signed; its tokens and cost are on hover, not drawn.
+        assert!(rt.find("rd-meta-t2").is_some());
+        assert!(!text.contains("tokens"), "{text}");
+        // What the bot did, in its words, under the reply.
+        assert!(text.contains("Used read_file, used docs"), "{text}");
+        let reply = element(&rt, "rd-reply-t2").rect;
+        let toggle = element(&rt, "rd-steps-toggle-t2").rect;
+        assert!(toggle[1] > reply[1], "the steps are inside the reply");
         assert!(rt.find("rd-step-op-1").is_none(), "steps start folded");
 
         click(&mut rt, "rd-steps-toggle-t2");
@@ -666,15 +689,39 @@ fn a_failed_reply_says_why_once() {
         let rt = render(scenes::reply_failed, dark);
         let text = screen_text(&rt);
         assert!(
-            text.contains("Raphie could not complete this reply. The model returned an error."),
+            text.contains("I couldn’t finish this reply. The model returned an error."),
             "{text}"
         );
-        assert!(text.contains("429 Too Many Requests"), "{text}");
         // Said under the message only, not again at the end.
-        assert_eq!(text.matches("could not complete").count(), 1, "{text}");
+        assert_eq!(text.matches("couldn’t finish").count(), 1, "{text}");
+        // The provider's own words are folded under Details.
+        assert!(!text.contains("429 Too Many Requests"), "{text}");
+        let mut rt = rt;
+        click(&mut rt, "rd-failed-more-t2");
+        assert!(screen_text(&rt).contains("429 Too Many Requests"));
         let line = element(&rt, "rd-failed-t2").rect;
         let detail = element(&rt, "rd-failed-detail-t2").rect;
         assert!(detail[1] >= line[1] + line[3], "the detail sits below");
+    }
+}
+
+#[test]
+fn failed_runs_of_a_scheduled_job_in_a_row_read_as_one() {
+    for dark in [false, true] {
+        let rt = render(scenes::scheduled_failures, dark);
+        let text = screen_text(&rt);
+        assert!(
+            text.contains("I couldn’t run Daily calendar briefing, after 3 tries."),
+            "{text}"
+        );
+        assert_eq!(text.matches("didn’t run").count(), 1, "{text}");
+        assert!(text.contains("3 attempts"), "{text}");
+        // The latest failure says it; the earlier two are not drawn.
+        assert!(rt.find("rd-scheduled-failure-t4").is_some());
+        assert!(rt.find("rd-scheduled-failure-t2").is_none());
+        assert!(rt.find("rd-turn-t3").is_none());
+        // The run that worked keeps its marker and reply.
+        assert!(rt.find("rd-turn-t1").is_some() && rt.find("rd-reply-t1").is_some());
     }
 }
 

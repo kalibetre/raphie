@@ -567,6 +567,10 @@ export function Workspace({
                           handoffs={handoffs}
                           bots={notificationBots}
                           skills={skillNames}
+                          author={{
+                            name: botProfile?.name ?? "Raphie",
+                            avatar: <BotAvatar id={workspace.botId} />,
+                          }}
                           onCancelHandoff={(id) =>
                             handoffQuery.cancel.mutateAsync(id)
                           }
