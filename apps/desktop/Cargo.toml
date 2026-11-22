@@ -19,7 +19,7 @@ publish = false
 # Rune is pre-release: pin an exact rev of its `dev` branch (never rewritten),
 # and patch the same crates Rune patches, from the same rev. A dependency's
 # [patch] does not reach this workspace, so without these the app would build
-# against stock winit/parley/wgpu-hal/accesskit. When bumping, copy the list
+# against stock winit/sctk-adwaita/parley/wgpu-hal/accesskit. When bumping, copy the list
 # from the [patch.crates-io] table in Rune's root Cargo.toml at the new rev.
 [workspace.dependencies]
 # `native-file-dialog` is the system file picker behind the composer's
@@ -32,6 +32,10 @@ winit = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867
 parley_engine = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
 wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
 accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
+# The vendored winit calls `AdwaitaFrame::content_corner_radius`, which only
+# Rune's sctk-adwaita has: without it, Linux builds fail.
+sctk-adwaita = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "01096f25021fb356b867c1b1868363467deb5143" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
