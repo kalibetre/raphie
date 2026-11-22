@@ -1,6 +1,7 @@
 import type { SessionSummary } from "@raphie/contracts";
 
-export type Presence = "needs-you" | "working" | "replied" | "available";
+export type Presence =
+  "needs-you" | "setup" | "working" | "replied" | "available";
 
 /** A conversation that waits on the owner: an approval or a question. */
 export const needsYou = (session: SessionSummary) =>
@@ -10,9 +11,12 @@ export const needsYou = (session: SessionSummary) =>
 export function presence(
   sessions: SessionSummary[],
   unread: (session: SessionSummary) => number,
+  /** Known to have no model it can reply with. */
+  unready = false,
 ): { state: Presence; label: string } {
   if (sessions.some(needsYou))
     return { state: "needs-you", label: "Needs you" };
+  if (unready) return { state: "setup", label: "Needs setup" };
   if (sessions.some((s) => s.working))
     return { state: "working", label: "Working" };
   const replies = sessions.filter((s) => unread(s) > 0).length;

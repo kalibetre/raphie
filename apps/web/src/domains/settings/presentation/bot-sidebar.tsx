@@ -23,6 +23,7 @@ export function BotSidebar({
   onRetry,
   conversations,
   onNew,
+  needsSetup = false,
 }: {
   bots: BotProfile[];
   botId: string;
@@ -39,6 +40,8 @@ export function BotSidebar({
   /** The selected bot's conversation list, below the team. */
   conversations?: ReactNode;
   onNew?: () => void;
+  /** The selected bot has no model yet; others are not known here. */
+  needsSetup?: boolean;
 }) {
   const botStyle = useBotStyle();
   const current = bots.find((b) => b.id === botId);
@@ -79,8 +82,10 @@ export function BotSidebar({
       >
         <nav className="bot-roster-list" aria-label="Your team">
           {bots.map((b) => {
-            const status = presence(byBot.get(b.id) ?? [], (s) =>
-              unread(b.id, s),
+            const status = presence(
+              byBot.get(b.id) ?? [],
+              (s) => unread(b.id, s),
+              needsSetup && b.id === botId,
             );
             return (
               <button

@@ -20,6 +20,16 @@ test("a teammate waiting on the owner needs them before anything else", () => {
   expect(presence([session({ waiting: true })], none).state).toBe("needs-you");
 });
 
+test("a teammate with no model needs setup, unless it already waits on you", () => {
+  expect(presence([session({ working: true })], none, true)).toEqual({
+    state: "setup",
+    label: "Needs setup",
+  });
+  expect(presence([session({ waiting: true })], none, true).state).toBe(
+    "needs-you",
+  );
+});
+
 test("working outranks unread replies, which outrank being available", () => {
   const read = session();
   const unread = session();

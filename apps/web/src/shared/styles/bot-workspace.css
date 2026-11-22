@@ -122,7 +122,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .bot-roster-status.needs-you {
+  .bot-roster-status.needs-you,
+  .bot-roster-status.setup {
     color: var(--attention);
   }
   .bot-roster-status.replied {
@@ -141,6 +142,9 @@
     border-radius: 50%;
     border: 2px solid var(--sidebar);
     background: var(--accent);
+  }
+  .roster-presence.setup {
+    background: var(--muted-foreground);
   }
   .roster-presence.needs-you {
     background: var(--attention);
@@ -889,5 +893,72 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+}
+@layer components {
+  /* A bot without a model asks for one, in place of the empty chat. */
+  .bot-setup {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: min(100%, 520px);
+    margin: 0 auto;
+    padding: 32px 20px;
+    overflow-y: auto;
+    text-align: center;
+  }
+  .bot-setup-avatar .bot-avatar {
+    width: 64px;
+    height: 64px;
+  }
+  .bot-setup h2 {
+    margin: 8px 0 0;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+  }
+  .bot-setup > p {
+    margin: 0 0 10px;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+  .bot-setup-options {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+  }
+  .bot-setup-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--card);
+    color: var(--muted-foreground);
+    text-align: left;
+    transition: border-color 150ms;
+  }
+  .bot-setup-option:hover {
+    border-color: var(--foreground);
+  }
+  .bot-setup-option span {
+    display: grid;
+  }
+  .bot-setup-option strong {
+    color: var(--foreground);
+    font-size: 13.5px;
+    font-weight: 550;
+  }
+  .bot-setup-option small {
+    font-size: 12px;
+  }
+  .bot-setup-form {
+    width: 100%;
+    text-align: left;
   }
 }

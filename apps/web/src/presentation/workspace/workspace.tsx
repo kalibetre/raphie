@@ -28,6 +28,10 @@ import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics"
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
 import { useSkills } from "../../domains/settings/infrastructure/use-skills";
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
+import {
+  BotSetup,
+  useNeedsSetup,
+} from "../../domains/settings/presentation/bot-setup";
 import { BotSidebar } from "../../domains/settings/presentation/bot-sidebar";
 import { BotTonesProvider } from "../../domains/settings/presentation/bot-tones";
 import type { Section } from "../../domains/settings/presentation/settings";
@@ -148,6 +152,8 @@ export function Workspace({
     void queries.invalidateQueries({ queryKey: ["handoffs"] });
   }, [handoffSignal, queries]);
   const [enabled, setEnabled] = useEnabledPlugins();
+  // A bot without a model asks for one instead of offering an empty chat.
+  const needsSetup = useNeedsSetup();
   const mobile = useIsMobile();
   // A phone opens on the bot's conversation list; this is a new conversation
   // started from it, before its first message gives it an address.
@@ -342,6 +348,7 @@ export function Workspace({
       error={!!inbox.bots.error}
       onRetry={() => void inbox.bots.refetch()}
       conversations={conversationList}
+      needsSetup={needsSetup}
       onNew={() => select()}
       onOpen={(botId, id) =>
         void navigate({
@@ -535,101 +542,113 @@ export function Workspace({
                 />
               ) : (
                 <>
-                  <div className="chat-stage">
-                    {nextBefore && (
-                      <button
-                        disabled={loadingOlder}
-                        onClick={() => void loadOlder()}
-                      >
-                        {loadingOlder ? "Loading…" : "Load earlier messages"}
-                      </button>
-                    )}
-                    {conversation && data ? (
-                      <Chat
-                        key={conversation.id}
-                        state={data}
-                        conversationId={conversation.id}
-                        onRead={markRead}
+                  {needsSetup && !conversation ? (
+                    <BotSetup
+                      botId={workspace.botId}
+                      name={botProfile?.name ?? "Raphie"}
+                      onProviders={() => openSettings("providers")}
+                    />
+                  ) : (
+                    <div className="chat-stage">
+                      {nextBefore && (
+                        <button
+                          disabled={loadingOlder}
+                          onClick={() => void loadOlder()}
+                        >
+                          {loadingOlder ? "Loading…" : "Load earlier messages"}
+                        </button>
+                      )}
+                      {conversation && data ? (
+                        <Chat
+                          key={conversation.id}
+                          state={data}
+                          conversationId={conversation.id}
+                          onRead={markRead}
+                          handoffs={handoffs}
+                          bots={notificationBots}
+                          skills={skillNames}
+                          onCancelHandoff={(id) =>
+                            handoffQuery.cancel.mutateAsync(id)
+                          }
+                        />
+                      ) : (
+                        <Welcome
+                          avatar={<BotAvatar id={workspace.botId} />}
+                          disabled={!connected || !data?.model}
+                          onSuggest={(text) =>
+                            setSuggestion({ text, at: Date.now() })
+                          }
+                        />
+                      )}
+                      <Composer
+                        key={`composer-${conversationId ?? "new"}`}
                         handoffs={handoffs}
-                        bots={notificationBots}
-                        skills={skillNames}
-                        onCancelHandoff={(id) =>
-                          handoffQuery.cancel.mutateAsync(id)
+                        mentionables={handoffQuery.data?.targets}
+                        handedOffBy={conversation?.handedOffBy}
+                        conversationId={conversationId}
+                        suggestion={suggestion}
+                        model={conversation?.model ?? data?.model ?? null}
+                        needsModel={!data?.model}
+                        usage={usage?.tokens ? usage : undefined}
+                        contextUsed={contextUsed}
+                        disabled={
+                          !connected ||
+                          !data?.model ||
+                          (!!conversationId && !conversation)
                         }
-                      />
-                    ) : (
-                      <Welcome
-                        avatar={<BotAvatar id={workspace.botId} />}
-                        disabled={!connected || !data?.model}
-                        onSuggest={(text) =>
-                          setSuggestion({ text, at: Date.now() })
-                        }
-                      />
-                    )}
-                    <Composer
-                      key={`composer-${conversationId ?? "new"}`}
-                      handoffs={handoffs}
-                      mentionables={handoffQuery.data?.targets}
-                      handedOffBy={conversation?.handedOffBy}
-                      conversationId={conversationId}
-                      suggestion={suggestion}
-                      model={conversation?.model ?? data?.model ?? null}
-                      needsModel={!data?.model}
-                      usage={usage?.tokens ? usage : undefined}
-                      contextUsed={contextUsed}
-                      disabled={
-                        !connected ||
-                        !data?.model ||
-                        (!!conversationId && !conversation)
-                      }
-                      busy={busy}
-                      enabledPlugins={enabled}
-                      onStop={async () => {
-                        if (!conversationId) return;
-                        await api(`/api/sessions/${conversationId}/control`, {
-                          action: "stop",
-                        });
-                        await refetch();
-                      }}
-                      onSend={send}
-                      onNewConversation={() => select()}
-                      onManageSkills={() =>
-                        void navigate({
-                          to: "/",
-                          search: { bot, view: "settings", section: "skills" },
-                        })
-                      }
-                      onChooseModel={async (model) => {
-                        if (!conversationId) return;
-                        await api(
-                          `/api/sessions/${conversationId}/model`,
-                          model,
-                        );
-                        await refetch();
-                      }}
-                      onModelSettings={() => {
-                        if (conversation)
-                          void navigate({
-                            to: "/sessions/$sessionId",
-                            params: { sessionId: conversation.sessionId },
-                            search: {
-                              bot,
-                              view: "settings",
-                              section: "models",
-                            },
+                        busy={busy}
+                        enabledPlugins={enabled}
+                        onStop={async () => {
+                          if (!conversationId) return;
+                          await api(`/api/sessions/${conversationId}/control`, {
+                            action: "stop",
                           });
-                        else
+                          await refetch();
+                        }}
+                        onSend={send}
+                        onNewConversation={() => select()}
+                        onManageSkills={() =>
                           void navigate({
                             to: "/",
                             search: {
                               bot,
                               view: "settings",
-                              section: "models",
+                              section: "skills",
                             },
-                          });
-                      }}
-                    />
-                  </div>
+                          })
+                        }
+                        onChooseModel={async (model) => {
+                          if (!conversationId) return;
+                          await api(
+                            `/api/sessions/${conversationId}/model`,
+                            model,
+                          );
+                          await refetch();
+                        }}
+                        onModelSettings={() => {
+                          if (conversation)
+                            void navigate({
+                              to: "/sessions/$sessionId",
+                              params: { sessionId: conversation.sessionId },
+                              search: {
+                                bot,
+                                view: "settings",
+                                section: "models",
+                              },
+                            });
+                          else
+                            void navigate({
+                              to: "/",
+                              search: {
+                                bot,
+                                view: "settings",
+                                section: "models",
+                              },
+                            });
+                        }}
+                      />
+                    </div>
+                  )}
                 </>
               )}
             </>

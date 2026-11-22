@@ -272,6 +272,34 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
 }
 
 #[test]
+fn a_bot_without_a_model_asks_for_one_instead_of_a_chat() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::bot_setup, dark);
+        let text = screen_text(&rt);
+        assert!(text.contains("First, I need a way to think."), "{text}");
+        assert!(rt.find("rd-setup").is_some());
+        assert_eq!(needs_you(&rt, "b-research").as_deref(), Some("Needs setup"));
+        // No empty chat, and no composer or model picker to type into.
+        assert!(rt.find("rd-empty").is_none());
+        assert!(rt.find("rd-composer").is_none());
+        // Choosing a provider opens its form on the bot's Providers page.
+        click(&mut rt, "rd-setup-openrouter");
+        assert_eq!(
+            rt.state.screen,
+            Screen::Settings(Page::Bot {
+                bot_id: "b-research".into(),
+                section: BotSection::Providers,
+            })
+        );
+        assert_eq!(rt.state.providers.provider, "openrouter");
+        assert!(rt.state.providers.open.is_some());
+    }
+    // A bot that has models keeps its chat.
+    let rt = render(scenes::new_conversation, false);
+    assert!(rt.find("rd-setup").is_none() && rt.find("rd-composer").is_some());
+}
+
+#[test]
 fn the_bots_take_at_most_two_fifths_of_the_window_and_scroll() {
     let mut rt = render_sized(scenes::conversations, false, (960.0, 560.0));
     rt.update(|ui, _| {

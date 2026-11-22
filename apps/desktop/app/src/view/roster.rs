@@ -23,6 +23,7 @@ use crate::widgets::{build_badge, build_badge_width, icon_button, one_line, pres
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Presence {
     NeedsYou,
+    NeedsSetup,
     Working,
     Replied(usize),
     Available,
@@ -32,6 +33,7 @@ impl Presence {
     pub fn label(self) -> String {
         match self {
             Presence::NeedsYou => "Needs you".into(),
+            Presence::NeedsSetup => "Needs setup".into(),
             Presence::Working => "Working".into(),
             Presence::Replied(1) => "1 new reply".into(),
             Presence::Replied(n) => format!("{n} new replies"),
@@ -41,7 +43,7 @@ impl Presence {
 
     fn color(self, t: &Theme) -> Color {
         match self {
-            Presence::NeedsYou => t.attention,
+            Presence::NeedsYou | Presence::NeedsSetup => t.attention,
             Presence::Replied(_) => t.accent,
             _ => t.muted_foreground,
         }
@@ -50,6 +52,7 @@ impl Presence {
     fn dot(self, t: &Theme) -> Color {
         match self {
             Presence::NeedsYou => t.attention,
+            Presence::NeedsSetup => t.muted_foreground,
             // The web's `--info` fallback, a calm blue.
             Presence::Working => hex("#4a6fa5").unwrap_or(t.accent),
             _ => t.accent,
@@ -64,8 +67,16 @@ pub fn needs_you(session: &SessionSummary) -> bool {
 
 pub fn presence(s: &Ui, bot_id: &str) -> Presence {
     let sessions = s.sessions_of(bot_id);
+    // Known only once the bot's settings are here.
+    let unready = s
+        .model
+        .settings
+        .get(bot_id)
+        .is_some_and(|settings| settings.models.is_empty());
     if sessions.iter().any(|session| needs_you(session)) {
         Presence::NeedsYou
+    } else if unready {
+        Presence::NeedsSetup
     } else if sessions.iter().any(|session| session.working) {
         Presence::Working
     } else {
