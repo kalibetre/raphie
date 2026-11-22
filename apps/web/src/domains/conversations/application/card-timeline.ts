@@ -1,5 +1,7 @@
 import type { CardEvent, CardTimelineItem } from "@raphie/contracts";
 
+import { localDate } from "./card-facts";
+
 /** One line of a timeline card as it reads at `now`. */
 export type TimelineRow =
   | { kind: "day"; date: string }
@@ -7,13 +9,6 @@ export type TimelineRow =
   | { kind: "now"; at: number }
   | { kind: "gap"; start: number; end: number; current: boolean; past: boolean }
   | { kind: "event"; event: CardEvent; past: boolean };
-
-/** The calendar date of `at` on this device, as YYYY-MM-DD. */
-function localDate(at: number) {
-  const date = new Date(at);
-  const two = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
-}
 
 /**
  * A timeline's items with the present placed among them: what is over is

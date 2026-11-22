@@ -48,6 +48,14 @@ function today(hour: number, minute = 0) {
   return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(hour)}:${two(minute)}:00${offset < 0 ? "-" : "+"}${two(Math.trunc(offset / 60))}:${two(offset % 60)}`;
 }
 
+/** The date `days` from today on this machine, as YYYY-MM-DD. */
+function dayFromNow(days: number) {
+  const at = new Date();
+  at.setDate(at.getDate() + days);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
+}
+
 /** The card a message asks for, and the short reply that goes with it. */
 function fixtureCard(
   input: string,
@@ -214,6 +222,104 @@ function fixtureCard(
         ],
       },
     };
+  if (/fizzy board/i.test(input))
+    return {
+      reply: "Six cards on ALX - FIT. One in review is overdue.",
+      arguments: {
+        title: "ALX - FIT",
+        url: "https://app.fizzy.example/boards/3",
+        source: "Fizzy",
+        columns: [
+          {
+            label: "Priority",
+            color: "orange",
+            rows: [
+              {
+                key: "#107",
+                title: "Update the document with the AI update notes",
+                url: "https://app.fizzy.example/cards/107",
+                people: ["Kalkidan Betre"],
+                tags: ["docs"],
+                progress: { done: 2, total: 5 },
+                trailing: "Nov 12",
+              },
+              {
+                key: "#108",
+                title: "AI 200 interactive elements (review request)",
+                url: "https://app.fizzy.example/cards/108",
+                people: ["Mara Tesfaye", "Kalkidan Betre"],
+                due: dayFromNow(1),
+                trailing: "Nov 12",
+              },
+            ],
+          },
+          {
+            label: "In Review",
+            color: "blue",
+            count: 9,
+            rows: [
+              {
+                key: "#94",
+                title: "SE 202 Redesign",
+                url: "https://app.fizzy.example/cards/94",
+                people: ["Kalkidan Betre"],
+                due: dayFromNow(-3),
+                trailing: "Nov 3",
+              },
+              {
+                key: "#93",
+                title: "Review and Fix of Understanding AI",
+                due: dayFromNow(12),
+                trailing: "Oct 25",
+              },
+            ],
+          },
+          { label: "Done", color: "green", rows: [] },
+          {
+            rows: [
+              {
+                key: "#96",
+                title: "SE 202 Course Overview needs to be re-built",
+                trailing: "Oct 30",
+              },
+              { key: "#95", title: "Salary Acc Change", trailing: "Oct 27" },
+            ],
+          },
+        ],
+      },
+    };
+  if (/card 107/i.test(input))
+    return {
+      reply: "It's in Priority with two of five steps done.",
+      arguments: {
+        title: "Update the document with the AI update notes",
+        url: "https://app.fizzy.example/cards/107",
+        source: "Fizzy",
+        more: { label: "4 comments · last from Mara, Nov 12" },
+        item: {
+          key: "#107",
+          fields: [
+            {
+              label: "Column",
+              badge: { label: "Priority", tone: "attention" },
+            },
+            { label: "Assigned", people: ["Kalkidan Betre"] },
+            { label: "Due", due: dayFromNow(1) },
+            { label: "Tags", tags: ["docs", "ai"] },
+            { label: "Board", value: "ALX - FIT" },
+          ],
+          body: "Fold the notes from the AI 200 update into the course document, then ask for a second read.",
+          steps: [
+            { label: "Collect the update notes", done: true },
+            { label: "Draft section 3", done: true },
+            { label: "Update the glossary" },
+            { label: "Ask for a second read" },
+            { label: "Publish" },
+            { label: "Tell the cohort" },
+          ],
+        },
+      },
+    };
   return null;
 }
 
@@ -258,7 +364,8 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
             },
           }
         : null;
-  // "my schedule", "AF board" and "my review" show the kinds of card.
+  // "my schedule", "AF board", "my review", "fizzy board" and "card 107"
+  // show the kinds of card.
   const card = fixtureCard(input);
   // "dentist", "clinic" and "inbox" show the three kinds of question.
   const ask: JsonObject | null = /dentist/i.test(input)
