@@ -49,6 +49,7 @@ pub const SCENES: &[Scene] = &[
     ("conversation-opened", conversation_opened),
     ("scheduled-failures", scheduled_failures),
     ("bot-setup", bot_setup),
+    ("teammate-setup", teammate_setup),
     ("conversations", conversations),
     ("conversations-archived", conversations_archived),
     ("unread", unread),
@@ -1750,6 +1751,20 @@ pub fn bot_setup(ui: &mut Ui) {
     ui.model.apply(Event::BotSettings {
         bot_id: "b-research".into(),
         settings: Box::new(settings),
+    });
+}
+
+/// A teammate just added: no model, and its conversation list has come
+/// back empty, so it joins through the teammate flow's last step.
+pub fn teammate_setup(ui: &mut Ui) {
+    bot_setup(ui);
+    ui.model.apply(Event::Sessions {
+        bot_id: "b-research".into(),
+        page: Paged {
+            items: vec![],
+            next: None,
+        },
+        more: false,
     });
 }
 

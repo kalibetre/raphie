@@ -14,11 +14,13 @@ use crate::avatar::{bot_avatar, tone_of};
 use crate::icons;
 use crate::state::{Onboarding, Ui};
 use crate::theme::{Theme, font};
-use crate::widgets::{Kind, Size, build_badge, button, centered, pressable};
+use crate::widgets::{Kind, Size, build_badge, button, centered, icon_button, pressable};
 
+/// A teammate's steps, the first one's or any later one's; a fresh install
+/// says hello first.
 const STEPS: [(Onboarding, &str); 4] = [
     (Onboarding::Welcome, "Welcome"),
-    (Onboarding::Teammate, "Your first teammate"),
+    (Onboarding::Teammate, "Meet your new teammate"),
     (Onboarding::Work, "How they work"),
     (Onboarding::Provider, "A way to think"),
 ];
@@ -27,18 +29,32 @@ const STEPS: [(Onboarding, &str); 4] = [
 const SAGE: &str = "#b5c99b";
 
 pub fn onboarding(s: &Ui, look: &Look) -> El {
-    let step = match s.onboarding {
+    let t = &look.theme;
+    let current = s.onboarding_step();
+    let step = match current {
         Onboarding::Welcome => welcome(s, look),
         Onboarding::Teammate => teammate(s, look),
         Onboarding::Work => work(s, look),
         Onboarding::Provider => provider(s, look),
     };
-    let at = STEPS
+    // Only a fresh install has the welcome; the rest are a new teammate's
+    // steps, the same ones "Add a teammate" shows.
+    let steps = if s.first_run() {
+        &STEPS[..]
+    } else {
+        &STEPS[1..]
+    };
+    let at = steps
         .iter()
-        .position(|(step, _)| *step == s.onboarding)
+        .position(|(step, _)| *step == current)
         .unwrap_or(0);
-    let labels: Vec<&str> = STEPS.iter().map(|(_, label)| *label).collect();
-    flow(s, look, &labels, at, None, step)
+    let labels: Vec<&str> = steps.iter().map(|(_, label)| *label).collect();
+    let close = pressable(
+        icon_button(t, &icons::X, 16.0, "Close").key("rd-onboarding-close"),
+        true,
+        |s: &mut Ui| s.skip_onboarding(),
+    );
+    flow(s, look, &labels, at, Some(close), step)
 }
 
 /// A full-window flow: a short bar per step above the step, filled up to
@@ -127,39 +143,6 @@ pub(super) fn lede(t: &Theme, words: &str) -> El {
     centered(words, font(14.0, 400.0).lh(22.4), t.muted_foreground)
 }
 
-/// Back on the left and the next step on the right, or a skip.
-fn actions(t: &Theme, next: Option<El>, skip: bool) -> El {
-    let mut bar = row()
-        .w_full()
-        .max_w(440.0)
-        .mt(8.0)
-        .justify_between()
-        .center_y()
-        .child(pressable(
-            button(
-                t,
-                Kind::Ghost,
-                Size::Regular,
-                Some(&icons::ARROW_LEFT),
-                "Back",
-            )
-            .key("rd-onboarding-back"),
-            true,
-            |s: &mut Ui| s.onboarding_back(),
-        ));
-    if let Some(next) = next {
-        bar = bar.child(next);
-    }
-    if skip {
-        bar = bar.child(pressable(
-            button(t, Kind::Ghost, Size::Regular, None, "Skip for now").key("rd-onboarding-skip"),
-            true,
-            |s: &mut Ui| s.onboarding_skipped = true,
-        ));
-    }
-    bar
-}
-
 /// The app greets the owner as raphie, before any bot appears.
 fn welcome(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
@@ -218,8 +201,8 @@ fn teammate(s: &Ui, look: &Look) -> El {
     );
     let copy = MeetCopy {
         bot_id: s.model.bot_id.as_deref().unwrap_or("default"),
-        heading: "Meet your first teammate",
-        lede: "They’ll handle your day-to-day. Give them any name you like.",
+        heading: "Meet your new teammate",
+        lede: "Give them a name, a colour and something to look after.",
         keys: "rd-onboarding",
     };
     meet_step(s, look, copy, back, |s: &mut Ui| s.onboarding_next())
@@ -264,5 +247,17 @@ fn provider(s: &Ui, look: &Look) -> El {
         .w_full()
         .items_center()
         .child(setup::panel(s, look))
-        .child(actions(t, None, true))
+        .child(
+            row()
+                .w_full()
+                .max_w(440.0)
+                .mt(8.0)
+                .justify_end()
+                .child(pressable(
+                    button(t, Kind::Ghost, Size::Regular, None, "Skip for now")
+                        .key("rd-onboarding-skip"),
+                    true,
+                    |s: &mut Ui| s.skip_onboarding(),
+                )),
+        )
 }

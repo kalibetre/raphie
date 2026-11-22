@@ -378,7 +378,8 @@ pub struct Ui {
     pub onboarding: Onboarding,
     /// Adding a teammate: past naming them, on choosing how they work.
     pub adding_work: bool,
-    pub onboarding_skipped: bool,
+    /// Bots whose setup the owner skipped, by id, until the app restarts.
+    pub onboarding_skipped: HashSet<String>,
     /// The workspace's size in points, as last laid out; 0 before the
     /// first layout. The width bounds the roster's, and the height the
     /// share the bots take of it.
@@ -604,7 +605,7 @@ impl Ui {
             settings_nav_home: false,
             onboarding: Onboarding::Welcome,
             adding_work: false,
-            onboarding_skipped: false,
+            onboarding_skipped: HashSet::new(),
             workspace_width: 0.0,
             workspace_height: 0.0,
             roster_width: ROSTER_WIDTH,
@@ -2248,17 +2249,21 @@ impl Ui {
         }
     }
 
-    /// Onboarding shows on a fresh install only: the one bot has no model to
-    /// reply with, nothing has been said yet, no settings page is open, and
-    /// the owner has not skipped it.
+    /// The teammate flow shows for a bot that cannot start yet: it has no
+    /// model to reply with, nothing has been said to it, no settings page is
+    /// open, and the owner has not skipped it. On a fresh install that is
+    /// the one bot; later, a teammate just added.
     pub fn shows_onboarding(&self) -> bool {
         self.model.auth == AuthState::SignedIn
             && self.screen == Screen::Workspace
-            && self.model.bots.len() == 1
             && self.model.sessions_loaded
             && self.model.session_list().next().is_none()
             && self.needs_setup()
-            && !self.onboarding_skipped
+            && self
+                .model
+                .bot_id
+                .as_ref()
+                .is_some_and(|id| !self.onboarding_skipped.contains(id))
     }
 
     /// The next onboarding step. Leaving "how they work" saves the first
@@ -2286,6 +2291,28 @@ impl Ui {
             }
             Onboarding::Provider => Onboarding::Provider,
         };
+    }
+
+    /// Whether this is a fresh install's one bot, met from the welcome on.
+    pub fn first_run(&self) -> bool {
+        self.model.bots.len() == 1
+    }
+
+    /// The step on screen: a later teammate is met while it is added, so
+    /// it joins the flow on its last step.
+    pub fn onboarding_step(&self) -> Onboarding {
+        if self.first_run() {
+            self.onboarding
+        } else {
+            Onboarding::Provider
+        }
+    }
+
+    /// Leaves the flow for this bot: the workspace, with its own setup.
+    pub fn skip_onboarding(&mut self) {
+        if let Some(id) = self.model.bot_id.clone() {
+            self.onboarding_skipped.insert(id);
+        }
     }
 
     pub fn onboarding_back(&mut self) {

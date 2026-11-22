@@ -289,7 +289,7 @@ fn a_fresh_install_is_onboarded_then_asks_for_a_model() {
         // The teammate: renamed, described and recoloured.
         click(&mut rt, "rd-onboarding-next");
         assert_eq!(rt.state.onboarding, state::Onboarding::Teammate);
-        assert!(screen_text(&rt).contains("Meet your first teammate"));
+        assert!(screen_text(&rt).contains("Meet your new teammate"));
         rt.update(|ui, _| {
             ui.profile.name = TextEdit::new("Juniper");
             ui.profile.description = TextEdit::new("Keeps my week on track");
@@ -330,20 +330,36 @@ fn a_fresh_install_is_onboarded_then_asks_for_a_model() {
 #[test]
 fn onboarding_can_be_skipped_and_never_shows_once_work_exists() {
     let mut rt = render(scenes::onboarding_provider, false);
-    click(&mut rt, "rd-onboarding-back");
-    assert_eq!(rt.state.onboarding, state::Onboarding::Work);
-    rt.update(|ui, _| ui.onboarding = state::Onboarding::Provider);
-    settle(&mut rt);
+    // The last step has no way back, only on: skip it, or close the flow.
+    assert!(rt.find("rd-onboarding-back").is_none());
     click(&mut rt, "rd-onboarding-skip");
     assert!(!rt.state.shows_onboarding());
     // Skipped: the bot's own setup, in the workspace.
     assert!(rt.find("rd-roster").is_some() && rt.find("rd-setup").is_some());
 
-    // A second bot, or a bot that can already reply, is not a fresh install.
-    let rt = render(scenes::bot_setup, false);
-    assert!(!rt.state.shows_onboarding());
+    // A bot that can already reply never sees it.
     let rt = render(scenes::new_conversation, false);
     assert!(!rt.state.shows_onboarding());
+}
+
+#[test]
+fn a_later_teammate_without_a_model_joins_through_the_same_flow() {
+    // Research has no model and nothing said yet; Raphie is set up.
+    let mut rt = render(scenes::teammate_setup, false);
+    assert!(rt.state.shows_onboarding());
+    assert!(!rt.state.first_run());
+    // No welcome: the new teammate's three steps, on the last.
+    assert_eq!(rt.state.onboarding_step(), state::Onboarding::Provider);
+    assert_eq!(
+        element(&rt, "rd-onboarding-progress").label.as_deref(),
+        Some("Step 3 of 3: A way to think")
+    );
+    assert!(screen_text(&rt).contains("First, I need a way to think."));
+    click(&mut rt, "rd-onboarding-close");
+    assert!(
+        rt.find("rd-roster").is_some(),
+        "closing skips to the workspace"
+    );
 }
 
 #[test]
