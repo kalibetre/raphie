@@ -376,6 +376,8 @@ pub struct Ui {
     pub settings_nav_home: bool,
     /// Where a fresh install's onboarding is, and whether it was skipped.
     pub onboarding: Onboarding,
+    /// Adding a teammate: past naming them, on choosing how they work.
+    pub adding_work: bool,
     pub onboarding_skipped: bool,
     /// The workspace's size in points, as last laid out; 0 before the
     /// first layout. The width bounds the roster's, and the height the
@@ -598,6 +600,7 @@ impl Ui {
             narrow_home: true,
             settings_nav_home: false,
             onboarding: Onboarding::Welcome,
+            adding_work: false,
             onboarding_skipped: false,
             workspace_width: 0.0,
             workspace_height: 0.0,
@@ -2088,6 +2091,22 @@ impl Ui {
         if page == Page::NewBot {
             self.ensure_presets();
             self.show_new_bot();
+            self.adding_work = false;
+            // A colour no teammate wears yet, as the web picks.
+            if self.profile.color.is_none() {
+                let tones = crate::avatar::Tones::assign(&self.model.bots);
+                let worn: Vec<String> = self
+                    .model
+                    .bots
+                    .iter()
+                    .map(|bot| tones.hex_of(&bot.id).to_lowercase())
+                    .collect();
+                self.profile.color = crate::avatar::PALETTE_NAMES
+                    .iter()
+                    .map(|(_, hex)| hex.to_string())
+                    .find(|hex| !worn.contains(hex))
+                    .or_else(|| Some(crate::avatar::PALETTE_NAMES[1].1.to_owned()));
+            }
         }
         if page == Page::Owner {
             // Unsaved edits stay; otherwise show what was last loaded
@@ -3687,10 +3706,12 @@ impl Ui {
 
     /// Leaves "Create a bot" without creating one, for the selected bot's
     /// Profile. The unfinished form is dropped: Cancel means discard.
+    /// Leaves "Add a teammate" without adding one, and drops the draft.
     pub fn cancel_new_bot(&mut self) {
         self.profile = ProfileDraft::empty();
         self.model.profile_error = None;
-        self.open_settings(None);
+        self.adding_work = false;
+        self.close_settings();
     }
 
     /// Opens "Delete bot" asking for the bot's name.
@@ -4028,13 +4049,12 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     }
                 }
                 Effect::BotCreated(bot_id) => {
-                    // The form did its job. Next the new bot needs a model
-                    // connection, so open its Providers page, as the web does.
+                    // The new teammate opens, and asks for a way to think on
+                    // its own screen, as on the web.
                     ui.profile = ProfileDraft::empty();
-                    ui.open_settings(Some(Page::Bot {
-                        bot_id,
-                        section: BotSection::Providers,
-                    }));
+                    ui.adding_work = false;
+                    ui.close_settings();
+                    ui.choose_bot(&bot_id);
                 }
                 Effect::BotDeleted(bot_id) => {
                     ui.deleting_bot = false;

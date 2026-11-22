@@ -26,7 +26,6 @@ const STEPS: [(Onboarding, &str); 3] = [
 const SAGE: &str = "#b5c99b";
 
 pub fn onboarding(s: &Ui, look: &Look) -> El {
-    let t = &look.theme;
     let step = match s.onboarding {
         Onboarding::Welcome => welcome(s, look),
         Onboarding::Teammate => teammate(s, look),
@@ -36,18 +35,27 @@ pub fn onboarding(s: &Ui, look: &Look) -> El {
         .iter()
         .position(|(step, _)| *step == s.onboarding)
         .unwrap_or(0);
-    // A short bar per step, filled up to this one, above the step.
+    let labels: Vec<&str> = STEPS.iter().map(|(_, label)| *label).collect();
+    flow(s, look, &labels, at, None, step)
+}
+
+/// A full-window flow: a short bar per step above the step, filled up to
+/// this one, and a close button when the flow can be left.
+pub(super) fn flow(
+    s: &Ui,
+    look: &Look,
+    steps: &[&str],
+    at: usize,
+    close: Option<El>,
+    step: El,
+) -> El {
+    let t = &look.theme;
     let mut progress = row()
         .key("rd-onboarding-progress")
         .role("progressbar")
-        .label(format!(
-            "Step {} of {}: {}",
-            at + 1,
-            STEPS.len(),
-            STEPS[at].1
-        ))
+        .label(format!("Step {} of {}: {}", at + 1, steps.len(), steps[at]))
         .gap(6.0);
-    for (i, (_, label)) in STEPS.iter().enumerate() {
+    for (i, label) in steps.iter().enumerate() {
         progress = progress.child(
             el().size(28.0, 4.0)
                 .radius(2.0)
@@ -65,6 +73,7 @@ pub fn onboarding(s: &Ui, look: &Look) -> El {
     };
     let badge = build_badge(t, s.flavor, s.release_channel, false)
         .map(|badge| row().absolute(inset, 12.0).child(badge));
+    let close = close.map(|button| row().pin(None, Some(8.0), Some(20.0), None).child(button));
     col()
         .key("rd-onboarding")
         .w_full()
@@ -80,6 +89,7 @@ pub fn onboarding(s: &Ui, look: &Look) -> El {
             s.workspace_height = rect[3];
         })
         .children(badge)
+        .children(close)
         .child(progress)
         .child(
             col()
@@ -112,11 +122,11 @@ fn teammate_avatar(s: &Ui, size: f32) -> El {
     bot_avatar(id, tone, size)
 }
 
-fn card() -> El {
+pub(super) fn card() -> El {
     col().w_full().max_w(440.0).gap(12.0).items_center()
 }
 
-fn heading(t: &Theme, words: &str) -> El {
+pub(super) fn heading(t: &Theme, words: &str) -> El {
     text(words.to_owned())
         .role("heading")
         .font(font(26.0, 600.0).tracking(-0.4))
@@ -124,7 +134,7 @@ fn heading(t: &Theme, words: &str) -> El {
         .mt(4.0)
 }
 
-fn lede(t: &Theme, words: &str) -> El {
+pub(super) fn lede(t: &Theme, words: &str) -> El {
     centered(words, font(14.0, 400.0).lh(22.4), t.muted_foreground)
 }
 

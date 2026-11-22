@@ -20,13 +20,8 @@ const PAGE_WIDTH: f32 = 808.0;
 
 /// Whose settings a page changes: one bot's, or the whole app's.
 pub enum Scope<'a> {
-    Bot {
-        id: &'a str,
-        name: &'a str,
-    },
+    Bot { id: &'a str, name: &'a str },
     App,
-    /// A bot that does not exist yet ("Create a bot").
-    NewBot,
 }
 
 /// A page: its header, then its groups, in a centred column.
@@ -102,14 +97,6 @@ fn hero(title: &str, lede: &str, scope: Scope, back: Option<El>, look: &Look) ->
             },
             "default",
             "App-wide".to_owned(),
-        ),
-        Scope::NewBot => (
-            Tone {
-                body: t.accent,
-                eye: t.accent,
-            },
-            "default",
-            "New bot".to_owned(),
         ),
     };
     let wash = tone.body;

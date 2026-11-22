@@ -18,7 +18,6 @@ use rune_kit::Dialog;
 use super::parts::{SaveBar, Scope, page, save_bar as save_bar_of};
 use crate::avatar::{PALETTE_NAMES, Tones, bot_avatar, tone_of};
 use crate::icons;
-use crate::profile::NEW_BOT;
 use crate::sections::{BotSection, Page};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
@@ -82,27 +81,6 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El 
             id: &bot.id,
             name: &bot.name,
         },
-        groups,
-        look,
-    )
-}
-
-/// "Create a bot": the Profile form for a bot that does not exist yet.
-pub fn new_bot(s: &Ui, look: &Look) -> El {
-    let t = &look.theme;
-    let (identity, personality) = fields(s, NEW_BOT, look);
-    let note = text("New bots start with their own memory and an empty workspace. Add a provider connection after creation.")
-        .font(font(12.0, 400.0).lh(19.2))
-        .color(t.muted_foreground)
-        .wrap();
-    let mut groups = vec![identity, personality, replies(s, t)];
-    groups.extend(self_updates(s, t));
-    groups.push(note);
-    page(
-        "rd-page-new-bot",
-        "Create a bot",
-        "A separate assistant with its own personality, memory and model connections.",
-        Scope::NewBot,
         groups,
         look,
     )

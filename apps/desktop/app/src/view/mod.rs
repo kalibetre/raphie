@@ -19,6 +19,7 @@
 //! Element keys made here start with `rd-`, because Rune keys the parts of
 //! its own components (`label`, `value`, ...) in the same namespace.
 
+mod add_teammate;
 mod asks;
 mod attachments;
 mod compaction;
@@ -50,6 +51,7 @@ use rune_kit::Kit;
 
 use crate::avatar::Tones;
 use crate::icons;
+use crate::sections::Page;
 use crate::state::{Screen, Ui};
 use crate::theme::{Theme, font};
 use crate::widgets::{icon_button, pressable};
@@ -94,6 +96,8 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
             // A fresh install starts with onboarding, in place of the workspace.
             Screen::Workspace if s.shows_onboarding() => onboarding::onboarding(s, &look),
             Screen::Workspace => workspace(s, &look, &mut overlays),
+            // Adding a teammate takes the window, as onboarding does.
+            Screen::Settings(Page::NewBot) => add_teammate::add_teammate(s, &look),
             Screen::Settings(page) => settings::settings(s, page, &look, &mut overlays),
         },
         _ => sign_in::sign_in(s, &look),

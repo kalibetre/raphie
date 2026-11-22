@@ -166,7 +166,7 @@ impl Page {
             Page::Bot { section, .. } => section.label(),
             Page::Owner => "You",
             Page::Account => "Account",
-            Page::NewBot => "Create a bot",
+            Page::NewBot => "Add a teammate",
             Page::Appearance => "Appearance",
             Page::About => "About",
             Page::Diagnostics => "Diagnostics",

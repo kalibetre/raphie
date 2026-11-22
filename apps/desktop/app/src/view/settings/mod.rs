@@ -44,7 +44,8 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
         Page::Account => account::account(s, look),
         Page::Appearance => appearance::appearance(s, look),
         Page::About => about::about(s, look),
-        Page::NewBot => profile::new_bot(s, look),
+        // Adding a teammate is a full-window flow, drawn instead of Settings.
+        Page::NewBot => col(),
         Page::Diagnostics => diagnostics::diagnostics(s, look),
         Page::Bot {
             bot_id,
@@ -104,8 +105,7 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
         Page::Bot {
             section: BotSection::Profile,
             ..
-        }
-        | Page::NewBot => profile::save_bar(s, look),
+        } => profile::save_bar(s, look),
         Page::Owner => owner::owner_save_bar(s, look),
         Page::Bot {
             section: BotSection::Skills,

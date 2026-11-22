@@ -105,6 +105,7 @@ pub const SCENES: &[Scene] = &[
     ("settings-history", settings_history),
     ("settings-history-restore", settings_history_restore),
     ("settings-new-bot", settings_new_bot),
+    ("add-teammate-work", add_teammate_work),
     ("settings-delete-bot", settings_delete_bot),
     ("settings-models", settings_models),
     ("settings-models-filter", settings_models_filter),
@@ -622,12 +623,24 @@ pub fn settings_history_restore(ui: &mut Ui) {
     ui.open_revisions = [4, 3].into_iter().collect();
 }
 
-/// Settings → Create a bot, with a name typed.
+/// "Add a teammate", with a name and what they handle typed.
 pub fn settings_new_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::NewBot));
     ui.profile.name = TextEdit::new("Travel");
     ui.profile.description = TextEdit::new("Plans trips and keeps the bookings straight.");
+}
+
+/// "Add a teammate" choosing how they work, from the built-in personalities.
+pub fn add_teammate_work(ui: &mut Ui) {
+    settings_new_bot(ui);
+    ui.model.apply(Event::PersonalityPresets(from_json(json!([
+        { "id": "candid", "name": "Candid", "summary": "Concise, honest and warm. The default.", "personality": "Be candid." },
+        { "id": "analyst", "name": "Analyst", "summary": "Precise and sourced; shows its reasoning.", "personality": "Be precise." },
+        { "id": "coach", "name": "Coach", "summary": "Asks good questions and holds you to your goals.", "personality": "Be a coach." }
+    ]))));
+    ui.profile.personality = TextEdit::new("Be precise.");
+    ui.adding_work = true;
 }
 
 /// A bot's Profile with "Delete bot" asking for its name.
