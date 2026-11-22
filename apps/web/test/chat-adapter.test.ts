@@ -17,6 +17,7 @@ const state: Snapshot = {
   uncertainToolDeliveries: [],
   toolApprovals: [],
   asks: [],
+  cards: [],
   activity: [],
   turns: [
     {

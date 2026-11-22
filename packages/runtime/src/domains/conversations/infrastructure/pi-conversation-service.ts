@@ -38,6 +38,7 @@ import {
   ownerInstructions,
   selfUpdateInstructions,
 } from "../../bots/domain/owner.ts";
+import { Cards } from "../../cards/infrastructure/card-store.ts";
 import {
   channelNames,
   isSharedTelegramDestination,
@@ -195,9 +196,15 @@ export const chatWorkflow = defineTask<
         );
         const destination = turn.replyTo?.conversation;
         if (destination) {
-          const text =
+          // A chat cannot draw a card, so it reads each one as text.
+          const cards = (await tx.doc(Cards)).cards.filter(
+            (c) => c.turnId === turn.id,
+          );
+          const text = [
             answer ??
-            `I could not complete that reply. ${turn.failure?.message ?? "Send a new message to retry."}`;
+              `I could not complete that reply. ${turn.failure?.message ?? "Send a new message to retry."}`,
+            ...cards.map((c) => c.text),
+          ].join("\n\n");
           state.deliveries.push({
             id: `${turn.id}:reply`,
             turnId: turn.id,
