@@ -259,6 +259,16 @@ pub(super) fn work_step(s: &Ui, look: &Look, bot_id: &str, left: El, right: El) 
             "Pick a starting personality. You can put it in your own words later in Settings.",
         ))
         .child(presets);
+    // Until the built-in personalities arrive, say so rather than show
+    // nothing to pick from.
+    if s.model.personality_presets.is_none() {
+        body = body.child(
+            text("Loading personalities…")
+                .key("rd-teammate-presets-loading")
+                .font(font(13.0, 400.0))
+                .color(t.muted_foreground),
+        );
+    }
     if let Some(error) = &s.model.profile_error {
         body = body.child(
             text(error.clone())

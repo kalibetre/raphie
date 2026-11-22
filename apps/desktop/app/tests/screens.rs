@@ -343,6 +343,19 @@ fn onboarding_can_be_skipped_and_never_shows_once_work_exists() {
 }
 
 #[test]
+fn onboarding_asks_for_the_built_in_personalities_before_they_are_needed() {
+    let mut rt = render(scenes::onboarding, false);
+    rt.update(|ui, _| ui.model.personality_presets = None);
+    settle(&mut rt);
+    click(&mut rt, "rd-onboarding-next");
+    assert!(rt.state.sent.contains(&Command::LoadPersonalityPresets));
+    // Still on their way: the step says so instead of showing nothing.
+    click(&mut rt, "rd-onboarding-next");
+    assert_eq!(rt.state.onboarding, state::Onboarding::Work);
+    assert!(rt.find("rd-teammate-presets-loading").is_some());
+}
+
+#[test]
 fn a_later_teammate_without_a_model_joins_through_the_same_flow() {
     // Research has no model and nothing said yet; Raphie is set up.
     let mut rt = render(scenes::teammate_setup, false);

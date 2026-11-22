@@ -2275,12 +2275,15 @@ impl Ui {
                 if let Some(bot_id) = self.model.bot_id.clone() {
                     self.show_profile(&bot_id);
                 }
+                // Asked now, so "how they work" has them when it opens.
+                self.ensure_presets();
                 Onboarding::Teammate
             }
             Onboarding::Teammate => {
                 if self.profile.name.text.trim().is_empty() {
                     return;
                 }
+                self.ensure_presets();
                 Onboarding::Work
             }
             Onboarding::Work => {
