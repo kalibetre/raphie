@@ -48,7 +48,8 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
   const input = user && typeof user.content === "string" ? user.content : "";
   const remember = /remember tea/i.test(input);
   const useNative = nativeWorkspace && /native workspace/i.test(input);
-  // "be blunt" and "my time zone" show a bot updating itself and the owner.
+  // "be blunt", "my time zone" and "release notes" show a bot updating
+  // itself, the owner and its skills.
   const self: { name: string; arguments: JsonObject } | null = /be blunt/i.test(
     input,
   )
@@ -64,7 +65,20 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
           name: "update_owner_profile",
           arguments: { callMe: "Hana", timeZone: "Africa/Addis_Ababa" },
         }
-      : null;
+      : /release notes/i.test(input)
+        ? {
+            // Again with "lead with fixes" to show the bot improving it.
+            name: "save_skill",
+            arguments: {
+              name: "release-notes",
+              description:
+                "Write release notes from the week's merged pull requests, grouped by area.",
+              body: /lead with fixes/i.test(input)
+                ? "1. List the merged pull requests.\n2. Lead with fixes.\n3. Group the rest by area."
+                : "1. List the merged pull requests.\n2. Group them by area.",
+            },
+          }
+        : null;
   // "dentist", "clinic" and "inbox" show the three kinds of question.
   const ask: JsonObject | null = /dentist/i.test(input)
     ? {

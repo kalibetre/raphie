@@ -26,7 +26,7 @@ use crate::contracts::{
 use crate::contracts::{ActivityEvent, BotRevision, PersonalityPreset, TraceDiagnostics};
 use crate::contracts::{JobRun, ScheduledJob};
 use crate::contracts::{ProviderSignIn, SignInStatus};
-use crate::contracts::{SkillDetail, SkillSummary};
+use crate::contracts::{SkillChange, SkillDetail, SkillSummary};
 use crate::inbox::{Inbox, JobUpdates};
 use crate::inspection::TraceView;
 use crate::jobs::RunHistory;
@@ -133,6 +133,18 @@ pub enum Event {
     SkillsFailed {
         bot_id: String,
         message: String,
+    },
+    /// What a reply's `save_skill` step changed, for its note; `None` when
+    /// it saved nothing or the owner has since made the skill theirs.
+    SkillChangeFound {
+        /// The note it is for: the step's id and when it started.
+        note: String,
+        change: Option<SkillChange>,
+    },
+    /// The owner's undo of a bot's skill change ended; `error` when it was
+    /// refused, as when the skill changed since.
+    SkillChangeUndone {
+        error: Option<String>,
     },
     /// One skill with its files, for the editor.
     Skill {
@@ -783,6 +795,12 @@ pub struct Model {
     pub memories: MemoryBrowser,
     /// Each bot's skills, once loaded.
     pub skills: HashMap<String, Vec<SkillSummary>>,
+    /// What each `save_skill` note under a reply found, by note key.
+    pub skill_changes: HashMap<String, Option<SkillChange>>,
+    /// An undo of a bot's skill change is under way.
+    pub undoing_skill_change: bool,
+    /// Why the last undo of a bot's skill change was refused.
+    pub skill_undo_error: Option<String>,
     /// The bot whose skills could not be loaded, and why.
     pub skills_error: Option<(String, String)>,
     /// The skill open in the editor, with the bot it belongs to.
@@ -970,6 +988,9 @@ impl Default for Model {
             memories: MemoryBrowser::default(),
             skills: HashMap::new(),
             skills_error: None,
+            skill_changes: HashMap::new(),
+            undoing_skill_change: false,
+            skill_undo_error: None,
             skill: None,
             skill_error: None,
             changing_skill: false,
@@ -1204,6 +1225,13 @@ impl Model {
             }
             Event::SkillsFailed { bot_id, message } => {
                 self.skills_error = Some((bot_id, message));
+            }
+            Event::SkillChangeFound { note, change } => {
+                self.skill_changes.insert(note, change);
+            }
+            Event::SkillChangeUndone { error } => {
+                self.undoing_skill_change = false;
+                self.skill_undo_error = error;
             }
             Event::Skill { bot_id, detail } => {
                 self.skill_error = None;

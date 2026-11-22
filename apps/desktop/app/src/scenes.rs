@@ -16,7 +16,7 @@ use raphie_core::contracts::{
 use raphie_core::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use raphie_core::contracts::{JobRun, ScheduledJob};
 use raphie_core::contracts::{PersonalityPreset, SelfUpdates};
-use raphie_core::contracts::{SkillDetail, SkillSummary};
+use raphie_core::contracts::{SkillChange, SkillDetail, SkillSummary};
 use raphie_core::engine::Command;
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::JobUpdates;
@@ -142,6 +142,8 @@ pub const SCENES: &[Scene] = &[
     ("composer-slash", composer_slash),
     ("conversation-skill", conversation_skill),
     ("conversation-self-updates", conversation_self_updates),
+    ("conversation-skill-notes", conversation_skill_notes),
+    ("settings-skills-by-bot", settings_skills_by_bot),
     ("settings-skills-empty", settings_skills_empty),
     ("settings-skills-editor", settings_skills_editor),
     ("settings-skills-new", settings_skills_new),
@@ -1340,6 +1342,107 @@ pub fn conversation_self_updates(ui: &mut Ui) {
         updated_at: Some((now_ms() - 57_200) as f64),
         ..owner_profile()
     }));
+}
+
+/// Two replies in which the bot saved skills: it wrote release-notes, then
+/// improved the owner's weekly-report. Only the latest change of each can
+/// be undone.
+pub fn conversation_skill_notes(ui: &mut Ui) {
+    let step = |id: i64, offset: i64, op: &str, kind: &str| {
+        activity(
+            id,
+            offset,
+            if op == "op-s1" { "t1" } else { "t2" },
+            Some(op),
+            kind,
+            &format!("save_skill {}", kind.trim_start_matches("tool.")),
+            json!({}),
+        )
+    };
+    open(
+        ui,
+        "s-1",
+        observation(
+            "Release notes",
+            vec![
+                turn(
+                    "t1",
+                    -120_000,
+                    "Write this week's release notes, same as last Friday.",
+                    Some(
+                        "Done; they're in release-notes.md. This is the third Friday, so I saved the steps as a skill: next time just say /release-notes.",
+                    ),
+                    "done",
+                ),
+                turn(
+                    "t2",
+                    -60_000,
+                    "In the weekly report, lead with risks from now on.",
+                    Some("Done. I updated your weekly-report skill to put risks first."),
+                    "done",
+                ),
+            ],
+            None,
+            "idle",
+            vec![],
+            vec![
+                step(1, -118_000, "op-s1", "tool.started"),
+                step(2, -117_600, "op-s1", "tool.completed"),
+                step(3, -58_000, "op-s2", "tool.started"),
+                step(4, -57_600, "op-s2", "tool.completed"),
+            ],
+        ),
+    );
+    let now = now_ms();
+    let change = |op: &str, name: &str, kind: &str, offset: i64| {
+        from_json::<SkillChange>(json!({
+            "id": format!("c-{op}"), "callId": op, "name": name, "kind": kind,
+            "at": now + offset, "undoable": true, "undone": false,
+        }))
+    };
+    let found = [
+        change("op-s1", "release-notes", "created", -117_800),
+        change("op-s2", "weekly-report", "edited", -57_800),
+    ];
+    for note in ui.self_update_notes() {
+        let change = found
+            .iter()
+            .find(|change| change.call_id == note.id)
+            .cloned();
+        ui.model.apply(Event::SkillChangeFound {
+            note: note.key(),
+            change,
+        });
+    }
+    ui.model.apply(Event::Skills {
+        bot_id: "default".into(),
+        items: bot_skill_list(),
+    });
+}
+
+/// Settings → Skills after the bot wrote one skill and edited another.
+pub fn settings_skills_by_bot(ui: &mut Ui) {
+    open_skills(ui, Some(bot_skill_list()));
+}
+
+/// The scene's skills with release-notes written by the bot and
+/// weekly-report edited by it.
+pub fn bot_skill_list() -> Vec<SkillSummary> {
+    let now = now_ms();
+    let mut items = skill_list();
+    for item in &mut items {
+        if item.name == "weekly-report" {
+            item.bot_change = Some(from_json(json!({ "kind": "edited", "at": now - 57_800 })));
+        }
+    }
+    items.push(from_json(json!({
+        "name": "release-notes", "enabled": true, "problem": null,
+        "description": "Write release notes from the week's merged pull requests, grouped by area.",
+        "files": ["SKILL.md"],
+        "botChange": { "kind": "created", "at": now - 117_800 },
+    })));
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+    items
 }
 
 /// A new conversation with "/" typed: commands, then the bot's skills.

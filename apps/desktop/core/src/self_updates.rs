@@ -16,6 +16,9 @@ pub enum SelfUpdateKind {
     Personality,
     /// The owner's profile, shared by every bot (`update_owner_profile`).
     Owner,
+    /// One of its skills, written or improved (`save_skill`). The runtime
+    /// keeps the change by the step's call; see `skill_change` in the API.
+    Skill,
 }
 
 /// One finished self-update step of a reply.
@@ -26,6 +29,14 @@ pub struct SelfUpdateNote {
     pub id: String,
     pub started_at: i64,
     pub done_at: i64,
+}
+
+impl SelfUpdateNote {
+    /// Names this note among a session's: a provider may reuse call ids, so
+    /// the step's start goes with it.
+    pub fn key(&self) -> String {
+        format!("{}@{}", self.id, self.started_at)
+    }
 }
 
 /// Clock slack, in milliseconds, between a step's events and the save they
@@ -42,6 +53,7 @@ pub fn self_update_notes(steps: &[ToolStep]) -> Vec<SelfUpdateNote> {
             let kind = match step.tool.as_str() {
                 "update_personality" => SelfUpdateKind::Personality,
                 "update_owner_profile" => SelfUpdateKind::Owner,
+                "save_skill" => SelfUpdateKind::Skill,
                 _ => return None,
             };
             Some(SelfUpdateNote {
@@ -125,6 +137,7 @@ mod tests {
             step("c", "update_owner_profile", false),
             step("d", "read_skill", true),
             mcp,
+            step("f", "save_skill", true),
         ]);
         let found: Vec<(&str, SelfUpdateKind)> = notes
             .iter()
@@ -134,7 +147,8 @@ mod tests {
             found,
             [
                 ("a", SelfUpdateKind::Personality),
-                ("b", SelfUpdateKind::Owner)
+                ("b", SelfUpdateKind::Owner),
+                ("f", SelfUpdateKind::Skill)
             ]
         );
     }

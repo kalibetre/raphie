@@ -71,13 +71,23 @@ pub struct SelfUpdates {
     pub personality: bool,
     /// The owner's profile, shared by every bot.
     pub owner: bool,
+    /// Its own skills: writing new ones and editing any of them. On when a
+    /// runtime older than the switch does not send it, as it then allows it.
+    #[serde(default = "allowed")]
+    pub skills: bool,
+}
+
+fn allowed() -> bool {
+    true
 }
 
 impl SelfUpdates {
-    /// What a new bot may change: its personality, not the owner's profile.
+    /// What a new bot may change: its personality and skills, not the
+    /// owner's profile.
     pub const NEW_BOT: SelfUpdates = SelfUpdates {
         personality: true,
         owner: false,
+        skills: true,
     };
 }
 
@@ -156,6 +166,44 @@ pub struct SkillSummary {
     /// Why the bot cannot use it, if it cannot.
     #[serde(default)]
     pub problem: Option<String>,
+    /// The bot's last change to it with `save_skill`, unless the owner has
+    /// saved it since.
+    #[serde(default)]
+    pub bot_change: Option<SkillBotChange>,
+}
+
+/// `SkillChangeKind`: whether the bot made the skill or edited it.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SkillChangeKind {
+    Created,
+    Edited,
+}
+
+/// `SkillSummary.botChange`: the bot's last change, as Settings shows it.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+pub struct SkillBotChange {
+    pub kind: SkillChangeKind,
+    /// Milliseconds since the epoch, on the runtime's clock.
+    pub at: i64,
+}
+
+/// `SkillChange` in `packages/contracts/src/skills/views.ts`: a change the
+/// bot made to a skill with `save_skill`, as its reply shows it.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillChange {
+    pub id: String,
+    /// The `save_skill` call that made it, as the reply's step names it.
+    pub call_id: String,
+    pub name: String,
+    pub kind: SkillChangeKind,
+    pub at: i64,
+    /// While the skill is as the bot left it and nothing changed it since.
+    pub undoable: bool,
+    /// The owner undid it.
+    #[serde(default)]
+    pub undone: bool,
 }
 
 /// `GET /api/skills`.

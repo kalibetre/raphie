@@ -19,11 +19,17 @@ const sameStyle = (a: ReplyStyle, b: ReplyStyle) =>
   a.formatting === b.formatting &&
   a.emoji === b.emoji;
 
-/** A new bot may change its personality, not the owner's profile. */
-const newBotSelfUpdates: SelfUpdates = { personality: true, owner: false };
+/** A new bot may change its personality and skills, not the owner's profile. */
+const newBotSelfUpdates: SelfUpdates = {
+  personality: true,
+  owner: false,
+  skills: true,
+};
 
 const sameSelfUpdates = (a: SelfUpdates, b: SelfUpdates) =>
-  a.personality === b.personality && a.owner === b.owner;
+  a.personality === b.personality &&
+  a.owner === b.owner &&
+  a.skills === b.skills;
 
 const starterPersonality =
   "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";

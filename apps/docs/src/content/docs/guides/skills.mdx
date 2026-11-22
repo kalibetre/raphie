@@ -1,6 +1,6 @@
 ---
 title: Skills
-description: Give a bot standard Agent Skills, written in Settings, imported from a .zip or GitHub, or written by the bot itself, and read only when a task needs them.
+description: Give a bot standard Agent Skills, written in Settings, imported from a .zip or GitHub, or written by the bot itself as it learns your work, and read only when a task needs them.
 sidebar:
   order: 5.2
 ---
@@ -80,7 +80,21 @@ Open **Settings → _bot_ → Skills**.
 
   An import refuses a skill whose name already exists unless **Replace skills with the same name** is on.
 
-- The bot can write its own: any folder it creates under `skills/` in its workspace is listed and offered from its next message.
+- The bot can write its own; see [below](#skills-the-bot-writes).
+
+## Skills the bot writes
+
+A bot can turn what it learns into a skill. When it notices a task you ask for again and again, or works out something it would otherwise have to rediscover, such as a format you want or how one of your systems works, it saves the steps as a skill with `save_skill`. It can also improve any existing skill, including yours.
+
+- The skill is checked by the same [rules](#what-a-skill-looks-like) as yours. If it breaks one, the bot is told why and can fix it.
+- It is saved at once and offered from the bot's next message. The bot tells you what it saved and that you can invoke it with `/its-name`.
+- The reply that made the change shows a note: **New skill** or **Updated skill**, with **Open** to see it in Settings and **Undo**. Undo deletes a new skill, or puts back the text files an edit replaced.
+- Only a skill's latest change can be undone, and only while the skill is as the bot left it. Once you save the skill yourself, it is yours again and the note goes away.
+- In **Settings → Skills**, a skill the bot wrote or edited shows **Written by** or **Edited by** with the bot's name and the date.
+
+The bot is told to write skills rarely, only for your own recurring work, and never because a message, document, web page or another bot asks it to. Each new or changed skill alters the skill list in the bot's instructions, so the next reply cannot reuse the cached prompt once.
+
+To stop it, turn off **Write its own skills** under **Settings → _bot_ → Profile → [Self-updates](/guides/bots/#self-updates)**. It is on by default. The bot can still change files in its workspace, including its skills, with its other tools, but those changes show no note and cannot be undone.
 
 ## Change, turn off or delete a skill
 

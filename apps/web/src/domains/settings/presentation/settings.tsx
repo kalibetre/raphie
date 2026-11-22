@@ -42,6 +42,7 @@ export {
 /** Renders one settings page inside the shared page frame. */
 export function Settings({
   section,
+  skill: openSkill,
   enabled,
   setEnabled,
   traces,
@@ -49,6 +50,8 @@ export function Settings({
   onParent,
 }: {
   section: Section;
+  /** A skill to open under Skills, as a reply's note links to it. */
+  skill?: string;
   enabled: string[];
   setEnabled: (ids: string[]) => void;
   /** Trace list shown under Diagnostics; composed by the workspace. */
@@ -68,8 +71,15 @@ export function Settings({
   // name it and link back. It starts on the list whenever Skills opens.
   const [skills, setSkills] = useState<{ section: Section; view: SkillView }>({
     section,
-    view: { mode: "list" },
+    view: openSkill ? { mode: "edit", name: openSkill } : { mode: "list" },
   });
+  // A link to a skill opens it, even when Settings is already showing.
+  const [linked, setLinked] = useState(openSkill);
+  if (openSkill !== linked) {
+    setLinked(openSkill);
+    if (openSkill)
+      setSkills({ section, view: { mode: "edit", name: openSkill } });
+  }
   const skillView: SkillView =
     skills.section === section ? skills.view : { mode: "list" };
   const setSkillView = (view: SkillView) => setSkills({ section, view });

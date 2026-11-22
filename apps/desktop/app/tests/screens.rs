@@ -5901,6 +5901,7 @@ fn a_preset_fills_the_editor_and_self_updates_are_saved_with_the_profile() {
     assert!(rt.state.profile.is_dirty());
 
     click(&mut rt, "rd-self-update-owner-switch");
+    click(&mut rt, "rd-self-update-skills-switch");
     click(&mut rt, "rd-profile-save");
     let Some(Command::SaveProfile { bot_id, update }) = rt.state.sent.last() else {
         panic!("a save, not {:?}", rt.state.sent.last());
@@ -5912,7 +5913,8 @@ fn a_preset_fills_the_editor_and_self_updates_are_saved_with_the_profile() {
         update.self_updates,
         Some(raphie_core::contracts::SelfUpdates {
             personality: true,
-            owner: true
+            owner: true,
+            skills: false,
         })
     );
 }
@@ -6007,6 +6009,139 @@ fn a_reply_notes_what_the_bot_changed_with_a_way_to_see_or_undo_it() {
     let mut rt = render(scenes::conversation_self_updates, false);
     click(&mut rt, "rd-self-update-op-o-review");
     assert_eq!(rt.state.screen, Screen::Settings(Page::Owner));
+}
+
+/// The pill keys of the scene's `save_skill` notes, in order.
+fn skill_note_keys(rt: &Runtime<Ui>) -> Vec<String> {
+    rt.state
+        .self_update_notes()
+        .iter()
+        .map(|note| format!("rd-self-update-{}", note.key()))
+        .collect()
+}
+
+#[test]
+fn a_reply_notes_the_skill_the_bot_saved_with_a_way_to_open_or_undo_it() {
+    let mut rt = render(scenes::conversation_skill_notes, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("New skill"), "{text}");
+    assert!(text.contains("release-notes"));
+    assert!(text.contains("Updated skill"));
+    assert!(text.contains("weekly-report"));
+    let [created, edited] = &skill_note_keys(&rt)[..] else {
+        panic!("two skill notes");
+    };
+
+    click(&mut rt, &format!("{edited}-undo"));
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::UndoSkillChange {
+            bot_id: "default".into(),
+            id: "c-op-s2".into(),
+        })
+    );
+    assert!(rt.state.model.undoing_skill_change);
+    // Once undone, the note says so and offers no second undo.
+    let undone = |note: &str| {
+        let notes = rt.state.self_update_notes();
+        let note = notes.iter().find(|n| n.id == note).unwrap();
+        note.key()
+    };
+    let key = undone("op-s2");
+    deliver(&mut rt, Event::SkillChangeUndone { error: None });
+    let change = rt.state.model.skill_changes[&key]
+        .clone()
+        .map(|mut change| {
+            change.undoable = false;
+            change.undone = true;
+            change
+        });
+    deliver(&mut rt, Event::SkillChangeFound { note: key, change });
+    assert!(screen_text(&rt).contains("Undid change to"));
+    assert!(rt.find(&format!("{edited}-undo")).is_none());
+
+    click(&mut rt, &format!("{created}-open"));
+    assert_eq!(
+        rt.state.screen,
+        Screen::Settings(Page::Bot {
+            bot_id: "default".into(),
+            section: BotSection::Skills,
+        })
+    );
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::LoadSkill {
+            bot_id: "default".into(),
+            name: "release-notes".into(),
+        })
+    );
+}
+
+#[test]
+fn a_skill_note_asks_what_its_call_saved_and_asks_again_when_skills_change() {
+    let mut rt = render(scenes::conversation_skill_notes, false);
+    let asked = |rt: &Runtime<Ui>| {
+        rt.state
+            .sent
+            .iter()
+            .filter(|command| matches!(command, Command::LoadSkillChange { .. }))
+            .count()
+    };
+    // The first event in asks for each note once.
+    let listed = rt.state.model.skills["default"].clone();
+    deliver(
+        &mut rt,
+        Event::Skills {
+            bot_id: "default".into(),
+            items: listed.clone(),
+        },
+    );
+    let before = asked(&rt);
+    assert_eq!(before, 2, "each note asked once: {:?}", rt.state.sent);
+    // Nothing changed: no new asks.
+    deliver(
+        &mut rt,
+        Event::Skills {
+            bot_id: "default".into(),
+            items: listed.clone(),
+        },
+    );
+    assert_eq!(asked(&rt), before);
+    // The owner saved weekly-report: its change is no longer the bot's.
+    let mut items = listed;
+    for item in &mut items {
+        if item.name == "weekly-report" {
+            item.bot_change = None;
+        }
+    }
+    deliver(
+        &mut rt,
+        Event::Skills {
+            bot_id: "default".into(),
+            items,
+        },
+    );
+    assert_eq!(asked(&rt), before + 2);
+}
+
+#[test]
+fn skills_the_bot_wrote_say_so_in_settings() {
+    let rt = render(scenes::settings_skills_by_bot, false);
+    let author = |name: &str| {
+        element(&rt, &format!("rd-skill-{name}-author"))
+            .text
+            .clone()
+    };
+    assert!(
+        author("release-notes").is_some_and(|text| text.starts_with("Written by Raphie · ")),
+        "{:?}",
+        author("release-notes")
+    );
+    assert!(author("weekly-report").is_some_and(|text| text.starts_with("Edited by Raphie · ")));
+    assert!(
+        rt.find("rd-skill-notes-author").is_none(),
+        "the owner's own"
+    );
 }
 
 #[test]

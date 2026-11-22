@@ -23,10 +23,13 @@ test("only finished self-updates become notes", () => {
       step("c", "update_owner_profile", false),
       step("d", "read_skill"),
       { ...step("e", "update_personality"), server: "evil" },
+      step("f", "save_skill"),
+      { ...step("g", "save_skill"), server: "evil" },
     ]).map((note) => [note.id, note.kind]),
   ).toEqual([
     ["a", "personality"],
     ["b", "owner"],
+    ["f", "skill"],
   ]);
 });
 

@@ -1,11 +1,12 @@
-//! Under a finished reply: what the bot changed about itself or the owner's
-//! profile in it, as a pill with a way to see or undo the change. A change
-//! that did not save shows nothing.
+//! Under a finished reply: what the bot changed about itself, the owner's
+//! profile or its skills in it, as a pill with a way to see or undo the
+//! change. A change that did not save shows nothing.
 //!
 //! Mirrors `self-update-notes.tsx` and the `.self-update-note*` rules in
 //! `chat.css`. Which save a step made is worked out in
 //! `raphie_core::self_updates`.
 
+use raphie_core::contracts::SkillChangeKind;
 use raphie_core::projections::ToolStep;
 use raphie_core::self_updates::{
     SelfUpdateKind, SelfUpdateNote, owner_saved, personality_edit, self_update_notes,
@@ -15,7 +16,7 @@ use rune::{Cursor, El, icon, row, text};
 use crate::icons;
 use crate::sections::{BotSection, Page};
 use crate::state::Ui;
-use crate::theme::{Theme, font};
+use crate::theme::{Theme, font, mono};
 
 /// The notes for one reply's tool steps, or `None` when it changed nothing.
 pub fn notes(s: &Ui, steps: &[ToolStep], t: &Theme) -> Option<El> {
@@ -24,6 +25,7 @@ pub fn notes(s: &Ui, steps: &[ToolStep], t: &Theme) -> Option<El> {
         .filter_map(|note| match note.kind {
             SelfUpdateKind::Personality => personality(s, note, t),
             SelfUpdateKind::Owner => owner(s, note, t),
+            SelfUpdateKind::Skill => skill(s, note, t),
         })
         .collect();
     if pills.is_empty() {
@@ -94,6 +96,50 @@ fn owner(s: &Ui, note: &SelfUpdateNote, t: &Theme) -> Option<El> {
     )
 }
 
+/// "New skill `release-notes` · Open · Undo", found by the call that saved
+/// it. Nothing shows when the save failed or the owner has since saved the
+/// skill themselves.
+fn skill(s: &Ui, note: &SelfUpdateNote, t: &Theme) -> Option<El> {
+    let bot_id = s.model.bot_id.clone()?;
+    let found = s.model.skill_changes.get(&note.key())?.as_ref()?;
+    let created = found.kind == SkillChangeKind::Created;
+    let what = match (found.undone, created) {
+        (true, true) => "Removed skill",
+        (true, false) => "Undid change to",
+        (false, true) => "New skill",
+        (false, false) => "Updated skill",
+    };
+    let key = note.key();
+    let mut pill = pill(t, &key, &icons::BOOK_OPEN, what).child(
+        text(found.name.clone())
+            .font(mono(11.5))
+            .color(t.foreground),
+    );
+    // A removed skill has nothing to open.
+    if !(found.undone && created) {
+        let bot_id = bot_id.clone();
+        let name = found.name.clone();
+        pill = pill.child(action(
+            t,
+            format!("rd-self-update-{key}-open"),
+            "Open",
+            true,
+            move |s: &mut Ui| s.open_bot_skill(&bot_id, &name),
+        ));
+    }
+    if found.undoable {
+        let id = found.id.clone();
+        pill = pill.child(action(
+            t,
+            format!("rd-self-update-{key}-undo"),
+            "Undo",
+            !s.model.undoing_skill_change,
+            move |s: &mut Ui| s.undo_skill_change(&bot_id, &id),
+        ));
+    }
+    Some(pill)
+}
+
 /// The rounded outline with its icon and what happened.
 fn pill(t: &Theme, id: &str, glyph: &'static rune::Icon, what: &str) -> El {
     row()
@@ -102,6 +148,9 @@ fn pill(t: &Theme, id: &str, glyph: &'static rune::Icon, what: &str) -> El {
         .px(11.0)
         .py(4.0)
         .gap(7.0)
+        // Wraps between its parts in a narrow window, as on the web.
+        .flex_wrap()
+        .shrink()
         .center_y()
         .radius(999.0)
         .border(1.0, t.border)

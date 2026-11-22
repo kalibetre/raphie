@@ -24,6 +24,8 @@ export type {
 
 export type {
   SaveSkill,
+  SkillChange,
+  SkillChangeKind,
   SkillDetail,
   SkillFile,
   SkillImport,

@@ -1061,8 +1061,9 @@
   }
   .self-update-note {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 7px;
+    gap: 2px 7px;
     margin: 0;
     padding: 4px 11px;
     border: 1px solid var(--border);
@@ -1072,6 +1073,16 @@
   }
   .self-update-note span {
     color: var(--foreground);
+  }
+  .self-update-skill {
+    font-size: 11.5px;
+    color: var(--foreground);
+  }
+  /* A skill note runs longer: keep each part whole and wrap between them. */
+  .self-update-note span,
+  .self-update-skill,
+  .self-update-note button {
+    white-space: nowrap;
   }
   .self-update-note button {
     padding: 0;

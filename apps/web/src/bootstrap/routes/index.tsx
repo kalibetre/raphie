@@ -13,6 +13,8 @@ export const Route = createFileRoute("/")({
     conversation?: number;
     view?: "settings" | "notifications";
     section?: Section;
+    /** A skill to open under Settings → Skills. */
+    skill?: string;
     bot?: string;
   } => ({
     bot:
@@ -40,6 +42,12 @@ export const Route = createFileRoute("/")({
           : isSection(search.section)
             ? search.section
             : undefined,
+    skill:
+      search.section === "skills" &&
+      typeof search.skill === "string" &&
+      /^[a-z0-9-]{1,64}$/.test(search.skill)
+        ? search.skill
+        : undefined,
   }),
   component: IndexPage,
 });

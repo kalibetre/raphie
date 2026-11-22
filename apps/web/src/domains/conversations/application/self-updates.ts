@@ -7,7 +7,8 @@ import type { ToolStep } from "./run-projection";
  * found by its tool step; what changed is read from what was saved then.
  */
 export type SelfUpdateNote = {
-  kind: "personality" | "owner";
+  kind: "personality" | "owner" | "skill";
+  /** The tool call's id; a skill change is kept under it. */
   id: string;
   startedAt: number;
   doneAt: number;
@@ -16,6 +17,7 @@ export type SelfUpdateNote = {
 const TOOLS = {
   update_personality: "personality",
   update_owner_profile: "owner",
+  save_skill: "skill",
 } as const;
 
 /** Clock slack between a step's events and the save they bracket. */

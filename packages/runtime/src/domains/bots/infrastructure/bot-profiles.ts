@@ -21,10 +21,11 @@ import { PERSONALITY_PRESETS, presetOf } from "../domain/personalities.ts";
 
 /**
  * What a bot may change by itself until the owner says otherwise: every bot
- * its own personality, and only the default bot the owner's profile.
+ * its own personality and skills, and only the default bot the owner's
+ * profile.
  */
 export function defaultSelfUpdates(id: string): SelfUpdates {
-  return { personality: true, owner: id === "default" };
+  return { personality: true, owner: id === "default", skills: true };
 }
 
 /**
@@ -36,7 +37,10 @@ function parse(value: string): BotProfile {
   return {
     ...profile,
     replyStyle: replyStyleOf(profile.replyStyle),
-    selfUpdates: profile.selfUpdates ?? defaultSelfUpdates(profile.id),
+    selfUpdates: {
+      ...defaultSelfUpdates(profile.id),
+      ...profile.selfUpdates,
+    },
   };
 }
 
@@ -122,7 +126,7 @@ export class BotProfileStore {
     return {
       ...input,
       replyStyle: replyStyleOf(input.replyStyle),
-      selfUpdates: input.selfUpdates ?? defaultSelfUpdates(id),
+      selfUpdates: { ...defaultSelfUpdates(id), ...input.selfUpdates },
       changedBy: "owner",
       preset: presetOf(input.personality),
       id,
@@ -157,7 +161,7 @@ export class BotProfileStore {
         ...previous,
         ...input,
         replyStyle: input.replyStyle ?? previous.replyStyle,
-        selfUpdates: input.selfUpdates ?? previous.selfUpdates,
+        selfUpdates: { ...previous.selfUpdates, ...input.selfUpdates },
         changedBy: "owner",
       });
     })();

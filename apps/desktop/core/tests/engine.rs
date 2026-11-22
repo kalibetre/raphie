@@ -1126,6 +1126,72 @@ fn workspace_folders_are_listed_and_a_file_is_saved_without_replacing_one() {
 }
 
 #[test]
+fn a_skill_the_bot_saved_is_found_by_its_call_and_undone() {
+    let host = FakeHost::start();
+    host.with(|h| {
+        h.skills.push(serde_json::json!({
+            "name": "release-notes", "enabled": true, "problem": null,
+            "description": "Write release notes.", "files": ["SKILL.md"],
+            "botChange": { "kind": "created", "at": 10_200 },
+        }));
+    });
+    let (mut driver, _) = signed_in(&host);
+    let find = |driver: &mut Driver, call: &str| {
+        driver.send(Command::LoadSkillChange {
+            bot_id: "default".into(),
+            note: format!("{call}@10000"),
+            call: call.into(),
+            from: 10_000,
+            to: 10_500,
+        });
+        let key = format!("{call}@10000");
+        driver.until("the change", move |m, _| m.skill_changes.contains_key(&key));
+    };
+    find(&mut driver, "op-s1");
+    let found = driver.model.skill_changes["op-s1@10000"]
+        .clone()
+        .expect("a change");
+    assert_eq!(found.name, "release-notes");
+    assert_eq!(found.kind, raphie_core::contracts::SkillChangeKind::Created);
+    assert!(found.undoable);
+    let asked = host.requests("/api/skills/changes?");
+    assert!(
+        asked[0].path.contains("call=op-s1&from=10000&to=10500"),
+        "{asked:?}"
+    );
+    // A call that saved nothing is found as nothing, not an error.
+    find(&mut driver, "op-none");
+    assert_eq!(driver.model.skill_changes["op-none@10000"], None);
+
+    driver.model.undoing_skill_change = true;
+    driver.send(Command::UndoSkillChange {
+        bot_id: "default".into(),
+        id: "c-1".into(),
+    });
+    driver.until("the undo", |m, _| !m.undoing_skill_change);
+    assert_eq!(driver.model.skill_undo_error, None);
+    driver.until("the list", |m, _| {
+        m.skills
+            .get("default")
+            .is_some_and(|items| items.is_empty())
+    });
+    // Refused the second time, and says why.
+    driver.model.undoing_skill_change = true;
+    driver.send(Command::UndoSkillChange {
+        bot_id: "default".into(),
+        id: "c-1".into(),
+    });
+    driver.until("the refusal", |m, _| !m.undoing_skill_change);
+    assert!(
+        driver
+            .model
+            .skill_undo_error
+            .as_deref()
+            .is_some_and(|e| e.contains("changed since"))
+    );
+}
+
+#[test]
 fn skills_load_save_toggle_import_and_delete() {
     let host = FakeHost::start();
     let (mut driver, _) = signed_in(&host);
@@ -2486,6 +2552,7 @@ fn self_updates_are_saved_and_the_built_in_personalities_load() {
     let everything = SelfUpdates {
         personality: true,
         owner: true,
+        skills: true,
     };
     assert!(driver.model.begin_save_profile());
     driver.send(Command::SaveProfile {
@@ -2504,7 +2571,7 @@ fn self_updates_are_saved_and_the_built_in_personalities_load() {
     let sent = host.with(|h| h.profile_saves[0].clone());
     assert_eq!(
         sent["selfUpdates"],
-        serde_json::json!({ "personality": true, "owner": true })
+        serde_json::json!({ "personality": true, "owner": true, "skills": true })
     );
     let saved = driver
         .model

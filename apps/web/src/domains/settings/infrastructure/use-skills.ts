@@ -1,11 +1,13 @@
 import type {
   SaveSkill,
+  SkillChange,
   SkillDetail,
   SkillImport,
   SkillList,
 } from "@raphie/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { ApiError } from "../../../infrastructure/http/api-client";
 import { useBackend } from "../../../infrastructure/http/backend-context";
 
 const listKey = ["skills"];
@@ -86,4 +88,56 @@ export function useSkill(name: string | null) {
     enabled: !!name,
     staleTime: Infinity,
   });
+}
+
+/**
+ * The change save_skill call `call` made while it ran, from `from` to `to`
+ * as its step saw it on the runtime's clock, and its undo. Null when it saved nothing, or once
+ * the owner has saved the skill themselves.
+ */
+export function useSkillChange(call: {
+  id: string;
+  from: number;
+  to: number;
+  /**
+   * Changes when the skill does, as the skills list sees it, so a note
+   * stops offering an undo once a later change or the owner's edit lands.
+   */
+  version: string;
+}) {
+  const { workspace } = useBackend();
+  const client = useQueryClient();
+  const query = new URLSearchParams({
+    call: call.id,
+    from: String(Math.floor(call.from)),
+    to: String(Math.ceil(call.to)),
+  });
+  const change = useQuery({
+    queryKey: ["skill-change", query.toString(), call.version],
+    queryFn: async () => {
+      try {
+        return await workspace.api<SkillChange>(`/api/skills/changes?${query}`);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    retry: false,
+    // Settings can make it the owner's, and a later reply can supersede it.
+    staleTime: 10_000,
+  });
+  const undo = useMutation({
+    mutationFn: (id: string) =>
+      workspace.api<SkillList>(
+        `/api/skills/changes/${encodeURIComponent(id)}/undo`,
+        {},
+      ),
+    onSuccess: (list) => {
+      client.setQueryData(listKey, list);
+      void client.invalidateQueries({ queryKey: ["skill"] });
+    },
+    // Refused because the skill changed since: show it as it is now.
+    onSettled: () => client.invalidateQueries({ queryKey: ["skill-change"] }),
+  });
+  return { change, undo };
 }

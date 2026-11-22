@@ -4,7 +4,7 @@
 //! Mirrors `skill-settings.tsx` and `shared/styles/settings/skills.css`.
 //! The page's state is in `crate::skills`.
 
-use raphie_core::contracts::SkillSummary;
+use raphie_core::contracts::{SkillChangeKind, SkillSummary};
 use raphie_core::engine::Command;
 use rune::{El, Tx, col, row, text, text_input};
 use rune_kit::Dialog;
@@ -12,6 +12,7 @@ use rune_kit::Dialog;
 use super::parts::{
     SaveBar, Scope, back_link, group_heading, group_with, page, save_bar, setting, status, sub_page,
 };
+use crate::format::month_day;
 use crate::sections::BotSection;
 use crate::skills::{SkillEditor, SkillsMode};
 use crate::state::Ui;
@@ -114,6 +115,12 @@ fn opening(s: &Ui, t: &Theme) -> El {
 /// "Skills": one row per skill, with Import and New skill beside the title.
 fn list(s: &Ui, items: &[SkillSummary], t: &Theme) -> El {
     let busy = s.model.changing_skill;
+    let bot_name = s
+        .model
+        .bot_id
+        .as_ref()
+        .and_then(|id| s.model.bots.iter().find(|bot| &bot.id == id))
+        .map_or("the bot", |bot| bot.name.as_str());
     let on = items
         .iter()
         .filter(|skill| skill.enabled && skill.problem.is_none())
@@ -142,14 +149,14 @@ fn list(s: &Ui, items: &[SkillSummary], t: &Theme) -> El {
         ));
     let mut rows: Vec<El> = items
         .iter()
-        .map(|skill| skill_row(skill, busy, t))
+        .map(|skill| skill_row(skill, bot_name, busy, t))
         .collect();
     if items.is_empty() {
         rows.push(setting(
             t,
             None,
             "No skills yet",
-            "Write one, or import a skill folder as a .zip or from GitHub. The bot can also write its own in skills/ in its workspace.",
+            "Write one, or import a skill folder as a .zip or from GitHub. The bot can also write its own when it notices a task you repeat.",
             None,
         ));
     }
@@ -171,7 +178,7 @@ fn list(s: &Ui, items: &[SkillSummary], t: &Theme) -> El {
     out
 }
 
-fn skill_row(skill: &SkillSummary, busy: bool, t: &Theme) -> El {
+fn skill_row(skill: &SkillSummary, bot_name: &str, busy: bool, t: &Theme) -> El {
     let key = |part: &str| format!("rd-skill-{}-{part}", skill.name);
     let usable = skill.problem.is_none();
     let on = skill.enabled && usable;
@@ -179,7 +186,7 @@ fn skill_row(skill: &SkillSummary, busy: bool, t: &Theme) -> El {
         Some(problem) => text(problem.clone()).color(t.error),
         None => text(skill.description.clone()).color(t.muted_foreground),
     };
-    let copy = col()
+    let mut copy = col()
         .grow(1.0)
         .min_w(0.0)
         .gap(2.0)
@@ -193,13 +200,28 @@ fn skill_row(skill: &SkillSummary, busy: bool, t: &Theme) -> El {
                 .key(key("description"))
                 .font(font(12.5, 400.0))
                 .wrap(),
-        )
-        .child(
-            text(skill.files.join(" · "))
-                .font(mono(11.0))
-                .color(t.muted_foreground)
+        );
+    // "Written by Ada · Nov 22": the bot's last change, until the owner
+    // saves the skill.
+    if let Some(change) = skill.bot_change {
+        let verb = match change.kind {
+            SkillChangeKind::Created => "Written",
+            SkillChangeKind::Edited => "Edited",
+        };
+        copy = copy.child(
+            text(format!("{verb} by {bot_name} · {}", month_day(change.at)))
+                .key(key("author"))
+                .font(font(12.0, 400.0))
+                .color(t.accent)
                 .wrap(),
         );
+    }
+    let copy = copy.child(
+        text(skill.files.join(" · "))
+            .font(mono(11.0))
+            .color(t.muted_foreground)
+            .wrap(),
+    );
     let (edit_name, toggle_name) = (skill.name.clone(), skill.name.clone());
     let actions = row()
         .gap(8.0)

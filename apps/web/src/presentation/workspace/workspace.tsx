@@ -62,11 +62,14 @@ export function Workspace({
   legacyConversationId,
   view,
   section = "bot",
+  skill,
 }: {
   sessionId?: string;
   legacyConversationId?: number;
   view?: "settings" | "notifications";
   section?: Section;
+  /** A skill to open when `section` is Skills. */
+  skill?: string;
 }) {
   const { workspace } = useBackend();
   const api = workspace.api;
@@ -430,6 +433,7 @@ export function Workspace({
             >
               <Settings
                 section={section}
+                skill={skill}
                 enabled={enabled}
                 setEnabled={setEnabled}
                 traces={<Diagnostics bots={inbox.bots.data?.items ?? []} />}

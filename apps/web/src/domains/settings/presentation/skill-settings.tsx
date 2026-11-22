@@ -2,6 +2,7 @@ import type { SkillDetail, SkillSummary } from "@raphie/contracts";
 import { Plus, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import {
   Dialog,
@@ -20,6 +21,7 @@ import {
   TabsTrigger,
 } from "../../../shared/ui/tabs";
 import { Textarea } from "../../../shared/ui/textarea";
+import { useBots } from "../infrastructure/use-bots";
 import { useSkill, useSkills } from "../infrastructure/use-skills";
 import { SaveBar } from "./save-bar";
 import { Group, Row } from "./settings-group";
@@ -112,6 +114,10 @@ function SkillList({
   onEdit: (name: string) => void;
 }) {
   const skills = useSkills();
+  const { workspace } = useBackend();
+  const botName =
+    useBots().data?.items.find((bot) => bot.id === workspace.botId)?.name ??
+    "the bot";
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState("");
   if (!skills.list.data)
@@ -159,6 +165,7 @@ function SkillList({
             <SkillRow
               key={skill.name}
               skill={skill}
+              botName={botName}
               pending={skills.enable.isPending}
               onEdit={() => onEdit(skill.name)}
               onToggle={(enabled) => {
@@ -174,7 +181,7 @@ function SkillList({
         ) : (
           <Row
             title="No skills yet"
-            description="Write one, or import a skill folder as a .zip or from GitHub. The bot can also write its own in skills/ in its workspace."
+            description="Write one, or import a skill folder as a .zip or from GitHub. The bot can also write its own when it notices a task you repeat."
           />
         )}
       </Group>
@@ -188,13 +195,25 @@ function SkillList({
   );
 }
 
+/** "Written by Ada · Nov 22": the bot's last change, until the owner saves it. */
+function botChangeLabel(change: SkillSummary["botChange"], botName: string) {
+  if (!change) return null;
+  const day = new Date(change.at).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  return `${change.kind === "created" ? "Written" : "Edited"} by ${botName} · ${day}`;
+}
+
 function SkillRow({
   skill,
+  botName,
   pending,
   onEdit,
   onToggle,
 }: {
   skill: SkillSummary;
+  botName: string;
   pending: boolean;
   onEdit: () => void;
   onToggle: (enabled: boolean) => void;
@@ -208,6 +227,11 @@ function SkillRow({
             <span className="skill-problem">{skill.problem}</span>
           ) : (
             skill.description
+          )}
+          {skill.botChange && (
+            <span className="skill-author">
+              {botChangeLabel(skill.botChange, botName)}
+            </span>
           )}
           <span className="skill-files">{skill.files.join(" · ")}</span>
         </>
