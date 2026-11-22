@@ -104,7 +104,7 @@ pub fn roster(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     let width = s.visible_roster_width();
     let bots = &s.model.bots;
-    let mut list = col().w_full();
+    let mut list = col().w_full().px(10.0).gap(2.0);
     for bot in bots {
         list = list.child(bot_row(s, bot, look));
     }
@@ -135,7 +135,7 @@ pub fn roster(s: &Ui, look: &Look) -> El {
         // own buttons and the build badge, and moves the window.
         .child(band(s, look, width))
         .children(requests(s, look))
-        .child(row().w_full().px(22.0).pb(8.0).child(label(t, "Your team")))
+        .child(row().w_full().px(20.0).pb(8.0).child(label(t, "Your team")))
         .child(bots_list)
         .child(sessions(s, look))
         .child(footer(s, look))
@@ -164,7 +164,7 @@ fn requests(s: &Ui, look: &Look) -> Option<El> {
         .role("region")
         .label("Needs you")
         .w_full()
-        .px(12.0)
+        .px(10.0)
         .pb(14.0)
         .gap(6.0);
     for (bot, session) in waiting.into_iter().take(3) {
@@ -220,25 +220,24 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
         .role("button")
         .label(format!("{}, {}", bot.name, status.label()))
         .w_full()
-        .px(22.0)
-        .py(5.0)
+        .px(10.0)
+        .py(7.0)
         .gap(12.0)
         .center_y()
+        .radius(9.0)
         .child(
             row()
-                .size(28.0, 28.0)
+                .size(30.0, 30.0)
                 .center()
-                .radius(8.0)
-                .fill(tone.body.alpha(if selected { 0.22 } else { 0.12 }))
-                .child(bot_avatar(&bot.id, tone, 24.0))
-                // A presence dot on the corner, ringed in the sidebar's colour.
+                .child(bot_avatar(&bot.id, tone, 30.0))
+                // A presence dot on the corner, ringed in the row's colour.
                 .child(
                     el().key(format!("rd-bot-{}-presence", bot.id))
                         .size(10.0, 10.0)
                         .radius(5.0)
                         .fill(status.dot(t))
-                        .border(2.0, t.sidebar)
-                        .absolute(20.0, 20.0)
+                        .border(2.0, if selected { t.hover } else { t.sidebar })
+                        .absolute(21.0, 21.0)
                         .a11y_hidden(),
                 ),
         )
@@ -252,12 +251,12 @@ fn bot_row(s: &Ui, bot: &BotProfile, look: &Look) -> El {
                         .key(format!("rd-bot-{}-status", bot.id)),
                 ),
         );
-    // The selected row is washed in the bot's own colour; the others show
-    // the hover colour under the pointer.
+    // Rows sit inside the sidebar's edges, rounded, in neutral greys: the
+    // hover a wash, the selected row the full hover colour.
     let row = if selected {
-        row.fill(tone.body.alpha(0.22))
+        row.fill(t.hover)
     } else {
-        row.hover(t.hover)
+        row.hover(t.hover.alpha(0.55))
     };
     // `move` gives the closure its own copy of `id`, since it outlives this
     // function.
@@ -271,16 +270,17 @@ fn add_row(t: &Theme) -> El {
         .role("button")
         .label("Add a teammate")
         .w_full()
-        .px(22.0)
-        .py(5.0)
+        .px(10.0)
+        .py(7.0)
         .gap(12.0)
         .center_y()
-        .hover(t.hover)
+        .radius(9.0)
+        .hover(t.hover.alpha(0.55))
         .child(
             row()
-                .size(28.0, 28.0)
+                .size(30.0, 30.0)
                 .center()
-                .radius(14.0)
+                .radius(15.0)
                 .fill(t.muted)
                 .child(
                     icon(&icons::PLUS, 15.0)
@@ -348,7 +348,7 @@ fn footer(s: &Ui, look: &Look) -> El {
         .key("rd-account")
         .w_full()
         .mt(12.0)
-        .pl(16.0)
+        .pl(20.0)
         .pr(10.0)
         .gap(8.0)
         .center_y()

@@ -69,9 +69,11 @@ pub fn sessions(s: &Ui, look: &Look) -> El {
 
     // No "N conversations" line under the chips, as on the web: the
     // filters already say what is shown, and the sidebar keeps the room.
+    // One inset for everything with a background (cards, rows, search):
+    // 10 points from the edge, with text a further 10 in.
     let mut page = col()
         .w_full()
-        .px(12.0)
+        .px(10.0)
         .pt(6.0)
         .pb(12.0)
         .child(search_box(s, t))
@@ -166,7 +168,7 @@ pub fn sessions(s: &Ui, look: &Look) -> El {
         .child(
             row()
                 .w_full()
-                .px(22.0)
+                .px(20.0)
                 .pb(4.0)
                 .gap(8.0)
                 .justify_between()
@@ -359,8 +361,12 @@ fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, 
     if let Some((label, color)) = status {
         entry = entry.child(text(label).font(font(11.0, 400.0).lh(16.0)).color(color));
     }
+    // The open conversation is lifted onto the card colour, like the
+    // composer; others wash grey under the pointer.
     if selected {
-        entry = entry.fill(t.accent_soft.alpha(0.7));
+        entry = entry
+            .fill(t.card)
+            .shadow(1.0, 2.0, t.foreground.alpha(0.06));
     }
     let id = session.id.clone();
     let open = pressable(entry, true, move |s: &mut Ui| s.select_session(Some(&id)));
@@ -374,7 +380,7 @@ fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, 
         .child(open)
         .child(archive_button(session, t).pin(None, Some(5.0), Some(6.0), None));
     if !selected {
-        wrapper = wrapper.hover(t.hover);
+        wrapper = wrapper.hover(t.hover.alpha(0.55));
     }
     wrapper
 }

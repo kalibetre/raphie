@@ -195,7 +195,7 @@ fn the_roster_lists_bots_and_says_which_need_the_owner() {
         assert!(element(&rt, "rd-requests").rect[1] < bots[1]);
         // The name over what the bot is doing, 5 points above and below.
         let row = element(&rt, "rd-bot-default").rect;
-        assert!((row[3] - 46.75).abs() < 0.5, "{row:?}");
+        assert!((row[3] - 50.75).abs() < 0.5, "{row:?}");
         assert!(text.contains("What’s on your mind?"), "the welcome screen");
 
         click(&mut rt, "rd-bot-b-research");
@@ -253,11 +253,13 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
         assert!(!screen_text(&rt).contains("Most recent first"));
 
         // A row opens its conversation; the pen starts a new one.
-        click(&mut rt, "rd-session-s-3");
+        // (The second row: in the smaller window the third is scrolled
+        // below the list's visible part.)
+        click(&mut rt, "rd-session-s-2");
         assert_eq!(
             rt.state.sent.last(),
             Some(&Command::SelectSession {
-                session_id: Some("s-3".into())
+                session_id: Some("s-2".into())
             })
         );
         click(&mut rt, "rd-new-conversation");
