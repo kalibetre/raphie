@@ -1,12 +1,50 @@
 import {
-  Activity as ActivityIcon,
-  ArrowUpRight,
-  CircleHelp,
+  CalendarClock,
+  type LucideIcon,
+  Mail,
   MessageSquare,
-  ShieldCheck,
+  Search,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+/**
+ * Work a teammate can take on. Choosing one puts the request in the
+ * composer to edit and send; nothing is sent until the owner sends it.
+ */
+const jobs: {
+  icon: LucideIcon;
+  title: string;
+  detail: string;
+  request: string;
+}[] = [
+  {
+    icon: CalendarClock,
+    title: "Send me a morning briefing",
+    detail: "Your day, every morning",
+    request: "Send me a short briefing of my day every morning.",
+  },
+  {
+    icon: Mail,
+    title: "Keep an eye on my inbox",
+    detail: "Draft replies for my OK",
+    request:
+      "Keep an eye on my inbox and draft replies for me to check before anything is sent.",
+  },
+  {
+    icon: Search,
+    title: "Research something",
+    detail: "And write it up",
+    request: "Research this for me and write up what you find: ",
+  },
+  {
+    icon: MessageSquare,
+    title: "Help me think something through",
+    detail: "No setup needed",
+    request: "Help me think something through: ",
+  },
+];
+
+/** A new conversation: the bot's empty desk, and work it can take on. */
 export function Welcome({
   disabled,
   onSuggest,
@@ -19,41 +57,23 @@ export function Welcome({
   return (
     <div className="welcome">
       <div className="welcome-avatar">{avatar}</div>
-      <span className="eyebrow">A LITTLE CLARITY FOR YOUR DAY</span>
-      <h2>What’s on your mind?</h2>
-      <p>
-        A place to think things through, get things done,
-        <br />
-        and keep the details in view.
-      </p>
-      <div className="suggestions">
-        {[
-          "Help me plan my day",
-          "Think through an idea",
-          "What can you help me with?",
-        ].map((text, index) => (
+      <h2>I’m ready when you are.</h2>
+      <p>Give me something to look after, or just ask.</p>
+      <div className="welcome-jobs" role="group" aria-label="Things to ask">
+        {jobs.map(({ icon: Icon, title, detail, request }) => (
           <button
-            key={text}
+            key={title}
+            className="welcome-job"
             disabled={disabled}
-            onClick={() => onSuggest(text)}
+            onClick={() => onSuggest(request)}
           >
+            <Icon size={16} aria-hidden="true" />
             <span>
-              {index === 0 ? (
-                <ActivityIcon size={17} />
-              ) : index === 1 ? (
-                <MessageSquare size={17} />
-              ) : (
-                <CircleHelp size={17} />
-              )}
-              {text}
+              <strong>{title}</strong>
+              <small>{detail}</small>
             </span>
-            <ArrowUpRight size={14} />
           </button>
         ))}
-      </div>
-      <div className="welcome-note">
-        <ShieldCheck size={14} /> You’re in control. Review connected actions
-        before they run.
       </div>
     </div>
   );
