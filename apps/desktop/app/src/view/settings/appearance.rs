@@ -76,6 +76,8 @@ fn theme_choice(t: &Theme, choice: ThemeChoice, label: &str, hint: &str, chosen:
             text(hint)
                 .font(font(11.5, 400.0))
                 .color(t.muted_foreground)
+                // A narrow window wraps the hint rather than cutting it.
+                .wrap()
                 .mx(4.0),
         )
         .on_press(move |s: &mut Ui| s.set_theme(choice));

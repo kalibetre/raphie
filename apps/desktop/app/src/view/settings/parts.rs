@@ -49,7 +49,8 @@ pub fn sub_page(
         .key(key)
         .w_full()
         .max_w(PAGE_WIDTH)
-        .px(44.0)
+        // A narrow window keeps the room for the page.
+        .px(if look.narrow { 16.0 } else { 44.0 })
         .pt(36.0)
         .pb(32.0)
         .gap(28.0)

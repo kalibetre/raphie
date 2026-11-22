@@ -42,6 +42,7 @@ pub const SCENES: &[Scene] = &[
     ("sign-in-this-mac", sign_in_this_mac),
     ("device-code", device_code),
     ("new-conversation", new_conversation),
+    ("conversation-opened", conversation_opened),
     ("scheduled-failures", scheduled_failures),
     ("bot-setup", bot_setup),
     ("conversations", conversations),
@@ -2157,6 +2158,13 @@ pub fn scheduled_failures(ui: &mut Ui) {
             vec![],
         ),
     );
+}
+
+/// The conversation opened from the roster: in a narrow window it takes the
+/// roster's place, with a way back.
+pub fn conversation_opened(ui: &mut Ui) {
+    conversation(ui);
+    ui.narrow_home = false;
 }
 
 /// The same conversation with the second reply's tool steps unfolded.

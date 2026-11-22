@@ -63,6 +63,8 @@ pub struct Look {
     /// How far the macOS traffic lights reach in from the left edge, in
     /// points; 0 in full screen, on other platforms and in headless runs.
     pub lights: f32,
+    /// One column at a time, as on a phone (below `state::NARROW`).
+    pub narrow: bool,
 }
 
 pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
@@ -79,6 +81,7 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
         kit: theme.kit(),
         tones: Tones::assign(&s.model.bots),
         lights: cx.titlebar_inset(),
+        narrow: s.narrow(),
         theme,
     };
     // Drop-down lists float over the page. A view that has one puts it in
@@ -108,6 +111,20 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
 
 fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
+    // A narrow window shows one column, as a phone does: the roster is home,
+    // and a conversation takes its place with a way back.
+    if s.narrow() && s.narrow_home {
+        return row()
+            .key("rd-workspace")
+            .w_full()
+            .h_full()
+            .fill(t.sidebar)
+            .child(roster::roster(s, look))
+            .on_layout(|s: &mut Ui, rect: [f32; 4]| {
+                s.workspace_width = rect[2];
+                s.workspace_height = rect[3];
+            });
+    }
     let mut main = col()
         .key("rd-main")
         .grow(1.0)
@@ -149,13 +166,14 @@ fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         .w_full()
         .h_full()
         .fill(t.background);
-    if s.roster_open {
+    let docked = s.roster_open && !s.narrow();
+    if docked {
         shell = shell.child(roster::roster(s, look));
     }
     shell = shell.child(main);
     // A handle on the roster's inner edge resizes it. It lies in the
     // overlay layer, so the conversation beside it cannot cover it.
-    if s.workspace_width > 0.0 && s.roster_open {
+    if s.workspace_width > 0.0 && docked {
         overlays.push(resize_handle(s.visible_roster_width(), t));
     }
     // The width bounds the roster's; the height, the bots' share of it.

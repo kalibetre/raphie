@@ -49,7 +49,8 @@ pub use state::Ui;
 /// Everything Rune needs to run the app, in a window or headless.
 pub fn spec() -> AppSpec<Ui> {
     AppSpec {
-        min_size: Some((960.0, 560.0)),
+        // As narrow as a phone: below 768 points one column shows at a time.
+        min_size: Some((360.0, 480.0)),
         scenes: scenes::SCENES,
         setup: Some(state::setup),
         poll: Some(state::poll),
@@ -85,7 +86,15 @@ fn on_key(ui: &mut Ui, ev: &KeyEvent, tx: &mut Tx) -> bool {
         return false;
     }
     if ev.is_command('b') {
-        ui.roster_open = !ui.roster_open;
+        // In a narrow window the roster is a screen: ⌘B goes to it and back.
+        if ui.narrow() {
+            match ui.screen {
+                state::Screen::Settings(_) => ui.settings_nav_home = !ui.settings_nav_home,
+                state::Screen::Workspace => ui.narrow_home = !ui.narrow_home,
+            }
+        } else {
+            ui.roster_open = !ui.roster_open;
+        }
         return true;
     }
     if ev.is_command(',') && ui.model.auth == raphie_core::model::AuthState::SignedIn {
