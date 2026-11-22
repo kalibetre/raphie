@@ -978,4 +978,46 @@
     border-radius: 50%;
     background: var(--accent);
   }
+
+  /* What a bot changed about itself or the owner in a reply. */
+  .self-update-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0;
+  }
+  .self-update-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    padding: 4px 11px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .self-update-note span {
+    color: var(--foreground);
+  }
+  .self-update-note button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+  }
+  .self-update-note button:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+  .self-update-note button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .self-update-note button::before {
+    content: "·" / "";
+    margin-right: 7px;
+    color: var(--muted-foreground);
+  }
 }

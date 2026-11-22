@@ -26,7 +26,7 @@ const same = (a: SaveOwnerProfile, b: SaveOwnerProfile) =>
 /** This device's time zone, offered when the owner has not chosen one. */
 const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-/** Settings → About you: who every bot is talking to. */
+/** Settings → You: who every bot is talking to. */
 export function OwnerSettings() {
   const owner = useOwner();
   const [message, setMessage] = useState("");

@@ -38,6 +38,7 @@ import {
   remarkMentions,
   remarkSkills,
 } from "./handoffs/mention-markdown";
+import { SelfUpdateNotes } from "./self-update-notes";
 
 const noBots: readonly { id: string; name: string }[] = [];
 const noSkills: readonly string[] = [];
@@ -348,6 +349,7 @@ export function Chat({
         {!working && steps.length > 0 && (
           <ToolSteps steps={steps} working={working} />
         )}
+        {!working && <SelfUpdateNotes steps={steps} />}
         {!working &&
           asks
             .filter((a) => a.turnId === turn.id)

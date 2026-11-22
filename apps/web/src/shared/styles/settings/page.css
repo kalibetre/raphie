@@ -323,6 +323,22 @@
     font-size: 10.5px;
     font-weight: 600;
   }
+  .revision-tag {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--muted);
+    color: var(--foreground);
+    font-size: 10.5px;
+    font-weight: 500;
+  }
+  .revision-tag-preset {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+  .revision-timeline .revision-restore {
+    margin: 0 0 16px;
+  }
   .revision-meta {
     margin: 0 0 8px;
     font-size: 12px;

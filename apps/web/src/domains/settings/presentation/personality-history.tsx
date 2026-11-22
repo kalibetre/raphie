@@ -2,13 +2,28 @@ import type { BotProfile } from "@raphie/contracts";
 import { useQuery } from "@tanstack/react-query";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
+import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
+import { useBots, usePersonalityPresets } from "../infrastructure/use-bots";
 import { Group } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
 
-/** Saved personality revisions as a timeline; open one to read it. */
+/**
+ * Saved personality revisions as a timeline; open one to read it, or
+ * restore its personality as a new revision.
+ */
 export function PersonalityHistory({ profile }: { profile: BotProfile }) {
   const { workspace } = useBackend();
+  const bots = useBots();
+  const presets = usePersonalityPresets().data?.items ?? [];
+  const restore = (revision: BotProfile) =>
+    bots.save.mutate({
+      name: profile.name,
+      description: profile.description,
+      color: profile.color ?? null,
+      personality: revision.personality,
+      revision: profile.revision,
+    });
   const history = useQuery({
     queryKey: ["bot-history", profile.id],
     queryFn: () =>
@@ -26,7 +41,15 @@ export function PersonalityHistory({ profile }: { profile: BotProfile }) {
       />
     );
   return (
-    <Group title="Revisions" note="The latest 50 saved versions.">
+    <Group
+      title="Revisions"
+      note="The latest 50 saved versions. Restoring one saves it as a new revision."
+    >
+      {bots.save.error instanceof Error && (
+        <p role="alert" className="settings-error">
+          {bots.save.error.message}
+        </p>
+      )}
       <ol className="revision-timeline">
         {history.data.items.map((revision) => {
           const current = revision.revision === profile.revision;
@@ -37,6 +60,15 @@ export function PersonalityHistory({ profile }: { profile: BotProfile }) {
                   <span className="revision-dot" aria-hidden="true" />
                   <strong>Revision {revision.revision}</strong>
                   {current && <span className="revision-current">Current</span>}
+                  {revision.changedBy === "bot" && (
+                    <span className="revision-tag">by {revision.name}</span>
+                  )}
+                  {revision.preset && (
+                    <span className="revision-tag revision-tag-preset">
+                      {presets.find((p) => p.id === revision.preset)?.name ??
+                        revision.preset}
+                    </span>
+                  )}
                   <time dateTime={new Date(revision.updatedAt).toISOString()}>
                     {new Date(revision.updatedAt).toLocaleString(undefined, {
                       dateStyle: "medium",
@@ -55,6 +87,18 @@ export function PersonalityHistory({ profile }: { profile: BotProfile }) {
                 >
                   <pre>{revision.personality}</pre>
                 </ScrollArea>
+                {revision.personality !== profile.personality && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="revision-restore"
+                    disabled={bots.save.isPending}
+                    onClick={() => restore(revision)}
+                  >
+                    Restore this personality
+                  </Button>
+                )}
               </details>
             </li>
           );
