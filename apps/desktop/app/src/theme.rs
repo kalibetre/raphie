@@ -41,6 +41,9 @@ pub struct Theme {
     pub night: Color,
     pub night_soft: Color,
     pub error: Color,
+    /// `--source-1` to `--source-4`: where a card's items came from, when
+    /// it mixes several sources.
+    pub sources: [Color; 4],
     /// `--shadow`: cards.
     pub shadow: [Shadow; 2],
     /// `--composer-shadow`: the floating composer.
@@ -73,6 +76,12 @@ impl Theme {
             night: color("#454a9c"),
             night_soft: color("#e2e3f3"),
             error: color("#b13e32"),
+            sources: [
+                color("#4a7a57"),
+                color("#4f7396"),
+                color("#8a5a8c"),
+                color("#a2670f"),
+            ],
             shadow: [drop(1.0, 2.0, "#2a24140a"), drop(8.0, 24.0, "#2a24140d")],
             composer_shadow: [drop(2.0, 4.0, "#2a24141a"), drop(12.0, 32.0, "#2a24142e")],
         }
@@ -99,9 +108,20 @@ impl Theme {
             night: color("#aeb3f2"),
             night_soft: color("#262842"),
             error: color("#e07a6e"),
+            sources: [
+                color("#7fb08b"),
+                color("#8aaed0"),
+                color("#c39ac5"),
+                color("#e0a54a"),
+            ],
             shadow: [drop(1.0, 2.0, "#00000066"), drop(8.0, 24.0, "#00000055")],
             composer_shadow: [drop(2.0, 4.0, "#00000099"), drop(12.0, 32.0, "#000000aa")],
         }
+    }
+
+    /// The colour of a card's source at `position`; they repeat after four.
+    pub fn source(&self, position: usize) -> Color {
+        self.sources[position % self.sources.len()]
     }
 
     /// The highlight behind selected text.

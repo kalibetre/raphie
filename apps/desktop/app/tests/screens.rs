@@ -5330,6 +5330,64 @@ fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
 }
 
 #[test]
+fn a_card_shows_under_its_reply_and_its_links_open_the_browser() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::card_list, dark);
+        let text = screen_text(&rt);
+        assert!(text.contains("Seven open, one blocked on the vendor."));
+        for part in [
+            "AF board · open",
+            "Jira · as of",
+            "In progress",
+            "AF-512",
+            "Retry failed webhook deliveries",
+            "High",
+            "Waiting on vendor",
+            "and 3 more in To do · Open in Jira",
+        ] {
+            assert!(text.contains(part), "{part} is missing from: {text}");
+        }
+        click(&mut rt, "rd-card-card-1-title");
+        click(&mut rt, "rd-card-card-1-0-0-title");
+        click(&mut rt, "rd-card-card-1-more");
+        assert_eq!(
+            rt.state.opened,
+            [
+                "https://example.atlassian.net/boards/7",
+                "https://example.atlassian.net/browse/AF-512",
+                "https://example.atlassian.net/boards/7?status=todo",
+            ]
+        );
+    }
+}
+
+#[test]
+fn a_timeline_card_places_now_and_names_each_source() {
+    let mut rt = render(scenes::card_timeline, false);
+    let text = screen_text(&rt);
+    for part in [
+        "Work calendar",
+        "Personal calendar",
+        "Side-project calendar couldn't be read",
+        "Standup",
+        "Now · ",
+        "Free until ",
+        "Overlaps",
+        "Team farewell call",
+    ] {
+        assert!(text.contains(part), "{part} is missing from: {text}");
+    }
+    // The line for now comes after the event that is over.
+    assert!(text.find("Standup") < text.find("Now · "), "{text}");
+    // A meeting's second link opens too.
+    click(&mut rt, "rd-card-card-1-4-link");
+    assert_eq!(rt.state.opened, ["https://meet.example.com/abc"]);
+
+    let text = screen_text(&render(scenes::card_sources, true));
+    assert!(text.contains("GitHub") && text.contains("Bitbucket") && text.contains("Checks fail"));
+}
+
+#[test]
 fn a_reply_style_is_chosen_and_saved_with_the_profile() {
     for dark in [false, true] {
         // Tall enough to show the Replies card under the personality.

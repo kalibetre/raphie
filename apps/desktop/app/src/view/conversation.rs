@@ -6,8 +6,8 @@
 //! `active-run.tsx`, and the message rules in `chat.css`.
 
 use raphie_core::contracts::{
-    AskStatus, ControlAction, QueueMode, SessionActivity, SessionAsk, SessionObservation,
-    SessionTurn, TurnStatus,
+    AskStatus, ControlAction, QueueMode, SessionActivity, SessionAsk, SessionCard,
+    SessionObservation, SessionTurn, TurnStatus,
 };
 use raphie_core::model::Conversation;
 use raphie_core::projections::{
@@ -20,6 +20,7 @@ use rune_kit::{Loader, Markdown};
 use super::Look;
 use super::asks;
 use super::attachments::{Action, file_card};
+use super::cards;
 use super::compaction;
 use super::handoffs;
 use super::self_updates;
@@ -133,12 +134,17 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             .iter()
             .filter(|ask| ask.turn_id == turn.id)
             .collect();
-        items.push(owner_turn(s, turn, steps, &asks, now, look));
+        let cards: Vec<&SessionCard> = observation
+            .cards
+            .iter()
+            .filter(|card| card.turn_id == turn.id)
+            .collect();
+        items.push(owner_turn(s, turn, steps, &asks, &cards, now, look));
         let streaming = writing
             .is_some_and(|w| w.id == turn.id)
             .then_some(live)
             .flatten();
-        if let Some(reply) = reply(s, turn, steps, streaming, &observation.activity, now, look) {
+        if let Some(reply) = reply(s, turn, steps, streaming, observation, now, look) {
             items.push(reply);
         }
     }
@@ -163,6 +169,7 @@ fn owner_turn(
     turn: &SessionTurn,
     steps: &[ToolStep],
     asks: &[&SessionAsk],
+    cards: &[&SessionCard],
     now: i64,
     look: &Look,
 ) -> El {
@@ -197,6 +204,12 @@ fn owner_turn(
     if !working {
         for ask in asks {
             block = block.child(asks::card(s, ask, look));
+        }
+    }
+    // A turn that ended without a reply still shows the cards it made.
+    if !working && !in_reply {
+        for shown in cards {
+            block = block.child(cards::card(shown, now, look));
         }
     }
     if turn.cancelled == Some(true) {
@@ -382,11 +395,12 @@ fn reply(
     turn: &SessionTurn,
     steps: &[ToolStep],
     live: Option<&str>,
-    activity: &[SessionActivity],
+    observation: &SessionObservation,
     now: i64,
     look: &Look,
 ) -> Option<El> {
     let t = &look.theme;
+    let activity = &observation.activity;
     let (source, streaming) = match (&turn.answer, live) {
         (Some(answer), _) => (answer.as_str(), false),
         (None, Some(text)) if !text.is_empty() => (text, true),
@@ -423,6 +437,15 @@ fn reply(
     } else {
         handoffs::markdown(s, source, look)
     });
+    if done {
+        for shown in observation
+            .cards
+            .iter()
+            .filter(|card| card.turn_id == turn.id)
+        {
+            reply = reply.child(cards::card(shown, now, look));
+        }
+    }
     if done && let Some(sources) = handoffs::sources(turn, look) {
         reply = reply.child(sources);
     }
@@ -671,6 +694,14 @@ fn active_run(
         .key("rd-working")
         .w_full()
         .child(tool_steps(s, &run, now, look));
+    // Cards the turn has shown so far, then what it is waiting to hear.
+    for shown in observation
+        .cards
+        .iter()
+        .filter(|card| card.turn_id == turn.id)
+    {
+        block = block.child(cards::card(shown, now, look));
+    }
     for ask in asks {
         block = block.child(asks::card(s, ask, look));
     }

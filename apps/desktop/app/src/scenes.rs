@@ -82,6 +82,10 @@ pub const SCENES: &[Scene] = &[
     ("ask-confirm", ask_confirm),
     ("ask-own-words", ask_own_words),
     ("ask-answered", ask_answered),
+    ("card-timeline", card_timeline),
+    ("card-list", card_list),
+    ("card-sources", card_sources),
+    ("card-narrow", card_narrow),
     ("command-approval", command_approval),
     ("settings-account", settings_account),
     ("settings-account-unreachable", settings_account_unreachable),
@@ -2463,6 +2467,135 @@ pub fn ask_answered(ui: &mut Ui) {
     answered["answeredVia"] = json!("web");
     seen.asks = vec![from_json(answered)];
     open(ui, "s-3", seen);
+}
+
+/// A reply with a card under it.
+fn showing(ui: &mut Ui, asked: &str, said: &str, card: Value) {
+    let mut seen = observation(
+        asked,
+        vec![turn("t1", -30_000, asked, Some(said), "done")],
+        None,
+        "idle",
+        vec![],
+        finished_activity(),
+    );
+    seen.cards = vec![from_json(json!({
+        "id": "card-1", "conversationId": "s-3", "turnId": "t1",
+        "createdAt": now_ms() - 20_000, "card": card
+    }))];
+    open(ui, "s-3", seen);
+}
+
+/// A day read from two calendars, around the present: one event is over,
+/// two overlap, and one is on both calendars.
+pub fn card_timeline(ui: &mut Ui) {
+    let now = now_ms();
+    let at = |minutes: i64| now + minutes * 60_000;
+    showing(
+        ui,
+        "What's my schedule like today?",
+        "Five things today. Sprint planning overlaps the dentist, and I couldn't read the side-project calendar.",
+        json!({
+            "type": "timeline", "title": "Today",
+            "sources": ["Work calendar", "Personal calendar"],
+            "warning": "Side-project calendar couldn't be read",
+            "items": [
+                { "kind": "event", "title": "Standup", "detail": "Meet · 6 people",
+                  "url": "https://calendar.example.com/e/1",
+                  "start": at(-70), "end": at(-55), "sources": [0] },
+                { "kind": "gap", "start": at(-55), "end": at(40) },
+                { "kind": "event", "title": "1:1 with Mara", "detail": "Room Baobab",
+                  "start": at(40), "end": at(70), "sources": [0] },
+                { "kind": "event", "title": "Sprint planning", "detail": "Meet · 9 people",
+                  "badge": { "label": "Overlaps", "tone": "attention" },
+                  "link": { "label": "Join", "url": "https://meet.example.com/abc" },
+                  "start": at(70), "end": at(130), "sources": [0] },
+                { "kind": "event", "title": "Dentist", "detail": "Bole Road clinic",
+                  "badge": { "label": "Overlaps", "tone": "attention" },
+                  "start": at(100), "end": at(145), "sources": [1] },
+                { "kind": "event", "title": "Team farewell call", "detail": "Zoom",
+                  "link": { "label": "Join", "url": "https://zoom.example.com/j/1" },
+                  "start": at(180), "end": at(210), "sources": [0, 1] }
+            ]
+        }),
+    );
+}
+
+fn tickets() -> Value {
+    json!({
+        "type": "list", "title": "AF board · open",
+        "url": "https://example.atlassian.net/boards/7",
+        "sources": ["Jira"],
+        "stats": [
+            { "label": "Open", "value": "7" },
+            { "label": "In progress", "value": "2" },
+            { "label": "Blocked", "value": "1" }
+        ],
+        "more": { "label": "and 3 more in To do · Open in Jira",
+                  "url": "https://example.atlassian.net/boards/7?status=todo" },
+        "groups": [
+            { "label": "In progress", "rows": [
+                { "key": "AF-512", "title": "Retry failed webhook deliveries",
+                  "url": "https://example.atlassian.net/browse/AF-512",
+                  "badge": { "label": "High", "tone": "bad" }, "trailing": "2d" },
+                { "key": "AF-498", "title": "Export report as CSV",
+                  "url": "https://example.atlassian.net/browse/AF-498",
+                  "badge": { "label": "Medium", "tone": "neutral" }, "trailing": "5d" }
+            ] },
+            { "label": "Blocked", "rows": [
+                { "key": "AF-471", "title": "Rotate payment provider keys",
+                  "detail": "Waiting on vendor",
+                  "badge": { "label": "Blocked", "tone": "attention" }, "trailing": "9d" }
+            ] },
+            { "label": "To do", "rows": [
+                { "key": "AF-520", "title": "Paginate the audit log",
+                  "badge": { "label": "Medium", "tone": "neutral" }, "trailing": "1d" }
+            ] }
+        ]
+    })
+}
+
+/// Tickets in groups, with headline numbers and a line for the rest.
+pub fn card_list(ui: &mut Ui) {
+    showing(
+        ui,
+        "What are the open tickets on my Jira AF board?",
+        "Seven open, one blocked on the vendor.",
+        tickets(),
+    );
+}
+
+/// Rows from two services, each marked with its source's colour.
+pub fn card_sources(ui: &mut Ui) {
+    showing(
+        ui,
+        "Do I have a PR waiting for my review?",
+        "Two. The oldest has waited three days.",
+        json!({
+            "type": "list", "title": "Waiting for your review",
+            "sources": ["GitHub", "Bitbucket"],
+            "groups": [{ "rows": [
+                { "key": "#214", "title": "Cache board queries per sprint",
+                  "detail": "acme/billing · by tesfa · +182 −40",
+                  "url": "https://github.example.com/acme/billing/pull/214",
+                  "badge": { "label": "Checks pass", "tone": "good" },
+                  "trailing": "3d", "sources": [0] },
+                { "key": "#87", "title": "Drop the legacy export endpoint",
+                  "detail": "acme/reports · by lior · +12 −310",
+                  "url": "https://bitbucket.example.com/acme/reports/pull-requests/87",
+                  "badge": { "label": "Checks fail", "tone": "bad" },
+                  "link": { "label": "Checks",
+                            "url": "https://bitbucket.example.com/acme/reports/pipelines/87" },
+                  "trailing": "5h", "sources": [1] }
+            ] }]
+        }),
+    );
+}
+
+/// A card in a narrow window: a row's badge and age go under its title.
+pub fn card_narrow(ui: &mut Ui) {
+    card_timeline(ui);
+    ui.narrow_home = false;
 }
 
 pub fn approval(ui: &mut Ui) {

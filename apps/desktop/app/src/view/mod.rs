@@ -21,6 +21,7 @@
 
 mod asks;
 mod attachments;
+mod cards;
 mod compaction;
 mod composer;
 mod conversation;

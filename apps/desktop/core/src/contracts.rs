@@ -975,6 +975,167 @@ pub struct SessionAsk {
     pub answer: Option<AskAnswer>,
 }
 
+/// `CardTone` in `packages/contracts/src/sessions/cards.ts`: how a badge reads.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CardTone {
+    #[default]
+    Neutral,
+    Good,
+    Attention,
+    Bad,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CardBadge {
+    pub label: String,
+    #[serde(default)]
+    pub tone: CardTone,
+}
+
+/// A link out of a card. The runtime only passes http and https addresses.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CardLink {
+    pub label: String,
+    pub url: String,
+}
+
+/// One headline number above a card's rows.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CardStat {
+    pub label: String,
+    pub value: String,
+}
+
+/// The line under a card's items for what it leaves out.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CardMore {
+    pub label: String,
+    #[serde(default)]
+    pub url: Option<String>,
+}
+
+/// `CardRow`: one row of a list card.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+pub struct CardRow {
+    /// A short identifier before the title, such as "AF-512".
+    #[serde(default)]
+    pub key: Option<String>,
+    pub title: String,
+    /// Where the title leads.
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub detail: Option<String>,
+    #[serde(default)]
+    pub badge: Option<CardBadge>,
+    /// A second link beside the row, such as a meeting's "Join".
+    #[serde(default)]
+    pub link: Option<CardLink>,
+    /// A short value at the end of the row, such as its age.
+    #[serde(default)]
+    pub trailing: Option<String>,
+    /// Positions in the card's `sources`; empty unless it has several.
+    #[serde(default)]
+    pub sources: Vec<usize>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CardGroup {
+    #[serde(default)]
+    pub label: Option<String>,
+    pub rows: Vec<CardRow>,
+}
+
+/// `CardEvent`: one event of a timeline card, in milliseconds since the epoch.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CardEvent {
+    pub title: String,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub detail: Option<String>,
+    #[serde(default)]
+    pub badge: Option<CardBadge>,
+    #[serde(default)]
+    pub link: Option<CardLink>,
+    #[serde(default)]
+    pub sources: Vec<usize>,
+    pub start: i64,
+    #[serde(default)]
+    pub end: Option<i64>,
+    /// The event has a date and no time of day; `start` is then midnight
+    /// UTC of that date.
+    #[serde(default)]
+    pub all_day: bool,
+}
+
+/// `CardTimelineItem`: an event, free time between two, or a new day.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum CardTimelineItem {
+    Event(CardEvent),
+    Gap {
+        start: i64,
+        end: i64,
+    },
+    Day {
+        at: i64,
+    },
+    #[serde(other)]
+    Unknown,
+}
+
+/// What a card holds: rows in groups, or the events of one or more days.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum CardBody {
+    List {
+        groups: Vec<CardGroup>,
+    },
+    Timeline {
+        items: Vec<CardTimelineItem>,
+    },
+    /// A kind of card a newer runtime sends; it is not drawn.
+    #[serde(other)]
+    Unknown,
+}
+
+/// `Card`: what a bot shows in place of a list in its reply.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct Card {
+    pub title: String,
+    /// Where the title leads: the board, query or calendar.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Where the items came from. With several, each item names its own.
+    #[serde(default)]
+    pub sources: Vec<String>,
+    /// Something the card is missing, such as an account that was not read.
+    #[serde(default)]
+    pub warning: Option<String>,
+    #[serde(default)]
+    pub stats: Vec<CardStat>,
+    #[serde(default)]
+    pub more: Option<CardMore>,
+    #[serde(flatten)]
+    pub body: CardBody,
+}
+
+/// `SessionCard`: a card a bot showed, under the reply of the turn that made it.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionCard {
+    pub id: String,
+    pub turn_id: String,
+    /// When the bot read the data: the card's "as of" time.
+    pub created_at: i64,
+    pub card: Card,
+}
+
 /// `ToolApprovalView["execution"]` in `packages/contracts/src/index.ts`.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -1068,6 +1229,9 @@ pub struct SessionObservation {
     /// Questions the bot asked the owner; absent from older runtimes.
     #[serde(default)]
     pub asks: Vec<SessionAsk>,
+    /// Cards the bot showed; absent from older runtimes.
+    #[serde(default)]
+    pub cards: Vec<SessionCard>,
     pub live: Option<LiveConversation>,
     /// The session's latest journal entries (at most 200), oldest first.
     #[serde(default)]
@@ -1979,5 +2143,68 @@ mod tests {
         );
         let unknown: AskStatus = serde_json::from_value(serde_json::json!("withdrawn")).unwrap();
         assert_eq!(unknown, AskStatus::Unknown);
+    }
+
+    #[test]
+    fn cards_read_as_the_runtime_sends_them() {
+        let list: SessionCard = serde_json::from_value(serde_json::json!({
+            "id": "c", "conversationId": "s", "turnId": "t", "createdAt": 5,
+            "card": {
+                "type": "list", "title": "AF board", "sources": ["Jira"],
+                "url": "https://example.com/board",
+                "stats": [{ "label": "Open", "value": "7" }],
+                "more": { "label": "and 3 more" },
+                "groups": [{ "label": "Blocked", "rows": [{
+                    "key": "AF-471", "title": "Rotate keys",
+                    "badge": { "label": "Blocked", "tone": "attention" },
+                    "trailing": "9d"
+                }] }]
+            }
+        }))
+        .expect("a list card parses");
+        assert_eq!(list.card.sources, ["Jira"]);
+        assert_eq!(list.card.more.as_ref().and_then(|m| m.url.as_deref()), None);
+        let CardBody::List { groups } = &list.card.body else {
+            panic!("a list card has groups");
+        };
+        let row = &groups[0].rows[0];
+        assert_eq!(
+            row.badge.as_ref().map(|b| b.tone),
+            Some(CardTone::Attention)
+        );
+        assert!(row.sources.is_empty());
+
+        let timeline: Card = serde_json::from_value(serde_json::json!({
+            "type": "timeline", "title": "Monday", "sources": ["Work", "Personal"],
+            "warning": "One calendar was not read",
+            "items": [
+                { "kind": "day", "at": 1 },
+                { "kind": "event", "title": "Birthday", "start": 0, "allDay": true, "sources": [1] },
+                { "kind": "gap", "start": 2, "end": 3 },
+                { "kind": "event", "title": "Standup", "start": 3, "end": 4,
+                  "badge": { "label": "New", "tone": "sparkly" },
+                  "link": { "label": "Join", "url": "https://meet.example.com/a" } },
+                { "kind": "holiday" }
+            ]
+        }))
+        .expect("a timeline card parses");
+        let CardBody::Timeline { items } = &timeline.body else {
+            panic!("a timeline card has items");
+        };
+        assert_eq!(items[0], CardTimelineItem::Day { at: 1 });
+        assert!(matches!(&items[1], CardTimelineItem::Event(e) if e.all_day && e.sources == [1]));
+        assert_eq!(items[2], CardTimelineItem::Gap { start: 2, end: 3 });
+        assert!(matches!(
+            &items[3],
+            CardTimelineItem::Event(e)
+                if e.end == Some(4) && e.badge.as_ref().map(|b| b.tone) == Some(CardTone::Unknown)
+        ));
+        // A part a newer runtime sends is skipped, not an error.
+        assert_eq!(items[4], CardTimelineItem::Unknown);
+        let newer: Card = serde_json::from_value(serde_json::json!({
+            "type": "board", "title": "Later", "sources": []
+        }))
+        .expect("an unknown kind of card parses");
+        assert_eq!(newer.body, CardBody::Unknown);
     }
 }
