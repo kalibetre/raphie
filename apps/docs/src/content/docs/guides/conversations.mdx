@@ -96,6 +96,30 @@ By default, bots keep replies short. A reply opens with the answer, or the one q
 
 To change this for one bot, set its [reply style](/guides/bots/#reply-style), or say how it should reply in its [personality](/guides/bots/#edit-identity-and-personality); a personality that asks for something else wins. What every bot knows about you, including your time zone, is set under [You](/guides/bots/#you).
 
+## Cards
+
+When the answer is a set of items you will scan, such as a day's events, open tickets or pull requests waiting for your review, a bot shows them as a card under a short reply instead of writing a list.
+
+| Card     | Shows                                                                                                                                                                 |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| List     | Rows, optionally in groups such as a status. A row has a title, and can have a key (`AF-512`), a line of detail, a badge and a short value such as its age.           |
+| Timeline | The events of one or more days in order, with free time of 30 minutes or more between them. Today's card dims what is over and marks the present with a **Now** line. |
+
+Either kind can carry up to four headline numbers, and a line at the bottom for what it leaves out. A card holds at most 40 rows or events.
+
+- **Links:** a title opens the ticket, pull request or event in your browser, the card's own title opens the board or query it came from, and a row can carry one more link, such as **Join** for a meeting. Only `http` and `https` links are kept.
+- **Several accounts:** when a card mixes sources, such as two calendars, each row has its source's colour and the card names them at the top. An event that sits on two calendars shows once, in both colours, and events that share time are badged **Overlaps**.
+- **A missing source:** when the bot could not read one of them, an amber line on the card says which, so a card never looks complete when it is not.
+- **As of:** a card is what the bot read at that moment, stamped with the time. It does not update; ask again for a fresh one.
+
+Cards are read-only. To act on a row, open it, or ask the bot.
+
+Telegram and Discord cannot draw a card, so there it is added to the reply as a plain list with its links. The web workspace and the desktop app show the same session's card.
+
+:::note
+The bot copies links from what its tools returned. Raphie checks that a link is a web address, not that it leads where the row says, so glance at the address before you sign in anywhere.
+:::
+
 ## Long conversations
 
 A session can go on as long as you like. When it grows close to the size the model can read at once, the bot summarizes its earlier messages and reads the summary instead of them from then on. Its most recent messages stay word for word.

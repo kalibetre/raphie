@@ -233,7 +233,7 @@ export function createCardTools(cards: CardService) {
                 start: str({
                   maxLength: 40,
                   description:
-                    'A date and time with its UTC offset ("2026-11-23T14:00:00+03:00"), or only a date ("2026-11-23") for an all-day event.',
+                    'A date and time in ISO 8601 with its UTC offset ("YYYY-MM-DDTHH:MM:SS+03:00"), or only a date ("YYYY-MM-DD") for an all-day event.',
                 }),
                 end: opt(str({ maxLength: 40 })),
               }),
