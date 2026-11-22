@@ -22,6 +22,7 @@ use super::asks;
 use super::attachments::{Action, file_card};
 use super::compaction;
 use super::handoffs;
+use super::self_updates;
 use super::steps::{Run, Working, code_box, tool_steps};
 use crate::format;
 use crate::icons;
@@ -172,6 +173,9 @@ fn owner_turn(
             working: None,
         };
         block = block.child(tool_steps(s, &run, now, look));
+    }
+    if !working && let Some(notes) = self_updates::notes(s, steps, t) {
+        block = block.child(notes);
     }
     if !working {
         for ask in asks {

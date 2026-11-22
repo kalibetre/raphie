@@ -272,6 +272,8 @@ pub enum Command {
     LoadBotHistory {
         bot_id: String,
     },
+    /// Load the built-in personalities a bot can start from.
+    LoadPersonalityPresets,
     /// Create a bot.
     CreateBot {
         bot: NewBot,
@@ -801,6 +803,7 @@ impl Engine {
             Command::SaveMemory { bot_id, update } => self.save_memory(bot_id, update),
             Command::TestMemory { bot_id } => self.test_memory(bot_id),
             Command::LoadBotHistory { bot_id } => self.load_bot_history(bot_id),
+            Command::LoadPersonalityPresets => self.load_personality_presets(),
             Command::CreateBot { bot } => self.create_bot(bot),
             Command::DeleteBot {
                 bot_id,
@@ -1737,6 +1740,25 @@ impl Engine {
         });
     }
 
+    fn load_personality_presets(&mut self) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.personality_presets().await {
+                Ok(items) => emit.emit(Event::PersonalityPresets(items)),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                // Presets are a convenience: without them the editor is
+                // still there, as on the web.
+                Err(_) => {}
+            }
+        });
+    }
+
     fn create_bot(&mut self, bot: NewBot) {
         let Some(api) = self.api.clone() else {
             return;
@@ -2521,7 +2543,14 @@ impl Engine {
         let inbox = self.inbox.clone();
         tokio::spawn(async move {
             match api.save_profile(&bot_id, &update).await {
-                Ok(profile) => emit.emit(Event::ProfileSaved(profile)),
+                Ok(profile) => {
+                    emit.emit(Event::ProfileSaved(profile));
+                    // The new revision joins the history, which revision
+                    // history and the notes under replies read.
+                    if let Ok(items) = api.bot_history(&bot_id).await {
+                        emit.emit(Event::BotHistory { bot_id, items });
+                    }
+                }
                 Err(ApiError::Unauthenticated) => {
                     let _ = inbox.send(Input::Expired);
                 }
@@ -2961,6 +2990,8 @@ mod tests {
             color: None,
             personality: String::new(),
             reply_style: Default::default(),
+            self_updates: None,
+            changed_by: None,
             revision: 1,
         };
         assert_eq!(

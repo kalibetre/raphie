@@ -1,4 +1,4 @@
-//! Settings → About you: who every bot is talking to. Shared by every bot.
+//! Settings → You: who every bot is talking to. Shared by every bot.
 //!
 //! Mirrors `apps/web/src/domains/settings/presentation/owner-settings.tsx`
 //! and the `.owner-time-zone` rules in `shared/styles/settings/bot.css`.
@@ -36,7 +36,7 @@ pub fn owner(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     } else {
         vec![status(t, "Loading…", "Fetching your profile.", None)]
     };
-    page("rd-page-owner", "About you", LEDE, Scope::App, groups, look)
+    page("rd-page-owner", "You", LEDE, Scope::App, groups, look)
 }
 
 /// "You": name, what bots call the owner, and their time zone.

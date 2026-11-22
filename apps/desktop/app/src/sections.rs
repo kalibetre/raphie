@@ -164,7 +164,7 @@ impl Page {
     pub fn label(&self) -> &'static str {
         match self {
             Page::Bot { section, .. } => section.label(),
-            Page::Owner => "About you",
+            Page::Owner => "You",
             Page::Account => "Account",
             Page::NewBot => "Create a bot",
             Page::Appearance => "Appearance",

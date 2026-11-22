@@ -23,7 +23,7 @@ use crate::contracts::{
     SandboxInfo, SandboxSettings, SessionApproval, SessionObservation, SessionSummary, SessionTurn,
     TelegramPairingCode,
 };
-use crate::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
+use crate::contracts::{ActivityEvent, BotRevision, PersonalityPreset, TraceDiagnostics};
 use crate::contracts::{JobRun, ScheduledJob};
 use crate::contracts::{ProviderSignIn, SignInStatus};
 use crate::contracts::{SkillDetail, SkillSummary};
@@ -111,6 +111,8 @@ pub enum Event {
         bot_id: String,
         message: String,
     },
+    /// The built-in personalities a bot can start from.
+    PersonalityPresets(Vec<PersonalityPreset>),
     /// A bot was created; this is it.
     BotCreated(BotProfile),
     BotCreateFailed {
@@ -818,6 +820,8 @@ pub struct Model {
     pub bot_history: HashMap<String, Vec<BotRevision>>,
     /// The bot whose history could not be loaded, and why.
     pub bot_history_error: Option<(String, String)>,
+    /// The built-in personalities, once loaded. The same for every bot.
+    pub personality_presets: Option<Vec<PersonalityPreset>>,
     /// A bot is being created.
     pub creating_bot: bool,
     /// A bot is being deleted.
@@ -983,6 +987,7 @@ impl Default for Model {
             sandbox_message: None,
             bot_history: HashMap::new(),
             bot_history_error: None,
+            personality_presets: None,
             creating_bot: false,
             deleting_bot: false,
             delete_bot_error: None,
@@ -1157,6 +1162,7 @@ impl Model {
             Event::BotHistoryFailed { bot_id, message } => {
                 self.bot_history_error = Some((bot_id, message));
             }
+            Event::PersonalityPresets(items) => self.personality_presets = Some(items),
             Event::BotCreated(profile) => {
                 self.creating_bot = false;
                 self.profile_error = None;

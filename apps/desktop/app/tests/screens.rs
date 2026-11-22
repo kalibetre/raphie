@@ -959,6 +959,8 @@ fn research(description: &str, revision: u32) -> BotProfile {
         color: None,
         personality: "Be brief.".into(),
         reply_style: Default::default(),
+        self_updates: None,
+        changed_by: None,
         revision,
     }
 }
@@ -5310,11 +5312,16 @@ fn a_profile_opened_before_its_bot_loads_fills_in_when_it_arrives() {
 }
 
 #[test]
-fn about_you_is_listed_first_under_the_app_and_loads_the_owner() {
+fn you_is_listed_first_under_the_app_and_loads_the_owner() {
     let mut rt = render(scenes::settings_account, false);
+    assert!(screen_text(&rt).lines().any(|line| line == "You"));
+    assert!(
+        !screen_text(&rt).contains("About you"),
+        "the page is \"You\""
+    );
     let owner = element(&rt, "rd-nav-owner");
     let account = element(&rt, "rd-nav-account");
-    assert!(owner.rect[1] < account.rect[1], "About you comes first");
+    assert!(owner.rect[1] < account.rect[1], "You comes first");
     click(&mut rt, "rd-nav-owner");
     assert_eq!(rt.state.screen, Screen::Settings(Page::Owner));
     assert_eq!(rt.state.sent.last(), Some(&Command::LoadOwner));
@@ -5743,4 +5750,156 @@ fn slash_new_leaves_an_open_conversation_for_a_new_one() {
         "/new opens a new conversation, as the button does"
     );
     assert_eq!(rt.state.composer.text, "");
+}
+
+#[test]
+fn a_preset_fills_the_editor_and_self_updates_are_saved_with_the_profile() {
+    let mut rt = render_sized(scenes::settings_profile_presets, false, (1280.0, 2600.0));
+    // Six cards, three to a row; the bot's own change is named over the
+    // editor.
+    let candid = element(&rt, "rd-profile-preset-candid");
+    let coach = element(&rt, "rd-profile-preset-coach");
+    let creative = element(&rt, "rd-profile-preset-creative");
+    assert!(coach.rect[1] > candid.rect[1], "a second row");
+    assert!(
+        (creative.rect[2] - candid.rect[2]).abs() < 0.5,
+        "equal widths"
+    );
+    assert_eq!(
+        element(&rt, "rd-profile-revision").text.as_deref(),
+        Some("Revision 4 · edited by Research")
+    );
+    assert!(screen_text(&rt).contains("Pick a starting point above"));
+
+    click(&mut rt, "rd-profile-preset-coach");
+    let coach = scenes::personality_presets()[3].personality.clone();
+    assert_eq!(rt.state.profile.personality.text, coach);
+    assert!(rt.state.profile.is_dirty());
+
+    click(&mut rt, "rd-self-update-owner-switch");
+    click(&mut rt, "rd-profile-save");
+    let Some(Command::SaveProfile { bot_id, update }) = rt.state.sent.last() else {
+        panic!("a save, not {:?}", rt.state.sent.last());
+    };
+    assert_eq!(bot_id, "b-research");
+    assert_eq!(update.personality, coach);
+    assert_eq!(update.revision, 4);
+    assert_eq!(
+        update.self_updates,
+        Some(raphie_core::contracts::SelfUpdates {
+            personality: true,
+            owner: true
+        })
+    );
+}
+
+#[test]
+fn self_updates_are_hidden_for_a_runtime_too_old_to_say() {
+    let mut rt = render_sized(research_profile, false, (1280.0, 2600.0));
+    assert!(rt.find("rd-self-updates").is_none());
+    assert!(rt.find("rd-profile-presets").is_none(), "no presets loaded");
+    deliver(
+        &mut rt,
+        Event::PersonalityPresets(scenes::personality_presets()),
+    );
+    assert!(rt.find("rd-profile-presets").is_some());
+}
+
+#[test]
+fn a_new_bot_may_change_its_personality_but_not_you() {
+    let mut rt = render_sized(scenes::settings_new_bot, false, (1280.0, 2600.0));
+    assert!(rt.state.sent.contains(&Command::LoadPersonalityPresets));
+    assert!(rt.find("rd-self-update-owner-switch").is_some());
+    assert_eq!(
+        rt.state.profile.self_updates,
+        Some(raphie_core::contracts::SelfUpdates::NEW_BOT)
+    );
+    click(&mut rt, "rd-profile-save");
+    let Some(Command::CreateBot { bot }) = rt.state.sent.last() else {
+        panic!("a bot to create, not {:?}", rt.state.sent.last());
+    };
+    assert_eq!(
+        bot.self_updates,
+        Some(raphie_core::contracts::SelfUpdates::NEW_BOT)
+    );
+}
+
+#[test]
+fn revision_history_tags_the_bots_changes_and_restores_an_older_one() {
+    let mut rt = render_sized(scenes::settings_history_restore, false, (1280.0, 1700.0));
+    assert!(rt.find("rd-revision-4-by-bot").is_some());
+    assert!(rt.find("rd-revision-4-preset").is_some());
+    let text = screen_text(&rt);
+    assert!(text.contains("by Research"), "{text}");
+    assert!(text.contains("Analyst"), "the preset's name, not its id");
+    assert!(text.contains("Restoring one saves it as a new revision."));
+    // The current personality has nothing to restore.
+    assert!(rt.find("rd-revision-4-restore").is_none());
+    click(&mut rt, "rd-revision-3-restore");
+    let Some(Command::SaveProfile { bot_id, update }) = rt.state.sent.last() else {
+        panic!("a save, not {:?}", rt.state.sent.last());
+    };
+    assert_eq!(bot_id, "b-research");
+    assert_eq!(update.revision, 4, "saved over the current revision");
+    assert_eq!(update.personality, scenes::bot_revisions()[0].personality);
+    assert_eq!(update.self_updates, None, "the switches are kept");
+    assert!(rt.state.model.saving_profile);
+}
+
+#[test]
+fn a_reply_notes_what_the_bot_changed_with_a_way_to_see_or_undo_it() {
+    let mut rt = render(scenes::conversation_self_updates, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Updated its personality"), "{text}");
+    assert!(text.contains("Updated what it knows about you"));
+    // Undo goes back to the revision before the bot's.
+    click(&mut rt, "rd-self-update-op-p-undo");
+    let Some(Command::SaveProfile { bot_id, update }) = rt.state.sent.last().cloned() else {
+        panic!("a save, not {:?}", rt.state.sent.last());
+    };
+    assert_eq!(bot_id, "default");
+    assert_eq!(update.revision, 4);
+    assert!(
+        update
+            .personality
+            .starts_with("Be thoughtful and candid. Explain")
+    );
+    // Once the undo is saved, the bot's change is no longer current.
+    let mut undone = rt.state.model.bots[0].clone();
+    undone.revision = 5;
+    undone.changed_by = Some("owner".into());
+    deliver(&mut rt, Event::ProfileSaved(undone));
+    assert!(rt.find("rd-self-update-op-p-undo").is_none());
+    assert!(rt.find("rd-self-update-op-p-see").is_some());
+
+    click(&mut rt, "rd-self-update-op-p-see");
+    assert_eq!(
+        rt.state.screen,
+        Screen::Settings(Page::Bot {
+            bot_id: "default".into(),
+            section: BotSection::History,
+        })
+    );
+    let mut rt = render(scenes::conversation_self_updates, false);
+    click(&mut rt, "rd-self-update-op-o-review");
+    assert_eq!(rt.state.screen, Screen::Settings(Page::Owner));
+}
+
+#[test]
+fn a_self_update_that_saved_nothing_shows_no_note() {
+    let mut rt = render(scenes::conversation_self_updates, false);
+    // The owner changed the profile again since: the bot's save is gone.
+    let mut owner = scenes::owner_profile();
+    owner.updated_at = Some(owner.updated_at.unwrap() + 1.0e9);
+    deliver(&mut rt, Event::Owner(owner));
+    assert!(rt.find("rd-self-update-op-o").is_none());
+    // No revision of the bot's: the personality note goes too.
+    deliver(
+        &mut rt,
+        Event::BotHistory {
+            bot_id: "default".into(),
+            items: vec![],
+        },
+    );
+    assert!(rt.find("rd-self-update-op-p").is_none());
 }

@@ -13,7 +13,7 @@ use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome, is_telegram_
 use raphie_core::contracts::SessionSummary;
 use raphie_core::contracts::{
     ApprovalMode, AskAnswer, ControlAction, Decision, MemoryProvider, MemoryStatus, ModelSelection,
-    RuntimeSettings, Scope, TurnStatus,
+    RuntimeSettings, Scope, TurnStatus, UpdateBotProfile,
 };
 use raphie_core::contracts::{BotRef, HandedOffBy, Handoff, HandoffStatus};
 use raphie_core::contracts::{ProviderSignIn, SignInEvent, SignInStatus};
@@ -29,7 +29,9 @@ use raphie_core::mentions::{MentionQuery, insert_mention, mention_matches, menti
 use raphie_core::model::{AuthState, Effect, Event, Model, SkillOutcome};
 use raphie_core::model_library::{self, ModelFilter, PickerFilter};
 use raphie_core::origin::Origin;
+use raphie_core::projections::tool_steps;
 use raphie_core::replies::ReadReplies;
+use raphie_core::self_updates::{SelfUpdateNote, self_update_notes};
 use raphie_core::settings::{Settings, ThemeChoice};
 use raphie_core::slash::{SlashItem, SlashKind, insert_skill, slash_matches, slash_query};
 use raphie_core::updates::ReleaseChannel;
@@ -342,6 +344,12 @@ pub struct Ui {
     pub slash_dismissed: Option<String>,
     /// The bot whose skills were last asked for, for the "/" menu.
     skills_asked: Option<String>,
+    /// Self-update steps (by tool step id) whose saves have been asked for:
+    /// a new one asks for the bot's history and the owner's profile again.
+    self_updates_asked: HashSet<String>,
+    /// The save on its way restores a revision or undoes a bot's change,
+    /// not the Profile form: unsaved edits in the form stay.
+    restoring_profile: bool,
     /// When the selected bot's handoffs were last asked for, which bot that
     /// was, and what its conversation looked like then: a settled turn or a
     /// finished tool step asks again at once, so a new handoff's card comes
@@ -432,7 +440,7 @@ pub struct Ui {
     jobs_asked_at: f64,
     /// The frame clock when the Workspace page last asked for its folder.
     files_asked_at: f64,
-    /// Settings → About you: its form.
+    /// Settings → You: its form.
     pub owner: OwnerDraft,
     /// Settings → Sandbox: its form.
     pub sandbox: SandboxDraft,
@@ -601,6 +609,8 @@ impl Ui {
             slash_active: 0,
             slash_dismissed: None,
             skills_asked: None,
+            self_updates_asked: HashSet::new(),
+            restoring_profile: false,
             handoffs_asked_at: 0.0,
             handoffs_bot: None,
             handoff_signal: String::new(),
@@ -1663,6 +1673,92 @@ impl Ui {
             .collect()
     }
 
+    /// Asks for the built-in personalities until they have arrived; they
+    /// are the same for every bot.
+    fn ensure_presets(&mut self) {
+        if self.model.personality_presets.is_none() {
+            self.command(Command::LoadPersonalityPresets);
+        }
+    }
+
+    /// The conversation's finished self-updates: what its bot changed
+    /// about itself or the owner, one per tool step.
+    pub fn self_update_notes(&self) -> Vec<SelfUpdateNote> {
+        let Some(conversation) = &self.model.conversation else {
+            return Vec::new();
+        };
+        let Some(observation) = &conversation.observation else {
+            return Vec::new();
+        };
+        conversation
+            .turns()
+            .into_iter()
+            .flat_map(|turn| {
+                self_update_notes(&tool_steps(
+                    &turn.id,
+                    &observation.activity,
+                    &observation.tool_approvals,
+                ))
+            })
+            .collect()
+    }
+
+    /// A self-update not seen before asks for what it saved: the bot's
+    /// revisions and the owner's profile, which its note under the reply
+    /// reads.
+    fn ensure_self_update_sources(&mut self) {
+        let Some(bot_id) = self.model.bot_id.clone() else {
+            return;
+        };
+        let wanted = matches!(self.model.auth, AuthState::SignedIn)
+            && matches!(self.screen, Screen::Workspace);
+        if !wanted {
+            return;
+        }
+        let mut new = false;
+        for note in self.self_update_notes() {
+            new |= self.self_updates_asked.insert(note.id);
+        }
+        if new {
+            self.command(Command::LoadBotHistory { bot_id });
+            self.command(Command::LoadOwner);
+        }
+    }
+
+    /// Saves `bot_id`'s profile as the host has it, with `personality` in
+    /// place of its own: "Restore this personality" in revision history,
+    /// and Undo under a reply. The bot's other settings are kept.
+    pub fn restore_personality(&mut self, bot_id: &str, personality: String) {
+        let Some(bot) = self.model.bots.iter().find(|bot| bot.id == bot_id) else {
+            return;
+        };
+        let update = UpdateBotProfile {
+            name: bot.name.clone(),
+            description: bot.description.clone(),
+            personality,
+            reply_style: bot.reply_style,
+            color: bot.color.clone(),
+            self_updates: None,
+            revision: bot.revision,
+        };
+        if self.model.begin_save_profile() {
+            self.restoring_profile = true;
+            self.command(Command::SaveProfile {
+                bot_id: bot_id.to_owned(),
+                update,
+            });
+        }
+    }
+
+    /// Puts a built-in personality in the Profile form's editor, to save as
+    /// it is or edit first.
+    pub fn pick_preset(&mut self, personality: &str) {
+        if self.profile.personality.text != personality {
+            self.profile.personality = TextEdit::new(personality);
+            self.profile.message = None;
+        }
+    }
+
     /// Asks once per bot for its skills, which the "/" menu offers.
     fn ensure_skills(&mut self) {
         let Some(bot_id) = self.model.bot_id.clone() else {
@@ -1715,6 +1811,9 @@ impl Ui {
         // The bot whose page this is starts unfolded in the navigation.
         if let Page::Bot { bot_id, section } = &page {
             self.expanded_bots.insert(bot_id.clone());
+            if matches!(section, BotSection::Profile | BotSection::History) {
+                self.ensure_presets();
+            }
             if *section == BotSection::Profile {
                 self.show_profile(bot_id);
                 self.deleting_bot = false;
@@ -1723,6 +1822,8 @@ impl Ui {
                 self.command(Command::RefreshBots);
             }
             if *section == BotSection::History {
+                // A failed restore is told here; an old error is not.
+                self.model.profile_error = None;
                 // The current revision starts unfolded, as on the web.
                 let current = self.model.bots.iter().find(|bot| &bot.id == bot_id);
                 self.open_revisions = current.map(|bot| bot.revision).into_iter().collect();
@@ -1834,6 +1935,7 @@ impl Ui {
             }
         }
         if page == Page::NewBot {
+            self.ensure_presets();
             self.show_new_bot();
         }
         if page == Page::Owner {
@@ -1968,6 +2070,7 @@ impl Ui {
         };
         if self.model.begin_save_profile() {
             self.profile.message = None;
+            self.restoring_profile = false;
             self.command(Command::SaveProfile { bot_id, update });
         }
     }
@@ -2959,7 +3062,7 @@ impl Ui {
         }
     }
 
-    /// After news from the host: an About you form with no edits shows what
+    /// After news from the host: a You form with no edits shows what
     /// the host has now.
     fn follow_owner(&mut self) {
         let Some(saved) = &self.model.owner else {
@@ -2971,7 +3074,7 @@ impl Ui {
         }
     }
 
-    /// Whether About you may be saved now: it has valid edits and no save
+    /// Whether You may be saved now: it has valid edits and no save
     /// is on its way.
     pub fn can_save_owner(&self) -> bool {
         self.owner.is_dirty() && self.owner.problem().is_none() && !self.model.saving_owner
@@ -3796,8 +3899,13 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     }
                 }
                 Effect::ProfileSaved(profile) => {
-                    // Show what was saved, at its new revision.
-                    if ui.profile.bot_id() == Some(profile.id.as_str()) {
+                    // Show what was saved, at its new revision. A restore
+                    // leaves unsaved edits in the form, which then say the
+                    // bot changed elsewhere.
+                    let restored = std::mem::take(&mut ui.restoring_profile);
+                    if ui.profile.bot_id() == Some(profile.id.as_str())
+                        && !(restored && ui.profile.is_dirty())
+                    {
                         ui.profile = ProfileDraft::of(&profile);
                         ui.profile.message = Some(format!("Saved revision {}.", profile.revision));
                     }
@@ -3813,6 +3921,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_skill();
     ui.ensure_models();
     ui.ensure_skills();
+    ui.ensure_self_update_sources();
     ui.ensure_command_mode();
     ui.ask_previews();
     ui.open_announced_sign_in_page(tx);

@@ -1,5 +1,6 @@
 //! Settings → Profile → Revision history: every saved version of a bot's
-//! profile, newest first, each unfolding into the personality it had.
+//! profile, newest first, each unfolding into the personality it had, with
+//! a way to restore it.
 //!
 //! Mirrors `personality-history.tsx` and the `.revision-*` rules in
 //! `shared/styles/settings/page.css`.
@@ -82,7 +83,43 @@ fn timeline(s: &Ui, bot: &BotProfile, revisions: &[BotRevision], t: &Theme) -> E
     for (index, revision) in revisions.iter().enumerate() {
         list = list.child(entry(s, bot, revision, index == 0, index == last, t));
     }
-    group(t, "Revisions", "The latest 50 saved versions.", vec![list])
+    let mut parts = Vec::new();
+    // A restore that failed says why here, where it was asked for.
+    if let Some(error) = &s.model.profile_error {
+        parts.push(
+            text(error.clone())
+                .key("rd-history-error")
+                .role("alert")
+                .font(font(12.0, 400.0))
+                .color(t.error)
+                .wrap()
+                .px(18.0)
+                .py(12.0),
+        );
+    }
+    parts.push(list);
+    group(
+        t,
+        "Revisions",
+        "The latest 50 saved versions. Restoring one saves it as a new revision.",
+        parts,
+    )
+}
+
+/// A small rounded label in a revision's heading (the web's
+/// `.revision-tag`): filled for who saved it, outlined for a preset.
+fn tag(t: &Theme, key: String, content: String, outlined: bool) -> El {
+    let label = row().key(key).px(8.0).py(2.0).radius(10.0);
+    let label = if outlined {
+        label.border(1.0, t.border)
+    } else {
+        label.fill(t.muted)
+    };
+    label.child(text(content).font(font(10.5, 500.0)).color(if outlined {
+        t.muted_foreground
+    } else {
+        t.foreground
+    }))
 }
 
 fn entry(
@@ -144,6 +181,30 @@ fn entry(
                 .child(text("Current").font(font(10.5, 600.0)).color(t.accent)),
         );
     }
+    if revision.changed_by.as_deref() == Some("bot") {
+        heading = heading.child(tag(
+            t,
+            format!("rd-revision-{number}-by-bot"),
+            format!("by {}", revision.name),
+            false,
+        ));
+    }
+    if let Some(preset) = &revision.preset {
+        // The preset's name once the presets have arrived, else its id.
+        let name = s
+            .model
+            .personality_presets
+            .iter()
+            .flatten()
+            .find(|known| &known.id == preset)
+            .map_or(preset.as_str(), |known| known.name.as_str());
+        heading = heading.child(tag(
+            t,
+            format!("rd-revision-{number}-preset"),
+            name.to_owned(),
+            true,
+        ));
+    }
     heading = heading
         // Pushes the time to the right edge.
         .child(el().grow(1.0))
@@ -203,6 +264,25 @@ fn entry(
                             .py(12.0),
                     ),
             );
+        if revision.personality != bot.personality {
+            let (bot_id, personality) = (bot.id.clone(), revision.personality.clone());
+            body = body.child(
+                pressable(
+                    button(
+                        t,
+                        Kind::Outline,
+                        Size::Small,
+                        None,
+                        "Restore this personality",
+                    )
+                    .key(format!("rd-revision-{number}-restore")),
+                    !s.model.saving_profile,
+                    move |s: &mut Ui| s.restore_personality(&bot_id, personality.clone()),
+                )
+                .self_start()
+                .mb(16.0),
+            );
+        }
     }
     row()
         .w_full()

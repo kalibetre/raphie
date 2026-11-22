@@ -48,10 +48,55 @@ pub struct BotProfile {
     /// How it writes its replies. Older runtimes omit it: the defaults.
     #[serde(default)]
     pub reply_style: ReplyStyle,
+    /// What the bot may change by itself. Older runtimes omit it: `None`,
+    /// and the profile page leaves the switches out.
+    #[serde(default)]
+    pub self_updates: Option<SelfUpdates>,
+    /// Who saved this revision: `"owner"` or `"bot"`. Absent on revisions
+    /// saved before bots could.
+    #[serde(default)]
+    pub changed_by: Option<String>,
     /// Counts saves. A save names the revision it was edited from, so two
     /// clients cannot silently overwrite each other.
     #[serde(default)]
     pub revision: u32,
+}
+
+/// `SelfUpdates` in `packages/contracts/src/bots/views.ts`: what a bot may
+/// change by itself, without asking. Each change is saved at once, shown in
+/// the conversation, and can be undone.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SelfUpdates {
+    /// Its own personality, saved as a new revision.
+    pub personality: bool,
+    /// The owner's profile, shared by every bot.
+    pub owner: bool,
+}
+
+impl SelfUpdates {
+    /// What a new bot may change: its personality, not the owner's profile.
+    pub const NEW_BOT: SelfUpdates = SelfUpdates {
+        personality: true,
+        owner: false,
+    };
+}
+
+/// `PersonalityPreset`: a built-in personality to start a bot from, as
+/// `GET /api/bots/personalities` lists them.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct PersonalityPreset {
+    pub id: String,
+    pub name: String,
+    /// One line on what the personality is like.
+    #[serde(default)]
+    pub summary: String,
+    pub personality: String,
+}
+
+/// What `GET /api/bots/personalities` answers.
+#[derive(Debug, Deserialize)]
+pub(crate) struct PersonalityPresetList {
+    pub items: Vec<PersonalityPreset>,
 }
 
 /// `ReplyStyle` in `packages/contracts/src/bots/views.ts`: how a bot writes
@@ -196,6 +241,9 @@ pub struct UpdateBotProfile {
     pub reply_style: ReplyStyle,
     /// `None` is sent as `null`: let Raphie pick a colour.
     pub color: Option<String>,
+    /// `None` leaves them out: the runtime keeps what the bot has.
+    #[serde(rename = "selfUpdates", skip_serializing_if = "Option::is_none")]
+    pub self_updates: Option<SelfUpdates>,
     /// The revision these edits started from.
     pub revision: u32,
 }
@@ -1815,6 +1863,12 @@ pub struct BotRevision {
     /// The personality as it was at this revision.
     #[serde(default)]
     pub personality: String,
+    /// Who saved it: `"owner"` or `"bot"`; absent on older revisions.
+    #[serde(default)]
+    pub changed_by: Option<String>,
+    /// The id of the built-in personality this revision's text is, if any.
+    #[serde(default)]
+    pub preset: Option<String>,
     /// When it was saved, in milliseconds since the Unix epoch.
     #[serde(default)]
     pub updated_at: i64,
@@ -1836,6 +1890,9 @@ pub struct NewBot {
     pub reply_style: ReplyStyle,
     /// `None` is sent as `null`: let Raphie pick a colour.
     pub color: Option<String>,
+    /// `None` leaves them out: the runtime starts the bot at its defaults.
+    #[serde(rename = "selfUpdates", skip_serializing_if = "Option::is_none")]
+    pub self_updates: Option<SelfUpdates>,
 }
 
 /// The body of `DELETE /api/bots/<id>`. The runtime deletes only if both

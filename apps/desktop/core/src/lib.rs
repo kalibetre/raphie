@@ -12,6 +12,7 @@
 //! - [`memory`]: what a save of a bot's memory settings carries, and its checks.
 //! - [`handoffs`]: tasks a bot handed to others, as cards and the composer show them.
 //! - [`mentions`]: "@Name" for another bot, typed and shown.
+//! - [`self_updates`]: what a bot changed about itself or the owner in a reply.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
 //! - [`settings`]: non-secret preferences.
 //! - [`last_sessions`]: the conversation last open with each bot.
@@ -48,6 +49,7 @@ pub mod permissions;
 pub mod projections;
 pub mod replies;
 pub mod sandbox;
+pub mod self_updates;
 pub mod settings;
 pub mod skills;
 pub mod slash;

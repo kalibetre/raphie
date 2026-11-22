@@ -9,6 +9,7 @@ use raphie_core::attachments::{FileBytes, Preview, TOO_LARGE, Upload};
 use raphie_core::auth::{AccessToken, MemoryStore, Secret, TokenStore};
 use raphie_core::channels::{Channel, ChannelChange, DiscordUpdate, telegram_summary};
 use raphie_core::contracts::SaveOwnerProfile;
+use raphie_core::contracts::SelfUpdates;
 use raphie_core::contracts::{ApprovalMode, HandoffStatus, ModelSelection, NewBot, TraceState};
 use raphie_core::contracts::{
     ApprovalStatus, ControlAction, Decision, MemoryProvider, Reflection, SandboxProvider, Scope,
@@ -462,6 +463,7 @@ fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
         description: "Reads and summarises".into(),
         personality: "Be brief.".into(),
         reply_style: Default::default(),
+        self_updates: None,
         color: None,
         revision,
     };
@@ -485,6 +487,16 @@ fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
     // An automatic colour is sent as an explicit null, not left out.
     let sent = host.with(|h| h.profile_saves[0].clone());
     assert!(sent["color"].is_null() && sent.get("color").is_some());
+    // Self-updates left as they are are not sent; the runtime keeps them.
+    assert!(sent.get("selfUpdates").is_none());
+    assert_eq!(saved.self_updates, Some(SelfUpdates::NEW_BOT));
+    assert_eq!(saved.changed_by.as_deref(), Some("owner"));
+    // The new revision joins the history without being asked.
+    driver.until("the history", |m, _| {
+        m.bot_history
+            .get("b-research")
+            .is_some_and(|items| items[0].revision == 2)
+    });
 
     // Another client saved meanwhile: this save started from revision 2.
     host.with(|h| h.profile_revision = 5);
@@ -769,6 +781,7 @@ fn a_bot_is_created_its_history_read_and_it_is_deleted_only_as_confirmed() {
                 description: "Plans trips".into(),
                 personality: "Be practical.".into(),
                 reply_style: Default::default(),
+                self_updates: None,
                 color: None,
             },
         });
@@ -2458,4 +2471,46 @@ fn handoffs_load_and_a_working_one_is_cancelled_once() {
     let (id, why) = driver.model.handoff_error.clone().unwrap();
     assert_eq!(id, "h-1");
     assert!(why.contains("already finished"), "{why}");
+}
+
+#[test]
+fn self_updates_are_saved_and_the_built_in_personalities_load() {
+    let host = FakeHost::start();
+    let (mut driver, _) = signed_in(&host);
+    driver.send(Command::LoadPersonalityPresets);
+    driver.until("the presets", |m, _| m.personality_presets.is_some());
+    let presets = driver.model.personality_presets.clone().unwrap();
+    assert_eq!(presets[1].name, "Coach");
+    assert_eq!(presets[1].personality, "Act as a coach.");
+
+    let everything = SelfUpdates {
+        personality: true,
+        owner: true,
+    };
+    assert!(driver.model.begin_save_profile());
+    driver.send(Command::SaveProfile {
+        bot_id: "b-research".into(),
+        update: UpdateBotProfile {
+            name: "Research".into(),
+            description: String::new(),
+            personality: "Be brief.".into(),
+            reply_style: Default::default(),
+            self_updates: Some(everything),
+            color: None,
+            revision: 1,
+        },
+    });
+    driver.until("the save", |m, _| !m.saving_profile);
+    let sent = host.with(|h| h.profile_saves[0].clone());
+    assert_eq!(
+        sent["selfUpdates"],
+        serde_json::json!({ "personality": true, "owner": true })
+    );
+    let saved = driver
+        .model
+        .bots
+        .iter()
+        .find(|b| b.id == "b-research")
+        .unwrap();
+    assert_eq!(saved.self_updates, Some(everything));
 }

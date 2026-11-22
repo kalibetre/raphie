@@ -1,4 +1,4 @@
-//! The edits in progress on Settings → About you: who every bot is talking
+//! The edits in progress on Settings → You: who every bot is talking
 //! to.
 //!
 //! Mirrors the form state in `apps/web/src/domains/settings/presentation/

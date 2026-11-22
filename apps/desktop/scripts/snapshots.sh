@@ -25,7 +25,7 @@ for scene in sign-in sign-in-this-mac device-code new-conversation conversations
   settings-owner settings-owner-edited \
   composer-slash settings-skills settings-skills-editor settings-skills-new settings-skills-import \
   settings-diagnostics settings-activity settings-about settings-about-update settings-about-nightly dev-build nightly-build \
-  settings-history settings-new-bot settings-delete-bot; do
+  settings-history settings-history-restore settings-profile-presets conversation-self-updates settings-new-bot settings-delete-bot; do
   for theme in light dark; do
     "$bin" --snap "$out/$scene-$theme.png" --scene "$scene" --theme "$theme" \
       --size 1280x800 --scale 2 --at 1.5 --chrome

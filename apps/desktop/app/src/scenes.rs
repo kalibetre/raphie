@@ -15,6 +15,7 @@ use raphie_core::contracts::{
 };
 use raphie_core::contracts::{ActivityEvent, BotRevision, TraceDiagnostics};
 use raphie_core::contracts::{JobRun, ScheduledJob};
+use raphie_core::contracts::{PersonalityPreset, SelfUpdates};
 use raphie_core::contracts::{SkillDetail, SkillSummary};
 use raphie_core::engine::Command;
 use raphie_core::flavor::Flavor;
@@ -94,7 +95,9 @@ pub const SCENES: &[Scene] = &[
     ("settings-about-nightly", settings_about_nightly),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
+    ("settings-profile-presets", settings_profile_presets),
     ("settings-history", settings_history),
+    ("settings-history-restore", settings_history_restore),
     ("settings-new-bot", settings_new_bot),
     ("settings-delete-bot", settings_delete_bot),
     ("settings-models", settings_models),
@@ -135,6 +138,7 @@ pub const SCENES: &[Scene] = &[
     ("settings-skills", settings_skills),
     ("composer-slash", composer_slash),
     ("conversation-skill", conversation_skill),
+    ("conversation-self-updates", conversation_self_updates),
     ("settings-skills-empty", settings_skills_empty),
     ("settings-skills-editor", settings_skills_editor),
     ("settings-skills-new", settings_skills_new),
@@ -433,10 +437,137 @@ fn open_research(ui: &mut Ui, section: BotSection) {
 /// Settings → Profile → Revision history, the current revision unfolded.
 pub fn settings_history(ui: &mut Ui) {
     open_research(ui, BotSection::History);
+    let items = bot_revisions();
+    // The bot as the host has it is its newest revision.
+    set_research(ui, |research| {
+        research.personality = items[0].personality.clone();
+    });
     ui.model.apply(Event::BotHistory {
         bot_id: "b-research".into(),
-        items: bot_revisions(),
+        items,
     });
+}
+
+/// Changes the Research bot in the list, as if the host had sent it so.
+fn set_research(ui: &mut Ui, change: impl FnOnce(&mut BotProfile)) {
+    let mut bots = ui.model.bots.clone();
+    if let Some(research) = bots.iter_mut().find(|bot| bot.id == "b-research") {
+        change(research);
+    }
+    ui.model.apply(Event::Bots(bots));
+}
+
+/// The built-in personalities, as `GET /api/bots/personalities` lists them
+/// (`packages/runtime/src/domains/bots/domain/personalities.ts`), with the
+/// texts shortened.
+pub fn personality_presets() -> Vec<PersonalityPreset> {
+    [
+        (
+            "candid",
+            "Candid",
+            "Concise, honest and warm. The default.",
+            "Be concise, thoughtful and candid. Use a warm, natural voice.",
+        ),
+        (
+            "chief-of-staff",
+            "Chief of staff",
+            "Organised and proactive; keeps your week on track.",
+            "Act like a trusted chief of staff. Keep track of commitments and loose ends.",
+        ),
+        (
+            "companion",
+            "Warm companion",
+            "Friendly and patient; remembers the small things.",
+            "Be warm, patient and encouraging, like a good friend who is also very capable.",
+        ),
+        (
+            "coach",
+            "Coach",
+            "Asks good questions and holds you to your goals.",
+            "Act as a supportive but demanding coach. Help set clear goals and small next steps.",
+        ),
+        (
+            "analyst",
+            "Analyst",
+            "Precise and sourced; shows its reasoning.",
+            "Be precise, rigorous and neutral. State conclusions first, then the evidence.",
+        ),
+        (
+            "creative",
+            "Creative partner",
+            "Playful and generative; builds on ideas.",
+            "Be a playful, curious creative partner. Offer several distinct options.",
+        ),
+    ]
+    .into_iter()
+    .map(|(id, name, summary, personality)| PersonalityPreset {
+        id: id.into(),
+        name: name.into(),
+        summary: summary.into(),
+        personality: personality.into(),
+    })
+    .collect()
+}
+
+/// Settings → Profile for a bot that last changed its own personality to
+/// the Analyst preset: the presets over the editor, the Analyst card
+/// chosen, and the Self-updates switches.
+pub fn settings_profile_presets(ui: &mut Ui) {
+    let presets = personality_presets();
+    let analyst = presets[4].personality.clone();
+    settings_account(ui);
+    ui.model.apply(Event::PersonalityPresets(presets));
+    set_research(ui, |research| {
+        research.revision = 4;
+        research.personality = analyst;
+        research.changed_by = Some("bot".into());
+    });
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "b-research".into(),
+        section: BotSection::Profile,
+    }));
+}
+
+/// The Research bot's revisions after it changed its own personality to
+/// the Analyst preset (revision 4), newest first.
+pub fn bot_revisions_by_bot() -> Vec<BotRevision> {
+    let analyst = personality_presets()[4].personality.clone();
+    let mut items: Vec<BotRevision> = from_json(json!([{
+        "id": "b-research", "revision": 4, "name": "Research",
+        "description": "Reads and summarises.", "color": null,
+        "personality": analyst, "changedBy": "bot", "preset": "analyst",
+        "createdAt": 1_794_200_400_000_i64, "updatedAt": 1_794_736_500_000_i64,
+    }]));
+    let mut older = bot_revisions();
+    for revision in &mut older {
+        revision.changed_by = Some("owner".into());
+    }
+    items.extend(older);
+    items
+}
+
+/// Revision history with the bot's own change on top, tagged, and the
+/// owner's revision 3 unfolded with "Restore this personality".
+pub fn settings_history_restore(ui: &mut Ui) {
+    let items = bot_revisions_by_bot();
+    settings_account(ui);
+    ui.model
+        .apply(Event::PersonalityPresets(personality_presets()));
+    let current = items[0].personality.clone();
+    set_research(ui, |research| {
+        research.revision = 4;
+        research.personality = current;
+        research.changed_by = Some("bot".into());
+    });
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "b-research".into(),
+        section: BotSection::History,
+    }));
+    ui.model.apply(Event::BotHistory {
+        bot_id: "b-research".into(),
+        items,
+    });
+    ui.open_revisions = [4, 3].into_iter().collect();
 }
 
 /// Settings → Create a bot, with a name typed.
@@ -514,7 +645,7 @@ pub fn bot_events() -> Vec<ActivityEvent> {
     .expect("the scene's events match the contract")
 }
 
-/// A made-up owner who has filled in About you.
+/// A made-up owner who has filled in Settings → You.
 pub fn owner_profile() -> OwnerProfile {
     OwnerProfile {
         name: "Hana Girma".into(),
@@ -525,7 +656,7 @@ pub fn owner_profile() -> OwnerProfile {
     }
 }
 
-/// Opens Settings → About you with `owner` loaded, or still loading.
+/// Opens Settings → You with `owner` loaded, or still loading.
 fn open_owner(ui: &mut Ui, owner: Option<OwnerProfile>) {
     settings_account(ui);
     if let Some(owner) = owner {
@@ -534,18 +665,18 @@ fn open_owner(ui: &mut Ui, owner: Option<OwnerProfile>) {
     ui.open_settings(Some(Page::Owner));
 }
 
-/// Settings → About you, filled in, nothing edited.
+/// Settings → You, filled in, nothing edited.
 pub fn settings_owner(ui: &mut Ui) {
     open_owner(ui, Some(owner_profile()));
 }
 
-/// About you with the time zone changed, so the save bar shows.
+/// Settings → You with the time zone changed, so the save bar shows.
 pub fn settings_owner_edited(ui: &mut Ui) {
     open_owner(ui, Some(owner_profile()));
     ui.owner.time_zone = "Europe/Berlin".into();
 }
 
-/// About you before the profile has arrived.
+/// Settings → You before the profile has arrived.
 pub fn settings_owner_loading(ui: &mut Ui) {
     open_owner(ui, None);
 }
@@ -1108,6 +1239,104 @@ pub fn conversation_skill(ui: &mut Ui) {
         bot_id: "default".into(),
         items: skill_list(),
     });
+}
+
+/// A reply in which the bot changed its own personality and what it knows
+/// about the owner: a note for each under the reply, with Undo while its
+/// change is the current revision.
+pub fn conversation_self_updates(ui: &mut Ui) {
+    open(
+        ui,
+        "s-1",
+        observation(
+            "Shorter replies",
+            vec![turn(
+                "t1",
+                -60_000,
+                "Keep your replies shorter from now on. Also, I moved to Berlin.",
+                Some("Done. I will keep replies short, and I noted that you live in Berlin now."),
+                "done",
+            )],
+            None,
+            "idle",
+            vec![],
+            vec![
+                activity(
+                    1,
+                    -58_000,
+                    "t1",
+                    Some("op-p"),
+                    "tool.started",
+                    "update_personality started",
+                    json!({}),
+                ),
+                activity(
+                    2,
+                    -57_600,
+                    "t1",
+                    Some("op-p"),
+                    "tool.completed",
+                    "update_personality completed",
+                    json!({}),
+                ),
+                activity(
+                    3,
+                    -57_400,
+                    "t1",
+                    Some("op-o"),
+                    "tool.started",
+                    "update_owner_profile started",
+                    json!({}),
+                ),
+                activity(
+                    4,
+                    -57_000,
+                    "t1",
+                    Some("op-o"),
+                    "tool.completed",
+                    "update_owner_profile completed",
+                    json!({}),
+                ),
+                activity(
+                    5,
+                    -55_000,
+                    "t1",
+                    None,
+                    "model.completed",
+                    "model completed",
+                    json!({"stopReason": "stop", "usage": {"totalTokens": 412, "cost": {"total": 0.0021}}}),
+                ),
+            ],
+        ),
+    );
+    let mut bots = ui.model.bots.clone();
+    bots[0].revision = 4;
+    bots[0].changed_by = Some("bot".into());
+    ui.model.apply(Event::Bots(bots));
+    let revision = |number: u32, offset_ms: i64, by: &str, personality: &str| {
+        from_json::<BotRevision>(json!({
+            "revision": number, "name": "Raphie", "description": "Your personal assistant.",
+            "color": null, "personality": personality, "changedBy": by,
+            "updatedAt": now_ms() + offset_ms,
+        }))
+    };
+    ui.model.apply(Event::BotHistory {
+        bot_id: "default".into(),
+        items: vec![
+            revision(
+                4,
+                -57_800,
+                "bot",
+                "Be thoughtful and candid. Keep replies short.",
+            ),
+            revision(3, -900_000, "owner", PERSONALITY),
+        ],
+    });
+    ui.model.apply(Event::Owner(OwnerProfile {
+        time_zone: "Europe/Berlin".into(),
+        updated_at: Some((now_ms() - 57_200) as f64),
+        ..owner_profile()
+    }));
 }
 
 /// A new conversation with "/" typed: commands, then the bot's skills.
@@ -2200,6 +2429,8 @@ fn bot(id: &str, name: &str, description: &str, color: Option<&str>) -> BotProfi
         color: color.map(str::to_owned),
         personality: PERSONALITY.into(),
         reply_style: Default::default(),
+        self_updates: Some(SelfUpdates::NEW_BOT),
+        changed_by: None,
         revision: 3,
     }
 }
