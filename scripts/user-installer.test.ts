@@ -98,6 +98,20 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
       { mode: 0o755 },
     );
     await writeFile(join(bin, "sudo"), "#!/bin/sh\nexit 99\n", { mode: 0o755 });
+    // The installer starts python3 many times a run. A version manager's
+    // shim (pyenv, asdf) is a script that looks the interpreter up each
+    // time, which across this test's runs cost a dozen seconds; link the
+    // interpreter it resolves to instead.
+    const python = Bun.spawnSync(
+      ["python3", "-c", "import sys; print(sys.executable)"],
+      { stdout: "pipe" },
+    );
+    assert.equal(python.exitCode, 0, "the installer needs python3");
+    await symlink(python.stdout.toString().trim(), join(bin, "python3"));
+    // The installer's retry and backoff waits (a resumed download, launchd
+    // refusing a bootstrap, an unhealthy service) are behaviour to check,
+    // not time to spend.
+    await writeFile(join(bin, "sleep"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     await writeFile(
       join(bin, "uname"),
       '#!/bin/sh\nif [ "$1" = -s ]; then echo Linux; else echo x86_64; fi\n',
@@ -483,7 +497,6 @@ test("installer persists stable/nightly channels and waits for a safe stable pro
     assert.equal(existsSync(join(truncatedHome, ".local/lib/raphie")), false);
     const failureHome = join(temp, "unhealthy-home");
     await mkdir(failureHome);
-    await writeFile(join(bin, "sleep"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     await writeFile(join(bundle, "raphie"), "#!/bin/sh\nexit 1\n");
     assert.equal(archive().exitCode, 0);
     await checksum();
