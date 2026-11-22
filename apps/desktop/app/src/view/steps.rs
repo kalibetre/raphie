@@ -12,6 +12,7 @@ use raphie_core::contracts::{Channel, Decision, Scope, SessionApproval};
 use raphie_core::projections::{
     ApprovalState, StepState, ToolStep, approval_state, format_duration, pretty, step_state,
 };
+use raphie_core::tool_phrases::{steps_summary, tool_phrase};
 use rune::{El, Icon, LiveRegion, ScrollSpec, TextCase, col, el, icon, row, text};
 use rune_kit::Loader;
 
@@ -76,17 +77,24 @@ fn header(run: &Run, needs_you: bool, expanded: bool, look: &Look) -> El {
     } else if let Some(working) = &run.working {
         working.label.clone()
     } else {
-        // From the first step's start to the last step's end.
-        let first = run.steps.first().map_or(0, |step| step.started_at);
-        let last = run
-            .steps
-            .iter()
-            .map(|step| step.done_at.unwrap_or(step.started_at))
-            .max()
-            .unwrap_or(first);
-        let tools = if count == 1 { "tool" } else { "tools" };
-        format!("Used {count} {tools} · {}", format_duration(last - first))
+        // Settled work says what the bot did, in its words; the details keep
+        // the tools, arguments and timings.
+        steps_summary(
+            run.steps
+                .iter()
+                .map(|step| (step.tool.as_str(), step.server.as_deref())),
+        )
     };
+    // From the first step's start to the last step's end, on hover.
+    let first = run.steps.first().map_or(0, |step| step.started_at);
+    let last = run
+        .steps
+        .iter()
+        .map(|step| step.done_at.unwrap_or(step.started_at))
+        .max()
+        .unwrap_or(first);
+    let tools = if count == 1 { "tool" } else { "tools" };
+    let timing = format!("{count} {tools} · {}", format_duration(last - first));
     let ink = if needs_you {
         t.attention
     } else {
@@ -97,7 +105,7 @@ fn header(run: &Run, needs_you: bool, expanded: bool, look: &Look) -> El {
     } else if run.working.is_some() {
         Loader::new().size(14.0).color(ink).build(&look.kit)
     } else {
-        icon(&icons::WRENCH, 14.0).color(ink)
+        icon(&icons::CHECK, 14.0).color(t.accent)
     };
     let weight = if needs_you { 560.0 } else { 400.0 };
     let mut header = row()
@@ -117,6 +125,9 @@ fn header(run: &Run, needs_you: bool, expanded: bool, look: &Look) -> El {
                 .color(ink)
                 .a11y_hidden(),
         );
+    if run.working.is_none() && !needs_you {
+        header = header.help(timing);
+    }
     if let (Some(working), false) = (&run.working, needs_you) {
         header = header.child(
             text(format!("{} elapsed", working.elapsed))
@@ -193,7 +204,11 @@ fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, working: bool, look: 
         },
         _ => "running".to_owned(),
     };
-    let mut name = row().gap(6.0).center_y().grow(1.0).min_w(0.0);
+    let mut name = row().gap(6.0).center_y().grow(1.0).min_w(0.0).child(
+        text(tool_phrase(&step.tool, step.server.as_deref()))
+            .font(font(13.0, 400.0))
+            .color(t.foreground),
+    );
     if let Some(server) = &step.server {
         name = name.child(
             text(server.clone())
