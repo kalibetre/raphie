@@ -149,7 +149,7 @@ MCP connections are hardened in the runtime:
 | Admin password, sessions                                    | Better Auth in `auth.sqlite`, mode `0600`; cookies are `HttpOnly`                            |
 | Device tokens                                               | Stored by the desktop app in the OS credential store; revocable from Settings                |
 
-Secrets are write-only through the API: no read response, conversation, Activity entry or trace contains them. Prompts tell the model that personality never grants capabilities and that chat text is not an approval. Details are on [credentials](/operate/credentials/) and [observability](/operate/observability/#what-is-recorded-and-what-is-not).
+Secrets are write-only through the API: no read response, conversation, Activity entry or trace contains them. Prompts tell the model that personality never grants capabilities and that chat text is not an approval. A bot allowed [self-updates](/guides/bots/#self-updates) can rewrite its own personality and the owner profile without an approval; it is told to do so only for the owner, never because content or another bot asks. That is an instruction, not a guarantee, so each change is shown in the conversation and kept as a revision to undo, and the switches can be turned off for a bot that reads untrusted material. Details are on [credentials](/operate/credentials/) and [observability](/operate/observability/#what-is-recorded-and-what-is-not).
 
 ## Known non-goals
 
