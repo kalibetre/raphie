@@ -7,7 +7,7 @@ import {
   CornerUpRight,
   ListEnd,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -16,7 +16,6 @@ import { useBackend } from "../../../infrastructure/http/backend-context";
 import { ToolSteps } from "../../approvals/presentation/tool-steps";
 import {
   formatCost,
-  formatTokens,
   runUsage,
   type ToolStep,
   toolSteps,
@@ -49,6 +48,35 @@ const time = (at: number) =>
     minute: "2-digit",
   });
 
+type Turn = Snapshot["turns"][number];
+
+/**
+ * Consecutive failed runs of one scheduled job read as one failure: the
+ * latest says how many attempts there were, and the earlier ones are hidden.
+ */
+function failedRuns(turns: Turn[]) {
+  const runs = new Map<string, { count: number; first: number } | "hidden">();
+  let group: Turn[] = [];
+  const close = () => {
+    group.forEach((turn, i) =>
+      runs.set(
+        turn.id,
+        i === group.length - 1
+          ? { count: group.length, first: group[0].createdAt }
+          : "hidden",
+      ),
+    );
+    group = [];
+  };
+  for (const turn of turns) {
+    const failed = turn.scheduled && turn.status === "error" && !turn.cancelled;
+    if (!failed || group[0]?.scheduled?.name !== turn.scheduled?.name) close();
+    if (failed) group.push(turn);
+  }
+  close();
+  return runs;
+}
+
 export function Chat({
   state,
   conversationId,
@@ -57,7 +85,10 @@ export function Chat({
   onCancelHandoff,
   bots = noBots,
   skills = noSkills,
+  author,
 }: {
+  /** The bot replying here: its name and avatar sign each reply. */
+  author: { name: string; avatar: ReactNode };
   state: Snapshot;
   conversationId: string;
   onRead?: () => void;
@@ -151,6 +182,25 @@ export function Chat({
   }, [turns, state.activity, state.toolApprovals, conversationId]);
 
   const asks = state.asks.filter((a) => a.conversationId === conversationId);
+  const runs = failedRuns(turns);
+  // A turn with a reply shows its tool work under the reply, signed by the
+  // bot; one without (stopped, failed or still working) shows it in place.
+  const replied = new Set(
+    messages
+      .filter((m) => m.role === "assistant")
+      .map((m) => m.id.replace(/:reply$/, "")),
+  );
+  const signature = (at?: number, title?: string) => (
+    <header className="message-author">
+      {author.avatar}
+      <strong>{author.name}</strong>
+      {at && (
+        <time dateTime={new Date(at).toISOString()} title={title}>
+          {time(at)}
+        </time>
+      )}
+    </header>
+  );
 
   return (
     <Conversation onRead={onRead}>
@@ -197,6 +247,20 @@ export function Chat({
               {turnWork(turn, steps.get(turn.id) ?? [])}
             </div>
           );
+        if (message.role === "user" && turn?.scheduled && runs.has(turn.id)) {
+          const run = runs.get(turn.id);
+          return run === "hidden" || !run ? null : (
+            <div key={message.id} className="turn-user">
+              {divider}
+              <ScheduledFailure
+                turn={turn}
+                attempts={run.count}
+                first={run.first}
+                signature={signature(turn.createdAt)}
+              />
+            </div>
+          );
+        }
         if (message.role === "user" && turn?.scheduled)
           return (
             <div key={message.id} className="turn-user">
@@ -283,8 +347,17 @@ export function Chat({
         const at = state.activity.findLast(
           (e) => e.runId === turnId && e.type === "model.completed",
         )?.at;
+        const turnSteps = (turn && steps.get(turn.id)) ?? [];
         return (
           <article key={message.id} className="message message-assistant">
+            {turn?.status === "done" &&
+              signature(
+                at,
+                // Tokens and cost are for the curious, not the conversation.
+                usage
+                  ? `${usage.tokens.toLocaleString()} tokens across ${usage.calls} model ${usage.calls === 1 ? "call" : "calls"} · ${formatCost(usage.cost)}, provider-reported`
+                  : undefined,
+              )}
             {turn && (
               <HandoffCards
                 turnId={turn.id}
@@ -303,26 +376,10 @@ export function Chat({
             {turn?.status === "done" && (
               <HandoffSources read={turn.readSessions ?? []} />
             )}
-            {turn?.status === "done" && (
-              <footer className="message-meta">
-                {at && (
-                  <time
-                    dateTime={new Date(at).toISOString()}
-                    title={new Date(at).toISOString()}
-                  >
-                    {time(at)}
-                  </time>
-                )}
-                {usage && (
-                  <span
-                    title={`${usage.tokens.toLocaleString()} tokens across ${usage.calls} model ${usage.calls === 1 ? "call" : "calls"}, provider-reported`}
-                  >
-                    {formatTokens(usage.tokens)} tokens ·{" "}
-                    {formatCost(usage.cost)}
-                  </span>
-                )}
-              </footer>
+            {turn?.status === "done" && turnSteps.length > 0 && (
+              <ToolSteps steps={turnSteps} working={false} />
             )}
+            {turn?.status === "done" && <SelfUpdateNotes steps={turnSteps} />}
           </article>
         );
       })}
@@ -344,12 +401,13 @@ export function Chat({
   // remount on every snapshot and collapse open step details.
   function turnWork(turn: Snapshot["turns"][number], steps: ToolStep[]) {
     const working = turn.status === "pending";
+    const inReply = turn.status === "done" && replied.has(turn.id);
     return (
       <>
-        {!working && steps.length > 0 && (
+        {!working && !inReply && steps.length > 0 && (
           <ToolSteps steps={steps} working={working} />
         )}
-        {!working && <SelfUpdateNotes steps={steps} />}
+        {!working && !inReply && <SelfUpdateNotes steps={steps} />}
         {!working &&
           asks
             .filter((a) => a.turnId === turn.id)
@@ -359,22 +417,70 @@ export function Chat({
         )}
         {turn.status === "error" && !turn.cancelled && (
           <div className="turn-failure" role="alert">
-            <p className="error turn-error">
+            {signature(turn.createdAt)}
+            <p className="turn-error">
               <CircleAlert size={14} className="turn-error-icon" />
               <span>
-                Raphie could not complete this reply.{" "}
+                I couldn’t finish this reply.{" "}
                 {turn.failure?.message ??
                   "Check Diagnostics, then send a new message to retry."}
               </span>
             </p>
             {turn.failure?.detail && (
-              <pre className="turn-error-detail">{turn.failure.detail}</pre>
+              <details className="turn-error-more">
+                <summary>Details</summary>
+                <pre className="turn-error-detail">{turn.failure.detail}</pre>
+              </details>
             )}
           </div>
         )}
       </>
     );
   }
+}
+
+/** A scheduled job that failed, once or several times in a row, said once. */
+function ScheduledFailure({
+  turn,
+  attempts,
+  first,
+  signature,
+}: {
+  turn: Turn;
+  attempts: number;
+  first: number;
+  signature: ReactNode;
+}) {
+  const name = turn.scheduled?.name ?? "A scheduled job";
+  return (
+    <div className="turn-failure" role="alert">
+      {signature}
+      <p className="turn-error-lede">
+        I couldn’t run <strong>{name}</strong>
+        {attempts > 1 ? `, after ${attempts} tries.` : "."}
+      </p>
+      <div className="turn-failure-card">
+        <CalendarClock size={14} aria-hidden="true" />
+        <span>
+          <strong>{name} didn’t run</strong>
+          <small>
+            {attempts > 1
+              ? time(first) === time(turn.createdAt)
+                ? `${attempts} attempts at ${time(first)}`
+                : `${attempts} attempts, ${time(first)} to ${time(turn.createdAt)}`
+              : `Due ${time(turn.createdAt)}`}
+            {turn.failure?.message ? ` · ${turn.failure.message}` : ""}
+          </small>
+        </span>
+      </div>
+      {turn.failure?.detail && (
+        <details className="turn-error-more">
+          <summary>Details</summary>
+          <pre className="turn-error-detail">{turn.failure.detail}</pre>
+        </details>
+      )}
+    </div>
+  );
 }
 
 /** A due job's delivery point: the saved instruction is not an owner message. */

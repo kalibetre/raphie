@@ -217,6 +217,65 @@
     display: flex;
     align-items: flex-start;
     gap: 6px;
+    margin: 0;
+    color: var(--error);
+    font-size: 13px;
+  }
+  .turn-error-lede {
+    margin: 0;
+    line-height: 1.6;
+  }
+  /* What did not happen, as a card the owner can act on. */
+  .turn-failure-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--attention) 35%, var(--border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--attention-soft) 45%, var(--card));
+    color: var(--attention);
+  }
+  .turn-failure-card span {
+    display: grid;
+    gap: 2px;
+  }
+  .turn-failure-card strong {
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .turn-failure-card small {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .turn-error-more summary {
+    width: fit-content;
+    color: var(--faint);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .turn-error-more .turn-error-detail {
+    margin: 6px 0 0;
+  }
+  /* A reply is signed: the bot's face, its name and the time. */
+  .message-author {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .message-author .bot-avatar {
+    width: 22px;
+    height: 22px;
+  }
+  .message-author strong {
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .message-author time {
+    color: var(--faint);
+    font-size: 11.5px;
   }
   .turn-error-icon {
     flex: none;
@@ -269,6 +328,13 @@
   .steps-attention .steps-header {
     color: var(--attention);
     font-weight: 560;
+  }
+  .steps-done {
+    color: var(--accent);
+  }
+  .message-assistant .steps {
+    display: block;
+    margin-top: 6px;
   }
   .steps-chevron {
     transition: transform 0.15s;
@@ -355,6 +421,9 @@
     gap: 6px;
     min-width: 0;
     color: var(--muted-foreground);
+  }
+  .step-phrase {
+    color: var(--foreground);
   }
   .step-name code {
     color: var(--foreground);

@@ -6,7 +6,6 @@ import {
   CircleAlert,
   LoaderCircle,
   ShieldQuestion,
-  Wrench,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -17,6 +16,10 @@ import {
   formatDuration,
   type ToolStep,
 } from "../../conversations/application/run-projection";
+import {
+  stepsSummary,
+  toolPhrase,
+} from "../../conversations/application/tool-phrases";
 import { ToolDecision } from "./tool-decision";
 
 function approvalState(approval: Approval) {
@@ -66,7 +69,9 @@ export function ToolSteps({
         (steps.length
           ? `Working · ${steps.length} ${steps.length === 1 ? "step" : "steps"}`
           : "Waiting for model…"))
-      : `Used ${steps.length} ${steps.length === 1 ? "tool" : "tools"}${first ? ` · ${formatDuration(last - first)}` : ""}`;
+      : // Settled work says what the bot did, in its words; the details
+        // keep the tools, arguments and timings.
+        stepsSummary(steps);
   const expanded = open || needsYou;
   return (
     <section
@@ -75,6 +80,11 @@ export function ToolSteps({
     >
       <button
         className="steps-header"
+        title={
+          !working && first
+            ? `${steps.length} ${steps.length === 1 ? "tool" : "tools"} · ${formatDuration(last - first)}`
+            : undefined
+        }
         aria-expanded={expanded}
         disabled={!steps.length || needsYou}
         onClick={() => setOpen(!open)}
@@ -84,7 +94,7 @@ export function ToolSteps({
         ) : needsYou ? (
           <ShieldQuestion size={14} />
         ) : (
-          <Wrench size={14} />
+          <Check size={14} className="steps-done" />
         )}
         <span className={working && !needsYou ? "shimmer" : ""}>{label}</span>
         {working && elapsed && (
@@ -117,6 +127,7 @@ function Step({ step, working }: { step: ToolStep; working: boolean }) {
       <details className="step-body" open={state === "pending"}>
         <summary>
           <span className="step-name">
+            <span className="step-phrase">{toolPhrase(step)}</span>
             {step.server && <span>{step.server}</span>}
             <code>{step.tool}</code>
           </span>

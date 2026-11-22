@@ -23,6 +23,7 @@ import { useComposerAttachments } from "./use-composer-attachments";
 import { useComposerLayout } from "./use-composer-layout";
 
 export function Composer({
+  botName = "Raphie",
   conversationId,
   suggestion,
   model,
@@ -42,6 +43,8 @@ export function Composer({
   onNewConversation,
   onManageSkills,
 }: {
+  /** The bot this conversation is with, named in the empty field. */
+  botName?: string;
   conversationId?: string;
   suggestion?: { text: string; at: number };
   model: ModelSelection | null;
@@ -297,8 +300,8 @@ export function Composer({
           <Textarea
             ref={input}
             className="min-h-6 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[14.5px] leading-6 shadow-none focus-visible:ring-0 md:text-[14.5px] dark:bg-transparent"
-            aria-label="Message Raphie"
-            placeholder="Message Raphie…"
+            aria-label={`${conversationId ? "Reply to" : "Message"} ${botName}`}
+            placeholder={`${conversationId ? "Reply to" : "Message"} ${botName}…`}
             value={draft}
             maxLength={4000}
             {...menuProps}
