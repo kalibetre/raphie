@@ -1,7 +1,10 @@
 name: CI
 
+# A pull request runs once, for the pull request; a push runs only on main,
+# for what merged. A branch pushed without a pull request gets no run.
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
