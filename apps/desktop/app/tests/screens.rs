@@ -274,6 +274,68 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
 }
 
 #[test]
+fn a_fresh_install_is_onboarded_then_asks_for_a_model() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::onboarding, dark);
+        assert!(rt.state.shows_onboarding());
+        assert!(
+            rt.find("rd-roster").is_none(),
+            "onboarding takes the window"
+        );
+        let text = screen_text(&rt);
+        assert!(text.contains("Welcome to raphie"), "{text}");
+        assert!(text.contains("Running on this Mac"), "{text}");
+
+        // The teammate: renamed and recoloured, saved on the way on.
+        click(&mut rt, "rd-onboarding-next");
+        assert_eq!(rt.state.onboarding, state::Onboarding::Teammate);
+        assert!(screen_text(&rt).contains("Meet your first teammate"));
+        rt.update(|ui, _| ui.profile.name = TextEdit::new("Juniper"));
+        click(&mut rt, "rd-onboarding-color-teal");
+        click(&mut rt, "rd-onboarding-next");
+        match rt.state.sent.last() {
+            Some(Command::SaveProfile { bot_id, update }) => {
+                assert_eq!(bot_id, "default");
+                assert_eq!(update.name, "Juniper");
+                assert_eq!(update.color.as_deref(), Some("#83bcb4"));
+            }
+            other => panic!("expected a profile save, got {other:?}"),
+        }
+
+        // The bot asks for a model; a service opens its form in Settings.
+        assert_eq!(rt.state.onboarding, state::Onboarding::Provider);
+        assert!(screen_text(&rt).contains("First, I need a way to think."));
+        click(&mut rt, "rd-setup-openrouter");
+        assert_eq!(
+            rt.state.screen,
+            Screen::Settings(Page::Bot {
+                bot_id: "default".into(),
+                section: BotSection::Providers,
+            })
+        );
+    }
+}
+
+#[test]
+fn onboarding_can_be_skipped_and_never_shows_once_work_exists() {
+    let mut rt = render(scenes::onboarding_provider, false);
+    click(&mut rt, "rd-onboarding-back");
+    assert_eq!(rt.state.onboarding, state::Onboarding::Teammate);
+    rt.update(|ui, _| ui.onboarding = state::Onboarding::Provider);
+    settle(&mut rt);
+    click(&mut rt, "rd-onboarding-skip");
+    assert!(!rt.state.shows_onboarding());
+    // Skipped: the bot's own setup, in the workspace.
+    assert!(rt.find("rd-roster").is_some() && rt.find("rd-setup").is_some());
+
+    // A second bot, or a bot that can already reply, is not a fresh install.
+    let rt = render(scenes::bot_setup, false);
+    assert!(!rt.state.shows_onboarding());
+    let rt = render(scenes::new_conversation, false);
+    assert!(!rt.state.shows_onboarding());
+}
+
+#[test]
 fn a_narrow_window_shows_one_column_at_a_time() {
     const PHONE: (f32, f32) = (390.0, 780.0);
     for dark in [false, true] {

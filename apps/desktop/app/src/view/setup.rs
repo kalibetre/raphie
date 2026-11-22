@@ -18,6 +18,18 @@ use crate::theme::{Theme, font};
 use crate::widgets::{Kind, Size, button, centered, one_line, pressable};
 
 pub fn setup(s: &Ui, look: &Look) -> El {
+    col()
+        .w_full()
+        .grow(1.0)
+        .min_h(0.0)
+        .padding(32.0)
+        .center()
+        .child(panel(s, look))
+}
+
+/// The bot's request for a model, without the space around it; onboarding
+/// places it in its own pane.
+pub fn panel(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     let Some(bot) = s.model.selected_bot() else {
         return col();
@@ -91,13 +103,7 @@ pub fn setup(s: &Ui, look: &Look) -> El {
         }
         page = page.child(options);
     }
-    col()
-        .w_full()
-        .grow(1.0)
-        .min_h(0.0)
-        .padding(32.0)
-        .center()
-        .child(page)
+    page
 }
 
 fn option(bot_id: &str, provider: &ConnectionProvider, t: &Theme) -> El {

@@ -28,6 +28,7 @@ mod handoffs;
 mod header;
 mod inbox;
 mod model_picker;
+mod onboarding;
 mod permissions;
 mod roster;
 mod self_updates;
@@ -90,6 +91,8 @@ pub fn view(s: &Ui, cx: &mut Cx<Ui>) -> El {
     let mut overlays: Vec<El> = Vec::new();
     let base = match &s.model.auth {
         AuthState::SignedIn => match &s.screen {
+            // A fresh install starts with onboarding, in place of the workspace.
+            Screen::Workspace if s.shows_onboarding() => onboarding::onboarding(s, &look),
             Screen::Workspace => workspace(s, &look, &mut overlays),
             Screen::Settings(page) => settings::settings(s, page, &look, &mut overlays),
         },

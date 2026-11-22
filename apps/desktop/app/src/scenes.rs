@@ -41,6 +41,9 @@ pub const SCENES: &[Scene] = &[
     ("sign-in-error", sign_in_error),
     ("sign-in-this-mac", sign_in_this_mac),
     ("device-code", device_code),
+    ("onboarding", onboarding),
+    ("onboarding-teammate", onboarding_teammate),
+    ("onboarding-provider", onboarding_provider),
     ("new-conversation", new_conversation),
     ("conversation-opened", conversation_opened),
     ("scheduled-failures", scheduled_failures),
@@ -195,6 +198,50 @@ pub fn device_code(ui: &mut Ui) {
         verification_url: format!("{ORIGIN}/device?user_code=WXYZ-1234"),
         expires_in: 600,
     });
+}
+
+/// A fresh install: one bot, no model, nothing said yet. Onboarding
+/// starts with the app's welcome.
+pub fn onboarding(ui: &mut Ui) {
+    let origin = Origin::parse("http://127.0.0.1:24320").expect("a valid origin");
+    ui.model.apply(Event::SignedIn { origin });
+    ui.model.apply(Event::Bots(vec![bot(
+        "default",
+        "Raphie",
+        "Your personal assistant.",
+        None,
+    )]));
+    ui.model.apply(Event::BotSelected {
+        bot_id: "default".into(),
+    });
+    ui.model.apply(Event::Sessions {
+        bot_id: "default".into(),
+        page: Paged {
+            items: vec![],
+            next: None,
+        },
+        more: false,
+    });
+    let mut settings = subscription_settings();
+    settings.connections.clear();
+    settings.models.clear();
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(settings),
+    });
+}
+
+/// Onboarding's second step, with a teal colour chosen.
+pub fn onboarding_teammate(ui: &mut Ui) {
+    onboarding(ui);
+    ui.onboarding_next();
+    ui.profile.color = Some("#83bcb4".into());
+}
+
+/// Onboarding's last step: the bot asks for a way to think.
+pub fn onboarding_provider(ui: &mut Ui) {
+    onboarding(ui);
+    ui.onboarding = crate::state::Onboarding::Provider;
 }
 
 /// Signed in, with two bots and a few sessions, on a new conversation.

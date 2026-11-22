@@ -374,6 +374,9 @@ pub struct Ui {
     /// In a narrow window, whether Settings shows its navigation rather
     /// than a page.
     pub settings_nav_home: bool,
+    /// Where a fresh install's onboarding is, and whether it was skipped.
+    pub onboarding: Onboarding,
+    pub onboarding_skipped: bool,
     /// The workspace's size in points, as last laid out; 0 before the
     /// first layout. The width bounds the roster's, and the height the
     /// share the bots take of it.
@@ -514,6 +517,18 @@ pub const ROSTER_WIDTH: f32 = 264.0;
 pub const ROSTER_MIN: f32 = 220.0;
 pub const ROSTER_MAX: f32 = 480.0;
 
+/// A fresh install's first steps, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Onboarding {
+    /// The app says hello.
+    #[default]
+    Welcome,
+    /// The owner names the first bot and picks its colour.
+    Teammate,
+    /// The bot asks for a model.
+    Provider,
+}
+
 /// Below this width one column shows at a time, as on a phone: the roster
 /// as home, or the conversation with a way back (the web's 768).
 pub const NARROW: f32 = 768.0;
@@ -582,6 +597,8 @@ impl Ui {
             roster_open: true,
             narrow_home: true,
             settings_nav_home: false,
+            onboarding: Onboarding::Welcome,
+            onboarding_skipped: false,
             workspace_width: 0.0,
             workspace_height: 0.0,
             roster_width: ROSTER_WIDTH,
@@ -2207,6 +2224,46 @@ impl Ui {
             self.restoring_profile = false;
             self.command(Command::SaveProfile { bot_id, update });
         }
+    }
+
+    /// Onboarding shows on a fresh install only: the one bot has no model to
+    /// reply with, nothing has been said yet, no settings page is open, and
+    /// the owner has not skipped it.
+    pub fn shows_onboarding(&self) -> bool {
+        self.model.auth == AuthState::SignedIn
+            && self.screen == Screen::Workspace
+            && self.model.bots.len() == 1
+            && self.model.sessions_loaded
+            && self.model.session_list().next().is_none()
+            && self.needs_setup()
+            && !self.onboarding_skipped
+    }
+
+    /// The next onboarding step. Leaving the teammate step saves the name
+    /// and colour, as Settings → Profile would.
+    pub fn onboarding_next(&mut self) {
+        self.onboarding = match self.onboarding {
+            Onboarding::Welcome => {
+                if let Some(bot_id) = self.model.bot_id.clone() {
+                    self.show_profile(&bot_id);
+                }
+                Onboarding::Teammate
+            }
+            Onboarding::Teammate => {
+                if self.profile.is_dirty() {
+                    self.save_profile();
+                }
+                Onboarding::Provider
+            }
+            Onboarding::Provider => Onboarding::Provider,
+        };
+    }
+
+    pub fn onboarding_back(&mut self) {
+        self.onboarding = match self.onboarding {
+            Onboarding::Provider => Onboarding::Teammate,
+            _ => Onboarding::Welcome,
+        };
     }
 
     /// True once the selected bot's settings say it has no model it can

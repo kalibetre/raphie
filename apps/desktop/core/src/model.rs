@@ -916,6 +916,9 @@ pub struct Model {
     pub bot_id: Option<String>,
     /// The live first page of sessions, newest first.
     pub sessions: Vec<SessionSummary>,
+    /// The selected bot's first page has arrived, so an empty list means
+    /// it has no conversations rather than that they are on their way.
+    pub sessions_loaded: bool,
     /// Later pages the owner asked for.
     pub more_sessions: Vec<SessionSummary>,
     pub sessions_next: Option<String>,
@@ -1048,6 +1051,7 @@ impl Default for Model {
             bots: Vec::new(),
             bot_id: None,
             sessions: Vec::new(),
+            sessions_loaded: false,
             more_sessions: Vec::new(),
             sessions_next: None,
             archived: None,
@@ -1502,6 +1506,7 @@ impl Model {
             Event::Sessions { bot_id, page, more } => {
                 if self.bot_id.as_deref() == Some(bot_id.as_str()) {
                     self.sessions_page(page, more);
+                    self.sessions_loaded = true;
                 }
             }
             Event::ArchivedSessions { bot_id, sessions } => {
@@ -1696,6 +1701,7 @@ impl Model {
         if self.bot_id.as_deref() != Some(bot_id.as_str()) {
             self.bot_id = Some(bot_id);
             self.sessions.clear();
+            self.sessions_loaded = false;
             self.more_sessions.clear();
             self.sessions_next = None;
             self.archived = None;
