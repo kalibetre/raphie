@@ -97,7 +97,7 @@ export const sections = [
   },
   {
     id: "owner",
-    label: "About you",
+    label: "You",
     icon: CircleUserRound,
     lede: () =>
       "Who every bot is talking to: your name, your time zone and a few lines about you.",

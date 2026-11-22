@@ -3,6 +3,7 @@ import type { BotProfile } from "@raphie/contracts";
 import { Input } from "../../../shared/ui/input";
 import { Textarea } from "../../../shared/ui/textarea";
 import { BotColorPicker } from "./bot-color-picker";
+import { PersonalityPresets } from "./personality-presets";
 
 export function BotProfileFields({
   botId,
@@ -72,6 +73,11 @@ export function BotProfileFields({
           conversations.
         </p>
         <div className="bot-form settings-form">
+          <PersonalityPresets
+            personality={personality}
+            pending={pending}
+            onPick={onPersonality}
+          />
           <label htmlFor="bot-personality" className="sr-only">
             Personality
           </label>
@@ -79,7 +85,9 @@ export function BotProfileFields({
             <div className="personality-editor-heading">
               <strong>In your words</strong>
               <span>
-                {saved ? `Revision ${saved.revision}` : "Starting personality"}
+                {saved
+                  ? `Revision ${saved.revision}${saved.changedBy === "bot" ? ` · edited by ${saved.name}` : ""}`
+                  : "Starting personality"}
               </span>
             </div>
             <Textarea
@@ -94,8 +102,8 @@ export function BotProfileFields({
             />
           </div>
           <p id="bot-personality-note">
-            Personality guides behavior. Models, connections and memory are
-            configured separately.
+            Pick a starting point above, then make it yours. Models, connections
+            and memory are configured separately.
           </p>
         </div>
       </section>

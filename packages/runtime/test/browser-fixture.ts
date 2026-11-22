@@ -48,6 +48,23 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
   const input = user && typeof user.content === "string" ? user.content : "";
   const remember = /remember tea/i.test(input);
   const useNative = nativeWorkspace && /native workspace/i.test(input);
+  // "be blunt" and "my time zone" show a bot updating itself and the owner.
+  const self: { name: string; arguments: JsonObject } | null = /be blunt/i.test(
+    input,
+  )
+    ? {
+        name: "update_personality",
+        arguments: {
+          personality:
+            "Be blunt and direct. Skip pleasantries and lead with the answer.",
+        },
+      }
+    : /my time zone/i.test(input)
+      ? {
+          name: "update_owner_profile",
+          arguments: { callMe: "Hana", timeZone: "Africa/Addis_Ababa" },
+        }
+      : null;
   // "dentist", "clinic" and "inbox" show the three kinds of question.
   const ask: JsonObject | null = /dentist/i.test(input)
     ? {
@@ -74,7 +91,11 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
           }
         : null;
   const useTool =
-    (/tool|approval/i.test(input) || remember || useNative || !!ask) &&
+    (/tool|approval/i.test(input) ||
+      remember ||
+      useNative ||
+      !!ask ||
+      !!self) &&
     !toolResult;
   const text =
     toolResult?.role === "toolResult"
@@ -89,25 +110,29 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
           {
             type: "toolCall",
             id: "test-call",
-            name: ask
-              ? "ask_owner"
-              : useNative
-                ? "bash"
-                : remember
-                  ? "memory_retain"
-                  : "mcp_fixture_execute",
-            arguments: ask
-              ? ask
-              : useNative
-                ? {
-                    command:
-                      "echo 'Created through Pi bash' > /workspace/from-chat.txt; cat /workspace/from-chat.txt",
-                  }
-                : remember
-                  ? { content: "Owner prefers jasmine tea", kind: "fact" }
-                  : {
-                      code: 'return calendar.events.list({ date: "2026-10-21" });',
-                    },
+            name: self
+              ? self.name
+              : ask
+                ? "ask_owner"
+                : useNative
+                  ? "bash"
+                  : remember
+                    ? "memory_retain"
+                    : "mcp_fixture_execute",
+            arguments: self
+              ? self.arguments
+              : ask
+                ? ask
+                : useNative
+                  ? {
+                      command:
+                        "echo 'Created through Pi bash' > /workspace/from-chat.txt; cat /workspace/from-chat.txt",
+                    }
+                  : remember
+                    ? { content: "Owner prefers jasmine tea", kind: "fact" }
+                    : {
+                        code: 'return calendar.events.list({ date: "2026-10-21" });',
+                      },
           },
         ]
       : [{ type: "text", text: "" }],

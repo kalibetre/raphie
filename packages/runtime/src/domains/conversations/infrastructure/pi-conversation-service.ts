@@ -36,6 +36,7 @@ import {
   knownTimeZone,
   localTime,
   ownerInstructions,
+  selfUpdateInstructions,
 } from "../../bots/domain/owner.ts";
 import {
   channelNames,
@@ -281,7 +282,12 @@ export const watchJobRun = defineTask<
 export class ChatService implements ConversationCommands {
   personality?: () => Pick<
     BotProfile,
-    "name" | "description" | "personality" | "replyStyle" | "revision"
+    | "name"
+    | "description"
+    | "personality"
+    | "replyStyle"
+    | "revision"
+    | "selfUpdates"
   >;
   /** The owner, shared by every bot; absent in tests that run one bot. */
   owner?: () => OwnerProfile;
@@ -689,9 +695,12 @@ export class ChatService implements ConversationCommands {
               this.memory?.read().configuration.enabled ?? false,
             ) +
             (profile
-              ? `Your name is ${profile.name}. ${profile.description}\nYour personality, as the owner wrote it (revision ${profile.revision}):\n${profile.personality}\n`
+              ? `Your name is ${profile.name}. ${profile.description}\nYour personality (revision ${profile.revision}):\n${profile.personality}\n`
               : "You are Raphie, a concise and thoughtful personal assistant. ") +
             ownerInstructions(owner) +
+            (profile
+              ? selfUpdateInstructions(profile.selfUpdates, owner)
+              : "") +
             replyInstructions(profile?.replyStyle) +
             (this.skills?.instructions() ?? "") +
             (isSharedTelegramDestination(destination)

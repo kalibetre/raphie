@@ -17,7 +17,7 @@
 //! - [`mcp`]: the "Add a connection" form on a bot's MCP tools page.
 //! - [`memory`]: the edits in progress on a bot's Memory page.
 //! - [`skills`]: what is open and typed on a bot's Skills page.
-//! - [`owner`]: the edits in progress on About you, shared by every bot.
+//! - [`owner`]: the edits in progress on Settings → You, shared by every bot.
 //! - [`scenes`]: fixture states for headless snapshots and tests.
 //! - [`format`]: small text helpers.
 

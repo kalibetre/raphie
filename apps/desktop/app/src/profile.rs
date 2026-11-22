@@ -5,7 +5,7 @@
 //! bot-profile-form.tsx`: what counts as a change, when saving is allowed,
 //! and what happens when the bot was changed somewhere else meanwhile.
 
-use raphie_core::contracts::{BotProfile, NewBot, ReplyStyle, UpdateBotProfile};
+use raphie_core::contracts::{BotProfile, NewBot, ReplyStyle, SelfUpdates, UpdateBotProfile};
 use rune::TextEdit;
 
 /// The runtime's limits (`packages/runtime/src/domains/bots/presentation/
@@ -34,6 +34,9 @@ pub struct ProfileDraft {
     pub color: Option<String>,
     /// How the bot writes its replies.
     pub reply_style: ReplyStyle,
+    /// What the bot may change by itself. `None` when the runtime is too
+    /// old to say: the switches stay hidden and a save leaves them out.
+    pub self_updates: Option<SelfUpdates>,
     /// A custom colour being typed.
     pub custom_color: TextEdit,
     /// What the last save said, until the next edit ("Saved revision 4.").
@@ -52,6 +55,7 @@ impl ProfileDraft {
             personality: TextEdit::new(""),
             color: None,
             reply_style: ReplyStyle::default(),
+            self_updates: None,
             custom_color: TextEdit::new(""),
             message: None,
             creating: false,
@@ -63,6 +67,7 @@ impl ProfileDraft {
     pub fn new_bot() -> ProfileDraft {
         ProfileDraft {
             personality: TextEdit::new(STARTER_PERSONALITY),
+            self_updates: Some(SelfUpdates::NEW_BOT),
             creating: true,
             ..ProfileDraft::empty()
         }
@@ -77,6 +82,7 @@ impl ProfileDraft {
             personality: TextEdit::new(profile.personality.clone()),
             color: profile.color.clone(),
             reply_style: profile.reply_style,
+            self_updates: profile.self_updates,
             custom_color: TextEdit::new(profile.color.clone().unwrap_or_default()),
             message: None,
             creating: false,
@@ -106,7 +112,8 @@ impl ProfileDraft {
                 || !self.description.text.is_empty()
                 || self.personality.text != STARTER_PERSONALITY
                 || self.color.is_some()
-                || self.reply_style != ReplyStyle::default();
+                || self.reply_style != ReplyStyle::default()
+                || self.self_updates != Some(SelfUpdates::NEW_BOT);
         }
         // `is_some_and` is false for `None`: an empty form has no changes.
         self.saved.as_ref().is_some_and(|saved| {
@@ -115,6 +122,7 @@ impl ProfileDraft {
                 || self.personality.text != saved.personality
                 || self.color != saved.color
                 || self.reply_style != saved.reply_style
+                || self.self_updates != saved.self_updates
         })
     }
 
@@ -154,6 +162,7 @@ impl ProfileDraft {
             personality: self.personality.text.trim().to_owned(),
             reply_style: self.reply_style,
             color: self.color.clone(),
+            self_updates: self.self_updates,
             revision: saved.revision,
         })
     }
@@ -167,6 +176,7 @@ impl ProfileDraft {
             personality: self.personality.text.trim().to_owned(),
             reply_style: self.reply_style,
             color: self.color.clone(),
+            self_updates: self.self_updates,
         })
     }
 
@@ -196,6 +206,11 @@ mod tests {
             color: None,
             personality: "Be brief.".into(),
             reply_style: Default::default(),
+            self_updates: Some(SelfUpdates {
+                personality: true,
+                owner: true,
+            }),
+            changed_by: Some("bot".into()),
             revision: 3,
         }
     }
@@ -255,6 +270,38 @@ mod tests {
         assert_eq!(bot.personality, STARTER_PERSONALITY);
         // A form for an existing bot creates nothing.
         assert_eq!(ProfileDraft::of(&research()).new_bot_request(), None);
+    }
+
+    #[test]
+    fn self_updates_are_part_of_the_draft_and_of_every_save() {
+        let mut draft = ProfileDraft::of(&research());
+        draft.self_updates.as_mut().unwrap().owner = false;
+        assert!(draft.is_dirty());
+        let update = draft.update().unwrap();
+        assert_eq!(
+            update.self_updates,
+            Some(SelfUpdates {
+                personality: true,
+                owner: false
+            })
+        );
+        // A runtime too old to say has none, and a save leaves them out.
+        let old = BotProfile {
+            self_updates: None,
+            ..research()
+        };
+        let draft = ProfileDraft::of(&old);
+        assert!(!draft.is_dirty());
+        assert_eq!(draft.update().unwrap().self_updates, None);
+        // A new bot may change its personality, not the owner's profile.
+        let mut draft = ProfileDraft::new_bot();
+        let request = draft.new_bot_request().unwrap();
+        assert_eq!(request.self_updates, Some(SelfUpdates::NEW_BOT));
+        draft.self_updates = Some(SelfUpdates {
+            personality: false,
+            owner: false,
+        });
+        assert!(draft.is_dirty(), "turning a switch off is an edit");
     }
 
     #[test]

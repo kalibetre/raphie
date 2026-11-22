@@ -238,6 +238,7 @@ fn router(fake: Fake) -> Router {
         .route("/api/bots", get(bots).post(create_bot))
         .route("/api/bots/{id}", axum::routing::delete(delete_bot))
         .route("/api/bots/{id}/history", get(bot_history))
+        .route("/api/bots/personalities", get(personality_presets))
         .route("/api/sessions/events", get(session_list_events))
         .route("/api/bots/{bot}/sessions/events", get(session_list_events))
         .route("/api/sessions/messages", post(submit))
@@ -1677,6 +1678,19 @@ async fn delete_bot(
     StatusCode::NO_CONTENT.into_response()
 }
 
+/// Two built-in personalities, as `GET /api/bots/personalities` lists them.
+async fn personality_presets(State(fake): State<Fake>, headers: HeaderMap) -> Response {
+    record(&fake, "GET", "/api/bots/personalities".into(), &headers);
+    if let Some(denied) = refuse(&fake, &headers) {
+        return denied;
+    }
+    Json(json!({ "items": [
+        { "id": "candid", "name": "Candid", "summary": "Concise, honest and warm.", "personality": "Be candid." },
+        { "id": "coach", "name": "Coach", "summary": "Asks good questions.", "personality": "Act as a coach." },
+    ]}))
+    .into_response()
+}
+
 /// The research bot's saved versions, newest first: one per revision.
 async fn bot_history(
     State(fake): State<Fake>,
@@ -1853,6 +1867,8 @@ async fn save_profile(
     Json(json!({
         "id": id, "name": body["name"], "description": body["description"],
         "personality": body["personality"], "color": body["color"],
+        "selfUpdates": body.get("selfUpdates").cloned().unwrap_or(json!({ "personality": true, "owner": false })),
+        "changedBy": "owner",
         "revision": current + 1, "createdAt": 2, "updatedAt": 3
     }))
     .into_response()

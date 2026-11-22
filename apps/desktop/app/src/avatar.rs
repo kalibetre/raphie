@@ -331,6 +331,8 @@ mod tests {
             color: color.map(str::to_owned),
             personality: String::new(),
             reply_style: Default::default(),
+            self_updates: None,
+            changed_by: None,
             revision: 1,
         }
     }

@@ -1,5 +1,6 @@
 import type {
   BotProfile,
+  PersonalityPreset,
   SaveBotProfile,
   UpdateBotProfile,
 } from "@raphie/contracts";
@@ -57,4 +58,19 @@ export function useBots() {
     },
   });
   return { ...query, save, create, remove };
+}
+
+/** The built-in personalities a bot can start from; the same for every bot. */
+export function usePersonalityPresets() {
+  const { backend } = useBackend();
+  return useQuery(
+    {
+      queryKey: ["personality-presets"],
+      queryFn: () =>
+        backend.api<{ items: PersonalityPreset[] }>("/api/bots/personalities"),
+      retry: false,
+      staleTime: Infinity,
+    },
+    backend.queries,
+  );
 }

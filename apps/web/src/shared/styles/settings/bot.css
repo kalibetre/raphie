@@ -354,4 +354,71 @@
     flex: 1 1 240px;
     width: auto;
   }
+
+  /* Built-in personalities above the editor. */
+  .personality-presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .personality-preset {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    text-align: left;
+    cursor: pointer;
+  }
+  .personality-preset:hover:not(:disabled) {
+    background: var(--muted);
+  }
+  .personality-preset[aria-pressed="true"] {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .personality-preset:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .personality-preset strong {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .personality-preset span {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--muted-foreground);
+  }
+
+  /* What a bot may change by itself. */
+  .self-updates {
+    display: flex;
+    flex-direction: column;
+  }
+  .self-update {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    cursor: pointer;
+  }
+  .self-update + .self-update {
+    border-top: 1px solid var(--border);
+  }
+  .self-update strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .self-update small {
+    display: block;
+    margin-top: 2px;
+    font-size: 11.5px;
+    color: var(--muted-foreground);
+  }
 }

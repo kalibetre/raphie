@@ -376,6 +376,8 @@ mod tests {
             color: None,
             personality: String::new(),
             reply_style: Default::default(),
+            self_updates: None,
+            changed_by: None,
             revision: 1,
         }
     }

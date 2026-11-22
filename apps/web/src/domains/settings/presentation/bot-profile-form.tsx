@@ -1,4 +1,4 @@
-import type { BotProfile, ReplyStyle } from "@raphie/contracts";
+import type { BotProfile, ReplyStyle, SelfUpdates } from "@raphie/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
@@ -10,6 +10,7 @@ import { BotProfileFields } from "./bot-profile-fields";
 import { DeleteBot } from "./delete-bot";
 import { defaultReplyStyle, ReplyStyleFields } from "./reply-style-fields";
 import { SaveBar } from "./save-bar";
+import { SelfUpdateFields } from "./self-update-fields";
 import { useSettingsGuard } from "./use-settings-guard";
 
 const sameStyle = (a: ReplyStyle, b: ReplyStyle) =>
@@ -17,6 +18,12 @@ const sameStyle = (a: ReplyStyle, b: ReplyStyle) =>
   a.warmth === b.warmth &&
   a.formatting === b.formatting &&
   a.emoji === b.emoji;
+
+/** A new bot may change its personality, not the owner's profile. */
+const newBotSelfUpdates: SelfUpdates = { personality: true, owner: false };
+
+const sameSelfUpdates = (a: SelfUpdates, b: SelfUpdates) =>
+  a.personality === b.personality && a.owner === b.owner;
 
 const starterPersonality =
   "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
@@ -41,6 +48,9 @@ export function BotForm({
   const [replyStyle, setReplyStyle] = useState<ReplyStyle>(
     profile?.replyStyle ?? defaultReplyStyle,
   );
+  const [selfUpdates, setSelfUpdates] = useState<SelfUpdates>(
+    profile?.selfUpdates ?? newBotSelfUpdates,
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const pending =
@@ -50,12 +60,14 @@ export function BotForm({
       description !== saved.description ||
       personality !== saved.personality ||
       color !== (saved.color ?? null) ||
-      !sameStyle(replyStyle, saved.replyStyle)
+      !sameStyle(replyStyle, saved.replyStyle) ||
+      !sameSelfUpdates(selfUpdates, saved.selfUpdates)
     : !!name ||
       !!description ||
       personality !== starterPersonality ||
       color !== null ||
-      !sameStyle(replyStyle, defaultReplyStyle);
+      !sameStyle(replyStyle, defaultReplyStyle) ||
+      !sameSelfUpdates(selfUpdates, newBotSelfUpdates);
   const guard = useSettingsGuard(dirty, pending);
   const changedElsewhere =
     !!profile && !!saved && profile.revision !== saved.revision;
@@ -74,6 +86,7 @@ export function BotForm({
     setPersonality(profile.personality);
     setColor(profile.color ?? null);
     setReplyStyle(profile.replyStyle);
+    setSelfUpdates(profile.selfUpdates);
     setError("");
   }, [profile, saved, dirty, pending]);
 
@@ -85,6 +98,7 @@ export function BotForm({
     setPersonality(latest?.personality ?? starterPersonality);
     setColor(latest?.color ?? null);
     setReplyStyle(latest?.replyStyle ?? defaultReplyStyle);
+    setSelfUpdates(latest?.selfUpdates ?? newBotSelfUpdates);
     setError("");
     setMessage("");
   }
@@ -111,6 +125,7 @@ export function BotForm({
       personality: personality.trim(),
       color,
       replyStyle,
+      selfUpdates,
     };
     try {
       if (saved) {
@@ -124,6 +139,7 @@ export function BotForm({
         setPersonality(updated.personality);
         setColor(updated.color ?? null);
         setReplyStyle(updated.replyStyle);
+        setSelfUpdates(updated.selfUpdates);
         setMessage(`Saved revision ${updated.revision}.`);
       } else {
         const created = await bots.create.mutateAsync(input);
@@ -173,6 +189,11 @@ export function BotForm({
         style={replyStyle}
         pending={pending}
         onChange={setReplyStyle}
+      />
+      <SelfUpdateFields
+        value={selfUpdates}
+        pending={pending}
+        onChange={setSelfUpdates}
       />
       {saved && (
         <Button

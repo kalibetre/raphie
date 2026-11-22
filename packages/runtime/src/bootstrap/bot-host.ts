@@ -11,6 +11,7 @@ import type {
 
 import type { BotProfiles } from "../domains/bots/application/ports.ts";
 import { BotProfileStore } from "../domains/bots/infrastructure/bot-profiles.ts";
+import { createSelfTools } from "../domains/bots/infrastructure/self-tools.ts";
 import {
   BotChannels,
   DiscordApplications,
@@ -107,14 +108,14 @@ export class BotHost implements BotProfiles {
         recursive: true,
         mode: 0o700,
       });
-      existing.gateway.setPersonality(() => host.profiles.read("default"));
+      host.bind(existing.gateway, "default");
       for (const profile of host.profiles.list()) {
         if (profile.id === "default") continue;
         const runtime = await host.attach(
           await openBot(profile.id, join(directory, "bots", profile.id)),
           join(directory, "bots", profile.id),
         );
-        runtime.gateway.setPersonality(() => host.profiles.read(profile.id));
+        host.bind(runtime.gateway, profile.id);
         host.runtimes.set(profile.id, runtime);
       }
       // Recover only after every bot's tools, task definitions and identity exist.
@@ -168,7 +169,7 @@ export class BotHost implements BotProfiles {
         mode: 0o700,
       });
       this.profiles.insert(profile);
-      runtime.gateway.setPersonality(() => this.profiles.read(profile.id));
+      this.bind(runtime.gateway, profile.id);
       this.runtimes.set(profile.id, runtime);
       this.refreshHandoffs();
       runtime.gateway.harness.resume();
@@ -261,6 +262,23 @@ export class BotHost implements BotProfiles {
     await ContainerWorkspace.reapForDeletion(directory);
     await rm(directory, { recursive: true, force: true });
     this.profiles.finishDeletion(id);
+  }
+
+  /**
+   * Gives bot `id` its profile: read at the start of each turn, and the
+   * tools to change its personality and the owner's profile when allowed.
+   */
+  private bind(gateway: Gateway, id: string) {
+    gateway.setPersonality(() => this.profiles.read(id));
+    gateway.install(
+      createSelfTools({
+        profile: () => this.profiles.read(id),
+        updatePersonality: (personality) =>
+          this.profiles.updatePersonality(id, personality),
+        owner: () => this.profiles.owner(),
+        saveOwner: (input) => this.profiles.saveOwner(input),
+      }),
+    );
   }
 
   /** Whether a bot's default model connection can search the web. */

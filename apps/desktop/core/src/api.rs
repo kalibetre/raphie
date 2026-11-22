@@ -39,6 +39,7 @@ use crate::contracts::{ApprovalMode, ApprovalModeBody, ArchiveBody};
 use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
 use crate::contracts::{OwnerProfile, SaveOwnerProfile};
+use crate::contracts::{PersonalityPreset, PersonalityPresetList};
 use crate::contracts::{SaveSkill, SkillDetail, SkillImport, SkillList, SkillSummary};
 use crate::jobs::{JobAction, NewJob};
 use crate::mcp::{McpAction, NewMcpConnection};
@@ -399,6 +400,13 @@ impl ApiClient {
         let path = format!("/api/bots/{}/history", encode(bot_id));
         let history: BotHistory = self.get_json(&path).await?;
         Ok(history.items)
+    }
+
+    /// The built-in personalities a bot can start from; the same for every
+    /// bot.
+    pub async fn personality_presets(&self) -> Result<Vec<PersonalityPreset>, ApiError> {
+        let list: PersonalityPresetList = self.get_json("/api/bots/personalities").await?;
+        Ok(list.items)
     }
 
     /// Creates a bot and returns it.

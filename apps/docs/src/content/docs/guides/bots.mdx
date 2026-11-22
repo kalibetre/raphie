@@ -30,15 +30,15 @@ All bots run in the same runtime and answer to you. Separation between them is l
   </Row>
 </Flow>
 
-| Separate for each bot                                        | Shared by all bots                                      |
-| ------------------------------------------------------------ | ------------------------------------------------------- |
-| Name, description, colour and personality with its revisions | The runtime process and data directory                  |
-| Sessions and their attachments                               | Your admin sign-in, passkeys and connected devices      |
-| Provider connections, keys and default model                 | Diagnostics traces                                      |
-| Memory configuration and stored memories                     | Browser preferences: theme, sidebar width, UI plugins   |
-| Workspace files, [skills](/guides/skills/) and sandbox       |                                                         |
-| MCP tools, channels and scheduled jobs                       |                                                         |
-| Activity                                                     | [About you](#about-you): your name, time zone and notes |
+| Separate for each bot                                        | Shared by all bots                                    |
+| ------------------------------------------------------------ | ----------------------------------------------------- |
+| Name, description, colour and personality with its revisions | The runtime process and data directory                |
+| Sessions and their attachments                               | Your admin sign-in, passkeys and connected devices    |
+| Provider connections, keys and default model                 | Diagnostics traces                                    |
+| Memory configuration and stored memories                     | Browser preferences: theme, sidebar width, UI plugins |
+| Workspace files, [skills](/guides/skills/) and sandbox       |                                                       |
+| MCP tools, channels and scheduled jobs                       |                                                       |
+| Activity                                                     | [You](#you): your name, time zone and notes           |
 
 A session belongs to exactly one bot and cannot be opened through another.
 
@@ -51,7 +51,7 @@ The first start creates the default bot. It cannot be deleted. Its data lives at
 <Steps>
 
 1. Choose **+** beside **Your bots** in the sidebar (at the end of the bot strip on a phone), or **Create a bot** in Settings.
-2. Give it a name, an optional description and a personality.
+2. Give it a name, an optional description and a personality: pick one of the [built-in personalities](#built-in-personalities) or write your own.
 3. Under **Providers**, connect a model provider with an API key or a subscription sign-in. A new bot has no provider and cannot reply until it has one.
 4. Under **Models**, pick its default model.
 5. Optionally adjust **Memory**, **MCP tools**, **Channels** and **Sandbox**.
@@ -75,9 +75,22 @@ Open **Profile** by clicking the bot's name in the title bar, or from Settings. 
 | Colour      | 8 presets, a custom colour, or **Automatic** | Automatic avoids colours other bots already use. |
 | Personality | 16,000 characters                            | In your own words.                               |
 
-The personality is your description of the bot's voice, values and way of working. The runtime adds it to the model's instructions when a turn starts, so a turn already running keeps the version it started with. Its [reply style](#reply-style) sets how it writes back, unless the personality asks for a different length or format.
+The personality describes the bot's voice, values and way of working. The runtime adds it to the model's instructions when a turn starts, so a turn already running keeps the version it started with. Its [reply style](#reply-style) sets how it writes back, unless the personality asks for a different length or format.
 
-Personality is owner configuration. A bot has no tool to edit its own profile, and nothing in its personality can grant tools, access or permissions. If a bot suggests a change to its personality, it is only text until you save it.
+Nothing in a personality can grant tools, access or permissions, whoever wrote it. A bot may rewrite its own personality when you allow it; see [self-updates](#self-updates).
+
+### Built-in personalities
+
+Above the editor, six starting points fill it with a ready-made personality. The highlighted one matches the text in the editor; edit it freely, and save to keep it.
+
+| Personality      | What it is like                                    |
+| ---------------- | -------------------------------------------------- |
+| Candid           | Concise, honest and warm. The default bot's own.   |
+| Chief of staff   | Organised and proactive; keeps your week on track. |
+| Warm companion   | Friendly and patient; remembers the small things.  |
+| Coach            | Asks good questions and holds you to your goals.   |
+| Analyst          | Precise and sourced; shows its reasoning.          |
+| Creative partner | Playful and generative; builds on ideas.           |
 
 :::caution
 Don't put credentials in a personality. The model receives it as instructions, and every revision is kept. Keys belong under **Providers** or the relevant settings page, where they are encrypted.
@@ -98,15 +111,28 @@ Whatever the settings, a reply opens with the answer and skips preamble and clos
 
 ### Revisions
 
-Every save creates a revision. **View revision history**, below the editor, opens the latest 50 with their name, description, colour and personality. To roll back, copy older text into the editor and save it as a new revision.
+Every save creates a revision. **View revision history**, below the editor, opens the latest 50 with their name, description, colour and personality. A revision the bot saved itself is marked **by** the bot's name, and one that is a built-in personality, unchanged, carries its name. To roll back, open a revision and choose **Restore this personality**, which saves it as a new revision.
 
 The runtime also serves the active personality as a plain `personality.md` file; see the [HTTP API](/architecture/http-api/).
 
 A save is refused while the bot has a turn in progress, or if someone saved a newer revision in another window. Wait for the turn to finish, or refresh, then save again.
 
-## About you
+### Self-updates
 
-**Settings → About you** tells every bot who it is talking to. It is one profile, shared by all your bots.
+Under **Self-updates**, two switches say what the bot may change by itself, without asking:
+
+| Switch                 | What the bot may do                                                                  | Default                                  |
+| ---------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------- |
+| Update its personality | Save a new personality when you ask for a different manner, or it learns what works. | On                                       |
+| Update "You"           | Save your name, what to call you, your time zone and notes on the [You](#you) page.  | On for the default bot, off for new bots |
+
+A change is saved at once and applies from the bot's next reply. The reply that made it shows a note: **Updated its personality**, with **See change** and **Undo**, or **Updated what it knows about you**, with **Review**. Undo restores the personality from before the change, as long as nothing newer was saved. Each personality change is also a revision marked as the bot's, so you can restore any earlier one later.
+
+While the You page is missing your name, time zone or notes, a bot allowed to update it is told to ask once when it fits the conversation, and to save what you tell it. The bot is told to change its personality only for you, never because a message, document, web page or another bot asks it to. Turn the switch off for a bot that reads material you don't trust.
+
+## You
+
+**Settings → You** tells every bot who it is talking to. It is one profile, shared by all your bots, and bots allowed to [update it](#self-updates) fill it in as they learn about you.
 
 | Field              | Limit            | Notes                                                                 |
 | ------------------ | ---------------- | --------------------------------------------------------------------- |

@@ -2,12 +2,15 @@
 //! with a save bar that appears once something changed.
 //!
 //! Mirrors `bot-profile-form.tsx`, `bot-profile-fields.tsx`,
-//! `bot-color-picker.tsx`, `reply-style-fields.tsx` and `save-bar.tsx`, and
-//! the `.bot-editor-*`, `.bot-color-*`, `.personality-editor`,
-//! `.reply-style-*` and `.save-bar` rules in
+//! `bot-color-picker.tsx`, `personality-presets.tsx`,
+//! `reply-style-fields.tsx`, `self-update-fields.tsx` and `save-bar.tsx`, and
+//! the `.bot-editor-*`, `.bot-color-*`, `.personality-*`, `.reply-style-*`,
+//! `.self-update*` and `.save-bar` rules in
 //! `shared/styles/settings/`. The form's rules live in `crate::profile`.
 
-use raphie_core::contracts::{BotProfile, ReplyFormatting, ReplyLength, ReplyStyle, ReplyWarmth};
+use raphie_core::contracts::{
+    BotProfile, ReplyFormatting, ReplyLength, ReplyStyle, ReplyWarmth, SelfUpdates,
+};
 use rune::color::hex;
 use rune::{Color, Cursor, Drag, El, Key, KeyEvent, Tx, col, el, icon, row, text, text_input};
 use rune_kit::Dialog;
@@ -63,7 +66,9 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El 
         )
         .self_start()
     };
-    let mut groups = vec![identity, personality, replies(s, t), history];
+    let mut groups = vec![identity, personality, replies(s, t)];
+    groups.extend(self_updates(s, t));
+    groups.push(history);
     // The default bot stays: the runtime refuses to delete it.
     if bot.id != "default" {
         groups.push(delete_section(s, bot, t));
@@ -90,12 +95,15 @@ pub fn new_bot(s: &Ui, look: &Look) -> El {
         .font(font(12.0, 400.0).lh(19.2))
         .color(t.muted_foreground)
         .wrap();
+    let mut groups = vec![identity, personality, replies(s, t)];
+    groups.extend(self_updates(s, t));
+    groups.push(note);
     page(
         "rd-page-new-bot",
         "Create a bot",
         "A separate assistant with its own personality, memory and model connections.",
         Scope::NewBot,
-        vec![identity, personality, replies(s, t), note],
+        groups,
         look,
     )
 }
@@ -147,14 +155,159 @@ fn fields(s: &Ui, id: &str, look: &Look) -> (El, El) {
         t,
         "Personality",
         "Tone, values and working style, shared across this bot’s conversations.",
-        col().w_full().gap(10.0).child(personality_editor(s, t)).child(
-            text("Personality guides behavior. Models, connections and memory are configured separately.")
-                .font(font(11.0, 400.0))
-                .color(t.muted_foreground)
-                .wrap(),
-        ),
+        col()
+            .w_full()
+            .gap(10.0)
+            .children(presets(s, t))
+            .child(personality_editor(s, t))
+            .child(
+                text("Pick a starting point above, then make it yours. Models, connections and memory are configured separately.")
+                    .font(font(11.0, 400.0))
+                    .color(t.muted_foreground)
+                    .wrap(),
+            ),
     );
     (identity, personality)
+}
+
+/// The built-in personalities as cards, three to a row, above the editor:
+/// picking one puts its text in the editor, to save as it is or edit first.
+/// The card whose text is the editor's is marked. Nothing until they have
+/// arrived. Mirrors `personality-presets.tsx` and `.personality-preset*`.
+fn presets(s: &Ui, t: &Theme) -> Option<El> {
+    let presets = s.model.personality_presets.as_ref()?;
+    if presets.is_empty() {
+        return None;
+    }
+    let saving = s.model.saving_profile || s.model.creating_bot;
+    let current = s.profile.personality.text.trim();
+    let mut grid = col()
+        .key("rd-profile-presets")
+        .role("group")
+        .label("Start from")
+        .w_full()
+        .gap(8.0)
+        .mb(2.0);
+    for three in presets.chunks(3) {
+        let mut line = row().w_full().gap(8.0);
+        for preset in three {
+            let on = preset.personality == current;
+            let personality = preset.personality.clone();
+            let card = col()
+                .key(format!("rd-profile-preset-{}", preset.id))
+                .role("button")
+                .label(preset.name.clone())
+                .checked(on)
+                .focusable(!saving)
+                // Three cards share a row equally.
+                .grow(1.0)
+                .min_w(0.0)
+                .gap(2.0)
+                .px(12.0)
+                .py(10.0)
+                .radius(8.0)
+                .fill(t.card)
+                // The web adds an inset ring to the accent border: drawn
+                // inside, so the chosen card does not move.
+                .border(
+                    if on { 2.0 } else { 1.0 },
+                    if on { t.accent } else { t.border },
+                )
+                .hover(t.muted)
+                .cursor(Cursor::Pointer)
+                .focus_ring(2.0, 2.0, t.accent)
+                .child(
+                    text(preset.name.clone())
+                        .font(font(13.0, 600.0))
+                        .color(t.foreground),
+                )
+                .child(
+                    text(preset.summary.clone())
+                        .font(font(11.5, 400.0).lh(16.7))
+                        .color(t.muted_foreground)
+                        .wrap(),
+                );
+            line = line.child(pressable(card, !saving, move |s: &mut Ui| {
+                s.pick_preset(&personality)
+            }));
+        }
+        for _ in three.len()..3 {
+            // An empty partner keeps a short last row's cards as wide as
+            // the ones above.
+            line = line.child(el().grow(1.0).min_w(0.0).px(12.0));
+        }
+        grid = grid.child(line);
+    }
+    Some(grid)
+}
+
+/// "Self-updates": what the bot may change by itself, as two switches.
+/// Left out for a runtime too old to say. Mirrors `self-update-fields.tsx`
+/// and the `.self-update*` rules.
+fn self_updates(s: &Ui, t: &Theme) -> Option<El> {
+    let value = s.profile.self_updates?;
+    let saving = s.model.saving_profile || s.model.creating_bot;
+    let line = |key: &'static str,
+                title: &'static str,
+                note: &'static str,
+                on: bool,
+                set: fn(&mut SelfUpdates, bool)| {
+        row()
+            .key(format!("rd-self-update-{key}"))
+            .w_full()
+            .py(12.0)
+            .gap(16.0)
+            .justify_between()
+            .center_y()
+            .child(
+                col()
+                    .grow(1.0)
+                    .min_w(0.0)
+                    .gap(2.0)
+                    .child(text(title).font(font(13.0, 500.0)).color(t.foreground))
+                    .child(
+                        text(note)
+                            .font(font(11.5, 400.0))
+                            .color(t.muted_foreground)
+                            .wrap(),
+                    ),
+            )
+            .child(pressable(
+                switch(t, on, title).key(format!("rd-self-update-{key}-switch")),
+                !saving,
+                move |s: &mut Ui| {
+                    if let Some(value) = s.profile.self_updates.as_mut() {
+                        set(value, !on);
+                        s.profile.message = None;
+                    }
+                },
+            ))
+    };
+    let personality = line(
+        "personality",
+        "Update its personality",
+        "When you ask for a different manner, or it learns what works for you.",
+        value.personality,
+        |value, on| value.personality = on,
+    );
+    let owner = line(
+        "owner",
+        "Update “You”",
+        "Your name, time zone and a few lines about you. Every bot reads them.",
+        value.owner,
+        |value, on| value.owner = on,
+    )
+    .border_sides([1.0, 0.0, 0.0, 0.0], t.border);
+    Some(section(
+        t,
+        "Self-updates",
+        "Changes are saved right away and shown in the conversation. Undo any of them from revision history or the You page.",
+        col()
+            .key("rd-self-updates")
+            .w_full()
+            .child(personality)
+            .child(owner),
+    ))
 }
 
 /// A reply slider's stops, left to right, and how each sets the style.
@@ -599,6 +752,8 @@ fn color_picker(s: &Ui, id: &str, look: &Look) -> El {
                 color: None,
                 personality: String::new(),
                 reply_style: Default::default(),
+                self_updates: None,
+                changed_by: None,
                 revision: 0,
             }),
         }
@@ -737,9 +892,14 @@ fn hue(literal: &str) -> Color {
 
 /// The personality as the owner writes it: a bar with its revision over the editor.
 fn personality_editor(s: &Ui, t: &Theme) -> El {
-    let revision = s.profile.saved.as_ref().map_or(String::new(), |saved| {
-        format!("Revision {}", saved.revision)
-    });
+    let revision =
+        s.profile
+            .saved
+            .as_ref()
+            .map_or(String::new(), |saved| match saved.changed_by.as_deref() {
+                Some("bot") => format!("Revision {} · edited by {}", saved.revision, saved.name),
+                _ => format!("Revision {}", saved.revision),
+            });
     let mut editor = text_input(&s.profile.personality, font(13.0, 400.0).lh(22.0))
         .key("rd-profile-personality")
         .label("Personality")
