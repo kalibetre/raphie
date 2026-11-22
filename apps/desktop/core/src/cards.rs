@@ -1,13 +1,84 @@
-//! A timeline card as it reads at one moment: what is over, and where the
-//! present falls among today's events.
+//! What a card works out before it is drawn: a timeline as it reads at one
+//! moment, how a due date reads today, and a person's initials.
 //!
-//! Mirrors `apps/web/src/domains/conversations/application/card-timeline.ts`.
+//! Mirrors `card-timeline.ts` and `card-facts.ts` in
+//! `apps/web/src/domains/conversations/application`.
 //! Pure functions, no clock: the caller passes the time and how this
 //! machine maps a moment to a calendar day.
 
-use crate::contracts::{CardEvent, CardTimelineItem};
+use crate::contracts::{CardEvent, CardTimelineItem, CardTone};
 
 const DAY_MS: i64 = 86_400_000;
+
+const MONTHS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// A calendar date written YYYY-MM-DD as (year, month, day), if it is one.
+fn civil(date: &str) -> Option<(i64, i64, i64)> {
+    let mut parts = date.split('-').map(|part| part.parse::<i64>().ok());
+    let (year, month, day) = (parts.next()??, parts.next()??, parts.next()??);
+    (parts.next().is_none() && (1..=12).contains(&month) && (1..=31).contains(&day))
+        .then_some((year, month, day))
+}
+
+/// Days from 1970-01-01 to a calendar date (Howard Hinnant's algorithm).
+fn days_from_civil((year, month, day): (i64, i64, i64)) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let of_era = year.rem_euclid(400);
+    let of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
+    era * 146_097 + of_era * 365 + of_era / 4 - of_era / 100 + of_year - 719_468
+}
+
+/// How a due date reads on a day.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Due {
+    pub label: String,
+    pub tone: CardTone,
+    /// Close or past: worth a badge. Later dates are plain words.
+    pub soon: bool,
+}
+
+/// How a due date written YYYY-MM-DD reads on `today` (days since
+/// 1970-01-01): overdue in red, today and tomorrow in amber, and later
+/// dates plainly. Mirrors `dueLabel` in the web's `card-facts.ts`.
+pub fn due_label(date: &str, today: i64) -> Due {
+    let Some(parts) = civil(date) else {
+        return Due {
+            label: date.to_owned(),
+            tone: CardTone::Neutral,
+            soon: false,
+        };
+    };
+    let days = days_from_civil(parts) - today;
+    let (label, tone) = match days {
+        ..0 => (format!("Overdue {}d", -days), CardTone::Bad),
+        0 => ("Due today".to_owned(), CardTone::Attention),
+        1 => ("Due tomorrow".to_owned(), CardTone::Attention),
+        _ => (
+            format!("Due {} {}", MONTHS[(parts.1 - 1) as usize], parts.2),
+            CardTone::Neutral,
+        ),
+    };
+    Due {
+        label,
+        tone,
+        soon: days <= 1,
+    }
+}
+
+/// Up to two letters for a person: "Kalkidan Betre" is "KB", "mara" is "M".
+pub fn initials(name: &str) -> String {
+    let mut words = name.split_whitespace();
+    let first = words.next().and_then(|word| word.chars().next());
+    let last = words.next_back().and_then(|word| word.chars().next());
+    first
+        .into_iter()
+        .chain(last)
+        .flat_map(char::to_uppercase)
+        .collect()
+}
 
 /// One line of a timeline card as it reads at `now`.
 #[derive(Clone, Debug, PartialEq)]
@@ -140,6 +211,37 @@ mod tests {
                 }
             })
             .collect()
+    }
+
+    #[test]
+    fn a_due_date_is_red_once_past_amber_today_and_tomorrow_and_plain_later() {
+        // 2026-11-23 is 20_780 days after 1970-01-01.
+        let today = days_from_civil((2026, 11, 23));
+        assert_eq!(today, 20_780);
+        let due = |date: &str| due_label(date, today);
+        assert_eq!(due("2026-11-20").label, "Overdue 3d");
+        assert_eq!(due("2026-11-20").tone, CardTone::Bad);
+        assert_eq!(due("2026-11-23").label, "Due today");
+        assert_eq!(due("2026-11-24").label, "Due tomorrow");
+        assert_eq!(due("2026-11-24").tone, CardTone::Attention);
+        let later = due("2026-12-04");
+        assert_eq!(later.label, "Due Dec 4");
+        assert!(!later.soon && later.tone == CardTone::Neutral);
+        // Across a year end the count is still in days.
+        assert_eq!(
+            due_label("2026-12-31", days_from_civil((2027, 1, 2))).label,
+            "Overdue 2d"
+        );
+        assert_eq!(due("soon").label, "soon");
+        assert!(!due("soon").soon);
+    }
+
+    #[test]
+    fn a_person_is_drawn_as_their_first_and_last_initials() {
+        assert_eq!(initials("Kalkidan Betre"), "KB");
+        assert_eq!(initials("  mara "), "M");
+        assert_eq!(initials("Ana de la Cruz"), "AC");
+        assert_eq!(initials(""), "");
     }
 
     #[test]

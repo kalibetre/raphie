@@ -39,7 +39,7 @@ Each bot holds a Pi registry. Extensions can be installed and removed while the 
 | `raphie.memory`                    | The five memory tools                                                                                                                                |
 | `raphie.workspace`                 | `workspace_exec` (just-bash) or the container `read`, `write`, `edit` and `bash` tools, plus a prompt section describing the limits                  |
 | `raphie.documents`                 | `read_document`: PDF and office document extraction in a worker                                                                                      |
-| `raphie.cards`                     | `show_card`: a list or timeline the clients draw under the reply, kept with the session and sent to a chat as text                                   |
+| `raphie.cards`                     | `show_card`: a list, timeline, board or item the clients draw under the reply, kept with the session and sent to a chat as text                      |
 | `raphie.mcp`, `raphie.mcp.*`       | One tool per advertised MCP tool, approval-gated except a documentation lookup                                                                       |
 | Tool search                        | Installed while the bot has MCP connections. Lets the model discover deferred MCP tools on demand, instead of paying their schema cost on every turn |
 | `raphie.jobs`, `raphie.scheduling` | The `raphie.recurring-prompt` task and the `schedule_create`, `schedule_update`, `schedule_delete` and `schedule_list` tools                         |

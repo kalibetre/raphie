@@ -70,55 +70,60 @@ function fixtureCard(
           day: "numeric",
           month: "long",
         }),
+        kind: "timeline",
         warning: "Side-project calendar couldn't be read",
-        events: [
+        groups: [
           {
-            title: "Standup",
-            detail: "Meet · 6 people",
-            start: today(9, 30),
-            end: today(9, 45),
-            source: "Work calendar",
-            url: "https://calendar.example.com/e/1",
-          },
-          {
-            title: "1:1 with Mara",
-            detail: "Room Baobab",
-            start: today(13),
-            end: today(13, 30),
-            source: "Work calendar",
-            url: "https://calendar.example.com/e/2",
-          },
-          {
-            title: "Sprint planning",
-            detail: "Meet · 9 people",
-            start: today(14),
-            end: today(15),
-            source: "Work calendar",
-            url: "https://calendar.example.com/e/3",
-            link: { label: "Join", url: "https://meet.example.com/abc" },
-          },
-          {
-            title: "Dentist",
-            detail: "Bole Road clinic",
-            start: today(14, 30),
-            end: today(15, 15),
-            source: "Personal calendar",
-            url: "https://calendar.example.com/e/4",
-          },
-          {
-            title: "Team farewell call",
-            detail: "Zoom",
-            start: today(23),
-            end: today(23, 30),
-            source: "Work calendar",
-            link: { label: "Join", url: "https://zoom.example.com/j/1" },
-          },
-          {
-            title: "Team farewell call",
-            start: today(23),
-            end: today(23, 30),
-            source: "Personal calendar",
-            url: "https://calendar.example.com/e/5",
+            rows: [
+              {
+                title: "Standup",
+                detail: "Meet · 6 people",
+                start: today(9, 30),
+                end: today(9, 45),
+                source: "Work calendar",
+                url: "https://calendar.example.com/e/1",
+              },
+              {
+                title: "1:1 with Mara",
+                detail: "Room Baobab",
+                start: today(13),
+                end: today(13, 30),
+                source: "Work calendar",
+                url: "https://calendar.example.com/e/2",
+              },
+              {
+                title: "Sprint planning",
+                detail: "Meet · 9 people",
+                start: today(14),
+                end: today(15),
+                source: "Work calendar",
+                url: "https://calendar.example.com/e/3",
+                link: { label: "Join", url: "https://meet.example.com/abc" },
+              },
+              {
+                title: "Dentist",
+                detail: "Bole Road clinic",
+                start: today(14, 30),
+                end: today(15, 15),
+                source: "Personal calendar",
+                url: "https://calendar.example.com/e/4",
+              },
+              {
+                title: "Team farewell call",
+                detail: "Zoom",
+                start: today(23),
+                end: today(23, 30),
+                source: "Work calendar",
+                link: { label: "Join", url: "https://zoom.example.com/j/1" },
+              },
+              {
+                title: "Team farewell call",
+                start: today(23),
+                end: today(23, 30),
+                source: "Personal calendar",
+                url: "https://calendar.example.com/e/5",
+              },
+            ],
           },
         ],
       },
@@ -127,6 +132,7 @@ function fixtureCard(
     return {
       reply: "Seven open, one blocked on the vendor.",
       arguments: {
+        kind: "list",
         title: "AF board · open",
         url: "https://example.atlassian.net/boards/7",
         source: "Jira",
@@ -191,6 +197,7 @@ function fixtureCard(
     return {
       reply: "Two. The oldest has waited three days.",
       arguments: {
+        kind: "list",
         title: "Waiting for your review",
         groups: [
           {
@@ -228,8 +235,9 @@ function fixtureCard(
       arguments: {
         title: "ALX - FIT",
         url: "https://app.fizzy.example/boards/3",
+        kind: "board",
         source: "Fizzy",
-        columns: [
+        groups: [
           {
             label: "Priority",
             color: "orange",
@@ -294,6 +302,7 @@ function fixtureCard(
       arguments: {
         title: "Update the document with the AI update notes",
         url: "https://app.fizzy.example/cards/107",
+        kind: "item",
         source: "Fizzy",
         more: { label: "4 comments · last from Mara, Nov 12" },
         item: {

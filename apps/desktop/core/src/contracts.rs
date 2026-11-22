@@ -1040,6 +1040,83 @@ pub struct CardRow {
     /// Positions in the card's `sources`; empty unless it has several.
     #[serde(default)]
     pub sources: Vec<usize>,
+    /// Who it is assigned to, by name.
+    #[serde(default)]
+    pub people: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub progress: Option<CardProgress>,
+    /// The calendar date it is due, as YYYY-MM-DD.
+    #[serde(default)]
+    pub due: Option<String>,
+}
+
+/// How far a task's checklist has got.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+pub struct CardProgress {
+    pub done: u32,
+    pub total: u32,
+}
+
+/// `CardColor`: a board column's colour by name; `theme.rs` has the shades.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CardColor {
+    #[default]
+    Gray,
+    Blue,
+    Green,
+    Yellow,
+    Orange,
+    Red,
+    Pink,
+    Purple,
+    #[serde(other)]
+    Unknown,
+}
+
+/// `CardColumn`: one column of a board card, such as a status.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CardColumn {
+    pub label: String,
+    #[serde(default)]
+    pub color: CardColor,
+    /// Every item in the column, which may be more than the rows shown.
+    pub count: u32,
+    pub rows: Vec<CardRow>,
+}
+
+/// `CardField`: one labelled fact about an item.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+pub struct CardField {
+    pub label: String,
+    #[serde(default)]
+    pub value: Option<String>,
+    #[serde(default)]
+    pub badge: Option<CardBadge>,
+    #[serde(default)]
+    pub people: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// A calendar date, as YYYY-MM-DD.
+    #[serde(default)]
+    pub due: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CardStep {
+    pub label: String,
+    #[serde(default)]
+    pub done: bool,
+}
+
+/// `CardSteps`: an item's checklist, counted, with its first few steps.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CardSteps {
+    pub done: u32,
+    pub total: u32,
+    pub items: Vec<CardStep>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -1099,6 +1176,23 @@ pub enum CardBody {
     },
     Timeline {
         items: Vec<CardTimelineItem>,
+    },
+    /// The columns of a board, each with its count and first rows.
+    Board {
+        columns: Vec<CardColumn>,
+    },
+    /// One task or ticket opened up.
+    Item {
+        /// A short identifier above the title, such as "#107".
+        #[serde(default)]
+        key: Option<String>,
+        #[serde(default)]
+        fields: Vec<CardField>,
+        /// The start of its description, as plain text.
+        #[serde(default)]
+        body: Option<String>,
+        #[serde(default)]
+        steps: Option<CardSteps>,
     },
     /// A kind of card a newer runtime sends; it is not drawn.
     #[serde(other)]
@@ -2207,8 +2301,58 @@ mod tests {
         ));
         // A part a newer runtime sends is skipped, not an error.
         assert_eq!(items[4], CardTimelineItem::Unknown);
+        let board: Card = serde_json::from_value(serde_json::json!({
+            "type": "board", "title": "ALX - FIT", "sources": ["Fizzy"],
+            "columns": [
+                { "label": "Priority", "color": "orange", "count": 2, "rows": [{
+                    "key": "#107", "title": "Update the document",
+                    "people": ["Kalkidan Betre"], "tags": ["docs"],
+                    "progress": { "done": 2, "total": 5 }, "due": "2026-11-27"
+                }] },
+                { "label": "Later", "color": "teal", "count": 0, "rows": [] }
+            ]
+        }))
+        .expect("a board card parses");
+        let CardBody::Board { columns } = &board.body else {
+            panic!("a board card has columns");
+        };
+        assert_eq!(columns[0].color, CardColor::Orange);
+        assert_eq!(columns[1].color, CardColor::Unknown);
+        let row = &columns[0].rows[0];
+        assert_eq!(row.people, ["Kalkidan Betre"]);
+        assert_eq!(row.progress, Some(CardProgress { done: 2, total: 5 }));
+        assert_eq!(row.due.as_deref(), Some("2026-11-27"));
+
+        let item: Card = serde_json::from_value(serde_json::json!({
+            "type": "item", "title": "Update the document", "sources": ["Fizzy"],
+            "key": "#107",
+            "fields": [
+                { "label": "Column", "badge": { "label": "Priority", "tone": "attention" } },
+                { "label": "Due", "due": "2026-11-27" }
+            ],
+            "body": "Fold the notes in.",
+            "steps": { "done": 1, "total": 3, "items": [
+                { "label": "Collect", "done": true }, { "label": "Draft" }
+            ] }
+        }))
+        .expect("an item card parses");
+        let CardBody::Item {
+            key,
+            fields,
+            body,
+            steps,
+        } = &item.body
+        else {
+            panic!("an item card has fields");
+        };
+        assert_eq!(key.as_deref(), Some("#107"));
+        assert_eq!(fields[1].due.as_deref(), Some("2026-11-27"));
+        assert_eq!(body.as_deref(), Some("Fold the notes in."));
+        let steps = steps.as_ref().expect("steps");
+        assert!(steps.items[0].done && !steps.items[1].done);
+
         let newer: Card = serde_json::from_value(serde_json::json!({
-            "type": "board", "title": "Later", "sources": []
+            "type": "gallery", "title": "Later", "sources": []
         }))
         .expect("an unknown kind of card parses");
         assert_eq!(newer.body, CardBody::Unknown);

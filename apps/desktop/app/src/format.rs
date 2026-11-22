@@ -63,6 +63,14 @@ pub fn weekday_date(date: &str) -> String {
     )
 }
 
+/// A calendar date written YYYY-MM-DD, in short: "Mon, Nov 23".
+pub fn short_date(date: &str) -> String {
+    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").map_or_else(
+        |_| date.to_owned(),
+        |day| day.format("%a, %b %-d").to_string(),
+    )
+}
+
 /// The local month and day of `at`: "Nov 14".
 pub fn month_day(at: i64) -> String {
     match chrono::DateTime::from_timestamp_millis(at) {
@@ -194,6 +202,7 @@ mod tests {
         );
         assert_eq!(weekday_date("2026-11-23"), "Monday 23 November");
         assert_eq!(weekday_date("soon"), "soon");
+        assert_eq!(short_date("2026-11-23"), "Mon, Nov 23");
         assert_eq!(local_day(local(23, 59)), local_day(local(0, 1)));
         assert_eq!(
             local_day(local(12, 0) + 86_400_000) - local_day(local(12, 0)),

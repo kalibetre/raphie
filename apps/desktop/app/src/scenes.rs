@@ -86,6 +86,9 @@ pub const SCENES: &[Scene] = &[
     ("card-list", card_list),
     ("card-sources", card_sources),
     ("card-narrow", card_narrow),
+    ("card-board", card_board),
+    ("card-board-narrow", card_board_narrow),
+    ("card-item", card_item),
     ("command-approval", command_approval),
     ("settings-account", settings_account),
     ("settings-account-unreachable", settings_account_unreachable),
@@ -2588,6 +2591,86 @@ pub fn card_sources(ui: &mut Ui) {
                             "url": "https://bitbucket.example.com/acme/reports/pipelines/87" },
                   "trailing": "5h", "sources": [1] }
             ] }]
+        }),
+    );
+}
+
+/// A date `days` from today on this machine, as the runtime writes one.
+fn day_from_now(days: i64) -> String {
+    (chrono::Local::now().date_naive() + chrono::Duration::days(days))
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
+/// A board's columns with their counts, and tasks with who has them, tags,
+/// checklist progress and due dates.
+pub fn card_board(ui: &mut Ui) {
+    showing(
+        ui,
+        "What is on my Fizzy board?",
+        "Six cards on ALX - FIT. One in review is overdue.",
+        json!({
+            "type": "board", "title": "ALX - FIT",
+            "url": "https://app.fizzy.example/boards/3",
+            "sources": ["Fizzy"],
+            "columns": [
+                { "label": "Priority", "color": "orange", "count": 2, "rows": [
+                    { "key": "#107", "title": "Update the document with the AI update notes",
+                      "url": "https://app.fizzy.example/cards/107",
+                      "people": ["Kalkidan Betre"], "tags": ["docs"],
+                      "progress": { "done": 2, "total": 5 }, "trailing": "Nov 12" },
+                    { "key": "#108", "title": "AI 200 interactive elements (review request)",
+                      "people": ["Mara Tesfaye", "Kalkidan Betre"],
+                      "due": day_from_now(1), "trailing": "Nov 12" }
+                ] },
+                { "label": "In Review", "color": "blue", "count": 9, "rows": [
+                    { "key": "#94", "title": "SE 202 Redesign",
+                      "people": ["Kalkidan Betre"],
+                      "due": day_from_now(-3), "trailing": "Nov 3" },
+                    { "key": "#93", "title": "Review and Fix of Understanding AI",
+                      "due": day_from_now(12), "trailing": "Oct 25" }
+                ] },
+                { "label": "Done", "color": "green", "count": 0, "rows": [] },
+                { "label": "No column", "color": "gray", "count": 1, "rows": [
+                    { "key": "#96", "title": "SE 202 Course Overview needs to be re-built",
+                      "trailing": "Oct 30" }
+                ] }
+            ]
+        }),
+    );
+}
+
+pub fn card_board_narrow(ui: &mut Ui) {
+    card_board(ui);
+    ui.narrow_home = false;
+}
+
+/// One task opened up: its facts, the start of its description, its steps.
+pub fn card_item(ui: &mut Ui) {
+    showing(
+        ui,
+        "Open card 107",
+        "It's in Priority with two of six steps done.",
+        json!({
+            "type": "item", "title": "Update the document with the AI update notes",
+            "url": "https://app.fizzy.example/cards/107",
+            "sources": ["Fizzy"], "key": "#107",
+            "more": { "label": "4 comments · last from Mara, Nov 12" },
+            "fields": [
+                { "label": "Column", "badge": { "label": "Priority", "tone": "attention" } },
+                { "label": "Assigned", "people": ["Kalkidan Betre"] },
+                { "label": "Due", "due": day_from_now(1) },
+                { "label": "Tags", "tags": ["docs", "ai"] },
+                { "label": "Board", "value": "ALX - FIT" }
+            ],
+            "body": "Fold the notes from the AI 200 update into the course document, then ask for a second read.",
+            "steps": { "done": 2, "total": 6, "items": [
+                { "label": "Collect the update notes", "done": true },
+                { "label": "Draft section 3", "done": true },
+                { "label": "Update the glossary" },
+                { "label": "Ask for a second read" },
+                { "label": "Publish" }
+            ] }
         }),
     );
 }

@@ -26,12 +26,42 @@ import { knownTimeZone } from "../../bots/domain/owner.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import {
   buildCard,
+  type CardInput,
   cardResult,
   MAX_CARD_ITEMS,
   MAX_COLUMN_ROWS,
+  type RowInput,
   type StoredCard,
 } from "../domain/card.ts";
 import { Cards, type CardState } from "./card-store.ts";
+
+type ShowCardArgs = Omit<CardInput, "groups" | "events" | "columns"> & {
+  kind: "list" | "timeline" | "board" | "item";
+  groups?: (Omit<NonNullable<CardInput["columns"]>[number], "rows"> & {
+    rows: (RowInput & { start?: string; end?: string })[];
+  })[];
+};
+
+/** The tool's one-shape arguments as the card they ask for. */
+function cardInput({ kind, groups, item, ...shared }: ShowCardArgs): CardInput {
+  if (kind === "item") return { ...shared, item: item ?? {} };
+  if (kind === "board") return { ...shared, columns: groups ?? [] };
+  if (kind === "timeline")
+    return {
+      ...shared,
+      // A row without a start cannot be placed; an empty one is refused.
+      events: (groups ?? []).flatMap((group) =>
+        group.rows.map((each) => ({ ...each, start: each.start ?? "" })),
+      ),
+    };
+  return {
+    ...shared,
+    groups: (groups ?? []).map(({ label, rows }) => ({
+      ...(label === undefined ? {} : { label }),
+      rows,
+    })),
+  };
+}
 
 const NO_TURN =
   "There is no reply in progress to show a card under. Put the list in your reply instead.";
@@ -100,99 +130,61 @@ export class CardService {
   }
 }
 
-const link = (what: string) =>
-  str({
-    maxLength: 2000,
-    description: `${what} Copy it exactly from a tool result; leave it out when you have none. Never write one from memory.`,
-  });
+// The schema is sent with every turn, so it stays small: one row shape for
+// lists, boards and timelines, and the rules said once in the description.
+const text = (maxLength: number, description?: string) =>
+  str({ maxLength, ...(description ? { description } : {}) });
 
 const badge = opt(
   obj({
-    label: str({ minLength: 1, maxLength: 24 }),
-    tone: opt(
-      oneOf(["neutral", "good", "attention", "bad"], {
-        description:
-          "good for done or passing, attention when the owner should look, bad for failing or urgent, neutral otherwise.",
-      }),
-    ),
+    label: text(24),
+    tone: opt(oneOf(["neutral", "good", "attention", "bad"])),
   }),
 );
 
 /** What a task row and an item's field can both carry. */
 const facts = {
-  people: opt(
-    arr(str({ minLength: 1, maxLength: 40 }), {
-      maxItems: 4,
-      description: "Who it is assigned to, by name.",
-    }),
-  ),
-  tags: opt(arr(str({ minLength: 1, maxLength: 24 }), { maxItems: 4 })),
-  due: opt(
-    str({
-      maxLength: 40,
-      description:
-        'The date it is due ("YYYY-MM-DD"). Leave it out once the task is done.',
-    }),
-  ),
+  people: opt(arr(text(40), { maxItems: 4 })),
+  tags: opt(arr(text(24), { maxItems: 4 })),
+  due: opt(text(40)),
 };
 
-const itemFields = {
-  title: str({ minLength: 1, maxLength: 140 }),
-  url: opt(link("The page for this item.")),
-  detail: opt(
-    str({
-      maxLength: 140,
-      description:
-        "One short line under the title, such as a place or an author.",
-    }),
-  ),
+const row = obj({
+  title: text(140),
+  key: opt(text(24, 'Its id, such as "AF-512".')),
+  url: opt(text(2000)),
+  detail: opt(text(140, "One short line, such as a place or an author.")),
   badge,
   link: opt(
     obj(
-      {
-        label: str({ minLength: 1, maxLength: 16 }),
-        url: link("Where it leads."),
-      },
-      {
-        description:
-          'One more link beside the item, with a one-word label, such as "Join" for a meeting.',
-      },
+      { label: text(16), url: text(2000) },
+      { description: 'One more link, such as "Join".' },
     ),
   ),
-  source: opt(
-    str({
-      maxLength: 40,
-      description:
-        "The account or service this item came from, when the card mixes several.",
-    }),
+  source: opt(text(40, "Its account or service, when the card mixes several.")),
+  trailing: opt(text(16, 'A short value at the end, such as its age ("3d").')),
+  ...facts,
+  progress: opt(
+    obj(
+      { done: int({ minimum: 0 }), total: int({ minimum: 1 }) },
+      { description: "Checklist steps done." },
+    ),
   ),
-};
+  start: opt(text(40, "Timeline only.")),
+  end: opt(text(40)),
+});
 
-const rows = arr(
-  obj({
-    key: opt(
-      str({
-        maxLength: 24,
-        description: 'A short identifier, such as "AF-512" or "#214".',
-      }),
-    ),
-    ...itemFields,
-    ...facts,
-    progress: opt(
-      obj(
-        { done: int({ minimum: 0 }), total: int({ minimum: 1 }) },
-        { description: "Checklist steps done, out of how many." },
-      ),
-    ),
-    trailing: opt(
-      str({
-        maxLength: 16,
-        description:
-          'A short value at the end of the row, such as its age ("3d").',
-      }),
-    ),
-  }),
-);
+const DESCRIPTION = [
+  "Show the owner a card under your reply. kind says which:",
+  `list: rows in groups (up to ${MAX_CARD_ITEMS}).`,
+  `timeline: events of one or more days, each row with start, and end when it has one (up to ${MAX_CARD_ITEMS}). Pass them as read, in any order: the card sorts them, merges one read from two calendars, and marks overlaps and free time.`,
+  `board: a project's columns as groups, in the board's order and empty ones too, each with its colour when the service gives one and its count when it holds more than the rows you pass (${MAX_COLUMN_ROWS} shown a column).`,
+  "item: one task or ticket opened up, in item; the card's title is its title.",
+  'Times are ISO 8601 with a UTC offset ("YYYY-MM-DDTHH:MM:SS+03:00"), or a date ("YYYY-MM-DD") for an all-day event or a due date; leave due out once a task is done.',
+  "Copy every url exactly from a tool result and leave it out when you have none; never write one from memory.",
+  "Badge tones: good for done or passing, attention when the owner should look, bad for failing or urgent.",
+  "Say what a card leaves out in more.",
+].join(" ");
 
 /** The `show_card` tool: a list, timeline, board or item the client draws under the reply. */
 export function createCardTools(
@@ -211,187 +203,81 @@ export function createCardTools(
     tools: [
       defineTool({
         name: "show_card",
-        description: `Show the owner a card under your reply. Pass exactly one of: groups (a list of rows), events (a timeline of one or more days), columns (a board, such as a project's tasks by status) or item (one task or ticket opened up). A list or timeline shows at most ${MAX_CARD_ITEMS} items and a board ${MAX_COLUMN_ROWS} rows a column; say what is left out in more.`,
+        description: DESCRIPTION,
         parameters: obj({
-          title: str({
-            minLength: 1,
-            maxLength: 80,
-            description:
-              'What the card shows, such as "AF board · open" or "Monday 23 November".',
-          }),
-          url: opt(link("The page the whole card comes from.")),
+          kind: oneOf(["list", "timeline", "board", "item"]),
+          title: text(80),
+          url: opt(text(2000)),
           source: opt(
-            str({
-              maxLength: 40,
-              description:
-                'Where every item came from, such as "Jira", when they share one source.',
-            }),
+            text(40, "Where every item came from, when they share it."),
           ),
           warning: opt(
-            str({
-              maxLength: 140,
-              description:
-                "What the card is missing, such as an account you could not read.",
-            }),
+            text(
+              140,
+              "What is missing, such as an account you could not read.",
+            ),
           ),
           stats: opt(
-            arr(
-              obj({
-                label: str({ minLength: 1, maxLength: 24 }),
-                value: str({ minLength: 1, maxLength: 12 }),
-              }),
-              {
-                maxItems: 4,
-                description: "Up to four headline numbers above the items.",
-              },
-            ),
+            arr(obj({ label: text(24), value: text(12) }), {
+              maxItems: 4,
+              description: "Headline numbers.",
+            }),
           ),
-          more: opt(
-            obj(
-              {
-                label: str({ minLength: 1, maxLength: 80 }),
-                url: opt(link("Where the full list is.")),
-              },
-              {
-                description:
-                  'A line under the items for what is left out, such as "and 12 more in To do".',
-              },
-            ),
-          ),
+          more: opt(obj({ label: text(80), url: opt(text(2000)) })),
           groups: opt(
             arr(
               obj({
-                label: opt(
-                  str({
-                    maxLength: 40,
-                    description: "A heading, such as a status.",
-                  }),
-                ),
-                rows,
-              }),
-              {
-                maxItems: 12,
-                description: "For a list. One group without a label is fine.",
-              },
-            ),
-          ),
-          columns: opt(
-            arr(
-              obj({
-                label: opt(
-                  str({
-                    maxLength: 40,
-                    description:
-                      "The column's name; leave it out for items in no column.",
-                  }),
-                ),
+                label: opt(text(40)),
                 color: opt(
-                  oneOf(
-                    [
-                      "gray",
-                      "blue",
-                      "green",
-                      "yellow",
-                      "orange",
-                      "red",
-                      "pink",
-                      "purple",
-                    ],
-                    {
-                      description:
-                        "The nearest of these to the colour the service gives the column. Leave it out when it gives none.",
-                    },
-                  ),
+                  oneOf([
+                    "gray",
+                    "blue",
+                    "green",
+                    "yellow",
+                    "orange",
+                    "red",
+                    "pink",
+                    "purple",
+                  ]),
                 ),
-                count: opt(
-                  int({
-                    minimum: 0,
-                    description:
-                      "How many items the column holds, when that is more than the rows you pass.",
-                  }),
-                ),
-                rows,
+                count: opt(int({ minimum: 0 })),
+                rows: arr(row),
               }),
-              {
-                maxItems: 12,
-                description:
-                  "For a board. Pass every column in the board's order, empty ones too.",
-              },
+              { maxItems: 12 },
             ),
           ),
           item: opt(
-            obj(
-              {
-                key: opt(
-                  str({
-                    maxLength: 24,
-                    description: 'Its identifier, such as "#107".',
+            obj({
+              key: opt(text(24)),
+              fields: opt(
+                arr(
+                  obj({
+                    label: text(24),
+                    value: opt(text(140)),
+                    badge,
+                    ...facts,
                   }),
-                ),
-                fields: opt(
-                  arr(
-                    obj({
-                      label: str({ minLength: 1, maxLength: 24 }),
-                      value: opt(str({ maxLength: 140 })),
-                      badge,
-                      ...facts,
-                    }),
-                    {
-                      maxItems: 8,
-                      description:
-                        'Its facts, each under a label: a status as a badge ("Column"), who has it as people ("Assigned"), a date as due ("Due"), tags, or plain text as value.',
-                    },
-                  ),
-                ),
-                body: opt(
-                  str({
-                    maxLength: 2000,
+                  {
+                    maxItems: 8,
                     description:
-                      "Its description as plain text; the card shows the start.",
-                  }),
+                      "Its facts under labels: a status as badge, who has it as people, a date as due, tags, or text as value.",
+                  },
                 ),
-                steps: opt(
-                  arr(
-                    obj({
-                      label: str({ minLength: 1, maxLength: 140 }),
-                      done: opt(bool()),
-                    }),
-                    {
-                      maxItems: 50,
-                      description:
-                        "Its whole checklist, in order; the card counts them and lists the first few.",
-                    },
-                  ),
-                ),
-              },
-              {
-                description:
-                  "For one task, ticket or card opened up. The card's title is its title; put its comment count in more.",
-              },
-            ),
-          ),
-          events: opt(
-            arr(
-              obj({
-                ...itemFields,
-                start: str({
-                  maxLength: 40,
-                  description:
-                    'A date and time in ISO 8601 with its UTC offset ("YYYY-MM-DDTHH:MM:SS+03:00"), or only a date ("YYYY-MM-DD") for an all-day event.',
+              ),
+              body: opt(text(2000, "Its description as plain text.")),
+              steps: opt(
+                arr(obj({ label: text(140), done: opt(bool()) }), {
+                  maxItems: 50,
+                  description: "Its whole checklist, in order.",
                 }),
-                end: opt(str({ maxLength: 40 })),
-              }),
-              {
-                description:
-                  "For a timeline. Pass every event as you read it, in any order, with its end when it has one: the card sorts them, merges one read from two calendars, and marks overlaps and free time.",
-              },
-            ),
+              ),
+            }),
           ),
         }),
         replay: "safe",
         execute: async (args, api, ctx) => {
           const zone = ownerTimeZone();
-          const built = buildCard(args, {
+          const built = buildCard(cardInput(args), {
             ...(knownTimeZone(zone) ? { timeZone: zone } : {}),
           });
           if ("error" in built)

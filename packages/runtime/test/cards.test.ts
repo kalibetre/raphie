@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+import type { JsonObject } from "@earendil-works/pi-durable";
+
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import {
   buildCard,
@@ -768,12 +770,15 @@ test("an item with nothing but a title is refused, and so are two kinds at once"
   ).toEqual({ error: expect.stringMatching(/not several/) });
 });
 
-const showing = (args: CardInput) =>
-  chatModel({ tool: { name: "show_card", args } });
+/** The bot calls `show_card` with these arguments, in the tool's own shape. */
+const showing = (args: Record<string, unknown>) =>
+  chatModel({ tool: { name: "show_card", args: args as JsonObject } });
+
+const listed = { kind: "list", ...tickets };
 
 test("a card a bot shows is kept with its turn, survives a restart, and the bot is told to stay brief", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-cards-"));
-  let app = await Gateway.open({ directory, ...showing(tickets) });
+  let app = await Gateway.open({ directory, ...showing(listed) });
   try {
     const turn = await app.chats.send({
       source: "web",
@@ -792,7 +797,7 @@ test("a card a bot shows is kept with its turn, survives a restart, and the bot 
       /^The card is shown to the owner under your reply\. Do not repeat/,
     );
     await app.close();
-    app = await Gateway.open({ directory, ...showing(tickets) });
+    app = await Gateway.open({ directory, ...showing(listed) });
 
     const owner = app.actors.establish("web");
     const seen = await app.queries.session(owner, turn.sessionId);
@@ -813,7 +818,7 @@ test("a card a bot shows is kept with its turn, survives a restart, and the bot 
 
 test("a chat that cannot draw a card reads it as text after the reply", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-cards-channel-"));
-  const app = await Gateway.open({ directory, ...showing(tickets) });
+  const app = await Gateway.open({ directory, ...showing(listed) });
   const thread = "discord:guild:channel:thread";
   try {
     const turn = await app.chats.send({
@@ -843,7 +848,7 @@ test("a chat that cannot draw a card reads it as text after the reply", async ()
 
 test("in a task another bot handed off, a card is refused so the list goes in the reply", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-cards-handoff-"));
-  const app = await Gateway.open({ directory, ...showing(tickets) });
+  const app = await Gateway.open({ directory, ...showing(listed) });
   try {
     await app.sessions.submitHandoff(app.actors.establish("web"), {
       eventId: "handoff:h1:1",
@@ -868,11 +873,91 @@ test("in a task another bot handed off, a card is refused so the list goes in th
   }
 }, 20_000);
 
+test("the tool's one row shape becomes a timeline, a board or an item by its kind", async () => {
+  const shown = async (args: Record<string, unknown>) => {
+    const directory = await mkdtemp(join(tmpdir(), "raphie-cards-kind-"));
+    const app = await Gateway.open({ directory, ...showing(args) });
+    try {
+      const turn = await app.chats.send({
+        source: "web",
+        actor: "owner",
+        eventId: "1",
+        text: "Show me.",
+      });
+      await until(
+        async () =>
+          (await app.chats.state()).turns.find((t) => t.id === turn.id)
+            ?.status === "done",
+      );
+      return {
+        answer: (await app.chats.state()).turns[0]!.answer,
+        card: (await app.cards.state()).cards[0]?.card,
+      };
+    } finally {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  };
+
+  const day = await shown({
+    kind: "timeline",
+    title: "Today",
+    groups: [
+      {
+        rows: [
+          { title: "Standup", start: "2026-11-23T09:30:00Z" },
+          { title: "Review", start: "2026-11-23T08:00:00Z" },
+        ],
+      },
+    ],
+  });
+  expect(
+    day.card?.type === "timeline" &&
+      day.card.items.map((item) => item.kind === "event" && item.title),
+  ).toEqual(["Review", "Standup"]);
+
+  const columns = await shown({
+    kind: "board",
+    title: "ALX - FIT",
+    groups: [
+      { label: "Priority", color: "orange", rows: [{ title: "Notes" }] },
+      { label: "In Review", count: 9, rows: [] },
+    ],
+  });
+  expect(
+    columns.card?.type === "board" &&
+      columns.card.columns.map((c) => [c.label, c.color, c.count]),
+  ).toEqual([
+    ["Priority", "orange", 1],
+    ["In Review", "blue", 9],
+  ]);
+
+  const task = await shown({
+    kind: "item",
+    title: "Notes",
+    item: { key: "#107", steps: [{ label: "Draft", done: true }] },
+  });
+  expect(task.card).toMatchObject({ type: "item", key: "#107" });
+
+  // A timeline row with no start, and an item with nothing in it, are refused.
+  const undated = await shown({
+    kind: "timeline",
+    title: "Today",
+    groups: [{ rows: [{ title: "Sometime" }] }],
+  });
+  expect(undated.card).toBeUndefined();
+  expect(undated.answer).toMatch(
+    /Event 1 \("Sometime"\) has a time I cannot read/,
+  );
+  const bare = await shown({ kind: "item", title: "Notes" });
+  expect(bare.answer).toMatch(/needs fields, a body or steps/);
+}, 30_000);
+
 test("a bad card goes back to the bot as an error and nothing is shown", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-cards-error-"));
   const app = await Gateway.open({
     directory,
-    ...showing({ title: "Nothing", groups: [{ rows: [] }] }),
+    ...showing({ kind: "list", title: "Nothing", groups: [{ rows: [] }] }),
   });
   try {
     const turn = await app.chats.send({

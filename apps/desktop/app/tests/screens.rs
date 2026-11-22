@@ -5364,6 +5364,66 @@ fn a_card_shows_under_its_reply_and_its_links_open_the_browser() {
 }
 
 #[test]
+fn a_board_card_counts_its_columns_and_an_item_card_opens_one_task() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::card_board, dark);
+        let text = screen_text(&rt);
+        for part in [
+            "ALX - FIT",
+            "Fizzy · as of",
+            "Priority",
+            "In Review",
+            "Done",
+            "No column",
+            "#107",
+            "docs",
+            "2/5",
+            "KB",
+            "MT",
+            "Due tomorrow",
+            "Overdue 3d",
+            "7 more in In Review",
+        ] {
+            assert!(text.contains(part), "{part} is missing from: {text}");
+        }
+        // A column with nothing in it is counted, not listed.
+        assert_eq!(text.matches("Done").count(), 1, "{text}");
+        click(&mut rt, "rd-card-card-1-0-0-title");
+        assert_eq!(rt.state.opened, ["https://app.fizzy.example/cards/107"]);
+
+        let text = screen_text(&render(scenes::card_item, dark));
+        for part in [
+            "#107 · Fizzy · as of",
+            "Column",
+            "Assigned",
+            "Kalkidan Betre",
+            "Due tomorrow",
+            "Board",
+            "Fold the notes from the AI 200 update",
+            "Steps · 2 of 6",
+            "Update the glossary",
+            "1 more",
+            "4 comments · last from Mara, Nov 12",
+        ] {
+            assert!(text.contains(part), "{part} is missing from: {text}");
+        }
+    }
+}
+
+#[test]
+fn a_card_fits_a_narrow_window() {
+    for scene in [scenes::card_narrow, scenes::card_board_narrow] {
+        let rt = render_sized(scene, false, (360.0, 900.0));
+        // `rect` is [x, y, width, height].
+        let card = element(&rt, "rd-card-card-1").rect;
+        assert!(
+            card[0] >= 0.0 && card[0] + card[2] <= 360.0,
+            "the card stays inside the window: {card:?}"
+        );
+    }
+}
+
+#[test]
 fn a_timeline_card_places_now_and_names_each_source() {
     let mut rt = render(scenes::card_timeline, false);
     let text = screen_text(&rt);
