@@ -63,6 +63,19 @@ impl Origin {
         format!("{}{}", self.serialized, path)
     }
 
+    /// The host's name, without scheme or port.
+    pub fn host(&self) -> String {
+        Url::parse(&self.serialized)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_owned))
+            .unwrap_or_default()
+    }
+
+    /// True when Raphie answers on this machine.
+    pub fn is_local(&self) -> bool {
+        is_loopback(&self.host())
+    }
+
     /// True when `url` points at this exact origin (same scheme, host and port).
     pub fn owns(&self, url: &str) -> bool {
         Url::parse(url).is_ok_and(|u| u.origin().ascii_serialization() == self.serialized)
@@ -97,6 +110,20 @@ mod tests {
         );
         assert!(Origin::parse("http://localhost:4320").is_ok());
         assert!(Origin::parse("http://[::1]:4320").is_ok());
+    }
+
+    #[test]
+    fn names_its_host_and_whether_it_is_this_machine() {
+        let remote = Origin::parse("https://raphie.tail1234.ts.net").unwrap();
+        assert_eq!(remote.host(), "raphie.tail1234.ts.net");
+        assert!(!remote.is_local());
+        for local in [
+            "http://127.0.0.1:4321",
+            "http://localhost:4320",
+            "http://[::1]:4320",
+        ] {
+            assert!(Origin::parse(local).unwrap().is_local(), "{local}");
+        }
     }
 
     #[test]

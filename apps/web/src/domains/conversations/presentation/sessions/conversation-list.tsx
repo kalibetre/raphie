@@ -174,7 +174,7 @@ export function ConversationList({
                     ? "Loading archived conversations…"
                     : "No archived conversations."
                   : tab === "all"
-                    ? "Your conversations will appear here."
+                    ? "No conversations yet."
                     : "You’re all caught up."}
             </p>
             {filter && (

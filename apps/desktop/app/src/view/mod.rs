@@ -33,6 +33,7 @@ mod roster;
 mod self_updates;
 mod sessions;
 mod settings;
+mod setup;
 mod sign_in;
 mod steps;
 mod viewer;
@@ -133,9 +134,14 @@ fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     } else {
         main = match &s.model.conversation {
             Some(conversation) => main.child(conversation::conversation(s, conversation, look)),
+            // A bot without a model asks for one instead of offering an
+            // empty chat, and has no composer until it can reply.
+            None if s.needs_setup() => main.child(setup::setup(s, look)),
             None => main.child(welcome::welcome(s, look)),
         };
-        main = main.child(composer::composer(s, look, overlays));
+        if s.model.conversation.is_some() || !s.needs_setup() {
+            main = main.child(composer::composer(s, look, overlays));
+        }
     }
 
     let mut shell = row()

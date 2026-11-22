@@ -42,6 +42,7 @@ pub const SCENES: &[Scene] = &[
     ("sign-in-this-mac", sign_in_this_mac),
     ("device-code", device_code),
     ("new-conversation", new_conversation),
+    ("bot-setup", bot_setup),
     ("conversations", conversations),
     ("conversations-archived", conversations_archived),
     ("unread", unread),
@@ -1547,6 +1548,22 @@ pub fn settings_providers_empty(ui: &mut Ui) {
         bot_id: "b-research".into(),
         section: BotSection::Providers,
     }));
+    let mut settings = model_settings();
+    settings.connections.clear();
+    settings.models.clear();
+    ui.model.apply(Event::BotSettings {
+        bot_id: "b-research".into(),
+        settings: Box::new(settings),
+    });
+}
+
+/// A new bot with no provider: it asks for a way to think instead of
+/// offering an empty chat.
+pub fn bot_setup(ui: &mut Ui) {
+    new_conversation(ui);
+    ui.model.apply(Event::BotSelected {
+        bot_id: "b-research".into(),
+    });
     let mut settings = model_settings();
     settings.connections.clear();
     settings.models.clear();

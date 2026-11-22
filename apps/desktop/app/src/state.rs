@@ -2075,6 +2075,42 @@ impl Ui {
         }
     }
 
+    /// True once the selected bot's settings say it has no model it can
+    /// reply with.
+    pub fn needs_setup(&self) -> bool {
+        self.model
+            .bot_id
+            .as_ref()
+            .and_then(|bot_id| self.model.settings.get(bot_id))
+            .is_some_and(|settings| settings.models.is_empty())
+    }
+
+    /// From a bot's setup: its Providers page, with the form for a new
+    /// connection to `provider_id` open.
+    pub fn set_up_provider(&mut self, bot_id: &str, provider_id: &str) {
+        self.open_settings(Some(Page::Bot {
+            bot_id: bot_id.to_owned(),
+            section: BotSection::Providers,
+        }));
+        let Some(settings) = self.model.settings.get(bot_id) else {
+            return;
+        };
+        let Some(provider) = settings.providers.iter().find(|p| p.id == provider_id) else {
+            return;
+        };
+        let count = settings
+            .connections
+            .iter()
+            .filter(|connection| connection.provider == provider.id)
+            .count();
+        self.providers = ProvidersView {
+            open: Some(ConnectionTarget::New),
+            provider: provider.id.clone(),
+            name: TextEdit::new(format!("{} {}", provider.name, count + 1)),
+            ..ProvidersView::new()
+        };
+    }
+
     /// Opens the form for a new connection to `bot_id`'s first provider,
     /// with a name suggested as the web suggests it ("OpenRouter 2").
     pub fn add_connection(&mut self, bot_id: &str) {

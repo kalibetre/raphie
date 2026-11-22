@@ -16,7 +16,7 @@ use crate::format;
 use crate::icons;
 use crate::state::{Filter, Ui};
 use crate::theme::{Theme, font};
-use crate::widgets::{Kind, Size, button, centered, one_line, pressable};
+use crate::widgets::{Kind, Size, button, one_line, pressable};
 
 /// The section under the bots: it takes the roster's remaining height, and
 /// everything below its label scrolls.
@@ -69,9 +69,11 @@ pub fn sessions(s: &Ui, look: &Look) -> El {
 
     // No "N conversations" line under the chips, as on the web: the
     // filters already say what is shown, and the sidebar keeps the room.
+    // One inset for everything with a background (cards, rows, search):
+    // 10 points from the edge, with text a further 10 in.
     let mut page = col()
         .w_full()
-        .px(12.0)
+        .px(10.0)
         .pt(6.0)
         .pb(12.0)
         .child(search_box(s, t))
@@ -154,22 +156,19 @@ pub fn sessions(s: &Ui, look: &Look) -> El {
     let name = model
         .selected_bot()
         .map_or("Raphie", |bot| bot.name.as_str());
-    let title = format!("{name}’s conversations");
+    let title = format!("With {name}");
     col()
         .key("rd-conversations")
         .role("region")
-        .label(title.clone())
+        .label(format!("Conversations with {name}"))
         .w_full()
         .grow(1.0)
         .min_h(0.0)
-        .mt(8.0)
-        .pt(14.0)
-        // Only a top edge: `[top, right, bottom, left]` widths.
-        .border_sides([1.0, 0.0, 0.0, 0.0], t.border)
+        .mt(14.0)
         .child(
             row()
                 .w_full()
-                .px(22.0)
+                .px(20.0)
                 .pb(4.0)
                 .gap(8.0)
                 .justify_between()
@@ -181,8 +180,12 @@ pub fn sessions(s: &Ui, look: &Look) -> El {
                         .shrink(),
                 )
                 .child(pressable(
-                    label_action(t, &icons::SQUARE_PEN, "New conversation")
-                        .key("rd-new-conversation"),
+                    label_action(
+                        t,
+                        &icons::SQUARE_PEN,
+                        &format!("New conversation with {name}"),
+                    )
+                    .key("rd-new-conversation"),
                     true,
                     |s: &mut Ui| s.select_session(None),
                 )),
@@ -358,8 +361,12 @@ fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, 
     if let Some((label, color)) = status {
         entry = entry.child(text(label).font(font(11.0, 400.0).lh(16.0)).color(color));
     }
+    // The open conversation is lifted onto the card colour, like the
+    // composer; others wash grey under the pointer.
     if selected {
-        entry = entry.fill(t.accent_soft.alpha(0.7));
+        entry = entry
+            .fill(t.card)
+            .shadow(1.0, 2.0, t.foreground.alpha(0.06));
     }
     let id = session.id.clone();
     let open = pressable(entry, true, move |s: &mut Ui| s.select_session(Some(&id)));
@@ -373,7 +380,7 @@ fn session_row(session: &SessionSummary, selected: bool, unread: u32, now: i64, 
         .child(open)
         .child(archive_button(session, t).pin(None, Some(5.0), Some(6.0), None));
     if !selected {
-        wrapper = wrapper.hover(t.hover);
+        wrapper = wrapper.hover(t.hover.alpha(0.55));
     }
     wrapper
 }
@@ -414,24 +421,19 @@ fn empty(s: &Ui, query: &str, t: &Theme) -> El {
             "No archived conversations."
         }
     } else if s.filter == Filter::All {
-        "Your conversations will appear here."
+        "No conversations yet."
     } else {
         "You’re all caught up."
     };
-    col()
+    // In the sidebar an empty list is a line of text, not a panel.
+    row()
         .key("rd-sessions-empty")
         .w_full()
-        .px(24.0)
-        .py(40.0)
-        .gap(14.0)
-        .items_center()
-        .radius(14.0)
-        .border(1.0, t.border)
-        .border_dash(4.0, 3.0)
+        .px(10.0)
+        .py(4.0)
         .child(
-            icon(&icons::MESSAGE_SQUARE_TEXT, 24.0)
-                .color(t.muted_foreground)
-                .a11y_hidden(),
+            text(message)
+                .font(font(12.0, 400.0))
+                .color(t.muted_foreground),
         )
-        .child(centered(message, font(13.0, 400.0), t.muted_foreground))
 }

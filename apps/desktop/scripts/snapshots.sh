@@ -12,7 +12,7 @@ bin=target/debug/raphie-desktop
 # 1280x800 at 2x is the size of the web workspace's reference screenshots, so
 # the two can be compared side by side. --chrome draws the traffic lights
 # where macOS puts them.
-for scene in sign-in sign-in-this-mac device-code new-conversation conversations conversations-archived unread inbox inbox-empty conversation conversation-archived attachments image-viewer model-picker model-picker-favorites model-picker-family permissions composer composer-full-access composer-context composer-nearly-full tools tools-unfinished reply-failed streaming working approval \
+for scene in sign-in sign-in-this-mac device-code new-conversation bot-setup conversations conversations-archived unread inbox inbox-empty conversation conversation-archived attachments image-viewer model-picker model-picker-favorites model-picker-family permissions composer composer-full-access composer-context composer-nearly-full tools tools-unfinished reply-failed streaming working approval \
   settings-account settings-appearance settings-profile settings-profile-edited \
   settings-models settings-models-filter settings-providers settings-providers-add settings-providers-sign-in settings-providers-subscription \
   settings-memory settings-memory-hindsight settings-memories settings-memories-editing \
