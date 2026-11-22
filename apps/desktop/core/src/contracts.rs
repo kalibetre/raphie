@@ -1082,8 +1082,9 @@ pub enum CardTimelineItem {
         start: i64,
         end: i64,
     },
+    /// The start of another day: its calendar date as YYYY-MM-DD.
     Day {
-        at: i64,
+        date: String,
     },
     #[serde(other)]
     Unknown,
@@ -2178,7 +2179,7 @@ mod tests {
             "type": "timeline", "title": "Monday", "sources": ["Work", "Personal"],
             "warning": "One calendar was not read",
             "items": [
-                { "kind": "day", "at": 1 },
+                { "kind": "day", "date": "2026-11-23" },
                 { "kind": "event", "title": "Birthday", "start": 0, "allDay": true, "sources": [1] },
                 { "kind": "gap", "start": 2, "end": 3 },
                 { "kind": "event", "title": "Standup", "start": 3, "end": 4,
@@ -2191,7 +2192,12 @@ mod tests {
         let CardBody::Timeline { items } = &timeline.body else {
             panic!("a timeline card has items");
         };
-        assert_eq!(items[0], CardTimelineItem::Day { at: 1 });
+        assert_eq!(
+            items[0],
+            CardTimelineItem::Day {
+                date: "2026-11-23".into()
+            }
+        );
         assert!(matches!(&items[1], CardTimelineItem::Event(e) if e.all_day && e.sources == [1]));
         assert_eq!(items[2], CardTimelineItem::Gap { start: 2, end: 3 });
         assert!(matches!(

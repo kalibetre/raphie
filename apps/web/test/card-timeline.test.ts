@@ -94,9 +94,12 @@ test("an all-day event is past only after its date, and days pass through", () =
     start: Date.UTC(2026, 10, 23),
     allDay: true as const,
   };
-  const items: CardTimelineItem[] = [{ kind: "day", at: at(0) }, birthday];
+  const items: CardTimelineItem[] = [
+    { kind: "day", date: "2026-11-23" },
+    birthday,
+  ];
   expect(timelineRows(items, at(23, 59))).toEqual([
-    { kind: "day", at: at(0) },
+    { kind: "day", date: "2026-11-23" },
     { kind: "event", event: birthday, past: false },
   ]);
   expect(timelineRows(items, at(0, 1, 24))[1]).toEqual({

@@ -254,7 +254,9 @@ export class Gateway {
       );
     registry.install(createWebSearchTools(() => app.models, options.webFetch));
     registry.install(createAskTools(app.asks));
-    registry.install(createCardTools(app.cards));
+    registry.install(
+      createCardTools(app.cards, () => app.chats.owner?.().timeZone ?? ""),
+    );
     if (options.mcp) {
       registry.install(createMcpTools(app, options.mcp));
       app.mcpConnections = [options.mcp];

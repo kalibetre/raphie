@@ -14,6 +14,7 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import { knownTimeZone } from "../../bots/domain/owner.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import {
   buildCard,
@@ -25,6 +26,9 @@ import { Cards, type CardState } from "./card-store.ts";
 
 const NO_TURN =
   "There is no reply in progress to show a card under. Put the list in your reply instead.";
+
+const HANDED_OFF =
+  "This is a task another bot handed you, and only your reply goes back to it: a card would stay here unread. Put the list in your reply instead.";
 
 export class CardService {
   app: DurableContext;
@@ -40,14 +44,15 @@ export class CardService {
 
   /**
    * The card for this call, stored once under the turn being answered: a
-   * replayed call finds the one it already showed. `null` without a turn.
+   * replayed call finds the one it already showed. Refused without a turn,
+   * and in a task another bot handed off.
    */
   async show(
     api: ToolExecutionApi,
     ctx: Context,
     card: Card,
     text: string,
-  ): Promise<{ drawn: boolean } | null> {
+  ): Promise<{ drawn: boolean } | "no-turn" | "handed-off"> {
     return api.commit(async (tx) => {
       const state = await tx.doc(Cards);
       const chats = await tx.doc(Chats);
@@ -58,7 +63,10 @@ export class CardService {
             (t) =>
               t.conversationId === api.conversationId && t.status === "pending",
           );
-      if (!turn) return null;
+      if (!turn) return "no-turn";
+      // A handed-off task answers to the bot that sent it, which reads the
+      // reply and nothing else.
+      if (turn.handoff?.kind === "task") return "handed-off";
       // A chat reads the card as text, added to the reply it is sent.
       const drawn = !turn.replyTo;
       if (existing) return { drawn };
@@ -132,7 +140,11 @@ const itemFields = {
 };
 
 /** The `show_card` tool: a list or timeline the client draws under the reply. */
-export function createCardTools(cards: CardService) {
+export function createCardTools(
+  cards: CardService,
+  /** The owner's time zone, or "" when they have not said. */
+  ownerTimeZone: () => string,
+) {
   return defineExtension({
     name: "raphie.cards",
     sections: [
@@ -239,22 +251,33 @@ export function createCardTools(cards: CardService) {
               }),
               {
                 description:
-                  "For a timeline. Pass every event as you read it, in any order: the card sorts them, merges one read from two calendars, and marks overlaps and free time.",
+                  "For a timeline. Pass every event as you read it, in any order, with its end when it has one: the card sorts them, merges one read from two calendars, and marks overlaps and free time.",
               },
             ),
           ),
         }),
         replay: "safe",
         execute: async (args, api, ctx) => {
-          const built = buildCard(args);
+          const zone = ownerTimeZone();
+          const built = buildCard(args, {
+            ...(knownTimeZone(zone) ? { timeZone: zone } : {}),
+          });
           if ("error" in built)
             return {
               output: [{ type: "text", text: built.error }],
               isError: true,
             };
           const shown = await cards.show(api, ctx, built.card, built.text);
-          if (!shown)
-            return { output: [{ type: "text", text: NO_TURN }], isError: true };
+          if (typeof shown === "string")
+            return {
+              output: [
+                {
+                  type: "text",
+                  text: shown === "handed-off" ? HANDED_OFF : NO_TURN,
+                },
+              ],
+              isError: true,
+            };
           return {
             output: [
               { type: "text", text: cardResult(built.notes, shown.drawn) },

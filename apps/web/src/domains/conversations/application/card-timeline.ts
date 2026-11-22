@@ -2,7 +2,7 @@ import type { CardEvent, CardTimelineItem } from "@raphie/contracts";
 
 /** One line of a timeline card as it reads at `now`. */
 export type TimelineRow =
-  | { kind: "day"; at: number }
+  | { kind: "day"; date: string }
   /** Where the present falls among today's events. */
   | { kind: "now"; at: number }
   | { kind: "gap"; start: number; end: number; current: boolean; past: boolean }

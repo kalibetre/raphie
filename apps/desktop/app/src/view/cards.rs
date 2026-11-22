@@ -243,9 +243,9 @@ fn timeline(
     {
         let key = format!("rd-card-{id}-{n}");
         body = match item {
-            TimelineRow::Day { at } => body
+            TimelineRow::Day { date } => body
                 .child(rule(t))
-                .child(heading(format::weekday_date(*at), t)),
+                .child(heading(format::weekday_date(date), t)),
             TimelineRow::Now { at } => body.child(
                 row()
                     .key(key)
@@ -317,7 +317,7 @@ fn event_row(key: &str, card: &Card, event: &CardEvent, past: bool, t: &Theme) -
                 .color(t.muted_foreground)
                 .w(TIME_WIDTH),
         )
-        // A timeline always draws a bar, in the first colour without sources.
+        // A timeline keeps the bar's column even when the card has one source.
         .child(bars(&event.sources, &card.sources, past, t))
         .child(main(
             key,
@@ -438,8 +438,15 @@ fn bars(of: &[usize], names: &[String], past: bool, t: &Theme) -> El {
     } else {
         bars.role("img").label(label)
     };
+    // With one source or none, the bar takes the first colour; with
+    // several, an item that names none has no bar.
     let first = [0];
-    for position in if of.is_empty() { &first[..] } else { of } {
+    let shown = if of.is_empty() && names.len() < 2 {
+        &first[..]
+    } else {
+        of
+    };
+    for position in shown {
         let colour = t.source(*position);
         bars = bars.child(
             el().w(3.0)

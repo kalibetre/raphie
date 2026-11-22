@@ -73,34 +73,67 @@ function safeUrl(url: string | undefined) {
 const MOMENT =
   /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2}))?$/;
 
+/** An instant, with the calendar date and time of day it is shown under. */
 type Moment = { at: number; date: string; clock?: string };
 
+/** The date and time of day of `at` in `zone`, as a clock there reads. */
+function inZone(at: number, zone: string) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, part.value]),
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    clock: `${parts.hour}:${parts.minute}`,
+  };
+}
+
 /**
- * When an event starts or ends. The date and time of day are kept as
- * written, in the calendar's own zone, so a day's events stay together
- * wherever the runtime runs.
+ * When an event starts or ends. A time is placed on the owner's day when
+ * their time zone is known, so a calendar that answers in UTC still groups
+ * events as the owner lives them; otherwise it stays on the date as written.
+ * A date alone is that date everywhere.
  */
-function moment(value: string): Moment | null {
-  const match = MOMENT.exec(value.trim());
+function moment(value: string, zone: string | undefined): Moment | null {
+  const text = value.trim();
+  const match = MOMENT.exec(text);
   if (!match) return null;
-  const at = Date.parse(match[2] ? value.trim() : `${match[1]}T00:00:00Z`);
+  const date = match[1]!;
+  const midnight = Date.parse(`${date}T00:00:00Z`);
+  // "2026-02-30" parses as 2 March; a date must be one the calendar has.
+  if (
+    Number.isNaN(midnight) ||
+    new Date(midnight).toISOString().slice(0, 10) !== date
+  )
+    return null;
+  if (!match[2]) return { at: midnight, date };
+  const at = Date.parse(text);
   if (Number.isNaN(at)) return null;
-  return { at, date: match[1]!, ...(match[2] ? { clock: match[2] } : {}) };
+  return { at, ...(zone ? inZone(at, zone) : { date, clock: match[2] }) };
 }
 
 type Tally = { sources: string[]; droppedLinks: number };
 
 /** The parts every row and event share, with unsafe links left out. */
-function item(input: ItemInput, fallbackSource: string | undefined, t: Tally) {
+function item(input: ItemInput, from: string[], t: Tally) {
   const url = safeUrl(input.url);
   const linkUrl = safeUrl(input.link?.url);
   if (input.url && !url) t.droppedLinks++;
   if (input.link && !linkUrl) t.droppedLinks++;
-  const source = (input.source ?? fallbackSource)?.trim();
-  let position: number | undefined;
-  if (source) {
-    position = t.sources.indexOf(source);
+  const positions: number[] = [];
+  for (const source of from) {
+    let position = t.sources.indexOf(source);
     if (position < 0) position = t.sources.push(source) - 1;
+    if (!positions.includes(position)) positions.push(position);
   }
   const badge: CardBadge | undefined = input.badge?.label.trim()
     ? { label: input.badge.label.trim(), tone: input.badge.tone ?? "neutral" }
@@ -115,8 +148,14 @@ function item(input: ItemInput, fallbackSource: string | undefined, t: Tally) {
     ...(input.detail?.trim() ? { detail: input.detail.trim() } : {}),
     ...(badge ? { badge } : {}),
     ...(link ? { link } : {}),
-    position,
+    positions,
   };
+}
+
+/** Where an item says it came from, or where the whole card did. */
+function sourcesOf(input: ItemInput, fallback: string | undefined) {
+  const source = (input.source ?? fallback)?.trim();
+  return source ? [source] : [];
 }
 
 type Placed<T> = Omit<T, "sources"> & { positions: number[] };
@@ -153,68 +192,98 @@ function line(
   }`;
 }
 
-type TimedEvent = Placed<CardEvent> & { date: string; clock: string };
+/** An event as the bot gave it, with its times read. */
+type ReadEvent = {
+  input: EventInput;
+  from: string[];
+  start: number;
+  end?: number;
+  allDay: boolean;
+  date: string;
+  clock: string;
+};
 
 /** The same event read from two calendars is one event from both. */
-function merged(events: TimedEvent[]) {
-  const seen = new Map<string, TimedEvent>();
+function merged(events: ReadEvent[]) {
+  const seen = new Map<string, ReadEvent>();
   for (const event of events) {
     const key = [
-      event.title.toLowerCase(),
+      event.input.title.trim().toLowerCase(),
       event.start,
       event.end ?? "",
-      event.allDay ?? "",
+      event.allDay,
     ].join("|");
     const first = seen.get(key);
     if (!first) {
       seen.set(key, event);
       continue;
     }
-    for (const position of event.positions)
-      if (!first.positions.includes(position)) first.positions.push(position);
-    // Only what the first reading lacks, and never an undefined: a card is
-    // stored as strict JSON.
-    if (!first.url && event.url) first.url = event.url;
-    if (!first.link && event.link) first.link = event.link;
-    if (!first.detail && event.detail) first.detail = event.detail;
-    if (!first.badge && event.badge) first.badge = event.badge;
+    for (const source of event.from)
+      if (!first.from.includes(source)) first.from.push(source);
+    // Only what the first reading lacks.
+    first.input = {
+      ...first.input,
+      ...(!first.input.url && event.input.url ? { url: event.input.url } : {}),
+      ...(!first.input.link && event.input.link
+        ? { link: event.input.link }
+        : {}),
+      ...(!first.input.detail?.trim() && event.input.detail
+        ? { detail: event.input.detail }
+        : {}),
+      ...(!first.input.badge && event.input.badge
+        ? { badge: event.input.badge }
+        : {}),
+    };
   }
   return [...seen.values()];
 }
 
+type TimedEvent = Placed<CardEvent> & { date: string; clock: string };
+
+/** When an event stops taking time; one without an end only marks its start. */
+const until = (event: Pick<CardEvent, "start" | "end">) =>
+  event.end ?? event.start + 1;
+
 /** Marks timed events that share time with another, unless the bot badged them. */
 function markOverlaps(events: TimedEvent[]) {
-  const timed = events.filter((e) => !e.allDay && e.end !== undefined);
+  const timed = events.filter((e) => !e.allDay);
   for (const event of timed)
     if (
       !event.badge &&
       timed.some(
         (other) =>
           other !== event &&
-          other.start < event.end! &&
-          event.start < other.end!,
+          other.start < until(event) &&
+          event.start < until(other),
       )
     )
       event.badge = { label: "Overlaps", tone: "attention" };
 }
 
+const NOTHING =
+  "A card needs at least one row or event with a title. When there is nothing to list, say so in your reply instead.";
+
 /**
  * A bot's `show_card` arguments as the card clients draw and the text chats
  * read. Links that are not http or https are left out, the same event from
  * two sources is shown once, and events that share time are marked.
+ * `timeZone` is the owner's, when they have said.
  */
-export function buildCard(input: CardInput): BuiltCard {
+export function buildCard(
+  input: CardInput,
+  options: { timeZone?: string } = {},
+): BuiltCard {
   const hasGroups = !!input.groups?.length;
   const hasEvents = !!input.events?.length;
-  if (hasGroups === hasEvents)
+  if (hasGroups && hasEvents)
     return {
-      error: hasGroups
-        ? "Pass groups for a list or events for a timeline, not both."
-        : "A card needs at least one row or event. When there is nothing to list, say so in your reply instead.",
+      error: "Pass groups for a list or events for a timeline, not both.",
     };
+  if (!hasGroups && !hasEvents) return { error: NOTHING };
+  const title = input.title.trim();
+  if (!title) return { error: "A card needs a title." };
   const tally: Tally = { sources: [], droppedLinks: 0 };
   const notes: string[] = [];
-  const title = input.title.trim();
   const url = safeUrl(input.url);
   if (input.url && !url) tally.droppedLinks++;
   const moreUrl = safeUrl(input.more?.url);
@@ -236,16 +305,14 @@ export function buildCard(input: CardInput): BuiltCard {
     let room = MAX_CARD_ITEMS;
     const groups: { label?: string; rows: Placed<CardRow>[] }[] = [];
     for (const group of input.groups!) {
-      const rows = group.rows.slice(0, room).map((row) => {
-        const { position, ...rest } = item(row, input.source, tally);
-        return {
-          ...(row.key?.trim() ? { key: row.key.trim() } : {}),
-          ...rest,
-          ...(row.trailing?.trim() ? { trailing: row.trailing.trim() } : {}),
-          positions: position === undefined ? [] : [position],
-        };
-      });
-      left += group.rows.length - rows.length;
+      const titled = group.rows.filter((row) => row.title.trim());
+      // Only rows that are shown count towards sources and dropped links.
+      const rows = titled.slice(0, room).map((row) => ({
+        ...(row.key?.trim() ? { key: row.key.trim() } : {}),
+        ...item(row, sourcesOf(row, input.source), tally),
+        ...(row.trailing?.trim() ? { trailing: row.trailing.trim() } : {}),
+      }));
+      left += titled.length - rows.length;
       room -= rows.length;
       if (rows.length)
         groups.push({
@@ -253,11 +320,7 @@ export function buildCard(input: CardInput): BuiltCard {
           rows,
         });
     }
-    if (!groups.length)
-      return {
-        error:
-          "A card needs at least one row. When there is nothing to list, say so in your reply instead.",
-      };
+    if (!groups.length) return { error: NOTHING };
     const several = tally.sources.length > 1;
     shape = {
       type: "list",
@@ -272,59 +335,77 @@ export function buildCard(input: CardInput): BuiltCard {
         body.push(line(row.key ?? "", row, tally.sources, positions));
     }
   } else {
-    const events: TimedEvent[] = [];
+    const read: ReadEvent[] = [];
     for (const [index, event] of input.events!.entries()) {
-      const start = moment(event.start);
-      const end = event.end ? moment(event.end) : undefined;
+      if (!event.title.trim()) continue;
+      const start = moment(event.start, options.timeZone);
+      const end = event.end ? moment(event.end, options.timeZone) : undefined;
       if (!start || end === null)
         return {
           error: `Event ${index + 1} ("${event.title}") has a time I cannot read. Give start and end as a date ("2026-11-23") for an all-day event, or a date and time with its UTC offset ("2026-11-23T14:00:00+03:00").`,
         };
       const allDay = !start.clock;
-      const { position, ...rest } = item(event, input.source, tally);
-      events.push({
-        kind: "event",
-        ...rest,
+      // An end at or before the start says nothing about how long it runs.
+      const ends = !allDay && end?.clock && end.at > start.at ? end : undefined;
+      read.push({
+        input: event,
+        from: sourcesOf(event, input.source),
         start: start.at,
-        ...(!allDay && end && end.at > start.at ? { end: end.at } : {}),
-        ...(allDay ? { allDay: true as const } : {}),
-        positions: position === undefined ? [] : [position],
+        ...(ends ? { end: ends.at } : {}),
+        allDay,
         date: start.date,
         clock: allDay
           ? "All day"
-          : end?.clock && end.at > start.at
-            ? `${start.clock}–${end.clock}`
+          : ends
+            ? `${start.clock}–${ends.clock}`
             : start.clock!,
       });
     }
+    if (!read.length) return { error: NOTHING };
     // A day's all-day events come first, then its timed ones in order.
-    const sorted = merged(events).sort(
+    const sorted = merged(read).sort(
       (a, b) =>
         a.date.localeCompare(b.date) ||
-        Number(!!b.allDay) - Number(!!a.allDay) ||
+        Number(b.allDay) - Number(a.allDay) ||
         a.start - b.start,
     );
-    const kept = sorted.slice(0, MAX_CARD_ITEMS);
-    left = sorted.length - kept.length;
+    left = sorted.length - Math.min(sorted.length, MAX_CARD_ITEMS);
+    // Only events that are shown count towards sources and dropped links.
+    const kept: TimedEvent[] = sorted.slice(0, MAX_CARD_ITEMS).map((event) => ({
+      kind: "event",
+      ...item(event.input, event.from, tally),
+      start: event.start,
+      ...(event.end === undefined ? {} : { end: event.end }),
+      ...(event.allDay ? { allDay: true as const } : {}),
+      date: event.date,
+      clock: event.clock,
+    }));
     markOverlaps(kept);
     const several = tally.sources.length > 1;
     const days = new Set(kept.map((e) => e.date)).size > 1;
     const items: CardTimelineItem[] = [];
     let date = "";
-    let busyUntil: number | undefined;
+    // Free time runs from the latest end so far, across midnight too, and
+    // is only named between two events of one day. After an event with no
+    // end, nobody knows when free time starts.
+    let busyUntil = Number.NEGATIVE_INFINITY;
+    let timedToday = false;
+    let openEnded = false;
     for (const event of kept) {
       if (event.date !== date) {
         date = event.date;
-        busyUntil = undefined;
+        timedToday = false;
         if (days) {
-          items.push({ kind: "day", at: event.start });
+          items.push({ kind: "day", date });
           body.push("", date);
         }
       }
       if (!event.allDay) {
-        if (busyUntil !== undefined && event.start - busyUntil >= MIN_GAP_MS)
+        if (timedToday && !openEnded && event.start - busyUntil >= MIN_GAP_MS)
           items.push({ kind: "gap", start: busyUntil, end: event.start });
-        busyUntil = Math.max(busyUntil ?? 0, event.end ?? event.start);
+        busyUntil = Math.max(busyUntil, event.end ?? event.start);
+        openEnded = event.end === undefined;
+        timedToday = true;
       }
       const { positions, date: _date, clock, ...rest } = event;
       items.push(withSources({ ...rest, positions }, several));
@@ -336,7 +417,7 @@ export function buildCard(input: CardInput): BuiltCard {
   if (left > 0) {
     more ??= { label: `and ${left} more` };
     notes.push(
-      `Only the first ${MAX_CARD_ITEMS} were shown; ${left} were left out.`,
+      `Only the first ${MAX_CARD_ITEMS} were shown; ${left === 1 ? "1 was" : `${left} were`} left out.`,
     );
   }
   if (tally.droppedLinks)

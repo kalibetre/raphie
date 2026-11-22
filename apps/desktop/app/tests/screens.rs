@@ -5347,6 +5347,8 @@ fn a_card_shows_under_its_reply_and_its_links_open_the_browser() {
         ] {
             assert!(text.contains(part), "{part} is missing from: {text}");
         }
+        // Under the reply only, not under the owner's message as well.
+        assert_eq!(text.matches("AF board · open").count(), 1, "{text}");
         click(&mut rt, "rd-card-card-1-title");
         click(&mut rt, "rd-card-card-1-0-0-title");
         click(&mut rt, "rd-card-card-1-more");

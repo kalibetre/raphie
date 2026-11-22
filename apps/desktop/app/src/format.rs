@@ -54,15 +54,13 @@ pub fn local_day(at: i64) -> i64 {
     })
 }
 
-/// The local weekday and date of `at`: "Monday 23 November".
-pub fn weekday_date(at: i64) -> String {
-    match chrono::DateTime::from_timestamp_millis(at) {
-        Some(utc) => utc
-            .with_timezone(&chrono::Local)
-            .format("%A %-d %B")
-            .to_string(),
-        None => String::new(),
-    }
+/// The weekday and date of a calendar date written YYYY-MM-DD:
+/// "Monday 23 November". The date as given when it cannot be read.
+pub fn weekday_date(date: &str) -> String {
+    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").map_or_else(
+        |_| date.to_owned(),
+        |day| day.format("%A %-d %B").to_string(),
+    )
 }
 
 /// The local month and day of `at`: "Nov 14".
@@ -194,6 +192,8 @@ mod tests {
             clock_range(local(11, 30), local(12, 15)),
             "11:30 AM – 12:15 PM"
         );
+        assert_eq!(weekday_date("2026-11-23"), "Monday 23 November");
+        assert_eq!(weekday_date("soon"), "soon");
         assert_eq!(local_day(local(23, 59)), local_day(local(0, 1)));
         assert_eq!(
             local_day(local(12, 0) + 86_400_000) - local_day(local(12, 0)),

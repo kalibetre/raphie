@@ -260,7 +260,8 @@ test("a timeline sorts a day, merges an event read twice, and marks overlaps and
       { title: "Mara's birthday", start: "2026-11-23", source: "Personal" },
     ],
   });
-  expect(card.sources).toEqual(["Work", "Personal"]);
+  // Sources are named in the order the card shows them.
+  expect(card.sources).toEqual(["Personal", "Work"]);
   // Stored as strict JSON: no property may be undefined.
   expect(card).toStrictEqual(JSON.parse(JSON.stringify(card)));
   expect(card.type === "timeline" && card.items).toEqual([
@@ -269,14 +270,14 @@ test("a timeline sorts a day, merges an event read twice, and marks overlaps and
       title: "Mara's birthday",
       start: at("2026-11-23T00:00:00Z"),
       allDay: true,
-      sources: [1],
+      sources: [0],
     },
     {
       kind: "event",
       title: "Standup",
       start: at("2026-11-23T09:30:00+03:00"),
       end: at("2026-11-23T09:45:00+03:00"),
-      sources: [0],
+      sources: [1],
     },
     {
       kind: "gap",
@@ -290,7 +291,7 @@ test("a timeline sorts a day, merges an event read twice, and marks overlaps and
       badge: { label: "Overlaps", tone: "attention" },
       start: at("2026-11-23T14:00:00+03:00"),
       end: at("2026-11-23T15:00:00+03:00"),
-      sources: [0],
+      sources: [1],
     },
     {
       kind: "event",
@@ -299,7 +300,7 @@ test("a timeline sorts a day, merges an event read twice, and marks overlaps and
       badge: { label: "Overlaps", tone: "attention" },
       start: at("2026-11-23T14:30:00+03:00"),
       end: at("2026-11-23T15:15:00+03:00"),
-      sources: [1],
+      sources: [0],
     },
     {
       kind: "gap",
@@ -312,7 +313,7 @@ test("a timeline sorts a day, merges an event read twice, and marks overlaps and
       url: "https://calendar.example.com/e/9",
       start: at("2026-11-23T17:00:00+03:00"),
       end: at("2026-11-23T17:30:00+03:00"),
-      sources: [0, 1],
+      sources: [1, 0],
     },
   ]);
   expect(text).toBe(
@@ -347,14 +348,14 @@ test("a timeline over several days starts each day, and free time stays within o
   });
   expect(card.sources).toEqual([]);
   expect(card.type === "timeline" && card.items).toEqual([
-    { kind: "day", at: at("2026-11-23T16:00:00+03:00") },
+    { kind: "day", date: "2026-11-23" },
     {
       kind: "event",
       title: "Planning",
       start: at("2026-11-23T16:00:00+03:00"),
       end: at("2026-11-23T17:00:00+03:00"),
     },
-    { kind: "day", at: at("2026-11-24T10:00:00+03:00") },
+    { kind: "day", date: "2026-11-24" },
     {
       kind: "event",
       title: "Review",
@@ -363,6 +364,200 @@ test("a timeline over several days starts each day, and free time stays within o
       end: at("2026-11-24T11:00:00+03:00"),
     },
   ]);
+});
+
+const timeline = (input: CardInput, timeZone?: string) => {
+  const { card } = buildCard(input, timeZone ? { timeZone } : {}) as {
+    card: Extract<ReturnType<typeof built>["card"], { type: "timeline" }>;
+  };
+  return card.items;
+};
+
+/** Each item in a few words, to read a whole timeline at a glance. */
+const outline = (input: CardInput, timeZone?: string) =>
+  timeline(input, timeZone).map((item) =>
+    item.kind === "day"
+      ? `day ${item.date}`
+      : item.kind === "gap"
+        ? `gap ${new Date(item.start).toISOString().slice(11, 16)}-${new Date(item.end).toISOString().slice(11, 16)}`
+        : `${item.title}${item.badge ? ` [${item.badge.label}]` : ""}`,
+  );
+
+test("events are placed on the owner's days, whatever zone the calendar answers in", () => {
+  const events = [
+    {
+      title: "Late call",
+      start: "2026-11-23T22:00:00Z",
+      end: "2026-11-23T23:00:00Z",
+    },
+    {
+      title: "Breakfast",
+      start: "2026-11-24T05:00:00Z",
+      end: "2026-11-24T06:00:00Z",
+    },
+    { title: "Birthday", start: "2026-11-24" },
+  ];
+  // In Addis Ababa both are on the 24th, 01:00 and 08:00: one day, no heading.
+  expect(outline({ title: "Week", events }, "Africa/Addis_Ababa")).toEqual([
+    "Birthday",
+    "Late call",
+    "gap 23:00-05:00",
+    "Breakfast",
+  ]);
+  expect(built({ title: "Week", events }).text.split("\n").slice(2)).toEqual([
+    "2026-11-23",
+    "• 22:00–23:00 Late call",
+    "",
+    "2026-11-24",
+    "• All day Birthday",
+    "• 05:00–06:00 Breakfast",
+  ]);
+  const local = buildCard(
+    { title: "Week", events },
+    {
+      timeZone: "Africa/Addis_Ababa",
+    },
+  );
+  expect("text" in local && local.text.split("\n").slice(2)).toEqual([
+    "• All day Birthday",
+    "• 01:00–02:00 Late call",
+    "• 08:00–09:00 Breakfast",
+  ]);
+  // Without the owner's zone the dates stay as written: two days, each named
+  // by its date, with the all-day event on its own.
+  expect(outline({ title: "Week", events })).toEqual([
+    "day 2026-11-23",
+    "Late call",
+    "day 2026-11-24",
+    "Birthday",
+    "Breakfast",
+  ]);
+});
+
+test("free time starts after an event that runs past midnight", () => {
+  expect(
+    outline({
+      title: "Weekend",
+      events: [
+        {
+          title: "Party",
+          start: "2026-11-23T22:00:00Z",
+          end: "2026-11-24T02:00:00Z",
+        },
+        {
+          title: "Early",
+          start: "2026-11-24T01:00:00Z",
+          end: "2026-11-24T01:30:00Z",
+        },
+        { title: "Breakfast", start: "2026-11-24T08:00:00Z" },
+      ],
+    }),
+  ).toEqual([
+    "day 2026-11-23",
+    "Party [Overlaps]",
+    "day 2026-11-24",
+    "Early [Overlaps]",
+    "gap 02:00-08:00",
+    "Breakfast",
+  ]);
+});
+
+test("an event without an end takes no free time for granted, and can overlap", () => {
+  expect(
+    outline({
+      title: "Today",
+      events: [
+        {
+          title: "Workshop",
+          start: "2026-11-23T10:00:00Z",
+          end: "2026-11-23T12:00:00Z",
+        },
+        { title: "Call", start: "2026-11-23T11:00:00Z" },
+        // An end before the start is no end at all.
+        {
+          title: "Errand",
+          start: "2026-11-23T13:00:00Z",
+          end: "2026-11-23T12:30:00Z",
+        },
+        {
+          title: "Lunch",
+          start: "2026-11-23T15:00:00Z",
+          end: "2026-11-23T16:00:00Z",
+        },
+        {
+          title: "Review",
+          start: "2026-11-23T17:00:00Z",
+          end: "2026-11-23T18:00:00Z",
+        },
+      ],
+    }),
+  ).toEqual([
+    "Workshop [Overlaps]",
+    "Call [Overlaps]",
+    "Errand",
+    "Lunch",
+    "gap 16:00-17:00",
+    "Review",
+  ]);
+});
+
+test("an event past what a card holds adds no source, and no note about its link", () => {
+  const { card, notes } = built({
+    title: "Busy",
+    events: [
+      ...Array.from({ length: MAX_CARD_ITEMS }, (_, n) => ({
+        title: `Work ${n}`,
+        start: `2026-11-23T${String(n % 24).padStart(2, "0")}:${n < 24 ? "00" : "30"}:00Z`,
+        source: "Work",
+      })),
+      {
+        title: "Left out",
+        start: "2026-11-23T23:45:00Z",
+        source: "Personal",
+        url: "ftp://example.com/x",
+      },
+    ],
+  });
+  expect(card.sources).toEqual(["Work"]);
+  expect(card.more).toEqual({ label: "and 1 more" });
+  expect(notes).toEqual([
+    `Only the first ${MAX_CARD_ITEMS} were shown; 1 was left out.`,
+  ]);
+});
+
+test("an event that names no source has none, among events that do", () => {
+  expect(
+    timeline({
+      title: "Today",
+      events: [
+        { title: "A", start: "2026-11-23T09:00:00Z", source: "Work" },
+        { title: "B", start: "2026-11-23T10:00:00Z", source: "Home" },
+        { title: "C", start: "2026-11-23T11:00:00Z" },
+      ],
+    }).map((item) => item.kind === "event" && item.sources),
+  ).toEqual([[0], [1], undefined]);
+});
+
+test("a date the calendar does not have, and a blank title, are not shown", () => {
+  expect(
+    buildCard({
+      title: "Today",
+      events: [{ title: "Ghost", start: "2026-02-30" }],
+    }),
+  ).toEqual({ error: expect.stringMatching(/Event 1 \("Ghost"\)/) });
+  expect(
+    buildCard({ title: "  ", groups: [{ rows: [{ title: "A" }] }] }),
+  ).toEqual({ error: "A card needs a title." });
+  const { card } = built({
+    title: "Rows",
+    groups: [{ rows: [{ title: "  " }, { title: "Kept" }] }],
+  });
+  expect(card.type === "list" && card.groups[0]!.rows).toEqual([
+    { title: "Kept" },
+  ]);
+  expect(
+    buildCard({ title: "Rows", groups: [{ rows: [{ title: " " }] }] }),
+  ).toEqual({ error: expect.stringMatching(/at least one row or event/) });
 });
 
 test("an event time without an offset is refused, with what to send instead", () => {
@@ -443,6 +638,33 @@ test("a chat that cannot draw a card reads it as text after the reply", async ()
     const delivery = state.deliveries.find((d) => d.turnId === turn.id)!;
     expect(delivery.text).toBe(`${answer}\n\n${built(tickets).text}`);
     expect((await app.cards.state()).cards).toHaveLength(1);
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 20_000);
+
+test("in a task another bot handed off, a card is refused so the list goes in the reply", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-cards-handoff-"));
+  const app = await Gateway.open({ directory, ...showing(tickets) });
+  try {
+    await app.sessions.submitHandoff(app.actors.establish("web"), {
+      eventId: "handoff:h1:1",
+      text: "List the open tickets.",
+      handoff: {
+        id: "h1",
+        kind: "task",
+        bot: { id: "chief", name: "Chief of staff" },
+        title: "Open tickets",
+      },
+    });
+    await until(
+      async () => (await app.chats.state()).turns[0]?.status === "done",
+    );
+    expect((await app.chats.state()).turns[0]!.answer).toMatch(
+      /only your reply goes back to it/,
+    );
+    expect((await app.cards.state()).cards).toEqual([]);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });

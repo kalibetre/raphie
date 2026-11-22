@@ -24,11 +24,19 @@ const clock = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
-/** "14:00 – 15:00", or "2:00 – 3:00 PM" where the day has two halves. */
-const range = (start: number, end: number) => clock.formatRange(start, end);
+/**
+ * "14:00 – 15:00", or "2:00 – 3:00 PM" where the day has two halves. A span
+ * across midnight is written as two times: a range would spell out both dates.
+ */
+const range = (start: number, end: number) =>
+  new Date(start).toDateString() === new Date(end).toDateString()
+    ? clock.formatRange(start, end)
+    : `${clock.format(start)} – ${clock.format(end)}`;
 
-const day = (at: number) =>
-  new Date(at).toLocaleDateString(undefined, {
+/** "Monday 23 November" for the calendar date "2026-11-23", in any zone. */
+const day = (date: string) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, {
+    timeZone: "UTC",
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -79,11 +87,14 @@ function Sources({
 }: {
   of?: number[];
   names: string[];
-  /** A timeline always draws a bar, in the first colour without sources. */
+  /** A timeline keeps the bar's column even when the card has one source. */
   bar?: boolean;
 }) {
   if (names.length < 2 && !bar) return null;
-  const label = (of ?? [])
+  // With one source or none, a timeline's bar takes the first colour; with
+  // several, an event that names none has no bar.
+  const shown = of ?? (names.length < 2 ? [0] : []);
+  const label = shown
     .flatMap((n) => (names[n] ? [names[n]] : []))
     .join(" and ");
   return (
@@ -93,7 +104,7 @@ function Sources({
         ? { role: "img", "aria-label": label }
         : { "aria-hidden": true })}
     >
-      {(of ?? []).map((n) => (
+      {shown.map((n) => (
         <span key={n} className="shown-card-bar" data-source={n % 4} />
       ))}
     </span>
@@ -194,7 +205,7 @@ function Timeline({
       {timelineRows(card.items, now).map((row, n) =>
         row.kind === "day" ? (
           <li key={n} className="shown-card-group">
-            {day(row.at)}
+            {day(row.date)}
           </li>
         ) : row.kind === "now" ? (
           <li key={n} className="shown-card-now">
@@ -220,7 +231,7 @@ function Timeline({
             data-past={row.past || undefined}
           >
             <span className="shown-card-time">{span(row.event)}</span>
-            <Sources of={row.event.sources ?? [0]} names={card.sources} bar />
+            <Sources of={row.event.sources} names={card.sources} bar />
             <Title item={row.event} />
             <Extras badge={row.event.badge} link={row.event.link} />
           </li>
@@ -250,7 +261,11 @@ export function ShownCard({ shown }: { shown: SessionCard }) {
           {card.url ? (
             <Out className="shown-card-out" href={card.url}>
               {card.title}
-              <ArrowUpRight size={12} aria-hidden="true" />
+              <ArrowUpRight
+                className="shown-card-arrow"
+                size={12}
+                aria-hidden="true"
+              />
             </Out>
           ) : (
             card.title
@@ -266,7 +281,7 @@ export function ShownCard({ shown }: { shown: SessionCard }) {
       {card.sources.length > 1 && (
         <ul className="shown-card-legend" aria-label="Sources">
           {card.sources.map((name, n) => (
-            <li key={n}>
+            <li key={n} className="shown-card-legend-item">
               <span
                 className="shown-card-dot"
                 data-source={n % 4}
@@ -281,8 +296,8 @@ export function ShownCard({ shown }: { shown: SessionCard }) {
         <dl className="shown-card-stats">
           {card.stats.map((stat, n) => (
             <div key={n} className="shown-card-stat">
-              <dt>{stat.label}</dt>
-              <dd>{stat.value}</dd>
+              <dt className="shown-card-stat-label">{stat.label}</dt>
+              <dd className="shown-card-stat-value">{stat.value}</dd>
             </div>
           ))}
         </dl>
@@ -301,7 +316,11 @@ export function ShownCard({ shown }: { shown: SessionCard }) {
         (card.more.url ? (
           <Out className="shown-card-more shown-card-out" href={card.more.url}>
             {card.more.label}
-            <ArrowUpRight size={12} aria-hidden="true" />
+            <ArrowUpRight
+              className="shown-card-arrow"
+              size={12}
+              aria-hidden="true"
+            />
           </Out>
         ) : (
           <p className="shown-card-more">{card.more.label}</p>

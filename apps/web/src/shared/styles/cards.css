@@ -32,7 +32,7 @@
     text-decoration: underline;
     text-underline-offset: 2px;
   }
-  .shown-card-out svg {
+  .shown-card-arrow {
     display: inline;
     margin-left: 3px;
     color: var(--muted-foreground);
@@ -54,7 +54,7 @@
     color: var(--muted-foreground);
     font-size: 12px;
   }
-  .shown-card-legend li {
+  .shown-card-legend-item {
     display: flex;
     align-items: center;
     gap: 5px;
@@ -91,14 +91,14 @@
     display: flex;
     flex-direction: column-reverse;
   }
-  .shown-card-stat dd {
+  .shown-card-stat-value {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     line-height: 1.3;
   }
-  .shown-card-stat dt {
+  .shown-card-stat-label {
     color: var(--muted-foreground);
     font-size: 12px;
   }

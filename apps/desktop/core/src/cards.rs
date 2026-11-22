@@ -13,7 +13,7 @@ const DAY_MS: i64 = 86_400_000;
 #[derive(Clone, Debug, PartialEq)]
 pub enum TimelineRow<'a> {
     Day {
-        at: i64,
+        date: &'a str,
     },
     /// Where the present falls among today's events.
     Now {
@@ -48,7 +48,7 @@ pub fn timeline_rows<'a>(
     let mut placed = false;
     for item in items {
         match item {
-            CardTimelineItem::Day { at } => rows.push(TimelineRow::Day { at: *at }),
+            CardTimelineItem::Day { date } => rows.push(TimelineRow::Day { date }),
             CardTimelineItem::Gap { start, end } => {
                 let current = *start <= now && now < *end;
                 if current && !placed {
@@ -200,7 +200,9 @@ mod tests {
     #[test]
     fn an_all_day_event_is_past_only_after_its_date() {
         let items = vec![
-            CardTimelineItem::Day { at: at(0, 0) },
+            CardTimelineItem::Day {
+                date: "2024-10-04".to_owned(),
+            },
             CardTimelineItem::Event(CardEvent {
                 title: "Birthday".to_owned(),
                 start: at(0, 0),

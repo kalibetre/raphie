@@ -109,10 +109,13 @@ Either kind can carry up to four headline numbers, and a line at the bottom for 
 
 - **Links:** a title opens the ticket, pull request or event in your browser, the card's own title opens the board or query it came from, and a row can carry one more link, such as **Join** for a meeting. Only `http` and `https` links are kept.
 - **Several accounts:** when a card mixes sources, such as two calendars, each row has its source's colour and the card names them at the top. An event that sits on two calendars shows once, in both colours, and events that share time are badged **Overlaps**.
+- **Your days:** events are placed on your days using the time zone under [You](/guides/bots/#you), even when a calendar answers in another zone. Without one, each event stays on the date its calendar gave. An event with no end time is not counted as busy or free.
 - **A missing source:** when the bot could not read one of them, an amber line on the card says which, so a card never looks complete when it is not.
 - **As of:** a card is what the bot read at that moment, stamped with the time. It does not update; ask again for a fresh one.
 
 Cards are read-only. To act on a row, open it, or ask the bot.
+
+A bot working on a task another bot [handed off](/guides/handoffs/) writes the list in its reply instead, because only the reply goes back to the bot that sent the task.
 
 Telegram and Discord cannot draw a card, so there it is added to the reply as a plain list with its links. The web workspace and the desktop app show the same session's card.
 

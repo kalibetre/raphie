@@ -44,8 +44,11 @@ export type CardEvent = CardItem & {
 /** Free time between two events of the same day. */
 export type CardGap = { kind: "gap"; start: number; end: number };
 
-/** The start of another day, in a timeline that covers several. */
-export type CardDay = { kind: "day"; at: number };
+/**
+ * The start of another day, in a timeline that covers several: the calendar
+ * date as YYYY-MM-DD, which reads the same in every time zone.
+ */
+export type CardDay = { kind: "day"; date: string };
 
 export type CardTimelineItem = CardEvent | CardGap | CardDay;
 
