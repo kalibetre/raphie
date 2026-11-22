@@ -1130,3 +1130,8 @@
     font-size: 12.5px;
   }
 }
+@layer components {
+  .onboarding-actions-end {
+    justify-content: flex-end;
+  }
+}

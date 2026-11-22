@@ -1,8 +1,11 @@
 import type { BotProfile } from "@raphie/contracts";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import { useState } from "react";
 
-import { botPalette } from "../../domains/settings/application/bot-tone";
+import {
+  botColors,
+  botPalette,
+} from "../../domains/settings/application/bot-tone";
 import { runtimePlace } from "../../domains/settings/application/team-presence";
 import {
   useBots,
@@ -11,62 +14,107 @@ import {
 import { BotSetup } from "../../domains/settings/presentation/bot-setup";
 import brandMark from "../../shared/favicon.svg?inline";
 import { Button } from "../../shared/ui/button";
-import { MeetStep, type TeammateDraft, WorkStep } from "./teammate-steps";
+import {
+  MeetStep,
+  startingPersonality,
+  type TeammateDraft,
+  WorkStep,
+} from "./teammate-steps";
 
-type Step = "welcome" | "teammate" | "work" | "provider";
+type Step = "welcome" | "meet" | "work" | "provider";
 
-const steps: { id: Step; label: string }[] = [
-  { id: "welcome", label: "Welcome" },
-  { id: "teammate", label: "Your first teammate" },
-  { id: "work", label: "How they work" },
-  { id: "provider", label: "A way to think" },
-];
+/** Used when the runtime offers no built-in personalities. */
+const starterPersonality =
+  "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
 
 /**
- * A fresh install's first steps: the app says hello, the owner meets the
- * first bot (its name, what it handles, its colour, how it works), and the
- * bot asks for a model. Connecting one ends it on the bot's empty desk.
- * "Add a teammate" asks the same of a new bot, through the same steps.
+ * How a teammate joins, the first one or any later one, through the same
+ * steps: meet them (name, what they handle, colour), choose how they work,
+ * then give them a way to think. A fresh install says hello first.
+ *
+ * - `first`: a fresh install's one bot, edited in place.
+ * - `new`: a bot being added; finishing "how they work" creates it, and it
+ *   then opens in `setup`.
+ * - `setup`: a bot with no model and nothing said yet, on the last step.
  */
-export function Onboarding({
-  bot,
+export type TeammateFlowMode =
+  | { kind: "first"; bot: BotProfile }
+  | { kind: "new" }
+  | { kind: "setup"; bot: BotProfile };
+
+export function TeammateFlow({
+  mode,
   onProviders,
-  onSkip,
+  onClose,
+  onCreated,
 }: {
-  bot: BotProfile;
+  mode: TeammateFlowMode;
   /** Opens the bot's provider settings, for a connection that needs care. */
   onProviders: () => void;
-  onSkip: () => void;
+  /** Leaves the flow: skips setting the bot up, or cancels adding one. */
+  onClose: () => void;
+  onCreated: (botId: string) => void;
 }) {
   const bots = useBots();
   const presets = usePersonalityPresets().data?.items;
-  const [step, setStep] = useState<Step>("welcome");
-  // The first bot as it is now: kept here so Back and Next keep the edits.
-  const [draft, setDraft] = useState<TeammateDraft>(() => ({
-    name: bot.name,
-    description: bot.description,
-    color: bot.color ?? botPalette[0].color,
-    personality: bot.personality,
-  }));
+  const bot = mode.kind === "new" ? undefined : mode.bot;
+  const botId = bot?.id ?? "new-bot";
+  const steps: Step[] =
+    mode.kind === "first"
+      ? ["welcome", "meet", "work", "provider"]
+      : ["meet", "work", "provider"];
+  const [step, setStep] = useState<Step>(
+    mode.kind === "first"
+      ? "welcome"
+      : mode.kind === "setup"
+        ? "provider"
+        : "meet",
+  );
+  const [draft, setDraft] = useState<TeammateDraft>(() =>
+    bot
+      ? {
+          name: bot.name,
+          description: bot.description,
+          color: bot.color ?? botPalette[0].color,
+          personality: bot.personality,
+        }
+      : {
+          name: "",
+          description: "",
+          // A colour no teammate wears yet.
+          color:
+            botColors([...(bots.data?.items ?? []), { id: "new-bot" }]).get(
+              "new-bot",
+            ) ?? botPalette[1].color,
+          personality: starterPersonality,
+        },
+  );
   const change = (next: Partial<TeammateDraft>) =>
     setDraft((current) => ({ ...current, ...next }));
-  const at = steps.findIndex((s) => s.id === step);
+  const at = steps.indexOf(step);
+  const pending = bots.save.isPending || bots.create.isPending;
+  const error = (bots.save.error ?? bots.create.error)?.message;
 
-  /** Saves what changed about the first bot, then asks for a model. */
-  async function save() {
+  /** Leaving "how they work": creates the new bot, or saves what changed. */
+  async function finishWork() {
+    const input = {
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      personality: draft.personality.trim(),
+      color: draft.color,
+    };
+    if (!bot) {
+      const created = await bots.create.mutateAsync(input);
+      onCreated(created.id);
+      return;
+    }
     const changed =
-      draft.name.trim() !== bot.name ||
-      draft.description.trim() !== bot.description ||
-      draft.color !== (bot.color ?? botPalette[0].color) ||
-      draft.personality.trim() !== bot.personality.trim();
+      input.name !== bot.name ||
+      input.description !== bot.description ||
+      input.color !== (bot.color ?? botPalette[0].color) ||
+      input.personality !== bot.personality.trim();
     if (changed)
-      await bots.save.mutateAsync({
-        name: draft.name.trim(),
-        description: draft.description.trim(),
-        personality: draft.personality.trim(),
-        color: draft.color,
-        revision: bot.revision,
-      });
+      await bots.save.mutateAsync({ ...input, revision: bot.revision });
     setStep("provider");
   }
 
@@ -74,32 +122,53 @@ export function Onboarding({
     <main className="onboarding">
       <ol
         className="onboarding-progress"
-        aria-label={`Step ${at + 1} of ${steps.length}: ${steps[at].label}`}
+        aria-label={`Step ${at + 1} of ${steps.length}`}
       >
         {steps.map((s, i) => (
-          <li key={s.id} data-done={i <= at || undefined} title={s.label} />
+          <li key={s} data-done={i <= at || undefined} />
         ))}
       </ol>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="onboarding-close"
+        aria-label="Close"
+        title="Close"
+        onClick={onClose}
+      >
+        <X />
+      </Button>
       <section className="onboarding-step">
-        {step === "welcome" && <Welcome onNext={() => setStep("teammate")} />}
-        {step === "teammate" && (
+        {step === "welcome" && <Welcome onNext={() => setStep("meet")} />}
+        {step === "meet" && (
           <MeetStep
-            botId={bot.id}
+            botId={botId}
             draft={draft}
-            heading="Meet your first teammate"
-            lede="They’ll handle your day-to-day. Give them any name you like."
+            heading="Meet your new teammate"
+            lede="Give them a name, a colour and something to look after."
             onChange={change}
-            onNext={() => setStep("work")}
+            onNext={() => {
+              change({
+                personality: startingPersonality(draft.personality, presets),
+              });
+              setStep("work");
+            }}
             actions={
               <div className="onboarding-actions">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setStep("welcome")}
-                >
-                  <ArrowLeft />
-                  Back
-                </Button>
+                {mode.kind === "first" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setStep("welcome")}
+                  >
+                    <ArrowLeft />
+                    Back
+                  </Button>
+                ) : (
+                  <Button type="button" variant="ghost" onClick={onClose}>
+                    Cancel
+                  </Button>
+                )}
                 <Button type="submit" size="lg" disabled={!draft.name.trim()}>
                   Next
                 </Button>
@@ -109,45 +178,41 @@ export function Onboarding({
         )}
         {step === "work" && (
           <WorkStep
-            botId={bot.id}
+            botId={botId}
             draft={draft}
             presets={presets}
             onChange={change}
-            error={bots.save.error?.message}
+            error={error}
             actions={
               <div className="onboarding-actions">
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => setStep("teammate")}
+                  onClick={() => setStep("meet")}
                 >
                   <ArrowLeft />
                   Back
                 </Button>
                 <Button
                   size="lg"
-                  disabled={bots.save.isPending}
-                  onClick={() => void save()}
+                  disabled={pending}
+                  onClick={() => void finishWork()}
                 >
-                  {bots.save.isPending ? "Saving…" : "Next"}
+                  {pending ? "Saving…" : "Next"}
                 </Button>
               </div>
             }
           />
         )}
-        {step === "provider" && (
+        {step === "provider" && bot && (
           <>
             <BotSetup
               botId={bot.id}
               name={bot.name}
               onProviders={onProviders}
             />
-            <div className="onboarding-actions">
-              <Button variant="ghost" onClick={() => setStep("work")}>
-                <ArrowLeft />
-                Back
-              </Button>
-              <Button variant="link" onClick={onSkip}>
+            <div className="onboarding-actions onboarding-actions-end">
+              <Button variant="link" onClick={onClose}>
                 Skip for now
               </Button>
             </div>

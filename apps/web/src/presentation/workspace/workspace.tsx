@@ -48,10 +48,9 @@ import {
 } from "../../shared/ui/sidebar";
 import { TooltipProvider } from "../../shared/ui/tooltip";
 import { useIsMobile } from "../../shared/ui/use-mobile";
-import { AddTeammate } from "./add-teammate";
 import { notificationItems } from "./notification-items";
 import { Notifications, useJobNotifications } from "./notifications";
-import { Onboarding } from "./onboarding";
+import { TeammateFlow, type TeammateFlowMode } from "./onboarding";
 import { showsOnboarding } from "./onboarding-gate";
 import { PanelResizeHandle } from "./panel-resize-handle";
 import { useBotInbox } from "./use-bot-inbox";
@@ -671,34 +670,35 @@ export function Workspace({
       </SidebarProvider>
     </TooltipProvider>
   );
-  const onboarding =
-    botProfile &&
-    showsOnboarding({
-      loaded: !!data,
-      needsSetup,
-      bots: inbox.bots.data?.items.length ?? 0,
-      conversations: summaries.length,
-      settingsOpen: !!view,
-      skipped: skippedOnboarding,
-    });
-  // Adding a teammate takes the window, as onboarding does; once created,
-  // the new bot opens and asks for a way to think.
-  if (view === "settings" && section === "new-bot")
+  const teamSize = inbox.bots.data?.items.length ?? 0;
+  const flow: TeammateFlowMode | undefined =
+    view === "settings" && section === "new-bot"
+      ? { kind: "new" }
+      : botProfile &&
+          showsOnboarding({
+            loaded: !!data,
+            needsSetup,
+            conversations: summaries.length,
+            settingsOpen: !!view,
+            skipped: skippedOnboarding,
+          })
+        ? { kind: teamSize === 1 ? "first" : "setup", bot: botProfile }
+        : undefined;
+  // A teammate joins through one flow, the first or any later one; it takes
+  // the window until the bot can reply or the owner leaves it.
+  if (flow)
     return (
       <BotTonesProvider bots={inbox.bots.data?.items ?? []}>
-        <AddTeammate
-          onClose={() => select(conversationId)}
-          onCreated={(id) => void navigate({ to: "/", search: { bot: id } })}
-        />
-      </BotTonesProvider>
-    );
-  if (onboarding)
-    return (
-      <BotTonesProvider bots={inbox.bots.data?.items ?? []}>
-        <Onboarding
-          bot={botProfile}
+        <TeammateFlow
+          key={flow.kind === "new" ? "new" : flow.bot.id}
+          mode={flow}
           onProviders={() => openSettings("providers")}
-          onSkip={() => setSkippedOnboarding(true)}
+          onClose={() =>
+            flow.kind === "new"
+              ? select(conversationId)
+              : setSkippedOnboarding(true)
+          }
+          onCreated={(id) => void navigate({ to: "/", search: { bot: id } })}
         />
       </BotTonesProvider>
     );
