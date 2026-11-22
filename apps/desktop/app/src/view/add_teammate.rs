@@ -1,8 +1,10 @@
 //! A new bot joins the team the way the first one did: the owner names it,
 //! says what it will handle and picks its colour, then chooses how it works.
 //! Once created it opens and asks for a way to think on its own screen.
+//! Onboarding meets the first bot through the same two steps.
 //!
-//! Mirrors `apps/web/src/presentation/workspace/add-teammate.tsx`.
+//! Mirrors `apps/web/src/presentation/workspace/add-teammate.tsx` and
+//! `teammate-steps.tsx`.
 
 use rune::color::hex;
 use rune::{Color, El, Tx, col, el, row, text};
@@ -17,6 +19,15 @@ use crate::widgets::{Field, Kind, Size, button, icon_button, pressable, text_fie
 
 const STEPS: [&str; 3] = ["Meet your new teammate", "How they work", "A way to think"];
 
+/// What differs between meeting the first bot and a new one.
+pub(super) struct MeetCopy<'a> {
+    pub bot_id: &'a str,
+    pub heading: &'static str,
+    pub lede: &'static str,
+    /// The prefix of the step's element keys.
+    pub keys: &'static str,
+}
+
 pub fn add_teammate(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
     let close = pressable(
@@ -25,15 +36,65 @@ pub fn add_teammate(s: &Ui, look: &Look) -> El {
         |s: &mut Ui| s.cancel_new_bot(),
     );
     let (at, step) = if s.adding_work {
-        (1, work(s, look))
+        let name = s.profile.name.text.trim().to_owned();
+        let creating = s.model.creating_bot;
+        let back = pressable(
+            button(
+                t,
+                Kind::Ghost,
+                Size::Regular,
+                Some(&icons::ARROW_LEFT),
+                "Back",
+            )
+            .key("rd-add-back"),
+            !creating,
+            |s: &mut Ui| s.adding_work = false,
+        );
+        let label = if creating {
+            "Adding…".to_owned()
+        } else {
+            format!("Add {name}")
+        };
+        let create = pressable(
+            button(t, Kind::Primary, Size::Large, None, &label).key("rd-add-create"),
+            !creating,
+            |s: &mut Ui| s.save_profile(),
+        );
+        (1, work_step(s, look, "new-bot", back, create))
     } else {
-        (0, meet(s, look))
+        let cancel = pressable(
+            button(t, Kind::Ghost, Size::Regular, None, "Cancel").key("rd-add-cancel"),
+            true,
+            |s: &mut Ui| s.cancel_new_bot(),
+        );
+        let next = |s: &mut Ui| {
+            if s.profile.name.text.trim().is_empty() {
+                return;
+            }
+            s.adding_work = true;
+            // Start from the first built-in personality, as the web does,
+            // unless one is already chosen.
+            let presets = s.model.personality_presets.as_deref().unwrap_or_default();
+            let current = s.profile.personality.text.trim();
+            if !presets.iter().any(|preset| preset.personality == current)
+                && let Some(first) = presets.first()
+            {
+                s.profile.personality = rune::TextEdit::new(first.personality.clone());
+            }
+        };
+        let copy = MeetCopy {
+            bot_id: "new-bot",
+            heading: "Meet your new teammate",
+            lede: "Give them a name, a colour and something to look after.",
+            keys: "rd-add",
+        };
+        (0, meet_step(s, look, copy, cancel, next))
     };
     flow(s, look, &STEPS, at, Some(close), step)
 }
 
-/// The new bot, in the colour being chosen.
-fn avatar(s: &Ui) -> El {
+/// The teammate, in the colour being chosen.
+fn avatar(s: &Ui, bot_id: &str) -> El {
     let color = s
         .profile
         .color
@@ -41,7 +102,7 @@ fn avatar(s: &Ui) -> El {
         .unwrap_or_else(|| PALETTE_NAMES[1].1.to_owned());
     let tone =
         tone_of(&color).unwrap_or_else(|| tone_of(PALETTE_NAMES[1].1).expect("a valid colour"));
-    bot_avatar("new-bot", tone, 64.0)
+    bot_avatar(bot_id, tone, 64.0)
 }
 
 fn field_label(t: &Theme, words: &str) -> El {
@@ -50,14 +111,22 @@ fn field_label(t: &Theme, words: &str) -> El {
         .color(t.muted_foreground)
 }
 
-fn meet(s: &Ui, look: &Look) -> El {
+/// Meeting a teammate: a name, what it will handle and a colour, in the
+/// profile draft. `left` is Back or Cancel; `next` moves on.
+pub(super) fn meet_step(
+    s: &Ui,
+    look: &Look,
+    copy: MeetCopy<'_>,
+    left: El,
+    next: impl Fn(&mut Ui) + Copy + 'static,
+) -> El {
     let t = &look.theme;
     let named = !s.profile.name.text.trim().is_empty();
     let chosen = s.profile.color.clone().unwrap_or_default();
     let mut swatches = row().gap(8.0).flex_wrap().justify_center().mt(4.0).mb(6.0);
     for (name, color) in PALETTE_NAMES {
         let mut swatch = el()
-            .key(format!("rd-add-color-{}", name.to_lowercase()))
+            .key(format!("{}-color-{}", copy.keys, name.to_lowercase()))
             .role("radio")
             .label(name)
             .help(name)
@@ -71,31 +140,15 @@ fn meet(s: &Ui, look: &Look) -> El {
         }
         swatches = swatches.child(swatch);
     }
-    let next = |s: &mut Ui| {
-        if s.profile.name.text.trim().is_empty() {
-            return;
-        }
-        s.adding_work = true;
-        // Start from the first built-in personality, as the web does,
-        // unless one is already chosen.
-        let presets = s.model.personality_presets.as_deref().unwrap_or_default();
-        let current = s.profile.personality.text.trim();
-        if !presets.iter().any(|preset| preset.personality == current)
-            && let Some(first) = presets.first()
-        {
-            s.profile.personality = rune::TextEdit::new(first.personality.clone());
-        }
-    };
+    let name_key = format!("{}-name", copy.keys);
+    let description_key = format!("{}-description", copy.keys);
     col()
         .items_center()
         .child(
             card()
-                .child(avatar(s))
-                .child(heading(t, "Meet your new teammate"))
-                .child(lede(
-                    t,
-                    "Give them a name, a colour and something to look after.",
-                ))
+                .child(avatar(s, copy.bot_id))
+                .child(heading(t, copy.heading))
+                .child(lede(t, copy.lede))
                 .child(
                     col()
                         .w_full()
@@ -105,7 +158,7 @@ fn meet(s: &Ui, look: &Look) -> El {
                         .child(text_field(
                             t,
                             Field {
-                                key: "rd-add-name",
+                                key: &name_key,
                                 label: "Name",
                                 placeholder: "Researcher",
                                 edit: &s.profile.name,
@@ -119,7 +172,7 @@ fn meet(s: &Ui, look: &Look) -> El {
                         .child(text_field(
                             t,
                             Field {
-                                key: "rd-add-description",
+                                key: &description_key,
                                 label: "What will they handle?",
                                 placeholder: "Reads up on things and writes them down",
                                 edit: &s.profile.description,
@@ -139,27 +192,24 @@ fn meet(s: &Ui, look: &Look) -> El {
                 .child(swatches),
         )
         .child(actions(
-            t,
+            left,
             pressable(
-                button(t, Kind::Ghost, Size::Regular, None, "Cancel").key("rd-add-cancel"),
-                true,
-                |s: &mut Ui| s.cancel_new_bot(),
-            ),
-            pressable(
-                button(t, Kind::Primary, Size::Large, None, "Next").key("rd-add-next"),
+                button(t, Kind::Primary, Size::Large, None, "Next")
+                    .key(format!("{}-next", copy.keys)),
                 named,
                 next,
             ),
         ))
 }
 
-fn work(s: &Ui, look: &Look) -> El {
+/// How a teammate works: a built-in personality to start from. `left` is
+/// Back and `right` finishes the step.
+pub(super) fn work_step(s: &Ui, look: &Look, bot_id: &str, left: El, right: El) -> El {
     let t = &look.theme;
     let name = s.profile.name.text.trim().to_owned();
-    let creating = s.model.creating_bot;
     let current = s.profile.personality.text.trim().to_owned();
     let mut presets = col()
-        .key("rd-add-presets")
+        .key("rd-teammate-presets")
         .role("group")
         .label("Personality")
         .w_full()
@@ -170,7 +220,7 @@ fn work(s: &Ui, look: &Look) -> El {
         let personality = preset.personality.clone();
         presets = presets.child(
             col()
-                .key(format!("rd-add-preset-{}", preset.id))
+                .key(format!("rd-teammate-preset-{}", preset.id))
                 .role("radio")
                 .label(preset.name.clone())
                 .checked(on)
@@ -202,7 +252,7 @@ fn work(s: &Ui, look: &Look) -> El {
         );
     }
     let mut body = card()
-        .child(avatar(s))
+        .child(avatar(s, bot_id))
         .child(heading(t, &format!("How should {name} work?")))
         .child(lede(
             t,
@@ -217,40 +267,10 @@ fn work(s: &Ui, look: &Look) -> El {
                 .wrap(),
         );
     }
-    col().items_center().child(body).child(actions(
-        t,
-        pressable(
-            button(
-                t,
-                Kind::Ghost,
-                Size::Regular,
-                Some(&icons::ARROW_LEFT),
-                "Back",
-            )
-            .key("rd-add-back"),
-            !creating,
-            |s: &mut Ui| s.adding_work = false,
-        ),
-        pressable(
-            button(
-                t,
-                Kind::Primary,
-                Size::Large,
-                None,
-                &if creating {
-                    "Adding…".to_owned()
-                } else {
-                    format!("Add {name}")
-                },
-            )
-            .key("rd-add-create"),
-            !creating,
-            |s: &mut Ui| s.save_profile(),
-        ),
-    ))
+    col().items_center().child(body).child(actions(left, right))
 }
 
-fn actions(_t: &Theme, left: El, right: El) -> El {
+fn actions(left: El, right: El) -> El {
     row()
         .w_full()
         .max_w(440.0)

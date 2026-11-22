@@ -43,6 +43,7 @@ pub const SCENES: &[Scene] = &[
     ("device-code", device_code),
     ("onboarding", onboarding),
     ("onboarding-teammate", onboarding_teammate),
+    ("onboarding-work", onboarding_work),
     ("onboarding-provider", onboarding_provider),
     ("new-conversation", new_conversation),
     ("conversation-opened", conversation_opened),
@@ -230,6 +231,8 @@ pub fn onboarding(ui: &mut Ui) {
         bot_id: "default".into(),
         settings: Box::new(settings),
     });
+    ui.model
+        .apply(Event::PersonalityPresets(teammate_presets()));
 }
 
 /// Onboarding's second step, with a teal colour chosen.
@@ -237,6 +240,12 @@ pub fn onboarding_teammate(ui: &mut Ui) {
     onboarding(ui);
     ui.onboarding_next();
     ui.profile.color = Some("#83bcb4".into());
+}
+
+/// Onboarding's third step: how the first bot works.
+pub fn onboarding_work(ui: &mut Ui) {
+    onboarding_teammate(ui);
+    ui.onboarding_next();
 }
 
 /// Onboarding's last step: the bot asks for a way to think.
@@ -631,14 +640,20 @@ pub fn settings_new_bot(ui: &mut Ui) {
     ui.profile.description = TextEdit::new("Plans trips and keeps the bookings straight.");
 }
 
-/// "Add a teammate" choosing how they work, from the built-in personalities.
-pub fn add_teammate_work(ui: &mut Ui) {
-    settings_new_bot(ui);
-    ui.model.apply(Event::PersonalityPresets(from_json(json!([
+/// A few built-in personalities, for the steps that choose one.
+fn teammate_presets() -> Vec<raphie_core::contracts::PersonalityPreset> {
+    from_json(json!([
         { "id": "candid", "name": "Candid", "summary": "Concise, honest and warm. The default.", "personality": "Be candid." },
         { "id": "analyst", "name": "Analyst", "summary": "Precise and sourced; shows its reasoning.", "personality": "Be precise." },
         { "id": "coach", "name": "Coach", "summary": "Asks good questions and holds you to your goals.", "personality": "Be a coach." }
-    ]))));
+    ]))
+}
+
+/// "Add a teammate" choosing how they work, from the built-in personalities.
+pub fn add_teammate_work(ui: &mut Ui) {
+    settings_new_bot(ui);
+    ui.model
+        .apply(Event::PersonalityPresets(teammate_presets()));
     ui.profile.personality = TextEdit::new("Be precise.");
     ui.adding_work = true;
 }

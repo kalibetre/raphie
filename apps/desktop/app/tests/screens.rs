@@ -286,18 +286,29 @@ fn a_fresh_install_is_onboarded_then_asks_for_a_model() {
         assert!(text.contains("Welcome to raphie"), "{text}");
         assert!(text.contains("Running on this Mac"), "{text}");
 
-        // The teammate: renamed and recoloured, saved on the way on.
+        // The teammate: renamed, described and recoloured.
         click(&mut rt, "rd-onboarding-next");
         assert_eq!(rt.state.onboarding, state::Onboarding::Teammate);
         assert!(screen_text(&rt).contains("Meet your first teammate"));
-        rt.update(|ui, _| ui.profile.name = TextEdit::new("Juniper"));
+        rt.update(|ui, _| {
+            ui.profile.name = TextEdit::new("Juniper");
+            ui.profile.description = TextEdit::new("Keeps my week on track");
+        });
         click(&mut rt, "rd-onboarding-color-teal");
+        click(&mut rt, "rd-onboarding-next");
+
+        // How they work, as a new teammate is asked; leaving saves it all.
+        assert_eq!(rt.state.onboarding, state::Onboarding::Work);
+        assert!(screen_text(&rt).contains("How should Juniper work?"));
+        click(&mut rt, "rd-teammate-preset-analyst");
         click(&mut rt, "rd-onboarding-next");
         match rt.state.sent.last() {
             Some(Command::SaveProfile { bot_id, update }) => {
                 assert_eq!(bot_id, "default");
                 assert_eq!(update.name, "Juniper");
+                assert_eq!(update.description, "Keeps my week on track");
                 assert_eq!(update.color.as_deref(), Some("#83bcb4"));
+                assert_eq!(update.personality, "Be precise.");
             }
             other => panic!("expected a profile save, got {other:?}"),
         }
@@ -320,7 +331,7 @@ fn a_fresh_install_is_onboarded_then_asks_for_a_model() {
 fn onboarding_can_be_skipped_and_never_shows_once_work_exists() {
     let mut rt = render(scenes::onboarding_provider, false);
     click(&mut rt, "rd-onboarding-back");
-    assert_eq!(rt.state.onboarding, state::Onboarding::Teammate);
+    assert_eq!(rt.state.onboarding, state::Onboarding::Work);
     rt.update(|ui, _| ui.onboarding = state::Onboarding::Provider);
     settle(&mut rt);
     click(&mut rt, "rd-onboarding-skip");

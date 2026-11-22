@@ -525,8 +525,11 @@ pub enum Onboarding {
     /// The app says hello.
     #[default]
     Welcome,
-    /// The owner names the first bot and picks its colour.
+    /// The owner names the first bot, says what it handles and picks its
+    /// colour.
     Teammate,
+    /// The owner picks how the first bot works.
+    Work,
     /// The bot asks for a model.
     Provider,
 }
@@ -2258,8 +2261,9 @@ impl Ui {
             && !self.onboarding_skipped
     }
 
-    /// The next onboarding step. Leaving the teammate step saves the name
-    /// and colour, as Settings → Profile would.
+    /// The next onboarding step. Leaving "how they work" saves the first
+    /// bot's name, description, colour and personality, as Settings →
+    /// Profile would.
     pub fn onboarding_next(&mut self) {
         self.onboarding = match self.onboarding {
             Onboarding::Welcome => {
@@ -2269,6 +2273,12 @@ impl Ui {
                 Onboarding::Teammate
             }
             Onboarding::Teammate => {
+                if self.profile.name.text.trim().is_empty() {
+                    return;
+                }
+                Onboarding::Work
+            }
+            Onboarding::Work => {
                 if self.profile.is_dirty() {
                     self.save_profile();
                 }
@@ -2280,7 +2290,8 @@ impl Ui {
 
     pub fn onboarding_back(&mut self) {
         self.onboarding = match self.onboarding {
-            Onboarding::Provider => Onboarding::Teammate,
+            Onboarding::Provider => Onboarding::Work,
+            Onboarding::Work => Onboarding::Teammate,
             _ => Onboarding::Welcome,
         };
     }

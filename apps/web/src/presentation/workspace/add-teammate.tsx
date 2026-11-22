@@ -9,11 +9,13 @@ import {
   useBots,
   usePersonalityPresets,
 } from "../../domains/settings/infrastructure/use-bots";
-import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { Button } from "../../shared/ui/button";
-import { Input } from "../../shared/ui/input";
-
-type Step = "meet" | "work";
+import {
+  MeetStep,
+  startingPersonality,
+  type TeammateDraft,
+  WorkStep,
+} from "./teammate-steps";
 
 /** Used when the runtime offers no built-in personalities. */
 const starterPersonality =
@@ -33,27 +35,27 @@ export function AddTeammate({
 }) {
   const bots = useBots();
   const presets = usePersonalityPresets().data?.items;
-  const [step, setStep] = useState<Step>("meet");
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  // A colour no teammate wears yet, as Settings would pick.
-  const [color, setColor] = useState<string>(
-    () =>
+  const [working, setWorking] = useState(false);
+  const [draft, setDraft] = useState<TeammateDraft>(() => ({
+    name: "",
+    description: "",
+    // A colour no teammate wears yet, as Settings would pick.
+    color:
       botColors([...(bots.data?.items ?? []), { id: "new-bot" }]).get(
         "new-bot",
       ) ?? botPalette[1].color,
-  );
-  const [personality, setPersonality] = useState<string>();
-  const chosen = personality ?? presets?.[0]?.personality ?? starterPersonality;
-  const trimmed = name.trim();
-  const at = step === "meet" ? 0 : 1;
+    personality: starterPersonality,
+  }));
+  const change = (next: Partial<TeammateDraft>) =>
+    setDraft((current) => ({ ...current, ...next }));
+  const at = working ? 1 : 0;
 
   async function create() {
     const created = await bots.create.mutateAsync({
-      name: trimmed,
-      description: description.trim(),
-      personality: chosen,
-      color,
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      personality: draft.personality.trim(),
+      color: draft.color,
     });
     onCreated(created.id);
   }
@@ -76,122 +78,59 @@ export function AddTeammate({
         <X />
       </Button>
       <section className="onboarding-step">
-        {step === "meet" ? (
-          <form
-            className="onboarding-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (trimmed) setStep("work");
-            }}
-          >
-            <div className="onboarding-avatar">
-              <BotAvatar id="new-bot" color={color} />
-            </div>
-            <h1>Meet your new teammate</h1>
-            <p>Give them a name, a colour and something to look after.</p>
-            <label className="onboarding-field">
-              <span>Name</span>
-              <Input
-                value={name}
-                maxLength={60}
-                placeholder="Researcher"
-                autoFocus
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-            <label className="onboarding-field">
-              <span>What will they handle?</span>
-              <Input
-                value={description}
-                maxLength={200}
-                placeholder="Reads up on things and writes them down"
-                onChange={(event) => setDescription(event.target.value)}
-              />
-              <small>
-                Your other teammates read this to know when to hand work over.
-              </small>
-            </label>
-            <div
-              className="onboarding-colors"
-              role="radiogroup"
-              aria-label="Colour"
-            >
-              {botPalette.map((tone) => (
-                <button
-                  key={tone.color}
+        {working ? (
+          <WorkStep
+            botId="new-bot"
+            draft={draft}
+            presets={presets}
+            onChange={change}
+            error={bots.create.error?.message}
+            actions={
+              <div className="onboarding-actions">
+                <Button
                   type="button"
-                  role="radio"
-                  aria-checked={color === tone.color}
-                  aria-label={tone.name}
-                  title={tone.name}
-                  style={{ background: tone.color }}
-                  onClick={() => setColor(tone.color)}
-                />
-              ))}
-            </div>
-            <div className="onboarding-actions">
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit" size="lg" disabled={!trimmed}>
-                Next
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="onboarding-card">
-            <div className="onboarding-avatar">
-              <BotAvatar id="new-bot" color={color} />
-            </div>
-            <h1>How should {trimmed} work?</h1>
-            <p>
-              Pick a starting personality. You can put it in your own words
-              later in Settings.
-            </p>
-            {presets?.length ? (
-              <div
-                className="onboarding-presets"
-                role="radiogroup"
-                aria-label="Personality"
-              >
-                {presets.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    role="radio"
-                    className="onboarding-preset"
-                    aria-checked={preset.personality === chosen}
-                    onClick={() => setPersonality(preset.personality)}
-                  >
-                    <strong>{preset.name}</strong>
-                    <span>{preset.summary}</span>
-                  </button>
-                ))}
+                  variant="ghost"
+                  onClick={() => setWorking(false)}
+                >
+                  <ArrowLeft />
+                  Back
+                </Button>
+                <Button
+                  size="lg"
+                  disabled={bots.create.isPending}
+                  onClick={() => void create()}
+                >
+                  {bots.create.isPending
+                    ? "Adding…"
+                    : `Add ${draft.name.trim()}`}
+                </Button>
               </div>
-            ) : null}
-            {bots.create.error && (
-              <p className="onboarding-error" role="alert">
-                {bots.create.error.message}
-              </p>
-            )}
-            <div className="onboarding-actions">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setStep("meet")}
-              >
-                <ArrowLeft />
-                Back
-              </Button>
-              <Button
-                size="lg"
-                disabled={bots.create.isPending}
-                onClick={() => void create()}
-              >
-                {bots.create.isPending ? "Adding…" : `Add ${trimmed}`}
-              </Button>
-            </div>
-          </div>
+            }
+          />
+        ) : (
+          <MeetStep
+            botId="new-bot"
+            draft={draft}
+            heading="Meet your new teammate"
+            lede="Give them a name, a colour and something to look after."
+            onChange={change}
+            onNext={() => {
+              change({
+                personality: startingPersonality(draft.personality, presets),
+              });
+              setWorking(true);
+            }}
+            actions={
+              <div className="onboarding-actions">
+                <Button type="button" variant="ghost" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="lg" disabled={!draft.name.trim()}>
+                  Next
+                </Button>
+              </div>
+            }
+          />
         )}
       </section>
     </main>

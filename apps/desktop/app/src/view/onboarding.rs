@@ -5,20 +5,21 @@
 //! Mirrors `apps/web/src/presentation/workspace/onboarding.tsx` and the
 //! `.onboarding` rules in `bot-workspace.css`.
 
-use rune::color::hex;
-use rune::{Color, El, Tx, col, el, row, text};
+use rune::{El, col, el, row, text};
 
 use super::Look;
+use super::add_teammate::{MeetCopy, meet_step, work_step};
 use super::setup;
-use crate::avatar::{PALETTE_NAMES, bot_avatar, tone_of};
+use crate::avatar::{bot_avatar, tone_of};
 use crate::icons;
 use crate::state::{Onboarding, Ui};
 use crate::theme::{Theme, font};
-use crate::widgets::{Field, Kind, Size, build_badge, button, centered, pressable, text_field};
+use crate::widgets::{Kind, Size, build_badge, button, centered, pressable};
 
-const STEPS: [(Onboarding, &str); 3] = [
+const STEPS: [(Onboarding, &str); 4] = [
     (Onboarding::Welcome, "Welcome"),
     (Onboarding::Teammate, "Your first teammate"),
+    (Onboarding::Work, "How they work"),
     (Onboarding::Provider, "A way to think"),
 ];
 
@@ -29,6 +30,7 @@ pub fn onboarding(s: &Ui, look: &Look) -> El {
     let step = match s.onboarding {
         Onboarding::Welcome => welcome(s, look),
         Onboarding::Teammate => teammate(s, look),
+        Onboarding::Work => work(s, look),
         Onboarding::Provider => provider(s, look),
     };
     let at = STEPS
@@ -107,19 +109,6 @@ pub(super) fn flow(
 fn brand_mark(size: f32) -> El {
     let tone = tone_of(SAGE).expect("a valid colour");
     bot_avatar("default", tone, size)
-}
-
-/// The first bot, in the colour being chosen.
-fn teammate_avatar(s: &Ui, size: f32) -> El {
-    let id = s.model.bot_id.as_deref().unwrap_or("default");
-    let color = s
-        .profile
-        .color
-        .clone()
-        .or_else(|| s.model.selected_bot().and_then(|bot| bot.color.clone()))
-        .unwrap_or_else(|| SAGE.to_owned());
-    let tone = tone_of(&color).unwrap_or_else(|| tone_of(SAGE).expect("a valid colour"));
-    bot_avatar(id, tone, size)
 }
 
 pub(super) fn card() -> El {
@@ -211,79 +200,47 @@ fn welcome(s: &Ui, look: &Look) -> El {
         ))
 }
 
-/// The first bot, named and coloured by the owner.
+/// The first bot: its name, what it handles and its colour, through the
+/// step "Add a teammate" uses.
 fn teammate(s: &Ui, look: &Look) -> El {
     let t = &look.theme;
-    let saving = s.model.saving_profile;
-    let named = !s.profile.name.text.trim().is_empty();
-    let chosen = s
-        .profile
-        .color
-        .clone()
-        .or_else(|| s.model.selected_bot().and_then(|bot| bot.color.clone()))
-        .unwrap_or_else(|| SAGE.to_owned());
-    let mut swatches = row().gap(8.0).flex_wrap().justify_center().mt(4.0).mb(6.0);
-    for (name, color) in PALETTE_NAMES {
-        let on = chosen.eq_ignore_ascii_case(color);
-        let mut swatch = el()
-            .key(format!("rd-onboarding-color-{}", name.to_lowercase()))
-            .role("radio")
-            .label(name)
-            .help(name)
-            .size(26.0, 26.0)
-            .radius(13.0)
-            .fill(hex(color).unwrap_or(Color::WHITE))
-            .focus_ring(2.0, 2.0, t.accent)
-            .on_press(move |s: &mut Ui| s.profile.color = Some(color.to_owned()));
-        if on {
-            swatch = swatch.outline(2.0, 2.0, t.foreground);
-        }
-        swatches = swatches.child(swatch);
-    }
-    let mut card = card()
-        .child(teammate_avatar(s, 64.0))
-        .child(heading(t, "Meet your first teammate"))
-        .child(lede(
+    let back = pressable(
+        button(
             t,
-            "They’ll handle your day-to-day. Give them any name you like.",
-        ))
-        .child(
-            col()
-                .w_full()
-                .mt(8.0)
-                .gap(6.0)
-                .child(
-                    text("Name")
-                        .font(font(12.5, 400.0))
-                        .color(t.muted_foreground),
-                )
-                .child(text_field(
-                    t,
-                    Field {
-                        key: "rd-onboarding-name",
-                        label: "Name",
-                        placeholder: "Raphie",
-                        edit: &s.profile.name,
-                        disabled: saving,
-                        compact: false,
-                    },
-                    |s: &mut Ui| &mut s.profile.name,
-                    |s: &mut Ui, _: &mut Tx| {
-                        if !s.profile.name.text.trim().is_empty() {
-                            s.onboarding_next();
-                        }
-                    },
-                )),
+            Kind::Ghost,
+            Size::Regular,
+            Some(&icons::ARROW_LEFT),
+            "Back",
         )
-        .child(swatches);
-    if let Some(error) = &s.model.profile_error {
-        card = card.child(
-            text(error.clone())
-                .font(font(13.0, 400.0))
-                .color(t.error)
-                .wrap(),
-        );
-    }
+        .key("rd-onboarding-back"),
+        true,
+        |s: &mut Ui| s.onboarding_back(),
+    );
+    let copy = MeetCopy {
+        bot_id: s.model.bot_id.as_deref().unwrap_or("default"),
+        heading: "Meet your first teammate",
+        lede: "They’ll handle your day-to-day. Give them any name you like.",
+        keys: "rd-onboarding",
+    };
+    meet_step(s, look, copy, back, |s: &mut Ui| s.onboarding_next())
+}
+
+/// How the first bot works; leaving it saves what changed.
+fn work(s: &Ui, look: &Look) -> El {
+    let t = &look.theme;
+    let saving = s.model.saving_profile;
+    let back = pressable(
+        button(
+            t,
+            Kind::Ghost,
+            Size::Regular,
+            Some(&icons::ARROW_LEFT),
+            "Back",
+        )
+        .key("rd-onboarding-back"),
+        !saving,
+        |s: &mut Ui| s.onboarding_back(),
+    );
     let next = pressable(
         button(
             t,
@@ -293,13 +250,11 @@ fn teammate(s: &Ui, look: &Look) -> El {
             if saving { "Saving…" } else { "Next" },
         )
         .key("rd-onboarding-next"),
-        named && !saving,
+        !saving,
         |s: &mut Ui| s.onboarding_next(),
     );
-    col()
-        .items_center()
-        .child(card)
-        .child(actions(t, Some(next), false))
+    let bot_id = s.model.bot_id.as_deref().unwrap_or("default");
+    work_step(s, look, bot_id, back, next)
 }
 
 /// The bot asks for a model, as it does outside onboarding.
