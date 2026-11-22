@@ -757,6 +757,78 @@ test("an item card carries its fields, the start of its description and its firs
   ]);
 });
 
+test("a description is cut between characters, never inside an emoji", () => {
+  const { card, text } = built({
+    title: "Notes",
+    item: { body: `${"a".repeat(599)}😀 and the rest ${"b".repeat(40)}` },
+  });
+  if (card.type !== "item") throw new Error("Expected an item.");
+  expect(card.body).toBe(`${"a".repeat(599)}😀…`);
+  expect(card.body!.isWellFormed()).toBe(true);
+  expect(text.isWellFormed()).toBe(true);
+});
+
+test("counts and progress stay whole numbers a client can hold", () => {
+  const { card } = built({
+    title: "Board",
+    columns: [
+      {
+        label: "A",
+        count: 5_000_000_000,
+        rows: [
+          { title: "Over", progress: { done: 9, total: 5 } },
+          { title: "Huge", progress: { done: 2, total: 1e21 } },
+          { title: "None", progress: { done: 1, total: 0 } },
+          { title: "Part", progress: { done: -3, total: 4.9 } },
+        ],
+      },
+      { label: "B", count: Number.NaN, rows: [{ title: "x" }] },
+      { label: "C", count: 1, rows: [{ title: "y" }, { title: "z" }] },
+    ],
+  });
+  if (card.type !== "board") throw new Error("Expected a board.");
+  // A count is never less than the rows it comes with.
+  expect(card.columns.map((column) => column.count)).toEqual([99_999, 1, 2]);
+  expect(card.columns[0]!.rows.map((each) => each.progress)).toEqual([
+    { done: 5, total: 5 },
+    { done: 2, total: 99_999 },
+    undefined,
+    { done: 0, total: 4 },
+  ]);
+  expect(card).toStrictEqual(JSON.parse(JSON.stringify(card)));
+});
+
+test("columns without a colour take the ones no column was given", () => {
+  const colours = (columns: NonNullable<CardInput["columns"]>) => {
+    const { card } = built({ title: "Board", columns });
+    return card.type === "board" && card.columns.map((column) => column.color);
+  };
+  const each = (label: string, color?: "blue" | "green" | "gray") => ({
+    label,
+    ...(color ? { color } : {}),
+    rows: [{ title: "x" }],
+  });
+  expect(
+    colours([each("A", "blue"), each("B"), each("C"), each("D", "green")]),
+  ).toEqual(["blue", "yellow", "purple", "green"]);
+  // More columns than colours: they come round again.
+  expect(colours(Array.from({ length: 9 }, (_, n) => each(`C${n}`)))).toEqual([
+    "blue",
+    "green",
+    "yellow",
+    "purple",
+    "orange",
+    "pink",
+    "red",
+    "blue",
+    "green",
+  ]);
+  // An unnamed column keeps a colour it was given.
+  expect(colours([{ color: "green", rows: [{ title: "x" }] }])).toEqual([
+    "green",
+  ]);
+});
+
 test("an item with nothing but a title is refused, and so are two kinds at once", () => {
   expect(buildCard({ title: "Bare", item: {} })).toEqual({
     error: expect.stringMatching(/needs fields, a body or steps/),
@@ -938,6 +1010,26 @@ test("the tool's one row shape becomes a timeline, a board or an item by its kin
     item: { key: "#107", steps: [{ label: "Draft", done: true }] },
   });
   expect(task.card).toMatchObject({ type: "item", key: "#107" });
+
+  // What belongs to another kind is left out, not drawn.
+  const plain = await shown({
+    kind: "list",
+    title: "Tickets",
+    item: { body: "Not for a list." },
+    groups: [
+      {
+        label: "Open",
+        color: "red",
+        count: 40,
+        rows: [{ title: "One", start: "2026-11-23T09:30:00Z" }],
+      },
+    ],
+  });
+  expect(plain.card).toMatchObject({
+    type: "list",
+    groups: [{ label: "Open", rows: [{ title: "One" }] }],
+  });
+  expect(JSON.stringify(plain.card)).not.toMatch(/red|40|start|Not for/);
 
   // A timeline row with no start, and an item with nothing in it, are refused.
   const undated = await shown({

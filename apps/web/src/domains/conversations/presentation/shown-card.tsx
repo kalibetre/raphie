@@ -163,7 +163,7 @@ function People({ names }: { names: string[] }) {
       aria-label={`Assigned to ${names.join(", ")}`}
       title={names.join(", ")}
     >
-      {names.slice(0, 3).map((name) => (
+      {names.map((name) => (
         <span key={name} className="shown-card-avatar" aria-hidden="true">
           {initials(name)}
         </span>

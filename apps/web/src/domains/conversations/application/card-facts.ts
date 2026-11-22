@@ -37,6 +37,8 @@ export function dueLabel(
       timeZone: "UTC",
       day: "numeric",
       month: "short",
+      // Another year is said, so next December is not mistaken for this one.
+      ...(date.slice(0, 4) === today.slice(0, 4) ? {} : { year: "numeric" }),
     })}`,
     tone: "neutral",
     soon: false,
@@ -46,7 +48,9 @@ export function dueLabel(
 /** Up to two letters for a person: "Kalkidan Betre" is "KB", "mara" is "M". */
 export function initials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
-  const first = words[0]?.[0] ?? "";
-  const last = words.length > 1 ? (words.at(-1)?.[0] ?? "") : "";
+  // By character, not by code unit: a name may start with one that takes two.
+  const letter = (word: string | undefined) => Array.from(word ?? "")[0] ?? "";
+  const first = letter(words[0]);
+  const last = words.length > 1 ? letter(words.at(-1)) : "";
   return (first + last).toUpperCase();
 }

@@ -483,10 +483,13 @@ fn item(
                     .w_full()
                     .gap(14.0)
                     .child(
+                        // At least the estimate, so values line up; wider
+                        // when a label's letters are, so it never runs into
+                        // its value.
                         text(field.label.clone())
                             .font(font(13.0, 400.0))
                             .color(t.muted_foreground)
-                            .w(label_width.max(40.0)),
+                            .min_w(label_width.max(40.0)),
                     )
                     .child(value),
             );
@@ -539,6 +542,12 @@ fn item(
                             } else {
                                 t.foreground
                             })
+                            // A done step is struck through, as on the web.
+                            .strikes(step.done.then_some((
+                                0,
+                                step.label.len(),
+                                Some(t.muted_foreground),
+                            )))
                             .wrap()
                             .shrink()
                             .min_w(0.0)
@@ -654,14 +663,14 @@ fn progress(progress: CardProgress, t: &Theme) -> El {
         .child(small(format!("{}/{}", progress.done, progress.total), t).a11y_hidden())
 }
 
-/// Who has it: up to three sets of initials, named for a screen reader.
+/// Who has it: their initials, named for a screen reader.
 fn people(names: &[String], t: &Theme) -> El {
     let mut faces = row()
         .role("img")
         .label(format!("Assigned to {}", names.join(", ")))
         .help(names.join(", "))
         .gap(2.0);
-    for name in names.iter().take(3) {
+    for name in names {
         faces = faces.child(
             row()
                 .size(22.0, 22.0)

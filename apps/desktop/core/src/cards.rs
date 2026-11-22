@@ -14,12 +14,30 @@ const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-/// A calendar date written YYYY-MM-DD as (year, month, day), if it is one.
+/// A calendar date written exactly YYYY-MM-DD as (year, month, day), if the
+/// calendar has that day. As strict as the web's parse, so both clients
+/// fall back to the raw text for the same input.
 fn civil(date: &str) -> Option<(i64, i64, i64)> {
-    let mut parts = date.split('-').map(|part| part.parse::<i64>().ok());
-    let (year, month, day) = (parts.next()??, parts.next()??, parts.next()??);
-    (parts.next().is_none() && (1..=12).contains(&month) && (1..=31).contains(&day))
-        .then_some((year, month, day))
+    let bytes = date.as_bytes();
+    let shaped = bytes.len() == 10
+        && bytes.iter().enumerate().all(|(at, byte)| match at {
+            4 | 7 => *byte == b'-',
+            _ => byte.is_ascii_digit(),
+        });
+    if !shaped {
+        return None;
+    }
+    let number = |range: std::ops::Range<usize>| date[range].parse::<i64>().ok();
+    let (year, month, day) = (number(0..4)?, number(5..7)?, number(8..10)?);
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        1..=12 => 31,
+        _ => return None,
+    };
+    (1..=days).contains(&day).then_some((year, month, day))
 }
 
 /// Days from 1970-01-01 to a calendar date (Howard Hinnant's algorithm).
@@ -29,6 +47,18 @@ fn days_from_civil((year, month, day): (i64, i64, i64)) -> i64 {
     let of_era = year.rem_euclid(400);
     let of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
     era * 146_097 + of_era * 365 + of_era / 4 - of_era / 100 + of_year - 719_468
+}
+
+/// The year a day falls in, from days since 1970-01-01 (the inverse of
+/// `days_from_civil`, for the year alone).
+fn year_of(days: i64) -> i64 {
+    let shifted = days + 719_468;
+    let era = shifted.div_euclid(146_097);
+    let of_era = shifted.rem_euclid(146_097);
+    let year_of_era = (of_era - of_era / 1_460 + of_era / 36_524 - of_era / 146_096) / 365;
+    let of_year = of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    // March-based: January and February belong to the next civil year.
+    era * 400 + year_of_era + i64::from(of_year >= 306)
 }
 
 /// How a due date reads on a day.
@@ -56,10 +86,16 @@ pub fn due_label(date: &str, today: i64) -> Due {
         ..0 => (format!("Overdue {}d", -days), CardTone::Bad),
         0 => ("Due today".to_owned(), CardTone::Attention),
         1 => ("Due tomorrow".to_owned(), CardTone::Attention),
-        _ => (
-            format!("Due {} {}", MONTHS[(parts.1 - 1) as usize], parts.2),
-            CardTone::Neutral,
-        ),
+        _ => {
+            let month = MONTHS[(parts.1 - 1) as usize];
+            // Another year is said, so next December is not mistaken for this one.
+            let label = if parts.0 == year_of(today) {
+                format!("Due {month} {}", parts.2)
+            } else {
+                format!("Due {month} {}, {}", parts.2, parts.0)
+            };
+            (label, CardTone::Neutral)
+        }
     };
     Due {
         label,
@@ -232,8 +268,40 @@ mod tests {
             due_label("2026-12-31", days_from_civil((2027, 1, 2))).label,
             "Overdue 2d"
         );
-        assert_eq!(due("soon").label, "soon");
-        assert!(!due("soon").soon);
+        assert_eq!(due("2027-12-04").label, "Due Dec 4, 2027");
+        // Anything but a real YYYY-MM-DD date is shown as it came.
+        for raw in [
+            "soon",
+            "",
+            "x-y-z",
+            "2026-13-01",
+            "2026-02-30",
+            "2026-1-5",
+            "+2026-11-23",
+            "99999999999999999-01-01",
+        ] {
+            assert_eq!(due(raw).label, raw);
+            assert!(!due(raw).soon);
+        }
+        assert_eq!(
+            due_label("2028-02-29", days_from_civil((2028, 2, 28))).label,
+            "Due tomorrow"
+        );
+    }
+
+    #[test]
+    fn a_days_year_is_read_back_from_its_count() {
+        for (date, year) in [
+            ((1970, 1, 1), 1970),
+            ((1999, 12, 31), 1999),
+            ((2000, 1, 1), 2000),
+            ((2024, 2, 29), 2024),
+            ((2026, 11, 23), 2026),
+            ((2026, 12, 31), 2026),
+            ((2027, 1, 1), 2027),
+        ] {
+            assert_eq!(year_of(days_from_civil(date)), year, "{date:?}");
+        }
     }
 
     #[test]

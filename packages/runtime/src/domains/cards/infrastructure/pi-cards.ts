@@ -166,7 +166,10 @@ const row = obj({
   ...facts,
   progress: opt(
     obj(
-      { done: int({ minimum: 0 }), total: int({ minimum: 1 }) },
+      {
+        done: int({ minimum: 0, maximum: 99_999 }),
+        total: int({ minimum: 1, maximum: 99_999 }),
+      },
       { description: "Checklist steps done." },
     ),
   ),
@@ -183,6 +186,7 @@ const DESCRIPTION = [
   'Times are ISO 8601 with a UTC offset ("YYYY-MM-DDTHH:MM:SS+03:00"), or a date ("YYYY-MM-DD") for an all-day event or a due date; leave due out once a task is done.',
   "Copy every url exactly from a tool result and leave it out when you have none; never write one from memory.",
   "Badge tones: good for done or passing, attention when the owner should look, bad for failing or urgent.",
+  "people, tags, progress, due, key and trailing are for list and board rows; a timeline ignores them.",
   "Say what a card leaves out in more.",
 ].join(" ");
 
@@ -240,7 +244,7 @@ export function createCardTools(
                     "purple",
                   ]),
                 ),
-                count: opt(int({ minimum: 0 })),
+                count: opt(int({ minimum: 0, maximum: 99_999 })),
                 rows: arr(row),
               }),
               { maxItems: 12 },

@@ -54,8 +54,17 @@ export const MAX_COLUMN_ROWS = 10;
 /** Steps of an item's checklist a card lists; the rest are only counted. */
 export const MAX_ITEM_STEPS = 5;
 
-/** How much of an item's description a card shows. */
+/** How much of an item's description a card shows, in characters. */
 const MAX_BODY_LENGTH = 600;
+
+/** The most a count or a checklist can be: clients hold them in 32 bits. */
+const MAX_COUNT = 99_999;
+
+/** A whole number from 0 to `MAX_COUNT`, whatever was passed. */
+const counted = (value: number | undefined) =>
+  Number.isFinite(value)
+    ? Math.min(MAX_COUNT, Math.max(0, Math.trunc(value!)))
+    : 0;
 
 /** Colours given in turn to columns the bot did not colour. */
 const COLUMN_COLORS: CardColor[] = [
@@ -220,11 +229,8 @@ function facts(
 
 /** One row of a list or a board. */
 function row(input: RowInput, fallbackSource: string | undefined, t: Tally) {
-  const total = Math.trunc(input.progress?.total ?? 0);
-  const done = Math.min(
-    total,
-    Math.max(0, Math.trunc(input.progress?.done ?? 0)),
-  );
+  const total = counted(input.progress?.total);
+  const done = Math.min(total, counted(input.progress?.done));
   return {
     ...(input.key?.trim() ? { key: input.key.trim() } : {}),
     ...item(input, sourcesOf(input, fallbackSource), t),
@@ -479,7 +485,7 @@ export function buildCard(
           (label
             ? (free[next++ % Math.max(free.length, 1)] ?? "blue")
             : ("gray" as const)),
-        count: Math.max(Math.trunc(column.count ?? 0), titled.length),
+        count: Math.max(counted(column.count), titled.length),
         rows: titled
           .slice(0, MAX_COLUMN_ROWS)
           .map((each) => row(each, input.source, tally)),
@@ -517,9 +523,12 @@ export function buildCard(
       });
     }
     const whole = input.item.body?.trim();
+    // Cut between characters, never inside one: half an emoji is not text,
+    // and a client that reads strictly would refuse the whole session.
+    const characters = whole ? Array.from(whole) : [];
     const text =
-      whole && whole.length > MAX_BODY_LENGTH
-        ? `${whole.slice(0, MAX_BODY_LENGTH).trimEnd()}…`
+      characters.length > MAX_BODY_LENGTH
+        ? `${characters.slice(0, MAX_BODY_LENGTH).join("").trimEnd()}…`
         : whole;
     const listed = (input.item.steps ?? [])
       .map((step) => ({ label: step.label.trim(), done: !!step.done }))

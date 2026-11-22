@@ -5414,12 +5414,31 @@ fn a_board_card_counts_its_columns_and_an_item_card_opens_one_task() {
 fn a_card_fits_a_narrow_window() {
     for scene in [scenes::card_narrow, scenes::card_board_narrow] {
         let rt = render_sized(scene, false, (360.0, 900.0));
-        // `rect` is [x, y, width, height].
+        // `rect` is [x, y, width, height]. The card clips what overflows
+        // it, so its rows' own parts are checked too.
         let card = element(&rt, "rd-card-card-1").rect;
         assert!(
             card[0] >= 0.0 && card[0] + card[2] <= 360.0,
             "the card stays inside the window: {card:?}"
         );
+        let inside = rt
+            .elements()
+            .into_iter()
+            .filter(|e| {
+                e.key
+                    .as_deref()
+                    .is_some_and(|key| key.starts_with("rd-card-card-1-"))
+            })
+            .collect::<Vec<_>>();
+        assert!(inside.len() > 3, "the card's rows are keyed");
+        for part in inside {
+            assert!(
+                part.rect[0] >= card[0] && part.rect[0] + part.rect[2] <= card[0] + card[2] + 0.5,
+                "{:?} stays inside the card: {:?} in {card:?}",
+                part.key,
+                part.rect
+            );
+        }
     }
 }
 

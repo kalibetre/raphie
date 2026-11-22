@@ -24,7 +24,11 @@ test("a due date is red once past, amber today and tomorrow, and plain later", (
   });
   const later = dueLabel("2026-12-02", today);
   expect(later).toMatchObject({ tone: "neutral", soon: false });
-  expect(later.label).toMatch(/^Due .*2/);
+  // Written out, not the raw date; and with its year only in another year.
+  expect(later.label).toMatch(/^Due (Dec 2|2 Dec)$/);
+  expect(dueLabel("2027-12-04", today).label).toMatch(
+    /^Due (Dec 4, 2027|4 Dec 2027)$/,
+  );
   // Across a month end and a year end the count is still in days.
   expect(dueLabel("2026-12-31", "2027-01-02").label).toBe("Overdue 2d");
   expect(dueLabel("soon", today)).toEqual({
@@ -39,4 +43,5 @@ test("a person is drawn as their first and last initials", () => {
   expect(initials("  mara ")).toBe("M");
   expect(initials("Ana de la Cruz")).toBe("AC");
   expect(initials("")).toBe("");
+  expect(initials("😀 Smile")).toBe("😀S");
 });
