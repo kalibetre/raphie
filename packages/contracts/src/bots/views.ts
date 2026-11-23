@@ -19,13 +19,9 @@ export type BotProfile = {
   /** What the bot may change by itself. */
   selfUpdates: SelfUpdates;
   /**
-   * Standing rules for this bot: what the owner wants it to do every time.
-   * It reads them in every conversation, after the owner's own rules.
-   */
-  rules: string[];
-  /**
-   * How this bot works with its own tools and services, kept by the owner
-   * and the bot together. Empty until one of them writes it.
+   * How this bot works, with its own tools and services and what the owner
+   * wants done every time, kept by the owner and the bot together. Empty
+   * until one of them writes it.
    */
   instructions: string;
   /** Who saved this revision; absent on revisions saved before bots could. */
@@ -48,8 +44,6 @@ export type SaveBotProfile = Pick<
    * left out, as from a client older than it, keeps its value too.
    */
   selfUpdates?: Partial<SelfUpdates>;
-  /** Omitted: a new bot starts with none, an edit keeps them. */
-  rules?: string[];
   /** Omitted: a new bot starts with none, an edit keeps them. */
   instructions?: string;
 };
@@ -91,13 +85,9 @@ export type OwnerProfile = {
   /** A few lines about the owner, in their words. */
   about: string;
   /**
-   * Standing rules for every bot: what the owner wants done every time,
-   * whichever bot they are talking to.
-   */
-  rules: string[];
-  /**
    * Instructions for every bot, kept by the owner and the bots together:
-   * Raphie's own guidance on its built-in tools until either changes it.
+   * how to work with the tools every bot has and what the owner wants done
+   * every time. Raphie's own guidance until either changes it.
    */
   instructions: string;
   /** Whether `instructions` is still Raphie's, which follows each release. */
@@ -107,10 +97,8 @@ export type OwnerProfile = {
 
 export type SaveOwnerProfile = Omit<
   OwnerProfile,
-  "updatedAt" | "rules" | "instructions" | "instructionsDefault"
+  "updatedAt" | "instructions" | "instructionsDefault"
 > & {
-  /** Omitted, as from a client older than rules, keeps them. */
-  rules?: string[];
   /** Omitted keeps them; null goes back to Raphie's. */
   instructions?: string | null;
 };

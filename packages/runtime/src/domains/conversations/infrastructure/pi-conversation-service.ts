@@ -39,7 +39,6 @@ import {
   ownerInstructions,
   selfUpdateInstructions,
 } from "../../bots/domain/owner.ts";
-import { rulesInstructions } from "../../bots/domain/rules.ts";
 import { Cards } from "../../cards/infrastructure/card-store.ts";
 import {
   channelNames,
@@ -297,7 +296,6 @@ export class ChatService implements ConversationCommands {
     | "replyStyle"
     | "revision"
     | "selfUpdates"
-    | "rules"
     | "instructions"
   >;
   /** The owner, shared by every bot; absent in tests that run one bot. */
@@ -716,7 +714,6 @@ export class ChatService implements ConversationCommands {
               ? `Your name is ${profile.name}. ${profile.description}\nYour personality (revision ${profile.revision}):\n${profile.personality}\n`
               : "You are Raphie, a concise and thoughtful personal assistant. ") +
             ownerInstructions(owner) +
-            rulesInstructions(owner.rules, profile?.rules ?? []) +
             (profile
               ? selfUpdateInstructions(profile.selfUpdates, owner)
               : "") +

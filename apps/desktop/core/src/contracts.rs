@@ -56,10 +56,6 @@ pub struct BotProfile {
     /// saved before bots could.
     #[serde(default)]
     pub changed_by: Option<String>,
-    /// Standing rules for this bot: what the owner wants it to do every
-    /// time. Older runtimes omit them: none.
-    #[serde(default)]
-    pub rules: Vec<String>,
     /// How this bot works with its own tools and services, kept by the
     /// owner and the bot together. Older runtimes omit them: none.
     #[serde(default)]
@@ -270,9 +266,6 @@ pub struct OwnerProfile {
     pub time_zone: String,
     #[serde(default)]
     pub about: String,
-    /// Standing rules for every bot. Older runtimes omit them: none.
-    #[serde(default)]
-    pub rules: Vec<String>,
     /// Instructions for every bot: Raphie's own until the owner or a bot
     /// changes them. Older runtimes omit them: none.
     #[serde(default)]
@@ -294,11 +287,6 @@ pub struct SaveOwnerProfile {
     pub call_me: String,
     pub time_zone: String,
     pub about: String,
-    /// `None` leaves them out: the runtime keeps the rules it has. Sent
-    /// only when they changed, so a runtime older than rules still saves
-    /// the rest.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rules: Option<Vec<String>>,
     /// `None` leaves them out and the runtime keeps them; `Some(None)` is
     /// sent as `null` and goes back to Raphie's own. Sent only when they
     /// changed, so Raphie's stay Raphie's and keep following releases.
@@ -320,11 +308,6 @@ pub struct UpdateBotProfile {
     /// `None` leaves them out: the runtime keeps what the bot has.
     #[serde(rename = "selfUpdates", skip_serializing_if = "Option::is_none")]
     pub self_updates: Option<SelfUpdates>,
-    /// `None` leaves them out: the runtime keeps the rules the bot has.
-    /// Sent only when they changed, so a runtime older than rules still
-    /// saves the rest.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rules: Option<Vec<String>>,
     /// `None` leaves them out: the runtime keeps the bot's. Sent only when
     /// they changed.
     #[serde(skip_serializing_if = "Option::is_none")]

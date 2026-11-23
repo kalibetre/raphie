@@ -266,7 +266,7 @@ export class BotHost implements BotProfiles {
 
   /**
    * Gives bot `id` its profile: read at the start of each turn, and the
-   * tools to change its personality, its rules and the owner's profile when
+   * tools to change its personality, its instructions and the owner's profile when
    * allowed.
    */
   private bind(gateway: Gateway, id: string) {
@@ -276,7 +276,6 @@ export class BotHost implements BotProfiles {
         profile: () => this.profiles.read(id),
         updatePersonality: (personality) =>
           this.profiles.updatePersonality(id, personality),
-        updateRules: (rules) => this.profiles.updateRules(id, rules),
         updateInstructions: (instructions) =>
           this.profiles.updateInstructions(id, instructions),
         owner: () => this.profiles.owner(),

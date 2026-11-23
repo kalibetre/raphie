@@ -11,15 +11,8 @@ import {
   SelectValue,
 } from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
-import {
-  rulesOf,
-  rulesProblem,
-  rulesText,
-  sameRules,
-} from "../application/rules";
 import { useOwner } from "../infrastructure/use-owner";
 import { InstructionsField } from "./instructions-field";
-import { RulesField } from "./rules-field";
 import { SaveBar } from "./save-bar";
 import { useSettingsGuard } from "./use-settings-guard";
 
@@ -27,18 +20,14 @@ const NOT_SET = "none";
 
 type Saved = Omit<OwnerProfile, "updatedAt">;
 
-type Draft = Omit<Saved, "rules" | "instructionsDefault"> & {
-  /** The rules as they are edited, one a line. */
-  rules: string;
-};
+type Draft = Omit<Saved, "instructionsDefault">;
 
 const same = (a: Draft, b: Draft) =>
   a.name === b.name &&
   a.callMe === b.callMe &&
   a.timeZone === b.timeZone &&
   a.about === b.about &&
-  a.instructions.trim() === b.instructions.trim() &&
-  sameRules(rulesOf(a.rules), rulesOf(b.rules));
+  a.instructions.trim() === b.instructions.trim();
 
 /** This device's time zone, offered when the owner has not chosen one. */
 const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -77,9 +66,8 @@ function OwnerForm({
 }) {
   const owner = useOwner();
   const { instructionsDefault, ...fields } = saved;
-  const start: Draft = { ...fields, rules: rulesText(saved.rules) };
+  const start: Draft = fields;
   const [draft, setDraft] = useState<Draft>(start);
-  const problem = rulesProblem(rulesOf(draft.rules));
   const setMessage = onMessage;
   const zones = useMemo(() => Intl.supportedValuesOf("timeZone"), []);
   const dirty = !same(draft, start);
@@ -99,7 +87,6 @@ function OwnerForm({
         callMe: draft.callMe.trim(),
         timeZone: draft.timeZone,
         about: draft.about.trim(),
-        rules: rulesOf(draft.rules),
         // Unchanged, Raphie's stay Raphie's and keep following releases.
         ...(draft.instructions.trim() === saved.instructions.trim()
           ? {}
@@ -227,22 +214,11 @@ function OwnerForm({
           </p>
         </div>
       </section>
-      <RulesField
-        id="owner-rules"
-        title="Rules for every bot"
-        note="What you want done every time, whichever bot you are talking to. Each bot reads these in every conversation, before its own rules."
-        placeholder={
-          "Give times on a 12-hour clock, in my time zone.\nLeave all-day events out of my schedule."
-        }
-        value={draft.rules}
-        pending={pending}
-        onChange={(rules) => set({ rules })}
-      />
       <InstructionsField
         id="owner-instructions"
         title="Instructions for every bot"
-        note="How every bot works with the tools Raphie gives them all, such as cards and questions, and anything else you want every bot to know about its tools. Each bot reads these in every conversation, before its own instructions, and the bots you allow to update your profile add to them when you ask."
-        placeholder="When I ask about my day, show it as a timeline card."
+        note="What you want every bot to do every time, and how they work with the tools Raphie gives them all, such as cards and questions. Each bot follows these in every conversation, before its own instructions, and the bots you allow to update your profile add to them when you ask."
+        placeholder="- Give times on a 12-hour clock, in my time zone."
         value={draft.instructions}
         pending={pending}
         status={
@@ -273,7 +249,7 @@ function OwnerForm({
           owner.save.error instanceof Error ? owner.save.error.message : ""
         }
         pending={pending}
-        canSave={dirty && !pending && !problem}
+        canSave={dirty && !pending}
         canDiscard={dirty && !pending}
         onDiscard={() => {
           setDraft(start);

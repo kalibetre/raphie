@@ -370,7 +370,6 @@ mod tests {
 
     fn bot(id: &str, name: &str) -> BotProfile {
         BotProfile {
-            rules: Vec::new(),
             instructions: String::new(),
             id: id.into(),
             name: name.into(),

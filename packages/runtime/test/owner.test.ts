@@ -48,7 +48,6 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       callMe: "",
       timeZone: "",
       about: "",
-      rules: [],
       instructions: DEFAULT_INSTRUCTIONS,
       instructionsDefault: true,
       updatedAt: null,
@@ -67,14 +66,24 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
     ).toBe(400);
     const clock = "Give times on a 12-hour clock.";
     expect(
-      (await call("PUT", { ...owner, rules: [` ${clock}`, clock] })).status,
+      (
+        await call("PUT", {
+          ...owner,
+          instructions: `${DEFAULT_INSTRUCTIONS}\n\n## Rules\n- ${clock}`,
+        })
+      ).status,
     ).toBe(200);
     expect(
-      (await call("PUT", { ...owner, rules: ["x".repeat(301)] })).status,
+      (await call("PUT", { ...owner, instructions: "x".repeat(16_001) }))
+        .status,
     ).toBe(400);
-    // A client older than rules saves the profile without them, and they stay.
+    // Rules are instructions now; a list of them is refused.
+    expect((await call("PUT", { ...owner, rules: [clock] })).status).toBe(400);
+    // A profile saved without instructions keeps them.
     expect((await call("PUT", owner)).status).toBe(200);
-    expect(await (await call("GET")).json()).toMatchObject({ rules: [clock] });
+    expect(await (await call("GET")).json()).toMatchObject({
+      instructionsDefault: false,
+    });
 
     await server.close();
     await host.close();
@@ -89,8 +98,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       name: "Research",
       description: "",
       personality: "Cite sources.",
-      rules: ["Link every source."],
-      instructions: "My calendar is in Executor.",
+      instructions: "My calendar is in Executor.\n- Link every source.",
     });
     for (const id of ["default", second.id]) {
       const { gateway } = host.runtime(id);
@@ -115,7 +123,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       true,
     );
     expect(told[0]).toContain("Mornings are for deep work.");
-    // Every bot reads the owner's rules; a bot's own rules stay with it.
+    // Every bot reads the instructions for every bot; a bot's own stay with it.
     expect(told.every((p) => p.includes(`- ${clock}`))).toBe(true);
     expect(told.filter((p) => p.includes("- Link every source."))).toHaveLength(
       1,
@@ -145,7 +153,6 @@ test("an owner who says nothing is not described, and times read like a clock", 
       callMe: "",
       timeZone: "",
       about: "",
-      rules: [],
       instructions: "",
       instructionsDefault: false,
       updatedAt: null,

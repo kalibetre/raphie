@@ -459,7 +459,6 @@ fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
     let host = FakeHost::start();
     let (mut driver, _) = signed_in(&host);
     let update = |revision| UpdateBotProfile {
-        rules: None,
         instructions: None,
         name: "Research".into(),
         description: "Reads and summarises".into(),
@@ -1302,7 +1301,6 @@ fn the_owner_profile_loads_saves_and_reports_a_refusal() {
         driver.until("the save", |m, _| !m.saving_owner);
     };
     let owner = |time_zone: &str| SaveOwnerProfile {
-        rules: None,
         instructions: None,
         name: "Hana Girma".into(),
         call_me: "Hana".into(),
@@ -2569,7 +2567,6 @@ fn self_updates_are_saved_and_the_built_in_personalities_load() {
     driver.send(Command::SaveProfile {
         bot_id: "b-research".into(),
         update: UpdateBotProfile {
-            rules: None,
             instructions: None,
             name: "Research".into(),
             description: String::new(),

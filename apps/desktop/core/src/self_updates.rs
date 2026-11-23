@@ -190,7 +190,6 @@ mod tests {
     #[test]
     fn an_owner_note_holds_only_while_the_profile_is_as_the_bot_saved_it() {
         let owner = OwnerProfile {
-            rules: Vec::new(),
             instructions: String::new(),
             instructions_default: false,
             name: "Hana Girma".into(),

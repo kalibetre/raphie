@@ -8,7 +8,6 @@
 use std::sync::OnceLock;
 
 use raphie_core::contracts::{OwnerProfile, SaveOwnerProfile};
-use raphie_core::rules::{rules_of, rules_problem, rules_text};
 use rune::TextEdit;
 use rune_kit::ComboboxState;
 
@@ -32,8 +31,6 @@ pub struct OwnerDraft {
     /// An IANA time zone, or empty for none.
     pub time_zone: String,
     pub about: TextEdit,
-    /// The rules for every bot as they are edited, one a line.
-    pub rules: TextEdit,
     /// The instructions for every bot as they are edited.
     pub instructions: TextEdit,
     /// The searchable list of time zones.
@@ -49,7 +46,6 @@ impl OwnerDraft {
             call_me: TextEdit::new(""),
             time_zone: String::new(),
             about: TextEdit::new(""),
-            rules: TextEdit::new(""),
             instructions: TextEdit::new(""),
             zones: ComboboxState::default(),
         }
@@ -63,7 +59,6 @@ impl OwnerDraft {
             call_me: TextEdit::new(saved.call_me.clone()),
             time_zone: saved.time_zone.clone(),
             about: TextEdit::new(saved.about.clone()),
-            rules: TextEdit::new(rules_text(&saved.rules)),
             instructions: TextEdit::new(saved.instructions.clone()),
             zones: ComboboxState::default(),
         }
@@ -76,7 +71,6 @@ impl OwnerDraft {
                 || self.call_me.text != saved.call_me
                 || self.time_zone != saved.time_zone
                 || self.about.text != saved.about
-                || rules_of(&self.rules.text) != saved.rules
                 || self.instructions.text.trim() != saved.instructions.trim()
         })
     }
@@ -100,15 +94,7 @@ impl OwnerDraft {
                 "The instructions for every bot are at most 16,000 characters.".to_owned(),
             );
         }
-        rules_problem(&rules_of(&self.rules.text))
-    }
-
-    /// The rules to send: those typed, when they differ from the saved
-    /// ones.
-    fn changed_rules(&self) -> Option<Vec<String>> {
-        let rules = rules_of(&self.rules.text);
-        let saved = self.saved.as_ref().map(|saved| &saved.rules);
-        (saved != Some(&rules)).then_some(rules)
+        None
     }
 
     /// The instructions to send: those typed, when they differ from the
@@ -128,7 +114,6 @@ impl OwnerDraft {
             call_me: saved.call_me.clone(),
             time_zone: saved.time_zone.clone(),
             about: saved.about.clone(),
-            rules: None,
             instructions: Some(None),
         })
     }
@@ -140,7 +125,6 @@ impl OwnerDraft {
             return None;
         }
         Some(SaveOwnerProfile {
-            rules: self.changed_rules(),
             // Unchanged, Raphie's stay Raphie's and keep following releases.
             instructions: self.changed_instructions().map(Some),
             name: self.name.text.trim().to_owned(),
@@ -205,7 +189,6 @@ mod tests {
 
     fn saved() -> OwnerProfile {
         OwnerProfile {
-            rules: Vec::new(),
             instructions: String::new(),
             instructions_default: false,
             name: "Hana Girma".into(),
@@ -238,33 +221,23 @@ mod tests {
     }
 
     #[test]
-    fn rules_are_part_of_the_form_and_of_every_save() {
+    fn instructions_are_sent_only_when_changed_and_reset_sends_null() {
         let mut draft = OwnerDraft::of(&OwnerProfile {
-            rules: vec!["Give times on a 12-hour clock.".into()],
+            instructions: "- Give times on a 12-hour clock.".into(),
             ..saved()
         });
-        assert_eq!(draft.rules.text, "Give times on a 12-hour clock.");
-        // A blank line or a bullet is not a change, and unchanged rules are
-        // left out of a save.
-        draft.rules = TextEdit::new("- Give times on a 12-hour clock.\n\n");
+        draft.instructions = TextEdit::new("- Give times on a 12-hour clock.\n");
         assert!(!draft.is_dirty());
-        assert_eq!(draft.update().and_then(|update| update.rules), None);
-        draft.rules = TextEdit::new("Give times on a 12-hour clock.\nLeave out all-day events.");
-        assert!(draft.is_dirty());
+        assert_eq!(draft.update().and_then(|update| update.instructions), None);
+        draft.instructions = TextEdit::new("- Leave out all-day events.");
         assert_eq!(
-            draft.update().and_then(|update| update.rules),
-            Some(vec![
-                "Give times on a 12-hour clock.".to_owned(),
-                "Leave out all-day events.".to_owned()
-            ])
+            draft.update().and_then(|update| update.instructions),
+            Some(Some("- Leave out all-day events.".into()))
         );
-        let many: Vec<String> = (0..21).map(|n| format!("Rule {n}.")).collect();
-        draft.rules = TextEdit::new(many.join("\n"));
         assert_eq!(
-            draft.problem().as_deref(),
-            Some("Keep to 20 rules; there are 21.")
+            draft.reset_instructions().map(|update| update.instructions),
+            Some(Some(None))
         );
-        assert_eq!(draft.update(), None);
     }
 
     #[test]

@@ -15,24 +15,19 @@ allows its self-updates. Personality guides its behavior without granting
 capabilities or access.
 
 **Self-updates**: What a bot may change by itself, per bot: its own
-personality, standing rules and instructions, the owner profile, and its
+personality and instructions, the owner profile, and its
 skills. Each change
 is saved at once and can be undone.
 
-**Standing rule**: One thing the owner wants done every time, in a sentence.
-A bot reads its rules in every conversation: the owner's rules for every bot,
-kept in the owner profile, then its own, kept in its profile. Rules say how to
-work and grant nothing.
-_Avoid_: Using memory for a rule; a bot searches memory only when it thinks to.
-
-**Instructions**: Notes on how to work with tools, kept by the owner and the
-bots together. One set is for every bot, kept in the owner profile, and
-starts as Raphie's own guidance on the tools every bot has, following each
-release until changed; one set is each bot's own, kept in its profile, and
-starts empty. A bot reads both in every conversation. Instructions grant
-nothing.
-_Avoid_: A purpose per MCP connection; what a connection is for goes in the
-bot's instructions.
+**Instructions**: What the owner and the bots keep written down about how
+the bots work: what the owner wants done every time, and how to work with
+their tools. One set is for every bot, kept in the owner profile, and starts
+as Raphie's own guidance on the tools every bot has, following each release
+until changed; one set is each bot's own, kept in its profile, and starts
+empty. A bot follows both in every conversation. Instructions grant nothing.
+_Avoid_: Standing rules, a separate list beside instructions; a purpose per
+MCP connection; using memory for what must be done every time, since a bot
+searches memory only when it thinks to.
 
 **Skill**: Instructions for one kind of task in the standard Agent Skills
 format: a folder in a bot's workspace, `skills/<name>/`, holding a `SKILL.md`.
@@ -41,7 +36,7 @@ task matches it. Skills never grant capabilities.
 
 **Owner profile**: What the owner tells every bot about themselves: their
 name, what to call them, their time zone, a few lines about them, and their
-standing rules and instructions for every bot. Shared by
+instructions for every bot. Shared by
 every bot; it describes the owner and grants nothing. Shown as **You** in
 Settings.
 _Avoid_: User profile, account, About you.

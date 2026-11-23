@@ -8,7 +8,6 @@ import {
 import type { BotProfiles } from "../../application/ports.ts";
 import { MAX_INSTRUCTIONS_LENGTH } from "../../domain/instructions.ts";
 import { PERSONALITY_PRESETS } from "../../domain/personalities.ts";
-import { MAX_RULE_LENGTH, MAX_RULES } from "../../domain/rules.ts";
 
 const profile = z
   .object({
@@ -31,10 +30,6 @@ const profile = z
         skills: z.boolean().optional(),
       })
       .strict()
-      .optional(),
-    rules: z
-      .array(z.string().trim().min(1).max(MAX_RULE_LENGTH))
-      .max(MAX_RULES)
       .optional(),
     instructions: z.string().trim().max(MAX_INSTRUCTIONS_LENGTH).optional(),
     color: z

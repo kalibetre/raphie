@@ -24,18 +24,89 @@ export function cleanInstructions(text: string) {
 }
 
 /**
+ * Rules saved before they became instructions, as a list at the top of
+ * them. Each rule is one line, once; none leaves the text as it was.
+ */
+export function withRules(instructions: string, rules: readonly string[]) {
+  const kept = [
+    ...new Set(
+      rules
+        .map((rule) =>
+          rule
+            .replace(/\s+/g, " ")
+            .replace(/^[-*•]\s+/, "")
+            .trim(),
+        )
+        .filter(Boolean),
+    ),
+  ];
+  if (!kept.length) return instructions;
+  const list = `## Rules\n${kept.map((rule) => `- ${rule}`).join("\n")}`;
+  return cleanInstructions(
+    instructions.trim() ? `${list}\n\n${instructions.trim()}` : list,
+  );
+}
+
+/** One change to a set of instructions, as a bot asks for it. */
+export type InstructionsEdit =
+  | { add: string }
+  | { replace: string; with: string }
+  | { instructions: string };
+
+/**
+ * `current` with `edit` made: a line or section added at the end, one
+ * passage replaced (or removed, with nothing), or the whole text. Says why
+ * when it cannot be made.
+ */
+export function editInstructions(
+  current: string,
+  edit: InstructionsEdit,
+): { text: string } | { problem: string } {
+  let text: string;
+  if ("add" in edit) {
+    const added = edit.add.trim();
+    if (!added) return { problem: "Say what to add." };
+    text = current.trim() ? `${current.trim()}\n${added}` : added;
+  } else if ("replace" in edit) {
+    const from = edit.replace.trim();
+    if (!from) return { problem: "Say which text to replace." };
+    const at = current.indexOf(from);
+    if (at < 0)
+      return {
+        problem:
+          "That text is not in the instructions. Copy it exactly as they read, or add instead.",
+      };
+    if (current.indexOf(from, at + from.length) >= 0)
+      return {
+        problem:
+          "That text is in the instructions more than once. Give enough of it to tell which.",
+      };
+    text =
+      current.slice(0, at) + edit.with.trim() + current.slice(at + from.length);
+    // Removing a line leaves no blank line in its place.
+    text = text.replace(/\n{3,}/g, "\n\n");
+  } else text = edit.instructions;
+  // Checked before trimming to the bound, so nothing is cut off unseen.
+  return text.trim().length > MAX_INSTRUCTIONS_LENGTH
+    ? {
+        problem: `The instructions would be over ${MAX_INSTRUCTIONS_LENGTH.toLocaleString("en")} characters. Shorten or remove something first.`,
+      }
+    : { text: cleanInstructions(text) };
+}
+
+/**
  * Both sets of instructions as a bot reads them in every conversation:
  * those for every bot, then its own. Either is left out when empty.
  */
 export function instructionsPrompt(everyBot: string, own: string) {
-  const grants =
-    "They say how to work with your tools and grant no capabilities or approvals.";
+  const follow =
+    "Follow them in every conversation without being reminded. They say how to work and grant no capabilities or approvals.";
   return (
     (everyBot.trim()
-      ? `Instructions for every bot, kept by the owner and the bots together. ${grants}\n${everyBot.trim()}\n`
+      ? `Instructions for every bot, kept by the owner and the bots together. ${follow}\n${everyBot.trim()}\n`
       : "") +
     (own.trim()
-      ? `Your own instructions, kept by the owner and you together. ${grants}\n${own.trim()}\n`
+      ? `Your own instructions, kept by the owner and you together. ${follow}\n${own.trim()}\n`
       : "")
   );
 }

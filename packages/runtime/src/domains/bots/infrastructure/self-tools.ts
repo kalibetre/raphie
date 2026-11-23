@@ -6,17 +6,17 @@ import type {
   SaveOwnerProfile,
 } from "@raphie/contracts";
 
-import { MAX_INSTRUCTIONS_LENGTH } from "../domain/instructions.ts";
+import {
+  editInstructions,
+  MAX_INSTRUCTIONS_LENGTH,
+} from "../domain/instructions.ts";
 import { knownTimeZone } from "../domain/owner.ts";
-import { cleanRule, MAX_RULE_LENGTH, MAX_RULES } from "../domain/rules.ts";
 
 /** One bot's view of what it may change about itself and the owner. */
 export type SelfProfile = {
   profile(): BotProfile;
   /** Saves a new revision; unchanged text saves nothing. */
   updatePersonality(personality: string): BotProfile;
-  /** Saves a new revision; unchanged rules save nothing. */
-  updateRules(rules: string[]): BotProfile;
   /** Saves a new revision; unchanged text saves nothing. */
   updateInstructions(instructions: string): BotProfile;
   owner(): OwnerProfile;
@@ -29,10 +29,9 @@ const text = (value: string, isError = false) => ({
 });
 
 /**
- * `update_personality`, `update_owner_profile`, `save_rule` and
- * `update_instructions`: a bot changing its own personality, what every bot
- * knows about the owner, the standing rules it and every bot follow, or the
- * instructions it and every bot read on working with their tools. Each is allowed per bot in
+ * `update_personality`, `update_owner_profile` and `update_instructions`:
+ * a bot changing its own personality, what every bot knows about the owner,
+ * or the instructions it and every bot follow. Each is allowed per bot in
  * its profile; a change is saved at once and the owner can undo it.
  */
 export function createSelfTools(self: SelfProfile) {
@@ -96,71 +95,14 @@ export function createSelfTools(self: SelfProfile) {
         },
       }),
       defineTool({
-        name: "save_rule",
-        description:
-          'Save, change or remove a standing rule: something the owner wants done every time, said with words such as "always", "never" or "from now on". You read your rules in every conversation. Write one short, self-contained sentence. To change or remove a rule, give its current text in replaces; leave rule empty to remove it. everyBot saves it for all of the owner\'s bots, for a rule about the owner and not about your own work.',
-        parameters: obj({
-          rule: str({ maxLength: MAX_RULE_LENGTH }),
-          replaces: opt(str({ maxLength: MAX_RULE_LENGTH })),
-          everyBot: opt(bool()),
-        }),
-        replay: "safe",
-        execute: async (args) => {
-          const allowed = self.profile().selfUpdates;
-          if (args.everyBot && !allowed.owner)
-            return text(
-              allowed.personality
-                ? "The owner has not allowed you to save rules for every bot. Save it for yourself, without everyBot, or tell them they can add it in Settings → You."
-                : "The owner has not allowed you to save rules. They can add it in Settings.",
-              true,
-            );
-          if (!args.everyBot && !allowed.personality)
-            return text(
-              "The owner has not allowed you to change how you work. They can add the rule in Settings → Profile.",
-              true,
-            );
-          const current = args.everyBot
-            ? self.owner().rules
-            : self.profile().rules;
-          const rule = cleanRule(args.rule);
-          const replaces = args.replaces && cleanRule(args.replaces);
-          if (replaces && !current.includes(replaces))
-            return text(
-              `No rule reads "${replaces}". The rules are: ${current.length ? current.map((item) => `"${item}"`).join("; ") : "none"}.`,
-              true,
-            );
-          if (!rule && !replaces)
-            return text("Say the rule, or which rule to remove.", true);
-          if (rule && current.includes(rule) && rule !== replaces)
-            return text("That rule is already saved.");
-          const next = replaces
-            ? current.flatMap((item) =>
-                item === replaces ? (rule ? [rule] : []) : [item],
-              )
-            : [...current, rule];
-          if (next.length > MAX_RULES)
-            return text(
-              `There are already ${MAX_RULES} rules. Replace or remove one first.`,
-              true,
-            );
-          if (args.everyBot) {
-            const { updatedAt: _, ...owner } = self.owner();
-            self.saveOwner({ ...owner, rules: next });
-          } else self.updateRules(next);
-          const whose = args.everyBot ? "Every bot reads" : "You read";
-          return text(
-            rule
-              ? `Saved. ${whose} it in every conversation, from the next message.`
-              : `Removed. ${whose} the rules without it from the next message.`,
-          );
-        },
-      }),
-      defineTool({
         name: "update_instructions",
         description:
-          "Replace your instructions on working with your tools and services, such as which connection holds the owner's calendar or how they want a board shown, when the owner asks you to note it. everyBot replaces the instructions every bot reads instead of your own. Send the whole text, keeping what still applies; an empty text clears your own. Tell the owner what you changed.",
+          'Change your instructions: what the owner wants done every time, said with words such as "always", "never" or "from now on", and how to work with your tools and services, such as which connection holds their calendar. You read them in every conversation. Make one change: add a line or section at the end; or replace a passage, copied exactly as it reads, with new text (empty removes it); or, only when the owner asks for a rewrite, send the whole text as instructions. everyBot changes the instructions every bot reads instead of your own, for what concerns the owner and every bot rather than your own work. Tell the owner what you changed.',
         parameters: obj({
-          instructions: str({ maxLength: MAX_INSTRUCTIONS_LENGTH }),
+          add: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
+          replace: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
+          with: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
+          instructions: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
           everyBot: opt(bool()),
         }),
         replay: "safe",
@@ -169,22 +111,45 @@ export function createSelfTools(self: SelfProfile) {
           if (args.everyBot ? !allowed.owner : !allowed.personality)
             return text(
               args.everyBot
-                ? "The owner has not allowed you to change the instructions for every bot. They can change them in Settings → You."
+                ? allowed.personality
+                  ? "The owner has not allowed you to change the instructions for every bot. Change your own, without everyBot, or tell them they can change these in Settings → You."
+                  : "The owner has not allowed you to change the instructions for every bot. They can change them in Settings → You."
                 : "The owner has not allowed you to change how you work. They can change your instructions in Settings → Profile.",
               true,
             );
-          const instructions = args.instructions.trim();
+          const asked = [
+            args.add !== undefined && { add: args.add },
+            args.replace !== undefined && {
+              replace: args.replace,
+              with: args.with ?? "",
+            },
+            args.instructions !== undefined && {
+              instructions: args.instructions,
+            },
+          ].filter((edit) => edit !== false);
+          if (asked.length !== 1)
+            return text(
+              "Make one change: add, replace (with with), or instructions for the whole text.",
+              true,
+            );
+          const current = args.everyBot
+            ? self.owner().instructions
+            : self.profile().instructions;
+          const edited = editInstructions(current, asked[0]!);
+          if ("problem" in edited) return text(edited.problem, true);
+          if (edited.text === current.trim())
+            return text("The instructions already read that way.");
           if (args.everyBot) {
-            if (!instructions)
+            if (!edited.text)
               return text(
-                "The instructions for every bot cannot be empty. Send them with your change.",
+                "The instructions for every bot cannot be emptied by a bot. The owner can reset them in Settings → You.",
                 true,
               );
             const { updatedAt: _, ...owner } = self.owner();
-            self.saveOwner({ ...owner, instructions });
+            self.saveOwner({ ...owner, instructions: edited.text });
             return text("Saved. Every bot reads them from its next message.");
           }
-          const saved = self.updateInstructions(instructions);
+          const saved = self.updateInstructions(edited.text);
           return text(
             `Saved as revision ${saved.revision}. You read them from your next message.`,
           );

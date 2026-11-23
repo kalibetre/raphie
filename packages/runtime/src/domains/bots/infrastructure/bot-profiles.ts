@@ -19,10 +19,10 @@ import {
 import {
   cleanInstructions,
   DEFAULT_INSTRUCTIONS,
+  withRules,
 } from "../domain/instructions.ts";
 import { EMPTY_OWNER } from "../domain/owner.ts";
 import { PERSONALITY_PRESETS, presetOf } from "../domain/personalities.ts";
-import { cleanRules } from "../domain/rules.ts";
 
 /**
  * What a bot may change by itself until the owner says otherwise: every bot
@@ -34,11 +34,14 @@ export function defaultSelfUpdates(id: string): SelfUpdates {
 }
 
 /**
- * A stored profile, with a reply style, self-updates and rules even if it
- * was saved before any of them.
+ * A stored profile, with a reply style, self-updates and instructions even
+ * if it was saved before any of them. Standing rules saved before they
+ * became instructions read as a list at the top of them.
  */
 function parse(value: string): BotProfile {
-  const profile = JSON.parse(value) as BotProfile;
+  const { rules, ...profile } = JSON.parse(value) as BotProfile & {
+    rules?: string[];
+  };
   return {
     ...profile,
     replyStyle: replyStyleOf(profile.replyStyle),
@@ -46,8 +49,7 @@ function parse(value: string): BotProfile {
       ...defaultSelfUpdates(profile.id),
       ...profile.selfUpdates,
     },
-    rules: profile.rules ?? [],
-    instructions: profile.instructions ?? "",
+    instructions: withRules(profile.instructions ?? "", rules ?? []),
   };
 }
 
@@ -58,7 +60,11 @@ function parse(value: string): BotProfile {
 type StoredOwner = Omit<
   OwnerProfile,
   "instructions" | "instructionsDefault"
-> & { instructions?: string | null };
+> & {
+  instructions?: string | null;
+  /** Standing rules for every bot, kept before they became instructions. */
+  rules?: string[];
+};
 
 export const defaultBot = {
   id: "default",
@@ -90,6 +96,7 @@ export class BotProfileStore {
       this.db.exec(
         `UPDATE ${table} SET value=json_remove(json_set(value,'$.personality',json_extract(value,'$.soul')),'$.soul') WHERE json_type(value,'$.soul') IS NOT NULL`,
       );
+    this.moveRulesIntoInstructions();
     if (
       !this.db.query("SELECT id FROM bot_profiles WHERE id='default'").get()
     ) {
@@ -98,7 +105,6 @@ export class BotProfileStore {
         ...defaultBot,
         replyStyle: DEFAULT_REPLY_STYLE,
         selfUpdates: defaultSelfUpdates("default"),
-        rules: [],
         instructions: "",
         changedBy: "owner",
         preset: presetOf(defaultBot.personality),
@@ -145,7 +151,6 @@ export class BotProfileStore {
       ...input,
       replyStyle: replyStyleOf(input.replyStyle),
       selfUpdates: { ...defaultSelfUpdates(id), ...input.selfUpdates },
-      rules: cleanRules(input.rules ?? []),
       instructions: cleanInstructions(input.instructions ?? ""),
       changedBy: "owner",
       preset: presetOf(input.personality),
@@ -182,7 +187,6 @@ export class BotProfileStore {
         ...input,
         replyStyle: input.replyStyle ?? previous.replyStyle,
         selfUpdates: { ...previous.selfUpdates, ...input.selfUpdates },
-        rules: input.rules ? cleanRules(input.rules) : previous.rules,
         instructions:
           input.instructions === undefined
             ? previous.instructions
@@ -202,20 +206,6 @@ export class BotProfileStore {
       return previous.personality === personality
         ? previous
         : this.write({ ...previous, personality, changedBy: "bot" });
-    })();
-  }
-
-  /**
-   * The bot changes its own standing rules: a new revision, saved by it.
-   * Unchanged rules save nothing.
-   */
-  updateRules(id: string, rules: string[]) {
-    return this.db.transaction(() => {
-      const previous = this.read(id);
-      const next = cleanRules(rules);
-      return JSON.stringify(previous.rules) === JSON.stringify(next)
-        ? previous
-        : this.write({ ...previous, rules: next, changedBy: "bot" });
     })();
   }
 
@@ -253,7 +243,7 @@ export class BotProfileStore {
 
   /** The owner as every bot knows them; empty until they say something. */
   owner(): OwnerProfile {
-    const { instructions, ...owner } = this.storedOwner();
+    const { instructions, rules: _, ...owner } = this.storedOwner();
     return {
       ...owner,
       instructions: instructions ?? DEFAULT_INSTRUCTIONS,
@@ -275,7 +265,6 @@ export class BotProfileStore {
       callMe: input.callMe,
       timeZone: input.timeZone,
       about: input.about,
-      rules: input.rules ? cleanRules(input.rules) : previous.rules,
       // Saved unchanged, Raphie's text stays Raphie's and keeps following releases.
       instructions: instructions === DEFAULT_INSTRUCTIONS ? null : instructions,
       updatedAt: Date.now(),
@@ -296,6 +285,42 @@ export class BotProfileStore {
     return row
       ? { ...empty, ...(JSON.parse(row.value) as StoredOwner) }
       : { ...empty, instructions: null };
+  }
+
+  /**
+   * Standing rules became instructions: each list of rules moves to the
+   * top of the instructions it belongs with, once. The owner's rules make
+   * the instructions for every bot their own, no longer Raphie's.
+   * Revisions keep their rules and read them the same way.
+   */
+  private moveRulesIntoInstructions() {
+    this.db.transaction(() => {
+      for (const row of this.db
+        .query<{ id: string; value: string }, []>(
+          "SELECT id,value FROM bot_profiles WHERE json_array_length(value,'$.rules') > 0",
+        )
+        .all())
+        this.db
+          .query("UPDATE bot_profiles SET value=? WHERE id=?")
+          .run(JSON.stringify(parse(row.value)), row.id);
+      const owner = this.db
+        .query<{ value: string }, []>(
+          "SELECT value FROM owner_profile WHERE json_array_length(value,'$.rules') > 0",
+        )
+        .get();
+      if (owner) {
+        const { rules, ...stored } = JSON.parse(owner.value) as StoredOwner;
+        this.db.query("UPDATE owner_profile SET value=? WHERE id=1").run(
+          JSON.stringify({
+            ...stored,
+            instructions: withRules(
+              stored.instructions ?? DEFAULT_INSTRUCTIONS,
+              rules ?? [],
+            ),
+          }),
+        );
+      }
+    })();
   }
 
   close() {

@@ -111,7 +111,10 @@ pub const SCENES: &[Scene] = &[
     ("settings-about-nightly", settings_about_nightly),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
-    ("settings-profile-rules", settings_profile_rules),
+    (
+        "settings-profile-instructions",
+        settings_profile_instructions,
+    ),
     ("settings-profile-presets", settings_profile_presets),
     ("settings-history", settings_history),
     ("settings-history-restore", settings_history_restore),
@@ -402,24 +405,22 @@ pub fn settings_profile(ui: &mut Ui) {
     }));
 }
 
-/// Settings → Profile for a bot with standing rules, one more being typed.
-pub fn settings_profile_rules(ui: &mut Ui) {
+/// Settings → Profile for a bot with instructions, one more line being
+/// typed.
+pub fn settings_profile_instructions(ui: &mut Ui) {
     settings_account(ui);
     let mut bots = ui.model.bots.clone();
     if let Some(bot) = bots.iter_mut().find(|bot| bot.id == "default") {
-        bot.rules = vec![
-            "Use Executor for my calendar, mail and tickets.".into(),
-            "Answer with a card when I ask about my day.".into(),
-        ];
+        bot.instructions = "- Executor holds my calendar, mail and Jira; look there first.\n- Answer with a card when I ask about my day.".into();
     }
     ui.model.apply(Event::Bots(bots));
     ui.open_settings(Some(Page::Bot {
         bot_id: "default".into(),
         section: BotSection::Profile,
     }));
-    ui.profile.rules = TextEdit::new(format!(
-        "{}\nLaunch T3 threads with automatic permissions.",
-        ui.profile.rules.text
+    ui.profile.instructions = TextEdit::new(format!(
+        "{}\n- Launch T3 threads with automatic permissions.",
+        ui.profile.instructions.text
     ));
 }
 
@@ -768,10 +769,6 @@ pub fn owner_profile() -> OwnerProfile {
         call_me: "Hana".into(),
         time_zone: "Africa/Addis_Ababa".into(),
         about: "I run a small design studio. Mornings are for deep work, so keep anything non-urgent until after lunch.".into(),
-        rules: vec![
-            "Give times on a 12-hour clock, in my time zone.".into(),
-            "Leave all-day events out of my schedule.".into(),
-        ],
         instructions: OWNER_INSTRUCTIONS.into(),
         instructions_default: true,
         updated_at: Some(1_794_650_049_530.0),
@@ -2992,7 +2989,6 @@ fn open(ui: &mut Ui, session_id: &str, observation: SessionObservation) {
 
 fn bot(id: &str, name: &str, description: &str, color: Option<&str>) -> BotProfile {
     BotProfile {
-        rules: Vec::new(),
         instructions: String::new(),
         id: id.into(),
         name: name.into(),

@@ -8,7 +8,6 @@ import {
 import type { BotProfiles } from "../../application/ports.ts";
 import { MAX_INSTRUCTIONS_LENGTH } from "../../domain/instructions.ts";
 import { knownTimeZone } from "../../domain/owner.ts";
-import { MAX_RULE_LENGTH, MAX_RULES } from "../../domain/rules.ts";
 
 const owner = z
   .object({
@@ -21,10 +20,6 @@ const owner = z
         message: "Choose a time zone such as Africa/Addis_Ababa.",
       }),
     about: z.string().trim().max(2000),
-    rules: z
-      .array(z.string().trim().min(1).max(MAX_RULE_LENGTH))
-      .max(MAX_RULES)
-      .optional(),
     // null goes back to Raphie's own.
     instructions: z
       .string()

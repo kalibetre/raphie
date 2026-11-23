@@ -6,7 +6,6 @@
 //! and what happens when the bot was changed somewhere else meanwhile.
 
 use raphie_core::contracts::{BotProfile, NewBot, ReplyStyle, SelfUpdates, UpdateBotProfile};
-use raphie_core::rules::{rules_of, rules_problem, rules_text};
 use rune::TextEdit;
 
 /// The runtime's limits (`packages/runtime/src/domains/bots/presentation/
@@ -39,8 +38,6 @@ pub struct ProfileDraft {
     /// What the bot may change by itself. `None` when the runtime is too
     /// old to say: the switches stay hidden and a save leaves them out.
     pub self_updates: Option<SelfUpdates>,
-    /// The bot's standing rules as they are edited, one a line.
-    pub rules: TextEdit,
     /// The bot's instructions on its tools as they are edited.
     pub instructions: TextEdit,
     /// A custom colour being typed.
@@ -62,7 +59,6 @@ impl ProfileDraft {
             color: None,
             reply_style: ReplyStyle::default(),
             self_updates: None,
-            rules: TextEdit::new(""),
             instructions: TextEdit::new(""),
             custom_color: TextEdit::new(""),
             message: None,
@@ -91,7 +87,6 @@ impl ProfileDraft {
             color: profile.color.clone(),
             reply_style: profile.reply_style,
             self_updates: profile.self_updates,
-            rules: TextEdit::new(rules_text(&profile.rules)),
             instructions: TextEdit::new(profile.instructions.clone()),
             custom_color: TextEdit::new(profile.color.clone().unwrap_or_default()),
             message: None,
@@ -133,7 +128,6 @@ impl ProfileDraft {
                 || self.color != saved.color
                 || self.reply_style != saved.reply_style
                 || self.self_updates != saved.self_updates
-                || rules_of(&self.rules.text) != saved.rules
                 || self.instructions.text.trim() != saved.instructions
         })
     }
@@ -167,24 +161,15 @@ impl ProfileDraft {
         }
     }
 
-    /// What is wrong with the standing rules, if anything: too many, or
-    /// one too long.
-    pub fn rules_problem(&self) -> Option<String> {
-        rules_problem(&rules_of(&self.rules.text))
-    }
-
     /// Everything that stops a save, the form's own fields first.
     pub fn blocker(&self) -> Option<String> {
-        self.problem()
-            .map(str::to_owned)
-            .or_else(|| self.rules_problem())
+        self.problem().map(str::to_owned)
     }
 
     /// The request that saves this form, or `None` for an empty form.
     pub fn update(&self) -> Option<UpdateBotProfile> {
         let saved = self.saved.as_ref()?;
         Some(UpdateBotProfile {
-            rules: Some(rules_of(&self.rules.text)).filter(|rules| rules != &saved.rules),
             instructions: Some(self.instructions.text.trim().to_owned())
                 .filter(|instructions| instructions != &saved.instructions),
             name: self.name.text.trim().to_owned(),
@@ -230,7 +215,6 @@ mod tests {
 
     fn research() -> BotProfile {
         BotProfile {
-            rules: Vec::new(),
             instructions: String::new(),
             id: "b-research".into(),
             name: "Research".into(),
@@ -337,36 +321,6 @@ mod tests {
             skills: true,
         });
         assert!(draft.is_dirty(), "turning a switch off is an edit");
-    }
-
-    #[test]
-    fn standing_rules_are_part_of_the_draft_and_of_every_save() {
-        let mut draft = ProfileDraft::of(&BotProfile {
-            rules: vec!["Use Executor for my calendar.".into()],
-            ..research()
-        });
-        assert_eq!(draft.rules.text, "Use Executor for my calendar.");
-        draft.rules = TextEdit::new("* Use Executor  for my calendar.\n");
-        assert!(!draft.is_dirty(), "a bullet and a blank line are no edit");
-        assert_eq!(draft.update().unwrap().rules, None, "unchanged: left out");
-        draft.rules = TextEdit::new("Use Executor for my calendar.\nAnswer with a card.");
-        assert!(draft.is_dirty());
-        assert_eq!(
-            draft.update().unwrap().rules,
-            Some(vec![
-                "Use Executor for my calendar.".to_owned(),
-                "Answer with a card.".to_owned()
-            ])
-        );
-        assert_eq!(draft.blocker(), None);
-        draft.rules = TextEdit::new("x".repeat(301));
-        assert_eq!(
-            draft.blocker().as_deref(),
-            Some("Rule 1 is over 300 characters.")
-        );
-        // The form's own fields are named first.
-        draft.name = TextEdit::new("");
-        assert_eq!(draft.blocker().as_deref(), Some("Give this bot a name."));
     }
 
     #[test]

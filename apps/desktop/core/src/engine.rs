@@ -3064,7 +3064,6 @@ mod tests {
     #[test]
     fn the_default_bot_wins_else_the_first() {
         let bot = |id: &str| BotProfile {
-            rules: Vec::new(),
             instructions: String::new(),
             id: id.into(),
             name: id.into(),

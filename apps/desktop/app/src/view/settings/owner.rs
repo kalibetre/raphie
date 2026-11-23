@@ -11,7 +11,6 @@ use rune_kit::{Combobox, ComboboxOption};
 use super::instructions::{Instructions, instructions_field};
 use super::parts::{SaveBar, Scope, page, save_bar, status};
 use super::profile::{label, section};
-use super::rules::{Rules, rules_field};
 use crate::owner::{ABOUT_LIMIT, NOT_SET, device_zone, time_zones, zone_label};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
@@ -24,12 +23,7 @@ const LEDE: &str =
 pub fn owner(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
     let groups = if s.owner.saved.is_some() {
-        vec![
-            you(s, look, overlays),
-            about(s, t),
-            rules(s, t),
-            instructions(s, t),
-        ]
+        vec![you(s, look, overlays), about(s, t), instructions(s, t)]
     } else if let Some(error) = &s.model.owner_error {
         let retry = pressable(
             button(t, Kind::Outline, Size::Small, None, "Try again").key("rd-owner-retry"),
@@ -224,22 +218,6 @@ fn about(s: &Ui, t: &Theme) -> El {
     )
 }
 
-/// "Rules for every bot": what the owner wants done every time.
-fn rules(s: &Ui, t: &Theme) -> El {
-    rules_field(
-        t,
-        Rules {
-            key: "rd-owner-rules",
-            title: "Rules for every bot",
-            note: "What you want done every time, whichever bot you are talking to. Each bot reads these in every conversation, before its own rules.",
-            placeholder: "Give times on a 12-hour clock, in my time zone.\nLeave all-day events out of my schedule.",
-            edit: &s.owner.rules,
-            busy: s.model.saving_owner,
-        },
-        |s: &mut Ui| &mut s.owner.rules,
-    )
-}
-
 /// "Instructions for every bot": Raphie's own until changed, with a way
 /// back to them.
 fn instructions(s: &Ui, t: &Theme) -> El {
@@ -263,8 +241,8 @@ fn instructions(s: &Ui, t: &Theme) -> El {
         Instructions {
             key: "rd-owner-instructions",
             title: "Instructions for every bot",
-            note: "How every bot works with the tools Raphie gives them all, such as cards and questions, and anything else you want every bot to know about its tools. Each bot reads these in every conversation, before its own instructions, and the bots you allow to update your profile add to them when you ask.",
-            placeholder: "When I ask about my day, show it as a timeline card.",
+            note: "What you want every bot to do every time, and how they work with the tools Raphie gives them all, such as cards and questions. Each bot follows these in every conversation, before its own instructions, and the bots you allow to update your profile add to them when you ask.",
+            placeholder: "- Give times on a 12-hour clock, in my time zone.",
             edit: &s.owner.instructions,
             busy,
             status: Some(if raphies {

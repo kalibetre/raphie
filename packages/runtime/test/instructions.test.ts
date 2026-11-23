@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,7 +8,9 @@ import type { OwnerProfile } from "@raphie/contracts";
 
 import {
   DEFAULT_INSTRUCTIONS,
+  editInstructions,
   instructionsPrompt,
+  withRules,
 } from "../src/domains/bots/domain/instructions.ts";
 import { EMPTY_OWNER } from "../src/domains/bots/domain/owner.ts";
 import { BotProfileStore } from "../src/domains/bots/infrastructure/bot-profiles.ts";
@@ -81,7 +84,6 @@ function tool(allowed: { personality: boolean; owner: boolean }) {
         instructions: own,
       }) as never,
     updatePersonality: () => ({}) as never,
-    updateRules: () => ({}) as never,
     updateInstructions: (next) => {
       own = next;
       return { revision: 2 } as never;
@@ -91,7 +93,6 @@ function tool(allowed: { personality: boolean; owner: boolean }) {
       (shared = {
         ...shared,
         ...input,
-        rules: input.rules ?? shared.rules,
         instructions: input.instructions ?? DEFAULT_INSTRUCTIONS,
         instructionsDefault: false,
         updatedAt: 1,
@@ -143,5 +144,90 @@ test("a bot reads the instructions for every bot, then its own, and none when em
     prompt.indexOf("Calendar: Executor."),
   );
   expect(prompt).toContain("grant no capabilities");
+  expect(prompt).toContain("in every conversation without being reminded");
   expect(instructionsPrompt("", " ")).toBe("");
+});
+
+test("a bot adds to its instructions and replaces one passage, leaving the rest", async () => {
+  const bot = tool({ personality: true, owner: true });
+  expect(await bot.run({ add: "- Give times on a 12-hour clock." })).toBe(
+    false,
+  );
+  expect(await bot.run({ add: "- Fizzy is my task board." })).toBe(false);
+  expect(bot.own()).toBe(
+    "- Give times on a 12-hour clock.\n- Fizzy is my task board.",
+  );
+  expect(
+    await bot.run({
+      replace: "Fizzy is my task board.",
+      with: "Fizzy is my task board; show it by column.",
+    }),
+  ).toBe(false);
+  expect(await bot.run({ replace: "- Give times on a 12-hour clock." })).toBe(
+    false,
+  );
+  expect(bot.own()).toBe("- Fizzy is my task board; show it by column.");
+  // Text that is not there, or two changes at once, is refused.
+  expect(await bot.run({ replace: "Never use cards.", with: "x" })).toBe(true);
+  expect(await bot.run({ add: "x", instructions: "y" })).toBe(true);
+  expect(await bot.run({})).toBe(true);
+  // An addition for every bot goes after Raphie's own.
+  expect(await bot.run({ add: "## Boards\nBy column.", everyBot: true })).toBe(
+    false,
+  );
+  expect(bot.shared()).toBe(`${DEFAULT_INSTRUCTIONS}\n## Boards\nBy column.`);
+});
+
+test("an edit says why it cannot be made", () => {
+  expect(editInstructions("a\na", { replace: "a", with: "b" })).toEqual({
+    problem:
+      "That text is in the instructions more than once. Give enough of it to tell which.",
+  });
+  expect("problem" in editInstructions("", { add: "x".repeat(16_001) })).toBe(
+    true,
+  );
+  expect(
+    editInstructions("one\n\ntwo\n\nthree", { replace: "two", with: "" }),
+  ).toEqual({ text: "one\n\nthree" });
+});
+
+test("standing rules saved before move to the top of the instructions, once", async () => {
+  expect(
+    withRules("Calendar: Executor.", ["* Be  brief.", "Be brief.", " "]),
+  ).toBe("## Rules\n- Be brief.\n\nCalendar: Executor.");
+  expect(withRules("Same.", [])).toBe("Same.");
+
+  const directory = await mkdtemp(join(tmpdir(), "raphie-instructions-"));
+  const path = join(directory, "bots.sqlite");
+  new BotProfileStore(path).close();
+  // As an older runtime left them: rules beside the profile and the owner.
+  const db = new Database(path);
+  db.query(
+    "UPDATE bot_profiles SET value=json_set(value,'$.rules',json('[\"Link every source.\"]')) WHERE id='default'",
+  ).run();
+  db.query("INSERT INTO owner_profile(id,value) VALUES(1,?)").run(
+    JSON.stringify({
+      ...owner,
+      rules: ["Give times on a 12-hour clock."],
+      updatedAt: 1,
+    }),
+  );
+  db.close();
+  for (let open = 0; open < 2; open++) {
+    const store = new BotProfileStore(path);
+    try {
+      expect(store.read("default").instructions).toBe(
+        "## Rules\n- Link every source.",
+      );
+      expect(store.owner()).toMatchObject({
+        name: "Hana Girma",
+        instructions: `## Rules\n- Give times on a 12-hour clock.\n\n${DEFAULT_INSTRUCTIONS}`,
+        instructionsDefault: false,
+      });
+      expect(store.owner()).not.toHaveProperty("rules");
+    } finally {
+      store.close();
+    }
+  }
+  await rm(directory, { recursive: true, force: true });
 });

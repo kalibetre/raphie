@@ -1216,7 +1216,6 @@ fn deliver(rt: &mut Runtime<Ui>, event: Event) {
 fn research(description: &str, revision: u32) -> BotProfile {
     BotProfile {
         instructions: String::new(),
-        rules: Vec::new(),
         id: "b-research".into(),
         name: "Research".into(),
         description: description.into(),
@@ -5614,7 +5613,7 @@ fn a_schedule_of_several_days_heads_each_one() {
 fn a_reply_style_is_chosen_and_saved_with_the_profile() {
     for dark in [false, true] {
         // Tall enough to show the Replies card under the personality and
-        // the standing rules.
+        // the instructions.
         let mut rt = render_sized(research_profile, dark, (1280.0, 2600.0));
         assert_eq!(
             rt.state.profile.reply_style,
@@ -6427,91 +6426,17 @@ fn a_self_update_that_saved_nothing_shows_no_note() {
 }
 
 #[test]
-fn rules_for_every_bot_are_typed_on_you_and_saved_with_the_profile() {
-    let mut rt = render_sized(scenes::settings_owner, false, (1280.0, 1700.0));
-    assert!(screen_text(&rt).contains("Rules for every bot"));
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("One rule a line · 2 of 20 · Rules say how to work and grant nothing.")
-    );
-    assert!(rt.find("rd-save-bar").is_none(), "a clean page is quiet");
-    // Typing in the box adds to the last rule; Return starts another.
-    click(&mut rt, "rd-owner-rules");
-    for key in [Key::Enter, Key::Text("- Be brief.".into())] {
-        rt.key(KeyEvent {
-            key,
-            mods: Default::default(),
-        });
-    }
-    settle(&mut rt);
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("One rule a line · 3 of 20 · Rules say how to work and grant nothing.")
-    );
-    click(&mut rt, "rd-owner-save");
-    let Some(Command::SaveOwner { owner }) = rt.state.sent.last().cloned() else {
-        panic!("no save was sent");
-    };
-    assert_eq!(
-        owner.rules,
-        Some(vec![
-            "Give times on a 12-hour clock, in my time zone.".to_owned(),
-            "Leave all-day events out of my schedule.".to_owned(),
-            "Be brief.".to_owned(),
-        ])
-    );
-    let mut saved = scenes::owner_profile();
-    saved.rules.push("Be brief.".into());
-    saved.updated_at = Some(1_794_650_100_000.0);
-    deliver(&mut rt, Event::OwnerSaved(saved));
-    assert!(!rt.state.owner.is_dirty());
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("One rule a line · 3 of 20 · Rules say how to work and grant nothing.")
-    );
-}
-
-#[test]
-fn too_many_rules_are_refused_before_anything_is_sent() {
-    let mut rt = render_sized(scenes::settings_owner, false, (1280.0, 2200.0));
-    let many: Vec<String> = (0..21).map(|n| format!("Rule {n}.")).collect();
-    rt.update(move |ui, _| ui.owner.rules = TextEdit::new(many.join("\n")));
-    settle(&mut rt);
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("Keep to 20 rules; there are 21.")
-    );
-    assert_eq!(
-        element(&rt, "rd-owner-error").text.as_deref(),
-        Some("Keep to 20 rules; there are 21.")
-    );
-    let before = rt.state.sent.len();
-    click(&mut rt, "rd-owner-save");
-    assert_eq!(rt.state.sent.len(), before, "nothing is sent");
-    // One rule too long says which.
-    rt.update(|ui, _| ui.owner.rules = TextEdit::new(format!("Be brief.\n{}", "x".repeat(301))));
-    settle(&mut rt);
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("Rule 2 is over 300 characters.")
-    );
-    click(&mut rt, "rd-owner-discard");
-    assert!(rt.find("rd-save-bar").is_none());
-}
-
-#[test]
-fn a_bots_standing_rules_are_saved_with_its_profile_and_follow_the_host() {
+fn a_bots_instructions_are_saved_with_its_profile_and_follow_the_host() {
     for dark in [false, true] {
-        let mut rt = render_sized(scenes::settings_profile_rules, dark, (1280.0, 1700.0));
-        assert!(screen_text(&rt).contains("Standing rules"));
-        // The card sits between the personality and the replies.
-        let rules = element(&rt, "rd-profile-rules-box");
-        let personality = element(&rt, "rd-profile-personality-box");
-        assert!(personality.rect[1] < rules.rect[1]);
-        assert_eq!(
-            element(&rt, "rd-profile-rules-count").text.as_deref(),
-            Some("One rule a line · 3 of 20 · Rules say how to work and grant nothing.")
+        let mut rt = render_sized(
+            scenes::settings_profile_instructions,
+            dark,
+            (1280.0, 2100.0),
         );
+        // The card sits between the personality and the replies.
+        let instructions = element(&rt, "rd-profile-instructions-box");
+        let personality = element(&rt, "rd-profile-personality-box");
+        assert!(personality.rect[1] < instructions.rect[1]);
         assert_eq!(
             element(&rt, "rd-profile-status").text.as_deref(),
             Some("Unsaved changes")
@@ -6521,14 +6446,8 @@ fn a_bots_standing_rules_are_saved_with_its_profile_and_follow_the_host() {
             panic!("no save was sent");
         };
         assert_eq!(bot_id, "default");
-        assert_eq!(
-            update.rules,
-            Some(vec![
-                "Use Executor for my calendar, mail and tickets.".to_owned(),
-                "Answer with a card when I ask about my day.".to_owned(),
-                "Launch T3 threads with automatic permissions.".to_owned(),
-            ])
-        );
+        let sent = update.instructions.clone().expect("changed, so sent");
+        assert!(sent.ends_with("- Launch T3 threads with automatic permissions."));
         // What was saved is shown, at its new revision.
         let mut saved = rt
             .state
@@ -6538,16 +6457,16 @@ fn a_bots_standing_rules_are_saved_with_its_profile_and_follow_the_host() {
             .find(|bot| bot.id == "default")
             .cloned()
             .expect("the default bot");
-        saved.rules = update.rules.clone().unwrap();
+        saved.instructions = sent;
         saved.revision += 1;
         deliver(&mut rt, Event::ProfileSaved(saved.clone()));
         assert!(!rt.state.profile.is_dirty());
-        // The bot saves a rule itself: a clean form follows it.
+        // The bot adds a line itself: a clean form follows it.
         let mut bots = rt.state.model.bots.clone();
         for bot in &mut bots {
             if bot.id == "default" {
                 *bot = saved.clone();
-                bot.rules.push("Never book before 9.".into());
+                bot.instructions.push_str("\n- Never book before 9.");
                 bot.revision += 1;
             }
         }
@@ -6555,26 +6474,26 @@ fn a_bots_standing_rules_are_saved_with_its_profile_and_follow_the_host() {
         assert!(
             rt.state
                 .profile
-                .rules
+                .instructions
                 .text
-                .ends_with("Never book before 9.")
+                .ends_with("- Never book before 9.")
         );
         assert!(!rt.state.profile.is_dirty());
-        // A rule too long blocks the save and says why.
-        rt.update(|ui, _| ui.profile.rules = TextEdit::new("x".repeat(301)));
+        // Too long blocks the save and says why.
+        rt.update(|ui, _| ui.profile.instructions = TextEdit::new("x".repeat(16_001)));
         settle(&mut rt);
         assert_eq!(
             element(&rt, "rd-profile-error").text.as_deref(),
-            Some("Rule 1 is over 300 characters.")
+            Some("Instructions can be at most 16,000 characters.")
         );
         assert!(!rt.state.can_save_profile());
         click(&mut rt, "rd-profile-discard");
         assert!(
             rt.state
                 .profile
-                .rules
+                .instructions
                 .text
-                .ends_with("Never book before 9.")
+                .ends_with("- Never book before 9.")
         );
     }
 }
@@ -6629,7 +6548,6 @@ fn instructions_for_every_bot_are_raphies_until_changed_and_reset_back() {
         panic!("no reset was sent");
     };
     assert_eq!(owner.instructions, Some(None), "sent as null");
-    assert_eq!(owner.rules, None, "the rules are kept");
 }
 
 #[test]

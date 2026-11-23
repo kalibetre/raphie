@@ -1884,7 +1884,6 @@ impl Ui {
             return;
         };
         let update = UpdateBotProfile {
-            rules: None,
             instructions: None,
             name: bot.name.clone(),
             description: bot.description.clone(),

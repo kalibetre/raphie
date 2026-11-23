@@ -517,7 +517,6 @@ export class Gateway {
       | "replyStyle"
       | "revision"
       | "selfUpdates"
-      | "rules"
       | "instructions"
     >,
   ) {
