@@ -44,17 +44,17 @@ A session belongs to exactly one bot and cannot be opened through another.
 
 ## The default bot
 
-The first start creates the default bot. It cannot be deleted. Its data lives at the top of the data directory, while each other bot gets its own folder under `bots/<id>/`; see [backup and recovery](/operate/backup-and-recovery/).
+The first start creates the default bot. It cannot be deleted. On a fresh install, onboarding introduces it before anything else, through the same steps as [creating a bot](#create-a-bot): its name, what it handles, its colour and how it works; it then asks for a model (see [first run](/start/first-run/)). Onboarding shows only while it is the only bot, has no model and has no conversations, and **Skip for now** leaves it until the next visit. Its data lives at the top of the data directory, while each other bot gets its own folder under `bots/<id>/`; see [backup and recovery](/operate/backup-and-recovery/).
 
 ## Create a bot
 
 <Steps>
 
-1. Choose **Add a teammate** under **Your team** in the sidebar, or **Create a bot** in Settings.
-2. Give it a name, an optional description and a personality: pick one of the [built-in personalities](#built-in-personalities) or write your own.
-3. Under **Providers**, connect a model provider with an API key or a subscription sign-in. A new bot has no provider and cannot reply until it has one.
-4. Under **Models**, pick its default model.
-5. Optionally adjust **Memory**, **MCP tools**, **Channels** and **Sandbox**.
+1. Choose **Add a teammate** under **Your team** in the sidebar. It opens a full-window flow; the close button or **Cancel** leaves without adding anyone.
+2. **Meet your new teammate:** give it a name, say what it will handle and pick a colour. Other bots read what it handles to decide when to [hand work over](/guides/handoffs/).
+3. **How should it work?** Pick one of the [built-in personalities](#built-in-personalities), then **Add**. You can put the personality in your own words later under **Settings → Personality**.
+4. **A way to think:** the flow goes on with the new bot asking for a model service; connect one with an API key or a subscription sign-in. A new bot has no provider and cannot reply until it has one. **Skip for now** or the close button leaves the flow, and the bot asks again on its own screen.
+5. Optionally adjust **Models**, **Memory**, **MCP tools**, **Channels** and **Sandbox** in Settings.
 
 </Steps>
 

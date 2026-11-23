@@ -65,7 +65,7 @@ export function Settings({
   const profile = useBots().data?.items.find((b) => b.id === workspace.botId);
   const page = sectionOf(section === "personality" ? "bot" : section);
   const name = profile?.name ?? "this bot";
-  const scoped = !isAppSection(section) && section !== "new-bot";
+  const scoped = !isAppSection(section);
   const parent = parentSection[section];
   // An open skill is a sub-page of Skills, kept here so the page header can
   // name it and link back. It starts on the list whenever Skills opens.
@@ -91,7 +91,7 @@ export function Settings({
         title={skill?.title ?? page.label}
         lede={skill?.lede ?? page.lede(name)}
         bot={scoped ? { id: workspace.botId, name } : undefined}
-        scope={section === "new-bot" ? "New bot" : "App-wide"}
+        scope="App-wide"
         back={
           skill
             ? {
@@ -113,8 +113,6 @@ export function Settings({
           <BotSettings />
         ) : section === "bot-history" ? (
           <BotSettings mode="history" />
-        ) : section === "new-bot" ? (
-          <BotSettings mode="create" />
         ) : section === "providers" ? (
           <ProviderSettings />
         ) : section === "models" ? (

@@ -68,10 +68,8 @@ export function SettingsMain({
                 className="settings-breadcrumb-scope"
                 style={botStyle(botId)}
               >
-                {section !== "new-bot" && <BotAvatar id={botId} />}
-                <span className="settings-breadcrumb-label">
-                  {section === "new-bot" ? "New bot" : name}
-                </span>
+                <BotAvatar id={botId} />
+                <span className="settings-breadcrumb-label">{name}</span>
               </span>
               <ChevronRight
                 className="settings-breadcrumb-divider"

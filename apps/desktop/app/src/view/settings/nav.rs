@@ -118,22 +118,8 @@ pub fn nav(s: &Ui, current: &Page, look: &Look) -> El {
                         .w_full()
                         .px(7.0)
                         .gap(3.5)
-                        .child(
-                            // "Bots", with the button that starts a new one.
-                            row()
-                                .w_full()
-                                .justify_between()
-                                .center_y()
-                                .child(group_label(t, "Bots"))
-                                .child(
-                                    icon_button(t, &icons::PLUS, 14.0, "Create a bot")
-                                        .key("rd-nav-new-bot")
-                                        .size(24.5, 24.5)
-                                        .on_press(|s: &mut Ui| {
-                                            s.open_settings(Some(Page::NewBot));
-                                        }),
-                                ),
-                        )
+                        // New teammates are added from the team, not here.
+                        .child(group_label(t, "Bots"))
                         .child(bots)
                         .child(group_label(t, "App").mt(14.0))
                         .child(app),

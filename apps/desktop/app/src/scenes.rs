@@ -41,10 +41,15 @@ pub const SCENES: &[Scene] = &[
     ("sign-in-error", sign_in_error),
     ("sign-in-this-mac", sign_in_this_mac),
     ("device-code", device_code),
+    ("onboarding", onboarding),
+    ("onboarding-teammate", onboarding_teammate),
+    ("onboarding-work", onboarding_work),
+    ("onboarding-provider", onboarding_provider),
     ("new-conversation", new_conversation),
     ("conversation-opened", conversation_opened),
     ("scheduled-failures", scheduled_failures),
     ("bot-setup", bot_setup),
+    ("teammate-setup", teammate_setup),
     ("conversations", conversations),
     ("conversations-archived", conversations_archived),
     ("unread", unread),
@@ -109,6 +114,7 @@ pub const SCENES: &[Scene] = &[
     ("settings-history", settings_history),
     ("settings-history-restore", settings_history_restore),
     ("settings-new-bot", settings_new_bot),
+    ("add-teammate-work", add_teammate_work),
     ("settings-delete-bot", settings_delete_bot),
     ("settings-models", settings_models),
     ("settings-models-filter", settings_models_filter),
@@ -202,6 +208,58 @@ pub fn device_code(ui: &mut Ui) {
         verification_url: format!("{ORIGIN}/device?user_code=WXYZ-1234"),
         expires_in: 600,
     });
+}
+
+/// A fresh install: one bot, no model, nothing said yet. Onboarding
+/// starts with the app's welcome.
+pub fn onboarding(ui: &mut Ui) {
+    let origin = Origin::parse("http://127.0.0.1:24320").expect("a valid origin");
+    ui.model.apply(Event::SignedIn { origin });
+    ui.model.apply(Event::Bots(vec![bot(
+        "default",
+        "Raphie",
+        "Your personal assistant.",
+        None,
+    )]));
+    ui.model.apply(Event::BotSelected {
+        bot_id: "default".into(),
+    });
+    ui.model.apply(Event::Sessions {
+        bot_id: "default".into(),
+        page: Paged {
+            items: vec![],
+            next: None,
+        },
+        more: false,
+    });
+    let mut settings = subscription_settings();
+    settings.connections.clear();
+    settings.models.clear();
+    ui.model.apply(Event::BotSettings {
+        bot_id: "default".into(),
+        settings: Box::new(settings),
+    });
+    ui.model
+        .apply(Event::PersonalityPresets(teammate_presets()));
+}
+
+/// Onboarding's second step, with a teal colour chosen.
+pub fn onboarding_teammate(ui: &mut Ui) {
+    onboarding(ui);
+    ui.onboarding_next();
+    ui.profile.color = Some("#83bcb4".into());
+}
+
+/// Onboarding's third step: how the first bot works.
+pub fn onboarding_work(ui: &mut Ui) {
+    onboarding_teammate(ui);
+    ui.onboarding_next();
+}
+
+/// Onboarding's last step: the bot asks for a way to think.
+pub fn onboarding_provider(ui: &mut Ui) {
+    onboarding(ui);
+    ui.onboarding = crate::state::Onboarding::Provider;
 }
 
 /// Signed in, with two bots and a few sessions, on a new conversation.
@@ -582,12 +640,30 @@ pub fn settings_history_restore(ui: &mut Ui) {
     ui.open_revisions = [4, 3].into_iter().collect();
 }
 
-/// Settings → Create a bot, with a name typed.
+/// "Add a teammate", with a name and what they handle typed.
 pub fn settings_new_bot(ui: &mut Ui) {
     settings_account(ui);
     ui.open_settings(Some(Page::NewBot));
     ui.profile.name = TextEdit::new("Travel");
     ui.profile.description = TextEdit::new("Plans trips and keeps the bookings straight.");
+}
+
+/// A few built-in personalities, for the steps that choose one.
+fn teammate_presets() -> Vec<raphie_core::contracts::PersonalityPreset> {
+    from_json(json!([
+        { "id": "candid", "name": "Candid", "summary": "Concise, honest and warm. The default.", "personality": "Be candid." },
+        { "id": "analyst", "name": "Analyst", "summary": "Precise and sourced; shows its reasoning.", "personality": "Be precise." },
+        { "id": "coach", "name": "Coach", "summary": "Asks good questions and holds you to your goals.", "personality": "Be a coach." }
+    ]))
+}
+
+/// "Add a teammate" choosing how they work, from the built-in personalities.
+pub fn add_teammate_work(ui: &mut Ui) {
+    settings_new_bot(ui);
+    ui.model
+        .apply(Event::PersonalityPresets(teammate_presets()));
+    ui.profile.personality = TextEdit::new("Be precise.");
+    ui.adding_work = true;
 }
 
 /// A bot's Profile with "Delete bot" asking for its name.
@@ -1682,6 +1758,20 @@ pub fn bot_setup(ui: &mut Ui) {
     ui.model.apply(Event::BotSettings {
         bot_id: "b-research".into(),
         settings: Box::new(settings),
+    });
+}
+
+/// A teammate just added: no model, and its conversation list has come
+/// back empty, so it joins through the teammate flow's last step.
+pub fn teammate_setup(ui: &mut Ui) {
+    bot_setup(ui);
+    ui.model.apply(Event::Sessions {
+        bot_id: "b-research".into(),
+        page: Paged {
+            items: vec![],
+            next: None,
+        },
+        more: false,
     });
 }
 

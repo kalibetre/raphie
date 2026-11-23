@@ -965,3 +965,173 @@
     text-align: left;
   }
 }
+@layer components {
+  /* A fresh install's first steps: one centred column, with a short
+     progress bar above the step. */
+  .onboarding {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100dvh;
+    padding: 40px 24px;
+    background: var(--background);
+  }
+  .onboarding-progress {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .onboarding-progress li {
+    width: 28px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+  .onboarding-progress li[data-done] {
+    background: var(--foreground);
+  }
+  .onboarding-mark {
+    width: 72px;
+    height: 72px;
+  }
+  .onboarding-step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    width: 100%;
+    padding: 32px 0;
+  }
+  .onboarding-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: min(100%, 440px);
+    text-align: center;
+  }
+  .onboarding-card h1 {
+    margin: 4px 0 0;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+  }
+  .onboarding-card > p {
+    margin: 0;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+  .onboarding-avatar .bot-avatar {
+    width: 64px;
+    height: 64px;
+  }
+  .onboarding-place {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0 10px !important;
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    font-size: 13px;
+  }
+  .onboarding-field {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    margin-top: 8px;
+    text-align: left;
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+  }
+  .onboarding-colors {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 4px 0 6px;
+  }
+  .onboarding-colors button {
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 50%;
+  }
+  .onboarding-colors button[aria-checked="true"] {
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 4px var(--foreground);
+  }
+  .onboarding-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    width: min(100%, 440px);
+    margin-top: 8px;
+  }
+  .onboarding-error {
+    color: var(--error);
+    font-size: 13px;
+  }
+  /* The setup step keeps its own spacing inside the onboarding pane. */
+  .onboarding-step .bot-setup {
+    flex: none;
+    padding: 0;
+  }
+}
+@layer components {
+  /* Closing a full-window flow, from its top-right corner. */
+  .onboarding {
+    position: relative;
+  }
+  .onboarding-close {
+    position: absolute;
+    top: 28px;
+    right: 24px;
+    color: var(--muted-foreground);
+  }
+  .onboarding-field small {
+    font-size: 12px;
+    color: var(--faint);
+  }
+  .onboarding-presets {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .onboarding-preset {
+    display: grid;
+    gap: 2px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--card);
+    text-align: left;
+  }
+  .onboarding-preset:hover {
+    background: var(--hover);
+  }
+  .onboarding-preset[aria-checked="true"] {
+    border-color: var(--foreground);
+    box-shadow: inset 0 0 0 1px var(--foreground);
+  }
+  .onboarding-preset strong {
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .onboarding-preset span {
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+  }
+}
+@layer components {
+  .onboarding-actions-end {
+    justify-content: flex-end;
+  }
+}

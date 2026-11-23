@@ -4,13 +4,12 @@ import { BotForm } from "./bot-profile-form";
 import { PersonalityHistory } from "./personality-history";
 import { SettingsStatus } from "./settings-status";
 
-type Mode = "profile" | "create" | "history";
+type Mode = "profile" | "history";
 
 export function BotSettings({ mode = "profile" }: { mode?: Mode }) {
   const { workspace, selectBot } = useBackend();
   const bots = useBots();
   const profile = bots.data?.items.find((b) => b.id === workspace.botId);
-  if (mode === "create") return <BotForm mode="create" />;
   if (!profile)
     return (
       <SettingsStatus
@@ -33,7 +32,5 @@ export function BotSettings({ mode = "profile" }: { mode?: Mode }) {
       />
     );
   if (mode === "history") return <PersonalityHistory profile={profile} />;
-  return (
-    <BotForm key={`${profile.id}:${mode}`} profile={profile} mode={mode} />
-  );
+  return <BotForm key={profile.id} profile={profile} />;
 }

@@ -274,6 +274,108 @@ fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
 }
 
 #[test]
+fn a_fresh_install_is_onboarded_then_asks_for_a_model() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::onboarding, dark);
+        assert!(rt.state.shows_onboarding());
+        assert!(
+            rt.find("rd-roster").is_none(),
+            "onboarding takes the window"
+        );
+        let text = screen_text(&rt);
+        assert!(text.contains("Welcome to raphie"), "{text}");
+        assert!(text.contains("Running on this Mac"), "{text}");
+
+        // The teammate: renamed, described and recoloured.
+        click(&mut rt, "rd-onboarding-next");
+        assert_eq!(rt.state.onboarding, state::Onboarding::Teammate);
+        assert!(screen_text(&rt).contains("Meet your new teammate"));
+        rt.update(|ui, _| {
+            ui.profile.name = TextEdit::new("Juniper");
+            ui.profile.description = TextEdit::new("Keeps my week on track");
+        });
+        click(&mut rt, "rd-onboarding-color-teal");
+        click(&mut rt, "rd-onboarding-next");
+
+        // How they work, as a new teammate is asked; leaving saves it all.
+        assert_eq!(rt.state.onboarding, state::Onboarding::Work);
+        assert!(screen_text(&rt).contains("How should Juniper work?"));
+        click(&mut rt, "rd-teammate-preset-analyst");
+        click(&mut rt, "rd-onboarding-next");
+        match rt.state.sent.last() {
+            Some(Command::SaveProfile { bot_id, update }) => {
+                assert_eq!(bot_id, "default");
+                assert_eq!(update.name, "Juniper");
+                assert_eq!(update.description, "Keeps my week on track");
+                assert_eq!(update.color.as_deref(), Some("#83bcb4"));
+                assert_eq!(update.personality, "Be precise.");
+            }
+            other => panic!("expected a profile save, got {other:?}"),
+        }
+
+        // The bot asks for a model; a service opens its form in Settings.
+        assert_eq!(rt.state.onboarding, state::Onboarding::Provider);
+        assert!(screen_text(&rt).contains("First, I need a way to think."));
+        click(&mut rt, "rd-setup-openrouter");
+        assert_eq!(
+            rt.state.screen,
+            Screen::Settings(Page::Bot {
+                bot_id: "default".into(),
+                section: BotSection::Providers,
+            })
+        );
+    }
+}
+
+#[test]
+fn onboarding_can_be_skipped_and_never_shows_once_work_exists() {
+    let mut rt = render(scenes::onboarding_provider, false);
+    // The last step has no way back, only on: skip it, or close the flow.
+    assert!(rt.find("rd-onboarding-back").is_none());
+    click(&mut rt, "rd-onboarding-skip");
+    assert!(!rt.state.shows_onboarding());
+    // Skipped: the bot's own setup, in the workspace.
+    assert!(rt.find("rd-roster").is_some() && rt.find("rd-setup").is_some());
+
+    // A bot that can already reply never sees it.
+    let rt = render(scenes::new_conversation, false);
+    assert!(!rt.state.shows_onboarding());
+}
+
+#[test]
+fn onboarding_asks_for_the_built_in_personalities_before_they_are_needed() {
+    let mut rt = render(scenes::onboarding, false);
+    rt.update(|ui, _| ui.model.personality_presets = None);
+    settle(&mut rt);
+    click(&mut rt, "rd-onboarding-next");
+    assert!(rt.state.sent.contains(&Command::LoadPersonalityPresets));
+    // Still on their way: the step says so instead of showing nothing.
+    click(&mut rt, "rd-onboarding-next");
+    assert_eq!(rt.state.onboarding, state::Onboarding::Work);
+    assert!(rt.find("rd-teammate-presets-loading").is_some());
+}
+
+#[test]
+fn a_later_teammate_without_a_model_joins_through_the_same_flow() {
+    // Research has no model and nothing said yet; Raphie is set up.
+    let mut rt = render(scenes::teammate_setup, false);
+    assert!(rt.state.shows_onboarding());
+    assert!(!rt.state.first_run());
+    // No welcome: the new teammate's three steps, on the last.
+    assert_eq!(rt.state.onboarding_step(), state::Onboarding::Provider);
+    assert_eq!(
+        element(&rt, "rd-onboarding-progress").label.as_deref(),
+        Some("Step 3 of 3: A way to think")
+    );
+    assert!(screen_text(&rt).contains("First, I need a way to think."));
+    click(&mut rt, "rd-onboarding-close");
+    assert!(
+        rt.find("rd-roster").is_some(),
+        "closing skips to the workspace"
+    );
+}
+
+#[test]
 fn a_narrow_window_shows_one_column_at_a_time() {
     const PHONE: (f32, f32) = (390.0, 780.0);
     for dark in [false, true] {
@@ -1149,43 +1251,32 @@ fn revision_history_lists_saved_versions_and_unfolds_them() {
 }
 
 #[test]
-fn a_bot_is_created_from_a_form_that_keeps_its_draft() {
-    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 1700.0));
-    click(&mut rt, "rd-nav-new-bot");
+fn a_teammate_is_added_through_a_flow_not_a_settings_page() {
+    let mut rt = render(scenes::conversations, false);
+    click(&mut rt, "rd-add-teammate");
     assert_eq!(rt.state.screen, Screen::Settings(Page::NewBot));
-    let text = screen_text(&rt);
-    assert!(text.contains("New bot"), "{text}");
-    assert_eq!(
-        element(&rt, "rd-profile-status").text.as_deref(),
-        Some("Independent configuration. No settings are copied.")
-    );
-    // The starter personality is there; an untouched form is not nagged.
     assert!(
-        rt.state
-            .profile
-            .personality
-            .text
-            .starts_with("Be thoughtful")
+        rt.find("rd-settings-nav").is_none(),
+        "the flow takes the window"
     );
-    assert!(rt.find("rd-profile-error").is_none());
-    let before = rt.state.sent.len();
-    click(&mut rt, "rd-profile-save");
-    assert_eq!(rt.state.sent.len(), before, "a bot needs a name");
+    assert!(screen_text(&rt).contains("Meet your new teammate"));
+    // A colour no teammate wears yet is chosen for them.
+    assert!(rt.state.profile.color.is_some());
 
-    rt.update(|ui, _| ui.profile.description = TextEdit::new("Plans trips"));
+    // A name first.
+    click(&mut rt, "rd-add-next");
+    assert!(!rt.state.adding_work, "a teammate needs a name");
+    rt.update(|ui, _| {
+        ui.profile.name = TextEdit::new(" Travel ");
+        ui.profile.description = TextEdit::new("Plans trips");
+    });
     settle(&mut rt);
-    assert_eq!(
-        element(&rt, "rd-profile-error").text.as_deref(),
-        Some("Give this bot a name.")
-    );
-    // The draft survives a look at another page.
-    click(&mut rt, "rd-nav-appearance");
-    click(&mut rt, "rd-nav-new-bot");
-    assert_eq!(rt.state.profile.description.text, "Plans trips");
+    click(&mut rt, "rd-add-next");
+    assert!(rt.state.adding_work);
+    assert!(screen_text(&rt).contains("How should Travel work?"));
 
-    rt.update(|ui, _| ui.profile.name = TextEdit::new(" Travel "));
-    settle(&mut rt);
-    click(&mut rt, "rd-profile-save");
+    // Adding sends the bot; it may change its personality, not you.
+    click(&mut rt, "rd-add-create");
     let Some(Command::CreateBot { bot }) = rt.state.sent.last() else {
         panic!("the bot is sent");
     };
@@ -1194,50 +1285,43 @@ fn a_bot_is_created_from_a_form_that_keeps_its_draft() {
         ("Travel", "Plans trips")
     );
     assert_eq!(
-        element(&rt, "rd-profile-save").label.as_deref(),
-        Some("Creating…")
+        bot.self_updates,
+        Some(raphie_core::contracts::SelfUpdates::NEW_BOT)
     );
+    assert!(screen_text(&rt).contains("Adding…"));
 
-    // A refusal keeps the form; success opens the new bot's Providers.
+    // A refusal keeps the flow; success opens the new teammate.
     deliver(
         &mut rt,
         Event::BotCreateFailed {
             message: "A bot with this name already exists.".into(),
         },
     );
-    assert_eq!(
-        element(&rt, "rd-profile-error").text.as_deref(),
-        Some("A bot with this name already exists.")
-    );
-    assert_eq!(rt.state.profile.name.text, " Travel ");
-    click(&mut rt, "rd-profile-save");
+    assert!(screen_text(&rt).contains("A bot with this name already exists."));
+    assert_eq!(rt.state.screen, Screen::Settings(Page::NewBot));
+    click(&mut rt, "rd-add-create");
     let mut created = research("Plans trips", 1);
     created.id = "b-travel".into();
     created.name = "Travel".into();
     deliver(&mut rt, Event::BotCreated(created));
-    assert_eq!(
-        rt.state.screen,
-        Screen::Settings(Page::Bot {
-            bot_id: "b-travel".into(),
-            section: BotSection::Providers,
-        })
-    );
-    assert!(rt.state.model.bots.iter().any(|bot| bot.id == "b-travel"));
+    assert_eq!(rt.state.screen, Screen::Workspace);
+    assert!(rt.state.sent.contains(&Command::SelectBot {
+        bot_id: "b-travel".into()
+    }));
 
-    // Cancel leaves without creating and drops the form.
-    click(&mut rt, "rd-nav-new-bot");
+    // Closing leaves without adding and drops the draft.
+    click(&mut rt, "rd-add-teammate");
     rt.update(|ui, _| ui.profile.name = TextEdit::new("Scratch"));
     settle(&mut rt);
-    click(&mut rt, "rd-profile-cancel");
-    assert!(matches!(
-        rt.state.screen,
-        Screen::Settings(Page::Bot {
-            section: BotSection::Profile,
-            ..
-        })
-    ));
-    click(&mut rt, "rd-nav-new-bot");
+    click(&mut rt, "rd-add-close");
+    assert_eq!(rt.state.screen, Screen::Workspace);
+    click(&mut rt, "rd-add-teammate");
     assert!(rt.state.profile.name.text.is_empty());
+
+    // Settings no longer creates bots.
+    click(&mut rt, "rd-add-close");
+    click(&mut rt, "rd-settings");
+    assert!(rt.find("rd-nav-new-bot").is_none());
 }
 
 #[test]
@@ -6068,25 +6152,6 @@ fn self_updates_are_hidden_for_a_runtime_too_old_to_say() {
         Event::PersonalityPresets(scenes::personality_presets()),
     );
     assert!(rt.find("rd-profile-presets").is_some());
-}
-
-#[test]
-fn a_new_bot_may_change_its_personality_but_not_you() {
-    let mut rt = render_sized(scenes::settings_new_bot, false, (1280.0, 2600.0));
-    assert!(rt.state.sent.contains(&Command::LoadPersonalityPresets));
-    assert!(rt.find("rd-self-update-owner-switch").is_some());
-    assert_eq!(
-        rt.state.profile.self_updates,
-        Some(raphie_core::contracts::SelfUpdates::NEW_BOT)
-    );
-    click(&mut rt, "rd-profile-save");
-    let Some(Command::CreateBot { bot }) = rt.state.sent.last() else {
-        panic!("a bot to create, not {:?}", rt.state.sent.last());
-    };
-    assert_eq!(
-        bot.self_updates,
-        Some(raphie_core::contracts::SelfUpdates::NEW_BOT)
-    );
 }
 
 #[test]

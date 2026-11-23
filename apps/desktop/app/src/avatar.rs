@@ -154,7 +154,7 @@ impl Tones {
     }
 
     /// The colour of bot `id` as `#rrggbb`.
-    fn hex_of(&self, id: &str) -> &str {
+    pub fn hex_of(&self, id: &str) -> &str {
         self.assigned
             .iter()
             .find(|(seen, _)| seen == id)

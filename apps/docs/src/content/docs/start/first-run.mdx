@@ -1,6 +1,6 @@
 ---
 title: First run
-description: Create the administrator, sign in, connect a model provider and start your first conversation.
+description: Create the administrator, sign in, meet your first bot, connect a model provider and start your first conversation.
 sidebar:
   order: 3
 ---
@@ -41,16 +41,18 @@ A new Raphie has no account and no model. You create the single administrator fr
 
    If you chose another port, `raphie port` prints the address. On a remote server, open an SSH tunnel to its web port first, for example `ssh -L 24320:127.0.0.1:24320 you@server`. See [remote access](/operate/remote-access/).
 
-4. **Connect a model provider.** Open **Settings** with the gear at the bottom of the sidebar, then **Providers**, and choose **Add connection**. Pick one:
+4. **Meet your first teammate.** A fresh Raphie welcomes you, then asks you to name the default bot (Raphie, unless you change it), say what it will handle and pick its colour, and then how it should work, from the [built-in personalities](/guides/bots/#built-in-personalities). These are the same steps as adding any later teammate, and all of it can change later in **Settings → Profile**.
+
+5. **Connect a model provider.** The bot then asks for a way to think: **First, I need a way to think.** Choose a model service there. The web workspace opens the connection form in place; the desktop app opens the bot's **Providers** page with that form open. You can also skip onboarding and use **Settings → Providers → Add connection** at any time. Pick one:
 
    - **OpenRouter:** paste an API key from your [OpenRouter keys page](https://openrouter.ai/settings/keys).
    - **ChatGPT subscription:** choose the sign-in button and finish signing in on the page it opens. If your browser is on a different machine from Raphie, the final redirect to `127.0.0.1` fails; copy that address from the browser bar and paste it back into Raphie.
 
    Connections belong to the bot you are configuring, and keys are encrypted on this machine. Details are in [credentials](/operate/credentials/).
 
-5. **Pick a default model.** Open **Models**, find a model from your new connection and choose **Set as default**. New conversations start with it; existing ones keep their model.
+6. **Pick a default model.** Open **Models**, find a model from your new connection and choose **Set as default**. New conversations start with it; existing ones keep their model.
 
-6. **Start a conversation.** Choose **New conversation**, type in the composer and send. You can switch models per conversation from the composer.
+7. **Start a conversation.** Once the bot can reply, it opens on its empty desk: choose one of the things to ask, or type in the composer, and send. You can switch models per conversation from the composer.
 
 </Steps>
 

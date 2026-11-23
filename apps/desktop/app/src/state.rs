@@ -374,6 +374,12 @@ pub struct Ui {
     /// In a narrow window, whether Settings shows its navigation rather
     /// than a page.
     pub settings_nav_home: bool,
+    /// Where a fresh install's onboarding is, and whether it was skipped.
+    pub onboarding: Onboarding,
+    /// Adding a teammate: past naming them, on choosing how they work.
+    pub adding_work: bool,
+    /// Bots whose setup the owner skipped, by id, until the app restarts.
+    pub onboarding_skipped: HashSet<String>,
     /// The workspace's size in points, as last laid out; 0 before the
     /// first layout. The width bounds the roster's, and the height the
     /// share the bots take of it.
@@ -514,6 +520,21 @@ pub const ROSTER_WIDTH: f32 = 264.0;
 pub const ROSTER_MIN: f32 = 220.0;
 pub const ROSTER_MAX: f32 = 480.0;
 
+/// A fresh install's first steps, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Onboarding {
+    /// The app says hello.
+    #[default]
+    Welcome,
+    /// The owner names the first bot, says what it handles and picks its
+    /// colour.
+    Teammate,
+    /// The owner picks how the first bot works.
+    Work,
+    /// The bot asks for a model.
+    Provider,
+}
+
 /// Below this width one column shows at a time, as on a phone: the roster
 /// as home, or the conversation with a way back (the web's 768).
 pub const NARROW: f32 = 768.0;
@@ -582,6 +603,9 @@ impl Ui {
             roster_open: true,
             narrow_home: true,
             settings_nav_home: false,
+            onboarding: Onboarding::Welcome,
+            adding_work: false,
+            onboarding_skipped: HashSet::new(),
             workspace_width: 0.0,
             workspace_height: 0.0,
             roster_width: ROSTER_WIDTH,
@@ -2071,6 +2095,22 @@ impl Ui {
         if page == Page::NewBot {
             self.ensure_presets();
             self.show_new_bot();
+            self.adding_work = false;
+            // A colour no teammate wears yet, as the web picks.
+            if self.profile.color.is_none() {
+                let tones = crate::avatar::Tones::assign(&self.model.bots);
+                let worn: Vec<String> = self
+                    .model
+                    .bots
+                    .iter()
+                    .map(|bot| tones.hex_of(&bot.id).to_lowercase())
+                    .collect();
+                self.profile.color = crate::avatar::PALETTE_NAMES
+                    .iter()
+                    .map(|(_, hex)| hex.to_string())
+                    .find(|hex| !worn.contains(hex))
+                    .or_else(|| Some(crate::avatar::PALETTE_NAMES[1].1.to_owned()));
+            }
         }
         if page == Page::Owner {
             // Unsaved edits stay; otherwise show what was last loaded
@@ -2207,6 +2247,83 @@ impl Ui {
             self.restoring_profile = false;
             self.command(Command::SaveProfile { bot_id, update });
         }
+    }
+
+    /// The teammate flow shows for a bot that cannot start yet: it has no
+    /// model to reply with, nothing has been said to it, no settings page is
+    /// open, and the owner has not skipped it. On a fresh install that is
+    /// the one bot; later, a teammate just added.
+    pub fn shows_onboarding(&self) -> bool {
+        self.model.auth == AuthState::SignedIn
+            && self.screen == Screen::Workspace
+            && self.model.sessions_loaded
+            && self.model.session_list().next().is_none()
+            && self.needs_setup()
+            && self
+                .model
+                .bot_id
+                .as_ref()
+                .is_some_and(|id| !self.onboarding_skipped.contains(id))
+    }
+
+    /// The next onboarding step. Leaving "how they work" saves the first
+    /// bot's name, description, colour and personality, as Settings →
+    /// Profile would.
+    pub fn onboarding_next(&mut self) {
+        self.onboarding = match self.onboarding {
+            Onboarding::Welcome => {
+                if let Some(bot_id) = self.model.bot_id.clone() {
+                    self.show_profile(&bot_id);
+                }
+                // Asked now, so "how they work" has them when it opens.
+                self.ensure_presets();
+                Onboarding::Teammate
+            }
+            Onboarding::Teammate => {
+                if self.profile.name.text.trim().is_empty() {
+                    return;
+                }
+                self.ensure_presets();
+                Onboarding::Work
+            }
+            Onboarding::Work => {
+                if self.profile.is_dirty() {
+                    self.save_profile();
+                }
+                Onboarding::Provider
+            }
+            Onboarding::Provider => Onboarding::Provider,
+        };
+    }
+
+    /// Whether this is a fresh install's one bot, met from the welcome on.
+    pub fn first_run(&self) -> bool {
+        self.model.bots.len() == 1
+    }
+
+    /// The step on screen: a later teammate is met while it is added, so
+    /// it joins the flow on its last step.
+    pub fn onboarding_step(&self) -> Onboarding {
+        if self.first_run() {
+            self.onboarding
+        } else {
+            Onboarding::Provider
+        }
+    }
+
+    /// Leaves the flow for this bot: the workspace, with its own setup.
+    pub fn skip_onboarding(&mut self) {
+        if let Some(id) = self.model.bot_id.clone() {
+            self.onboarding_skipped.insert(id);
+        }
+    }
+
+    pub fn onboarding_back(&mut self) {
+        self.onboarding = match self.onboarding {
+            Onboarding::Provider => Onboarding::Work,
+            Onboarding::Work => Onboarding::Teammate,
+            _ => Onboarding::Welcome,
+        };
     }
 
     /// True once the selected bot's settings say it has no model it can
@@ -3630,10 +3747,12 @@ impl Ui {
 
     /// Leaves "Create a bot" without creating one, for the selected bot's
     /// Profile. The unfinished form is dropped: Cancel means discard.
+    /// Leaves "Add a teammate" without adding one, and drops the draft.
     pub fn cancel_new_bot(&mut self) {
         self.profile = ProfileDraft::empty();
         self.model.profile_error = None;
-        self.open_settings(None);
+        self.adding_work = false;
+        self.close_settings();
     }
 
     /// Opens "Delete bot" asking for the bot's name.
@@ -3979,13 +4098,12 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     }
                 }
                 Effect::BotCreated(bot_id) => {
-                    // The form did its job. Next the new bot needs a model
-                    // connection, so open its Providers page, as the web does.
+                    // The new teammate opens, and asks for a way to think on
+                    // its own screen, as on the web.
                     ui.profile = ProfileDraft::empty();
-                    ui.open_settings(Some(Page::Bot {
-                        bot_id,
-                        section: BotSection::Providers,
-                    }));
+                    ui.adding_work = false;
+                    ui.close_settings();
+                    ui.choose_bot(&bot_id);
                 }
                 Effect::BotDeleted(bot_id) => {
                     ui.deleting_bot = false;
