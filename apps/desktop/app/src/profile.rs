@@ -14,6 +14,7 @@ use rune::TextEdit;
 const NAME_LIMIT: usize = 80;
 const DESCRIPTION_LIMIT: usize = 500;
 const PERSONALITY_LIMIT: usize = 16_000;
+const INSTRUCTIONS_LIMIT: usize = 16_000;
 
 /// The personality a new bot starts with, as the web offers it.
 pub const STARTER_PERSONALITY: &str = "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";
@@ -40,6 +41,8 @@ pub struct ProfileDraft {
     pub self_updates: Option<SelfUpdates>,
     /// The bot's standing rules as they are edited, one a line.
     pub rules: TextEdit,
+    /// The bot's instructions on its tools as they are edited.
+    pub instructions: TextEdit,
     /// A custom colour being typed.
     pub custom_color: TextEdit,
     /// What the last save said, until the next edit ("Saved revision 4.").
@@ -60,6 +63,7 @@ impl ProfileDraft {
             reply_style: ReplyStyle::default(),
             self_updates: None,
             rules: TextEdit::new(""),
+            instructions: TextEdit::new(""),
             custom_color: TextEdit::new(""),
             message: None,
             creating: false,
@@ -88,6 +92,7 @@ impl ProfileDraft {
             reply_style: profile.reply_style,
             self_updates: profile.self_updates,
             rules: TextEdit::new(rules_text(&profile.rules)),
+            instructions: TextEdit::new(profile.instructions.clone()),
             custom_color: TextEdit::new(profile.color.clone().unwrap_or_default()),
             message: None,
             creating: false,
@@ -129,6 +134,7 @@ impl ProfileDraft {
                 || self.reply_style != saved.reply_style
                 || self.self_updates != saved.self_updates
                 || rules_of(&self.rules.text) != saved.rules
+                || self.instructions.text.trim() != saved.instructions
         })
     }
 
@@ -154,6 +160,8 @@ impl ProfileDraft {
             Some("Give this bot a personality.")
         } else if length(&self.personality) > PERSONALITY_LIMIT {
             Some("A personality can be at most 16,000 characters.")
+        } else if length(&self.instructions) > INSTRUCTIONS_LIMIT {
+            Some("Instructions can be at most 16,000 characters.")
         } else {
             None
         }
@@ -177,6 +185,8 @@ impl ProfileDraft {
         let saved = self.saved.as_ref()?;
         Some(UpdateBotProfile {
             rules: Some(rules_of(&self.rules.text)).filter(|rules| rules != &saved.rules),
+            instructions: Some(self.instructions.text.trim().to_owned())
+                .filter(|instructions| instructions != &saved.instructions),
             name: self.name.text.trim().to_owned(),
             description: self.description.text.trim().to_owned(),
             personality: self.personality.text.trim().to_owned(),
@@ -221,6 +231,7 @@ mod tests {
     fn research() -> BotProfile {
         BotProfile {
             rules: Vec::new(),
+            instructions: String::new(),
             id: "b-research".into(),
             name: "Research".into(),
             description: "Reads papers".into(),
@@ -356,6 +367,28 @@ mod tests {
         // The form's own fields are named first.
         draft.name = TextEdit::new("");
         assert_eq!(draft.blocker().as_deref(), Some("Give this bot a name."));
+    }
+
+    #[test]
+    fn instructions_are_sent_only_when_they_change() {
+        let mut draft = ProfileDraft::of(&BotProfile {
+            instructions: "Calendar: Executor.".into(),
+            ..research()
+        });
+        draft.instructions = TextEdit::new("Calendar: Executor.\n");
+        assert!(!draft.is_dirty(), "a trailing line is no edit");
+        assert_eq!(draft.update().unwrap().instructions, None);
+        draft.instructions = TextEdit::new(" Calendar: Executor. Boards by column. ");
+        assert!(draft.is_dirty());
+        assert_eq!(
+            draft.update().unwrap().instructions.as_deref(),
+            Some("Calendar: Executor. Boards by column.")
+        );
+        draft.instructions = TextEdit::new("x".repeat(16_001));
+        assert_eq!(
+            draft.problem(),
+            Some("Instructions can be at most 16,000 characters.")
+        );
     }
 
     #[test]

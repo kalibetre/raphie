@@ -14,6 +14,7 @@ mod channels;
 mod diagnostics;
 mod history;
 mod inspect;
+mod instructions;
 mod jobs;
 mod mcp;
 mod memories;

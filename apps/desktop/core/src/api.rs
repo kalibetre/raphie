@@ -28,11 +28,11 @@ use crate::contracts::{
     BotList, BotProfile, ChannelHomeSettings, ChannelSettings, ControlAction, ControlBody,
     Decision, DecisionBody, DecisionResult, DefaultModelBody, DeviceCodeResponse,
     DeviceTokenResponse, EditConnectionBody, ErrorBody, HandoffList, McpActionBody, McpConnection,
-    McpList, McpPurposeBody, MemoryPage, MemoryRecall, MemoryStatus, Page, RecallBody, Receipt,
-    ReviseMemoryBody, RuntimeSettings, SandboxInfo, SandboxSettings, SaveDiscordBody, SaveMcpBody,
-    SaveMemoryBody, SaveSandboxBody, SaveTelegramBody, Scope, SelectHomeBody, SessionObservation,
-    SessionSummary, SessionTurn, SubmitMessage, TelegramPairingCode, TestConnectionBody,
-    UnpairTelegramBody, UpdateBotProfile,
+    McpList, MemoryPage, MemoryRecall, MemoryStatus, Page, RecallBody, Receipt, ReviseMemoryBody,
+    RuntimeSettings, SandboxInfo, SandboxSettings, SaveDiscordBody, SaveMcpBody, SaveMemoryBody,
+    SaveSandboxBody, SaveTelegramBody, Scope, SelectHomeBody, SessionObservation, SessionSummary,
+    SessionTurn, SubmitMessage, TelegramPairingCode, TestConnectionBody, UnpairTelegramBody,
+    UpdateBotProfile,
 };
 use crate::contracts::{ActivityEvent, TelemetryBody, TraceDiagnostics};
 use crate::contracts::{AnswerSignInBody, ProviderSignIn, StartSignInBody};
@@ -864,26 +864,18 @@ impl ApiClient {
         connection: &NewMcpConnection,
     ) -> Result<Vec<McpConnection>, ApiError> {
         let body = match connection {
-            NewMcpConnection::Http {
+            NewMcpConnection::Http { name, url, token } => SaveMcpBody::Http {
                 name,
-                purpose,
-                url,
-                token,
-            } => SaveMcpBody::Http {
-                name,
-                purpose: purpose.as_deref(),
                 url,
                 token: token.as_ref().map(Secret::expose),
             },
             NewMcpConnection::Stdio {
                 name,
-                purpose,
                 command,
                 args,
                 env,
             } => SaveMcpBody::Stdio {
                 name,
-                purpose: purpose.as_deref(),
                 command,
                 args,
                 env: env
@@ -907,21 +899,6 @@ impl ApiClient {
         let path = format!("/api/mcp/{}", encode(id));
         let list: McpList = self
             .post_json(&bot_path(bot_id, &path), &McpActionBody { action })
-            .await?;
-        Ok(list.items)
-    }
-
-    /// Saves what the bot should use one connection for and returns the
-    /// bot's connections as they are afterwards.
-    pub async fn describe_mcp(
-        &self,
-        bot_id: &str,
-        id: &str,
-        purpose: &str,
-    ) -> Result<Vec<McpConnection>, ApiError> {
-        let path = format!("/api/mcp/{}/purpose", encode(id));
-        let list: McpList = self
-            .post_json(&bot_path(bot_id, &path), &McpPurposeBody { purpose })
             .await?;
         Ok(list.items)
     }

@@ -22,7 +22,7 @@ Open **Settings**, choose the bot, then **MCP tools**, and fill in **Add a conne
 
 <Steps>
 
-1. Enter a **Connection name** and, in **What it is for**, what the bot should use it for. Choose **Streamable HTTP**.
+1. Enter a **Connection name** and choose **Streamable HTTP**.
 2. Enter the **Server URL**. Use `https://`. Plain `http://` is accepted for any host, but a bearer token or MCP sign-in is only used over HTTPS or on a loopback address.
 3. If the server takes a static token, paste it into **Bearer token (optional)**. Leave it empty if the server supports MCP sign-in.
 4. Choose **Connect server**.
@@ -35,7 +35,7 @@ Open **Settings**, choose the bot, then **MCP tools**, and fill in **Add a conne
 
 <Steps>
 
-1. Enter a **Connection name** and, in **What it is for**, what the bot should use it for. Choose **Local command (stdio)**.
+1. Enter a **Connection name** and choose **Local command (stdio)**.
 2. Enter the **Command**, for example `npx`.
 3. Enter **Arguments (JSON array)**, for example `["-y", "your-mcp-server"]`.
 4. Add any secrets the server needs in **Environment (JSON object, optional)**, for example `{"API_TOKEN": "…"}`.
@@ -55,7 +55,6 @@ A stdio server runs on the Raphie host as the same user account as Raphie, outsi
 A server's tools stay out of the bot's instructions until the bot searches for them, so the instructions name what is connected instead. In every conversation the bot reads, for each connected server:
 
 - its **Connection name**;
-- **What it is for**, in your words;
 - for Executor, the apps it holds, such as Gmail, Google Calendar and Jira, each with the name the bot searches Executor for;
 - what the server says about itself when it connects, cut to 1,500 characters and marked as reference, not instructions.
 
@@ -63,9 +62,9 @@ It is also told to look in these servers before saying it cannot reach something
 
 A gateway offers tools named `search` and `call`, which say nothing about the calendar or mail behind them. For Executor, Raphie fills that in by itself: when it connects, and every hour after, it asks Executor which apps it holds, and tells the bot. An app you add to Executor reaches the bot within the hour, or at once if you **Pause** and **Enable** the connection. Raphie asks with Executor's `skills` tool and no arguments, which lists apps and acts on none, so it needs no approval. If Executor does not answer, the bot keeps the list it had.
 
-For any other gateway, or to add your own words, fill in **What it is for**. Without "calendar, mail and tickets" beside its name, a bot asked about your calendar finds no calendar tool and says it has none. The apps and your words are added to each tool's description, so a tool search for "calendar" finds them.
+The apps are also added to each tool's description, so a tool search for "calendar" finds them. Each connection's row shows them under its address, or the server's own one-line description.
 
-Change it under the connection's row, in **What _name_ is for**, then **Save**. It applies from the bot's next reply and nothing reconnects. Left empty, the field shows Executor's apps, or another server's own one-line description.
+To say what a connection is for, such as "Executor holds my calendar, mail and Jira", tell the bot, or write it in the bot's [instructions](/guides/bots/#instructions). The bot reads them in every conversation, so for any gateway that does not list its apps, this is how a bot asked about your calendar knows where to look instead of saying it has none.
 
 ## Manage connections
 

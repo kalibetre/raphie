@@ -17,6 +17,8 @@ use rune_kit::ComboboxState;
 const NAME_LIMIT: usize = 80;
 const CALL_ME_LIMIT: usize = 40;
 pub const ABOUT_LIMIT: usize = 2_000;
+/// The runtime's limit on a set of instructions, for every bot or one.
+pub const INSTRUCTIONS_LIMIT: usize = 16_000;
 
 /// The time zone choice that clears it, as the list names it.
 pub const NOT_SET: &str = "none";
@@ -32,6 +34,8 @@ pub struct OwnerDraft {
     pub about: TextEdit,
     /// The rules for every bot as they are edited, one a line.
     pub rules: TextEdit,
+    /// The instructions for every bot as they are edited.
+    pub instructions: TextEdit,
     /// The searchable list of time zones.
     pub zones: ComboboxState,
 }
@@ -46,6 +50,7 @@ impl OwnerDraft {
             time_zone: String::new(),
             about: TextEdit::new(""),
             rules: TextEdit::new(""),
+            instructions: TextEdit::new(""),
             zones: ComboboxState::default(),
         }
     }
@@ -59,6 +64,7 @@ impl OwnerDraft {
             time_zone: saved.time_zone.clone(),
             about: TextEdit::new(saved.about.clone()),
             rules: TextEdit::new(rules_text(&saved.rules)),
+            instructions: TextEdit::new(saved.instructions.clone()),
             zones: ComboboxState::default(),
         }
     }
@@ -71,6 +77,7 @@ impl OwnerDraft {
                 || self.time_zone != saved.time_zone
                 || self.about.text != saved.about
                 || rules_of(&self.rules.text) != saved.rules
+                || self.instructions.text.trim() != saved.instructions.trim()
         })
     }
 
@@ -88,6 +95,11 @@ impl OwnerDraft {
         if long(&self.about, ABOUT_LIMIT) {
             return Some("About you is at most 2,000 characters.".to_owned());
         }
+        if long(&self.instructions, INSTRUCTIONS_LIMIT) {
+            return Some(
+                "The instructions for every bot are at most 16,000 characters.".to_owned(),
+            );
+        }
         rules_problem(&rules_of(&self.rules.text))
     }
 
@@ -99,6 +111,28 @@ impl OwnerDraft {
         (saved != Some(&rules)).then_some(rules)
     }
 
+    /// The instructions to send: those typed, when they differ from the
+    /// saved ones.
+    fn changed_instructions(&self) -> Option<String> {
+        let typed = self.instructions.text.trim();
+        let saved = self.saved.as_ref().map(|saved| saved.instructions.trim());
+        (saved != Some(typed)).then(|| typed.to_owned())
+    }
+
+    /// What "Reset to Raphie's" sends: the saved profile as it is, with
+    /// the instructions for every bot back to Raphie's own.
+    pub fn reset_instructions(&self) -> Option<SaveOwnerProfile> {
+        let saved = self.saved.as_ref()?;
+        Some(SaveOwnerProfile {
+            name: saved.name.clone(),
+            call_me: saved.call_me.clone(),
+            time_zone: saved.time_zone.clone(),
+            about: saved.about.clone(),
+            rules: None,
+            instructions: Some(None),
+        })
+    }
+
     /// What a save would send, trimmed as the web trims it, or `None`
     /// while the form has a problem.
     pub fn update(&self) -> Option<SaveOwnerProfile> {
@@ -107,6 +141,8 @@ impl OwnerDraft {
         }
         Some(SaveOwnerProfile {
             rules: self.changed_rules(),
+            // Unchanged, Raphie's stay Raphie's and keep following releases.
+            instructions: self.changed_instructions().map(Some),
             name: self.name.text.trim().to_owned(),
             call_me: self.call_me.text.trim().to_owned(),
             time_zone: self.time_zone.clone(),
@@ -170,6 +206,8 @@ mod tests {
     fn saved() -> OwnerProfile {
         OwnerProfile {
             rules: Vec::new(),
+            instructions: String::new(),
+            instructions_default: false,
             name: "Hana Girma".into(),
             call_me: "Hana".into(),
             time_zone: "Africa/Addis_Ababa".into(),

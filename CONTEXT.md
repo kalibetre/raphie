@@ -15,7 +15,8 @@ allows its self-updates. Personality guides its behavior without granting
 capabilities or access.
 
 **Self-updates**: What a bot may change by itself, per bot: its own
-personality and standing rules, the owner profile, and its skills. Each change
+personality, standing rules and instructions, the owner profile, and its
+skills. Each change
 is saved at once and can be undone.
 
 **Standing rule**: One thing the owner wants done every time, in a sentence.
@@ -24,9 +25,14 @@ kept in the owner profile, then its own, kept in its profile. Rules say how to
 work and grant nothing.
 _Avoid_: Using memory for a rule; a bot searches memory only when it thinks to.
 
-**Connection purpose**: What the owner says a bot should use one MCP
-connection for. A bot reads each connection's name and purpose in every
-conversation, since a connection's tools are only found by searching.
+**Instructions**: Notes on how to work with tools, kept by the owner and the
+bots together. One set is for every bot, kept in the owner profile, and
+starts as Raphie's own guidance on the tools every bot has, following each
+release until changed; one set is each bot's own, kept in its profile, and
+starts empty. A bot reads both in every conversation. Instructions grant
+nothing.
+_Avoid_: A purpose per MCP connection; what a connection is for goes in the
+bot's instructions.
 
 **Skill**: Instructions for one kind of task in the standard Agent Skills
 format: a folder in a bot's workspace, `skills/<name>/`, holding a `SKILL.md`.
@@ -34,8 +40,8 @@ A bot sees every skill's name and description and reads a skill only when a
 task matches it. Skills never grant capabilities.
 
 **Owner profile**: What the owner tells every bot about themselves: their
-name, what to call them, their time zone, a few lines about them and their
-standing rules for every bot. Shared by
+name, what to call them, their time zone, a few lines about them, and their
+standing rules and instructions for every bot. Shared by
 every bot; it describes the owner and grants nothing. Shown as **You** in
 Settings.
 _Avoid_: User profile, account, About you.

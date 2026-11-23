@@ -60,6 +60,10 @@ pub struct BotProfile {
     /// time. Older runtimes omit them: none.
     #[serde(default)]
     pub rules: Vec<String>,
+    /// How this bot works with its own tools and services, kept by the
+    /// owner and the bot together. Older runtimes omit them: none.
+    #[serde(default)]
+    pub instructions: String,
     /// Counts saves. A save names the revision it was edited from, so two
     /// clients cannot silently overwrite each other.
     #[serde(default)]
@@ -269,6 +273,13 @@ pub struct OwnerProfile {
     /// Standing rules for every bot. Older runtimes omit them: none.
     #[serde(default)]
     pub rules: Vec<String>,
+    /// Instructions for every bot: Raphie's own until the owner or a bot
+    /// changes them. Older runtimes omit them: none.
+    #[serde(default)]
+    pub instructions: String,
+    /// Whether `instructions` is still Raphie's, which follows each release.
+    #[serde(default)]
+    pub instructions_default: bool,
     /// When it was last saved, in milliseconds; `None` before the first save.
     #[serde(default)]
     pub updated_at: Option<f64>,
@@ -288,6 +299,11 @@ pub struct SaveOwnerProfile {
     /// the rest.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rules: Option<Vec<String>>,
+    /// `None` leaves them out and the runtime keeps them; `Some(None)` is
+    /// sent as `null` and goes back to Raphie's own. Sent only when they
+    /// changed, so Raphie's stay Raphie's and keep following releases.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<Option<String>>,
 }
 
 /// Body of `POST /api/bots/<id>/profile`
@@ -309,6 +325,10 @@ pub struct UpdateBotProfile {
     /// saves the rest.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rules: Option<Vec<String>>,
+    /// `None` leaves them out: the runtime keeps the bot's. Sent only when
+    /// they changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
     /// The revision these edits started from.
     pub revision: u32,
 }
@@ -1635,9 +1655,6 @@ pub struct McpConnection {
     pub from_environment: bool,
     pub id: String,
     pub name: String,
-    /// What the bot should use it for, in the owner's words.
-    #[serde(default)]
-    pub purpose: Option<String>,
     /// One line the service says about itself, when it says anything.
     #[serde(default)]
     pub summary: Option<String>,
@@ -1674,26 +1691,16 @@ pub(crate) struct McpList {
 pub(crate) enum SaveMcpBody<'a> {
     Http {
         name: &'a str,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        purpose: Option<&'a str>,
         url: &'a str,
         #[serde(skip_serializing_if = "Option::is_none")]
         token: Option<&'a str>,
     },
     Stdio {
         name: &'a str,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        purpose: Option<&'a str>,
         command: &'a str,
         args: &'a [String],
         env: std::collections::BTreeMap<&'a str, &'a str>,
     },
-}
-
-/// The body of `POST /api/mcp/:id/purpose`.
-#[derive(Serialize)]
-pub(crate) struct McpPurposeBody<'a> {
-    pub purpose: &'a str,
 }
 
 /// The body of `POST /api/mcp/:id`.

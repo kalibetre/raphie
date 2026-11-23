@@ -315,7 +315,6 @@ fn router(fake: Fake) -> Router {
         .route("/api/channels/{channel}/{action}", post(change_channel))
         .route("/api/mcp", get(mcp).post(add_mcp))
         .route("/api/mcp/{id}", post(change_mcp))
-        .route("/api/mcp/{id}/purpose", post(describe_mcp))
         .route("/api/memory/evidence", get(memory_evidence))
         .route("/api/memory/recall", post(recall_memory))
         .route("/api/memory/evidence/{id}", post(change_memory))
@@ -1348,9 +1347,6 @@ async fn add_mcp(
             "toolCount": if waiting { 0 } else { 3 },
             "credentialConfigured": !waiting,
         });
-        if let Some(purpose) = body.get("purpose") {
-            item["purpose"] = purpose.clone();
-        }
         if waiting {
             item["authorizationUrl"] = json!("https://tools.example.com/authorize?state=abc");
         }
@@ -1359,37 +1355,6 @@ async fn add_mcp(
     let mut response = mcp_json(&fake);
     *response.status_mut() = StatusCode::CREATED;
     response
-}
-
-/// Saves what one connection is for; an empty purpose clears it.
-async fn describe_mcp(
-    State(fake): State<Fake>,
-    uri: axum::http::Uri,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Response {
-    record(&fake, "POST", uri.path().to_owned(), &headers);
-    if let Some(denied) = refuse(&fake, &headers) {
-        return denied;
-    }
-    let id = uri.path().rsplit('/').nth(1).unwrap_or("").to_owned();
-    {
-        let mut host = fake.host.lock().unwrap();
-        let Some(item) = host.mcp.iter_mut().find(|item| item["id"] == id.as_str()) else {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({ "error": "MCP connection not found." })),
-            )
-                .into_response();
-        };
-        match body["purpose"].as_str() {
-            Some("") | None => {
-                item.as_object_mut().unwrap().remove("purpose");
-            }
-            Some(purpose) => item["purpose"] = json!(purpose),
-        }
-    }
-    mcp_json(&fake)
 }
 
 async fn change_mcp(

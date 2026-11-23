@@ -16,7 +16,7 @@ for scene in sign-in sign-in-this-mac device-code onboarding onboarding-teammate
   settings-account settings-appearance settings-profile settings-profile-edited settings-profile-rules \
   settings-models settings-models-filter settings-providers settings-providers-add settings-providers-sign-in settings-providers-subscription \
   settings-memory settings-memory-hindsight settings-memories settings-memories-editing \
-  settings-mcp settings-mcp-command settings-mcp-purpose \
+  settings-mcp settings-mcp-command \
   settings-channels settings-channels-discord settings-channels-telegram \
   settings-sandbox settings-sandbox-container \
   settings-workspace settings-workspace-folder \

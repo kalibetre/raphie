@@ -8,6 +8,7 @@ use raphie_core::engine::Command;
 use rune::{El, Tx, col, row, text, text_input};
 use rune_kit::{Combobox, ComboboxOption};
 
+use super::instructions::{Instructions, instructions_field};
 use super::parts::{SaveBar, Scope, page, save_bar, status};
 use super::profile::{label, section};
 use super::rules::{Rules, rules_field};
@@ -23,7 +24,12 @@ const LEDE: &str =
 pub fn owner(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
     let groups = if s.owner.saved.is_some() {
-        vec![you(s, look, overlays), about(s, t), rules(s, t)]
+        vec![
+            you(s, look, overlays),
+            about(s, t),
+            rules(s, t),
+            instructions(s, t),
+        ]
     } else if let Some(error) = &s.model.owner_error {
         let retry = pressable(
             button(t, Kind::Outline, Size::Small, None, "Try again").key("rd-owner-retry"),
@@ -231,6 +237,44 @@ fn rules(s: &Ui, t: &Theme) -> El {
             busy: s.model.saving_owner,
         },
         |s: &mut Ui| &mut s.owner.rules,
+    )
+}
+
+/// "Instructions for every bot": Raphie's own until changed, with a way
+/// back to them.
+fn instructions(s: &Ui, t: &Theme) -> El {
+    let busy = s.model.saving_owner;
+    let raphies = s
+        .owner
+        .saved
+        .as_ref()
+        .is_some_and(|saved| saved.instructions_default);
+    let reset = (!raphies).then(|| {
+        pressable(
+            button(t, Kind::Ghost, Size::Small, None, "Reset to Raphie’s")
+                .key("rd-owner-instructions-reset"),
+            // Not over unsaved edits: save or discard them first.
+            !busy && !s.owner.is_dirty(),
+            |s: &mut Ui| s.reset_owner_instructions(),
+        )
+    });
+    instructions_field(
+        t,
+        Instructions {
+            key: "rd-owner-instructions",
+            title: "Instructions for every bot",
+            note: "How every bot works with the tools Raphie gives them all, such as cards and questions, and anything else you want every bot to know about its tools. Each bot reads these in every conversation, before its own instructions, and the bots you allow to update your profile add to them when you ask.",
+            placeholder: "When I ask about my day, show it as a timeline card.",
+            edit: &s.owner.instructions,
+            busy,
+            status: Some(if raphies {
+                "Raphie’s own, updated with each release until changed"
+            } else {
+                "Changed from Raphie’s own"
+            }),
+            action: reset,
+        },
+        |s: &mut Ui| &mut s.owner.instructions,
     )
 }
 

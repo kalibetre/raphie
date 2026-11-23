@@ -460,6 +460,7 @@ fn saving_a_profile_bumps_its_revision_and_a_stale_save_conflicts() {
     let (mut driver, _) = signed_in(&host);
     let update = |revision| UpdateBotProfile {
         rules: None,
+        instructions: None,
         name: "Research".into(),
         description: "Reads and summarises".into(),
         personality: "Be brief.".into(),
@@ -1302,6 +1303,7 @@ fn the_owner_profile_loads_saves_and_reports_a_refusal() {
     };
     let owner = |time_zone: &str| SaveOwnerProfile {
         rules: None,
+        instructions: None,
         name: "Hana Girma".into(),
         call_me: "Hana".into(),
         time_zone: time_zone.into(),
@@ -1558,7 +1560,6 @@ fn mcp_connections_are_listed_added_and_changed() {
     add(
         &mut driver,
         NewMcpConnection::Http {
-            purpose: None,
             name: "Project tools".into(),
             url: "https://tools.example.com/mcp".into(),
             token: None,
@@ -1574,7 +1575,6 @@ fn mcp_connections_are_listed_added_and_changed() {
     add(
         &mut driver,
         NewMcpConnection::Stdio {
-            purpose: Some("my project's files".into()),
             name: "Local".into(),
             command: "npx".into(),
             args: vec!["-y".into(), "a-server".into()],
@@ -1583,9 +1583,6 @@ fn mcp_connections_are_listed_added_and_changed() {
     );
     host.with(|h| {
         assert!(h.mcp_adds[0].get("token").is_none());
-        // A purpose is sent only when one was typed.
-        assert!(h.mcp_adds[0].get("purpose").is_none());
-        assert_eq!(h.mcp_adds[1]["purpose"], "my project's files");
         assert_eq!(h.mcp_adds[1]["transport"], "stdio");
         assert_eq!(h.mcp_adds[1]["args"][1], "a-server");
         assert_eq!(h.mcp_adds[1]["env"]["API_TOKEN"], "mcp-test-token");
@@ -1597,7 +1594,6 @@ fn mcp_connections_are_listed_added_and_changed() {
     add(
         &mut driver,
         NewMcpConnection::Http {
-            purpose: None,
             name: "Broken".into(),
             url: "not a url".into(),
             token: Some(Secret::new("mcp-test-token")),
@@ -1616,31 +1612,6 @@ fn mcp_connections_are_listed_added_and_changed() {
         });
         driver.until("the change", |m, _| !m.changing_mcp);
     };
-    // What a connection is for is saved, and cleared, on its own.
-    assert_eq!(
-        driver.model.mcp["default"][2].purpose.as_deref(),
-        Some("my project's files")
-    );
-    let describe = |driver: &mut Driver, id: &str, purpose: &str| {
-        assert!(driver.model.begin_change_mcp());
-        driver.send(Command::DescribeMcp {
-            bot_id: "default".into(),
-            id: id.into(),
-            purpose: purpose.into(),
-        });
-        driver.until("the purpose", |m, _| !m.changing_mcp);
-    };
-    describe(&mut driver, "mcp-2", "calendar and mail");
-    assert_eq!(
-        driver.model.mcp["default"][1].purpose.as_deref(),
-        Some("calendar and mail")
-    );
-    describe(&mut driver, "mcp-3", "");
-    assert_eq!(driver.model.mcp["default"][2].purpose, None);
-    describe(&mut driver, "gone", "x");
-    let error = driver.model.mcp_change_error.clone().unwrap_or_default();
-    assert!(error.contains("not found"), "{error}");
-
     change(&mut driver, "mcp-3", McpAction::Disable);
     assert!(summary(&driver.model.mcp["default"][2]).starts_with("Paused"));
     change(&mut driver, "env-1", McpAction::Import);
@@ -2599,6 +2570,7 @@ fn self_updates_are_saved_and_the_built_in_personalities_load() {
         bot_id: "b-research".into(),
         update: UpdateBotProfile {
             rules: None,
+            instructions: None,
             name: "Research".into(),
             description: String::new(),
             personality: "Be brief.".into(),

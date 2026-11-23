@@ -25,15 +25,12 @@ pub enum McpTransport {
 pub enum NewMcpConnection {
     Http {
         name: String,
-        /// What the bot should use it for; `None` when left blank.
-        purpose: Option<String>,
         url: String,
         /// `None` lets the server ask for browser authorization instead.
         token: Option<Secret>,
     },
     Stdio {
         name: String,
-        purpose: Option<String>,
         command: String,
         args: Vec<String>,
         /// Environment variables for the command: name, then value.
@@ -152,13 +149,11 @@ mod tests {
     #[test]
     fn a_new_connection_prints_without_its_secrets() {
         let http = NewMcpConnection::Http {
-            purpose: None,
             name: "Tools".into(),
             url: "https://tools.example.com/mcp".into(),
             token: Some(Secret::new("not-a-real-token")),
         };
         let stdio = NewMcpConnection::Stdio {
-            purpose: None,
             name: "Local".into(),
             command: "npx".into(),
             args: vec!["-y".into()],

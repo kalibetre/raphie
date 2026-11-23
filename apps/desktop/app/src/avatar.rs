@@ -326,6 +326,7 @@ mod tests {
     fn bot(id: &str, color: Option<&str>) -> BotProfile {
         BotProfile {
             rules: Vec::new(),
+            instructions: String::new(),
             id: id.into(),
             name: id.into(),
             description: String::new(),

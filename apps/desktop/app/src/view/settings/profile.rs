@@ -15,6 +15,7 @@ use rune::color::hex;
 use rune::{Color, Cursor, Drag, El, Key, KeyEvent, Tx, col, el, icon, row, text, text_input};
 use rune_kit::Dialog;
 
+use super::instructions::{Instructions, instructions_field};
 use super::parts::{SaveBar, Scope, page, save_bar as save_bar_of};
 use super::rules::{Rules, rules_field};
 use crate::avatar::{PALETTE_NAMES, Tones, bot_avatar, tone_of};
@@ -66,7 +67,13 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El 
         )
         .self_start()
     };
-    let mut groups = vec![identity, personality, standing_rules(s, t), replies(s, t)];
+    let mut groups = vec![
+        identity,
+        personality,
+        standing_rules(s, t),
+        own_instructions(s, t),
+        replies(s, t),
+    ];
     groups.extend(self_updates(s, t));
     groups.push(history);
     // The default bot stays: the runtime refuses to delete it.
@@ -228,11 +235,29 @@ fn standing_rules(s: &Ui, t: &Theme) -> El {
             key: "rd-profile-rules",
             title: "Standing rules",
             note: "What you want this bot to do every time. It reads them in every conversation, after your rules for every bot on the You page, and adds to them when you tell it “always” or “from now on”.",
-            placeholder: "Use Executor for my calendar, mail and tickets.\nAnswer with a card when I ask about my day.",
+            placeholder: "Answer in English, even when I write in Amharic.\nAsk before booking anything before 10 AM.",
             edit: &s.profile.rules,
             busy: s.model.saving_profile || s.model.creating_bot,
         },
         |s: &mut Ui| &mut s.profile.rules,
+    )
+}
+
+/// "Instructions": how this bot works with its own tools and services.
+fn own_instructions(s: &Ui, t: &Theme) -> El {
+    instructions_field(
+        t,
+        Instructions {
+            key: "rd-profile-instructions",
+            title: "Instructions",
+            note: "How this bot works with its own tools and services. It reads them in every conversation, after the instructions for every bot on the You page. Tell it to note something, such as where your calendar lives, and it adds it here.",
+            placeholder: "Executor holds my calendar, mail, Jira and GitHub; look there first.\nFizzy is my task board: show it as a board, by column.",
+            edit: &s.profile.instructions,
+            busy: s.model.saving_profile || s.model.creating_bot,
+            status: None,
+            action: None,
+        },
+        |s: &mut Ui| &mut s.profile.instructions,
     )
 }
 
@@ -751,6 +776,7 @@ fn color_picker(s: &Ui, id: &str, look: &Look) -> El {
             // A bot being created is not in the roster yet: stand in for it.
             None => others.push(BotProfile {
                 rules: Vec::new(),
+                instructions: String::new(),
                 id: id.to_owned(),
                 name: String::new(),
                 description: String::new(),

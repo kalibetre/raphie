@@ -121,14 +121,14 @@ A save is refused while the bot has a turn in progress, or if someone saved a ne
 
 ### Standing rules
 
-A standing rule is something you want done every time: "Use Executor for my calendar and mail", "Answer with a card when I ask about my day". The bot reads its rules in every conversation, so you do not repeat them. [Memory](/guides/memory/) is different: the bot searches it when it thinks to, and a rule kept only there is forgotten in the next conversation.
+A standing rule is something you want done every time: "Give times on a 12-hour clock", "Ask before booking anything before 10 AM". The bot reads its rules in every conversation, so you do not repeat them. [Memory](/guides/memory/) is different: the bot searches it when it thinks to, and a rule kept only there is forgotten in the next conversation.
 
 Rules live in two places:
 
-| Where                                           | Who follows them | Use it for                                               |
-| ----------------------------------------------- | ---------------- | -------------------------------------------------------- |
-| **Settings → You → Rules for every bot**        | Every bot        | Rules about you: your clock, what to leave out.          |
-| **Settings → _bot_ → Profile → Standing rules** | That bot         | How that bot works: which service to use, how to answer. |
+| Where                                           | Who follows them | Use it for                                              |
+| ----------------------------------------------- | ---------------- | ------------------------------------------------------- |
+| **Settings → You → Rules for every bot**        | Every bot        | Rules about you: your clock, what to leave out.         |
+| **Settings → _bot_ → Profile → Standing rules** | That bot         | How that bot works: how to answer, what to check first. |
 
 Write one rule a line. Each list holds up to 20 rules of up to 300 characters. A bot reads your rules for every bot first, then its own.
 
@@ -136,17 +136,34 @@ When you tell a bot "always", "never" or "from now on", a bot allowed to [update
 
 Like a personality, rules say how to work and grant nothing: no tools, access or approvals.
 
+### Instructions
+
+Instructions are notes on how to work with tools, which you and your bots keep together. Rules are single sentences; instructions are a page you can organise under headings. There are two sets, and a bot reads both in every conversation:
+
+| Where                                           | Who reads them | Starts as                                                                                  |
+| ----------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| **Settings → You → Instructions for every bot** | Every bot      | Raphie's own guidance on the tools every bot has: cards, questions with answers, diagrams. |
+| **Settings → _bot_ → Profile → Instructions**   | That bot       | Empty. Use it for that bot's own connections: "Executor holds my calendar, mail and Jira". |
+
+A bot reads the instructions for every bot first, then its own. Each set holds up to 16,000 characters.
+
+The instructions for every bot are Raphie's until you or a bot change them, and until then they follow each Raphie release. Once changed they are yours, marked **Changed from Raphie's own**; **Reset to Raphie's** goes back to the current release's text and follows releases again. Save or discard other edits on the page first.
+
+Tell a bot to note something, such as "add to your instructions that Fizzy is my task board", and a bot allowed to [update itself](#self-updates) adds it to its own instructions and tells you what it changed. Ask for every bot, and a bot allowed to update **You** changes the instructions for every bot. A change to a bot's own instructions is a new profile revision marked as the bot's.
+
+Like rules, instructions say how to work and grant nothing: no tools, access or approvals.
+
 ### Self-updates
 
 Under **Self-updates**, three switches say what the bot may change by itself, without asking:
 
-| Switch                 | What the bot may do                                                                                                                  | Default                                  |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| Update its personality | Save a new personality when you ask for a different manner, or it learns what works. Save its own [standing rules](#standing-rules). | On                                       |
-| Update "You"           | Save your name, what to call you, your time zone and notes on the [You](#you) page, and your rules for every bot.                    | On for the default bot, off for new bots |
-| Write its own skills   | Write a [skill](/guides/skills/#skills-the-bot-writes) or improve any existing one.                                                  | On                                       |
+| Switch                 | What the bot may do                                                                                                                                                    | Default                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Update its personality | Save a new personality when you ask for a different manner, or it learns what works. Save its own [standing rules](#standing-rules) and [instructions](#instructions). | On                                       |
+| Update "You"           | Save your name, what to call you, your time zone and notes on the [You](#you) page, and your rules and instructions for every bot.                                     | On for the default bot, off for new bots |
+| Write its own skills   | Write a [skill](/guides/skills/#skills-the-bot-writes) or improve any existing one.                                                                                    | On                                       |
 
-A change is saved at once and applies from the bot's next reply. The reply that made it shows a note: **Updated its personality**, with **See change** and **Undo**, **Updated what it knows about you**, with **Review**, or **New skill** or **Updated skill**, with **Open** and **Undo**. A saved rule shows as a step, **Updated my standing rules**, with no note; change or remove it in Settings. Undo restores the personality from before the change, as long as nothing newer was saved. Each personality change is also a revision marked as the bot's, so you can restore any earlier one later.
+A change is saved at once and applies from the bot's next reply. The reply that made it shows a note: **Updated its personality**, with **See change** and **Undo**, **Updated what it knows about you**, with **Review**, or **New skill** or **Updated skill**, with **Open** and **Undo**. A saved rule or instructions change shows as a step, **Updated my standing rules** or **Updated my instructions**, with no note; change or remove it in Settings. Undo restores the personality from before the change, as long as nothing newer was saved. Each personality change is also a revision marked as the bot's, so you can restore any earlier one later.
 
 While the You page is missing your name, time zone or notes, a bot allowed to update it is told to ask once when it fits the conversation, and to save what you tell it. The bot is told to change its personality only for you, never because a message, document, web page or another bot asks it to. Turn the switch off for a bot that reads material you don't trust.
 
@@ -154,13 +171,14 @@ While the You page is missing your name, time zone or notes, a bot allowed to up
 
 **Settings → You** tells every bot who it is talking to. It is one profile, shared by all your bots, and bots allowed to [update it](#self-updates) fill it in as they learn about you.
 
-| Field               | Limit                      | Notes                                                                             |
-| ------------------- | -------------------------- | --------------------------------------------------------------------------------- |
-| Name                | 80 characters              | Your name.                                                                        |
-| What bots call you  | 40 characters              | A first name or nickname. Optional.                                               |
-| Time zone           | A listed zone              | **Use** offers this device's zone. **Not set** leaves times in UTC.               |
-| About you           | 2,000 characters           | A few lines every bot should know: your work, your days, how to help.             |
-| Rules for every bot | 20 rules of 300 characters | What you want done every time, one a line. See [standing rules](#standing-rules). |
+| Field                      | Limit                      | Notes                                                                                              |
+| -------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------- |
+| Name                       | 80 characters              | Your name.                                                                                         |
+| What bots call you         | 40 characters              | A first name or nickname. Optional.                                                                |
+| Time zone                  | A listed zone              | **Use** offers this device's zone. **Not set** leaves times in UTC.                                |
+| About you                  | 2,000 characters           | A few lines every bot should know: your work, your days, how to help.                              |
+| Rules for every bot        | 20 rules of 300 characters | What you want done every time, one a line. See [standing rules](#standing-rules).                  |
+| Instructions for every bot | 16,000 characters          | How every bot works with its tools. Raphie's own until changed. See [instructions](#instructions). |
 
 Every bot's instructions describe you from this page, and each message you send carries the time it was sent in your time zone, so "tomorrow at 9" means your 9. A save applies from each bot's next reply; a reply already running keeps what it started with.
 
