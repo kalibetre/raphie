@@ -1,5 +1,5 @@
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import { bool, obj, opt, str } from "@earendil-works/pi-schema";
+import { obj, opt, str } from "@earendil-works/pi-schema";
 import type {
   BotProfile,
   OwnerProfile,
@@ -97,24 +97,19 @@ export function createSelfTools(self: SelfProfile) {
       defineTool({
         name: "update_instructions",
         description:
-          'Change your instructions: what the owner wants done every time, said with words such as "always", "never" or "from now on", and how to work with your tools and services, such as which connection holds their calendar. You read them in every conversation. Make one change: add a line or section at the end; or replace a passage, copied exactly as it reads, with new text (empty removes it); or, only when the owner asks for a rewrite, send the whole text as instructions. everyBot changes the instructions every bot reads instead of your own, for what concerns the owner and every bot rather than your own work. Tell the owner what you changed.',
+          'Change your instructions: what the owner wants done every time, said with words such as "always", "never" or "from now on", and how to work with your tools and services, such as which connection holds their calendar. You read them in every conversation. Make one change: add a line or section at the end; or replace a passage, copied exactly as it reads, with new text (empty removes it); or, only when the owner asks for a rewrite, send the whole text as instructions. The instructions Raphie gives every bot are fixed and cannot be changed. Tell the owner what you changed.',
         parameters: obj({
           add: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
           replace: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
           with: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
           instructions: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
-          everyBot: opt(bool()),
         }),
         replay: "safe",
         execute: async (args) => {
           const allowed = self.profile().selfUpdates;
-          if (args.everyBot ? !allowed.owner : !allowed.personality)
+          if (!allowed.personality)
             return text(
-              args.everyBot
-                ? allowed.personality
-                  ? "The owner has not allowed you to change the instructions for every bot. Change your own, without everyBot, or tell them they can change these in Settings → You."
-                  : "The owner has not allowed you to change the instructions for every bot. They can change them in Settings → You."
-                : "The owner has not allowed you to change how you work. They can change your instructions in Settings → Profile.",
+              "The owner has not allowed you to change how you work. They can change your instructions in Settings → Profile.",
               true,
             );
           const asked = [
@@ -132,23 +127,11 @@ export function createSelfTools(self: SelfProfile) {
               "Make one change: add, replace (with with), or instructions for the whole text.",
               true,
             );
-          const current = args.everyBot
-            ? self.owner().instructions
-            : self.profile().instructions;
+          const current = self.profile().instructions;
           const edited = editInstructions(current, asked[0]!);
           if ("problem" in edited) return text(edited.problem, true);
           if (edited.text === current.trim())
             return text("The instructions already read that way.");
-          if (args.everyBot) {
-            if (!edited.text)
-              return text(
-                "The instructions for every bot cannot be emptied by a bot. The owner can reset them in Settings → You.",
-                true,
-              );
-            const { updatedAt: _, ...owner } = self.owner();
-            self.saveOwner({ ...owner, instructions: edited.text });
-            return text("Saved. Every bot reads them from its next message.");
-          }
           const saved = self.updateInstructions(edited.text);
           return text(
             `Saved as revision ${saved.revision}. You read them from your next message.`,

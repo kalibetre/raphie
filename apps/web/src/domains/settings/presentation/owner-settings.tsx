@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
+import { ScrollArea } from "../../../shared/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -12,7 +13,6 @@ import {
 } from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
 import { useOwner } from "../infrastructure/use-owner";
-import { InstructionsField } from "./instructions-field";
 import { SaveBar } from "./save-bar";
 import { useSettingsGuard } from "./use-settings-guard";
 
@@ -20,14 +20,13 @@ const NOT_SET = "none";
 
 type Saved = Omit<OwnerProfile, "updatedAt">;
 
-type Draft = Omit<Saved, "instructionsDefault">;
+type Draft = Omit<Saved, "everyBotInstructions">;
 
 const same = (a: Draft, b: Draft) =>
   a.name === b.name &&
   a.callMe === b.callMe &&
   a.timeZone === b.timeZone &&
-  a.about === b.about &&
-  a.instructions.trim() === b.instructions.trim();
+  a.about === b.about;
 
 /** This device's time zone, offered when the owner has not chosen one. */
 const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -65,8 +64,7 @@ function OwnerForm({
   onMessage: (message: string) => void;
 }) {
   const owner = useOwner();
-  const { instructionsDefault, ...fields } = saved;
-  const start: Draft = fields;
+  const { everyBotInstructions, ...start } = saved;
   const [draft, setDraft] = useState<Draft>(start);
   const setMessage = onMessage;
   const zones = useMemo(() => Intl.supportedValuesOf("timeZone"), []);
@@ -87,28 +85,8 @@ function OwnerForm({
         callMe: draft.callMe.trim(),
         timeZone: draft.timeZone,
         about: draft.about.trim(),
-        // Unchanged, Raphie's stay Raphie's and keep following releases.
-        ...(draft.instructions.trim() === saved.instructions.trim()
-          ? {}
-          : { instructions: draft.instructions.trim() }),
       });
       setMessage("Saved. Every bot uses it from its next reply.");
-    } catch {
-      // The save bar shows the error.
-    }
-  }
-
-  async function reset() {
-    setMessage("");
-    try {
-      await owner.save.mutateAsync({
-        name: saved.name,
-        callMe: saved.callMe,
-        timeZone: saved.timeZone,
-        about: saved.about,
-        instructions: null,
-      });
-      setMessage("Back to Raphie’s instructions for every bot.");
     } catch {
       // The save bar shows the error.
     }
@@ -214,34 +192,30 @@ function OwnerForm({
           </p>
         </div>
       </section>
-      <InstructionsField
-        id="owner-instructions"
-        title="Instructions for every bot"
-        note="What you want every bot to do every time, and how they work with the tools Raphie gives them all, such as cards and questions. Each bot follows these in every conversation, before its own instructions, and the bots you allow to update your profile add to them when you ask."
-        placeholder="- Give times on a 12-hour clock, in my time zone."
-        value={draft.instructions}
-        pending={pending}
-        status={
-          instructionsDefault
-            ? "Raphie’s own · updated with each release"
-            : "Changed from Raphie’s own"
-        }
-        action={
-          !instructionsDefault && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={pending || dirty}
-              title={dirty ? "Save or discard your changes first" : undefined}
-              onClick={() => void reset()}
-            >
-              Reset to Raphie’s
-            </Button>
-          )
-        }
-        onChange={(instructions) => set({ instructions })}
-      />
+      <section
+        className="bot-editor-section"
+        aria-label="Instructions for every bot"
+      >
+        <h2>Instructions for every bot</h2>
+        <p>
+          How every bot works with the tools Raphie gives them all, such as
+          cards and questions. Every bot follows these in every conversation,
+          before its own instructions. They come with Raphie and change as tools
+          are added; what you want of one bot goes in its own instructions, on
+          its Profile.
+        </p>
+        <div className="personality-editor">
+          <div className="personality-editor-heading">
+            <span>Read-only · updated with each release</span>
+          </div>
+          <ScrollArea
+            className="every-bot-instructions-scroll"
+            viewportLabel="Raphie’s instructions for every bot"
+          >
+            <div className="every-bot-instructions">{everyBotInstructions}</div>
+          </ScrollArea>
+        </div>
+      </section>
       <SaveBar
         visible={dirty || pending || !!message || owner.save.isError}
         status={guard.message || message || (dirty ? "Unsaved changes" : "")}

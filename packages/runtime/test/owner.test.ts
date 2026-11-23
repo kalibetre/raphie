@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
-import { DEFAULT_INSTRUCTIONS } from "../src/domains/bots/domain/instructions.ts";
+import { EVERY_BOT_INSTRUCTIONS } from "../src/domains/bots/domain/instructions.ts";
 import {
   localTime,
   ownerInstructions,
@@ -48,8 +48,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       callMe: "",
       timeZone: "",
       about: "",
-      instructions: DEFAULT_INSTRUCTIONS,
-      instructionsDefault: true,
+      everyBotInstructions: EVERY_BOT_INSTRUCTIONS,
       updatedAt: null,
     });
     const owner = {
@@ -64,26 +63,15 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
     expect(
       (await call("PUT", { ...owner, about: "x".repeat(2001) })).status,
     ).toBe(400);
-    const clock = "Give times on a 12-hour clock.";
+    // Raphie's instructions for every bot, and rules, cannot be sent.
     expect(
-      (
-        await call("PUT", {
-          ...owner,
-          instructions: `${DEFAULT_INSTRUCTIONS}\n\n## Rules\n- ${clock}`,
-        })
-      ).status,
-    ).toBe(200);
-    expect(
-      (await call("PUT", { ...owner, instructions: "x".repeat(16_001) }))
+      (await call("PUT", { ...owner, instructions: "Boards by status." }))
         .status,
     ).toBe(400);
-    // Rules are instructions now; a list of them is refused.
-    expect((await call("PUT", { ...owner, rules: [clock] })).status).toBe(400);
-    // A profile saved without instructions keeps them.
+    expect((await call("PUT", { ...owner, rules: ["Be brief."] })).status).toBe(
+      400,
+    );
     expect((await call("PUT", owner)).status).toBe(200);
-    expect(await (await call("GET")).json()).toMatchObject({
-      instructionsDefault: false,
-    });
 
     await server.close();
     await host.close();
@@ -123,8 +111,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       true,
     );
     expect(told[0]).toContain("Mornings are for deep work.");
-    // Every bot reads the instructions for every bot; a bot's own stay with it.
-    expect(told.every((p) => p.includes(`- ${clock}`))).toBe(true);
+    // A bot's own instructions stay with it.
     expect(told.filter((p) => p.includes("- Link every source."))).toHaveLength(
       1,
     );
@@ -153,8 +140,7 @@ test("an owner who says nothing is not described, and times read like a clock", 
       callMe: "",
       timeZone: "",
       about: "",
-      instructions: "",
-      instructionsDefault: false,
+      everyBotInstructions: "",
       updatedAt: null,
     }),
   ).toBe("");

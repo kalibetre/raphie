@@ -121,20 +121,18 @@ A save is refused while the bot has a turn in progress, or if someone saved a ne
 
 ### Instructions
 
-Instructions are what you and your bots keep written down about how they work: what you want done every time, such as "Give times on a 12-hour clock", and how to use their tools, such as "Executor holds my calendar, mail and Jira". A bot follows them in every conversation without being reminded, so you do not repeat yourself. [Memory](/guides/memory/) is different: the bot searches it when it thinks to, and something kept only there is forgotten in the next conversation.
+Instructions say how a bot works: what you want done every time, such as "Give times on a 12-hour clock", and how to use its tools, such as "Executor holds my calendar, mail and Jira". A bot follows them in every conversation without being reminded, so you do not repeat yourself. [Memory](/guides/memory/) is different: the bot searches it when it thinks to, and something kept only there is forgotten in the next conversation.
 
-There are two sets, and a bot reads both:
+A bot reads two sets, Raphie's first:
 
-| Where                                           | Who follows them | Starts as                                                                                  |
-| ----------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------ |
-| **Settings → You → Instructions for every bot** | Every bot        | Raphie's own guidance on the tools every bot has: cards, questions with answers, diagrams. |
-| **Settings → _bot_ → Profile → Instructions**   | That bot         | Empty. Use it for what only that bot does, and for its own connections.                    |
+| Where                                           | Who writes them            | What they hold                                                                          |
+| ----------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------- |
+| **Settings → You → Instructions for every bot** | Raphie, with each release  | How to use the tools every bot has: cards, questions with answers, diagrams. Read-only. |
+| **Settings → _bot_ → Profile → Instructions**   | You and that bot, together | Everything else you want of that bot, and its own connections. Starts empty.            |
 
-A bot reads the instructions for every bot first, then its own. Each set is free text of up to 16,000 characters; a list of lines and a few headings keep it easy to scan.
+Raphie's instructions for every bot change only when Raphie does, as tools are added, so every bot always has the current ones. Neither you nor a bot can edit them; what you want of a bot goes in its own instructions.
 
-The instructions for every bot are Raphie's until you or a bot change them, and until then they follow each Raphie release. Once changed they are yours, marked **Changed from Raphie's own**; **Reset to Raphie's** goes back to the current release's text and follows releases again. Save or discard other edits on the page first.
-
-When you tell a bot "always", "never" or "from now on", or to note something, a bot allowed to [update itself](#self-updates) adds it to its own instructions and tells you what it changed. It adds a line or replaces the one passage you mean, so the rest stays as it was, and rewrites the whole text only when you ask. Ask for every bot, and a bot allowed to update **You** changes the instructions for every bot. A change to a bot's own instructions is a new profile revision marked as the bot's.
+A bot's own instructions are free text of up to 16,000 characters; a list of lines and a few headings keep them easy to scan. When you tell a bot "always", "never" or "from now on", or to note something, a bot allowed to [update itself](#self-updates) adds it and tells you what it changed. It adds a line or replaces the one passage you mean, so the rest stays as it was, and rewrites the whole text only when you ask. Each change is a new profile revision marked as the bot's.
 
 Like a personality, instructions say how to work and grant nothing: no tools, access or approvals.
 
@@ -145,7 +143,7 @@ Under **Self-updates**, three switches say what the bot may change by itself, wi
 | Switch                 | What the bot may do                                                                                                                | Default                                  |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | Update its personality | Save a new personality when you ask for a different manner, or it learns what works. Add to its own [instructions](#instructions). | On                                       |
-| Update "You"           | Save your name, what to call you, your time zone and notes on the [You](#you) page, and the instructions for every bot.            | On for the default bot, off for new bots |
+| Update "You"           | Save your name, what to call you, your time zone and notes on the [You](#you) page.                                                | On for the default bot, off for new bots |
 | Write its own skills   | Write a [skill](/guides/skills/#skills-the-bot-writes) or improve any existing one.                                                | On                                       |
 
 A change is saved at once and applies from the bot's next reply. The reply that made it shows a note: **Updated its personality**, with **See change** and **Undo**, **Updated what it knows about you**, with **Review**, or **New skill** or **Updated skill**, with **Open** and **Undo**. A change to instructions shows as a step, **Updated my instructions**, with no note; change or remove it in Settings. Undo restores the personality from before the change, as long as nothing newer was saved. Each personality change is also a revision marked as the bot's, so you can restore any earlier one later.
@@ -156,13 +154,13 @@ While the You page is missing your name, time zone or notes, a bot allowed to up
 
 **Settings → You** tells every bot who it is talking to. It is one profile, shared by all your bots, and bots allowed to [update it](#self-updates) fill it in as they learn about you.
 
-| Field                      | Limit             | Notes                                                                                                                           |
-| -------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Name                       | 80 characters     | Your name.                                                                                                                      |
-| What bots call you         | 40 characters     | A first name or nickname. Optional.                                                                                             |
-| Time zone                  | A listed zone     | **Use** offers this device's zone. **Not set** leaves times in UTC.                                                             |
-| About you                  | 2,000 characters  | A few lines every bot should know: your work, your days, how to help.                                                           |
-| Instructions for every bot | 16,000 characters | What every bot does every time, and how it works with its tools. Raphie's own until changed. See [instructions](#instructions). |
+| Field                      | Limit            | Notes                                                                                               |
+| -------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
+| Name                       | 80 characters    | Your name.                                                                                          |
+| What bots call you         | 40 characters    | A first name or nickname. Optional.                                                                 |
+| Time zone                  | A listed zone    | **Use** offers this device's zone. **Not set** leaves times in UTC.                                 |
+| About you                  | 2,000 characters | A few lines every bot should know: your work, your days, how to help.                               |
+| Instructions for every bot | Read-only        | Raphie's, on the tools every bot has, updated with each release. See [instructions](#instructions). |
 
 Every bot's instructions describe you from this page, and each message you send carries the time it was sent in your time zone, so "tomorrow at 9" means your 9. A save applies from each bot's next reply; a reply already running keeps what it started with.
 

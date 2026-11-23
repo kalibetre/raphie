@@ -45,8 +45,8 @@ export function SelfUpdateFields({
           <span>
             <strong>Update “You”</strong>
             <small>
-              Your name, time zone, a few lines about you, and the instructions
-              for every bot. Every bot reads them.
+              Your name, time zone and a few lines about you. Every bot reads
+              them.
             </small>
           </span>
           <Switch

@@ -433,3 +433,18 @@
     gap: 4px 12px;
   }
 }
+@layer components {
+  /* Raphie's instructions for every bot: read, not edited, in the editor's frame. */
+  .every-bot-instructions-scroll {
+    max-height: 360px;
+  }
+  .every-bot-instructions {
+    padding: 16px;
+    background: var(--card);
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--muted-foreground);
+  }
+}

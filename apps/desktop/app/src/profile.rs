@@ -13,7 +13,8 @@ use rune::TextEdit;
 const NAME_LIMIT: usize = 80;
 const DESCRIPTION_LIMIT: usize = 500;
 const PERSONALITY_LIMIT: usize = 16_000;
-const INSTRUCTIONS_LIMIT: usize = 16_000;
+/// The runtime's limit on a bot's instructions.
+pub const INSTRUCTIONS_LIMIT: usize = 16_000;
 
 /// The personality a new bot starts with, as the web offers it.
 pub const STARTER_PERSONALITY: &str = "Be thoughtful and candid. Explain uncertainty. Never claim an action succeeded without confirmation.";

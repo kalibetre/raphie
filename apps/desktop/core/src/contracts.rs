@@ -266,13 +266,10 @@ pub struct OwnerProfile {
     pub time_zone: String,
     #[serde(default)]
     pub about: String,
-    /// Instructions for every bot: Raphie's own until the owner or a bot
-    /// changes them. Older runtimes omit them: none.
+    /// Raphie's instructions every bot follows, fixed by the release and
+    /// read-only. Older runtimes omit them: none.
     #[serde(default)]
-    pub instructions: String,
-    /// Whether `instructions` is still Raphie's, which follows each release.
-    #[serde(default)]
-    pub instructions_default: bool,
+    pub every_bot_instructions: String,
     /// When it was last saved, in milliseconds; `None` before the first save.
     #[serde(default)]
     pub updated_at: Option<f64>,
@@ -287,11 +284,6 @@ pub struct SaveOwnerProfile {
     pub call_me: String,
     pub time_zone: String,
     pub about: String,
-    /// `None` leaves them out and the runtime keeps them; `Some(None)` is
-    /// sent as `null` and goes back to Raphie's own. Sent only when they
-    /// changed, so Raphie's stay Raphie's and keep following releases.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub instructions: Option<Option<String>>,
 }
 
 /// Body of `POST /api/bots/<id>/profile`

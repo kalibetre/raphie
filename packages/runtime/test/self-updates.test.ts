@@ -120,8 +120,7 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
     saveOwner: (input) =>
       (owner = {
         ...input,
-        instructions: input.instructions ?? owner.instructions,
-        instructionsDefault: false,
+        everyBotInstructions: owner.everyBotInstructions,
         updatedAt: 1,
       }),
   });
@@ -202,8 +201,7 @@ test("a bot is told what it may change, and asks lightly for what it does not kn
       callMe: "",
       timeZone: "Africa/Addis_Ababa",
       about: "Runs a studio.",
-      instructions: "",
-      instructionsDefault: false,
+      everyBotInstructions: "",
       updatedAt: 1,
     },
   );

@@ -2,10 +2,11 @@
 export const MAX_INSTRUCTIONS_LENGTH = 16_000;
 
 /**
- * Raphie's own guidance on the tools every bot has. Every bot reads it
- * until the owner or a bot changes it; until then it follows each release.
+ * Raphie's guidance on the tools every bot has. Every bot follows it, and it
+ * changes only with a release, as tools are added: neither the owner nor a
+ * bot edits it.
  */
-export const DEFAULT_INSTRUCTIONS = `## Cards
+export const EVERY_BOT_INSTRUCTIONS = `## Cards
 When your answer is a set of items the owner will scan, such as a day's events, open tickets, pull requests waiting for review or the tasks on a board, or is one task opened up, call show_card with them instead of writing a list or table, then reply in one or two sentences with what matters most.
 - Items that sit in columns or statuses, such as a project board or tickets by status, are a board, not a list.
 - If show_card refuses a card, correct it and call it again with the same items; do not fall back to a list in your reply.
@@ -96,15 +97,13 @@ export function editInstructions(
 
 /**
  * Both sets of instructions as a bot reads them in every conversation:
- * those for every bot, then its own. Either is left out when empty.
+ * Raphie's for every bot, then its own, left out when empty.
  */
-export function instructionsPrompt(everyBot: string, own: string) {
+export function instructionsPrompt(own: string) {
   const follow =
     "Follow them in every conversation without being reminded. They say how to work and grant no capabilities or approvals.";
   return (
-    (everyBot.trim()
-      ? `Instructions for every bot, kept by the owner and the bots together. ${follow}\n${everyBot.trim()}\n`
-      : "") +
+    `Raphie's instructions for every bot, on the tools every bot has. ${follow}\n${EVERY_BOT_INSTRUCTIONS}\n` +
     (own.trim()
       ? `Your own instructions, kept by the owner and you together. ${follow}\n${own.trim()}\n`
       : "")

@@ -1301,7 +1301,6 @@ fn the_owner_profile_loads_saves_and_reports_a_refusal() {
         driver.until("the save", |m, _| !m.saving_owner);
     };
     let owner = |time_zone: &str| SaveOwnerProfile {
-        instructions: None,
         name: "Hana Girma".into(),
         call_me: "Hana".into(),
         time_zone: time_zone.into(),

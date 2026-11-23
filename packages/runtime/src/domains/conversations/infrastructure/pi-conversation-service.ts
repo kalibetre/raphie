@@ -718,10 +718,7 @@ export class ChatService implements ConversationCommands {
               ? selfUpdateInstructions(profile.selfUpdates, owner)
               : "") +
             (this.services?.() ?? "") +
-            instructionsPrompt(
-              owner.instructions,
-              profile?.instructions ?? "",
-            ) +
+            instructionsPrompt(profile?.instructions ?? "") +
             replyInstructions(profile?.replyStyle) +
             (this.skills?.instructions(profile?.selfUpdates.skills ?? false) ??
               "") +

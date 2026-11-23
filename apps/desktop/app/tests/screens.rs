@@ -6508,46 +6508,23 @@ fn a_connection_shows_what_it_holds_and_asks_nothing_about_its_use() {
 }
 
 #[test]
-fn instructions_for_every_bot_are_raphies_until_changed_and_reset_back() {
+fn raphies_instructions_for_every_bot_are_shown_read_only_on_you() {
     let mut rt = render_sized(scenes::settings_owner, false, (1280.0, 2400.0));
-    assert!(screen_text(&rt).contains("Instructions for every bot"));
-    let count = |rt: &_| {
-        element(rt, "rd-owner-instructions-status")
+    assert!(screen_text(&rt).contains("Read-only · updated with each release"));
+    assert!(
+        element(&rt, "rd-owner-instructions")
             .text
-            .clone()
-            .unwrap_or_default()
-    };
-    assert_eq!(count(&rt), "Raphie’s own · updated with each release");
-    assert!(rt.find("rd-owner-instructions-reset").is_none());
-    // Saved without a change, they are left out and stay Raphie's.
+            .as_deref()
+            .is_some_and(|shown| shown.starts_with("## Cards"))
+    );
+    // Nothing on the page edits them, so a save sends only the owner's own.
     rt.update(|ui, _| ui.owner.about = TextEdit::new("I run a studio."));
     settle(&mut rt);
     click(&mut rt, "rd-owner-save");
     let Some(Command::SaveOwner { owner }) = rt.state.sent.last().cloned() else {
         panic!("no save was sent");
     };
-    assert_eq!(owner.instructions, None);
-    deliver(&mut rt, Event::OwnerSaved(scenes::owner_profile()));
-
-    rt.update(|ui, _| ui.owner.instructions = TextEdit::new(" Boards by column. "));
-    settle(&mut rt);
-    click(&mut rt, "rd-owner-save");
-    let Some(Command::SaveOwner { owner }) = rt.state.sent.last().cloned() else {
-        panic!("no save was sent");
-    };
-    assert_eq!(owner.instructions, Some(Some("Boards by column.".into())));
-    let mut changed = scenes::owner_profile();
-    changed.instructions = "Boards by column.".into();
-    changed.instructions_default = false;
-    changed.updated_at = Some(1_794_650_100_000.0);
-    deliver(&mut rt, Event::OwnerSaved(changed));
-    assert_eq!(count(&rt), "Changed from Raphie’s own");
-
-    click(&mut rt, "rd-owner-instructions-reset");
-    let Some(Command::SaveOwner { owner }) = rt.state.sent.last().cloned() else {
-        panic!("no reset was sent");
-    };
-    assert_eq!(owner.instructions, Some(None), "sent as null");
+    assert_eq!(owner.about, "I run a studio.");
 }
 
 #[test]

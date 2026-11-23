@@ -85,20 +85,14 @@ export type OwnerProfile = {
   /** A few lines about the owner, in their words. */
   about: string;
   /**
-   * Instructions for every bot, kept by the owner and the bots together:
-   * how to work with the tools every bot has and what the owner wants done
-   * every time. Raphie's own guidance until either changes it.
+   * Raphie's instructions every bot follows, on the tools every bot has.
+   * Fixed by the release: read-only, and updated with each one.
    */
-  instructions: string;
-  /** Whether `instructions` is still Raphie's, which follows each release. */
-  instructionsDefault: boolean;
+  everyBotInstructions: string;
   updatedAt: number | null;
 };
 
 export type SaveOwnerProfile = Omit<
   OwnerProfile,
-  "updatedAt" | "instructions" | "instructionsDefault"
-> & {
-  /** Omitted keeps them; null goes back to Raphie's. */
-  instructions?: string | null;
-};
+  "updatedAt" | "everyBotInstructions"
+>;

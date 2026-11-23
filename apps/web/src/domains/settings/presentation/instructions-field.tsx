@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { Textarea } from "../../../shared/ui/textarea";
 
 /** The same bound the runtime keeps. */
@@ -17,7 +15,6 @@ export function InstructionsField({
   value,
   pending,
   status,
-  action,
   onChange,
 }: {
   id: string;
@@ -28,8 +25,6 @@ export function InstructionsField({
   pending: boolean;
   /** Said in the editor's heading, as a personality says its revision. */
   status: string;
-  /** A control beside the count, such as a reset. */
-  action?: ReactNode;
   onChange: (value: string) => void;
 }) {
   return (
@@ -62,7 +57,6 @@ export function InstructionsField({
             {MAX_INSTRUCTIONS.toLocaleString()} · They say how to work and grant
             nothing.
           </p>
-          {action}
         </div>
       </div>
     </section>

@@ -7,7 +7,7 @@
 use rune::{El, TextEdit, Tx, col, row, text, text_input};
 
 use super::profile::section;
-use crate::owner::INSTRUCTIONS_LIMIT;
+use crate::profile::INSTRUCTIONS_LIMIT;
 use crate::state::Ui;
 use crate::theme::{Theme, font};
 
@@ -23,8 +23,6 @@ pub struct Instructions<'a> {
     pub busy: bool,
     /// Said in the editor's heading, as a personality says its revision.
     pub status: String,
-    /// A control beside the count, such as a reset.
-    pub action: Option<El>,
 }
 
 /// The card. `access` tells Rune where the text lives, as for
@@ -42,7 +40,6 @@ pub fn instructions_field(
         edit,
         busy,
         status,
-        action,
     } = instructions;
     let length = edit.text.trim().chars().count();
     let long = length > INSTRUCTIONS_LIMIT;
@@ -77,15 +74,12 @@ pub fn instructions_field(
     .font(font(11.0, 400.0))
     .color(if long { t.error } else { t.muted_foreground })
     .wrap();
-    let mut foot = row()
+    let foot = row()
         .w_full()
         .gap(12.0)
         .center_y()
         .flex_wrap()
         .child(col().grow(1.0).min_w(200.0).child(count));
-    if let Some(action) = action {
-        foot = foot.child(action);
-    }
     section(
         t,
         title,

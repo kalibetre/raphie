@@ -16,11 +16,7 @@ import {
   DEFAULT_REPLY_STYLE,
   replyStyleOf,
 } from "../../conversations/domain/reply-style.ts";
-import {
-  cleanInstructions,
-  DEFAULT_INSTRUCTIONS,
-  withRules,
-} from "../domain/instructions.ts";
+import { cleanInstructions, withRules } from "../domain/instructions.ts";
 import { EMPTY_OWNER } from "../domain/owner.ts";
 import { PERSONALITY_PRESETS, presetOf } from "../domain/personalities.ts";
 
@@ -54,16 +50,12 @@ function parse(value: string): BotProfile {
 }
 
 /**
- * The owner profile as kept: instructions null while they are Raphie's,
- * so they follow each release until someone changes them.
+ * The owner profile as kept. Rules and instructions for every bot saved
+ * before Raphie's became fixed are left where they were and not read.
  */
-type StoredOwner = Omit<
-  OwnerProfile,
-  "instructions" | "instructionsDefault"
-> & {
-  instructions?: string | null;
-  /** Standing rules for every bot, kept before they became instructions. */
+type StoredOwner = Omit<OwnerProfile, "everyBotInstructions"> & {
   rules?: string[];
+  instructions?: string | null;
 };
 
 export const defaultBot = {
@@ -243,30 +235,31 @@ export class BotProfileStore {
 
   /** The owner as every bot knows them; empty until they say something. */
   owner(): OwnerProfile {
-    const { instructions, rules: _, ...owner } = this.storedOwner();
+    const row = this.db
+      .query<{ value: string }, []>("SELECT value FROM owner_profile")
+      .get();
+    if (!row) return EMPTY_OWNER;
+    const { name, callMe, timeZone, about, updatedAt } = {
+      ...EMPTY_OWNER,
+      ...(JSON.parse(row.value) as StoredOwner),
+    };
     return {
-      ...owner,
-      instructions: instructions ?? DEFAULT_INSTRUCTIONS,
-      instructionsDefault: instructions === null || instructions === undefined,
+      name,
+      callMe,
+      timeZone,
+      about,
+      everyBotInstructions: EMPTY_OWNER.everyBotInstructions,
+      updatedAt,
     };
   }
 
   saveOwner(input: SaveOwnerProfile): OwnerProfile {
-    const previous = this.storedOwner();
-    const instructions =
-      input.instructions === undefined
-        ? previous.instructions
-        : input.instructions === null
-          ? null
-          : cleanInstructions(input.instructions);
     // Fields are picked, so a whole profile sent back stores only these.
     const owner: StoredOwner = {
       name: input.name,
       callMe: input.callMe,
       timeZone: input.timeZone,
       about: input.about,
-      // Saved unchanged, Raphie's text stays Raphie's and keeps following releases.
-      instructions: instructions === DEFAULT_INSTRUCTIONS ? null : instructions,
       updatedAt: Date.now(),
     };
     this.db
@@ -277,21 +270,10 @@ export class BotProfileStore {
     return this.owner();
   }
 
-  private storedOwner(): StoredOwner {
-    const row = this.db
-      .query<{ value: string }, []>("SELECT value FROM owner_profile")
-      .get();
-    const { instructions: _, instructionsDefault: __, ...empty } = EMPTY_OWNER;
-    return row
-      ? { ...empty, ...(JSON.parse(row.value) as StoredOwner) }
-      : { ...empty, instructions: null };
-  }
-
   /**
-   * Standing rules became instructions: each list of rules moves to the
-   * top of the instructions it belongs with, once. The owner's rules make
-   * the instructions for every bot their own, no longer Raphie's.
-   * Revisions keep their rules and read them the same way.
+   * Standing rules became instructions: a bot's list of rules moves to the
+   * top of its instructions, once. Revisions keep their rules and read them
+   * the same way.
    */
   private moveRulesIntoInstructions() {
     this.db.transaction(() => {
@@ -303,23 +285,6 @@ export class BotProfileStore {
         this.db
           .query("UPDATE bot_profiles SET value=? WHERE id=?")
           .run(JSON.stringify(parse(row.value)), row.id);
-      const owner = this.db
-        .query<{ value: string }, []>(
-          "SELECT value FROM owner_profile WHERE json_array_length(value,'$.rules') > 0",
-        )
-        .get();
-      if (owner) {
-        const { rules, ...stored } = JSON.parse(owner.value) as StoredOwner;
-        this.db.query("UPDATE owner_profile SET value=? WHERE id=1").run(
-          JSON.stringify({
-            ...stored,
-            instructions: withRules(
-              stored.instructions ?? DEFAULT_INSTRUCTIONS,
-              rules ?? [],
-            ),
-          }),
-        );
-      }
     })();
   }
 

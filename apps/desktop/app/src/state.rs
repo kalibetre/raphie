@@ -3383,20 +3383,6 @@ impl Ui {
         }
     }
 
-    /// "Reset to Raphie's": the instructions for every bot go back to
-    /// Raphie's own. Only with nothing unsaved, so no edit is lost.
-    pub fn reset_owner_instructions(&mut self) {
-        if self.owner.is_dirty() || self.model.saving_owner {
-            return;
-        }
-        let Some(owner) = self.owner.reset_instructions() else {
-            return;
-        };
-        if self.model.begin_save_owner() {
-            self.command(Command::SaveOwner { owner });
-        }
-    }
-
     /// Throws the edits away and shows the profile the host has now.
     pub fn discard_owner(&mut self) {
         if let Some(saved) = &self.model.owner {

@@ -19,15 +19,16 @@ personality and instructions, the owner profile, and its
 skills. Each change
 is saved at once and can be undone.
 
-**Instructions**: What the owner and the bots keep written down about how
-the bots work: what the owner wants done every time, and how to work with
-their tools. One set is for every bot, kept in the owner profile, and starts
-as Raphie's own guidance on the tools every bot has, following each release
-until changed; one set is each bot's own, kept in its profile, and starts
-empty. A bot follows both in every conversation. Instructions grant nothing.
-_Avoid_: Standing rules, a separate list beside instructions; a purpose per
-MCP connection; using memory for what must be done every time, since a bot
-searches memory only when it thinks to.
+**Instructions**: What a bot follows in every conversation about how to
+work: what the owner wants done every time, and how to use its tools. Raphie's
+instructions for every bot cover the tools every bot has; they ship with each
+release and nobody edits them. Each bot's own, kept in its profile, start
+empty and are kept by the owner and that bot together. Instructions grant
+nothing.
+_Avoid_: Standing rules, a separate list beside instructions; instructions
+of the owner's for every bot; a purpose per MCP connection; using memory for
+what must be done every time, since a bot searches memory only when it thinks
+to.
 
 **Skill**: Instructions for one kind of task in the standard Agent Skills
 format: a folder in a bot's workspace, `skills/<name>/`, holding a `SKILL.md`.
@@ -35,8 +36,7 @@ A bot sees every skill's name and description and reads a skill only when a
 task matches it. Skills never grant capabilities.
 
 **Owner profile**: What the owner tells every bot about themselves: their
-name, what to call them, their time zone, a few lines about them, and their
-instructions for every bot. Shared by
+name, what to call them, their time zone and a few lines about them. Shared by
 every bot; it describes the owner and grants nothing. Shown as **You** in
 Settings.
 _Avoid_: User profile, account, About you.

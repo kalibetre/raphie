@@ -232,7 +232,6 @@ fn own_instructions(s: &Ui, t: &Theme) -> El {
             edit: &s.profile.instructions,
             busy: s.model.saving_profile || s.model.creating_bot,
             status: revision_label(s),
-            action: None,
         },
         |s: &mut Ui| &mut s.profile.instructions,
     )
@@ -290,7 +289,7 @@ fn self_updates(s: &Ui, t: &Theme) -> Option<El> {
     let owner = line(
         "owner",
         "Update “You”",
-        "Your name, time zone, a few lines about you, and the instructions for every bot. Every bot reads them.",
+        "Your name, time zone and a few lines about you. Every bot reads them.",
         value.owner,
         |value, on| value.owner = on,
     )

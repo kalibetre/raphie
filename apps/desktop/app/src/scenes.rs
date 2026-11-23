@@ -769,8 +769,7 @@ pub fn owner_profile() -> OwnerProfile {
         call_me: "Hana".into(),
         time_zone: "Africa/Addis_Ababa".into(),
         about: "I run a small design studio. Mornings are for deep work, so keep anything non-urgent until after lunch.".into(),
-        instructions: OWNER_INSTRUCTIONS.into(),
-        instructions_default: true,
+        every_bot_instructions: OWNER_INSTRUCTIONS.into(),
         updated_at: Some(1_794_650_049_530.0),
     }
 }
