@@ -43,7 +43,6 @@ export function InstructionsField({
         {/* The personality's editor, so the two read as one kind of text. */}
         <div className="personality-editor">
           <div className="personality-editor-heading">
-            <strong>In your words</strong>
             <span>{status}</span>
           </div>
           <Textarea

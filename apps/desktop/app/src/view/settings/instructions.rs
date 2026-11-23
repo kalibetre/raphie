@@ -107,15 +107,10 @@ pub fn instructions_field(
                             .px(14.0)
                             .py(11.0)
                             .gap(10.0)
-                            .justify_between()
+                            .justify_end()
                             .center_y()
                             .fill(t.muted)
                             .border_sides([0.0, 0.0, 1.0, 0.0], t.border)
-                            .child(
-                                text("In your words")
-                                    .font(font(10.0, 500.0))
-                                    .color(t.foreground),
-                            )
                             .child(
                                 text(status)
                                     .key(format!("{key}-status"))

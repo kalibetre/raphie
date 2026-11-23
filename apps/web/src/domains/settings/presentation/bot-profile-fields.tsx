@@ -83,7 +83,6 @@ export function BotProfileFields({
           </label>
           <div className="personality-editor">
             <div className="personality-editor-heading">
-              <strong>In your words</strong>
               <span>
                 {saved
                   ? `Revision ${saved.revision}${saved.changedBy === "bot" ? ` · edited by ${saved.name}` : ""}`

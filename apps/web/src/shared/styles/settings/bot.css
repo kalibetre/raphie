@@ -211,7 +211,8 @@
   .personality-editor-heading {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    /* Only the revision, at the end of the bar. */
+    justify-content: flex-end;
     gap: 10px;
     padding: 11px 14px;
     background: var(--muted);
