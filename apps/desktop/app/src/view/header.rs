@@ -74,7 +74,11 @@ pub fn header(s: &Ui, look: &Look) -> El {
         actions = actions.child(pressable(
             icon_button(t, glyph, 17.0, label).key("rd-archive"),
             true,
-            move |s: &mut Ui| s.archive(&session_id, !archived),
+            move |s: &mut Ui| {
+                if let Some(bot_id) = s.model.bot_id.clone() {
+                    s.archive(&bot_id, &session_id, !archived);
+                }
+            },
         ));
     }
     let actions = actions
