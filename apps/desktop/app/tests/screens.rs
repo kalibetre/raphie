@@ -551,49 +551,77 @@ fn the_sidebar_lists_searches_and_filters_sessions() {
 }
 
 #[test]
-fn the_archived_filter_fetches_and_lists_archived_conversations() {
+fn the_sidebar_has_no_archived_or_new_replies_filter() {
+    let rt = render(scenes::new_conversation, false);
+    assert!(rt.find("rd-filter-archived").is_none());
+    assert!(rt.find("rd-filter-new").is_none());
+    assert!(rt.find("rd-filter-approvals").is_some());
+}
+
+#[test]
+fn settings_archived_fetches_searches_opens_and_unarchives() {
     for dark in [false, true] {
-        let mut rt = render(scenes::new_conversation, dark);
-        assert!(rt.find("rd-filter-archived").is_some());
-        click(&mut rt, "rd-filter-archived");
-        assert_eq!(rt.state.filter, Filter::Archived);
-        assert_eq!(rt.state.sent.last(), Some(&Command::LoadArchived));
-        // Until they arrive, the list says so rather than "none".
-        assert!(rt.find("rd-session-s-1").is_none());
+        let mut rt = render(scenes::conversation, dark);
+        // Its page is listed under the bot, last.
+        rt.update(|ui, _| ui.open_settings(None));
+        settle(&mut rt);
+        assert!(screen_text(&rt).contains("Archived"));
+        // Opening the page fetches the bot's archived conversations.
+        rt.update(|ui, _| {
+            ui.open_settings(Some(Page::Bot {
+                bot_id: "default".into(),
+                section: BotSection::Archived,
+            }));
+        });
+        settle(&mut rt);
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::LoadArchived {
+                bot_id: "default".into()
+            })
+        );
         assert!(screen_text(&rt).contains("Loading archived conversations…"));
 
-        // The archived ones, and none of the live list.
-        let mut rt = render(scenes::conversations_archived, dark);
+        let mut rt = render(scenes::settings_archived, dark);
         for id in ["s-4", "s-5"] {
-            assert!(rt.find(&format!("rd-session-{id}")).is_some(), "row {id}");
+            assert!(rt.find(&format!("rd-archived-{id}")).is_some(), "row {id}");
         }
-        for id in ["s-1", "s-2", "s-3"] {
-            assert!(rt.find(&format!("rd-session-{id}")).is_none(), "row {id}");
-        }
-        assert!(rt.find("rd-more-sessions").is_none());
-        // A row's button brings its conversation back.
-        let restore = element(&rt, "rd-session-s-4-archive");
+        assert!(screen_text(&rt).contains("2 conversations · Most recent first"));
+
+        // Search matches titles, whatever the case.
+        click(&mut rt, "rd-archived-search");
+        rt.paste("GIFT");
+        settle(&mut rt);
+        assert!(rt.find("rd-archived-s-5").is_some() && rt.find("rd-archived-s-4").is_none());
+        assert!(screen_text(&rt).contains("1 conversation matching “GIFT”"));
+
+        // Its button brings it back.
+        let restore = element(&rt, "rd-archived-s-5-restore");
         assert_eq!(
             restore.label.as_deref(),
-            Some("Unarchive Holiday packing list")
+            Some("Unarchive Birthday gift ideas")
         );
-        click(&mut rt, "rd-session-s-4-archive");
+        click(&mut rt, "rd-archived-s-5-restore");
         assert_eq!(
             rt.state.sent.last(),
             Some(&Command::Archive {
-                session_id: "s-4".into(),
+                bot_id: "default".into(),
+                session_id: "s-5".into(),
                 archived: false
             })
         );
 
-        // Nothing archived: the list says so.
-        rt.update(|ui, _| {
-            ui.model.apply(Event::ArchivedSessions {
-                bot_id: "default".into(),
-                sessions: Vec::new(),
-            });
-        });
-        settle(&mut rt);
+        // Pressing the row leaves Settings for the conversation.
+        click(&mut rt, "rd-archived-s-5");
+        assert_eq!(rt.state.screen, Screen::Workspace);
+        assert_eq!(
+            rt.state.sent.last(),
+            Some(&Command::SelectSession {
+                session_id: Some("s-5".into())
+            })
+        );
+
+        let rt = render(scenes::settings_archived_empty, dark);
         assert!(screen_text(&rt).contains("No archived conversations."));
     }
 }
@@ -619,6 +647,7 @@ fn a_rows_button_archives_its_conversation() {
     assert_eq!(
         rt.state.sent.last(),
         Some(&Command::Archive {
+            bot_id: "default".into(),
             session_id: "s-3".into(),
             archived: true
         })
@@ -644,6 +673,7 @@ fn the_title_bar_archives_and_unarchives_the_open_conversation() {
         assert_eq!(
             rt.state.sent.last(),
             Some(&Command::Archive {
+                bot_id: "default".into(),
                 session_id: "s-1".into(),
                 archived: true
             })
@@ -664,6 +694,7 @@ fn the_title_bar_archives_and_unarchives_the_open_conversation() {
         assert_eq!(
             rt.state.sent.last(),
             Some(&Command::Archive {
+                bot_id: "default".into(),
                 session_id: "s-1".into(),
                 archived: false
             })
@@ -4228,7 +4259,7 @@ fn a_new_conversation_starts_with_the_command_mode_chosen_for_it() {
 }
 
 #[test]
-fn replies_not_read_yet_are_marked_counted_and_filtered() {
+fn replies_not_read_yet_are_marked_counted_and_listed_first() {
     for dark in [false, true] {
         let mut rt = render(scenes::unread, dark);
         let shown = screen_text(&rt);
@@ -4240,11 +4271,21 @@ fn replies_not_read_yet_are_marked_counted_and_filtered() {
         // replies, one waiting for approval.
         assert_eq!(needs_you(&rt, "default").as_deref(), Some("Needs you"));
 
-        click(&mut rt, "rd-filter-new");
-        assert_eq!(rt.state.filter, Filter::NewReplies);
-        assert!(rt.find("rd-session-s-1").is_some());
-        assert!(rt.find("rd-session-s-2").is_none());
-        assert!(rt.find("rd-session-s-3").is_none());
+        // The list is most recent first, with new replies ahead of the
+        // rest: a new reply in the oldest conversation lifts it to the top.
+        let top = |rt: &Runtime<Ui>, key: &str| element(rt, key).rect[1];
+        assert!(top(&rt, "rd-session-s-1") < top(&rt, "rd-session-s-2"));
+        assert!(top(&rt, "rd-session-s-2") < top(&rt, "rd-session-s-3"));
+        rt.update(|ui, _| {
+            for session in &mut ui.model.sessions {
+                if session.id == "s-3" {
+                    session.reply_count = Some(2);
+                }
+            }
+        });
+        settle(&mut rt);
+        assert!(top(&rt, "rd-session-s-3") < top(&rt, "rd-session-s-2"));
+        assert!(top(&rt, "rd-session-s-1") < top(&rt, "rd-session-s-2"));
     }
 }
 
@@ -4273,8 +4314,6 @@ fn opening_a_conversation_reads_its_replies_only_at_its_end_in_the_front_window(
     );
     assert_eq!(unread(&rt), 0);
     assert!(rt.find("rd-session-s-1-dot").is_none());
-    click(&mut rt, "rd-filter-new");
-    assert!(screen_text(&rt).contains("You’re all caught up."));
 
     // A reply that arrives while another app is in front stays new...
     let arrive = |rt: &mut Runtime<Ui>, count: u32| {

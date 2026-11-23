@@ -31,7 +31,7 @@ use serde_json::{Value, json};
 use crate::format::now_ms;
 use crate::sections::{BotSection, Page};
 use crate::skills::SkillEditor;
-use crate::state::{BACKEND, Dropdown, Filter, Ui};
+use crate::state::{BACKEND, Dropdown, Ui};
 
 /// A named change to a fresh [`Ui`], as `AppSpec::scenes` takes them.
 pub type Scene = (&'static str, fn(&mut Ui));
@@ -51,7 +51,6 @@ pub const SCENES: &[Scene] = &[
     ("bot-setup", bot_setup),
     ("teammate-setup", teammate_setup),
     ("conversations", conversations),
-    ("conversations-archived", conversations_archived),
     ("unread", unread),
     ("inbox", inbox),
     ("inbox-empty", inbox_empty),
@@ -175,6 +174,8 @@ pub const SCENES: &[Scene] = &[
         settings_diagnostics_unavailable,
     ),
     ("settings-activity", settings_activity),
+    ("settings-archived", settings_archived),
+    ("settings-archived-empty", settings_archived_empty),
     ("settings-activity-empty", settings_activity_empty),
     ("settings-activity-loading", settings_activity_loading),
 ];
@@ -1943,11 +1944,13 @@ pub fn conversations(ui: &mut Ui) {
     conversation(ui);
 }
 
-/// The sidebar's Archived filter: two archived conversations, with "Plan
-/// the week" still open beside them.
-pub fn conversations_archived(ui: &mut Ui) {
+/// Settings → Archived: two archived conversations.
+pub fn settings_archived(ui: &mut Ui) {
     conversation(ui);
-    ui.filter = Filter::Archived;
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Archived,
+    }));
     let now = now_ms();
     let archived = |mut session: SessionSummary, at: i64| {
         session.archived_at = Some(at);
@@ -1979,6 +1982,19 @@ pub fn conversations_archived(ui: &mut Ui) {
                 now - 5 * 86_400_000,
             ),
         ],
+    });
+}
+
+/// Settings → Archived with nothing archived yet.
+pub fn settings_archived_empty(ui: &mut Ui) {
+    conversation(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Archived,
+    }));
+    ui.model.apply(Event::ArchivedSessions {
+        bot_id: "default".into(),
+        sessions: Vec::new(),
     });
 }
 

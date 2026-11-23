@@ -1990,10 +1990,14 @@ fn a_session_is_archived_and_brought_back() {
     host.with(|h| h.archived_sessions = vec![archived]);
 
     // The archived list is fetched when asked for.
-    assert_eq!(driver.model.archived, None);
-    driver.send(Command::LoadArchived);
-    driver.until("the archived list", |m, _| m.archived.is_some());
-    let listed = driver.model.archived.clone().unwrap();
+    assert!(driver.model.archived.is_empty());
+    driver.send(Command::LoadArchived {
+        bot_id: "default".into(),
+    });
+    driver.until("the archived list", |m, _| {
+        m.archived.contains_key("default")
+    });
+    let listed = driver.model.archived["default"].clone();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].archived_at, Some(2));
     let seen = host.requests("/api/sessions");
@@ -2017,6 +2021,7 @@ fn a_session_is_archived_and_brought_back() {
     });
     assert!(!driver.model.open_archived());
     driver.send(Command::Archive {
+        bot_id: "default".into(),
         session_id: listed_first.clone(),
         archived: true,
     });
@@ -2033,6 +2038,7 @@ fn a_session_is_archived_and_brought_back() {
 
     // Bringing it back sends `false`.
     driver.send(Command::Archive {
+        bot_id: "default".into(),
         session_id: listed_first.clone(),
         archived: false,
     });
@@ -2046,6 +2052,7 @@ fn a_session_is_archived_and_brought_back() {
 
     // An unknown session says why.
     driver.send(Command::Archive {
+        bot_id: "default".into(),
         session_id: "gone".into(),
         archived: true,
     });

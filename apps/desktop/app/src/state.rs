@@ -69,15 +69,12 @@ fn first_origin(flavor: Flavor, ports_file: Option<&std::path::Path>) -> String 
 }
 
 /// Which conversations the sidebar lists (the web's filter chips).
+/// Archived ones are in Settings → Archived, not here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Filter {
     All,
-    /// Only conversations with replies not read yet on this computer.
-    NewReplies,
     /// Only conversations with an action waiting for approval.
     Approvals,
-    /// Only archived conversations, fetched when chosen.
-    Archived,
 }
 
 /// Which notifications the inbox lists (the web's tabs).
@@ -391,6 +388,8 @@ pub struct Ui {
     /// The search box over the selected bot's conversations.
     pub search: TextEdit,
     pub filter: Filter,
+    /// The search box on Settings → Archived.
+    pub archived_search: TextEdit,
     pub screen: Screen,
     /// Bots whose pages are unfolded in the Settings navigation.
     pub expanded_bots: HashSet<String>,
@@ -611,6 +610,7 @@ impl Ui {
             roster_width: ROSTER_WIDTH,
             search: TextEdit::new(""),
             filter: Filter::All,
+            archived_search: TextEdit::new(""),
             screen: Screen::Workspace,
             expanded_bots: HashSet::new(),
             theme: ThemeChoice::System,
@@ -738,25 +738,18 @@ impl Ui {
         self.command(Command::SelectBot {
             bot_id: bot_id.to_owned(),
         });
-        // The Archived filter shows this bot's archived ones now.
-        if self.filter == Filter::Archived && self.model.archived.is_none() {
-            self.command(Command::LoadArchived);
-        }
     }
 
-    /// Chooses which conversations the sidebar lists. The archived ones
-    /// are fetched each time their filter is chosen, as on the web.
+    /// Chooses which conversations the sidebar lists.
     pub fn choose_filter(&mut self, filter: Filter) {
         self.filter = filter;
-        if filter == Filter::Archived {
-            self.command(Command::LoadArchived);
-        }
     }
 
-    /// Archives one of the selected bot's conversations, or brings it
-    /// back. It stays open if it is.
-    pub fn archive(&mut self, session_id: &str, archived: bool) {
+    /// Archives one of a bot's conversations, or brings it back. It stays
+    /// open if it is.
+    pub fn archive(&mut self, bot_id: &str, session_id: &str, archived: bool) {
         self.command(Command::Archive {
+            bot_id: bot_id.to_owned(),
             session_id: session_id.to_owned(),
             archived,
         });
@@ -2003,6 +1996,13 @@ impl Ui {
                 self.model.memory_message = None;
                 // Notice settings saved in another client.
                 self.command(Command::LoadMemory {
+                    bot_id: bot_id.clone(),
+                });
+            }
+            if *section == BotSection::Archived {
+                // Fetched each time the page opens, as on the web.
+                self.archived_search = TextEdit::new("");
+                self.command(Command::LoadArchived {
                     bot_id: bot_id.clone(),
                 });
             }

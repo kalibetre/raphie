@@ -121,11 +121,14 @@ pub enum Command {
     LoadMoreSessions {
         after: String,
     },
-    /// Fetch the selected bot's archived sessions.
-    LoadArchived,
-    /// Archive one of the selected bot's sessions (`archived: true`), or
-    /// bring it back.
+    /// Fetch a bot's archived sessions (Settings → Archived).
+    LoadArchived {
+        bot_id: String,
+    },
+    /// Archive one of a bot's sessions (`archived: true`), or bring it
+    /// back.
     Archive {
+        bot_id: String,
         session_id: String,
         archived: bool,
     },
@@ -739,11 +742,12 @@ impl Engine {
             Command::SelectBot { bot_id } => self.select_bot(bot_id),
             Command::SelectSession { session_id } => self.open_session(session_id),
             Command::LoadMoreSessions { after } => self.load_more_sessions(after),
-            Command::LoadArchived => self.load_archived(),
+            Command::LoadArchived { bot_id } => self.load_archived(bot_id),
             Command::Archive {
+                bot_id,
                 session_id,
                 archived,
-            } => self.archive(session_id, archived),
+            } => self.archive(bot_id, session_id, archived),
             Command::LoadOlder { session_id, before } => self.load_older(session_id, before),
             Command::Send {
                 text,
@@ -1128,8 +1132,8 @@ impl Engine {
         });
     }
 
-    fn load_archived(&mut self) {
-        let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
+    fn load_archived(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
             return;
         };
         let emit = self.emit.clone();
@@ -1141,8 +1145,8 @@ impl Engine {
 
     /// Archives a session or brings it back. The live list follows on its
     /// own stream; the archived list is fetched again.
-    fn archive(&mut self, session_id: String, archived: bool) {
-        let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
+    fn archive(&mut self, bot_id: String, session_id: String, archived: bool) {
+        let Some(api) = self.api.clone() else {
             return;
         };
         let emit = self.emit.clone();

@@ -18,6 +18,7 @@ import {
 import { useHandoffs } from "../../domains/conversations/infrastructure/use-handoffs";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
+import { ArchivedConversations } from "../../domains/conversations/presentation/sessions/archived-conversations";
 import { ConversationList } from "../../domains/conversations/presentation/sessions/conversation-list";
 import {
   lastSessionKey,
@@ -333,13 +334,7 @@ export function Workspace({
       onSelect={select}
       hasMore={!!hasMoreSessions}
       loadMore={() => void loadMoreSessions()}
-      fetchArchived={async () =>
-        (await api<Page<SessionSummary>>("/api/sessions?archived=1&limit=100"))
-          .items
-      }
-      onArchive={(session, archived) =>
-        void archive(session.sessionId, archived)
-      }
+      onArchive={(session) => void archive(session.sessionId, true)}
     />
   );
   // On a phone the bot's conversations are a screen of their own, until one
@@ -443,6 +438,20 @@ export function Workspace({
                 setEnabled={setEnabled}
                 traces={<Diagnostics bots={inbox.bots.data?.items ?? []} />}
                 activity={<BotActivity />}
+                archived={
+                  <ArchivedConversations
+                    botId={workspace.botId}
+                    fetchArchived={async () =>
+                      (
+                        await api<Page<SessionSummary>>(
+                          "/api/sessions?archived=1&limit=100",
+                        )
+                      ).items
+                    }
+                    onOpen={(session) => select(session.sessionId)}
+                    onUnarchive={(session) => archive(session.sessionId, false)}
+                  />
+                }
                 onParent={(next) => selectSettings(workspace.botId, next)}
               />
             </SettingsMain>
