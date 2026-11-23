@@ -16,6 +16,7 @@ use rune::{Color, Cursor, Drag, El, Key, KeyEvent, Tx, col, el, icon, row, text,
 use rune_kit::Dialog;
 
 use super::parts::{SaveBar, Scope, page, save_bar as save_bar_of};
+use super::rules::{Rules, rules_field};
 use crate::avatar::{PALETTE_NAMES, Tones, bot_avatar, tone_of};
 use crate::icons;
 use crate::sections::{BotSection, Page};
@@ -65,7 +66,7 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El 
         )
         .self_start()
     };
-    let mut groups = vec![identity, personality, replies(s, t)];
+    let mut groups = vec![identity, personality, standing_rules(s, t), replies(s, t)];
     groups.extend(self_updates(s, t));
     groups.push(history);
     // The default bot stays: the runtime refuses to delete it.
@@ -219,6 +220,22 @@ fn presets(s: &Ui, t: &Theme) -> Option<El> {
     Some(grid)
 }
 
+/// "Standing rules": what the owner wants this bot to do every time.
+fn standing_rules(s: &Ui, t: &Theme) -> El {
+    rules_field(
+        t,
+        Rules {
+            key: "rd-profile-rules",
+            title: "Standing rules",
+            note: "What you want this bot to do every time. It reads them in every conversation, after your rules for every bot on the You page, and adds to them when you tell it “always” or “from now on”.",
+            placeholder: "Use Executor for my calendar, mail and tickets.\nAnswer with a card when I ask about my day.",
+            edit: &s.profile.rules,
+            busy: s.model.saving_profile || s.model.creating_bot,
+        },
+        |s: &mut Ui| &mut s.profile.rules,
+    )
+}
+
 /// "Self-updates": what the bot may change by itself, as three switches.
 /// Left out for a runtime too old to say. Mirrors `self-update-fields.tsx`
 /// and the `.self-update*` rules.
@@ -264,14 +281,14 @@ fn self_updates(s: &Ui, t: &Theme) -> Option<El> {
     let personality = line(
         "personality",
         "Update its personality",
-        "When you ask for a different manner, or it learns what works for you.",
+        "When you ask for a different manner, or it learns what works for you. It also saves the standing rules you give it.",
         value.personality,
         |value, on| value.personality = on,
     );
     let owner = line(
         "owner",
         "Update “You”",
-        "Your name, time zone and a few lines about you. Every bot reads them.",
+        "Your name, time zone, a few lines about you and your rules for every bot. Every bot reads them.",
         value.owner,
         |value, on| value.owner = on,
     )
@@ -733,6 +750,7 @@ fn color_picker(s: &Ui, id: &str, look: &Look) -> El {
             Some(this) => this.color = None,
             // A bot being created is not in the roster yet: stand in for it.
             None => others.push(BotProfile {
+                rules: Vec::new(),
                 id: id.to_owned(),
                 name: String::new(),
                 description: String::new(),
@@ -962,7 +980,7 @@ pub fn save_bar(s: &Ui, look: &Look) -> Option<El> {
     } else if let Some(error) = &s.model.profile_error {
         Some(error.clone())
     } else if dirty {
-        draft.problem().map(str::to_owned)
+        draft.blocker()
     } else {
         None
     };
@@ -1002,7 +1020,7 @@ fn create_bar(s: &Ui, t: &Theme) -> El {
     // untouched form is not nagged about its empty name.
     let error = match &s.model.profile_error {
         Some(error) => Some(error.clone()),
-        None if dirty => draft.problem().map(str::to_owned),
+        None if dirty => draft.blocker(),
         None => None,
     };
     let cancel = pressable(

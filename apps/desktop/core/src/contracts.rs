@@ -56,6 +56,10 @@ pub struct BotProfile {
     /// saved before bots could.
     #[serde(default)]
     pub changed_by: Option<String>,
+    /// Standing rules for this bot: what the owner wants it to do every
+    /// time. Older runtimes omit them: none.
+    #[serde(default)]
+    pub rules: Vec<String>,
     /// Counts saves. A save names the revision it was edited from, so two
     /// clients cannot silently overwrite each other.
     #[serde(default)]
@@ -262,6 +266,9 @@ pub struct OwnerProfile {
     pub time_zone: String,
     #[serde(default)]
     pub about: String,
+    /// Standing rules for every bot. Older runtimes omit them: none.
+    #[serde(default)]
+    pub rules: Vec<String>,
     /// When it was last saved, in milliseconds; `None` before the first save.
     #[serde(default)]
     pub updated_at: Option<f64>,
@@ -276,6 +283,11 @@ pub struct SaveOwnerProfile {
     pub call_me: String,
     pub time_zone: String,
     pub about: String,
+    /// `None` leaves them out: the runtime keeps the rules it has. Sent
+    /// only when they changed, so a runtime older than rules still saves
+    /// the rest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rules: Option<Vec<String>>,
 }
 
 /// Body of `POST /api/bots/<id>/profile`
@@ -292,6 +304,11 @@ pub struct UpdateBotProfile {
     /// `None` leaves them out: the runtime keeps what the bot has.
     #[serde(rename = "selfUpdates", skip_serializing_if = "Option::is_none")]
     pub self_updates: Option<SelfUpdates>,
+    /// `None` leaves them out: the runtime keeps the rules the bot has.
+    /// Sent only when they changed, so a runtime older than rules still
+    /// saves the rest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rules: Option<Vec<String>>,
     /// The revision these edits started from.
     pub revision: u32,
 }
@@ -1618,6 +1635,12 @@ pub struct McpConnection {
     pub from_environment: bool,
     pub id: String,
     pub name: String,
+    /// What the bot should use it for, in the owner's words.
+    #[serde(default)]
+    pub purpose: Option<String>,
+    /// One line the service says about itself, when it says anything.
+    #[serde(default)]
+    pub summary: Option<String>,
     pub transport: McpTransport,
     /// The server's URL, or the command the runtime starts.
     pub address: String,
@@ -1651,16 +1674,26 @@ pub(crate) struct McpList {
 pub(crate) enum SaveMcpBody<'a> {
     Http {
         name: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        purpose: Option<&'a str>,
         url: &'a str,
         #[serde(skip_serializing_if = "Option::is_none")]
         token: Option<&'a str>,
     },
     Stdio {
         name: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        purpose: Option<&'a str>,
         command: &'a str,
         args: &'a [String],
         env: std::collections::BTreeMap<&'a str, &'a str>,
     },
+}
+
+/// The body of `POST /api/mcp/:id/purpose`.
+#[derive(Serialize)]
+pub(crate) struct McpPurposeBody<'a> {
+    pub purpose: &'a str,
 }
 
 /// The body of `POST /api/mcp/:id`.

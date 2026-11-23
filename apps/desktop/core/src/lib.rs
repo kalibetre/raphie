@@ -12,6 +12,7 @@
 //! - [`memory`]: what a save of a bot's memory settings carries, and its checks.
 //! - [`handoffs`]: tasks a bot handed to others, as cards and the composer show them.
 //! - [`mentions`]: "@Name" for another bot, typed and shown.
+//! - [`rules`]: standing rules as the settings pages edit them, one a line.
 //! - [`self_updates`]: what a bot changed about itself or the owner in a reply.
 //! - [`cards`]: a timeline card as it reads now: what is over, and where the present falls.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
@@ -50,6 +51,7 @@ pub mod origin;
 pub mod permissions;
 pub mod projections;
 pub mod replies;
+pub mod rules;
 pub mod sandbox;
 pub mod self_updates;
 pub mod settings;

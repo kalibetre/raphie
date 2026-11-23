@@ -23,6 +23,7 @@ mod owner;
 mod parts;
 mod profile;
 mod providers;
+mod rules;
 mod sandbox;
 mod skills;
 mod workspace;

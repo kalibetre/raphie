@@ -8,6 +8,7 @@
 use std::sync::OnceLock;
 
 use raphie_core::contracts::{OwnerProfile, SaveOwnerProfile};
+use raphie_core::rules::{rules_of, rules_problem, rules_text};
 use rune::TextEdit;
 use rune_kit::ComboboxState;
 
@@ -29,6 +30,8 @@ pub struct OwnerDraft {
     /// An IANA time zone, or empty for none.
     pub time_zone: String,
     pub about: TextEdit,
+    /// The rules for every bot as they are edited, one a line.
+    pub rules: TextEdit,
     /// The searchable list of time zones.
     pub zones: ComboboxState,
 }
@@ -42,6 +45,7 @@ impl OwnerDraft {
             call_me: TextEdit::new(""),
             time_zone: String::new(),
             about: TextEdit::new(""),
+            rules: TextEdit::new(""),
             zones: ComboboxState::default(),
         }
     }
@@ -54,6 +58,7 @@ impl OwnerDraft {
             call_me: TextEdit::new(saved.call_me.clone()),
             time_zone: saved.time_zone.clone(),
             about: TextEdit::new(saved.about.clone()),
+            rules: TextEdit::new(rules_text(&saved.rules)),
             zones: ComboboxState::default(),
         }
     }
@@ -65,6 +70,7 @@ impl OwnerDraft {
                 || self.call_me.text != saved.call_me
                 || self.time_zone != saved.time_zone
                 || self.about.text != saved.about
+                || rules_of(&self.rules.text) != saved.rules
         })
     }
 
@@ -82,7 +88,15 @@ impl OwnerDraft {
         if long(&self.about, ABOUT_LIMIT) {
             return Some("About you is at most 2,000 characters.".to_owned());
         }
-        None
+        rules_problem(&rules_of(&self.rules.text))
+    }
+
+    /// The rules to send: those typed, when they differ from the saved
+    /// ones.
+    fn changed_rules(&self) -> Option<Vec<String>> {
+        let rules = rules_of(&self.rules.text);
+        let saved = self.saved.as_ref().map(|saved| &saved.rules);
+        (saved != Some(&rules)).then_some(rules)
     }
 
     /// What a save would send, trimmed as the web trims it, or `None`
@@ -92,6 +106,7 @@ impl OwnerDraft {
             return None;
         }
         Some(SaveOwnerProfile {
+            rules: self.changed_rules(),
             name: self.name.text.trim().to_owned(),
             call_me: self.call_me.text.trim().to_owned(),
             time_zone: self.time_zone.clone(),
@@ -154,6 +169,7 @@ mod tests {
 
     fn saved() -> OwnerProfile {
         OwnerProfile {
+            rules: Vec::new(),
             name: "Hana Girma".into(),
             call_me: "Hana".into(),
             time_zone: "Africa/Addis_Ababa".into(),
@@ -180,6 +196,36 @@ mod tests {
         );
         draft.about = TextEdit::new("x".repeat(ABOUT_LIMIT + 1));
         assert!(draft.problem().is_some());
+        assert_eq!(draft.update(), None);
+    }
+
+    #[test]
+    fn rules_are_part_of_the_form_and_of_every_save() {
+        let mut draft = OwnerDraft::of(&OwnerProfile {
+            rules: vec!["Give times on a 12-hour clock.".into()],
+            ..saved()
+        });
+        assert_eq!(draft.rules.text, "Give times on a 12-hour clock.");
+        // A blank line or a bullet is not a change, and unchanged rules are
+        // left out of a save.
+        draft.rules = TextEdit::new("- Give times on a 12-hour clock.\n\n");
+        assert!(!draft.is_dirty());
+        assert_eq!(draft.update().and_then(|update| update.rules), None);
+        draft.rules = TextEdit::new("Give times on a 12-hour clock.\nLeave out all-day events.");
+        assert!(draft.is_dirty());
+        assert_eq!(
+            draft.update().and_then(|update| update.rules),
+            Some(vec![
+                "Give times on a 12-hour clock.".to_owned(),
+                "Leave out all-day events.".to_owned()
+            ])
+        );
+        let many: Vec<String> = (0..21).map(|n| format!("Rule {n}.")).collect();
+        draft.rules = TextEdit::new(many.join("\n"));
+        assert_eq!(
+            draft.problem().as_deref(),
+            Some("Keep to 20 rules; there are 21.")
+        );
         assert_eq!(draft.update(), None);
     }
 
