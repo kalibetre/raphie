@@ -17,14 +17,18 @@ const MAX_APPS = 40;
  * The apps in a gateway's list of skills, each once as "Name (slug)", in
  * the order they first appear. A gateway such as Executor names an app
  * with every skill the app ships; the gateway's own app is left out, since
- * it is the gateway. Empty for anything that is not such a list.
+ * it is the gateway. Undefined for anything that is not such a list, which
+ * is not the same as a list with no apps in it.
  */
-export function appsFromSkills(listing: unknown, gateway: string): string[] {
+export function appsFromSkills(
+  listing: unknown,
+  gateway: string,
+): string[] | undefined {
   const skills =
     listing && typeof listing === "object" && "skills" in listing
       ? listing.skills
       : undefined;
-  if (!Array.isArray(skills)) return [];
+  if (!Array.isArray(skills)) return undefined;
   const apps: string[] = [];
   for (const skill of skills as unknown[]) {
     const app =

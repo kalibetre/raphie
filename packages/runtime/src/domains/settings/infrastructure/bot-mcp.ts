@@ -247,13 +247,25 @@ export class BotMcp {
    */
   async refreshApps() {
     if (this.closed) return;
+    // Asked outside the gate: it also admits the owner's messages, which
+    // must not wait on a slow gateway.
+    const listed = await Promise.all(
+      [...this.clients.values()].map(
+        async (client) => [client, await gatewayApps(client)] as const,
+      ),
+    );
     await this.options.gate.run(async () => {
       if (this.closed || (await this.options.busy())) return;
+      const connected = new Set(this.clients.values());
       let changed = false;
-      for (const client of this.clients.values()) {
-        const apps = await gatewayApps(client);
-        // A gateway that does not answer keeps the list it gave before.
-        if (!apps || JSON.stringify(apps) === JSON.stringify(client.apps))
+      for (const [client, apps] of listed) {
+        // A gateway that does not answer keeps the list it gave before, and
+        // a connection replaced meanwhile already asked for its own.
+        if (
+          !apps ||
+          !connected.has(client) ||
+          JSON.stringify(apps) === JSON.stringify(client.apps ?? [])
+        )
           continue;
         client.apps = apps;
         changed = true;

@@ -10,11 +10,11 @@ const LISTING_TIMEOUT_MS = 8000;
 const GATEWAY = "executor";
 
 /**
- * The apps a gateway holds, or undefined when the server is not one or
- * does not answer. Executor's own tools are `search` and `call`, so the
- * calendar and mail behind it are invisible until it is asked; its
- * `skills` tool, called with nothing, lists every app without acting on
- * any. Never throws: a connection works without its list.
+ * The apps a gateway holds, none when it holds none, or undefined when the
+ * server is not one or does not give a list. Executor's own tools are
+ * `search` and `call`, so the calendar and mail behind it are invisible
+ * until it is asked; its `skills` tool, called with nothing, lists every
+ * app without acting on any. Never throws: a connection works without its list.
  */
 export async function gatewayApps(
   client: McpClient,
@@ -35,8 +35,7 @@ export async function gatewayApps(
       .map((part) => (part.type === "text" ? part.text : ""))
       .join("");
     const listing: unknown = result.structuredContent ?? JSON.parse(text);
-    const apps = appsFromSkills(listing, GATEWAY);
-    return apps.length ? apps : undefined;
+    return appsFromSkills(listing, GATEWAY);
   } catch {
     return undefined;
   }

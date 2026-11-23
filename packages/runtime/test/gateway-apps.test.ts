@@ -57,8 +57,10 @@ test("a gateway's apps are read from its skills, each once, without the gateway 
     "GitHub (github)",
     "Google Calendar (google-calendar)",
   ]);
-  for (const other of [null, "text", {}, { skills: "none" }, { skills: [1] }])
-    expect(appsFromSkills(other, "executor")).toEqual([]);
+  for (const other of [null, "text", {}, { skills: "none" }])
+    expect(appsFromSkills(other, "executor")).toBeUndefined();
+  // A list that names no app is a gateway with none, not a missing list.
+  expect(appsFromSkills({ skills: [1] }, "executor")).toEqual([]);
   const many = Array.from({ length: 45 }, (_, n) => `App ${n} (app-${n})`);
   expect(appsLine(many)).toEndWith("App 39 (app-39) and 5 more");
 });
@@ -149,6 +151,12 @@ test("a connection shows its apps, and a new app reaches the bot on the next ref
     listing = "down";
     await mcp.refreshApps();
     expect(mcp.read()[0]!.summary).toContain("Gmail");
+
+    // One whose apps were all removed says so, and the bot is told.
+    listing = { skills: [skill("Executor", "executor", "code-mode")] };
+    await mcp.refreshApps();
+    expect(published.at(-1)).toEqual([]);
+    expect(mcp.read()[0]!.summary).toBeUndefined();
   } finally {
     await mcp.close();
     await rm(directory, { recursive: true, force: true });
