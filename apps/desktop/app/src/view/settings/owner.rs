@@ -245,11 +245,12 @@ fn instructions(s: &Ui, t: &Theme) -> El {
             placeholder: "- Give times on a 12-hour clock, in my time zone.",
             edit: &s.owner.instructions,
             busy,
-            status: Some(if raphies {
-                "Raphie’s own, updated with each release until changed"
+            status: if raphies {
+                "Raphie’s own · updated with each release"
             } else {
                 "Changed from Raphie’s own"
-            }),
+            }
+            .to_owned(),
             action: reset,
         },
         |s: &mut Ui| &mut s.owner.instructions,

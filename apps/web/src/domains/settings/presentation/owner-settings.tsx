@@ -223,7 +223,7 @@ function OwnerForm({
         pending={pending}
         status={
           instructionsDefault
-            ? "Raphie’s own, updated with each release until changed"
+            ? "Raphie’s own · updated with each release"
             : "Changed from Raphie’s own"
         }
         action={

@@ -180,6 +180,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
         }
         value={instructions}
         pending={pending}
+        status={`Revision ${saved.revision}${saved.changedBy === "bot" ? ` · edited by ${saved.name}` : ""}`}
         onChange={setInstructions}
       />
       <ReplyStyleFields

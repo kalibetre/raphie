@@ -6512,12 +6512,12 @@ fn instructions_for_every_bot_are_raphies_until_changed_and_reset_back() {
     let mut rt = render_sized(scenes::settings_owner, false, (1280.0, 2400.0));
     assert!(screen_text(&rt).contains("Instructions for every bot"));
     let count = |rt: &_| {
-        element(rt, "rd-owner-instructions-count")
+        element(rt, "rd-owner-instructions-status")
             .text
             .clone()
             .unwrap_or_default()
     };
-    assert!(count(&rt).starts_with("Raphie’s own, updated with each release until changed · "));
+    assert_eq!(count(&rt), "Raphie’s own · updated with each release");
     assert!(rt.find("rd-owner-instructions-reset").is_none());
     // Saved without a change, they are left out and stay Raphie's.
     rt.update(|ui, _| ui.owner.about = TextEdit::new("I run a studio."));
@@ -6541,7 +6541,7 @@ fn instructions_for_every_bot_are_raphies_until_changed_and_reset_back() {
     changed.instructions_default = false;
     changed.updated_at = Some(1_794_650_100_000.0);
     deliver(&mut rt, Event::OwnerSaved(changed));
-    assert!(count(&rt).starts_with("Changed from Raphie’s own · "));
+    assert_eq!(count(&rt), "Changed from Raphie’s own");
 
     click(&mut rt, "rd-owner-instructions-reset");
     let Some(Command::SaveOwner { owner }) = rt.state.sent.last().cloned() else {

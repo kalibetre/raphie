@@ -231,7 +231,7 @@ fn own_instructions(s: &Ui, t: &Theme) -> El {
             placeholder: "- Ask before booking anything before 10 AM.\n- Executor holds my calendar, mail, Jira and GitHub; look there first.\n- Fizzy is my task board: show it as a board, by column.",
             edit: &s.profile.instructions,
             busy: s.model.saving_profile || s.model.creating_bot,
-            status: None,
+            status: revision_label(s),
             action: None,
         },
         |s: &mut Ui| &mut s.profile.instructions,
@@ -897,16 +897,21 @@ fn hue(literal: &str) -> Color {
     hex(literal).unwrap_or(Color::BLACK)
 }
 
+/// "Revision 4", and who saved it when it was the bot: the heading of the
+/// personality and instructions editors.
+fn revision_label(s: &Ui) -> String {
+    s.profile
+        .saved
+        .as_ref()
+        .map_or(String::new(), |saved| match saved.changed_by.as_deref() {
+            Some("bot") => format!("Revision {} · edited by {}", saved.revision, saved.name),
+            _ => format!("Revision {}", saved.revision),
+        })
+}
+
 /// The personality as the owner writes it: a bar with its revision over the editor.
 fn personality_editor(s: &Ui, t: &Theme) -> El {
-    let revision =
-        s.profile
-            .saved
-            .as_ref()
-            .map_or(String::new(), |saved| match saved.changed_by.as_deref() {
-                Some("bot") => format!("Revision {} · edited by {}", saved.revision, saved.name),
-                _ => format!("Revision {}", saved.revision),
-            });
+    let revision = revision_label(s);
     let mut editor = text_input(&s.profile.personality, font(13.0, 400.0).lh(22.0))
         .key("rd-profile-personality")
         .label("Personality")

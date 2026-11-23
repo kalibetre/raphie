@@ -21,8 +21,8 @@ pub struct Instructions<'a> {
     pub placeholder: &'static str,
     pub edit: &'a TextEdit,
     pub busy: bool,
-    /// Said before the count, such as whose text it is.
-    pub status: Option<&'static str>,
+    /// Said in the editor's heading, as a personality says its revision.
+    pub status: String,
     /// A control beside the count, such as a reset.
     pub action: Option<El>,
 }
@@ -69,10 +69,7 @@ pub fn instructions_field(
         t.border
     };
     let count = text(format!(
-        "{}{} / {} · They say how to work and grant nothing.",
-        status
-            .map(|status| format!("{status} · "))
-            .unwrap_or_default(),
+        "{} / {} · They say how to work and grant nothing.",
         thousands(length),
         thousands(INSTRUCTIONS_LIMIT),
     ))
@@ -96,18 +93,47 @@ pub fn instructions_field(
         col()
             .w_full()
             .gap(10.0)
+            // The personality's editor, so the two read as one kind of text.
             .child(
                 col()
-                    .key(format!("{key}-box"))
                     .w_full()
-                    .min_h(192.0)
-                    .padding(12.0)
                     .radius(8.0)
-                    .fill(t.background.alpha(0.5))
                     .border(1.0, border)
-                    .child(editor)
-                    // A press on the empty part of the box puts the caret in.
-                    .on_press_tx(move |_: &mut Ui, tx: &mut Tx| tx.focus(key, false)),
+                    .border_layout()
+                    .clip_rounded(7.0)
+                    .child(
+                        row()
+                            .w_full()
+                            .px(14.0)
+                            .py(11.0)
+                            .gap(10.0)
+                            .justify_between()
+                            .center_y()
+                            .fill(t.muted)
+                            .border_sides([0.0, 0.0, 1.0, 0.0], t.border)
+                            .child(
+                                text("In your words")
+                                    .font(font(10.0, 500.0))
+                                    .color(t.foreground),
+                            )
+                            .child(
+                                text(status)
+                                    .key(format!("{key}-status"))
+                                    .font(font(10.0, 400.0))
+                                    .color(t.muted_foreground),
+                            ),
+                    )
+                    .child(
+                        col()
+                            .key(format!("{key}-box"))
+                            .w_full()
+                            .min_h(270.0)
+                            .padding(16.0)
+                            .fill(t.card)
+                            .child(editor)
+                            // A press on the empty part of the box puts the caret in.
+                            .on_press_tx(move |_: &mut Ui, tx: &mut Tx| tx.focus(key, false)),
+                    ),
             )
             .child(foot),
     )
