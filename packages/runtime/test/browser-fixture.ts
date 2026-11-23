@@ -48,6 +48,19 @@ function today(hour: number, minute = 0) {
   return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(hour)}:${two(minute)}:00${offset < 0 ? "-" : "+"}${two(Math.trunc(offset / 60))}:${two(offset % 60)}`;
 }
 
+/**
+ * `minutes` from now on this machine, on a quarter hour, with its UTC
+ * offset; `days` moves it to another day at the same time.
+ */
+function fromNow(minutes: number, days = 0) {
+  const at = new Date();
+  at.setDate(at.getDate() + days);
+  at.setMinutes(Math.round((at.getMinutes() + minutes) / 15) * 15, 0, 0);
+  const offset = -at.getTimezoneOffset();
+  const two = (n: number) => String(Math.abs(n)).padStart(2, "0");
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(at.getHours())}:${two(at.getMinutes())}:00${offset < 0 ? "-" : "+"}${two(Math.trunc(offset / 60))}:${two(offset % 60)}`;
+}
+
 /** The date `days` from today on this machine, as YYYY-MM-DD. */
 function dayFromNow(days: number) {
   const at = new Date();
@@ -76,26 +89,31 @@ function fixtureCard(
           {
             rows: [
               {
+                title: "Out of office: Hana",
+                start: dayFromNow(0),
+                source: "Work calendar",
+              },
+              {
                 title: "Standup",
                 detail: "Meet · 6 people",
-                start: today(9, 30),
-                end: today(9, 45),
+                start: fromNow(-180),
+                end: fromNow(-165),
                 source: "Work calendar",
                 url: "https://calendar.example.com/e/1",
               },
               {
                 title: "1:1 with Mara",
                 detail: "Room Baobab",
-                start: today(13),
-                end: today(13, 30),
+                start: fromNow(-90),
+                end: fromNow(-60),
                 source: "Work calendar",
                 url: "https://calendar.example.com/e/2",
               },
               {
                 title: "Sprint planning",
                 detail: "Meet · 9 people",
-                start: today(14),
-                end: today(15),
+                start: fromNow(30),
+                end: fromNow(90),
                 source: "Work calendar",
                 url: "https://calendar.example.com/e/3",
                 link: { label: "Join", url: "https://meet.example.com/abc" },
@@ -103,8 +121,8 @@ function fixtureCard(
               {
                 title: "Dentist",
                 detail: "Bole Road clinic",
-                start: today(14, 30),
-                end: today(15, 15),
+                start: fromNow(75),
+                end: fromNow(120),
                 source: "Personal calendar",
                 url: "https://calendar.example.com/e/4",
               },
@@ -122,6 +140,49 @@ function fixtureCard(
                 end: today(23, 30),
                 source: "Personal calendar",
                 url: "https://calendar.example.com/e/5",
+              },
+            ],
+          },
+        ],
+      },
+    };
+  if (/my week/i.test(input))
+    return {
+      reply: "Two busy days; Thursday's review overlaps lunch.",
+      arguments: {
+        title: "This week",
+        kind: "timeline",
+        groups: [
+          {
+            rows: [
+              {
+                title: "Design review: onboarding v2",
+                detail: "Room 4B",
+                start: fromNow(60),
+                end: fromNow(120),
+                source: "Work calendar",
+                link: { label: "Join", url: "https://meet.example.com/xyz" },
+              },
+              {
+                title: "Standup",
+                detail: "Meet",
+                start: fromNow(0, 1),
+                end: fromNow(15, 1),
+                source: "Work calendar",
+                link: { label: "Join", url: "https://meet.example.com/abc" },
+              },
+              {
+                title: "Lunch with Abel",
+                start: fromNow(120, 1),
+                end: fromNow(180, 1),
+                source: "Personal calendar",
+              },
+              {
+                title: "Quarterly planning",
+                detail: "Main hall",
+                start: fromNow(150, 1),
+                end: fromNow(240, 1),
+                source: "Work calendar",
               },
             ],
           },
@@ -373,8 +434,8 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
             },
           }
         : null;
-  // "my schedule", "AF board", "my review", "fizzy board" and "card 107"
-  // show the kinds of card.
+  // "my schedule", "my week", "AF board", "my review", "fizzy board" and
+  // "card 107" show the kinds of card.
   const card = fixtureCard(input);
   // "dentist", "clinic" and "inbox" show the three kinds of question.
   const ask: JsonObject | null = /dentist/i.test(input)
