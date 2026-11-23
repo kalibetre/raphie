@@ -34,7 +34,7 @@ mod onboarding;
 mod permissions;
 mod roster;
 mod self_updates;
-mod sessions;
+pub mod sessions;
 mod settings;
 mod setup;
 mod sign_in;

@@ -1,19 +1,20 @@
 import type { SessionSummary } from "@raphie/contracts";
-import { useQuery } from "@tanstack/react-query";
-import {
-  Archive,
-  ArchiveRestore,
-  MessageSquareText,
-  Search,
-  X,
-} from "lucide-react";
+import { Archive, MessageSquareText, Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "../../../../shared/ui/button";
 import { ScrollArea } from "../../../../shared/ui/scroll-area";
+import {
+  byNewReplies,
+  titleMatches,
+} from "../../application/session-summaries";
 import { SessionCard } from "./session-card";
 
-/** Filterable, searchable list of one bot's conversations. */
+/**
+ * Searchable list of one bot's conversations. Those with new replies come
+ * first, then the rest; each group most recent first. Archived ones are in
+ * Settings, not here.
+ */
 export function ConversationList({
   name,
   sessions,
@@ -22,7 +23,6 @@ export function ConversationList({
   onSelect,
   hasMore,
   loadMore,
-  fetchArchived,
   onArchive,
 }: {
   name: string;
@@ -32,9 +32,7 @@ export function ConversationList({
   onSelect: (id: string) => void;
   hasMore: boolean;
   loadMore: () => void;
-  /** The bot's archived conversations, fetched when that filter opens. */
-  fetchArchived: () => Promise<SessionSummary[]>;
-  onArchive: (session: SessionSummary, archived: boolean) => void;
+  onArchive: (session: SessionSummary) => void;
 }) {
   const [filter, setFilter] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
@@ -42,26 +40,13 @@ export function ConversationList({
     setFilter("");
     searchInput.current?.focus();
   };
-  const [tab, setTab] = useState<"all" | "unread" | "approval" | "archived">(
-    "all",
-  );
-  const archived = useQuery({
-    queryKey: ["sessions", "archived"],
-    enabled: tab === "archived",
-    queryFn: fetchArchived,
-  });
+  const [tab, setTab] = useState<"all" | "approval">("all");
   const counts = {
     all: sessions.length,
-    unread: sessions.filter((s) => unread(s) > 0).length,
     approval: sessions.filter((s) => s.waiting).length,
-    archived: 0,
   };
-  const shown = tab === "archived" ? (archived.data ?? []) : sessions;
-  const filtered = shown.filter(
-    (s) =>
-      s.title.toLowerCase().includes(filter.toLowerCase()) &&
-      (tab !== "unread" || unread(s) > 0) &&
-      (tab !== "approval" || s.waiting),
+  const filtered = byNewReplies(sessions, unread).filter(
+    (s) => titleMatches(s, filter) && (tab !== "approval" || s.waiting),
   );
   return (
     <ScrollArea
@@ -97,9 +82,7 @@ export function ConversationList({
           {(
             [
               ["all", "All"],
-              ["unread", "New replies"],
               ["approval", "Approvals"],
-              ["archived", "Archived"],
             ] as const
           ).map(([id, label]) => (
             <Button
@@ -107,19 +90,12 @@ export function ConversationList({
               variant="ghost"
               size="xs"
               aria-pressed={tab === id}
-              aria-label={id === "archived" ? label : `${label}, ${counts[id]}`}
-              title={id === "archived" ? label : undefined}
+              aria-label={`${label}, ${counts[id]}`}
               onClick={() => setTab(id)}
               className="library-filter h-7 rounded-full border px-2 text-[11px]"
             >
-              {id === "archived" ? (
-                // An icon keeps the four filters on one row in the sidebar;
-                // it is the same box as the archive buttons.
-                <Archive size={13} aria-hidden="true" />
-              ) : (
-                <span className="library-filter-label">{label}</span>
-              )}
-              {id !== "all" && id !== "archived" && counts[id] > 0 && (
+              <span className="library-filter-label">{label}</span>
+              {id !== "all" && counts[id] > 0 && (
                 <span className="library-filter-count" aria-hidden="true">
                   {counts[id]}
                 </span>
@@ -130,8 +106,7 @@ export function ConversationList({
         <p className="library-results" role="status">
           {filtered.length}{" "}
           {filtered.length === 1 ? "conversation" : "conversations"}
-          {tab === "archived" ? " archived" : ""}
-          {filter ? ` matching “${filter}”` : " · Most recent first"}
+          {filter ? ` matching “${filter}”` : " · New replies first"}
         </p>
         <nav
           className="conversation-list library-list"
@@ -144,21 +119,17 @@ export function ConversationList({
                 selected={s.id === selectedId}
                 now={Date.now()}
                 onSelect={() => onSelect(s.id)}
-                unreadCount={s.archivedAt ? 0 : unread(s)}
+                unreadCount={unread(s)}
               />
               <Button
                 variant="ghost"
                 size="icon-xs"
                 className="library-row-archive"
-                aria-label={`${s.archivedAt ? "Unarchive" : "Archive"} ${s.title}`}
-                title={s.archivedAt ? "Unarchive" : "Archive"}
-                onClick={() => onArchive(s, !s.archivedAt)}
+                aria-label={`Archive ${s.title}`}
+                title="Archive"
+                onClick={() => onArchive(s)}
               >
-                {s.archivedAt ? (
-                  <ArchiveRestore size={14} />
-                ) : (
-                  <Archive size={14} />
-                )}
+                <Archive size={14} />
               </Button>
             </div>
           ))}
@@ -169,13 +140,9 @@ export function ConversationList({
             <p>
               {filter
                 ? "No matching conversations."
-                : tab === "archived"
-                  ? archived.isPending
-                    ? "Loading archived conversations…"
-                    : "No archived conversations."
-                  : tab === "all"
-                    ? "No conversations yet."
-                    : "You’re all caught up."}
+                : tab === "all"
+                  ? "No conversations yet."
+                  : "You’re all caught up."}
             </p>
             {filter && (
               <Button variant="outline" size="sm" onClick={clearSearch}>
@@ -184,7 +151,7 @@ export function ConversationList({
             )}
           </div>
         )}
-        {hasMore && tab !== "archived" && (
+        {hasMore && (
           <Button variant="outline" onClick={loadMore}>
             Load more conversations
           </Button>

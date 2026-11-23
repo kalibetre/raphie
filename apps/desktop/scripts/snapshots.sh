@@ -12,7 +12,7 @@ bin=target/debug/raphie-desktop
 # 1280x800 at 2x is the size of the web workspace's reference screenshots, so
 # the two can be compared side by side. --chrome draws the traffic lights
 # where macOS puts them.
-for scene in sign-in sign-in-this-mac device-code onboarding onboarding-teammate onboarding-work onboarding-provider new-conversation conversation-opened bot-setup teammate-setup scheduled-failures conversations conversations-archived unread inbox inbox-empty conversation conversation-archived attachments image-viewer model-picker model-picker-favorites model-picker-family permissions composer composer-full-access composer-context composer-nearly-full tools tools-unfinished reply-failed streaming working approval card-timeline card-list card-sources card-board card-item \
+for scene in sign-in sign-in-this-mac device-code onboarding onboarding-teammate onboarding-work onboarding-provider new-conversation conversation-opened bot-setup teammate-setup scheduled-failures conversations unread inbox inbox-empty conversation conversation-archived attachments image-viewer model-picker model-picker-favorites model-picker-family permissions composer composer-full-access composer-context composer-nearly-full tools tools-unfinished reply-failed streaming working approval card-timeline card-list card-sources card-board card-item \
   settings-account settings-appearance settings-profile settings-profile-edited \
   settings-models settings-models-filter settings-providers settings-providers-add settings-providers-sign-in settings-providers-subscription \
   settings-memory settings-memory-hindsight settings-memories settings-memories-editing \
@@ -24,7 +24,7 @@ for scene in sign-in sign-in-this-mac device-code onboarding onboarding-teammate
   settings-account settings-account-unreachable settings-account-runtime-down \
   settings-owner settings-owner-edited \
   composer-slash settings-skills settings-skills-editor settings-skills-new settings-skills-import \
-  settings-diagnostics settings-activity settings-about settings-about-update settings-about-nightly dev-build nightly-build \
+  settings-diagnostics settings-activity settings-archived settings-archived-empty settings-about settings-about-update settings-about-nightly dev-build nightly-build \
   settings-history settings-history-restore settings-profile-presets conversation-self-updates conversation-skill-notes settings-skills-by-bot settings-new-bot add-teammate-work settings-delete-bot; do
   for theme in light dark; do
     "$bin" --snap "$out/$scene-$theme.png" --scene "$scene" --theme "$theme" \

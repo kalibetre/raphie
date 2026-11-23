@@ -47,6 +47,7 @@ export function Settings({
   setEnabled,
   traces,
   activity,
+  archived,
   onParent,
 }: {
   section: Section;
@@ -58,6 +59,8 @@ export function Settings({
   traces: ReactNode;
   /** Bot-wide activity journal; composed by the workspace. */
   activity: ReactNode;
+  /** The bot's archived conversations; composed by the workspace. */
+  archived: ReactNode;
   /** Opens the page a sub-page was reached from. */
   onParent: (section: Section) => void;
 }) {
@@ -141,6 +144,8 @@ export function Settings({
           <TelemetrySettings traces={traces} />
         ) : section === "activity" ? (
           activity
+        ) : section === "archived" ? (
+          archived
         ) : section === "owner" ? (
           <OwnerSettings />
         ) : section === "account" ? (
