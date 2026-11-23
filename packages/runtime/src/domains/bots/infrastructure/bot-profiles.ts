@@ -18,6 +18,7 @@ import {
 } from "../../conversations/domain/reply-style.ts";
 import { EMPTY_OWNER } from "../domain/owner.ts";
 import { PERSONALITY_PRESETS, presetOf } from "../domain/personalities.ts";
+import { cleanRules } from "../domain/rules.ts";
 
 /**
  * What a bot may change by itself until the owner says otherwise: every bot
@@ -29,8 +30,8 @@ export function defaultSelfUpdates(id: string): SelfUpdates {
 }
 
 /**
- * A stored profile, with a reply style and self-updates even if it was
- * saved before either.
+ * A stored profile, with a reply style, self-updates and rules even if it
+ * was saved before any of them.
  */
 function parse(value: string): BotProfile {
   const profile = JSON.parse(value) as BotProfile;
@@ -41,6 +42,7 @@ function parse(value: string): BotProfile {
       ...defaultSelfUpdates(profile.id),
       ...profile.selfUpdates,
     },
+    rules: profile.rules ?? [],
   };
 }
 
@@ -82,6 +84,7 @@ export class BotProfileStore {
         ...defaultBot,
         replyStyle: DEFAULT_REPLY_STYLE,
         selfUpdates: defaultSelfUpdates("default"),
+        rules: [],
         changedBy: "owner",
         preset: presetOf(defaultBot.personality),
         revision: 1,
@@ -127,6 +130,7 @@ export class BotProfileStore {
       ...input,
       replyStyle: replyStyleOf(input.replyStyle),
       selfUpdates: { ...defaultSelfUpdates(id), ...input.selfUpdates },
+      rules: cleanRules(input.rules ?? []),
       changedBy: "owner",
       preset: presetOf(input.personality),
       id,
@@ -162,6 +166,7 @@ export class BotProfileStore {
         ...input,
         replyStyle: input.replyStyle ?? previous.replyStyle,
         selfUpdates: { ...previous.selfUpdates, ...input.selfUpdates },
+        rules: input.rules ? cleanRules(input.rules) : previous.rules,
         changedBy: "owner",
       });
     })();
@@ -177,6 +182,20 @@ export class BotProfileStore {
       return previous.personality === personality
         ? previous
         : this.write({ ...previous, personality, changedBy: "bot" });
+    })();
+  }
+
+  /**
+   * The bot changes its own standing rules: a new revision, saved by it.
+   * Unchanged rules save nothing.
+   */
+  updateRules(id: string, rules: string[]) {
+    return this.db.transaction(() => {
+      const previous = this.read(id);
+      const next = cleanRules(rules);
+      return JSON.stringify(previous.rules) === JSON.stringify(next)
+        ? previous
+        : this.write({ ...previous, rules: next, changedBy: "bot" });
     })();
   }
 
@@ -209,7 +228,11 @@ export class BotProfileStore {
   }
 
   saveOwner(input: SaveOwnerProfile): OwnerProfile {
-    const owner = { ...input, updatedAt: Date.now() };
+    const owner = {
+      ...input,
+      rules: input.rules ? cleanRules(input.rules) : this.owner().rules,
+      updatedAt: Date.now(),
+    };
     this.db
       .query(
         "INSERT INTO owner_profile(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",

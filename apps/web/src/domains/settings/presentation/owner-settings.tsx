@@ -11,17 +11,30 @@ import {
   SelectValue,
 } from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
+import {
+  rulesOf,
+  rulesProblem,
+  rulesText,
+  sameRules,
+} from "../application/rules";
 import { useOwner } from "../infrastructure/use-owner";
+import { RulesField } from "./rules-field";
 import { SaveBar } from "./save-bar";
 import { useSettingsGuard } from "./use-settings-guard";
 
 const NOT_SET = "none";
 
-const same = (a: SaveOwnerProfile, b: SaveOwnerProfile) =>
+type Draft = Omit<SaveOwnerProfile, "rules"> & {
+  /** The rules as they are edited, one a line. */
+  rules: string;
+};
+
+const same = (a: Draft, b: Draft) =>
   a.name === b.name &&
   a.callMe === b.callMe &&
   a.timeZone === b.timeZone &&
-  a.about === b.about;
+  a.about === b.about &&
+  sameRules(rulesOf(a.rules), rulesOf(b.rules));
 
 /** This device's time zone, offered when the owner has not chosen one. */
 const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -59,13 +72,15 @@ function OwnerForm({
   onMessage: (message: string) => void;
 }) {
   const owner = useOwner();
-  const [draft, setDraft] = useState<SaveOwnerProfile>(saved);
+  const start: Draft = { ...saved, rules: rulesText(saved.rules ?? []) };
+  const [draft, setDraft] = useState<Draft>(start);
+  const problem = rulesProblem(rulesOf(draft.rules));
   const setMessage = onMessage;
   const zones = useMemo(() => Intl.supportedValuesOf("timeZone"), []);
-  const dirty = !same(draft, saved);
+  const dirty = !same(draft, start);
   const pending = owner.save.isPending;
   const guard = useSettingsGuard(dirty, pending);
-  const set = (patch: Partial<SaveOwnerProfile>) => {
+  const set = (patch: Partial<Draft>) => {
     setMessage("");
     setDraft((current) => ({ ...current, ...patch }));
   };
@@ -79,6 +94,7 @@ function OwnerForm({
         callMe: draft.callMe.trim(),
         timeZone: draft.timeZone,
         about: draft.about.trim(),
+        rules: rulesOf(draft.rules),
       });
       setMessage("Saved. Every bot uses it from its next reply.");
     } catch {
@@ -186,6 +202,17 @@ function OwnerForm({
           </p>
         </div>
       </section>
+      <RulesField
+        id="owner-rules"
+        title="Rules for every bot"
+        note="What you want done every time, whichever bot you are talking to. Each bot reads these in every conversation, before its own rules."
+        placeholder={
+          "Give times on a 12-hour clock, in my time zone.\nLeave all-day events out of my schedule."
+        }
+        value={draft.rules}
+        pending={pending}
+        onChange={(rules) => set({ rules })}
+      />
       <SaveBar
         visible={dirty || pending || !!message || owner.save.isError}
         status={guard.message || message || (dirty ? "Unsaved changes" : "")}
@@ -193,10 +220,10 @@ function OwnerForm({
           owner.save.error instanceof Error ? owner.save.error.message : ""
         }
         pending={pending}
-        canSave={dirty && !pending}
+        canSave={dirty && !pending && !problem}
         canDiscard={dirty && !pending}
         onDiscard={() => {
-          setDraft(saved);
+          setDraft(start);
           setMessage("");
         }}
       />

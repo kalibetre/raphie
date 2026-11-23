@@ -70,6 +70,8 @@ export async function connectMcp(
     const tools = await client.listTools();
     return {
       server: client.serverInfo,
+      /** What the server says about itself and how to use it. */
+      instructions: client.instructions,
       tools,
       call: async (
         name: string,
@@ -88,4 +90,8 @@ export async function connectMcp(
   }
 }
 
-export type McpClient = Awaited<ReturnType<typeof connectMcp>>;
+/** A connected server. What it says about itself is absent when it says nothing. */
+export type McpClient = Omit<
+  Awaited<ReturnType<typeof connectMcp>>,
+  "instructions"
+> & { instructions?: string };

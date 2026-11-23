@@ -18,6 +18,11 @@ export type BotProfile = {
   color?: string | null;
   /** What the bot may change by itself. */
   selfUpdates: SelfUpdates;
+  /**
+   * Standing rules for this bot: what the owner wants it to do every time.
+   * It reads them in every conversation, after the owner's own rules.
+   */
+  rules: string[];
   /** Who saved this revision; absent on revisions saved before bots could. */
   changedBy?: "owner" | "bot";
   /** The built-in personality this revision's text is, unchanged. */
@@ -38,6 +43,8 @@ export type SaveBotProfile = Pick<
    * left out, as from a client older than it, keeps its value too.
    */
   selfUpdates?: Partial<SelfUpdates>;
+  /** Omitted: a new bot starts with none, an edit keeps them. */
+  rules?: string[];
 };
 
 /**
@@ -76,7 +83,15 @@ export type OwnerProfile = {
   timeZone: string;
   /** A few lines about the owner, in their words. */
   about: string;
+  /**
+   * Standing rules for every bot: what the owner wants done every time,
+   * whichever bot they are talking to.
+   */
+  rules: string[];
   updatedAt: number | null;
 };
 
-export type SaveOwnerProfile = Omit<OwnerProfile, "updatedAt">;
+export type SaveOwnerProfile = Omit<OwnerProfile, "updatedAt" | "rules"> & {
+  /** Omitted, as from a client older than rules, keeps them. */
+  rules?: string[];
+};

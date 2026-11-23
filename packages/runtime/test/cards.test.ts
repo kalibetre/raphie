@@ -208,10 +208,10 @@ test("a long list is cut to what a card holds, with a line for the rest", () => 
 
 test("a card needs rows or events, and not both", () => {
   expect(buildCard({ title: "Empty" })).toEqual({
-    error: expect.stringMatching(/at least one row or event/),
+    error: expect.stringMatching(/This card has no rows/),
   });
   expect(buildCard({ title: "Empty", groups: [{ rows: [] }] })).toEqual({
-    error: expect.stringMatching(/at least one row/),
+    error: expect.stringMatching(/This card has no rows/),
   });
   expect(
     buildCard({
@@ -559,7 +559,7 @@ test("a date the calendar does not have, and a blank title, are not shown", () =
   ]);
   expect(
     buildCard({ title: "Rows", groups: [{ rows: [{ title: " " }] }] }),
-  ).toEqual({ error: expect.stringMatching(/at least one row or event/) });
+  ).toEqual({ error: expect.stringMatching(/This card has no rows/) });
 });
 
 test("an event time without an offset is refused, with what to send instead", () => {
@@ -678,7 +678,7 @@ test("a board column shows its first rows and counts the rest; an empty board is
   expect(card.columns[0]!.count).toBe(25);
   expect(
     buildCard({ title: "Empty", columns: [{ label: "To do", rows: [] }] }),
-  ).toEqual({ error: expect.stringMatching(/at least one row or event/) });
+  ).toEqual({ error: expect.stringMatching(/This card has no rows/) });
 });
 
 test("an item card carries its fields, the start of its description and its first steps", () => {
@@ -1065,10 +1065,57 @@ test("a bad card goes back to the bot as an error and nothing is shown", async (
     );
     expect(
       (await app.chats.state()).turns.find((t) => t.id === turn.id)!.answer,
-    ).toMatch(/A card needs at least one row/);
+    ).toMatch(/This card has no rows/);
     expect((await app.cards.state()).cards).toEqual([]);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });
   }
 }, 20_000);
+
+test("text too long for its place is cut, and the card is still shown", () => {
+  const long = "Two calendars could not be read. ".repeat(20);
+  const built = buildCard({
+    title: "Today",
+    source: "Google Calendar (kwoldemariam@alxafrica.com)",
+    warning: long,
+    stats: [
+      { label: "Events", value: "1" },
+      { label: "Read", value: "2 of 4 calendars were read" },
+      { label: "a", value: "1" },
+      { label: "b", value: "1" },
+      { label: "c", value: "1" },
+    ],
+    groups: [
+      {
+        label: "Work",
+        rows: [
+          {
+            title: "Design Team Weekly",
+            badge: { label: "Awaiting your reply since Monday" },
+            tags: ["a-very-long-tag-name-that-goes-on", "👩‍💻".repeat(30)],
+            trailing: "in three days and a bit",
+          },
+        ],
+      },
+    ],
+  });
+  if ("error" in built) throw new Error(built.error);
+  const { card } = built;
+  // A source and a warning wrap, so they keep far more than a tag does.
+  expect(card.sources).toEqual([
+    "Google Calendar (kwoldemariam@alxafrica.com)",
+  ]);
+  expect(Array.from(card.warning!)).toHaveLength(300);
+  expect(card.warning).toEndWith("…");
+  expect(card.stats).toHaveLength(4);
+  expect(card.stats![1]!.value).toBe("2 of 4 calendar…");
+  if (card.type !== "list") throw new Error("Expected a list.");
+  const row = card.groups[0]!.rows[0]!;
+  expect(row.badge!.label).toBe("Awaiting your reply sin…");
+  expect(row.tags![0]).toBe("a-very-long-tag-name-th…");
+  expect(Array.from(row.tags![1]!)).toHaveLength(24);
+  expect(row.trailing).toBe("in three days a…");
+  // What is stored stays plain JSON: nothing absent is kept as undefined.
+  expect(JSON.parse(JSON.stringify(card))).toEqual(card);
+});

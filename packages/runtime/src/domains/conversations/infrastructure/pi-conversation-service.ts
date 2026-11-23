@@ -38,6 +38,7 @@ import {
   ownerInstructions,
   selfUpdateInstructions,
 } from "../../bots/domain/owner.ts";
+import { rulesInstructions } from "../../bots/domain/rules.ts";
 import { Cards } from "../../cards/infrastructure/card-store.ts";
 import {
   channelNames,
@@ -295,6 +296,7 @@ export class ChatService implements ConversationCommands {
     | "replyStyle"
     | "revision"
     | "selfUpdates"
+    | "rules"
   >;
   /** The owner, shared by every bot; absent in tests that run one bot. */
   owner?: () => OwnerProfile;
@@ -309,6 +311,12 @@ export class ChatService implements ConversationCommands {
     /** The skill a message invokes with `/name`, ready for its turn. */
     invoke: (text: string) => Promise<string | undefined>;
   };
+  /**
+   * The services connected to this bot, as its instructions name them.
+   * Their tools are searched for, so without this a bot does not know what
+   * it can reach.
+   */
+  services?: () => string;
   app: DurableContext;
   model: ModelRef | undefined;
   private models: Models;
@@ -706,9 +714,11 @@ export class ChatService implements ConversationCommands {
               ? `Your name is ${profile.name}. ${profile.description}\nYour personality (revision ${profile.revision}):\n${profile.personality}\n`
               : "You are Raphie, a concise and thoughtful personal assistant. ") +
             ownerInstructions(owner) +
+            rulesInstructions(owner.rules, profile?.rules ?? []) +
             (profile
               ? selfUpdateInstructions(profile.selfUpdates, owner)
               : "") +
+            (this.services?.() ?? "") +
             replyInstructions(profile?.replyStyle) +
             (this.skills?.instructions(profile?.selfUpdates.skills ?? false) ??
               "") +

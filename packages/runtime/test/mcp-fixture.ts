@@ -10,6 +10,8 @@ export function rpcResponse(message: {
       protocolVersion: "2025-11-25",
       serverInfo: { name: "fixture-mcp", version: "1.0.0" },
       capabilities: { tools: {} },
+      instructions:
+        "# Fixture\n\nA fixture server that echoes text.\nFind its tools with search.",
     };
   else if (message.method === "tools/list")
     result = message.params?.cursor

@@ -7,6 +7,7 @@ import {
 } from "../../../../infrastructure/http/validation.ts";
 import type { BotProfiles } from "../../application/ports.ts";
 import { PERSONALITY_PRESETS } from "../../domain/personalities.ts";
+import { MAX_RULE_LENGTH, MAX_RULES } from "../../domain/rules.ts";
 
 const profile = z
   .object({
@@ -29,6 +30,10 @@ const profile = z
         skills: z.boolean().optional(),
       })
       .strict()
+      .optional(),
+    rules: z
+      .array(z.string().trim().min(1).max(MAX_RULE_LENGTH))
+      .max(MAX_RULES)
       .optional(),
     color: z
       .string()

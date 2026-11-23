@@ -392,6 +392,7 @@ test("a bot writes and improves skills with save_skill, and the owner can undo e
     },
     revision: 1,
     selfUpdates: { personality: true, owner: false, skills: allowed },
+    rules: [],
   }));
   const server = await startServer(gateway, { port: 0 });
   const call = async (method: string, path: string, body?: unknown) => {

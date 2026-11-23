@@ -1,9 +1,15 @@
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import { toLlmContent } from "@earendil-works/pi-mcp";
+import {
+  JSON_RPC_ERROR_CODES,
+  McpError,
+  McpTimeoutError,
+  toLlmContent,
+} from "@earendil-works/pi-mcp";
 import type { Schema } from "@earendil-works/pi-schema";
 
 import type { McpClient } from "../../../infrastructure/mcp/client.ts";
 import type { Telemetry } from "../../../shared/application/telemetry.ts";
+import { redact } from "../../../shared/infrastructure/redaction.ts";
 import {
   Activity,
   record,
@@ -13,6 +19,9 @@ import type { ToolApprovalService, ToolResult } from "./pi-tool-approvals.ts";
 import { ToolApprovals } from "./pi-tool-approvals.ts";
 
 export type McpTools = {
+  /** The owner's name for the connection, and what they use it for. */
+  name?: string;
+  purpose?: string;
   namespace?: string;
   client: McpClient;
   identity: string;
@@ -45,6 +54,34 @@ function normalize(result: Awaited<ReturnType<McpClient["call"]>>): ToolResult {
   };
 }
 
+/** What a failed call's error said, on one line and without saved secrets. */
+function saidBy(error: unknown) {
+  // Our own complaint about a malformed answer uses the same error type.
+  if (
+    !(error instanceof McpError) ||
+    error.code === JSON_RPC_ERROR_CODES.invalidRequest
+  )
+    return "";
+  const text = JSON.parse(redact(error.message.slice(0, 2000))) as string;
+  return text.replace(/\s+/g, " ").trim().slice(0, 600);
+}
+
+/**
+ * What to tell the bot when a service refused a call, or nothing when the
+ * failure was not a refusal. A refusal is the service's answer that it
+ * does not know the tool or its arguments: the call did not run.
+ */
+function refusalOf(error: unknown) {
+  if (
+    !(error instanceof McpError) ||
+    (error.code !== JSON_RPC_ERROR_CODES.invalidParams &&
+      error.code !== JSON_RPC_ERROR_CODES.methodNotFound)
+  )
+    return undefined;
+  const said = saidBy(error);
+  return `The service refused the call and did not run it${said ? `: ${said}` : "."} Correct the request before trying again.`;
+}
+
 function output(result: ToolResult) {
   return {
     output: [{ type: "text" as const, text: result.text }],
@@ -63,11 +100,18 @@ export function createMcpTools(
   const server = options.client.server?.name ?? "mcp";
   const namespace =
     options.namespace ?? server.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 20);
+  const label = options.name ? `${options.name}: ` : "";
+  const about =
+    options.name && options.purpose
+      ? `\nPart of ${options.name}, which the owner uses for: ${options.purpose}`
+      : "";
   const tools = options.client.tools.map((tool) =>
     defineTool({
       name: toolName(namespace, tool.name),
       deferred: options.namespace ? true : undefined,
-      description: `${tool.description ?? tool.name}\n${options.documentationTools?.includes(tool.name) ? "Documentation lookup." : "Requires the owner to approve the exact arguments before execution."}`,
+      // The name and purpose are what a tool search for "calendar" matches
+      // when the tool itself is a gateway's generic "search" or "call".
+      description: `${label}${tool.description ?? tool.name}${about}\n${options.documentationTools?.includes(tool.name) ? "Documentation lookup." : "Requires the owner to approve the exact arguments before execution."}`,
       parameters: {
         ...tool.inputSchema,
         type: "object",
@@ -194,12 +238,39 @@ export function createMcpTools(
             text: "The previous call may already have executed. Its outcome is unknown. Do not repeat it; ask the owner to inspect the external service first.",
             isError: true,
           });
-        let result;
+        let result: ToolResult;
         try {
           result = normalize(await call(approved.id));
-        } catch {
+        } catch (error) {
           if (ctx.abortSignal?.aborted)
             throw new Error("MCP invocation interrupted.");
+          // The service answered, and its answer was a refusal: the call
+          // did not run, so it is a result like any other and the bot can
+          // correct its arguments.
+          const refusal = refusalOf(error);
+          if (refusal) {
+            result = { text: refusal, isError: true };
+            await api.commit(async (tx) => {
+              const item = (await tx.doc(ToolApprovals)).approvals.find(
+                (a) => a.id === approved.id,
+              )!;
+              item.execution = "done";
+              item.result = result;
+              record(
+                await tx.doc(Activity),
+                "action.completed",
+                `${item.tool} was refused by the service`,
+                {
+                  conversationId: item.conversationId,
+                  operationId: item.id,
+                  pluginId: server,
+                  details: result,
+                },
+              );
+            }, ctx);
+            return output(result);
+          }
+          const said = saidBy(error);
           await api.commit(async (tx) => {
             (await tx.doc(ToolApprovals)).approvals.find(
               (a) => a.id === approved.id,
@@ -215,7 +286,12 @@ export function createMcpTools(
             );
           }, ctx);
           return output({
-            text: "MCP call failed or its outcome is unknown. Do not repeat it; ask the owner to inspect the external service first.",
+            text:
+              error instanceof McpTimeoutError
+                ? `The service did not answer within ${Math.round(error.timeoutMs / 1000)} seconds, so the call may still be running or may have finished. Its outcome is unknown. Do not repeat it; check the service for the result, or ask the owner to.`
+                : said
+                  ? `The service reported an error: ${said} Whether the call took effect is unknown. Do not repeat it unchanged; check the service first, or ask the owner to.`
+                  : "MCP call failed or its outcome is unknown. Do not repeat it; ask the owner to inspect the external service first.",
             isError: true,
           });
         }
