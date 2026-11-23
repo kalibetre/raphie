@@ -5567,29 +5567,46 @@ fn a_card_fits_a_narrow_window() {
 }
 
 #[test]
-fn a_timeline_card_places_now_and_names_each_source() {
+fn a_timeline_card_reads_as_todays_schedule_and_names_each_source() {
     let mut rt = render(scenes::card_timeline, false);
     let text = screen_text(&rt);
     for part in [
+        "Today",
         "Work calendar",
         "Personal calendar",
         "Side-project calendar couldn't be read",
-        "Standup",
-        "Now · ",
+        "Out of office: Hana",
+        "NEXT · IN ",
+        "1 earlier · Standup",
         "Free until ",
         "Overlaps",
         "Team farewell call",
     ] {
         assert!(text.contains(part), "{part} is missing from: {text}");
     }
-    // The line for now comes after the event that is over.
-    assert!(text.find("Standup") < text.find("Now · "), "{text}");
-    // A meeting's second link opens too.
-    click(&mut rt, "rd-card-card-1-4-link");
+    // The event that is over is folded until its line is pressed.
+    let day = format!(
+        "rd-card-card-1-{}",
+        raphie_desktop::format::local_day(raphie_desktop::format::now_ms())
+    );
+    assert!(rt.find(&format!("{day}-earlier-0")).is_none());
+    click(&mut rt, &format!("{day}-earlier"));
+    assert!(rt.find(&format!("{day}-earlier-0")).is_some());
+    // A meeting's second link opens too: now, free time, 1:1, then this.
+    click(&mut rt, &format!("{day}-3-link"));
     assert_eq!(rt.state.opened, ["https://meet.example.com/abc"]);
 
     let text = screen_text(&render(scenes::card_sources, true));
     assert!(text.contains("GitHub") && text.contains("Bitbucket") && text.contains("Checks fail"));
+}
+
+#[test]
+fn a_schedule_of_several_days_heads_each_one() {
+    let text = screen_text(&render(scenes::card_week, false));
+    for part in ["This week", "Today", "Tomorrow", "Quarterly planning"] {
+        assert!(text.contains(part), "{part} is missing from: {text}");
+    }
+    assert!(text.find("Today") < text.find("Tomorrow"), "{text}");
 }
 
 #[test]

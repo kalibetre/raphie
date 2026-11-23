@@ -105,6 +105,15 @@ test("the strip covers a working day at least, with overlaps on a second lane", 
   // An evening event widens it to the next whole hour.
   const late = schedule([event("Dinner", at(19, 30), at(20, 15))], at(9));
   expect(late[0]!.strip!.to).toBe(at(21));
+  // An hour too close to the end is not labelled beside it.
+  const later = schedule([event("Dinner", at(21, 30), at(22, 15))], at(9));
+  expect(later[0]!.strip!.hours).toEqual([
+    at(8),
+    at(12),
+    at(15),
+    at(18),
+    at(23),
+  ]);
 });
 
 test("another day has no strip, nothing next and nothing folded", () => {

@@ -109,7 +109,8 @@ function strip(date: string, events: CardEvent[], now: number): ScheduleStrip {
   const to = hourOf(date, toHour);
   const hours = [fromHour];
   for (let hour = fromHour + 1; hour < toHour; hour++)
-    if (hour % 3 === 0 && hour - fromHour > 1 && toHour - hour > 1)
+    // Far enough from the ends that labels never run into each other.
+    if (hour % 3 === 0 && hour - fromHour >= 2 && toHour - hour >= 3)
       hours.push(hour);
   hours.push(toHour);
   const blocks: ScheduleBlock[] = [];

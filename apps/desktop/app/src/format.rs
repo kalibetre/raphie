@@ -71,6 +71,88 @@ pub fn short_date(date: &str) -> String {
     )
 }
 
+/// A calendar day counted from 1970-01-01.
+fn civil_day(day: i64) -> chrono::NaiveDate {
+    chrono::NaiveDate::default() + chrono::Duration::days(day)
+}
+
+/// The weekday and date of a day counted from 1970-01-01: "Monday 23 November".
+pub fn day_date(day: i64) -> String {
+    civil_day(day).format("%A %-d %B").to_string()
+}
+
+/// The weekday of a day counted from 1970-01-01: "Wednesday".
+pub fn weekday(day: i64) -> String {
+    civil_day(day).format("%A").to_string()
+}
+
+/// A day counted from 1970-01-01, in short: "Mon, Nov 23".
+pub fn short_day(day: i64) -> String {
+    civil_day(day).format("%a, %b %-d").to_string()
+}
+
+/// When a local hour (0 to 24) of a day counted from 1970-01-01 starts,
+/// in milliseconds since the Unix epoch. An hour a clock change skips
+/// reads as the next one.
+pub fn hour_at(day: i64, hour: i64) -> i64 {
+    use chrono::TimeZone;
+    let start = civil_day(day).and_time(chrono::NaiveTime::MIN) + chrono::Duration::hours(hour);
+    (0..3)
+        .find_map(|later| {
+            chrono::Local
+                .from_local_datetime(&(start + chrono::Duration::hours(later)))
+                .earliest()
+        })
+        .map_or(day * 86_400_000 + hour * 3_600_000, |at| {
+            at.timestamp_millis()
+        })
+}
+
+/// The local hour of `at`, for a scale: "8 AM", "12 PM".
+pub fn hour_label(at: i64) -> String {
+    local(at).map_or_else(String::new, |local| {
+        let half = if local.hour() < 12 { "AM" } else { "PM" };
+        format!("{} {half}", twelve(local.hour()))
+    })
+}
+
+/// The local time of `at` without leading zero: "7:30 PM".
+pub fn short_clock(at: i64) -> String {
+    local(at).map_or_else(String::new, |local| {
+        let half = if local.hour() < 12 { "AM" } else { "PM" };
+        format!("{}:{:02} {half}", twelve(local.hour()), local.minute())
+    })
+}
+
+/// A span of local time without leading zeros: "7:30 – 8:30 PM", or
+/// "11:30 AM – 12:15 PM" across noon.
+pub fn short_range(start: i64, end: i64) -> String {
+    let (from, to) = (short_clock(start), short_clock(end));
+    match (from.rsplit_once(' '), to.rsplit_once(' ')) {
+        (Some((time, half)), Some((_, same))) if half == same => format!("{time} – {to}"),
+        _ => format!("{from} – {to}"),
+    }
+}
+
+/// The local time of `at` without "AM" or "PM", for a time column whose
+/// next line says it: "7:30".
+pub fn bare_clock(at: i64) -> String {
+    local(at).map_or_else(String::new, |local| {
+        format!("{}:{:02}", twelve(local.hour()), local.minute())
+    })
+}
+
+fn local(at: i64) -> Option<chrono::DateTime<chrono::Local>> {
+    chrono::DateTime::from_timestamp_millis(at).map(|utc| utc.with_timezone(&chrono::Local))
+}
+
+fn twelve(hour: u32) -> u32 {
+    match hour % 12 {
+        0 => 12,
+        other => other,
+    }
+}
+
 /// The local month and day of `at`: "Nov 14".
 pub fn month_day(at: i64) -> String {
     match chrono::DateTime::from_timestamp_millis(at) {

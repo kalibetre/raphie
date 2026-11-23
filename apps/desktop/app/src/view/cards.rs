@@ -6,10 +6,12 @@
 //! layout is a phone's at every width: a row is a title that wraps over one
 //! line of small parts, never fixed columns.
 
-use raphie_core::cards::{TimelineRow, due_label, initials, timeline_rows};
+use raphie_core::cards::{
+    ScheduleDay, ScheduleNext, ScheduleStrip, TimelineRow, due_label, duration, initials, schedule,
+};
 use raphie_core::contracts::{
     Card, CardBody, CardColumn, CardEvent, CardField, CardGroup, CardLink, CardProgress, CardRow,
-    CardSteps, CardTimelineItem, CardTone, SessionCard,
+    CardSteps, CardTone, SessionCard,
 };
 use rune::{Color, Cursor, El, Tx, col, el, icon, row, text};
 
@@ -20,24 +22,33 @@ use crate::state::Ui;
 use crate::theme::{Theme, font};
 use crate::widgets::{Kind, Size, button};
 
-pub fn card(shown: &SessionCard, now: i64, look: &Look) -> El {
+pub fn card(s: &Ui, shown: &SessionCard, now: i64, look: &Look) -> El {
     let t = &look.theme;
     let card = &shown.card;
     let id = &shown.id;
     let today = format::local_day(now);
+    let days = match &card.body {
+        CardBody::Timeline { items } => schedule(items, now, format::local_day, format::hour_at),
+        _ => Vec::new(),
+    };
+    // A schedule of one day is headed by that day, read from its events.
+    let single = match days.as_slice() {
+        [day] => Some(day),
+        _ => None,
+    };
     let mut body = col()
         .key(format!("rd-card-{id}"))
         .role("group")
         .label(card.title.clone())
+        // As wide as the conversation: a row wraps, so width only helps.
         .w_full()
-        .max_w(520.0)
         .mt(8.0)
         .mb(4.0)
         .radius(12.0)
         .fill(t.card)
         .border(1.0, t.border)
         .clip_rounded(12.0)
-        .child(head(shown, now, t));
+        .child(head(shown, single, now, t));
     if card.sources.len() > 1 {
         let mut line = legend("Sources");
         for (position, name) in card.sources.iter().enumerate() {
@@ -79,7 +90,12 @@ pub fn card(shown: &SessionCard, now: i64, look: &Look) -> El {
     }
     body = match &card.body {
         CardBody::List { groups } => list(body, id, card, groups, today, t),
-        CardBody::Timeline { items } => timeline(body, id, card, items, now, t),
+        CardBody::Timeline { .. } => {
+            let several = days.len() > 1;
+            days.iter().fold(body, |body, day| {
+                schedule_day(body, s, id, card, day, several, now, t)
+            })
+        }
         CardBody::Board { columns } => board(body, id, card, columns, today, t),
         CardBody::Item {
             fields,
@@ -109,11 +125,17 @@ pub fn card(shown: &SessionCard, now: i64, look: &Look) -> El {
     body
 }
 
-/// The title, linked when the card has a page, over where and when it was read.
-fn head(shown: &SessionCard, now: i64, t: &Theme) -> El {
+/// The title, linked when the card has a page, over where and when it was
+/// read. A one-day schedule is headed by its day, with how full it is.
+fn head(shown: &SessionCard, single: Option<&ScheduleDay>, now: i64, t: &Theme) -> El {
     let card = &shown.card;
-    let title = text(card.title.clone())
-        .font(font(14.0, 600.0))
+    let heading = single.map_or_else(|| card.title.clone(), day_name);
+    let title = text(heading.clone())
+        .font(if single.is_some() {
+            font(17.0, 600.0)
+        } else {
+            font(14.0, 600.0)
+        })
         .color(t.foreground)
         .wrap()
         .shrink()
@@ -124,7 +146,7 @@ fn head(shown: &SessionCard, now: i64, t: &Theme) -> El {
             .child(link(
                 title,
                 format!("rd-card-{}-title", shown.id),
-                &card.title,
+                &heading,
                 url,
             ))
             .child(out_arrow(t)),
@@ -147,13 +169,15 @@ fn head(shown: &SessionCard, now: i64, t: &Theme) -> El {
         about.push_str(&format!("{only} · "));
     }
     about.push_str(&format!("as of {read}"));
-    col()
-        .w_full()
-        .px(12.0)
-        .pt(10.0)
-        .pb(8.0)
-        .child(name)
-        .child(small(about, t))
+    let mut head = col().w_full().px(12.0).pt(10.0).pb(8.0);
+    if let Some(day) = single {
+        head = head.child(small(format::day_date(day.day), t));
+    }
+    head = head.child(name).child(small(about, t));
+    match single {
+        Some(day) => head.child(summary(day, t)),
+        None => head,
+    }
 }
 
 fn legend(label: &str) -> El {
@@ -317,40 +341,442 @@ fn list_row(key: &str, card: &Card, item: &CardRow, today: i64, t: &Theme) -> El
     }
 }
 
-fn timeline(
+/// "Today", "Tomorrow", "Yesterday" or the weekday of a day further off.
+fn day_name(day: &ScheduleDay) -> String {
+    match day.offset {
+        0 => "Today".to_owned(),
+        1 => "Tomorrow".to_owned(),
+        -1 => "Yesterday".to_owned(),
+        _ => format::weekday(day.day),
+    }
+}
+
+/// How full a day is: its events, the time they take and when it frees up.
+fn summary(day: &ScheduleDay, t: &Theme) -> El {
+    let part = |strong: String, rest: &str| {
+        row()
+            .gap(4.0)
+            .center_y()
+            .child(text(strong).font(font(12.5, 600.0)).color(t.foreground))
+            .child(
+                text(rest.to_owned())
+                    .font(font(12.5, 400.0))
+                    .color(t.muted_foreground),
+            )
+    };
+    let mut line = row().w_full().pt(4.0).gaps(2.0, 10.0).flex_wrap();
+    line = line.child(part(
+        day.events.to_string(),
+        if day.events == 1 { "event" } else { "events" },
+    ));
+    if day.booked > 0 {
+        line = line.child(part(duration(day.booked), "booked"));
+    }
+    if let Some(free) = day.free_after {
+        line = line.child(
+            row()
+                .gap(4.0)
+                .center_y()
+                .child(
+                    text("free after".to_owned())
+                        .font(font(12.5, 400.0))
+                        .color(t.muted_foreground),
+                )
+                .child(
+                    text(format::short_clock(free))
+                        .font(font(12.5, 600.0))
+                        .color(t.foreground),
+                ),
+        );
+    }
+    line
+}
+
+/// The day at a glance: a bar of busy time with a mark for now.
+///
+/// Built from slices of time between the blocks' edges, each as wide as its
+/// share of the day, so it needs no measured width. A slice is two halves:
+/// a block alone fills both, and an overlap puts one block over the other.
+fn strip_view(strip: &ScheduleStrip, t: &Theme) -> El {
+    const HALF: f32 = 6.0;
+    let mut edges: Vec<i64> = vec![strip.from, strip.to];
+    for block in &strip.blocks {
+        edges.extend([block.start, block.end]);
+    }
+    if let Some(now) = strip.now {
+        edges.push(now);
+    }
+    edges.sort_unstable();
+    edges.dedup();
+    let colour = |source: usize, past: bool| {
+        let colour = t.source(source);
+        if past { colour.alpha(0.4) } else { colour }
+    };
+    let mut bar = row()
+        .w_full()
+        .h(18.0)
+        .px(0.0)
+        .py(3.0)
+        .radius(4.0)
+        .fill(t.muted)
+        .clip_rounded(4.0)
+        .a11y_hidden();
+    for pair in edges.windows(2) {
+        let (start, end) = (pair[0], pair[1]);
+        if strip.now == Some(start) {
+            bar = bar.child(el().w(2.0).self_stretch().fill(t.foreground));
+        }
+        let covering = |lane: u8| {
+            strip
+                .blocks
+                .iter()
+                .find(|b| b.lane == lane && b.start <= start && end <= b.end)
+        };
+        let (first, second) = (covering(0), covering(1));
+        let top = first.map(|b| colour(b.source, b.past));
+        let bottom = match (first, second) {
+            (_, Some(b)) => Some(colour(b.source, b.past)),
+            (Some(b), None) if !b.split => Some(colour(b.source, b.past)),
+            _ => None,
+        };
+        // Grow is a share of the day: minutes keep it in an f32's range.
+        let share = ((end - start) / 60_000).max(1) as f32;
+        let half = |fill: Option<Color>| {
+            let part = el().w_full().h(HALF);
+            match fill {
+                Some(fill) => part.fill(fill),
+                None => part,
+            }
+        };
+        bar = bar.child(
+            col()
+                .grow(share)
+                .shrink()
+                .min_w(0.0)
+                .child(half(top))
+                .child(half(bottom)),
+        );
+    }
+    let mut hours = row().w_full().pt(2.0);
+    for (n, pair) in strip.hours.windows(2).enumerate() {
+        let share = ((pair[1] - pair[0]) / 60_000).max(1) as f32;
+        let mut segment = row()
+            .grow(share)
+            .shrink()
+            .min_w(0.0)
+            .child(small_hour(pair[0], t));
+        // The last label sits at the strip's end.
+        if n + 2 == strip.hours.len() {
+            segment = segment.justify_between().child(small_hour(pair[1], t));
+        }
+        hours = hours.child(segment);
+    }
+    col()
+        .w_full()
+        .px(12.0)
+        .pt(4.0)
+        .pb(2.0)
+        .a11y_hidden()
+        .child(bar)
+        .child(hours)
+}
+
+fn small_hour(at: i64, t: &Theme) -> El {
+    text(format::hour_label(at))
+        .font(font(10.5, 400.0))
+        .color(t.muted_foreground)
+}
+
+/// What is on now, or the next thing today, with its link to join.
+fn next_view(key: &str, next: &ScheduleNext, now: i64, t: &Theme) -> El {
+    let event = next.event;
+    let when = if next.current {
+        event.end.map_or_else(
+            || "NOW".to_owned(),
+            |end| format!("NOW · ENDS IN {}", duration(end - now).to_uppercase()),
+        )
+    } else {
+        format!("NEXT · IN {}", duration(event.start - now).to_uppercase())
+    };
+    let mut meta = meta().child(small(span(event), t));
+    if let Some(detail) = &event.detail {
+        meta = meta.child(small(detail.clone(), t).wrap().shrink().min_w(0.0));
+    }
+    let name = text(event.title.clone())
+        .font(font(14.0, 600.0))
+        .color(t.foreground)
+        .wrap()
+        .shrink()
+        .min_w(0.0);
+    let name = match &event.url {
+        Some(url) => link(name, format!("{key}-title"), &event.title, url),
+        None => name,
+    };
+    let mut boxed = row()
+        .key(key.to_owned())
+        .w_full()
+        .px(12.0)
+        .py(10.0)
+        .gap(10.0)
+        .center_y()
+        .radius(10.0)
+        .fill(t.accent_soft)
+        .child(
+            col()
+                .grow(1.0)
+                .shrink()
+                .min_w(0.0)
+                .child(text(when).font(font(11.5, 600.0)).color(t.accent))
+                .child(name)
+                .child(meta),
+        );
+    if let Some(second) = &event.link {
+        let url = second.url.clone();
+        boxed = boxed.child(
+            button(t, Kind::Primary, Size::Small, None, &second.label)
+                .key(format!("{key}-link"))
+                .role("link")
+                .label(format!("{} (opens your browser)", second.label))
+                .on_press_tx(move |s: &mut Ui, tx: &mut Tx| s.open_link(&url, tx)),
+        );
+    }
+    row().w_full().px(12.0).pt(8.0).pb(10.0).child(boxed)
+}
+
+/// "All day", "7:30 – 8:30 PM" or a start alone.
+fn span(event: &CardEvent) -> String {
+    if event.all_day {
+        "All day".to_owned()
+    } else {
+        match event.end {
+            Some(end) => format::short_range(event.start, end),
+            None => format::short_clock(event.start),
+        }
+    }
+}
+
+/// The column every event's start and end sit in, and that free time and
+/// the line for now line up with.
+const WHEN: f32 = 52.0;
+
+/// One timed event: start over end in a column, then the event itself.
+fn event_line(key: &str, card: &Card, event: &CardEvent, past: bool, t: &Theme) -> El {
+    let ink = if past {
+        t.muted_foreground
+    } else {
+        t.foreground
+    };
+    // The end says "AM" or "PM", so the start can leave it out.
+    let mut when = col().w(WHEN).items_end().self_start().child(
+        text(match event.end {
+            Some(_) => format::bare_clock(event.start),
+            None => format::short_clock(event.start),
+        })
+        .font(font(13.0, 600.0))
+        .color(ink),
+    );
+    if let Some(end) = event.end {
+        when = when.child(
+            text(format::short_clock(end))
+                .font(font(11.5, 400.0))
+                .color(t.muted_foreground),
+        );
+    }
+    let mut main = col().grow(1.0).shrink().min_w(0.0).child(title(
+        key,
+        &event.title,
+        event.url.as_deref(),
+        ink,
+    ));
+    if event.detail.is_some() || event.badge.is_some() {
+        let mut parts = meta();
+        if let Some(detail) = &event.detail {
+            parts = parts.child(small(detail.clone(), t).wrap().shrink().min_w(0.0));
+        }
+        if let Some(badge) = &event.badge {
+            parts = parts.child(self::badge(&badge.label, badge.tone, t));
+        }
+        main = main.child(parts);
+    }
+    let line = line(key)
+        .child(when)
+        // A schedule keeps the bar even when the card has one source.
+        .child(bars(&event.sources, &card.sources, past, t))
+        .child(main);
+    match &event.link {
+        Some(second) => line.child(self::second(key, second, t)),
+        None => line,
+    }
+}
+
+/// One day of a schedule: its strip, all-day events, what is next and its
+/// agenda, under a heading when the card covers several days.
+#[allow(clippy::too_many_arguments)]
+fn schedule_day(
     mut body: El,
+    s: &Ui,
     id: &str,
     card: &Card,
-    items: &[CardTimelineItem],
+    day: &ScheduleDay,
+    several: bool,
     now: i64,
     t: &Theme,
 ) -> El {
-    for (n, item) in timeline_rows(items, now, format::local_day)
-        .iter()
-        .enumerate()
-    {
-        let key = format!("rd-card-{id}-{n}");
-        body = match item {
-            TimelineRow::Day { date } => {
-                body.child(rule(t))
-                    .child(heading(format::weekday_date(date), None, t))
+    let key = format!("rd-card-{id}-{}", day.day);
+    if several {
+        body = body.child(rule(t)).child(
+            row()
+                .w_full()
+                .px(12.0)
+                .pt(12.0)
+                .pb(6.0)
+                .gaps(2.0, 8.0)
+                .flex_wrap()
+                .justify_between()
+                .child(
+                    text(day_name(day))
+                        .font(font(13.0, 600.0))
+                        .color(t.foreground),
+                )
+                .child(small(
+                    format!(
+                        "{} · {} {}",
+                        format::short_day(day.day),
+                        day.events,
+                        if day.events == 1 { "event" } else { "events" }
+                    ),
+                    t,
+                )),
+        );
+    }
+    if let Some(strip) = &day.strip {
+        body = body.child(strip_view(strip, t));
+    }
+    if !day.all_day.is_empty() {
+        let mut chips = row()
+            .w_full()
+            .px(12.0)
+            .pt(6.0)
+            .pb(2.0)
+            .gaps(6.0, 6.0)
+            .flex_wrap();
+        for (n, event) in day.all_day.iter().enumerate() {
+            let source = event.sources.first().copied().unwrap_or(0);
+            chips = chips.child(
+                row()
+                    .gap(6.0)
+                    .center_y()
+                    .min_w(0.0)
+                    .px(9.0)
+                    .py(2.0)
+                    .radius(999.0)
+                    .fill(t.muted)
+                    .child(
+                        el().w(8.0)
+                            .h(8.0)
+                            .radius(4.0)
+                            .fill(t.source(source))
+                            .a11y_hidden(),
+                    )
+                    .child({
+                        let name = text(event.title.clone())
+                            .font(font(12.0, 400.0))
+                            .color(t.foreground)
+                            .wrap()
+                            .shrink()
+                            .min_w(0.0);
+                        match &event.url {
+                            Some(url) => link(name, format!("{key}-all-{n}"), &event.title, url),
+                            None => name,
+                        }
+                    }),
+            );
+        }
+        body = body.child(chips);
+    }
+    if let Some(next) = &day.next {
+        body = body.child(next_view(&format!("{key}-next"), next, now, t));
+    }
+    if !day.earlier.is_empty() {
+        let open = s.open_card_days.contains(&key);
+        let names = day
+            .earlier
+            .iter()
+            .map(|e| e.title.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let toggle = key.clone();
+        body = body.child(rule(t)).child(
+            row()
+                .key(format!("{key}-earlier"))
+                .w_full()
+                .min_h(36.0)
+                .px(12.0)
+                .py(6.0)
+                .gap(6.0)
+                .center_y()
+                .role("button")
+                .label(format!(
+                    "{} {} earlier: {names}",
+                    if open { "Hide" } else { "Show" },
+                    day.earlier.len()
+                ))
+                .cursor(Cursor::Pointer)
+                .on_press(move |s: &mut Ui| Ui::toggle(&mut s.open_card_days, &toggle))
+                .child(
+                    icon(
+                        if open {
+                            &icons::CHEVRON_DOWN
+                        } else {
+                            &icons::CHEVRON_RIGHT
+                        },
+                        14.0,
+                    )
+                    .color(t.muted_foreground)
+                    .a11y_hidden(),
+                )
+                .child(
+                    text(format!("{} earlier · {names}", day.earlier.len()))
+                        .font(font(12.5, 400.0))
+                        .color(t.muted_foreground)
+                        .wrap()
+                        .shrink()
+                        .min_w(0.0),
+                ),
+        );
+        if open {
+            for (n, event) in day.earlier.iter().enumerate() {
+                body = body.child(rule(t)).child(event_line(
+                    &format!("{key}-earlier-{n}"),
+                    card,
+                    event,
+                    true,
+                    t,
+                ));
             }
+        }
+    }
+    for (n, row_) in day.rows.iter().enumerate() {
+        let key = format!("{key}-{n}");
+        body = match row_ {
             TimelineRow::Now { at } => body.child(
                 row()
                     .key(key)
                     .w_full()
                     .px(12.0)
                     .py(2.0)
-                    .gap(8.0)
+                    .gap(10.0)
                     .center_y()
                     .child(
-                        text(format!("Now · {}", format::clock(*at)))
-                            .font(font(11.0, 600.0))
-                            .color(t.accent),
+                        row().w(WHEN).justify_end().child(
+                            text(format::bare_clock(*at))
+                                .font(font(11.0, 600.0))
+                                .color(t.accent),
+                        ),
                     )
                     .child(el().h(1.0).grow(1.0).fill(t.accent).a11y_hidden()),
             ),
-            // In line with a row's title, past its bar.
+            // Past the time column and the bar, in line with the titles.
             TimelineRow::Gap {
                 start,
                 end,
@@ -360,68 +786,28 @@ fn timeline(
                 row()
                     .key(key)
                     .w_full()
-                    .pl(25.0)
+                    .pl(12.0 + WHEN + 23.0)
                     .pr(12.0)
-                    .pt(2.0)
-                    .pb(6.0)
-                    .child(
-                        small(
-                            if *current {
-                                format!("Free until {}", format::clock(*end))
-                            } else {
-                                format!("Free {}", format::clock_range(*start, *end))
-                            },
-                            t,
-                        )
-                        .wrap()
-                        .shrink()
-                        .min_w(0.0),
-                    ),
+                    .py(4.0)
+                    .gap(8.0)
+                    .center_y()
+                    .child(small(
+                        if *current {
+                            format!("Free until {}", format::short_clock(*end))
+                        } else {
+                            format!("Free {}", duration(end - start))
+                        },
+                        t,
+                    ))
+                    .child(el().h(1.0).grow(1.0).fill(t.border).a11y_hidden()),
             ),
             TimelineRow::Event { event, past } => body
                 .child(rule(t))
-                .child(event_row(&key, card, event, *past, t)),
+                .child(event_line(&key, card, event, *past, t)),
+            TimelineRow::Day { .. } => body,
         };
     }
     body
-}
-
-fn event_row(key: &str, card: &Card, event: &CardEvent, past: bool, t: &Theme) -> El {
-    let when = if event.all_day {
-        "All day".to_owned()
-    } else {
-        match event.end {
-            Some(end) => format::clock_range(event.start, end),
-            None => format::clock(event.start),
-        }
-    };
-    let ink = if past {
-        t.muted_foreground
-    } else {
-        t.foreground
-    };
-    // The time and any badge sit over the title, so the title has the width.
-    let mut top = meta().child(small(when, t));
-    if let Some(badge) = &event.badge {
-        top = top.child(self::badge(&badge.label, badge.tone, t));
-    }
-    let mut main = col().grow(1.0).shrink().min_w(0.0).child(top).child(title(
-        key,
-        &event.title,
-        event.url.as_deref(),
-        ink,
-    ));
-    if let Some(detail) = &event.detail {
-        main = main.child(small(detail.clone(), t).wrap().shrink().min_w(0.0));
-    }
-    let line = line(key)
-        // A timeline keeps the bar even when the card has one source.
-        .child(bars(&event.sources, &card.sources, past, t))
-        .child(main);
-    match &event.link {
-        Some(second) => line.child(self::second(key, second, t)),
-        None => line,
-    }
 }
 
 /// One task opened up: its facts, the start of its description, its steps.
