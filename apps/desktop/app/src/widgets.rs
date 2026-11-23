@@ -407,6 +407,9 @@ pub fn text_field(
         .label(label)
         .grow(1.0)
         .min_w(0.0)
+        // Text longer than the box, a long placeholder above all, stops
+        // inside its padding instead of running over what is beside it.
+        .clip_rounded(0.0)
         .color(t.foreground)
         .placeholder(placeholder, t.muted_foreground)
         .caret(t.foreground, t.selection())

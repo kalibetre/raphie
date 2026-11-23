@@ -56,13 +56,16 @@ A server's tools stay out of the bot's instructions until the bot searches for t
 
 - its **Connection name**;
 - **What it is for**, in your words;
+- for Executor, the apps it holds, such as Gmail, Google Calendar and Jira, each with the name the bot searches Executor for;
 - what the server says about itself when it connects, cut to 1,500 characters and marked as reference, not instructions.
 
 It is also told to look in these servers before saying it cannot reach something.
 
-Fill in **What it is for** when the server's own tools do not say what it reaches. A gateway such as Executor offers tools named `search` and `call`; without "calendar, mail and tickets" beside its name, a bot asked about your calendar finds no calendar tool and says it has none. The same words are added to each tool's description, so a tool search for "calendar" finds them.
+A gateway offers tools named `search` and `call`, which say nothing about the calendar or mail behind them. For Executor, Raphie fills that in by itself: when it connects, and every hour after, it asks Executor which apps it holds, and tells the bot. An app you add to Executor reaches the bot within the hour, or at once if you **Pause** and **Enable** the connection. Raphie asks with Executor's `skills` tool and no arguments, which lists apps and acts on none, so it needs no approval. If Executor does not answer, the bot keeps the list it had.
 
-Change it under the connection's row, in **What _name_ is for**, then **Save**. It applies from the bot's next reply and nothing reconnects. Left empty, the field shows the server's own one-line description.
+For any other gateway, or to add your own words, fill in **What it is for**. Without "calendar, mail and tickets" beside its name, a bot asked about your calendar finds no calendar tool and says it has none. The apps and your words are added to each tool's description, so a tool search for "calendar" finds them.
+
+Change it under the connection's row, in **What _name_ is for**, then **Save**. It applies from the bot's next reply and nothing reconnects. Left empty, the field shows Executor's apps, or another server's own one-line description.
 
 ## Manage connections
 

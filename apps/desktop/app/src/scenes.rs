@@ -1269,6 +1269,7 @@ pub fn mcp_connections() -> Vec<McpConnection> {
         },
         {
             "source": "saved", "id": "mcp-files", "name": "Project files",
+            "summary": "A kanban tracker. An account has boards; a board holds cards in columns. A new card starts in triage until someone moves it to a column.",
             "transport": "stdio", "address": "npx",
             "enabled": false, "connected": false, "toolCount": 0, "credentialConfigured": false,
         },

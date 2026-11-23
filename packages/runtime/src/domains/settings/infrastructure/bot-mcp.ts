@@ -18,12 +18,16 @@ import { InputError } from "../../../shared/application/input-error.ts";
 import type { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { McpTools } from "../../approvals/infrastructure/mcp-approval-gate.ts";
-import { serviceSummary } from "../domain/connected-services.ts";
+import { appsLine, serviceSummary } from "../domain/connected-services.ts";
 import {
   configuredCredentialKeyStore,
   CredentialCipher,
   type CredentialKeyStore,
 } from "./credential-cipher.ts";
+import { gatewayApps } from "./gateway-apps.ts";
+
+/** How often a connected gateway is asked for its apps again. */
+const APPS_REFRESH_MS = 60 * 60_000;
 
 type Entry = {
   id: string;
@@ -55,6 +59,7 @@ export class BotMcp {
   private clients = new Map<string, McpClient>();
   private oauth = new Map<string, McpOAuth>();
   private closed = false;
+  private refresh?: ReturnType<typeof setInterval>;
 
   private constructor(
     db: Database,
@@ -114,6 +119,11 @@ export class BotMcp {
         }
       }
       service.publish();
+      service.refresh = setInterval(
+        () => void service?.refreshApps().catch(() => {}),
+        APPS_REFRESH_MS,
+      );
+      service.refresh.unref();
       return service;
     } catch (error) {
       if (service) await service.close();
@@ -128,8 +138,7 @@ export class BotMcp {
       source: this.environmentEntry && e.legacy ? "environment" : "saved",
       name: e.name,
       purpose: e.purpose || undefined,
-      summary:
-        serviceSummary(this.clients.get(e.id)?.instructions) || undefined,
+      summary: this.summary(this.clients.get(e.id)),
       enabled: e.enabled,
       transport: e.config.transport,
       address:
@@ -145,6 +154,13 @@ export class BotMcp {
       authorizationUrl: this.oauth.get(e.id)?.authorizationUrl,
       authorizationFailed: this.oauth.get(e.id)?.failed || undefined,
     }));
+  }
+
+  /** One line on what a connected server is: its apps, else its own words. */
+  private summary(client: McpClient | undefined) {
+    if (client?.apps?.length)
+      return `Apps: ${appsLine(client.apps.map((app) => app.replace(/ \([^)]*\)$/, "")))}`;
+    return serviceSummary(client?.instructions) || undefined;
   }
 
   private redact(config: McpConnection) {
@@ -200,7 +216,7 @@ export class BotMcp {
         this.oauth.set(entry.id, oauth);
       }
     }
-    const client = await (this.options.connect ?? connectMcp)(
+    const client: McpClient = await (this.options.connect ?? connectMcp)(
       config,
       oauth?.authProvider,
     );
@@ -220,7 +236,42 @@ export class BotMcp {
         );
       return call(...args);
     };
+    client.apps = await gatewayApps(client);
     return client;
+  }
+
+  /**
+   * Asks each connected gateway for its apps again, so one the owner added
+   * since reaches the bot without a reconnect. Skipped while the bot is
+   * working: a changed list changes its tools' descriptions.
+   */
+  async refreshApps() {
+    if (this.closed) return;
+    // Asked outside the gate: it also admits the owner's messages, which
+    // must not wait on a slow gateway.
+    const listed = await Promise.all(
+      [...this.clients.values()].map(
+        async (client) => [client, await gatewayApps(client)] as const,
+      ),
+    );
+    await this.options.gate.run(async () => {
+      if (this.closed || (await this.options.busy())) return;
+      const connected = new Set(this.clients.values());
+      let changed = false;
+      for (const [client, apps] of listed) {
+        // A gateway that does not answer keeps the list it gave before, and
+        // a connection replaced meanwhile already asked for its own.
+        if (
+          !apps ||
+          !connected.has(client) ||
+          JSON.stringify(apps) === JSON.stringify(client.apps ?? [])
+        )
+          continue;
+        client.apps = apps;
+        changed = true;
+      }
+      if (changed && !this.closed) this.publish();
+    });
   }
 
   private publish() {
@@ -414,6 +465,7 @@ export class BotMcp {
 
   async close() {
     this.closed = true;
+    clearInterval(this.refresh);
     await Promise.allSettled(
       [...this.oauth.values()].map((oauth) => oauth.close()),
     );

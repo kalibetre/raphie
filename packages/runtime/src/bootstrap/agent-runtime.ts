@@ -303,6 +303,7 @@ export class Gateway {
             connection.name ?? connection.client.server?.name ?? "MCP server",
           purpose: connection.purpose,
           instructions: connection.client.instructions,
+          apps: connection.client.apps,
         })),
       );
     app.chats.skills = {

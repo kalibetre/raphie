@@ -15,6 +15,7 @@ import {
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { ChatService } from "../../conversations/infrastructure/pi-conversation-service.ts";
+import { appsLine } from "../../settings/domain/connected-services.ts";
 import type { ToolApprovalService, ToolResult } from "./pi-tool-approvals.ts";
 import { ToolApprovals } from "./pi-tool-approvals.ts";
 
@@ -101,10 +102,13 @@ export function createMcpTools(
   const namespace =
     options.namespace ?? server.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 20);
   const label = options.name ? `${options.name}: ` : "";
+  const apps = options.client.apps?.length
+    ? `\nApps in ${options.name ?? server}: ${appsLine(options.client.apps)}`
+    : "";
   const about =
-    options.name && options.purpose
+    (options.name && options.purpose
       ? `\nPart of ${options.name}, which the owner uses for: ${options.purpose}`
-      : "";
+      : "") + apps;
   const tools = options.client.tools.map((tool) =>
     defineTool({
       name: toolName(namespace, tool.name),

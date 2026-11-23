@@ -94,4 +94,8 @@ export async function connectMcp(
 export type McpClient = Omit<
   Awaited<ReturnType<typeof connectMcp>>,
   "instructions"
-> & { instructions?: string };
+> & {
+  instructions?: string;
+  /** The apps a gateway holds, each as "Name (slug)", when it lists them. */
+  apps?: string[];
+};

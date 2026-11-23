@@ -21,7 +21,10 @@ export type BotMcpConnection = {
    * in every conversation, beside the connection's name.
    */
   purpose?: string;
-  /** One line the service says about itself, when it says anything. */
+  /**
+   * One line on what the service is: the apps a gateway such as Executor
+   * holds, else what it says about itself, when it says anything.
+   */
   summary?: string;
   transport: McpTransport;
   address: string;
