@@ -65,10 +65,7 @@ RAPHIE_VERSION=v0.0.5 scripts/dmg.sh     # target/dist/Raphie-macos-arm64.dmg
 
 `RAPHIE_VERSION` (for example `v0.0.5` or a nightly tag) stamps the version the app shows in **About** and compares in its update check. The image is signed ad hoc only, with no Developer ID or notarisation, which is why users need **Open Anyway** on first launch; see [desktop app](/guides/desktop/#install).
 
-| Workflow                            | When                                                                                             | What it does with the image                                                                                                                                         |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Desktop app** (`desktop-app.yml`) | Pull requests touching `apps/desktop/**`, `VERSION` or the workflow itself                       | Runs `scripts/dmg.sh` on a macOS runner and keeps the image as a run artifact for seven days, for trying out.                                                       |
-| **Release** (`release.yml`)         | A pushed `vX.Y.Z` tag (a draft stable release) or a manual run on `main` (a nightly pre-release) | Runs `scripts/dmg.sh` with the release's `RAPHIE_VERSION`, attests its provenance, and publishes `Raphie-macos-arm64.dmg` with the release, listed in `SHA256SUMS`. |
+Only the release workflow (`release.yml`) builds the image, for a pushed `vX.Y.Z` tag (a draft stable release) or a manual run on `main` (a nightly pre-release). A nightly is named one patch past the newest stable tag (`v0.0.6-nightly.…` after `v0.0.5`), worked out by `scripts/nightly-base-version.sh`, so it sorts after every stable release so far and before the next one, whether that is a patch, a minor or a major. The `VERSION` file at the repository root only labels builds made without `RAPHIE_VERSION`, such as `cargo run`. It runs `scripts/dmg.sh` with the release's `RAPHIE_VERSION`, attests the image's provenance, and publishes `Raphie-macos-arm64.dmg` with the release, listed in `SHA256SUMS`. Pull requests don't build it; CI's `desktop` job compiles and tests the app on each one.
 
 ## Use the fixture
 
@@ -165,16 +162,17 @@ Snapshots are for comparing by eye and attaching to a pull request. Do not commi
 
 Each file names its web source at the top. When you change the web side, change the desktop side in the same pull request.
 
-| Desktop                     | Web source                                                                              |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| `app/src/theme.rs`          | `apps/web/src/shared/styles/tokens.css`                                                 |
-| `app/src/avatar.rs`         | `bot-glance.ts` and `bot-tone.ts` in `domains/settings/application`                     |
-| `app/src/icons.rs`          | the Lucide icons the web components import                                              |
-| `app/src/sections.rs`       | `settings-sections.ts` and `settings-nav.tsx`                                           |
-| `app/src/widgets.rs`        | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                           |
-| `core/src/projections.rs`   | `packages/contracts/src/sessions/projections.ts`                                        |
-| `core/src/model_library.rs` | `domains/settings/application/model-library.ts`                                         |
-| `app/src/view/*.rs`         | the matching component and its rules in `chat.css`, `sessions.css`, `bot-workspace.css` |
+| Desktop                     | Web source                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `app/src/theme.rs`          | `apps/web/src/shared/styles/tokens.css`                                                                 |
+| `app/src/avatar.rs`         | `bot-glance.ts` and `bot-tone.ts` in `domains/settings/application`                                     |
+| `app/src/icons.rs`          | the Lucide icons the web components import                                                              |
+| `app/src/sections.rs`       | `settings-sections.ts` and `settings-nav.tsx`                                                           |
+| `app/src/widgets.rs`        | `shared/ui/button.tsx`, `shared/ui/input.tsx`                                                           |
+| `core/src/projections.rs`   | `packages/contracts/src/sessions/projections.ts`                                                        |
+| `core/src/model_library.rs` | `domains/settings/application/model-library.ts`                                                         |
+| `core/src/cards.rs`         | `card-timeline.ts` and `card-facts.ts` in `domains/conversations/application`                           |
+| `app/src/view/*.rs`         | the matching component and its rules in `chat.css`, `cards.css`, `sessions.css` and `bot-workspace.css` |
 
 The web's root font size is 14 px, so its Tailwind rem sizes are 14/16 of their usual pixels: `h-8` is 28 pt here and `text-sm` is 12.25 pt.
 

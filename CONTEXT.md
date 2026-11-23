@@ -71,6 +71,12 @@ Approval does not itself prove that the action executed successfully.
 goes back to the bot as the tool's result. Unlike an approval, it settles no
 action: the bot decides what to do with the answer.
 
+**Card**: What a bot shows under its reply in place of a list: rows, the
+events of one or more days, the columns of a board, or one task opened up,
+drawn by the client from a fixed set of parts. A card is a snapshot of what the bot read, with links out; it
+settles nothing and takes no input.
+_Avoid_: View, which names a read model; widget.
+
 **Command permission mode**: A conversation's Ask or Full access setting for
 workspace command tools. It does not authorize MCP calls or change sandbox limits.
 

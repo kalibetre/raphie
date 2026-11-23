@@ -29,7 +29,9 @@ jobs:
             echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
             echo 'nightly=false' >> "$GITHUB_OUTPUT"
           else
-            base_version=$(cat VERSION)
+            # One patch past the newest stable tag, so nobody has to bump a
+            # number after each release (scripts/nightly-base-version.sh).
+            base_version=$(git ls-remote --tags --refs origin | bash scripts/nightly-base-version.sh)
             [[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
             echo "version=v${base_version}-nightly.$(date -u +%Y%m%d).${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
             echo 'nightly=true' >> "$GITHUB_OUTPUT"

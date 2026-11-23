@@ -1,5 +1,8 @@
 name: Experimental standalone builds
 
+# Run by hand only. Release builds and tests the packages it publishes
+# (release.yml), so pull requests don't build them; run this to try a
+# packaging change before a release, or to verify a draft release's archives.
 on:
   workflow_dispatch:
     inputs:
@@ -7,13 +10,6 @@ on:
         description: Draft release tag to verify (leave empty for the normal build)
         required: false
         type: string
-  pull_request:
-    paths:
-      - "apps/web/**"
-      - "packages/**"
-      - "scripts/**"
-      - "bun.lock"
-      - ".github/workflows/standalone.yml"
 
 permissions:
   contents: read

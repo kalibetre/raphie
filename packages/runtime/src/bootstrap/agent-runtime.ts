@@ -46,6 +46,10 @@ import {
   createAskTools,
 } from "../domains/asks/infrastructure/pi-asks.ts";
 import { Files } from "../domains/attachments/infrastructure/local-attachment-store.ts";
+import {
+  CardService,
+  createCardTools,
+} from "../domains/cards/infrastructure/pi-cards.ts";
 import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.ts";
 import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
 import { compactionPolicy } from "../domains/conversations/domain/compaction.ts";
@@ -152,6 +156,7 @@ export class Gateway {
   chats: ChatService;
   toolApprovals: ToolApprovalService;
   asks: AskService;
+  cards: CardService;
   observations: Observations;
 
   private constructor(options: Options) {
@@ -186,6 +191,7 @@ export class Gateway {
     this.chats.homeAvailable = (address) => this.home.available(address);
     this.toolApprovals = new ToolApprovalService(this);
     this.asks = new AskService(this);
+    this.cards = new CardService(this);
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
     this.queries = new PiClientQueries(this);
@@ -248,6 +254,9 @@ export class Gateway {
       );
     registry.install(createWebSearchTools(() => app.models, options.webFetch));
     registry.install(createAskTools(app.asks));
+    registry.install(
+      createCardTools(app.cards, () => app.chats.owner?.().timeZone ?? ""),
+    );
     if (options.mcp) {
       registry.install(createMcpTools(app, options.mcp));
       app.mcpConnections = [options.mcp];

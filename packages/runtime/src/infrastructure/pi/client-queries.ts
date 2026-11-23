@@ -3,6 +3,7 @@ import type {
   SessionActivity,
   SessionApproval,
   SessionAsk,
+  SessionCard,
   SessionObservation,
   SessionSummary,
   SessionTurn,
@@ -18,6 +19,7 @@ import type { McpTools } from "../../domains/approvals/infrastructure/mcp-approv
 import type { ToolApprovalService } from "../../domains/approvals/infrastructure/pi-tool-approvals.ts";
 import type { Ask } from "../../domains/asks/domain/ask.ts";
 import type { AskService } from "../../domains/asks/infrastructure/pi-asks.ts";
+import type { CardService } from "../../domains/cards/infrastructure/pi-cards.ts";
 import { ChannelBindings } from "../../domains/channels/infrastructure/pi-bindings.ts";
 import type { ChatService } from "../../domains/conversations/infrastructure/pi-conversation-service.ts";
 import type { Observations } from "../../domains/conversations/infrastructure/pi-observations.ts";
@@ -30,6 +32,7 @@ type QuerySource = DurableContext & {
   chats: ChatService;
   toolApprovals: ToolApprovalService;
   asks: AskService;
+  cards: CardService;
   observations: Observations;
   options: {
     mcp?: McpTools;
@@ -272,6 +275,20 @@ export class PiClientQueries implements ClientQueries {
       }));
   }
 
+  async cards(actor: ActorContext, id: string): Promise<SessionCard[]> {
+    const { session } = await this.selected(actor, id);
+    return (await this.app.cards.state()).cards
+      .filter((c) => c.conversationId === session.id)
+      .slice(-100)
+      .map((c) => ({
+        id: c.id,
+        conversationId: id,
+        turnId: c.turnId,
+        createdAt: c.createdAt,
+        card: c.card,
+      }));
+  }
+
   async activity(actor: ActorContext, before?: string, limit = 100) {
     const size = pageSize(limit);
     this.app.actors.require(actor);
@@ -304,6 +321,7 @@ export class PiClientQueries implements ClientQueries {
     const toolApprovals = await this.approvals(actor, id);
     const asks = await this.asks(actor, id);
     const asking = asks.some((a) => a.status === "pending");
+    const cards = await this.cards(actor, id);
     const journal = (await this.app.harness.snapshot(Activity, context))!
       .events;
     const activity = journal
@@ -387,6 +405,7 @@ export class PiClientQueries implements ClientQueries {
       nextBefore: history.next,
       toolApprovals,
       asks,
+      cards,
       live,
       activity,
       phase: waiting

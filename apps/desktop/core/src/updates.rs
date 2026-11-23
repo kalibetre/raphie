@@ -1,9 +1,11 @@
 //! This app's version, and whether a newer Raphie has been released.
 //!
-//! The version is Raphie's, from the repository's `VERSION` file, so the
-//! desktop and the web report the same number. A build can stamp another
-//! with the `RAPHIE_VERSION` environment variable at compile time, as the
-//! release workflow does for the web (`v0.0.4-nightly.20261105.…`).
+//! A release build is stamped with its version through the `RAPHIE_VERSION`
+//! environment variable at compile time, as the release workflow does for
+//! every part of Raphie (`v0.0.5`, or `v0.0.6-nightly.20261123.…`). A build
+//! made without it, such as a developer's, takes the repository's `VERSION`
+//! file, which only labels those builds: releases and nightlies are named
+//! from tags.
 //!
 //! The check reads Raphie's public releases on GitHub and only tells the
 //! owner; nothing is downloaded or installed. It uses its own HTTP client,

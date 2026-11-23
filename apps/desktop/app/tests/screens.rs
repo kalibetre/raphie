@@ -5414,6 +5414,145 @@ fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
 }
 
 #[test]
+fn a_card_shows_under_its_reply_and_its_links_open_the_browser() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::card_list, dark);
+        let text = screen_text(&rt);
+        assert!(text.contains("Seven open, one blocked on the vendor."));
+        for part in [
+            "AF board · open",
+            "Jira · as of",
+            "In progress",
+            "AF-512",
+            "Retry failed webhook deliveries",
+            "High",
+            "Waiting on vendor",
+            "and 3 more in To do · Open in Jira",
+        ] {
+            assert!(text.contains(part), "{part} is missing from: {text}");
+        }
+        // Under the reply only, not under the owner's message as well.
+        assert_eq!(text.matches("AF board · open").count(), 1, "{text}");
+        click(&mut rt, "rd-card-card-1-title");
+        click(&mut rt, "rd-card-card-1-0-0-title");
+        click(&mut rt, "rd-card-card-1-more");
+        assert_eq!(
+            rt.state.opened,
+            [
+                "https://example.atlassian.net/boards/7",
+                "https://example.atlassian.net/browse/AF-512",
+                "https://example.atlassian.net/boards/7?status=todo",
+            ]
+        );
+    }
+}
+
+#[test]
+fn a_board_card_counts_its_columns_and_an_item_card_opens_one_task() {
+    for dark in [false, true] {
+        let mut rt = render(scenes::card_board, dark);
+        let text = screen_text(&rt);
+        for part in [
+            "ALX - FIT",
+            "Fizzy · as of",
+            "Priority",
+            "In Review",
+            "Done",
+            "No column",
+            "#107",
+            "docs",
+            "2/5",
+            "KB",
+            "MT",
+            "Due tomorrow",
+            "Overdue 3d",
+            "7 more in In Review",
+        ] {
+            assert!(text.contains(part), "{part} is missing from: {text}");
+        }
+        // A column with nothing in it is counted, not listed.
+        assert_eq!(text.matches("Done").count(), 1, "{text}");
+        click(&mut rt, "rd-card-card-1-0-0-title");
+        assert_eq!(rt.state.opened, ["https://app.fizzy.example/cards/107"]);
+
+        let text = screen_text(&render(scenes::card_item, dark));
+        for part in [
+            "#107 · Fizzy · as of",
+            "Column",
+            "Assigned",
+            "Kalkidan Betre",
+            "Due tomorrow",
+            "Board",
+            "Fold the notes from the AI 200 update",
+            "Steps · 2 of 6",
+            "Update the glossary",
+            "1 more",
+            "4 comments · last from Mara, Nov 12",
+        ] {
+            assert!(text.contains(part), "{part} is missing from: {text}");
+        }
+    }
+}
+
+#[test]
+fn a_card_fits_a_narrow_window() {
+    for scene in [scenes::card_narrow, scenes::card_board_narrow] {
+        let rt = render_sized(scene, false, (360.0, 900.0));
+        // `rect` is [x, y, width, height]. The card clips what overflows
+        // it, so its rows' own parts are checked too.
+        let card = element(&rt, "rd-card-card-1").rect;
+        assert!(
+            card[0] >= 0.0 && card[0] + card[2] <= 360.0,
+            "the card stays inside the window: {card:?}"
+        );
+        let inside = rt
+            .elements()
+            .into_iter()
+            .filter(|e| {
+                e.key
+                    .as_deref()
+                    .is_some_and(|key| key.starts_with("rd-card-card-1-"))
+            })
+            .collect::<Vec<_>>();
+        assert!(inside.len() > 3, "the card's rows are keyed");
+        for part in inside {
+            assert!(
+                part.rect[0] >= card[0] && part.rect[0] + part.rect[2] <= card[0] + card[2] + 0.5,
+                "{:?} stays inside the card: {:?} in {card:?}",
+                part.key,
+                part.rect
+            );
+        }
+    }
+}
+
+#[test]
+fn a_timeline_card_places_now_and_names_each_source() {
+    let mut rt = render(scenes::card_timeline, false);
+    let text = screen_text(&rt);
+    for part in [
+        "Work calendar",
+        "Personal calendar",
+        "Side-project calendar couldn't be read",
+        "Standup",
+        "Now · ",
+        "Free until ",
+        "Overlaps",
+        "Team farewell call",
+    ] {
+        assert!(text.contains(part), "{part} is missing from: {text}");
+    }
+    // The line for now comes after the event that is over.
+    assert!(text.find("Standup") < text.find("Now · "), "{text}");
+    // A meeting's second link opens too.
+    click(&mut rt, "rd-card-card-1-4-link");
+    assert_eq!(rt.state.opened, ["https://meet.example.com/abc"]);
+
+    let text = screen_text(&render(scenes::card_sources, true));
+    assert!(text.contains("GitHub") && text.contains("Bitbucket") && text.contains("Checks fail"));
+}
+
+#[test]
 fn a_reply_style_is_chosen_and_saved_with_the_profile() {
     for dark in [false, true] {
         // Tall enough to show the Replies card under the personality.

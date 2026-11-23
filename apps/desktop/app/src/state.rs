@@ -3958,6 +3958,14 @@ impl Ui {
         }
     }
 
+    /// Opens a link from a card in the owner's browser. The runtime only
+    /// passes web addresses; anything else is ignored here too.
+    pub fn open_link(&mut self, url: &str, tx: &mut Tx) {
+        if url.starts_with("https://") || url.starts_with("http://") {
+            self.open_url(url.to_owned(), tx);
+        }
+    }
+
     fn open_url(&mut self, url: String, tx: &mut Tx) {
         if self.client.is_none() {
             // Tests and headless runs: note it instead of opening a browser.

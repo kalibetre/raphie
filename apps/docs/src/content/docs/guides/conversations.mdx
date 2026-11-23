@@ -96,6 +96,40 @@ By default, bots keep replies short. A reply opens with the answer, or the one q
 
 To change this for one bot, set its [reply style](/guides/bots/#reply-style), or say how it should reply in its [personality](/guides/bots/#edit-identity-and-personality); a personality that asks for something else wins. What every bot knows about you, including your time zone, is set under [You](/guides/bots/#you).
 
+## Cards
+
+When the answer is a set of items you will scan, such as a day's events, open tickets or pull requests waiting for your review, a bot shows them as a card under a short reply instead of writing a list.
+
+| Card     | Shows                                                                                                                                                                     |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| List     | Rows, optionally in groups such as a status.                                                                                                                              |
+| Timeline | The events of one or more days in order, with free time of 30 minutes or more between them. Today's card dims what is over and marks the present with a **Now** line.     |
+| Board    | A project's columns, from Fizzy, Jira, Trello or any tool with boards: a bar and a count for each column, then each column's first 10 tasks, with how many more it holds. |
+| Item     | One task or ticket opened up: its facts under labels (status, who has it, due date, tags), the start of its description, and its checklist with the first five steps.     |
+
+A row has a title, and can have a key (`AF-512`), a line of detail, a badge and a short value such as its age. A task can also show who has it as initials (up to four people), its tags, how far its checklist has got, and when it is due. A due date turns amber today and tomorrow, and red once it has passed.
+
+Any card can carry up to four headline numbers, and a line at the bottom for what it leaves out. A list or timeline holds at most 40 rows or events.
+
+Cards are laid out for a phone at every width: a title wraps rather than being cut off, its small parts sit on one line beside it (beneath it in a list, with an event's time above), and a row is tall enough to press.
+
+- **Links:** a title opens the ticket, pull request or event in your browser, the card's own title opens the board or query it came from, and a row can carry one more link, such as **Join** for a meeting. Only `http` and `https` links are kept.
+- **Several accounts:** when a card mixes sources, such as two calendars, each row has its source's colour and the card names them at the top. An event that sits on two calendars shows once, in both colours, and events that share time are badged **Overlaps**.
+- **Your days:** events are placed on your days using the time zone under [You](/guides/bots/#you), even when a calendar answers in another zone. Without one, each event stays on the date its calendar gave. An event with no end time is not counted as busy or free.
+- **Column colours:** a board's columns take the colour the tool gives them, matched to the nearest of eight named colours and drawn in Raphie's own shade for light and dark. A column with no colour is given one.
+- **A missing source:** when the bot could not read one of them, an amber line on the card says which, so a card never looks complete when it is not.
+- **As of:** a card is what the bot read at that moment, stamped with the time. It does not update; ask again for a fresh one.
+
+Cards are read-only: a checklist shows what is ticked but cannot be ticked. To act on a row, open it, or ask the bot.
+
+A bot working on a task another bot [handed off](/guides/handoffs/) writes the list in its reply instead, because only the reply goes back to the bot that sent the task.
+
+Telegram and Discord cannot draw a card, so there it is added to the reply as a plain list with its links. The web workspace and the desktop app show the same session's card.
+
+:::note
+The bot copies links from what its tools returned. Raphie checks that a link is a web address, not that it leads where the row says, so glance at the address before you sign in anywhere.
+:::
+
 ## Long conversations
 
 A session can go on as long as you like. When it grows close to the size the model can read at once, the bot summarizes its earlier messages and reads the summary instead of them from then on. Its most recent messages stay word for word.
