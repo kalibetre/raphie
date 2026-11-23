@@ -185,6 +185,8 @@ Change it with `raphie channel nightly` (or `stable`), then run `raphie update`;
 5. swaps in the new binaries, keeping the old ones in `~/.local/lib/.raphie-previous.*`;
 6. restarts the service and waits up to 15 seconds for it to become healthy; if it does not, it stops and disables the service.
 
+On macOS, expect a Keychain prompt after each update. macOS ties the saved credential key to the program that stored it and treats every release as a new program, so it asks whether `raphie` may use the key, and Raphie does not start until you answer. Choose **Always Allow**. The installer says so after its 15 seconds and waits up to five more minutes for your answer before it stops and disables the service. If that happens, run `raphie restart` and answer the prompt.
+
 Stop a foreground `raphie start --foreground` yourself before updating. On Linux, keep the same `XDG_DATA_HOME` you installed with; the installer refuses to guess a changed data location.
 
 :::caution

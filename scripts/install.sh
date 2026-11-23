@@ -659,6 +659,19 @@ if [ "$service_started" = true ]; then
     if "$install_dir/raphie" health >/dev/null 2>&1; then ready=true; break; fi
     sleep 1
   done
+  # macOS ties the saved credential key to the program that stored it, and
+  # every release is a new program to it. The updated runtime then waits,
+  # without failing, until its Keychain prompt is answered.
+  if [ "$ready" = false ] && [ "$updating" = true ] && [ "$platform" = Darwin ]; then
+    # Tests shorten the wait.
+    keychain_seconds=${RAPHIE_KEYCHAIN_WAIT_SECONDS:-300}
+    case "$keychain_seconds" in '' | *[!0-9]*) keychain_seconds=300 ;; esac
+    printf 'Raphie has not answered yet. macOS may be asking whether raphie may use its saved key: choose Always Allow. Waiting up to %s more seconds...\n' "$keychain_seconds" >&2
+    for ((attempt = 0; attempt < keychain_seconds; attempt++)); do
+      if "$install_dir/raphie" health >/dev/null 2>&1; then ready=true; break; fi
+      sleep 1
+    done
+  fi
   if [ "$ready" = true ]; then
     printf 'User service is healthy.\n'
   else
@@ -666,6 +679,7 @@ if [ "$service_started" = true ]; then
     else launchctl bootout "gui/$(id -u)" "$agent" || true; launchctl disable "gui/$(id -u)/com.raphie.user" || true; printf 'Service did not become healthy. Check: %s\n' "$HOME/Library/Logs/Raphie/service-error.log" >&2; fi
     service_failed=true
     echo 'The service was stopped. Check the credential store or configured headless key file, and check for port conflicts before starting it again.' >&2
+    [ "$updating" = false ] || [ "$platform" != Darwin ] || echo "If a Keychain prompt was left unanswered, run \"$bin_dir/raphie\" restart and choose Always Allow." >&2
     [ "$updating" = false ] || echo 'Do not start an older version against migrated data; restore the offline backup first.' >&2
   fi
 elif [ "$service_attempted" = true ]; then
