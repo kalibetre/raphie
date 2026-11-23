@@ -2,8 +2,8 @@
   /* A card the bot showed under its reply: rows, a day's events, a board's
      columns or one task. It is laid out for a phone at every width: a row is
      a title that wraps over one line of small parts, never fixed columns. */
+  /* As wide as the conversation: a row wraps, so width only helps. */
   .shown-card {
-    max-width: 520px;
     margin: 8px 0 4px;
     overflow: hidden;
     border: 1px solid var(--border);
@@ -269,33 +269,240 @@
   .shown-card-second {
     flex: none;
   }
-  .shown-card-row[data-past] .shown-card-title,
-  .shown-card-gap[data-past] {
-    color: var(--muted-foreground);
-  }
-  .shown-card-row[data-past] .shown-card-bar {
-    opacity: 0.45;
-  }
-  /* In line with a row's title, past its bar. */
-  .shown-card-gap {
-    padding: 2px 12px 6px 25px;
+  /* A schedule: a timeline card laid out as a day. */
+  .shown-card-eyebrow {
+    margin: 0;
     color: var(--muted-foreground);
     font-size: 12px;
+  }
+  .shown-card-head:has(.shown-card-eyebrow) .shown-card-heading {
+    font-size: 17px;
+  }
+  .shown-card-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    margin: 4px 0 0;
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+  }
+  .shown-card-summary strong {
+    color: var(--foreground);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .shown-card-glance {
+    padding: 4px 12px 2px;
+  }
+  .shown-card-strip {
+    position: relative;
+    height: 18px;
+    border-radius: 4px;
+    background: var(--muted);
+  }
+  /* Two lanes, so an overlap shows as one block above another. */
+  .shown-card-block {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    min-width: 3px;
+    border-radius: 3px;
+    background: var(--source-1);
+  }
+  .shown-card-block[data-split][data-lane="0"] {
+    bottom: 9px;
+  }
+  .shown-card-block[data-split][data-lane="1"] {
+    top: 9px;
+  }
+  .shown-card-block[data-source="1"] {
+    background: var(--source-2);
+  }
+  .shown-card-block[data-source="2"] {
+    background: var(--source-3);
+  }
+  .shown-card-block[data-source="3"] {
+    background: var(--source-4);
+  }
+  .shown-card-block[data-past] {
+    opacity: 0.4;
+  }
+  .shown-card-tick {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--foreground);
+  }
+  .shown-card-hours {
+    position: relative;
+    height: 15px;
+    margin-top: 2px;
+    color: var(--muted-foreground);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .shown-card-hour {
+    position: absolute;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+  .shown-card-hour[data-edge="start"] {
+    transform: none;
+  }
+  .shown-card-hour[data-edge="end"] {
+    transform: translateX(-100%);
+  }
+  .shown-card-allday {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 6px 12px 2px;
+    list-style: none;
+  }
+  .shown-card-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--muted);
+    font-size: 12px;
+  }
+  .shown-card-next {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 12px 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+  }
+  .shown-card-next .shown-card-title {
+    font-weight: 600;
+  }
+  .shown-card-next-when {
+    margin: 0;
+    color: var(--accent);
+    font-size: 11.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .shown-card-day {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 8px;
+    margin: 0;
+    padding: 12px 12px 6px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .shown-card-day-about {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  /* Start over end, in a column the free time and now line up with. */
+  .shown-card-event {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .shown-card-when {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-self: flex-start;
+    width: 52px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .shown-card-when-start {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .shown-card-when-end {
+    color: var(--muted-foreground);
+    font-size: 11.5px;
+  }
+  .shown-card-event[data-past] .shown-card-title,
+  .shown-card-event[data-past] .shown-card-when-start {
+    color: var(--muted-foreground);
+  }
+  .shown-card-event[data-past] .shown-card-bar {
+    opacity: 0.45;
+  }
+  /* Past the time column and the bar, in line with the titles. */
+  .shown-card-gap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 4px 75px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .shown-card-gap::after {
+    flex: 1;
+    border-top: 1px dashed var(--border);
+    content: "";
   }
   .shown-card-now {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     padding: 2px 12px;
     color: var(--accent);
     font-size: 11px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
+  .shown-card-now-at {
+    flex: none;
+    width: 52px;
+    text-align: right;
+  }
   .shown-card-now-line {
     flex: 1;
     height: 1px;
     background: var(--accent);
+  }
+  .shown-card-earlier {
+    border-top: 1px solid var(--border);
+  }
+  .shown-card-earlier-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 36px;
+    padding: 6px 12px;
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .shown-card-earlier-trigger:hover {
+    color: var(--foreground);
+  }
+  .shown-card-earlier-chevron {
+    flex: none;
+    transition: transform 150ms;
+  }
+  .shown-card-earlier-trigger[data-panel-open] .shown-card-earlier-chevron {
+    transform: rotate(90deg);
   }
   .shown-card-rest,
   .shown-card-more {

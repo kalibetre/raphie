@@ -9,13 +9,24 @@ import type {
   CardSteps,
   SessionCard,
 } from "@raphie/contracts";
-import { ArrowUpRight, Check } from "lucide-react";
+import { ArrowUpRight, Check, ChevronRight } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { Badge } from "../../../shared/ui/badge";
 import { Button } from "../../../shared/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../../../shared/ui/collapsible";
 import { dueLabel, initials, localDate } from "../application/card-facts";
-import { timelineRows } from "../application/card-timeline";
+import {
+  duration,
+  schedule,
+  type ScheduleDay,
+  type ScheduleNext,
+  type ScheduleStrip,
+} from "../application/card-schedule";
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, {
@@ -45,7 +56,7 @@ const dated = (date: string, options: Intl.DateTimeFormatOptions) =>
   });
 
 /** "Monday 23 November" for "2026-11-23". */
-const day = (date: string) =>
+const longDay = (date: string) =>
   dated(date, { weekday: "long", day: "numeric", month: "long" });
 
 /** "as of 10:42" today; an older card also says which day. */
@@ -428,58 +439,309 @@ const span = (event: CardEvent) =>
       ? range(event.start, event.end)
       : clock.format(event.start);
 
-function Timeline({
-  card,
-  now,
+/** "9:30" or "14:30": a time without its "AM" or "PM", for the time column. */
+function bare(at: number) {
+  return clock
+    .formatToParts(at)
+    .filter((part) => part.type !== "dayPeriod")
+    .map((part) => part.value)
+    .join("")
+    .trim();
+}
+
+const hourLabel = new Intl.DateTimeFormat(undefined, { hour: "numeric" });
+
+/** "Today", "Tomorrow", "Yesterday" or the weekday of a day further off. */
+const dayName = (day: ScheduleDay) =>
+  day.offset === 0
+    ? "Today"
+    : day.offset === 1
+      ? "Tomorrow"
+      : day.offset === -1
+        ? "Yesterday"
+        : dated(day.date, { weekday: "long" });
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** How full a day is: its events, the time they take and when it frees up. */
+function Summary({ day }: { day: ScheduleDay }) {
+  return (
+    <p className="shown-card-summary">
+      <span>
+        <strong>{day.events}</strong> {day.events === 1 ? "event" : "events"}
+      </span>
+      {day.booked > 0 && (
+        <span>
+          <strong>{duration(day.booked)}</strong> booked
+        </span>
+      )}
+      {day.freeAfter !== undefined && (
+        <span>
+          free after <strong>{clock.format(day.freeAfter)}</strong>
+        </span>
+      )}
+    </p>
+  );
+}
+
+/** The day at a glance: a bar of busy time with a mark for now. */
+function Strip({ strip }: { strip: ScheduleStrip }) {
+  const at = (moment: number) =>
+    `${((moment - strip.from) / (strip.to - strip.from)) * 100}%`;
+  return (
+    <div className="shown-card-glance" aria-hidden="true">
+      <div className="shown-card-strip">
+        {strip.blocks.map((block, n) => (
+          <span
+            key={n}
+            className="shown-card-block"
+            data-source={block.source % 4}
+            data-lane={block.lane}
+            data-split={block.split || undefined}
+            data-past={block.past || undefined}
+            style={{
+              left: at(block.start),
+              width: `calc(${at(block.end)} - ${at(block.start)})`,
+            }}
+          />
+        ))}
+        {strip.now !== undefined && (
+          <span className="shown-card-tick" style={{ left: at(strip.now) }} />
+        )}
+      </div>
+      <div className="shown-card-hours">
+        {strip.hours.map((hour, n) => (
+          <span
+            key={hour}
+            className="shown-card-hour"
+            data-edge={
+              n === 0
+                ? "start"
+                : n === strip.hours.length - 1
+                  ? "end"
+                  : undefined
+            }
+            style={{ left: at(hour) }}
+          >
+            {hourLabel.format(hour)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** What is on now, or the next thing today, with its link to join. */
+function Next({ next, now }: { next: ScheduleNext; now: number }) {
+  const { event, current } = next;
+  const when = current
+    ? event.end
+      ? `Now · ends in ${duration(event.end - now)}`
+      : "Now"
+    : `Next · in ${duration(event.start - now)}`;
+  return (
+    <div className="shown-card-next">
+      <div className="shown-card-main">
+        <p className="shown-card-next-when">{when}</p>
+        <Title title={event.title} url={event.url} />
+        <p className="shown-card-meta">
+          <span className="shown-card-time">{span(event)}</span>
+          {event.detail && <span>{event.detail}</span>}
+        </p>
+      </div>
+      {event.link && (
+        <Button
+          size="sm"
+          className="shown-card-second h-8 px-3 text-xs"
+          nativeButton={false}
+          render={
+            <a
+              href={event.link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            />
+          }
+        >
+          {event.link.label}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** One timed event: start over end in a column, then the event itself. */
+function Event({
+  event,
+  past,
+  sources,
 }: {
-  card: Extract<Card, { type: "timeline" }>;
-  now: number;
+  event: CardEvent;
+  past: boolean;
+  sources: string[];
 }) {
   return (
-    <ul className="shown-card-rows">
-      {timelineRows(card.items, now).map((row, n) =>
-        row.kind === "day" ? (
-          <li key={n} className="shown-card-group">
-            <span>{day(row.date)}</span>
-          </li>
-        ) : row.kind === "now" ? (
-          <li key={n} className="shown-card-now">
-            <span>Now · {clock.format(row.at)}</span>
-            <span className="shown-card-now-line" aria-hidden="true" />
-          </li>
-        ) : row.kind === "gap" ? (
-          <li
-            key={n}
-            className="shown-card-gap"
-            data-past={row.past || undefined}
-          >
-            {row.current
-              ? `Free until ${clock.format(row.end)}`
-              : `Free ${range(row.start, row.end)}`}
-          </li>
-        ) : (
-          <li
-            key={n}
-            className="shown-card-row"
-            data-past={row.past || undefined}
-          >
-            <Sources of={row.event.sources} names={card.sources} bar />
-            <span className="shown-card-main">
-              <span className="shown-card-meta">
-                <span className="shown-card-time">{span(row.event)}</span>
-                {row.event.badge && <Tone badge={row.event.badge} />}
-              </span>
-              <Title title={row.event.title} url={row.event.url} />
-              {row.event.detail && (
-                <span className="shown-card-meta">{row.event.detail}</span>
-              )}
-            </span>
-            {row.event.link && <Second link={row.event.link} />}
-          </li>
-        ),
-      )}
-    </ul>
+    <li className="shown-card-event" data-past={past || undefined}>
+      <span className="shown-card-when">
+        <time
+          className="shown-card-when-start"
+          dateTime={new Date(event.start).toISOString()}
+        >
+          {event.end ? bare(event.start) : clock.format(event.start)}
+        </time>
+        {/* The end says "AM" or "PM", so the start can leave it out. */}
+        {event.end && (
+          <span className="shown-card-when-end">{clock.format(event.end)}</span>
+        )}
+      </span>
+      <Sources of={event.sources} names={sources} bar />
+      <span className="shown-card-main">
+        <Title title={event.title} url={event.url} />
+        {(event.detail || event.badge) && (
+          <span className="shown-card-meta">
+            {event.detail && <span>{event.detail}</span>}
+            {event.badge && <Tone badge={event.badge} />}
+          </span>
+        )}
+      </span>
+      {event.link && <Second link={event.link} />}
+    </li>
   );
+}
+
+/** Today's events already over, as one line that opens to show them. */
+function Earlier({
+  events,
+  sources,
+}: {
+  events: CardEvent[];
+  sources: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="shown-card-earlier">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger className="shown-card-earlier-trigger">
+          <ChevronRight
+            className="shown-card-earlier-chevron"
+            size={14}
+            aria-hidden="true"
+          />
+          <span>
+            {events.length} earlier ·{" "}
+            {events.map((event) => event.title).join(", ")}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ul className="shown-card-rows">
+            {events.map((event, n) => (
+              <Event key={n} event={event} past sources={sources} />
+            ))}
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
+    </li>
+  );
+}
+
+/** One day of a schedule: its all-day events, what is next and its agenda. */
+function Day({
+  day,
+  sources,
+  now,
+  several,
+}: {
+  day: ScheduleDay;
+  sources: string[];
+  now: number;
+  several: boolean;
+}) {
+  return (
+    <section aria-label={day.date}>
+      {several && (
+        <h4 className="shown-card-day">
+          <span>{dayName(day)}</span>
+          <span className="shown-card-day-about">
+            {dated(day.date, {
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+            })}{" "}
+            · {plural(day.events, "event")}
+          </span>
+        </h4>
+      )}
+      {day.strip && <Strip strip={day.strip} />}
+      {day.allDay.length > 0 && (
+        <ul className="shown-card-allday" aria-label="All day">
+          {day.allDay.map((event, n) => (
+            <li key={n} className="shown-card-chip">
+              <span
+                className="shown-card-dot"
+                data-source={(event.sources?.[0] ?? 0) % 4}
+                aria-hidden="true"
+              />
+              <Title title={event.title} url={event.url} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {day.next && <Next next={day.next} now={now} />}
+      {(day.earlier.length > 0 || day.rows.length > 0) && (
+        <ul className="shown-card-rows shown-card-agenda">
+          {day.earlier.length > 0 && (
+            <Earlier events={day.earlier} sources={sources} />
+          )}
+          {day.rows.map((row, n) =>
+            row.kind === "now" ? (
+              <li key={n} className="shown-card-now">
+                <span className="shown-card-now-at">{bare(row.at)}</span>
+                <span className="shown-card-now-line" aria-hidden="true" />
+              </li>
+            ) : row.kind === "gap" ? (
+              <li
+                key={n}
+                className="shown-card-gap"
+                data-past={row.past || undefined}
+              >
+                <span>
+                  {row.current
+                    ? `Free until ${clock.format(row.end)}`
+                    : `Free ${duration(row.end - row.start)}`}
+                </span>
+              </li>
+            ) : (
+              <Event
+                key={n}
+                event={row.event}
+                past={row.past}
+                sources={sources}
+              />
+            ),
+          )}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function Schedule({
+  days,
+  sources,
+  now,
+}: {
+  days: ScheduleDay[];
+  sources: string[];
+  now: number;
+}) {
+  return days.map((day) => (
+    <Day
+      key={day.date}
+      day={day}
+      sources={sources}
+      now={now}
+      several={days.length > 1}
+    />
+  ));
 }
 
 /**
@@ -496,6 +758,10 @@ export function ShownCard({ shown }: { shown: SessionCard }) {
     return () => clearInterval(timer);
   }, []);
   const today = localDate(now);
+  const days = card.type === "timeline" ? schedule(card.items, now) : [];
+  // A schedule of one day is headed by that day, read from its events.
+  const single = days.length === 1 ? days[0] : undefined;
+  const heading = single ? dayName(single) : card.title;
   const where = [
     card.type === "item" && card.key,
     card.sources.length === 1 && card.sources[0],
@@ -503,14 +769,15 @@ export function ShownCard({ shown }: { shown: SessionCard }) {
   return (
     <section className="shown-card" aria-label={card.title}>
       <header className="shown-card-head">
+        {single && <p className="shown-card-eyebrow">{longDay(single.date)}</p>}
         <h3 className="shown-card-heading">
           {card.url ? (
             <Out className="shown-card-out" href={card.url}>
-              {card.title}
+              {heading}
               <Arrow />
             </Out>
           ) : (
-            card.title
+            heading
           )}
         </h3>
         <p className="shown-card-about">
@@ -519,6 +786,7 @@ export function ShownCard({ shown }: { shown: SessionCard }) {
             {asOf(shown.createdAt, now)}
           </time>
         </p>
+        {single && <Summary day={single} />}
       </header>
       {card.sources.length > 1 && (
         <ul className="shown-card-legend" aria-label="Sources">
@@ -552,7 +820,7 @@ export function ShownCard({ shown }: { shown: SessionCard }) {
       {card.type === "list" ? (
         <List card={card} today={today} />
       ) : card.type === "timeline" ? (
-        <Timeline card={card} now={now} />
+        <Schedule days={days} sources={card.sources} now={now} />
       ) : card.type === "board" ? (
         <Board card={card} today={today} />
       ) : card.type === "item" ? (

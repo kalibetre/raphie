@@ -212,7 +212,7 @@ fn owner_turn(
     // A turn that ended without a reply still shows the cards it made.
     if !working && !in_reply {
         for shown in cards {
-            block = block.child(cards::card(shown, now, look));
+            block = block.child(cards::card(s, shown, now, look));
         }
     }
     if turn.cancelled == Some(true) {
@@ -446,7 +446,7 @@ fn reply(
             .iter()
             .filter(|card| card.turn_id == turn.id)
         {
-            reply = reply.child(cards::card(shown, now, look));
+            reply = reply.child(cards::card(s, shown, now, look));
         }
     }
     if done && let Some(sources) = handoffs::sources(turn, look) {
@@ -703,7 +703,7 @@ fn active_run(
         .iter()
         .filter(|card| card.turn_id == turn.id)
     {
-        block = block.child(cards::card(shown, now, look));
+        block = block.child(cards::card(s, shown, now, look));
     }
     for ask in asks {
         block = block.child(asks::card(s, ask, look));

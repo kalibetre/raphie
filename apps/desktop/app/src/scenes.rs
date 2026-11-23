@@ -28,7 +28,7 @@ use raphie_core::updates::{ReleaseChannel, Update, UpdateStatus};
 use rune::TextEdit;
 use serde_json::{Value, json};
 
-use crate::format::now_ms;
+use crate::format::{self, now_ms};
 use crate::sections::{BotSection, Page};
 use crate::skills::SkillEditor;
 use crate::state::{BACKEND, Dropdown, Ui};
@@ -90,6 +90,8 @@ pub const SCENES: &[Scene] = &[
     ("card-list", card_list),
     ("card-sources", card_sources),
     ("card-narrow", card_narrow),
+    ("card-earlier", card_earlier),
+    ("card-week", card_week),
     ("card-board", card_board),
     ("card-board-narrow", card_board_narrow),
     ("card-item", card_item),
@@ -2636,10 +2638,12 @@ fn showing(ui: &mut Ui, asked: &str, said: &str, card: Value) {
 }
 
 /// A day read from two calendars, around the present: one event is over,
-/// two overlap, and one is on both calendars.
+/// two overlap, one is on both calendars and one takes the whole day.
 pub fn card_timeline(ui: &mut Ui) {
     let now = now_ms();
     let at = |minutes: i64| now + minutes * 60_000;
+    // An all-day event's start is midnight UTC of its date.
+    let today = format::local_day(now) * 86_400_000;
     showing(
         ui,
         "What's my schedule like today?",
@@ -2649,6 +2653,8 @@ pub fn card_timeline(ui: &mut Ui) {
             "sources": ["Work calendar", "Personal calendar"],
             "warning": "Side-project calendar couldn't be read",
             "items": [
+                { "kind": "event", "title": "Out of office: Hana", "allDay": true,
+                  "start": today, "sources": [0] },
                 { "kind": "event", "title": "Standup", "detail": "Meet · 6 people",
                   "url": "https://calendar.example.com/e/1",
                   "start": at(-70), "end": at(-55), "sources": [0] },
@@ -2825,6 +2831,51 @@ pub fn card_item(ui: &mut Ui) {
 pub fn card_narrow(ui: &mut Ui) {
     card_timeline(ui);
     ui.narrow_home = false;
+}
+
+/// Today's schedule with the events already over unfolded.
+pub fn card_earlier(ui: &mut Ui) {
+    card_timeline(ui);
+    let day = format::local_day(now_ms());
+    ui.open_card_days.insert(format!("rd-card-card-1-{day}"));
+}
+
+/// A schedule over two days: a heading for each, and a strip for today.
+pub fn card_week(ui: &mut Ui) {
+    let now = now_ms();
+    let at = |minutes: i64| now + minutes * 60_000;
+    let day = 86_400_000;
+    let date = |offset: i64| {
+        (chrono::NaiveDate::default() + chrono::Duration::days(format::local_day(now) + offset))
+            .format("%Y-%m-%d")
+            .to_string()
+    };
+    showing(
+        ui,
+        "What does my week look like?",
+        "Two busy days; tomorrow's lunch overlaps quarterly planning.",
+        json!({
+            "type": "timeline", "title": "This week",
+            "sources": ["Work calendar", "Personal calendar"],
+            "items": [
+                { "kind": "day", "date": date(0) },
+                { "kind": "event", "title": "Design review: onboarding v2", "detail": "Room 4B",
+                  "link": { "label": "Join", "url": "https://meet.example.com/xyz" },
+                  "start": at(60), "end": at(120), "sources": [0] },
+                { "kind": "day", "date": date(1) },
+                { "kind": "event", "title": "Standup", "detail": "Meet",
+                  "link": { "label": "Join", "url": "https://meet.example.com/abc" },
+                  "start": at(0) + day, "end": at(15) + day, "sources": [0] },
+                { "kind": "gap", "start": at(15) + day, "end": at(120) + day },
+                { "kind": "event", "title": "Lunch with Abel",
+                  "badge": { "label": "Overlaps", "tone": "attention" },
+                  "start": at(120) + day, "end": at(180) + day, "sources": [1] },
+                { "kind": "event", "title": "Quarterly planning", "detail": "Main hall",
+                  "badge": { "label": "Overlaps", "tone": "attention" },
+                  "start": at(150) + day, "end": at(240) + day, "sources": [0] }
+            ]
+        }),
+    );
 }
 
 pub fn approval(ui: &mut Ui) {
