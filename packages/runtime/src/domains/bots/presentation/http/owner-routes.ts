@@ -6,6 +6,7 @@ import {
   limitBody,
 } from "../../../../infrastructure/http/validation.ts";
 import type { BotProfiles } from "../../application/ports.ts";
+import { MAX_INSTRUCTIONS_LENGTH } from "../../domain/instructions.ts";
 import { knownTimeZone } from "../../domain/owner.ts";
 import { MAX_RULE_LENGTH, MAX_RULES } from "../../domain/rules.ts";
 
@@ -24,6 +25,13 @@ const owner = z
       .array(z.string().trim().min(1).max(MAX_RULE_LENGTH))
       .max(MAX_RULES)
       .optional(),
+    // null goes back to Raphie's own.
+    instructions: z
+      .string()
+      .trim()
+      .max(MAX_INSTRUCTIONS_LENGTH)
+      .nullable()
+      .optional(),
   })
   .strict();
 
@@ -31,7 +39,7 @@ const owner = z
 export function ownerRoutes(bots: BotProfiles) {
   return new Hono()
     .get("/", (c) => c.json(bots.owner()))
-    .put("/", limitBody(20_000), jsonInput(owner), (c) =>
+    .put("/", limitBody(100_000), jsonInput(owner), (c) =>
       c.json(bots.saveOwner(c.req.valid("json"))),
     );
 }

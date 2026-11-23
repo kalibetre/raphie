@@ -1,4 +1,4 @@
-import type { SaveOwnerProfile } from "@raphie/contracts";
+import type { OwnerProfile } from "@raphie/contracts";
 import { useMemo, useState } from "react";
 
 import { Button } from "../../../shared/ui/button";
@@ -18,13 +18,16 @@ import {
   sameRules,
 } from "../application/rules";
 import { useOwner } from "../infrastructure/use-owner";
+import { InstructionsField } from "./instructions-field";
 import { RulesField } from "./rules-field";
 import { SaveBar } from "./save-bar";
 import { useSettingsGuard } from "./use-settings-guard";
 
 const NOT_SET = "none";
 
-type Draft = Omit<SaveOwnerProfile, "rules"> & {
+type Saved = Omit<OwnerProfile, "updatedAt">;
+
+type Draft = Omit<Saved, "rules" | "instructionsDefault"> & {
   /** The rules as they are edited, one a line. */
   rules: string;
 };
@@ -34,6 +37,7 @@ const same = (a: Draft, b: Draft) =>
   a.callMe === b.callMe &&
   a.timeZone === b.timeZone &&
   a.about === b.about &&
+  a.instructions.trim() === b.instructions.trim() &&
   sameRules(rulesOf(a.rules), rulesOf(b.rules));
 
 /** This device's time zone, offered when the owner has not chosen one. */
@@ -67,12 +71,13 @@ function OwnerForm({
   message,
   onMessage,
 }: {
-  saved: SaveOwnerProfile;
+  saved: Saved;
   message: string;
   onMessage: (message: string) => void;
 }) {
   const owner = useOwner();
-  const start: Draft = { ...saved, rules: rulesText(saved.rules ?? []) };
+  const { instructionsDefault, ...fields } = saved;
+  const start: Draft = { ...fields, rules: rulesText(saved.rules) };
   const [draft, setDraft] = useState<Draft>(start);
   const problem = rulesProblem(rulesOf(draft.rules));
   const setMessage = onMessage;
@@ -95,8 +100,28 @@ function OwnerForm({
         timeZone: draft.timeZone,
         about: draft.about.trim(),
         rules: rulesOf(draft.rules),
+        // Unchanged, Raphie's stay Raphie's and keep following releases.
+        ...(draft.instructions.trim() === saved.instructions.trim()
+          ? {}
+          : { instructions: draft.instructions.trim() }),
       });
       setMessage("Saved. Every bot uses it from its next reply.");
+    } catch {
+      // The save bar shows the error.
+    }
+  }
+
+  async function reset() {
+    setMessage("");
+    try {
+      await owner.save.mutateAsync({
+        name: saved.name,
+        callMe: saved.callMe,
+        timeZone: saved.timeZone,
+        about: saved.about,
+        instructions: null,
+      });
+      setMessage("Back to Raphie’s instructions for every bot.");
     } catch {
       // The save bar shows the error.
     }
@@ -212,6 +237,34 @@ function OwnerForm({
         value={draft.rules}
         pending={pending}
         onChange={(rules) => set({ rules })}
+      />
+      <InstructionsField
+        id="owner-instructions"
+        title="Instructions for every bot"
+        note="How every bot works with the tools Raphie gives them all, such as cards and questions, and anything else you want every bot to know about its tools. Each bot reads these in every conversation, before its own instructions, and the bots you allow to update your profile add to them when you ask."
+        placeholder="When I ask about my day, show it as a timeline card."
+        value={draft.instructions}
+        pending={pending}
+        status={
+          instructionsDefault
+            ? "Raphie’s own, updated with each release until changed"
+            : "Changed from Raphie’s own"
+        }
+        action={
+          !instructionsDefault && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pending || dirty}
+              title={dirty ? "Save or discard your changes first" : undefined}
+              onClick={() => void reset()}
+            >
+              Reset to Raphie’s
+            </Button>
+          )
+        }
+        onChange={(instructions) => set({ instructions })}
       />
       <SaveBar
         visible={dirty || pending || !!message || owner.save.isError}

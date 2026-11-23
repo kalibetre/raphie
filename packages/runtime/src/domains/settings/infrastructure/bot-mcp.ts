@@ -32,8 +32,6 @@ const APPS_REFRESH_MS = 60 * 60_000;
 type Entry = {
   id: string;
   name: string;
-  /** What the bot should use it for, in the owner's words. */
-  purpose?: string;
   enabled: boolean;
   config: McpConnection;
   legacy?: boolean;
@@ -91,9 +89,12 @@ export class BotMcp {
       );
       service = new BotMcp(db, cipher, options);
       if (row)
-        service.entries = JSON.parse(
-          cipher.decrypt(JSON.parse(row.value), "connections", "mcp")!,
-        );
+        // A purpose saved before bots had instructions is dropped.
+        service.entries = (
+          JSON.parse(
+            cipher.decrypt(JSON.parse(row.value), "connections", "mcp")!,
+          ) as (Entry & { purpose?: string })[]
+        ).map(({ purpose: _, ...entry }) => entry);
       else service.persist();
       db.exec(
         "CREATE TABLE IF NOT EXISTS legacy_mcp (id INTEGER PRIMARY KEY CHECK(id=1))",
@@ -137,7 +138,6 @@ export class BotMcp {
       id: e.id,
       source: this.environmentEntry && e.legacy ? "environment" : "saved",
       name: e.name,
-      purpose: e.purpose || undefined,
       summary: this.summary(this.clients.get(e.id)),
       enabled: e.enabled,
       transport: e.config.transport,
@@ -283,7 +283,6 @@ export class BotMcp {
               {
                 client,
                 name: e.name,
-                purpose: e.purpose,
                 namespace: e.legacy
                   ? undefined
                   : `c_${e.id.replaceAll("-", "")}`,
@@ -360,7 +359,6 @@ export class BotMcp {
       const entry: Entry = {
         id: crypto.randomUUID(),
         name: input.name,
-        purpose: input.purpose || undefined,
         enabled: true,
         config,
       };
@@ -444,21 +442,6 @@ export class BotMcp {
       this.persist();
       this.publish();
       await old?.close().catch(() => {});
-      return this.read();
-    });
-  }
-
-  /**
-   * Saves what the bot should use a connection for. The bot reads it from
-   * its next turn; nothing reconnects.
-   */
-  async describe(id: string, purpose: string) {
-    return this.options.gate.run(async () => {
-      const entry = this.entries.find((e) => e.id === id);
-      if (!entry) throw new InputError("MCP connection not found.", 404);
-      entry.purpose = purpose || undefined;
-      if (!(this.environmentEntry && entry.legacy)) this.persist();
-      this.publish();
       return this.read();
     });
   }

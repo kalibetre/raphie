@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from "../../../shared/ui/select";
 import { useBotAutomation } from "../infrastructure/use-bot-automation";
-import { McpPurpose } from "./mcp-purpose";
 import { Group, Row } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
 import { useSettingsGuard } from "./use-settings-guard";
@@ -19,7 +18,6 @@ import { useSettingsGuard } from "./use-settings-guard";
 export function McpSettings() {
   const data = useBotAutomation<BotMcpConnection>("mcp");
   const [name, setName] = useState("");
-  const [purpose, setPurpose] = useState("");
   const [transport, setTransport] = useState<"http" | "stdio">("http");
   const [address, setAddress] = useState("");
   const [token, setToken] = useState("");
@@ -29,14 +27,12 @@ export function McpSettings() {
   const [message, setMessage] = useState("");
   const pending = data.mutation.isPending;
   const dirty =
-    !!(name || purpose || address || token || args || env) ||
-    transport !== "http";
+    !!(name || address || token || args || env) || transport !== "http";
   const guard = useSettingsGuard(dirty, pending);
 
   function discard() {
     setTransport("http");
     setName("");
-    setPurpose("");
     setAddress("");
     setToken("");
     setArgs("");
@@ -49,7 +45,6 @@ export function McpSettings() {
     setMessage("");
     try {
       const input: SaveMcpConnection = { name, transport };
-      if (purpose.trim()) input.purpose = purpose.trim();
       if (transport === "http") {
         input.url = address;
         if (token) input.token = token;
@@ -111,20 +106,6 @@ export function McpSettings() {
     }
   }
 
-  async function describe(id: string, text: string) {
-    setError("");
-    try {
-      await data.mutation.mutateAsync({
-        id: `${id}/purpose`,
-        input: { purpose: text },
-      });
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Could not update MCP.",
-      );
-    }
-  }
-
   if (!data.data)
     return (
       <SettingsStatus
@@ -141,7 +122,7 @@ export function McpSettings() {
     <>
       <Group
         title="Connected servers"
-        note="The bot is told each server's name and what it is for, and finds its tools as needed. Tool actions require your approval; connections are not shared with other bots."
+        note="The bot is told each server's name and what it says about itself, and finds its tools as needed. Tell the bot what to use each one for, and it keeps that in its instructions. Tool actions require your approval; connections are not shared with other bots."
       >
         {data.data.items.some(
           (connection) => connection.source === "environment",
@@ -157,7 +138,14 @@ export function McpSettings() {
             <div key={connection.id} className="mcp-connection">
               <Row
                 title={connection.name}
-                description={`${connection.authorizationUrl ? "Authorization required" : connection.authorizationFailed ? "Authorization did not complete · reconnect to retry" : connection.connected ? `${connection.toolCount} tools` : connection.enabled ? "Disconnected · reconnect to retry" : "Paused"} · ${connection.transport === "http" ? "Streamable HTTP" : "Local command"} · ${connection.address}`}
+                description={
+                  <>
+                    {`${connection.authorizationUrl ? "Authorization required" : connection.authorizationFailed ? "Authorization did not complete · reconnect to retry" : connection.connected ? `${connection.toolCount} tools` : connection.enabled ? "Disconnected · reconnect to retry" : "Paused"} · ${connection.transport === "http" ? "Streamable HTTP" : "Local command"} · ${connection.address}`}
+                    {connection.summary && (
+                      <span className="mcp-summary">{connection.summary}</span>
+                    )}
+                  </>
+                }
               >
                 <div className="automation-actions">
                   {connection.authorizationUrl && (
@@ -216,13 +204,6 @@ export function McpSettings() {
                   )}
                 </div>
               </Row>
-              <McpPurpose
-                // Saved text from elsewhere starts the field again.
-                key={connection.purpose ?? ""}
-                connection={connection}
-                pending={pending}
-                onSave={(text) => describe(connection.id, text)}
-              />
             </div>
           ))
         ) : (
@@ -252,18 +233,6 @@ export function McpSettings() {
             maxLength={80}
             placeholder="My project tools"
           />
-          <label htmlFor="mcp-purpose">What it is for (optional)</label>
-          <Input
-            id="mcp-purpose"
-            value={purpose}
-            onChange={(e) => setPurpose(e.target.value)}
-            maxLength={300}
-            placeholder="Calendar, mail, tickets and code hosting"
-          />
-          <p className="automation-note">
-            The bot reads this in every conversation, so it knows to look here
-            before saying it cannot reach something.
-          </p>
           <label htmlFor="mcp-transport">Transport</label>
           <Select
             value={transport}

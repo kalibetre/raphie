@@ -277,6 +277,8 @@ export class BotHost implements BotProfiles {
         updatePersonality: (personality) =>
           this.profiles.updatePersonality(id, personality),
         updateRules: (rules) => this.profiles.updateRules(id, rules),
+        updateInstructions: (instructions) =>
+          this.profiles.updateInstructions(id, instructions),
         owner: () => this.profiles.owner(),
         saveOwner: (input) => this.profiles.saveOwner(input),
       }),

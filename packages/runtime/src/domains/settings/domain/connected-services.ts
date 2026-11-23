@@ -2,8 +2,6 @@
 export type ConnectedService = {
   /** The owner's name for the connection. */
   name: string;
-  /** What to use it for, in the owner's words. */
-  purpose?: string;
   /** What the service says about itself when it connects. */
   instructions?: string;
   /** The apps a gateway such as Executor holds, each as "Name (slug)". */
@@ -85,10 +83,9 @@ export function connectedServicesInstructions(
   if (!services.length) return "";
   const list = services
     .map((service) => {
-      const purpose = line(service.purpose ?? "");
       const own = line(service.instructions ?? "").slice(0, MAX_OWN_WORDS);
       return (
-        `- ${line(service.name)}${purpose ? `: ${purpose}` : ""}` +
+        `- ${line(service.name)}` +
         (service.apps?.length
           ? `\n  Apps in it, each found by searching it for the slug in brackets: ${appsLine(service.apps)}`
           : "") +

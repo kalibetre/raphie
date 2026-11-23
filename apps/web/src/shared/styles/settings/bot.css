@@ -422,3 +422,13 @@
     color: var(--muted-foreground);
   }
 }
+@layer components {
+  /* An instructions field's count, with a reset beside it when there is one. */
+  .instructions-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 12px;
+  }
+}

@@ -20,9 +20,8 @@ import type { ToolApprovalService, ToolResult } from "./pi-tool-approvals.ts";
 import { ToolApprovals } from "./pi-tool-approvals.ts";
 
 export type McpTools = {
-  /** The owner's name for the connection, and what they use it for. */
+  /** The owner's name for the connection. */
   name?: string;
-  purpose?: string;
   namespace?: string;
   client: McpClient;
   identity: string;
@@ -105,17 +104,13 @@ export function createMcpTools(
   const apps = options.client.apps?.length
     ? `\nApps in ${options.name ?? server}: ${appsLine(options.client.apps)}`
     : "";
-  const about =
-    (options.name && options.purpose
-      ? `\nPart of ${options.name}, which the owner uses for: ${options.purpose}`
-      : "") + apps;
   const tools = options.client.tools.map((tool) =>
     defineTool({
       name: toolName(namespace, tool.name),
       deferred: options.namespace ? true : undefined,
-      // The name and purpose are what a tool search for "calendar" matches
+      // The name and apps are what a tool search for "calendar" matches
       // when the tool itself is a gateway's generic "search" or "call".
-      description: `${label}${tool.description ?? tool.name}${about}\n${options.documentationTools?.includes(tool.name) ? "Documentation lookup." : "Requires the owner to approve the exact arguments before execution."}`,
+      description: `${label}${tool.description ?? tool.name}${apps}\n${options.documentationTools?.includes(tool.name) ? "Documentation lookup." : "Requires the owner to approve the exact arguments before execution."}`,
       parameters: {
         ...tool.inputSchema,
         type: "object",

@@ -94,6 +94,7 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
   let personality = "Be kind.";
   let owner: OwnerProfile = { ...EMPTY_OWNER, name: "Hana Girma" };
   let rules: string[] = [];
+  let instructions = "";
   const extension = createSelfTools({
     profile: () => ({
       id: "default",
@@ -108,6 +109,7 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
       },
       selfUpdates: { ...allowed, skills: false },
       rules,
+      instructions,
       revision: 1,
       createdAt: 0,
       updatedAt: 0,
@@ -120,9 +122,19 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
       rules = next;
       return { revision: 2 } as never;
     },
+    updateInstructions: (next) => {
+      instructions = next;
+      return { revision: 2 } as never;
+    },
     owner: () => owner,
     saveOwner: (input) =>
-      (owner = { ...input, rules: input.rules ?? owner.rules, updatedAt: 1 }),
+      (owner = {
+        ...input,
+        rules: input.rules ?? owner.rules,
+        instructions: input.instructions ?? owner.instructions,
+        instructionsDefault: false,
+        updatedAt: 1,
+      }),
   });
   const run = async (name: string, args: Record<string, unknown>) => {
     const tool = extension.tools!.find((t) => t.name === name)!;
@@ -141,6 +153,7 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
     personality: () => personality,
     owner: () => owner,
     rules: () => rules,
+    instructions: () => instructions,
   };
 }
 
@@ -202,6 +215,8 @@ test("a bot is told what it may change, and asks lightly for what it does not kn
       timeZone: "Africa/Addis_Ababa",
       about: "Runs a studio.",
       rules: [],
+      instructions: "",
+      instructionsDefault: false,
       updatedAt: 1,
     },
   );

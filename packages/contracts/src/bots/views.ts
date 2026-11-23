@@ -23,6 +23,11 @@ export type BotProfile = {
    * It reads them in every conversation, after the owner's own rules.
    */
   rules: string[];
+  /**
+   * How this bot works with its own tools and services, kept by the owner
+   * and the bot together. Empty until one of them writes it.
+   */
+  instructions: string;
   /** Who saved this revision; absent on revisions saved before bots could. */
   changedBy?: "owner" | "bot";
   /** The built-in personality this revision's text is, unchanged. */
@@ -45,6 +50,8 @@ export type SaveBotProfile = Pick<
   selfUpdates?: Partial<SelfUpdates>;
   /** Omitted: a new bot starts with none, an edit keeps them. */
   rules?: string[];
+  /** Omitted: a new bot starts with none, an edit keeps them. */
+  instructions?: string;
 };
 
 /**
@@ -88,10 +95,22 @@ export type OwnerProfile = {
    * whichever bot they are talking to.
    */
   rules: string[];
+  /**
+   * Instructions for every bot, kept by the owner and the bots together:
+   * Raphie's own guidance on its built-in tools until either changes it.
+   */
+  instructions: string;
+  /** Whether `instructions` is still Raphie's, which follows each release. */
+  instructionsDefault: boolean;
   updatedAt: number | null;
 };
 
-export type SaveOwnerProfile = Omit<OwnerProfile, "updatedAt" | "rules"> & {
+export type SaveOwnerProfile = Omit<
+  OwnerProfile,
+  "updatedAt" | "rules" | "instructions" | "instructionsDefault"
+> & {
   /** Omitted, as from a client older than rules, keeps them. */
   rules?: string[];
+  /** Omitted keeps them; null goes back to Raphie's. */
+  instructions?: string | null;
 };

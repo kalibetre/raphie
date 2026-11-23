@@ -126,7 +126,7 @@ test("a connection shows its apps, and a new app reaches the bot on the next ref
       transport: "http",
       url: "http://localhost/mcp",
     });
-    // Shown in Settings by name, where a purpose would be typed.
+    // Shown in Settings under its name.
     expect(added!.summary).toBe("Apps: Jira, GitHub, Google Calendar");
     expect(published.at(-1)).toHaveLength(3);
     const before = published.length;

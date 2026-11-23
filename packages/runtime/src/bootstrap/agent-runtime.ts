@@ -301,7 +301,6 @@ export class Gateway {
         app.mcpConnections.map((connection) => ({
           name:
             connection.name ?? connection.client.server?.name ?? "MCP server",
-          purpose: connection.purpose,
           instructions: connection.client.instructions,
           apps: connection.client.apps,
         })),
@@ -519,6 +518,7 @@ export class Gateway {
       | "revision"
       | "selfUpdates"
       | "rules"
+      | "instructions"
     >,
   ) {
     this.chats.personality = read;

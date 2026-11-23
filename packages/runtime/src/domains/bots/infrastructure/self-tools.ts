@@ -6,6 +6,7 @@ import type {
   SaveOwnerProfile,
 } from "@raphie/contracts";
 
+import { MAX_INSTRUCTIONS_LENGTH } from "../domain/instructions.ts";
 import { knownTimeZone } from "../domain/owner.ts";
 import { cleanRule, MAX_RULE_LENGTH, MAX_RULES } from "../domain/rules.ts";
 
@@ -16,6 +17,8 @@ export type SelfProfile = {
   updatePersonality(personality: string): BotProfile;
   /** Saves a new revision; unchanged rules save nothing. */
   updateRules(rules: string[]): BotProfile;
+  /** Saves a new revision; unchanged text saves nothing. */
+  updateInstructions(instructions: string): BotProfile;
   owner(): OwnerProfile;
   saveOwner(input: SaveOwnerProfile): OwnerProfile;
 };
@@ -26,9 +29,10 @@ const text = (value: string, isError = false) => ({
 });
 
 /**
- * `update_personality`, `update_owner_profile` and `save_rule`: a bot
- * changing its own personality, what every bot knows about the owner, or
- * the standing rules it and every bot follow. Each is allowed per bot in
+ * `update_personality`, `update_owner_profile`, `save_rule` and
+ * `update_instructions`: a bot changing its own personality, what every bot
+ * knows about the owner, the standing rules it and every bot follow, or the
+ * instructions it and every bot read on working with their tools. Each is allowed per bot in
  * its profile; a change is saved at once and the owner can undo it.
  */
 export function createSelfTools(self: SelfProfile) {
@@ -148,6 +152,41 @@ export function createSelfTools(self: SelfProfile) {
             rule
               ? `Saved. ${whose} it in every conversation, from the next message.`
               : `Removed. ${whose} the rules without it from the next message.`,
+          );
+        },
+      }),
+      defineTool({
+        name: "update_instructions",
+        description:
+          "Replace your instructions on working with your tools and services, such as which connection holds the owner's calendar or how they want a board shown, when the owner asks you to note it. everyBot replaces the instructions every bot reads instead of your own. Send the whole text, keeping what still applies; an empty text clears your own. Tell the owner what you changed.",
+        parameters: obj({
+          instructions: str({ maxLength: MAX_INSTRUCTIONS_LENGTH }),
+          everyBot: opt(bool()),
+        }),
+        replay: "safe",
+        execute: async (args) => {
+          const allowed = self.profile().selfUpdates;
+          if (args.everyBot ? !allowed.owner : !allowed.personality)
+            return text(
+              args.everyBot
+                ? "The owner has not allowed you to change the instructions for every bot. They can change them in Settings → You."
+                : "The owner has not allowed you to change how you work. They can change your instructions in Settings → Profile.",
+              true,
+            );
+          const instructions = args.instructions.trim();
+          if (args.everyBot) {
+            if (!instructions)
+              return text(
+                "The instructions for every bot cannot be empty. Send them with your change.",
+                true,
+              );
+            const { updatedAt: _, ...owner } = self.owner();
+            self.saveOwner({ ...owner, instructions });
+            return text("Saved. Every bot reads them from its next message.");
+          }
+          const saved = self.updateInstructions(instructions);
+          return text(
+            `Saved as revision ${saved.revision}. You read them from your next message.`,
           );
         },
       }),

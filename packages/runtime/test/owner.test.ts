@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
+import { DEFAULT_INSTRUCTIONS } from "../src/domains/bots/domain/instructions.ts";
 import {
   localTime,
   ownerInstructions,
@@ -48,6 +49,8 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       timeZone: "",
       about: "",
       rules: [],
+      instructions: DEFAULT_INSTRUCTIONS,
+      instructionsDefault: true,
       updatedAt: null,
     });
     const owner = {
@@ -87,6 +90,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       description: "",
       personality: "Cite sources.",
       rules: ["Link every source."],
+      instructions: "My calendar is in Executor.",
     });
     for (const id of ["default", second.id]) {
       const { gateway } = host.runtime(id);
@@ -119,6 +123,11 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
     expect(told.find((p) => p.includes("- Link every source."))).toContain(
       "Cite sources.",
     );
+    // Every bot reads Raphie's instructions; a bot's own stay with it.
+    expect(told.every((p) => p.includes("call show_card"))).toBe(true);
+    expect(
+      told.filter((p) => p.includes("My calendar is in Executor.")),
+    ).toHaveLength(1);
     // Each message says when it was sent on the owner's clock too.
     expect(messages.at(-1)).toMatch(/in Africa\/Addis_Ababa\]/);
   } finally {
@@ -137,6 +146,8 @@ test("an owner who says nothing is not described, and times read like a clock", 
       timeZone: "",
       about: "",
       rules: [],
+      instructions: "",
+      instructionsDefault: false,
       updatedAt: null,
     }),
   ).toBe("");

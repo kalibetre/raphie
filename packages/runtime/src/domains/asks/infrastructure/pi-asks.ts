@@ -5,7 +5,6 @@ import {
   defineDoc,
   defineExtension,
   defineTool,
-  section,
 } from "@earendil-works/pi-durable";
 import { arr, bool, obj, opt, str } from "@earendil-works/pi-schema";
 import type { AskAnswer, Channel } from "@raphie/contracts";
@@ -259,12 +258,6 @@ export class AskService {
 export function createAskTools(asks: AskService) {
   return defineExtension({
     name: "raphie.asks",
-    sections: [
-      section("asks", ({ agent }) => {
-        if (!agent.tools.some((tool) => tool.name === "ask_owner")) return;
-        return "When you need the owner to decide something before you can go on, call ask_owner with the question and its answers instead of writing the question in your reply; the owner picks with one press. Ask only what you cannot reasonably decide yourself, and one question at a time. Before anything that deletes, sends or spends, ask with the action itself as the first answer and danger set.";
-      }),
-    ],
     tools: [
       defineTool({
         name: "ask_owner",

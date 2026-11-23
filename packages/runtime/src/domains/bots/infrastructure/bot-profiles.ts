@@ -16,6 +16,10 @@ import {
   DEFAULT_REPLY_STYLE,
   replyStyleOf,
 } from "../../conversations/domain/reply-style.ts";
+import {
+  cleanInstructions,
+  DEFAULT_INSTRUCTIONS,
+} from "../domain/instructions.ts";
 import { EMPTY_OWNER } from "../domain/owner.ts";
 import { PERSONALITY_PRESETS, presetOf } from "../domain/personalities.ts";
 import { cleanRules } from "../domain/rules.ts";
@@ -43,8 +47,18 @@ function parse(value: string): BotProfile {
       ...profile.selfUpdates,
     },
     rules: profile.rules ?? [],
+    instructions: profile.instructions ?? "",
   };
 }
+
+/**
+ * The owner profile as kept: instructions null while they are Raphie's,
+ * so they follow each release until someone changes them.
+ */
+type StoredOwner = Omit<
+  OwnerProfile,
+  "instructions" | "instructionsDefault"
+> & { instructions?: string | null };
 
 export const defaultBot = {
   id: "default",
@@ -85,6 +99,7 @@ export class BotProfileStore {
         replyStyle: DEFAULT_REPLY_STYLE,
         selfUpdates: defaultSelfUpdates("default"),
         rules: [],
+        instructions: "",
         changedBy: "owner",
         preset: presetOf(defaultBot.personality),
         revision: 1,
@@ -131,6 +146,7 @@ export class BotProfileStore {
       replyStyle: replyStyleOf(input.replyStyle),
       selfUpdates: { ...defaultSelfUpdates(id), ...input.selfUpdates },
       rules: cleanRules(input.rules ?? []),
+      instructions: cleanInstructions(input.instructions ?? ""),
       changedBy: "owner",
       preset: presetOf(input.personality),
       id,
@@ -167,6 +183,10 @@ export class BotProfileStore {
         replyStyle: input.replyStyle ?? previous.replyStyle,
         selfUpdates: { ...previous.selfUpdates, ...input.selfUpdates },
         rules: input.rules ? cleanRules(input.rules) : previous.rules,
+        instructions:
+          input.instructions === undefined
+            ? previous.instructions
+            : cleanInstructions(input.instructions),
         changedBy: "owner",
       });
     })();
@@ -199,6 +219,20 @@ export class BotProfileStore {
     })();
   }
 
+  /**
+   * The bot changes its own instructions: a new revision, saved by it.
+   * Unchanged text saves nothing.
+   */
+  updateInstructions(id: string, instructions: string) {
+    return this.db.transaction(() => {
+      const previous = this.read(id);
+      const next = cleanInstructions(instructions);
+      return previous.instructions === next
+        ? previous
+        : this.write({ ...previous, instructions: next, changedBy: "bot" });
+    })();
+  }
+
   /** Saves `profile` as the next revision. */
   private write(profile: BotProfile) {
     const next = {
@@ -219,18 +253,31 @@ export class BotProfileStore {
 
   /** The owner as every bot knows them; empty until they say something. */
   owner(): OwnerProfile {
-    const row = this.db
-      .query<{ value: string }, []>("SELECT value FROM owner_profile")
-      .get();
-    return row
-      ? { ...EMPTY_OWNER, ...(JSON.parse(row.value) as OwnerProfile) }
-      : EMPTY_OWNER;
+    const { instructions, ...owner } = this.storedOwner();
+    return {
+      ...owner,
+      instructions: instructions ?? DEFAULT_INSTRUCTIONS,
+      instructionsDefault: instructions === null || instructions === undefined,
+    };
   }
 
   saveOwner(input: SaveOwnerProfile): OwnerProfile {
-    const owner = {
-      ...input,
-      rules: input.rules ? cleanRules(input.rules) : this.owner().rules,
+    const previous = this.storedOwner();
+    const instructions =
+      input.instructions === undefined
+        ? previous.instructions
+        : input.instructions === null
+          ? null
+          : cleanInstructions(input.instructions);
+    // Fields are picked, so a whole profile sent back stores only these.
+    const owner: StoredOwner = {
+      name: input.name,
+      callMe: input.callMe,
+      timeZone: input.timeZone,
+      about: input.about,
+      rules: input.rules ? cleanRules(input.rules) : previous.rules,
+      // Saved unchanged, Raphie's text stays Raphie's and keeps following releases.
+      instructions: instructions === DEFAULT_INSTRUCTIONS ? null : instructions,
       updatedAt: Date.now(),
     };
     this.db
@@ -238,7 +285,17 @@ export class BotProfileStore {
         "INSERT INTO owner_profile(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
       )
       .run(JSON.stringify(owner));
-    return owner;
+    return this.owner();
+  }
+
+  private storedOwner(): StoredOwner {
+    const row = this.db
+      .query<{ value: string }, []>("SELECT value FROM owner_profile")
+      .get();
+    const { instructions: _, instructionsDefault: __, ...empty } = EMPTY_OWNER;
+    return row
+      ? { ...empty, ...(JSON.parse(row.value) as StoredOwner) }
+      : { ...empty, instructions: null };
   }
 
   close() {

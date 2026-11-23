@@ -14,6 +14,7 @@ import {
 import { useBots } from "../infrastructure/use-bots";
 import { BotProfileFields } from "./bot-profile-fields";
 import { DeleteBot } from "./delete-bot";
+import { InstructionsField } from "./instructions-field";
 import { defaultReplyStyle, ReplyStyleFields } from "./reply-style-fields";
 import { RulesField } from "./rules-field";
 import { SaveBar } from "./save-bar";
@@ -59,6 +60,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
     profile?.selfUpdates ?? newBotSelfUpdates,
   );
   const [rules, setRules] = useState(rulesText(profile?.rules ?? []));
+  const [instructions, setInstructions] = useState(profile?.instructions ?? "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const rulesError = rulesProblem(rulesOf(rules));
@@ -70,6 +72,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
       personality !== saved.personality ||
       color !== (saved.color ?? null) ||
       !sameRules(rulesOf(rules), saved.rules) ||
+      instructions.trim() !== saved.instructions ||
       !sameStyle(replyStyle, saved.replyStyle) ||
       !sameSelfUpdates(selfUpdates, saved.selfUpdates)
     : !!name ||
@@ -77,6 +80,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
       personality !== starterPersonality ||
       color !== null ||
       !!rulesOf(rules).length ||
+      !!instructions.trim() ||
       !sameStyle(replyStyle, defaultReplyStyle) ||
       !sameSelfUpdates(selfUpdates, newBotSelfUpdates);
   const guard = useSettingsGuard(dirty, pending);
@@ -99,6 +103,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
     setReplyStyle(profile.replyStyle);
     setSelfUpdates(profile.selfUpdates);
     setRules(rulesText(profile.rules));
+    setInstructions(profile.instructions);
     setError("");
   }, [profile, saved, dirty, pending]);
 
@@ -112,6 +117,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
     setReplyStyle(latest?.replyStyle ?? defaultReplyStyle);
     setSelfUpdates(latest?.selfUpdates ?? newBotSelfUpdates);
     setRules(rulesText(latest?.rules ?? []));
+    setInstructions(latest?.instructions ?? "");
     setError("");
     setMessage("");
   }
@@ -127,6 +133,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
       replyStyle,
       selfUpdates,
       rules: rulesOf(rules),
+      instructions: instructions.trim(),
     };
     try {
       if (saved) {
@@ -142,6 +149,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
         setReplyStyle(updated.replyStyle);
         setSelfUpdates(updated.selfUpdates);
         setRules(rulesText(updated.rules));
+        setInstructions(updated.instructions);
         setMessage(`Saved revision ${updated.revision}.`);
       }
     } catch (cause) {
@@ -183,11 +191,22 @@ export function BotForm({ profile }: { profile: BotProfile }) {
         title="Standing rules"
         note="What you want this bot to do every time. It reads them in every conversation, after your rules for every bot on the You page, and adds to them when you tell it “always” or “from now on”."
         placeholder={
-          "Use Executor for my calendar, mail and tickets.\nAnswer with a card when I ask about my day."
+          "Answer in English, even when I write in Amharic.\nAsk before booking anything before 10 AM."
         }
         value={rules}
         pending={pending}
         onChange={setRules}
+      />
+      <InstructionsField
+        id="bot-instructions"
+        title="Instructions"
+        note="How this bot works with its own tools and services. It reads them in every conversation, after the instructions for every bot on the You page. Tell it to note something, such as where your calendar lives, and it adds it here."
+        placeholder={
+          "Executor holds my calendar, mail, Jira and GitHub; look there first.\nFizzy is my task board: show it as a board, by column."
+        }
+        value={instructions}
+        pending={pending}
+        onChange={setInstructions}
       />
       <ReplyStyleFields
         style={replyStyle}

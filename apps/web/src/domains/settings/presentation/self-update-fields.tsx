@@ -29,7 +29,8 @@ export function SelfUpdateFields({
             <strong>Update its personality</strong>
             <small>
               When you ask for a different manner, or it learns what works for
-              you. It also saves the standing rules you give it.
+              you. It also saves the standing rules and instructions you give
+              it.
             </small>
           </span>
           <Switch
@@ -44,8 +45,8 @@ export function SelfUpdateFields({
           <span>
             <strong>Update “You”</strong>
             <small>
-              Your name, time zone, a few lines about you and your rules for
-              every bot. Every bot reads them.
+              Your name, time zone, a few lines about you, and your rules and
+              instructions for every bot. Every bot reads them.
             </small>
           </span>
           <Switch

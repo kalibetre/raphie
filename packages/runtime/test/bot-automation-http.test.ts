@@ -69,7 +69,6 @@ test("owner APIs isolate MCP inventories and scheduled prompt results between bo
     });
     const connected = await post("/api/mcp", {
       name: "Tools",
-      purpose: "calendar and mail",
       transport: "http",
       url: `http://127.0.0.1:${mcp.port}/mcp`,
       token: "synthetic-automation-secret",
@@ -77,19 +76,9 @@ test("owner APIs isolate MCP inventories and scheduled prompt results between bo
     expect(connected.status).toBe(201);
     const connection = (await connected.json()).items[0];
     expect(connection.toolCount).toBe(2);
-    expect(connection.purpose).toBe("calendar and mail");
     // What the server says about itself, past its heading.
     expect(connection.summary).toBe("A fixture server that echoes text.");
-    const described = await post(`/api/mcp/${connection.id}/purpose`, {
-      purpose: " calendar, mail and tickets ",
-    });
-    expect((await described.json()).items[0].purpose).toBe(
-      "calendar, mail and tickets",
-    );
-    expect(original.mcpConnections[0]).toMatchObject({
-      name: "Tools",
-      purpose: "calendar, mail and tickets",
-    });
+    expect(original.mcpConnections[0]).toMatchObject({ name: "Tools" });
     expect(JSON.stringify(connection)).not.toContain(
       "synthetic-automation-secret",
     );
@@ -131,9 +120,9 @@ test("owner APIs isolate MCP inventories and scheduled prompt results between bo
       await delay(10);
     expect((await original.chats.state()).turns).toHaveLength(1);
     expect(offered[0]).toContain("tool_search");
-    // The bot is told what is connected and what for, before it searches.
+    // The bot is told what is connected before it searches.
     expect(prompts[0]).toContain("Connected services.");
-    expect(prompts[0]).toContain("- Tools: calendar, mail and tickets");
+    expect(prompts[0]).toContain("- Tools\\n");
     expect(prompts[0]).toContain("A fixture server that echoes text.");
     expect(
       (await host.runtime(other.id).gateway.chats.state()).turns,
