@@ -685,6 +685,47 @@ sys.exit(os.waitstatus_to_exitcode(status))`,
       "nightly-12-1",
     );
     assert.ok(existsSync(join(temp, "bootstrapped")));
+    // macOS asks about the saved credential key again after every update,
+    // and the runtime waits for the answer. The update waits with it, past
+    // its usual fifteen seconds, and says what to look for.
+    const again = () =>
+      writeFile(join(updateInstall, ".raphie-user-install"), "nightly-11-1\n");
+    await writeFile(
+      join(bundle, "raphie"),
+      `#!/bin/sh
+[ "$1" = health ] || exit 0
+echo >> "$FIXTURE/health-checks"
+[ "$(wc -l < "$FIXTURE/health-checks")" -gt 20 ]
+`,
+    );
+    assert.equal(archive().exitCode, 0);
+    await checksum();
+    await again();
+    const prompted = run([], {
+      HOME: updateHome,
+      HOLD_PORT: String(freePorts().runtime),
+    });
+    assert.equal(prompted.exitCode, 0, prompted.stderr.toString());
+    assert.match(prompted.stderr.toString(), /choose Always Allow/);
+    assert.match(prompted.stdout.toString(), /User service is healthy\./);
+    // Nobody answers: it stops the service and says how to try again.
+    await writeFile(join(bundle, "raphie"), '#!/bin/sh\n[ "$1" != health ]\n');
+    assert.equal(archive().exitCode, 0);
+    await checksum();
+    await again();
+    const unanswered = run([], {
+      HOME: updateHome,
+      HOLD_PORT: String(freePorts().runtime),
+      RAPHIE_KEYCHAIN_WAIT_SECONDS: "3",
+    });
+    assert.notEqual(unanswered.exitCode, 0);
+    assert.match(
+      unanswered.stderr.toString(),
+      /Waiting up to 3 more seconds[^]*did not become healthy[^]*raphie" restart and choose Always Allow\./,
+    );
+    await writeFile(join(bundle, "raphie"), "#!/bin/sh\nexit 0\n");
+    assert.equal(archive().exitCode, 0);
+    await checksum();
     await writeFile(join(bin, "launchctl"), "#!/bin/sh\nexit 0\n", {
       mode: 0o755,
     });
