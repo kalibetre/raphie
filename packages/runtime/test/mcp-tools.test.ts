@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+import {
+  JSON_RPC_ERROR_CODES,
+  McpError,
+  McpTimeoutError,
+} from "@earendil-works/pi-mcp";
 import type { AdapterPostableMessage } from "chat";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
@@ -402,6 +407,63 @@ test("restart after remote execution claim reports uncertainty without repeating
     await app.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("a refused call says why and may be corrected; a silent one is left alone", async () => {
+  const web = { source: "web" as const, actor: "owner", text: "Use the tool" };
+  const outcome = async (failure: Error) => {
+    const directory = await mkdtemp(join(tmpdir(), "raphie-mcp-refused-"));
+    const mcp = fixture(async () => {
+      throw failure;
+    });
+    const app = await Gateway.open({ directory, ...model(), mcp });
+    try {
+      await app.chats.send({
+        ...web,
+        eventId: "refused",
+        approvalMode: "full-access",
+      });
+      await until(async () =>
+        (await app.chats.state()).turns.every((t) => t.status !== "pending"),
+      );
+      return {
+        execution: (await app.toolApprovals.state()).approvals[0].execution,
+        answer: (await app.chats.state()).turns[0].answer!,
+      };
+    } finally {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  };
+  // The service did not know an argument: nothing ran, and it says what.
+  const refused = await outcome(
+    new McpError(
+      JSON_RPC_ERROR_CODES.invalidParams,
+      "Unknown ref:\n  baseRef main",
+    ),
+  );
+  assert.equal(refused.execution, "done");
+  assert.match(
+    refused.answer,
+    /refused the call and did not run it: Unknown ref: baseRef main Correct the request/,
+  );
+  // An error from inside the service: what it said, and no automatic repeat.
+  const broke = await outcome(
+    new McpError(JSON_RPC_ERROR_CODES.internalError, "ref_not_found"),
+  );
+  assert.equal(broke.execution, "uncertain");
+  assert.match(
+    broke.answer,
+    /reported an error: ref_not_found Whether the call took effect is unknown/,
+  );
+  const silent = await outcome(new McpTimeoutError(30_000));
+  assert.equal(silent.execution, "uncertain");
+  assert.match(silent.answer, /did not answer within 30 seconds/);
+  // Anything else stays as it was: no detail is passed on.
+  const lost = await outcome(new Error("socket hang up at 10.0.0.5"));
+  assert.equal(lost.execution, "uncertain");
+  assert.match(lost.answer, /MCP call failed or its outcome is unknown/);
+  assert.doesNotMatch(lost.answer, /socket/);
 });
 
 test("Full access runs MCP tools without asking, and Ask makes the next call wait", async () => {

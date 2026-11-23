@@ -47,6 +47,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       callMe: "",
       timeZone: "",
       about: "",
+      rules: [],
       updatedAt: null,
     });
     const owner = {
@@ -61,7 +62,16 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
     expect(
       (await call("PUT", { ...owner, about: "x".repeat(2001) })).status,
     ).toBe(400);
+    const clock = "Give times on a 12-hour clock.";
+    expect(
+      (await call("PUT", { ...owner, rules: [` ${clock}`, clock] })).status,
+    ).toBe(200);
+    expect(
+      (await call("PUT", { ...owner, rules: ["x".repeat(301)] })).status,
+    ).toBe(400);
+    // A client older than rules saves the profile without them, and they stay.
     expect((await call("PUT", owner)).status).toBe(200);
+    expect(await (await call("GET")).json()).toMatchObject({ rules: [clock] });
 
     await server.close();
     await host.close();
@@ -76,6 +86,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       name: "Research",
       description: "",
       personality: "Cite sources.",
+      rules: ["Link every source."],
     });
     for (const id of ["default", second.id]) {
       const { gateway } = host.runtime(id);
@@ -100,6 +111,14 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       true,
     );
     expect(told[0]).toContain("Mornings are for deep work.");
+    // Every bot reads the owner's rules; a bot's own rules stay with it.
+    expect(told.every((p) => p.includes(`- ${clock}`))).toBe(true);
+    expect(told.filter((p) => p.includes("- Link every source."))).toHaveLength(
+      1,
+    );
+    expect(told.find((p) => p.includes("- Link every source."))).toContain(
+      "Cite sources.",
+    );
     // Each message says when it was sent on the owner's clock too.
     expect(messages.at(-1)).toMatch(/in Africa\/Addis_Ababa\]/);
   } finally {
@@ -117,6 +136,7 @@ test("an owner who says nothing is not described, and times read like a clock", 
       callMe: "",
       timeZone: "",
       about: "",
+      rules: [],
       updatedAt: null,
     }),
   ).toBe("");

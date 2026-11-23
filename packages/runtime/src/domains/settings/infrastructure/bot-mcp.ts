@@ -18,6 +18,7 @@ import { InputError } from "../../../shared/application/input-error.ts";
 import type { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
 import { registerRedactionSecret } from "../../activity/infrastructure/pi-activity-journal.ts";
 import type { McpTools } from "../../approvals/infrastructure/mcp-approval-gate.ts";
+import { serviceSummary } from "../domain/connected-services.ts";
 import {
   configuredCredentialKeyStore,
   CredentialCipher,
@@ -27,6 +28,8 @@ import {
 type Entry = {
   id: string;
   name: string;
+  /** What the bot should use it for, in the owner's words. */
+  purpose?: string;
   enabled: boolean;
   config: McpConnection;
   legacy?: boolean;
@@ -39,7 +42,7 @@ type Options = {
   busy: () => Promise<boolean>;
   publish: (tools: McpTools[]) => void;
   keyStore?: CredentialKeyStore;
-  connect?: typeof connectMcp;
+  connect?: (...args: Parameters<typeof connectMcp>) => Promise<McpClient>;
 };
 
 /** Owner-managed connections; only encrypted transport configuration reaches disk. */
@@ -124,6 +127,9 @@ export class BotMcp {
       id: e.id,
       source: this.environmentEntry && e.legacy ? "environment" : "saved",
       name: e.name,
+      purpose: e.purpose || undefined,
+      summary:
+        serviceSummary(this.clients.get(e.id)?.instructions) || undefined,
       enabled: e.enabled,
       transport: e.config.transport,
       address:
@@ -225,6 +231,8 @@ export class BotMcp {
           ? [
               {
                 client,
+                name: e.name,
+                purpose: e.purpose,
                 namespace: e.legacy
                   ? undefined
                   : `c_${e.id.replaceAll("-", "")}`,
@@ -301,6 +309,7 @@ export class BotMcp {
       const entry: Entry = {
         id: crypto.randomUUID(),
         name: input.name,
+        purpose: input.purpose || undefined,
         enabled: true,
         config,
       };
@@ -384,6 +393,21 @@ export class BotMcp {
       this.persist();
       this.publish();
       await old?.close().catch(() => {});
+      return this.read();
+    });
+  }
+
+  /**
+   * Saves what the bot should use a connection for. The bot reads it from
+   * its next turn; nothing reconnects.
+   */
+  async describe(id: string, purpose: string) {
+    return this.options.gate.run(async () => {
+      const entry = this.entries.find((e) => e.id === id);
+      if (!entry) throw new InputError("MCP connection not found.", 404);
+      entry.purpose = purpose || undefined;
+      if (!(this.environmentEntry && entry.legacy)) this.persist();
+      this.publish();
       return this.read();
     });
   }

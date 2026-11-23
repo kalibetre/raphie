@@ -120,6 +120,26 @@
     flex-wrap: wrap;
     gap: 8px;
   }
+  /* A connection: its row, then what the bot should use it for. */
+  .mcp-connection + .mcp-connection {
+    border-top: 1px solid var(--border);
+  }
+  .mcp-purpose {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 0 18px 14px;
+  }
+  .mcp-purpose-label {
+    flex: 0 0 100%;
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .mcp-purpose-input {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
   .automation-note {
     margin: 0;
     font-size: 12px;

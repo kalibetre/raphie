@@ -109,6 +109,7 @@ pub const SCENES: &[Scene] = &[
     ("settings-about-nightly", settings_about_nightly),
     ("settings-profile", settings_profile),
     ("settings-profile-edited", settings_profile_edited),
+    ("settings-profile-rules", settings_profile_rules),
     ("settings-profile-presets", settings_profile_presets),
     ("settings-history", settings_history),
     ("settings-history-restore", settings_history_restore),
@@ -161,6 +162,7 @@ pub const SCENES: &[Scene] = &[
     ("settings-skills-new", settings_skills_new),
     ("settings-skills-import", settings_skills_import),
     ("settings-mcp-command", settings_mcp_command),
+    ("settings-mcp-purpose", settings_mcp_purpose),
     ("settings-mcp-empty", settings_mcp_empty),
     ("settings-mcp-loading", settings_mcp_loading),
     ("settings-owner", settings_owner),
@@ -397,6 +399,27 @@ pub fn settings_profile(ui: &mut Ui) {
         bot_id: "default".into(),
         section: BotSection::Profile,
     }));
+}
+
+/// Settings → Profile for a bot with standing rules, one more being typed.
+pub fn settings_profile_rules(ui: &mut Ui) {
+    settings_account(ui);
+    let mut bots = ui.model.bots.clone();
+    if let Some(bot) = bots.iter_mut().find(|bot| bot.id == "default") {
+        bot.rules = vec![
+            "Use Executor for my calendar, mail and tickets.".into(),
+            "Answer with a card when I ask about my day.".into(),
+        ];
+    }
+    ui.model.apply(Event::Bots(bots));
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Profile,
+    }));
+    ui.profile.rules = TextEdit::new(format!(
+        "{}\nLaunch T3 threads with automatic permissions.",
+        ui.profile.rules.text
+    ));
 }
 
 /// Settings → Profile with unsaved changes, so the save bar shows.
@@ -741,6 +764,10 @@ pub fn owner_profile() -> OwnerProfile {
         call_me: "Hana".into(),
         time_zone: "Africa/Addis_Ababa".into(),
         about: "I run a small design studio. Mornings are for deep work, so keep anything non-urgent until after lunch.".into(),
+        rules: vec![
+            "Give times on a 12-hour clock, in my time zone.".into(),
+            "Leave all-day events out of my schedule.".into(),
+        ],
         updated_at: Some(1_794_650_049_530.0),
     }
 }
@@ -1228,11 +1255,14 @@ pub fn mcp_connections() -> Vec<McpConnection> {
     serde_json::from_value(json!([
         {
             "source": "saved", "id": "mcp-calendar", "name": "Calendar",
+            "purpose": "My work and personal calendars, and booking meetings",
+            "summary": "Calendars, events and free time.",
             "transport": "http", "address": "https://calendar.example.com/mcp",
             "enabled": true, "connected": true, "toolCount": 12, "credentialConfigured": true,
         },
         {
             "source": "saved", "id": "mcp-docs", "name": "Team docs",
+            "summary": "Search and read the team's documents.",
             "transport": "http", "address": "https://docs.example.com/mcp",
             "enabled": true, "connected": false, "toolCount": 0, "credentialConfigured": false,
             "authorizationUrl": "https://docs.example.com/oauth/authorize?state=made-up",
@@ -1597,6 +1627,15 @@ fn open_mcp(ui: &mut Ui, connections: Option<Vec<McpConnection>>) {
 /// Settings → MCP tools with connections in every state.
 pub fn settings_mcp(ui: &mut Ui) {
     open_mcp(ui, Some(mcp_connections()));
+}
+
+/// MCP tools with what one connection is for being typed, so its Save and
+/// Discard show.
+pub fn settings_mcp_purpose(ui: &mut Ui) {
+    open_mcp(ui, Some(mcp_connections()));
+    if let Some(draft) = ui.mcp.purposes.get_mut("mcp-docs") {
+        draft.edit = TextEdit::new("Specs, meeting notes and the handbook");
+    }
 }
 
 /// MCP tools with the form set to a local command whose arguments are not
@@ -2907,6 +2946,7 @@ fn open(ui: &mut Ui, session_id: &str, observation: SessionObservation) {
 
 fn bot(id: &str, name: &str, description: &str, color: Option<&str>) -> BotProfile {
     BotProfile {
+        rules: Vec::new(),
         id: id.into(),
         name: name.into(),
         description: description.into(),

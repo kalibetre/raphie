@@ -67,6 +67,7 @@ import {
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
+import { connectedServicesInstructions } from "../domains/settings/domain/connected-services.ts";
 import {
   createSkillTools,
   createSkillWriter,
@@ -295,6 +296,15 @@ export class Gateway {
         () => app.chats.personality?.().selfUpdates.skills ?? false,
       ),
     );
+    app.chats.services = () =>
+      connectedServicesInstructions(
+        app.mcpConnections.map((connection) => ({
+          name:
+            connection.name ?? connection.client.server?.name ?? "MCP server",
+          purpose: connection.purpose,
+          instructions: connection.client.instructions,
+        })),
+      );
     app.chats.skills = {
       instructions: (canWrite) => app.skills.instructions(canWrite),
       refresh: () => app.skills.refresh(),
@@ -507,6 +517,7 @@ export class Gateway {
       | "replyStyle"
       | "revision"
       | "selfUpdates"
+      | "rules"
     >,
   ) {
     this.chats.personality = read;

@@ -5,10 +5,17 @@ import { useEffect, useState } from "react";
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { botColors } from "../application/bot-tone";
+import {
+  rulesOf,
+  rulesProblem,
+  rulesText,
+  sameRules,
+} from "../application/rules";
 import { useBots } from "../infrastructure/use-bots";
 import { BotProfileFields } from "./bot-profile-fields";
 import { DeleteBot } from "./delete-bot";
 import { defaultReplyStyle, ReplyStyleFields } from "./reply-style-fields";
+import { RulesField } from "./rules-field";
 import { SaveBar } from "./save-bar";
 import { SelfUpdateFields } from "./self-update-fields";
 import { useSettingsGuard } from "./use-settings-guard";
@@ -51,8 +58,10 @@ export function BotForm({ profile }: { profile: BotProfile }) {
   const [selfUpdates, setSelfUpdates] = useState<SelfUpdates>(
     profile?.selfUpdates ?? newBotSelfUpdates,
   );
+  const [rules, setRules] = useState(rulesText(profile?.rules ?? []));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const rulesError = rulesProblem(rulesOf(rules));
   const pending =
     bots.save.isPending || bots.create.isPending || bots.remove.isPending;
   const dirty = saved
@@ -60,12 +69,14 @@ export function BotForm({ profile }: { profile: BotProfile }) {
       description !== saved.description ||
       personality !== saved.personality ||
       color !== (saved.color ?? null) ||
+      !sameRules(rulesOf(rules), saved.rules) ||
       !sameStyle(replyStyle, saved.replyStyle) ||
       !sameSelfUpdates(selfUpdates, saved.selfUpdates)
     : !!name ||
       !!description ||
       personality !== starterPersonality ||
       color !== null ||
+      !!rulesOf(rules).length ||
       !sameStyle(replyStyle, defaultReplyStyle) ||
       !sameSelfUpdates(selfUpdates, newBotSelfUpdates);
   const guard = useSettingsGuard(dirty, pending);
@@ -87,6 +98,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
     setColor(profile.color ?? null);
     setReplyStyle(profile.replyStyle);
     setSelfUpdates(profile.selfUpdates);
+    setRules(rulesText(profile.rules));
     setError("");
   }, [profile, saved, dirty, pending]);
 
@@ -99,6 +111,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
     setColor(latest?.color ?? null);
     setReplyStyle(latest?.replyStyle ?? defaultReplyStyle);
     setSelfUpdates(latest?.selfUpdates ?? newBotSelfUpdates);
+    setRules(rulesText(latest?.rules ?? []));
     setError("");
     setMessage("");
   }
@@ -113,6 +126,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
       color,
       replyStyle,
       selfUpdates,
+      rules: rulesOf(rules),
     };
     try {
       if (saved) {
@@ -127,6 +141,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
         setColor(updated.color ?? null);
         setReplyStyle(updated.replyStyle);
         setSelfUpdates(updated.selfUpdates);
+        setRules(rulesText(updated.rules));
         setMessage(`Saved revision ${updated.revision}.`);
       }
     } catch (cause) {
@@ -162,6 +177,17 @@ export function BotForm({ profile }: { profile: BotProfile }) {
         onName={setName}
         onDescription={setDescription}
         onPersonality={setPersonality}
+      />
+      <RulesField
+        id="bot-rules"
+        title="Standing rules"
+        note="What you want this bot to do every time. It reads them in every conversation, after your rules for every bot on the You page, and adds to them when you tell it “always” or “from now on”."
+        placeholder={
+          "Use Executor for my calendar, mail and tickets.\nAnswer with a card when I ask about my day."
+        }
+        value={rules}
+        pending={pending}
+        onChange={setRules}
       />
       <ReplyStyleFields
         style={replyStyle}
@@ -229,6 +255,7 @@ export function BotForm({ profile }: { profile: BotProfile }) {
           !changedElsewhere &&
           !!name.trim() &&
           !!personality.trim() &&
+          !rulesError &&
           (!saved || dirty)
         }
         canDiscard={dirty}

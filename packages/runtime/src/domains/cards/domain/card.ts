@@ -13,6 +13,8 @@ import type {
   CardTone,
 } from "@raphie/contracts";
 
+import { fitted } from "./card-fit.ts";
+
 /** Rows or events one card holds; the rest go behind its "more" line. */
 export const MAX_CARD_ITEMS = 40;
 
@@ -380,7 +382,7 @@ function markOverlaps(events: TimedEvent[]) {
 }
 
 const NOTHING =
-  "A card needs at least one row or event with a title. When there is nothing to list, say so in your reply instead.";
+  "This card has no rows. Pass the items you read again, each with a title, in groups[].rows. Only when there is truly nothing to list, say so in your reply instead.";
 
 /**
  * A bot's `show_card` arguments as the card clients draw and the text chats
@@ -389,9 +391,10 @@ const NOTHING =
  * `timeZone` is the owner's, when they have said.
  */
 export function buildCard(
-  input: CardInput,
+  passed: CardInput,
   options: { timeZone?: string } = {},
 ): BuiltCard {
+  const input = fitted(passed);
   const hasGroups = !!input.groups?.length;
   const hasEvents = !!input.events?.length;
   const hasColumns = !!input.columns?.length;

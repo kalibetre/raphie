@@ -22,6 +22,7 @@ pub fn tool_phrase(tool: &str, server: Option<&str>) -> String {
         "handoff_list" | "handoff_read" => "Checked on handed-off work",
         "update_owner_profile" => "Updated what I know about you",
         "update_personality" => "Updated my personality",
+        "save_rule" => "Updated my standing rules",
         "workspace_exec" | "bash" => "Ran a command",
         _ => return format!("Used {}", server.unwrap_or(tool)),
     };

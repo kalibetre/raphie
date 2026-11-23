@@ -444,6 +444,12 @@ pub enum Command {
         id: String,
         action: McpAction,
     },
+    /// Save what the bot should use one MCP connection for.
+    DescribeMcp {
+        bot_id: String,
+        id: String,
+        purpose: String,
+    },
     /// Load a page of a bot's saved memories: the first, or the one after
     /// the cursor `after`. `ticket` comes from `MemoryBrowser::begin_load`
     /// and returns with the answer.
@@ -896,6 +902,11 @@ impl Engine {
             Command::LoadMcp { bot_id } => self.load_mcp(bot_id),
             Command::AddMcp { bot_id, connection } => self.add_mcp(bot_id, connection),
             Command::ChangeMcp { bot_id, id, action } => self.change_mcp(bot_id, id, action),
+            Command::DescribeMcp {
+                bot_id,
+                id,
+                purpose,
+            } => self.describe_mcp(bot_id, id, purpose),
             Command::BrowseMemory {
                 bot_id,
                 after,
@@ -2525,6 +2536,25 @@ impl Engine {
         });
     }
 
+    fn describe_mcp(&mut self, bot_id: String, id: String, purpose: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.describe_mcp(&bot_id, &id, &purpose).await {
+                Ok(items) => emit.emit(Event::McpChanged { bot_id, items }),
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::McpChangeFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
     fn browse_memory(&mut self, bot_id: String, after: Option<String>, ticket: u64) {
         let Some(api) = self.api.clone() else {
             return;
@@ -3064,6 +3094,7 @@ mod tests {
     #[test]
     fn the_default_bot_wins_else_the_first() {
         let bot = |id: &str| BotProfile {
+            rules: Vec::new(),
             id: id.into(),
             name: id.into(),
             description: String::new(),

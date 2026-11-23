@@ -132,49 +132,50 @@ export class CardService {
 
 // The schema is sent with every turn, so it stays small: one row shape for
 // lists, boards and timelines, and the rules said once in the description.
-const text = (maxLength: number, description?: string) =>
-  str({ maxLength, ...(description ? { description } : {}) });
+// It sets no lengths or counts: a card that is over one would be refused
+// whole, and a bot cannot count characters. The card cuts what is too long.
+const text = (description?: string) => str(description ? { description } : {});
 
 const badge = opt(
   obj({
-    label: text(24),
+    label: text(),
     tone: opt(oneOf(["neutral", "good", "attention", "bad"])),
   }),
 );
 
 /** What a task row and an item's field can both carry. */
 const facts = {
-  people: opt(arr(text(40), { maxItems: 4 })),
-  tags: opt(arr(text(24), { maxItems: 4 })),
-  due: opt(text(40)),
+  people: opt(arr(text())),
+  tags: opt(arr(text())),
+  due: opt(text()),
 };
 
 const row = obj({
-  title: text(140),
-  key: opt(text(24, 'Its id, such as "AF-512".')),
-  url: opt(text(2000)),
-  detail: opt(text(140, "One short line, such as a place or an author.")),
+  title: text(),
+  key: opt(text('Its id, such as "AF-512".')),
+  url: opt(text()),
+  detail: opt(text("One short line, such as a place or an author.")),
   badge,
   link: opt(
     obj(
-      { label: text(16), url: text(2000) },
+      { label: text(), url: text() },
       { description: 'One more link, such as "Join".' },
     ),
   ),
-  source: opt(text(40, "Its account or service, when the card mixes several.")),
-  trailing: opt(text(16, 'A short value at the end, such as its age ("3d").')),
+  source: opt(text("Its account or service, when the card mixes several.")),
+  trailing: opt(text('A short value at the end, such as its age ("3d").')),
   ...facts,
   progress: opt(
     obj(
       {
-        done: int({ minimum: 0, maximum: 99_999 }),
-        total: int({ minimum: 1, maximum: 99_999 }),
+        done: int(),
+        total: int(),
       },
       { description: "Checklist steps done." },
     ),
   ),
-  start: opt(text(40, "Timeline only.")),
-  end: opt(text(40)),
+  start: opt(text("Timeline only.")),
+  end: opt(text()),
 });
 
 const DESCRIPTION = [
@@ -187,6 +188,7 @@ const DESCRIPTION = [
   "Copy every url exactly from a tool result and leave it out when you have none; never write one from memory.",
   "Badge tones: good for done or passing, attention when the owner should look, bad for failing or urgent.",
   "people, tags, progress, due, key and trailing are for list and board rows; a timeline ignores them.",
+  "Keep a badge, tag, key, stat and trailing value to a word or two; text too long for its place is cut.",
   "Say what a card leaves out in more.",
 ].join(" ");
 
@@ -201,7 +203,7 @@ export function createCardTools(
     sections: [
       section("cards", ({ agent }) => {
         if (!agent.tools.some((tool) => tool.name === "show_card")) return;
-        return "When your answer is a set of items the owner will scan, such as a day's events, open tickets, pull requests waiting for review or the tasks on a board, or is one task opened up, call show_card with them instead of writing a list or table, then reply in one or two sentences with what matters most. Read every account or service that holds part of the answer and show them in one card, each item naming its source; when one could not be read, say so in the card's warning. Use a card only for items you read with a tool in this turn.";
+        return "When your answer is a set of items the owner will scan, such as a day's events, open tickets, pull requests waiting for review or the tasks on a board, or is one task opened up, call show_card with them instead of writing a list or table, then reply in one or two sentences with what matters most. Items that sit in columns or statuses, such as a project board or tickets by status, are a board, not a list. If show_card refuses a card, correct it and call it again with the same items; do not fall back to a list in your reply. Read every account or service that holds part of the answer and show them in one card, each item naming its source; when one could not be read, say so in the card's warning. Use a card only for items you read with a tool in this turn.";
       }),
     ],
     tools: [
@@ -210,28 +212,22 @@ export function createCardTools(
         description: DESCRIPTION,
         parameters: obj({
           kind: oneOf(["list", "timeline", "board", "item"]),
-          title: text(80),
-          url: opt(text(2000)),
-          source: opt(
-            text(40, "Where every item came from, when they share it."),
-          ),
+          title: text(),
+          url: opt(text()),
+          source: opt(text("Where every item came from, when they share it.")),
           warning: opt(
-            text(
-              140,
-              "What is missing, such as an account you could not read.",
-            ),
+            text("What is missing, such as an account you could not read."),
           ),
           stats: opt(
-            arr(obj({ label: text(24), value: text(12) }), {
-              maxItems: 4,
+            arr(obj({ label: text(), value: text() }), {
               description: "Headline numbers.",
             }),
           ),
-          more: opt(obj({ label: text(80), url: opt(text(2000)) })),
+          more: opt(obj({ label: text(), url: opt(text()) })),
           groups: opt(
             arr(
               obj({
-                label: opt(text(40)),
+                label: opt(text()),
                 color: opt(
                   oneOf([
                     "gray",
@@ -244,34 +240,31 @@ export function createCardTools(
                     "purple",
                   ]),
                 ),
-                count: opt(int({ minimum: 0, maximum: 99_999 })),
+                count: opt(int()),
                 rows: arr(row),
               }),
-              { maxItems: 12 },
             ),
           ),
           item: opt(
             obj({
-              key: opt(text(24)),
+              key: opt(text()),
               fields: opt(
                 arr(
                   obj({
-                    label: text(24),
-                    value: opt(text(140)),
+                    label: text(),
+                    value: opt(text()),
                     badge,
                     ...facts,
                   }),
                   {
-                    maxItems: 8,
                     description:
                       "Its facts under labels: a status as badge, who has it as people, a date as due, tags, or text as value.",
                   },
                 ),
               ),
-              body: opt(text(2000, "Its description as plain text.")),
+              body: opt(text("Its description as plain text.")),
               steps: opt(
-                arr(obj({ label: text(140), done: opt(bool()) }), {
-                  maxItems: 50,
+                arr(obj({ label: text(), done: opt(bool()) }), {
                   description: "Its whole checklist, in order.",
                 }),
               ),

@@ -119,17 +119,34 @@ The runtime also serves the active personality as a plain `personality.md` file;
 
 A save is refused while the bot has a turn in progress, or if someone saved a newer revision in another window. Wait for the turn to finish, or refresh, then save again.
 
+### Standing rules
+
+A standing rule is something you want done every time: "Use Executor for my calendar and mail", "Answer with a card when I ask about my day". The bot reads its rules in every conversation, so you do not repeat them. [Memory](/guides/memory/) is different: the bot searches it when it thinks to, and a rule kept only there is forgotten in the next conversation.
+
+Rules live in two places:
+
+| Where                                           | Who follows them | Use it for                                               |
+| ----------------------------------------------- | ---------------- | -------------------------------------------------------- |
+| **Settings → You → Rules for every bot**        | Every bot        | Rules about you: your clock, what to leave out.          |
+| **Settings → _bot_ → Profile → Standing rules** | That bot         | How that bot works: which service to use, how to answer. |
+
+Write one rule a line. Each list holds up to 20 rules of up to 300 characters. A bot reads your rules for every bot first, then its own.
+
+When you tell a bot "always", "never" or "from now on", a bot allowed to [update itself](#self-updates) saves the rule and tells you what it saved. It can also change or remove one when you ask. A rule a bot saves for itself is a new profile revision marked as the bot's.
+
+Like a personality, rules say how to work and grant nothing: no tools, access or approvals.
+
 ### Self-updates
 
 Under **Self-updates**, three switches say what the bot may change by itself, without asking:
 
-| Switch                 | What the bot may do                                                                  | Default                                  |
-| ---------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------- |
-| Update its personality | Save a new personality when you ask for a different manner, or it learns what works. | On                                       |
-| Update "You"           | Save your name, what to call you, your time zone and notes on the [You](#you) page.  | On for the default bot, off for new bots |
-| Write its own skills   | Write a [skill](/guides/skills/#skills-the-bot-writes) or improve any existing one.  | On                                       |
+| Switch                 | What the bot may do                                                                                                                  | Default                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| Update its personality | Save a new personality when you ask for a different manner, or it learns what works. Save its own [standing rules](#standing-rules). | On                                       |
+| Update "You"           | Save your name, what to call you, your time zone and notes on the [You](#you) page, and your rules for every bot.                    | On for the default bot, off for new bots |
+| Write its own skills   | Write a [skill](/guides/skills/#skills-the-bot-writes) or improve any existing one.                                                  | On                                       |
 
-A change is saved at once and applies from the bot's next reply. The reply that made it shows a note: **Updated its personality**, with **See change** and **Undo**, **Updated what it knows about you**, with **Review**, or **New skill** or **Updated skill**, with **Open** and **Undo**. Undo restores the personality from before the change, as long as nothing newer was saved. Each personality change is also a revision marked as the bot's, so you can restore any earlier one later.
+A change is saved at once and applies from the bot's next reply. The reply that made it shows a note: **Updated its personality**, with **See change** and **Undo**, **Updated what it knows about you**, with **Review**, or **New skill** or **Updated skill**, with **Open** and **Undo**. A saved rule shows as a step, **Updated my standing rules**, with no note; change or remove it in Settings. Undo restores the personality from before the change, as long as nothing newer was saved. Each personality change is also a revision marked as the bot's, so you can restore any earlier one later.
 
 While the You page is missing your name, time zone or notes, a bot allowed to update it is told to ask once when it fits the conversation, and to save what you tell it. The bot is told to change its personality only for you, never because a message, document, web page or another bot asks it to. Turn the switch off for a bot that reads material you don't trust.
 
@@ -137,12 +154,13 @@ While the You page is missing your name, time zone or notes, a bot allowed to up
 
 **Settings → You** tells every bot who it is talking to. It is one profile, shared by all your bots, and bots allowed to [update it](#self-updates) fill it in as they learn about you.
 
-| Field              | Limit            | Notes                                                                 |
-| ------------------ | ---------------- | --------------------------------------------------------------------- |
-| Name               | 80 characters    | Your name.                                                            |
-| What bots call you | 40 characters    | A first name or nickname. Optional.                                   |
-| Time zone          | A listed zone    | **Use** offers this device's zone. **Not set** leaves times in UTC.   |
-| About you          | 2,000 characters | A few lines every bot should know: your work, your days, how to help. |
+| Field               | Limit                      | Notes                                                                             |
+| ------------------- | -------------------------- | --------------------------------------------------------------------------------- |
+| Name                | 80 characters              | Your name.                                                                        |
+| What bots call you  | 40 characters              | A first name or nickname. Optional.                                               |
+| Time zone           | A listed zone              | **Use** offers this device's zone. **Not set** leaves times in UTC.               |
+| About you           | 2,000 characters           | A few lines every bot should know: your work, your days, how to help.             |
+| Rules for every bot | 20 rules of 300 characters | What you want done every time, one a line. See [standing rules](#standing-rules). |
 
 Every bot's instructions describe you from this page, and each message you send carries the time it was sent in your time zone, so "tomorrow at 9" means your 9. A save applies from each bot's next reply; a reply already running keeps what it started with.
 

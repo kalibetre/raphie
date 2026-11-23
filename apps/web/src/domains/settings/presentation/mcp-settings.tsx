@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "../../../shared/ui/select";
 import { useBotAutomation } from "../infrastructure/use-bot-automation";
+import { McpPurpose } from "./mcp-purpose";
 import { Group, Row } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
 import { useSettingsGuard } from "./use-settings-guard";
@@ -18,6 +19,7 @@ import { useSettingsGuard } from "./use-settings-guard";
 export function McpSettings() {
   const data = useBotAutomation<BotMcpConnection>("mcp");
   const [name, setName] = useState("");
+  const [purpose, setPurpose] = useState("");
   const [transport, setTransport] = useState<"http" | "stdio">("http");
   const [address, setAddress] = useState("");
   const [token, setToken] = useState("");
@@ -27,12 +29,14 @@ export function McpSettings() {
   const [message, setMessage] = useState("");
   const pending = data.mutation.isPending;
   const dirty =
-    !!(name || address || token || args || env) || transport !== "http";
+    !!(name || purpose || address || token || args || env) ||
+    transport !== "http";
   const guard = useSettingsGuard(dirty, pending);
 
   function discard() {
     setTransport("http");
     setName("");
+    setPurpose("");
     setAddress("");
     setToken("");
     setArgs("");
@@ -45,6 +49,7 @@ export function McpSettings() {
     setMessage("");
     try {
       const input: SaveMcpConnection = { name, transport };
+      if (purpose.trim()) input.purpose = purpose.trim();
       if (transport === "http") {
         input.url = address;
         if (token) input.token = token;
@@ -106,6 +111,20 @@ export function McpSettings() {
     }
   }
 
+  async function describe(id: string, text: string) {
+    setError("");
+    try {
+      await data.mutation.mutateAsync({
+        id: `${id}/purpose`,
+        input: { purpose: text },
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not update MCP.",
+      );
+    }
+  }
+
   if (!data.data)
     return (
       <SettingsStatus
@@ -122,7 +141,7 @@ export function McpSettings() {
     <>
       <Group
         title="Connected servers"
-        note="Tools are discovered as needed. Tool actions require your approval; connections are not shared with other bots."
+        note="The bot is told each server's name and what it is for, and finds its tools as needed. Tool actions require your approval; connections are not shared with other bots."
       >
         {data.data.items.some(
           (connection) => connection.source === "environment",
@@ -135,68 +154,76 @@ export function McpSettings() {
         )}
         {data.data.items.length ? (
           data.data.items.map((connection) => (
-            <Row
-              key={connection.id}
-              title={connection.name}
-              description={`${connection.authorizationUrl ? "Authorization required" : connection.authorizationFailed ? "Authorization did not complete · reconnect to retry" : connection.connected ? `${connection.toolCount} tools` : connection.enabled ? "Disconnected · reconnect to retry" : "Paused"} · ${connection.transport === "http" ? "Streamable HTTP" : "Local command"} · ${connection.address}`}
-            >
-              <div className="automation-actions">
-                {connection.authorizationUrl && (
-                  <a
-                    className="underline underline-offset-4"
-                    href={connection.authorizationUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Authorize ${connection.name} (opens a new tab)`}
-                  >
-                    Authorize
-                  </a>
-                )}
-                {connection.source === "environment" ? (
-                  <>
-                    <span>Environment configuration · default bot only</span>
-                    <Button
-                      disabled={pending}
-                      onClick={() => void change(connection.id, "import")}
+            <div key={connection.id} className="mcp-connection">
+              <Row
+                title={connection.name}
+                description={`${connection.authorizationUrl ? "Authorization required" : connection.authorizationFailed ? "Authorization did not complete · reconnect to retry" : connection.connected ? `${connection.toolCount} tools` : connection.enabled ? "Disconnected · reconnect to retry" : "Paused"} · ${connection.transport === "http" ? "Streamable HTTP" : "Local command"} · ${connection.address}`}
+              >
+                <div className="automation-actions">
+                  {connection.authorizationUrl && (
+                    <a
+                      className="underline underline-offset-4"
+                      href={connection.authorizationUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Authorize ${connection.name} (opens a new tab)`}
                     >
-                      Import encrypted copy
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pending}
-                      onClick={() =>
-                        void change(
-                          connection.id,
-                          connection.connected || connection.authorizationUrl
-                            ? "disable"
-                            : "enable",
-                        )
-                      }
-                    >
-                      {connection.connected
-                        ? "Pause"
-                        : connection.authorizationUrl
-                          ? "Cancel authorization"
-                          : connection.enabled
-                            ? "Reconnect"
-                            : "Enable"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={pending}
-                      onClick={() => void change(connection.id, "remove")}
-                    >
-                      Remove
-                    </Button>
-                  </>
-                )}
-              </div>
-            </Row>
+                      Authorize
+                    </a>
+                  )}
+                  {connection.source === "environment" ? (
+                    <>
+                      <span>Environment configuration · default bot only</span>
+                      <Button
+                        disabled={pending}
+                        onClick={() => void change(connection.id, "import")}
+                      >
+                        Import encrypted copy
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() =>
+                          void change(
+                            connection.id,
+                            connection.connected || connection.authorizationUrl
+                              ? "disable"
+                              : "enable",
+                          )
+                        }
+                      >
+                        {connection.connected
+                          ? "Pause"
+                          : connection.authorizationUrl
+                            ? "Cancel authorization"
+                            : connection.enabled
+                              ? "Reconnect"
+                              : "Enable"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => void change(connection.id, "remove")}
+                      >
+                        Remove
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </Row>
+              <McpPurpose
+                // Saved text from elsewhere starts the field again.
+                key={connection.purpose ?? ""}
+                connection={connection}
+                pending={pending}
+                onSave={(text) => describe(connection.id, text)}
+              />
+            </div>
           ))
         ) : (
           <Row
@@ -225,6 +252,18 @@ export function McpSettings() {
             maxLength={80}
             placeholder="My project tools"
           />
+          <label htmlFor="mcp-purpose">What it is for (optional)</label>
+          <Input
+            id="mcp-purpose"
+            value={purpose}
+            onChange={(e) => setPurpose(e.target.value)}
+            maxLength={300}
+            placeholder="Calendar, mail, tickets and code hosting"
+          />
+          <p className="automation-note">
+            The bot reads this in every conversation, so it knows to look here
+            before saying it cannot reach something.
+          </p>
           <label htmlFor="mcp-transport">Transport</label>
           <Select
             value={transport}
