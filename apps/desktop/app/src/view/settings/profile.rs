@@ -15,8 +15,8 @@ use rune::color::hex;
 use rune::{Color, Cursor, Drag, El, Key, KeyEvent, Tx, col, el, icon, row, text, text_input};
 use rune_kit::Dialog;
 
+use super::instructions::{Instructions, instructions_field};
 use super::parts::{SaveBar, Scope, page, save_bar as save_bar_of};
-use super::rules::{Rules, rules_field};
 use crate::avatar::{PALETTE_NAMES, Tones, bot_avatar, tone_of};
 use crate::icons;
 use crate::sections::{BotSection, Page};
@@ -66,7 +66,7 @@ pub fn profile(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El 
         )
         .self_start()
     };
-    let mut groups = vec![identity, personality, standing_rules(s, t), replies(s, t)];
+    let mut groups = vec![identity, personality, own_instructions(s, t), replies(s, t)];
     groups.extend(self_updates(s, t));
     groups.push(history);
     // The default bot stays: the runtime refuses to delete it.
@@ -220,19 +220,20 @@ fn presets(s: &Ui, t: &Theme) -> Option<El> {
     Some(grid)
 }
 
-/// "Standing rules": what the owner wants this bot to do every time.
-fn standing_rules(s: &Ui, t: &Theme) -> El {
-    rules_field(
+/// "Instructions": how this bot works with its own tools and services.
+fn own_instructions(s: &Ui, t: &Theme) -> El {
+    instructions_field(
         t,
-        Rules {
-            key: "rd-profile-rules",
-            title: "Standing rules",
-            note: "What you want this bot to do every time. It reads them in every conversation, after your rules for every bot on the You page, and adds to them when you tell it “always” or “from now on”.",
-            placeholder: "Use Executor for my calendar, mail and tickets.\nAnswer with a card when I ask about my day.",
-            edit: &s.profile.rules,
+        Instructions {
+            key: "rd-profile-instructions",
+            title: "Instructions",
+            note: "How this bot works: what you want it to do every time, and how to use its own tools and services. It follows them in every conversation, after the instructions for every bot on the You page. When you tell it “always”, “from now on” or to note something, it adds it here.",
+            placeholder: "- Ask before booking anything before 10 AM.\n- Executor holds my calendar, mail, Jira and GitHub; look there first.\n- Fizzy is my task board: show it as a board, by column.",
+            edit: &s.profile.instructions,
             busy: s.model.saving_profile || s.model.creating_bot,
+            status: revision_label(s),
         },
-        |s: &mut Ui| &mut s.profile.rules,
+        |s: &mut Ui| &mut s.profile.instructions,
     )
 }
 
@@ -281,14 +282,14 @@ fn self_updates(s: &Ui, t: &Theme) -> Option<El> {
     let personality = line(
         "personality",
         "Update its personality",
-        "When you ask for a different manner, or it learns what works for you. It also saves the standing rules you give it.",
+        "When you ask for a different manner, or it learns what works for you. It also adds to its instructions when you say “always” or ask it to note something.",
         value.personality,
         |value, on| value.personality = on,
     );
     let owner = line(
         "owner",
         "Update “You”",
-        "Your name, time zone, a few lines about you and your rules for every bot. Every bot reads them.",
+        "Your name, time zone and a few lines about you. Every bot reads them.",
         value.owner,
         |value, on| value.owner = on,
     )
@@ -750,7 +751,7 @@ fn color_picker(s: &Ui, id: &str, look: &Look) -> El {
             Some(this) => this.color = None,
             // A bot being created is not in the roster yet: stand in for it.
             None => others.push(BotProfile {
-                rules: Vec::new(),
+                instructions: String::new(),
                 id: id.to_owned(),
                 name: String::new(),
                 description: String::new(),
@@ -895,16 +896,21 @@ fn hue(literal: &str) -> Color {
     hex(literal).unwrap_or(Color::BLACK)
 }
 
+/// "Revision 4", and who saved it when it was the bot: the heading of the
+/// personality and instructions editors.
+fn revision_label(s: &Ui) -> String {
+    s.profile
+        .saved
+        .as_ref()
+        .map_or(String::new(), |saved| match saved.changed_by.as_deref() {
+            Some("bot") => format!("Revision {} · edited by {}", saved.revision, saved.name),
+            _ => format!("Revision {}", saved.revision),
+        })
+}
+
 /// The personality as the owner writes it: a bar with its revision over the editor.
 fn personality_editor(s: &Ui, t: &Theme) -> El {
-    let revision =
-        s.profile
-            .saved
-            .as_ref()
-            .map_or(String::new(), |saved| match saved.changed_by.as_deref() {
-                Some("bot") => format!("Revision {} · edited by {}", saved.revision, saved.name),
-                _ => format!("Revision {}", saved.revision),
-            });
+    let revision = revision_label(s);
     let mut editor = text_input(&s.profile.personality, font(13.0, 400.0).lh(22.0))
         .key("rd-profile-personality")
         .label("Personality")
@@ -930,15 +936,10 @@ fn personality_editor(s: &Ui, t: &Theme) -> El {
                 .px(14.0)
                 .py(11.0)
                 .gap(10.0)
-                .justify_between()
+                .justify_end()
                 .center_y()
                 .fill(t.muted)
                 .border_sides([0.0, 0.0, 1.0, 0.0], t.border)
-                .child(
-                    text("In your words")
-                        .font(font(10.0, 500.0))
-                        .color(t.foreground),
-                )
                 .child(
                     text(revision)
                         .key("rd-profile-revision")

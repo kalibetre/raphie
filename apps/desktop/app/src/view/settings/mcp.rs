@@ -15,7 +15,6 @@ use rune::{El, Span, Tx, col, row, text};
 use rune_kit::{Select, SelectAppearance};
 
 use super::parts::{Scope, group, page, setting, status};
-use crate::mcp::PurposeDraft;
 use crate::sections::BotSection;
 use crate::state::Ui;
 use crate::theme::{Theme, font};
@@ -100,7 +99,7 @@ fn servers(s: &Ui, bot_id: &str, connections: &[McpConnection], t: &Theme) -> El
         );
     }
     for connection in connections {
-        rows.push(server(s, bot_id, connection, busy, t));
+        rows.push(server(bot_id, connection, busy, t));
     }
     if connections.is_empty() {
         rows.push(setting(
@@ -114,13 +113,13 @@ fn servers(s: &Ui, bot_id: &str, connections: &[McpConnection], t: &Theme) -> El
     group(
         t,
         "Connected servers",
-        "The bot is told each server's name and what it is for, and finds its tools as needed. Tool actions require your approval; connections are not shared with other bots.",
+        "The bot is told each server's name and what it says about itself, and finds its tools as needed. Tell the bot what to use each one for, and it keeps that in its instructions. Tool actions require your approval; connections are not shared with other bots.",
         rows,
     )
 }
 
 /// One connection: its name and state, then what can be done to it.
-fn server(s: &Ui, bot_id: &str, connection: &McpConnection, busy: bool, t: &Theme) -> El {
+fn server(bot_id: &str, connection: &McpConnection, busy: bool, t: &Theme) -> El {
     let key = |part: &str| format!("rd-mcp-{}-{part}", connection.id);
     // A closure that makes the handler for one action on this connection.
     // Each handler owns its own copies of the ids, because Rune keeps it
@@ -207,108 +206,29 @@ fn server(s: &Ui, bot_id: &str, connection: &McpConnection, busy: bool, t: &Them
                 .color(t.muted_foreground)
                 .wrap(),
         );
+    // What it holds, under its address (the web's `.mcp-summary`).
+    let copy = match &connection.summary {
+        Some(about) => copy.child(
+            text(about.clone())
+                .key(key("about"))
+                .font(font(12.5, 400.0))
+                .color(t.muted_foreground)
+                .wrap(),
+        ),
+        None => copy,
+    };
     let line = row()
         .key(format!("rd-mcp-{}", connection.id))
         .w_full()
         .px(18.0)
         .py(14.0)
         .gap(16.0);
-    let line = if connection.from_environment {
+    if connection.from_environment {
         // Its note and button are too wide to sit beside the name.
         line.child(copy.gap(10.0).child(actions))
     } else {
         line.center_y().child(copy).child(actions)
-    };
-    // The row, then what the bot should use the connection for (the web's
-    // `.mcp-connection`).
-    let mut whole = col().w_full().child(line);
-    if let Some(draft) = s.mcp.purposes.get(&connection.id) {
-        whole = whole.child(purpose(bot_id, connection, draft, busy, t));
     }
-    whole
-}
-
-const PURPOSE_HINT: &str = "Calendar, mail, tickets and code hosting";
-
-/// "What <name> is for": the owner's words for a connection, with Save and
-/// Discard once they differ from what is saved. Mirrors `mcp-purpose.tsx`
-/// and `.mcp-purpose`.
-fn purpose(
-    bot_id: &str,
-    connection: &McpConnection,
-    draft: &PurposeDraft,
-    busy: bool,
-    t: &Theme,
-) -> El {
-    let key = format!("rd-mcp-{}-purpose", connection.id);
-    let title = format!("What {} is for", connection.name);
-    let save = {
-        let (bot_id, id) = (bot_id.to_owned(), connection.id.clone());
-        move |s: &mut Ui| s.describe_mcp(&bot_id, &id)
-    };
-    let submit = {
-        let save = save.clone();
-        move |s: &mut Ui, _: &mut Tx| save(s)
-    };
-    let id = connection.id.clone();
-    let field = text_field(
-        t,
-        Field {
-            key: &key,
-            label: &title,
-            placeholder: connection.summary.as_deref().unwrap_or(PURPOSE_HINT),
-            edit: &draft.edit,
-            disabled: busy,
-            compact: true,
-        },
-        // The field shows only while its draft exists; a draft dropped
-        // between frames gets an empty one to type into.
-        move |s: &mut Ui| {
-            &mut s
-                .mcp
-                .purposes
-                .entry(id.clone())
-                .or_insert_with(|| PurposeDraft::of(""))
-                .edit
-        },
-        submit,
-    );
-    let mut line = row()
-        .w_full()
-        .gap(8.0)
-        .flex_wrap()
-        .center_y()
-        // The field takes the room the buttons leave, down to 220 points,
-        // and then wraps above them.
-        .child(col().grow(1.0).min_w(220.0).child(field));
-    if draft.is_changed() {
-        let discard = {
-            let id = connection.id.clone();
-            move |s: &mut Ui| s.discard_mcp_purpose(&id)
-        };
-        line = line
-            .child(pressable(
-                button(t, Kind::Primary, Size::Small, None, "Save").key(format!("{key}-save")),
-                !busy,
-                save,
-            ))
-            .child(pressable(
-                button(t, Kind::Ghost, Size::Small, None, "Discard").key(format!("{key}-discard")),
-                !busy,
-                discard,
-            ));
-    }
-    col()
-        .w_full()
-        .px(18.0)
-        .pb(14.0)
-        .gap(6.0)
-        .child(
-            text(title.clone())
-                .font(font(12.0, 550.0))
-                .color(t.foreground),
-        )
-        .child(line)
 }
 
 /// "Add a connection": a name, how to reach the server, and its secrets.
@@ -340,24 +260,6 @@ fn add_form(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
             },
             |s: &mut Ui| &mut s.mcp.name,
             submit,
-        ))
-        .child(caption("What it is for (optional)"))
-        .child(text_field(
-            t,
-            Field {
-                key: "rd-mcp-purpose",
-                label: "What it is for (optional)",
-                placeholder: PURPOSE_HINT,
-                edit: &form.purpose,
-                disabled: busy,
-                compact: true,
-            },
-            |s: &mut Ui| &mut s.mcp.purpose,
-            submit,
-        ))
-        .child(note(
-            t,
-            "The bot reads this in every conversation, so it knows to look here before saying it cannot reach something.",
         ))
         .child(caption("Transport"))
         .child(

@@ -10,7 +10,6 @@ use rune_kit::{Combobox, ComboboxOption};
 
 use super::parts::{SaveBar, Scope, page, save_bar, status};
 use super::profile::{label, section};
-use super::rules::{Rules, rules_field};
 use crate::owner::{ABOUT_LIMIT, NOT_SET, device_zone, time_zones, zone_label};
 use crate::state::Ui;
 use crate::theme::{Theme, font};
@@ -23,7 +22,7 @@ const LEDE: &str =
 pub fn owner(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
     let groups = if s.owner.saved.is_some() {
-        vec![you(s, look, overlays), about(s, t), rules(s, t)]
+        vec![you(s, look, overlays), about(s, t), instructions(s, t)]
     } else if let Some(error) = &s.model.owner_error {
         let retry = pressable(
             button(t, Kind::Outline, Size::Small, None, "Try again").key("rd-owner-retry"),
@@ -218,19 +217,48 @@ fn about(s: &Ui, t: &Theme) -> El {
     )
 }
 
-/// "Rules for every bot": what the owner wants done every time.
-fn rules(s: &Ui, t: &Theme) -> El {
-    rules_field(
+/// "Instructions for every bot": Raphie's, read-only, in the frame of the
+/// personality's editor. They change only with a release.
+fn instructions(s: &Ui, t: &Theme) -> El {
+    let text_of = s
+        .owner
+        .saved
+        .as_ref()
+        .map_or(String::new(), |saved| saved.every_bot_instructions.clone());
+    section(
         t,
-        Rules {
-            key: "rd-owner-rules",
-            title: "Rules for every bot",
-            note: "What you want done every time, whichever bot you are talking to. Each bot reads these in every conversation, before its own rules.",
-            placeholder: "Give times on a 12-hour clock, in my time zone.\nLeave all-day events out of my schedule.",
-            edit: &s.owner.rules,
-            busy: s.model.saving_owner,
-        },
-        |s: &mut Ui| &mut s.owner.rules,
+        "Instructions for every bot",
+        "How every bot works with the tools Raphie gives them all, such as cards and questions. Every bot follows these in every conversation, before its own instructions. They come with Raphie and change as tools are added; what you want of one bot goes in its own instructions, on its Profile.",
+        col()
+            .w_full()
+            .radius(8.0)
+            .border(1.0, t.border)
+            .border_layout()
+            .clip_rounded(7.0)
+            .child(
+                row()
+                    .w_full()
+                    .px(14.0)
+                    .py(11.0)
+                    .justify_end()
+                    .center_y()
+                    .fill(t.muted)
+                    .border_sides([0.0, 0.0, 1.0, 0.0], t.border)
+                    .child(
+                        text("Read-only · updated with each release")
+                            .font(font(10.0, 400.0))
+                            .color(t.muted_foreground),
+                    ),
+            )
+            .child(
+                col().w_full().padding(16.0).fill(t.card).child(
+                    text(text_of)
+                        .key("rd-owner-instructions")
+                        .font(font(13.0, 400.0).lh(22.0))
+                        .color(t.muted_foreground)
+                        .wrap(),
+                ),
+            ),
     )
 }
 

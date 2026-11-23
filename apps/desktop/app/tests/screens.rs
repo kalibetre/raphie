@@ -1215,7 +1215,7 @@ fn deliver(rt: &mut Runtime<Ui>, event: Event) {
 
 fn research(description: &str, revision: u32) -> BotProfile {
     BotProfile {
-        rules: Vec::new(),
+        instructions: String::new(),
         id: "b-research".into(),
         name: "Research".into(),
         description: description.into(),
@@ -1242,7 +1242,7 @@ fn research_profile(ui: &mut Ui) {
 
 #[test]
 fn revision_history_lists_saved_versions_and_unfolds_them() {
-    let mut rt = render_sized(research_profile, false, (1280.0, 2100.0));
+    let mut rt = render_sized(research_profile, false, (1280.0, 2500.0));
     click(&mut rt, "rd-profile-history");
     assert_eq!(
         rt.state.sent.last(),
@@ -1362,7 +1362,7 @@ fn a_bot_is_deleted_only_after_its_name_is_typed() {
     let rt = render_sized(scenes::settings_profile, false, (1280.0, 1700.0));
     assert!(rt.find("rd-delete-bot").is_none());
 
-    let mut rt = render_sized(research_profile, false, (1280.0, 2100.0));
+    let mut rt = render_sized(research_profile, false, (1280.0, 2500.0));
     // Unsaved edits block it: the confirmation must name the saved bot.
     rt.update(|ui, _| ui.profile.description = TextEdit::new("Edited"));
     settle(&mut rt);
@@ -5613,8 +5613,8 @@ fn a_schedule_of_several_days_heads_each_one() {
 fn a_reply_style_is_chosen_and_saved_with_the_profile() {
     for dark in [false, true] {
         // Tall enough to show the Replies card under the personality and
-        // the standing rules.
-        let mut rt = render_sized(research_profile, dark, (1280.0, 2200.0));
+        // the instructions.
+        let mut rt = render_sized(research_profile, dark, (1280.0, 2600.0));
         assert_eq!(
             rt.state.profile.reply_style,
             ReplyStyle::default(),
@@ -5653,7 +5653,7 @@ fn a_reply_style_is_chosen_and_saved_with_the_profile() {
 
 #[test]
 fn a_reply_slider_follows_a_drag_along_its_track() {
-    let mut rt = render_sized(research_profile, false, (1280.0, 1800.0));
+    let mut rt = render_sized(research_profile, false, (1280.0, 2200.0));
     let [x, y, w, h] = element(&rt, "rd-reply-warmth-track").rect;
     let mid = y + h / 2.0;
     // From the middle stop, dragged past the right end: Warm.
@@ -5704,7 +5704,7 @@ fn a_profile_opened_before_its_bot_loads_fills_in_when_it_arrives() {
             section: BotSection::Profile,
         }));
     }
-    let mut rt = render_sized(opened_early, false, (1280.0, 1800.0));
+    let mut rt = render_sized(opened_early, false, (1280.0, 2200.0));
     assert!(rt.state.profile.saved.is_none());
     let mut bots = rt.state.model.bots.clone();
     bots.push(research("Reads and summarises.", 3));
@@ -6159,7 +6159,7 @@ fn slash_new_leaves_an_open_conversation_for_a_new_one() {
 
 #[test]
 fn a_preset_fills_the_editor_and_self_updates_are_saved_with_the_profile() {
-    let mut rt = render_sized(scenes::settings_profile_presets, false, (1280.0, 2600.0));
+    let mut rt = render_sized(scenes::settings_profile_presets, false, (1280.0, 3000.0));
     // Six cards, three to a row; the bot's own change is named over the
     // editor.
     let candid = element(&rt, "rd-profile-preset-candid");
@@ -6426,91 +6426,17 @@ fn a_self_update_that_saved_nothing_shows_no_note() {
 }
 
 #[test]
-fn rules_for_every_bot_are_typed_on_you_and_saved_with_the_profile() {
-    let mut rt = render_sized(scenes::settings_owner, false, (1280.0, 1700.0));
-    assert!(screen_text(&rt).contains("Rules for every bot"));
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("One rule a line · 2 of 20 · Rules say how to work and grant nothing.")
-    );
-    assert!(rt.find("rd-save-bar").is_none(), "a clean page is quiet");
-    // Typing in the box adds to the last rule; Return starts another.
-    click(&mut rt, "rd-owner-rules");
-    for key in [Key::Enter, Key::Text("- Be brief.".into())] {
-        rt.key(KeyEvent {
-            key,
-            mods: Default::default(),
-        });
-    }
-    settle(&mut rt);
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("One rule a line · 3 of 20 · Rules say how to work and grant nothing.")
-    );
-    click(&mut rt, "rd-owner-save");
-    let Some(Command::SaveOwner { owner }) = rt.state.sent.last().cloned() else {
-        panic!("no save was sent");
-    };
-    assert_eq!(
-        owner.rules,
-        Some(vec![
-            "Give times on a 12-hour clock, in my time zone.".to_owned(),
-            "Leave all-day events out of my schedule.".to_owned(),
-            "Be brief.".to_owned(),
-        ])
-    );
-    let mut saved = scenes::owner_profile();
-    saved.rules.push("Be brief.".into());
-    saved.updated_at = Some(1_794_650_100_000.0);
-    deliver(&mut rt, Event::OwnerSaved(saved));
-    assert!(!rt.state.owner.is_dirty());
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("One rule a line · 3 of 20 · Rules say how to work and grant nothing.")
-    );
-}
-
-#[test]
-fn too_many_rules_are_refused_before_anything_is_sent() {
-    let mut rt = render_sized(scenes::settings_owner, false, (1280.0, 2200.0));
-    let many: Vec<String> = (0..21).map(|n| format!("Rule {n}.")).collect();
-    rt.update(move |ui, _| ui.owner.rules = TextEdit::new(many.join("\n")));
-    settle(&mut rt);
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("Keep to 20 rules; there are 21.")
-    );
-    assert_eq!(
-        element(&rt, "rd-owner-error").text.as_deref(),
-        Some("Keep to 20 rules; there are 21.")
-    );
-    let before = rt.state.sent.len();
-    click(&mut rt, "rd-owner-save");
-    assert_eq!(rt.state.sent.len(), before, "nothing is sent");
-    // One rule too long says which.
-    rt.update(|ui, _| ui.owner.rules = TextEdit::new(format!("Be brief.\n{}", "x".repeat(301))));
-    settle(&mut rt);
-    assert_eq!(
-        element(&rt, "rd-owner-rules-count").text.as_deref(),
-        Some("Rule 2 is over 300 characters.")
-    );
-    click(&mut rt, "rd-owner-discard");
-    assert!(rt.find("rd-save-bar").is_none());
-}
-
-#[test]
-fn a_bots_standing_rules_are_saved_with_its_profile_and_follow_the_host() {
+fn a_bots_instructions_are_saved_with_its_profile_and_follow_the_host() {
     for dark in [false, true] {
-        let mut rt = render_sized(scenes::settings_profile_rules, dark, (1280.0, 1700.0));
-        assert!(screen_text(&rt).contains("Standing rules"));
-        // The card sits between the personality and the replies.
-        let rules = element(&rt, "rd-profile-rules-box");
-        let personality = element(&rt, "rd-profile-personality-box");
-        assert!(personality.rect[1] < rules.rect[1]);
-        assert_eq!(
-            element(&rt, "rd-profile-rules-count").text.as_deref(),
-            Some("One rule a line · 3 of 20 · Rules say how to work and grant nothing.")
+        let mut rt = render_sized(
+            scenes::settings_profile_instructions,
+            dark,
+            (1280.0, 2100.0),
         );
+        // The card sits between the personality and the replies.
+        let instructions = element(&rt, "rd-profile-instructions-box");
+        let personality = element(&rt, "rd-profile-personality-box");
+        assert!(personality.rect[1] < instructions.rect[1]);
         assert_eq!(
             element(&rt, "rd-profile-status").text.as_deref(),
             Some("Unsaved changes")
@@ -6520,14 +6446,8 @@ fn a_bots_standing_rules_are_saved_with_its_profile_and_follow_the_host() {
             panic!("no save was sent");
         };
         assert_eq!(bot_id, "default");
-        assert_eq!(
-            update.rules,
-            Some(vec![
-                "Use Executor for my calendar, mail and tickets.".to_owned(),
-                "Answer with a card when I ask about my day.".to_owned(),
-                "Launch T3 threads with automatic permissions.".to_owned(),
-            ])
-        );
+        let sent = update.instructions.clone().expect("changed, so sent");
+        assert!(sent.ends_with("- Launch T3 threads with automatic permissions."));
         // What was saved is shown, at its new revision.
         let mut saved = rt
             .state
@@ -6537,16 +6457,16 @@ fn a_bots_standing_rules_are_saved_with_its_profile_and_follow_the_host() {
             .find(|bot| bot.id == "default")
             .cloned()
             .expect("the default bot");
-        saved.rules = update.rules.clone().unwrap();
+        saved.instructions = sent;
         saved.revision += 1;
         deliver(&mut rt, Event::ProfileSaved(saved.clone()));
         assert!(!rt.state.profile.is_dirty());
-        // The bot saves a rule itself: a clean form follows it.
+        // The bot adds a line itself: a clean form follows it.
         let mut bots = rt.state.model.bots.clone();
         for bot in &mut bots {
             if bot.id == "default" {
                 *bot = saved.clone();
-                bot.rules.push("Never book before 9.".into());
+                bot.instructions.push_str("\n- Never book before 9.");
                 bot.revision += 1;
             }
         }
@@ -6554,128 +6474,68 @@ fn a_bots_standing_rules_are_saved_with_its_profile_and_follow_the_host() {
         assert!(
             rt.state
                 .profile
-                .rules
+                .instructions
                 .text
-                .ends_with("Never book before 9.")
+                .ends_with("- Never book before 9.")
         );
         assert!(!rt.state.profile.is_dirty());
-        // A rule too long blocks the save and says why.
-        rt.update(|ui, _| ui.profile.rules = TextEdit::new("x".repeat(301)));
+        // Too long blocks the save and says why.
+        rt.update(|ui, _| ui.profile.instructions = TextEdit::new("x".repeat(16_001)));
         settle(&mut rt);
         assert_eq!(
             element(&rt, "rd-profile-error").text.as_deref(),
-            Some("Rule 1 is over 300 characters.")
+            Some("Instructions can be at most 16,000 characters.")
         );
         assert!(!rt.state.can_save_profile());
         click(&mut rt, "rd-profile-discard");
         assert!(
             rt.state
                 .profile
-                .rules
+                .instructions
                 .text
-                .ends_with("Never book before 9.")
+                .ends_with("- Never book before 9.")
         );
     }
 }
 
 #[test]
-fn what_a_connection_is_for_is_typed_saved_and_follows_the_host() {
-    let mut rt = render_sized(scenes::settings_mcp, false, (1280.0, 1900.0));
-    assert!(screen_text(&rt).contains("What Calendar is for"));
-    assert_eq!(
-        rt.state.mcp.purposes["mcp-calendar"].edit.text,
-        "My work and personal calendars, and booking meetings"
-    );
-    // Nothing typed: no Save or Discard.
-    assert!(rt.find("rd-mcp-mcp-docs-purpose-save").is_none());
-    click(&mut rt, "rd-mcp-mcp-docs-purpose-input");
-    rt.key(KeyEvent {
-        key: Key::Text(" Specs and notes ".into()),
-        mods: Default::default(),
-    });
-    settle(&mut rt);
-    assert!(rt.find("rd-mcp-mcp-docs-purpose-discard").is_some());
-    // The list arriving again, as it does every few seconds, keeps it.
-    deliver(
-        &mut rt,
-        Event::Mcp {
-            bot_id: "default".into(),
-            items: scenes::mcp_connections(),
-        },
-    );
-    assert_eq!(
-        rt.state.mcp.purposes["mcp-docs"].edit.text,
-        " Specs and notes "
-    );
-    click(&mut rt, "rd-mcp-mcp-docs-purpose-save");
-    assert_eq!(
-        rt.state.sent.last(),
-        Some(&Command::DescribeMcp {
-            bot_id: "default".into(),
-            id: "mcp-docs".into(),
-            purpose: "Specs and notes".into(),
-        })
-    );
-    // A second press while saving sends nothing more.
-    let sent = rt.state.sent.len();
-    click(&mut rt, "rd-mcp-mcp-docs-purpose-save");
-    assert_eq!(rt.state.sent.len(), sent);
-    let mut items = scenes::mcp_connections();
-    items[1].purpose = Some("Specs and notes".into());
-    deliver(
-        &mut rt,
-        Event::McpChanged {
-            bot_id: "default".into(),
-            items,
-        },
-    );
-    assert_eq!(
-        rt.state.mcp.purposes["mcp-docs"].edit.text,
-        "Specs and notes"
-    );
-    assert!(rt.find("rd-mcp-mcp-docs-purpose-save").is_none());
-
-    // Discard puts the saved text back.
-    rt.update(|ui, _| {
-        ui.mcp.purposes.get_mut("mcp-calendar").unwrap().edit = TextEdit::new("Something else");
-    });
-    settle(&mut rt);
-    click(&mut rt, "rd-mcp-mcp-calendar-purpose-discard");
-    assert!(!rt.state.mcp.purposes["mcp-calendar"].is_changed());
-    assert!(rt.find("rd-mcp-mcp-calendar-purpose-save").is_none());
+fn a_connection_shows_what_it_holds_and_asks_nothing_about_its_use() {
+    let rt = render_sized(scenes::settings_mcp, false, (1280.0, 1900.0));
+    let shown = screen_text(&rt);
+    assert!(shown.contains("Calendars, events and free time."));
+    assert!(!shown.contains("is for"), "no field for what it is for");
+    assert!(shown.contains("keeps that in its instructions"));
 }
 
 #[test]
-fn a_purpose_typed_for_a_new_connection_is_sent_with_it() {
-    let mut rt = render_sized(scenes::settings_mcp_empty, false, (1280.0, 1500.0));
-    rt.update(|ui, _| {
-        ui.mcp.name = TextEdit::new("Executor");
-        ui.mcp.address = TextEdit::new("https://executor.example.com/mcp");
-    });
-    settle(&mut rt);
-    click(&mut rt, "rd-mcp-purpose-input");
-    rt.key(KeyEvent {
-        key: Key::Text(" calendar, mail and tickets ".into()),
-        mods: Default::default(),
-    });
-    settle(&mut rt);
-    click(&mut rt, "rd-mcp-connect");
-    let Some(Command::AddMcp { connection, .. }) = rt.state.sent.last() else {
-        panic!("the form is sent");
-    };
-    assert!(matches!(
-        connection,
-        NewMcpConnection::Http { purpose: Some(purpose), .. }
-            if purpose == "calendar, mail and tickets"
-    ));
-    // Added: the form is empty again, and the new connection has its field.
-    deliver(
-        &mut rt,
-        Event::McpAdded {
-            bot_id: "default".into(),
-            items: scenes::mcp_connections(),
-        },
+fn raphies_instructions_for_every_bot_are_shown_read_only_on_you() {
+    let mut rt = render_sized(scenes::settings_owner, false, (1280.0, 2400.0));
+    assert!(screen_text(&rt).contains("Read-only · updated with each release"));
+    assert!(
+        element(&rt, "rd-owner-instructions")
+            .text
+            .as_deref()
+            .is_some_and(|shown| shown.starts_with("## Cards"))
     );
-    assert!(rt.state.mcp.purpose.text.is_empty());
-    assert!(rt.find("rd-mcp-mcp-calendar-purpose-input").is_some());
+    // Nothing on the page edits them, so a save sends only the owner's own.
+    rt.update(|ui, _| ui.owner.about = TextEdit::new("I run a studio."));
+    settle(&mut rt);
+    click(&mut rt, "rd-owner-save");
+    let Some(Command::SaveOwner { owner }) = rt.state.sent.last().cloned() else {
+        panic!("no save was sent");
+    };
+    assert_eq!(owner.about, "I run a studio.");
+}
+
+#[test]
+fn a_bots_own_instructions_are_edited_on_its_profile() {
+    let mut rt = render_sized(scenes::settings_profile, false, (1280.0, 2600.0));
+    assert!(screen_text(&rt).contains("Instructions"));
+    rt.update(|ui, _| ui.profile.instructions = TextEdit::new("Calendar: Executor."));
+    settle(&mut rt);
+    assert!(rt.state.profile.is_dirty());
+    assert_eq!(
+        rt.state.profile.update().unwrap().instructions.as_deref(),
+        Some("Calendar: Executor.")
+    );
 }

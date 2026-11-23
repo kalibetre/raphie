@@ -1884,7 +1884,7 @@ impl Ui {
             return;
         };
         let update = UpdateBotProfile {
-            rules: None,
+            instructions: None,
             name: bot.name.clone(),
             description: bot.description.clone(),
             personality,
@@ -2165,8 +2165,6 @@ impl Ui {
         if browsing {
             self.follow_memories();
         }
-        // Connections already loaded show what each is for at once.
-        self.follow_mcp();
     }
 
     /// Puts `bot_id`'s profile in the form: its unsaved edits if there are
@@ -3662,50 +3660,8 @@ impl Ui {
 
     /// Empties the "Add a connection" form, typed token included.
     pub fn discard_mcp(&mut self) {
-        self.mcp.clear();
+        self.mcp = McpForm::new();
         self.model.mcp_change_error = None;
-    }
-
-    /// Saves what connection `id` is for, as typed in its field.
-    pub fn describe_mcp(&mut self, bot_id: &str, id: &str) {
-        match self.mcp.purpose_to_save(id) {
-            Ok(Some(purpose)) => {
-                self.mcp.error = None;
-                if self.model.begin_change_mcp() {
-                    self.command(Command::DescribeMcp {
-                        bot_id: bot_id.to_owned(),
-                        id: id.to_owned(),
-                        purpose,
-                    });
-                }
-            }
-            Ok(None) => {}
-            Err(problem) => {
-                self.mcp.error = Some(problem);
-                self.model.mcp_message = None;
-            }
-        }
-    }
-
-    /// Puts back what connection `id` is saved as being for.
-    pub fn discard_mcp_purpose(&mut self, id: &str) {
-        if let Some(draft) = self.mcp.purposes.get_mut(id) {
-            draft.discard();
-        }
-        self.mcp.error = None;
-    }
-
-    /// After news from the host: every connection of the bot on the MCP
-    /// tools page has a field for what it is for.
-    fn follow_mcp(&mut self) {
-        if let Screen::Settings(Page::Bot {
-            bot_id,
-            section: BotSection::Mcp,
-        }) = &self.screen
-            && let Some(connections) = self.model.mcp.get(bot_id)
-        {
-            self.mcp.follow(connections);
-        }
     }
 
     /// Opens an MCP server's sign-in page in the owner's browser. The
@@ -4229,7 +4185,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                 Effect::McpAdded => {
                     // Replacing the form drops what was typed, which wipes
                     // the token and the environment.
-                    ui.mcp.clear();
+                    ui.mcp = McpForm::new();
                 }
                 Effect::MemoryChanged(id) => {
                     // The correction was saved or the memory is gone: close
@@ -4262,7 +4218,6 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.follow_memories();
     ui.follow_sandbox();
     ui.follow_owner();
-    ui.follow_mcp();
     ui.follow_skill();
     ui.ensure_models();
     ui.ensure_skills();

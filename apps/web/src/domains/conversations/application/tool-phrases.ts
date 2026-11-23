@@ -18,6 +18,7 @@ const phrases: Record<string, string> = {
   handoff_read: "Checked on handed-off work",
   update_owner_profile: "Updated what I know about you",
   update_personality: "Updated my personality",
+  update_instructions: "Updated my instructions",
   save_rule: "Updated my standing rules",
   workspace_exec: "Ran a command",
   bash: "Ran a command",

@@ -13,10 +13,6 @@ import {
   selfUpdateInstructions,
 } from "../src/domains/bots/domain/owner.ts";
 import { PERSONALITY_PRESETS } from "../src/domains/bots/domain/personalities.ts";
-import {
-  MAX_RULES,
-  rulesInstructions,
-} from "../src/domains/bots/domain/rules.ts";
 import { BotProfileStore } from "../src/domains/bots/infrastructure/bot-profiles.ts";
 import { createSelfTools } from "../src/domains/bots/infrastructure/self-tools.ts";
 import { chatModel } from "./chat-model.ts";
@@ -93,7 +89,7 @@ test("a bot's own edit is a revision marked as its own, and repeating it adds no
 function selfTools(allowed: { personality: boolean; owner: boolean }) {
   let personality = "Be kind.";
   let owner: OwnerProfile = { ...EMPTY_OWNER, name: "Hana Girma" };
-  let rules: string[] = [];
+  let instructions = "";
   const extension = createSelfTools({
     profile: () => ({
       id: "default",
@@ -107,7 +103,7 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
         emoji: false,
       },
       selfUpdates: { ...allowed, skills: false },
-      rules,
+      instructions,
       revision: 1,
       createdAt: 0,
       updatedAt: 0,
@@ -116,13 +112,17 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
       personality = text;
       return { revision: 2 } as never;
     },
-    updateRules: (next) => {
-      rules = next;
+    updateInstructions: (next) => {
+      instructions = next;
       return { revision: 2 } as never;
     },
     owner: () => owner,
     saveOwner: (input) =>
-      (owner = { ...input, rules: input.rules ?? owner.rules, updatedAt: 1 }),
+      (owner = {
+        ...input,
+        everyBotInstructions: owner.everyBotInstructions,
+        updatedAt: 1,
+      }),
   });
   const run = async (name: string, args: Record<string, unknown>) => {
     const tool = extension.tools!.find((t) => t.name === name)!;
@@ -140,7 +140,7 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
     run,
     personality: () => personality,
     owner: () => owner,
-    rules: () => rules,
+    instructions: () => instructions,
   };
 }
 
@@ -201,7 +201,7 @@ test("a bot is told what it may change, and asks lightly for what it does not kn
       callMe: "",
       timeZone: "Africa/Addis_Ababa",
       about: "Runs a studio.",
-      rules: [],
+      everyBotInstructions: "",
       updatedAt: 1,
     },
   );
@@ -209,72 +209,13 @@ test("a bot is told what it may change, and asks lightly for what it does not kn
   expect(known).not.toContain("You do not know");
 });
 
-test("a bot saves, changes and removes standing rules, for itself or for every bot", async () => {
-  const bot = selfTools({ personality: true, owner: true });
-  const calendar = "Use Executor for calendar, mail and tickets.";
-  expect((await bot.run("save_rule", { rule: `- ${calendar}` })).error).toBe(
-    false,
-  );
-  // The same rule again saves nothing new.
-  expect((await bot.run("save_rule", { rule: calendar })).text).toBe(
-    "That rule is already saved.",
-  );
-  expect(bot.rules()).toEqual([calendar]);
-  expect(bot.owner().rules).toEqual([]);
-  const clock = "Give times on a 12-hour clock.";
-  expect(
-    (await bot.run("save_rule", { rule: clock, everyBot: true })).text,
-  ).toContain("Every bot reads it");
-  expect(bot.owner().rules).toEqual([clock]);
-  // Saving a rule keeps the rest of the owner's profile.
-  expect(bot.owner().name).toBe("Hana Girma");
-
-  const cards = "Use Executor for calendar and mail, and answer with a card.";
-  await bot.run("save_rule", { rule: cards, replaces: calendar });
-  expect(bot.rules()).toEqual([cards]);
-  const unknown = await bot.run("save_rule", {
-    rule: "",
-    replaces: "Never use cards.",
-  });
-  expect(unknown.error).toBe(true);
-  expect(unknown.text).toContain(cards);
-  expect((await bot.run("save_rule", { rule: "", replaces: cards })).text).toBe(
-    "Removed. You read the rules without it from the next message.",
-  );
-  expect(bot.rules()).toEqual([]);
-  expect((await bot.run("save_rule", { rule: " " })).error).toBe(true);
-
-  for (let index = 0; index < MAX_RULES; index++)
-    await bot.run("save_rule", { rule: `Rule ${index}.` });
-  expect((await bot.run("save_rule", { rule: "One more." })).error).toBe(true);
-  expect(bot.rules()).toHaveLength(MAX_RULES);
-
-  // A bot that may not change the owner's profile keeps a rule to itself.
-  const own = selfTools({ personality: true, owner: false });
-  const refused = await own.run("save_rule", { rule: clock, everyBot: true });
-  expect(refused.error).toBe(true);
-  expect(refused.text).toContain("without everyBot");
-  expect(own.owner().rules).toEqual([]);
-  const none = selfTools({ personality: false, owner: false });
-  expect((await none.run("save_rule", { rule: clock })).error).toBe(true);
-  expect(none.rules()).toEqual([]);
-});
-
-test("standing rules are read in every conversation, the owner's first", () => {
-  expect(rulesInstructions([], [])).toBe("");
-  const text = rulesInstructions(
-    ["Give times on a 12-hour clock."],
-    ["* Use Executor  for calendar.", "Give times on a 12-hour clock.", " "],
-  );
-  expect(text).toContain("Follow each one in every conversation");
-  expect(text).toEndWith(
-    "- Give times on a 12-hour clock.\n- Use Executor for calendar.\n",
-  );
+test("a bot is told to keep what the owner says to do every time in its instructions", () => {
   const told = selfUpdateInstructions(
     { personality: true, owner: false, skills: false },
     EMPTY_OWNER,
   );
-  expect(told).toContain("save_rule");
+  expect(told).toContain("update_instructions");
+  expect(told).toContain('"from now on"');
   expect(told).not.toContain("everyBot");
   expect(
     selfUpdateInstructions(

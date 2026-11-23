@@ -1,8 +1,9 @@
-import type { SaveOwnerProfile } from "@raphie/contracts";
+import type { OwnerProfile } from "@raphie/contracts";
 import { useMemo, useState } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
+import { ScrollArea } from "../../../shared/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -11,30 +12,21 @@ import {
   SelectValue,
 } from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
-import {
-  rulesOf,
-  rulesProblem,
-  rulesText,
-  sameRules,
-} from "../application/rules";
 import { useOwner } from "../infrastructure/use-owner";
-import { RulesField } from "./rules-field";
 import { SaveBar } from "./save-bar";
 import { useSettingsGuard } from "./use-settings-guard";
 
 const NOT_SET = "none";
 
-type Draft = Omit<SaveOwnerProfile, "rules"> & {
-  /** The rules as they are edited, one a line. */
-  rules: string;
-};
+type Saved = Omit<OwnerProfile, "updatedAt">;
+
+type Draft = Omit<Saved, "everyBotInstructions">;
 
 const same = (a: Draft, b: Draft) =>
   a.name === b.name &&
   a.callMe === b.callMe &&
   a.timeZone === b.timeZone &&
-  a.about === b.about &&
-  sameRules(rulesOf(a.rules), rulesOf(b.rules));
+  a.about === b.about;
 
 /** This device's time zone, offered when the owner has not chosen one. */
 const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -67,14 +59,13 @@ function OwnerForm({
   message,
   onMessage,
 }: {
-  saved: SaveOwnerProfile;
+  saved: Saved;
   message: string;
   onMessage: (message: string) => void;
 }) {
   const owner = useOwner();
-  const start: Draft = { ...saved, rules: rulesText(saved.rules ?? []) };
+  const { everyBotInstructions, ...start } = saved;
   const [draft, setDraft] = useState<Draft>(start);
-  const problem = rulesProblem(rulesOf(draft.rules));
   const setMessage = onMessage;
   const zones = useMemo(() => Intl.supportedValuesOf("timeZone"), []);
   const dirty = !same(draft, start);
@@ -94,7 +85,6 @@ function OwnerForm({
         callMe: draft.callMe.trim(),
         timeZone: draft.timeZone,
         about: draft.about.trim(),
-        rules: rulesOf(draft.rules),
       });
       setMessage("Saved. Every bot uses it from its next reply.");
     } catch {
@@ -202,17 +192,30 @@ function OwnerForm({
           </p>
         </div>
       </section>
-      <RulesField
-        id="owner-rules"
-        title="Rules for every bot"
-        note="What you want done every time, whichever bot you are talking to. Each bot reads these in every conversation, before its own rules."
-        placeholder={
-          "Give times on a 12-hour clock, in my time zone.\nLeave all-day events out of my schedule."
-        }
-        value={draft.rules}
-        pending={pending}
-        onChange={(rules) => set({ rules })}
-      />
+      <section
+        className="bot-editor-section"
+        aria-label="Instructions for every bot"
+      >
+        <h2>Instructions for every bot</h2>
+        <p>
+          How every bot works with the tools Raphie gives them all, such as
+          cards and questions. Every bot follows these in every conversation,
+          before its own instructions. They come with Raphie and change as tools
+          are added; what you want of one bot goes in its own instructions, on
+          its Profile.
+        </p>
+        <div className="personality-editor">
+          <div className="personality-editor-heading">
+            <span>Read-only · updated with each release</span>
+          </div>
+          <ScrollArea
+            className="every-bot-instructions-scroll"
+            viewportLabel="Raphie’s instructions for every bot"
+          >
+            <div className="every-bot-instructions">{everyBotInstructions}</div>
+          </ScrollArea>
+        </div>
+      </section>
       <SaveBar
         visible={dirty || pending || !!message || owner.save.isError}
         status={guard.message || message || (dirty ? "Unsaved changes" : "")}
@@ -220,7 +223,7 @@ function OwnerForm({
           owner.save.error instanceof Error ? owner.save.error.message : ""
         }
         pending={pending}
-        canSave={dirty && !pending && !problem}
+        canSave={dirty && !pending}
         canDiscard={dirty && !pending}
         onDiscard={() => {
           setDraft(start);

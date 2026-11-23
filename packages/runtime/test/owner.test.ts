@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
+import { EVERY_BOT_INSTRUCTIONS } from "../src/domains/bots/domain/instructions.ts";
 import {
   localTime,
   ownerInstructions,
@@ -47,7 +48,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       callMe: "",
       timeZone: "",
       about: "",
-      rules: [],
+      everyBotInstructions: EVERY_BOT_INSTRUCTIONS,
       updatedAt: null,
     });
     const owner = {
@@ -62,16 +63,15 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
     expect(
       (await call("PUT", { ...owner, about: "x".repeat(2001) })).status,
     ).toBe(400);
-    const clock = "Give times on a 12-hour clock.";
+    // Raphie's instructions for every bot, and rules, cannot be sent.
     expect(
-      (await call("PUT", { ...owner, rules: [` ${clock}`, clock] })).status,
-    ).toBe(200);
-    expect(
-      (await call("PUT", { ...owner, rules: ["x".repeat(301)] })).status,
+      (await call("PUT", { ...owner, instructions: "Boards by status." }))
+        .status,
     ).toBe(400);
-    // A client older than rules saves the profile without them, and they stay.
+    expect((await call("PUT", { ...owner, rules: ["Be brief."] })).status).toBe(
+      400,
+    );
     expect((await call("PUT", owner)).status).toBe(200);
-    expect(await (await call("GET")).json()).toMatchObject({ rules: [clock] });
 
     await server.close();
     await host.close();
@@ -86,7 +86,7 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       name: "Research",
       description: "",
       personality: "Cite sources.",
-      rules: ["Link every source."],
+      instructions: "My calendar is in Executor.\n- Link every source.",
     });
     for (const id of ["default", second.id]) {
       const { gateway } = host.runtime(id);
@@ -111,14 +111,18 @@ test("the owner's profile is shared by every bot, survives a restart and reaches
       true,
     );
     expect(told[0]).toContain("Mornings are for deep work.");
-    // Every bot reads the owner's rules; a bot's own rules stay with it.
-    expect(told.every((p) => p.includes(`- ${clock}`))).toBe(true);
+    // A bot's own instructions stay with it.
     expect(told.filter((p) => p.includes("- Link every source."))).toHaveLength(
       1,
     );
     expect(told.find((p) => p.includes("- Link every source."))).toContain(
       "Cite sources.",
     );
+    // Every bot reads Raphie's instructions; a bot's own stay with it.
+    expect(told.every((p) => p.includes("call show_card"))).toBe(true);
+    expect(
+      told.filter((p) => p.includes("My calendar is in Executor.")),
+    ).toHaveLength(1);
     // Each message says when it was sent on the owner's clock too.
     expect(messages.at(-1)).toMatch(/in Africa\/Addis_Ababa\]/);
   } finally {
@@ -136,7 +140,7 @@ test("an owner who says nothing is not described, and times read like a clock", 
       callMe: "",
       timeZone: "",
       about: "",
-      rules: [],
+      everyBotInstructions: "",
       updatedAt: null,
     }),
   ).toBe("");

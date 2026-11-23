@@ -58,7 +58,7 @@ test("an owner note holds only while the profile is as the bot saved it", () => 
     callMe: "Hana",
     timeZone: "Africa/Addis_Ababa",
     about: "",
-    rules: [],
+    everyBotInstructions: "",
     updatedAt: 10_300,
   };
   expect(ownerSaved(owner, note!)).toBe(true);

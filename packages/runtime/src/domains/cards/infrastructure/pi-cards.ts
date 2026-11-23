@@ -1,11 +1,7 @@
 import type { Context } from "@earendil-works/chord/context";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
-import {
-  defineExtension,
-  defineTool,
-  section,
-} from "@earendil-works/pi-durable";
+import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import {
   arr,
   bool,
@@ -200,12 +196,6 @@ export function createCardTools(
 ) {
   return defineExtension({
     name: "raphie.cards",
-    sections: [
-      section("cards", ({ agent }) => {
-        if (!agent.tools.some((tool) => tool.name === "show_card")) return;
-        return "When your answer is a set of items the owner will scan, such as a day's events, open tickets, pull requests waiting for review or the tasks on a board, or is one task opened up, call show_card with them instead of writing a list or table, then reply in one or two sentences with what matters most. Items that sit in columns or statuses, such as a project board or tickets by status, are a board, not a list. If show_card refuses a card, correct it and call it again with the same items; do not fall back to a list in your reply. Read every account or service that holds part of the answer and show them in one card, each item naming its source; when one could not be read, say so in the card's warning. Use a card only for items you read with a tool in this turn.";
-      }),
-    ],
     tools: [
       defineTool({
         name: "show_card",

@@ -2,8 +2,6 @@ export type McpTransport = "http" | "stdio";
 
 export type SaveMcpConnection = {
   name: string;
-  /** What the bot should use it for, in the owner's words. */
-  purpose?: string;
   transport: McpTransport;
   url?: string;
   token?: string;
@@ -16,11 +14,6 @@ export type BotMcpConnection = {
   source?: "environment" | "saved";
   id: string;
   name: string;
-  /**
-   * What the bot should use it for, in the owner's words: the bot reads it
-   * in every conversation, beside the connection's name.
-   */
-  purpose?: string;
   /**
    * One line on what the service is: the apps a gateway such as Executor
    * holds, else what it says about itself, when it says anything.

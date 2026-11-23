@@ -211,7 +211,8 @@
   .personality-editor-heading {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    /* Only the revision, at the end of the bar. */
+    justify-content: flex-end;
     gap: 10px;
     padding: 11px 14px;
     background: var(--muted);
@@ -419,6 +420,31 @@
     display: block;
     margin-top: 2px;
     font-size: 11.5px;
+    color: var(--muted-foreground);
+  }
+}
+@layer components {
+  /* An instructions field's count, with a reset beside it when there is one. */
+  .instructions-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 12px;
+  }
+}
+@layer components {
+  /* Raphie's instructions for every bot: read, not edited, in the editor's frame. */
+  .every-bot-instructions-scroll {
+    max-height: 360px;
+  }
+  .every-bot-instructions {
+    padding: 16px;
+    background: var(--card);
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     color: var(--muted-foreground);
   }
 }
