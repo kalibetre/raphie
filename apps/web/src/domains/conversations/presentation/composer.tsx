@@ -396,15 +396,9 @@ export function Composer({
           Uploading to workspace…
         </p>
       )}
-      {(needsModel || busy) && (
-        <p
-          className="composer-hint"
-          data-warning={needsModel || undefined}
-          role={needsModel ? "status" : undefined}
-        >
-          {needsModel
-            ? "Connect a model in Settings to start chatting."
-            : "Raphie is working. You can leave and come back."}
+      {needsModel && (
+        <p className="composer-hint" data-warning role="status">
+          Connect a model in Settings to start chatting.
         </p>
       )}
     </div>

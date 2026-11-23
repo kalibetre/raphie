@@ -238,18 +238,6 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
                 .mt(8.0),
         );
     }
-    if busy {
-        wrap = wrap.child(
-            centered(
-                "Raphie is working. You can leave and come back.",
-                font(11.5, 400.0),
-                t.faint,
-            )
-            .key("rd-composer-hint")
-            .w_full()
-            .mt(8.0),
-        );
-    }
     col()
         .key("rd-composer-area")
         .w_full()
