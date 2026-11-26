@@ -36,7 +36,7 @@ use crate::contracts::{
 };
 use crate::contracts::{ActivityEvent, TelemetryBody, TraceDiagnostics};
 use crate::contracts::{AnswerSignInBody, ProviderSignIn, StartSignInBody};
-use crate::contracts::{ApprovalMode, ApprovalModeBody, ArchiveBody};
+use crate::contracts::{ApprovalMode, ApprovalModeBody};
 use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
 use crate::contracts::{OwnerProfile, SaveOwnerProfile};
@@ -964,12 +964,6 @@ impl ApiClient {
         self.get_json(&path).await
     }
 
-    /// The bot's archived sessions, most recent first. The plain list
-    /// leaves them out.
-    pub async fn archived_sessions(&self, bot_id: &str) -> Result<Page<SessionSummary>, ApiError> {
-        self.get_json(&archived_sessions_path(bot_id)).await
-    }
-
     pub async fn session(
         &self,
         bot_id: &str,
@@ -1080,20 +1074,6 @@ impl ApiClient {
         // The answer repeats the model sent; only success matters.
         let _: serde_json::Value = self.post_json(&path, model).await?;
         Ok(())
-    }
-
-    /// Archives a session (`archived: true`) or brings it back, and
-    /// returns whether it is archived now.
-    pub async fn archive(
-        &self,
-        bot_id: &str,
-        session_id: &str,
-        archived: bool,
-    ) -> Result<bool, ApiError> {
-        let answer: ArchiveBody = self
-            .post_json(&archive_path(bot_id, session_id), &ArchiveBody { archived })
-            .await?;
-        Ok(answer.archived)
     }
 
     /// A bot's job runs the owner has not dismissed.
@@ -1243,17 +1223,6 @@ impl ApiClient {
     }
 }
 
-fn archived_sessions_path(bot_id: &str) -> String {
-    bot_path(bot_id, "/api/sessions?archived=1&limit=100")
-}
-
-fn archive_path(bot_id: &str, session_id: &str) -> String {
-    bot_path(
-        bot_id,
-        &format!("/api/sessions/{}/archive", encode(session_id)),
-    )
-}
-
 fn approval_mode_path(bot_id: &str, session_id: &str) -> String {
     bot_path(
         bot_id,
@@ -1334,30 +1303,6 @@ mod tests {
         assert_eq!(
             bot_path("b1 2", "/api/sessions/x/events"),
             "/api/bots/b1%202/sessions/x/events"
-        );
-    }
-
-    #[test]
-    fn archiving_has_its_own_route_and_list() {
-        assert_eq!(
-            archive_path("default", "s 1"),
-            "/api/sessions/s%201/archive"
-        );
-        assert_eq!(
-            archive_path("b1", "s-1"),
-            "/api/bots/b1/sessions/s-1/archive"
-        );
-        assert_eq!(
-            archived_sessions_path("default"),
-            "/api/sessions?archived=1&limit=100"
-        );
-        assert_eq!(
-            archived_sessions_path("b1"),
-            "/api/bots/b1/sessions?archived=1&limit=100"
-        );
-        assert_eq!(
-            serde_json::to_value(ArchiveBody { archived: false }).unwrap(),
-            serde_json::json!({ "archived": false })
         );
     }
 

@@ -710,6 +710,7 @@ impl Ui {
 
     pub fn select_bot(&mut self, bot_id: &str) {
         self.quoting = None;
+        self.reveal = None;
         self.inbox_open = false;
         // A model chosen for one bot's new conversation is not another's.
         self.new_model = None;
@@ -777,8 +778,10 @@ impl Ui {
     }
 
     pub fn select_session(&mut self, session_id: Option<&str>) {
-        // A quote belongs to the session it was taken from.
+        // A quote, and a message to bring into view, belong to the session
+        // they were taken from.
         self.quoting = None;
+        self.reveal = None;
         // In a narrow window the conversation takes the roster's place.
         self.narrow_home = false;
         self.inbox_open = false;

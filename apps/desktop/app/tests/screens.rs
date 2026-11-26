@@ -2750,6 +2750,9 @@ fn run_history_pages_filters_by_job_and_refreshes() {
         })
     );
     assert_eq!(rt.state.reveal.as_deref(), Some("t-311"));
+    // Going elsewhere before it loads forgets it.
+    rt.update(|ui, _| ui.go_to_chat());
+    assert_eq!(rt.state.reveal, None);
 }
 
 #[test]
