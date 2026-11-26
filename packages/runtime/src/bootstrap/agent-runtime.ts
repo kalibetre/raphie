@@ -225,19 +225,7 @@ export class Gateway {
       root: () => this.root,
       submit: (input) =>
         this.sessions.submitWork(this.actors.establish("web"), input),
-      turn: async (turnId) => {
-        const turn = (await this.chats.state()).turns.find(
-          (t) => t.id === turnId,
-        );
-        return (
-          turn && {
-            status: turn.status,
-            answer: turn.answer,
-            ...(turn.cancelled ? { cancelled: true } : {}),
-            ...(turn.failure ? { failure: turn.failure } : {}),
-          }
-        );
-      },
+      turn: (turnId) => this.chats.turn(turnId),
       stop: (sessionId) => this.chats.control(sessionId, "stop"),
     });
     this.work.runs = this.workRuns;

@@ -43,7 +43,8 @@ export function workLine(item: WorkItem) {
   const last = item.result
     ? `; last: ${clip(item.result.text.replace(/\s+/g, " "), 100)} (${day(item.result.at)})`
     : "";
-  return `${item.id} ${flat(item.title)}: ${where}${last}`;
+  const running = item.run ? "; working on it in the background" : "";
+  return `${item.id} ${flat(item.title)}: ${where}${running}${last}`;
 }
 
 /**

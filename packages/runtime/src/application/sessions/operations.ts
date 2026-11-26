@@ -187,7 +187,6 @@ export class Sessions implements SessionOperations {
     return { id: receipt.id, sessionId: receipt.sessionId };
   }
 
-  /** Internal: a due scheduled job, marked so clients show it as scheduled. */
   /** A work item's brief to its own session, or its result to the chat. */
   async submitWork(
     actor: ActorContext,
@@ -207,6 +206,7 @@ export class Sessions implements SessionOperations {
     return { id: receipt.id, sessionId: receipt.sessionId };
   }
 
+  /** Internal: a due scheduled job, marked so clients show it as scheduled. */
   async submitScheduled(
     actor: ActorContext,
     input: {

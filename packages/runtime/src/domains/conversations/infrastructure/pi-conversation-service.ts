@@ -477,7 +477,9 @@ export class ChatService implements ConversationCommands {
         );
       const violation = messageViolation(
         input,
-        input.handoff?.kind === "result" || input.work?.kind === "result"
+        // A work brief or result is the bot's own writing, as long as a
+        // handoff's result may be.
+        input.handoff?.kind === "result" || input.work
           ? HANDOFF_RESULT_MAX_LENGTH
           : undefined,
       );
@@ -725,6 +727,9 @@ export class ChatService implements ConversationCommands {
         const destination =
           replyTo ??
           (asked &&
+          // A work result is the owner's private work: it never follows
+          // them to a place others read, such as a server thread.
+          (!input.work || isPrivateDestination(asked)) &&
           bindings.find((b) => sameDestination(b, asked))?.sessionId ===
             conversation.sessionId
             ? { ...asked }
@@ -826,7 +831,8 @@ export class ChatService implements ConversationCommands {
                 // The owner's open work goes with the chat's messages only,
                 // and only when the reply stays private: a scheduled run
                 // whose home is a group is the chat, but answers the group.
-                conversation.chat && (!replyTo || isPrivateDestination(replyTo))
+                conversation.chat &&
+                  (!destination || isPrivateDestination(destination))
                   ? openWorkContext((await tx.doc(WorkItems)).items)
                   : "",
               ) +

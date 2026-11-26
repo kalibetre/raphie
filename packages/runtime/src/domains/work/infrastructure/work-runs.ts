@@ -1,3 +1,5 @@
+import type { Context } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import {
   type ConversationId,
   defineExtension,
@@ -7,6 +9,7 @@ import {
 import type { TurnFailure, TurnWork, WorkItem } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
+import { HANDOFF_RESULT_MAX_LENGTH } from "../../conversations/domain/admission.ts";
 import { clip, isOpen, LIMITS } from "../domain/work-item.ts";
 import { WorkItems } from "./work-store.ts";
 
@@ -20,7 +23,10 @@ export type RunTurn = {
 
 type Options = {
   /** The bot's root conversation, which owns the runs' tasks. */
-  root: () => { id: ConversationId };
+  root: () => {
+    id: ConversationId;
+    commit: <T>(change: (tx: Tx) => Promise<T>, ctx: Context) => Promise<T>;
+  };
   /** Sends a brief to an item's session, or a result to the chat. */
   submit: (input: {
     eventId: string;
@@ -48,11 +54,25 @@ const MAX_ATTEMPTS = 4;
 const retryable = (error: unknown) =>
   !(error instanceof InputError) || error.status >= 500;
 
-/** What a run says it came to, for the chat to read as data. */
-function outcomeText(outcome: Outcome, answer: string | null, why?: string) {
-  if (outcome === "completed") return answer ?? "";
-  if (outcome === "cancelled") return "The run was cancelled.";
-  return `The run failed${why ? `: ${why}` : "."}`;
+/**
+ * What a run says it came to, for the chat to read as data, cut to what a
+ * result can hold with a note saying so.
+ */
+export function outcomeText(
+  outcome: Outcome,
+  answer: string | null,
+  why?: string,
+) {
+  const text =
+    outcome === "completed"
+      ? (answer ?? "")
+      : outcome === "cancelled"
+        ? "The run was cancelled."
+        : `The run failed${why ? `: ${why}` : "."}`;
+  if (text.length <= HANDOFF_RESULT_MAX_LENGTH) return text;
+  const note =
+    "\n\n[The reply was cut here: it was longer than a result can hold. The full reply is in the item's session.]";
+  return text.slice(0, HANDOFF_RESULT_MAX_LENGTH - note.length) + note;
 }
 
 /**
@@ -100,7 +120,10 @@ export class WorkRuns {
     return JSON.parse(JSON.stringify(item)) as WorkItem;
   }
 
-  /** Stops an item's running turn; the run then reports it as cancelled. */
+  /**
+   * Stops an item's running turn; the run then reports it as cancelled. A
+   * run whose turn already ended without reporting is let go of.
+   */
   async cancel(item: WorkItem | undefined) {
     if (!item) throw new InputError("Work item not found.", 404);
     if (!item.run) throw new InputError(`${item.id} has nothing running.`, 409);
@@ -109,7 +132,17 @@ export class WorkRuns {
         `${item.id} is still starting. Try again in a moment.`,
         409,
       );
-    await this.options.stop(item.sessionId);
+    const turn = await this.options.turn(item.run.turnId);
+    if (turn?.status === "pending") {
+      await this.options.stop(item.sessionId);
+      return;
+    }
+    await this.options.root().commit(async (tx) => {
+      const stored = (await tx.doc(WorkItems)).items.find(
+        (i) => i.id === item.id,
+      );
+      if (stored?.run?.turnId === item.run?.turnId) delete stored?.run;
+    }, context);
   }
 
   private createTask() {
@@ -141,8 +174,15 @@ export class WorkRuns {
           const item = (await runtime.snapshot(WorkItems, ctx))?.items.find(
             (i) => i.id === itemId,
           );
-          if (!item?.run) {
-            await runtime.commit(() => finish, ctx);
+          // Closed before its brief went out: nothing is sent.
+          if (!item?.run || !isOpen(item.status)) {
+            await runtime.commit(async (tx) => {
+              const stored = (await tx.doc(WorkItems)).items.find(
+                (i) => i.id === itemId,
+              );
+              if (stored) delete stored.run;
+              return finish;
+            }, ctx);
             return;
           }
           try {

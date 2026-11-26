@@ -319,8 +319,8 @@ export function createWorkTools(runs: WorkRuns) {
           result: opt(result),
         }),
         replay: "safe",
-        execute: (args, api, ctx) =>
-          mutate(api, ctx, async (tx) => {
+        execute: async (args, api, ctx) => {
+          const result = await mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
             const item = await changeWorkItem(
               tx,
@@ -331,7 +331,15 @@ export function createWorkTools(runs: WorkRuns) {
             );
             if (typeof item === "string") return { error: item };
             return JSON.stringify({ closed: true, item: workLine(item) });
-          }),
+          });
+          // Closing a running item stops its work, as on the Work page.
+          const item = (await api.snapshot(WorkItems, ctx))?.items.find(
+            (each) => each.id === args.id.trim(),
+          );
+          if (item && !isOpen(item.status) && item.run?.turnId)
+            await runs.cancel(item).catch(() => {});
+          return result;
+        },
       }),
       defineTool({
         name: "work_start",

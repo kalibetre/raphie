@@ -436,7 +436,17 @@ export class BotHost implements BotProfiles {
         root: gateway.root,
         harness: gateway.harness,
         install: (extension) => gateway.install(extension),
-        busy,
+        // A work item's background run is not the bot being busy: a due
+        // job still posts in the chat while it runs.
+        busy: async () => {
+          const { conversations, turns } = await gateway.chats.state();
+          const background = new Set(
+            conversations.filter((c) => c.work).map((c) => c.id),
+          );
+          return turns.some(
+            (t) => t.status === "pending" && !background.has(t.conversationId),
+          );
+        },
         submit: (input) => gateway.sessions.submitScheduled(actor, input),
       });
       const connections = mcp;

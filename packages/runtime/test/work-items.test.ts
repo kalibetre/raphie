@@ -11,10 +11,14 @@ import type { WorkItem } from "@raphie/contracts";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { Activity } from "../src/domains/activity/infrastructure/pi-activity-journal.ts";
+import { ChannelBindings } from "../src/domains/channels/infrastructure/pi-bindings.ts";
+import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
 import {
   MAX_LISTED,
   openWorkContext,
 } from "../src/domains/work/domain/work-item.ts";
+import { outcomeText } from "../src/domains/work/infrastructure/work-runs.ts";
+import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
 import { workRoutes } from "../src/domains/work/presentation/http/routes.ts";
 import { InputError } from "../src/shared/application/input-error.ts";
 import { chatModel } from "./chat-model.ts";
@@ -482,6 +486,140 @@ test("the owner cancels background work, and closing an item mid-run keeps its r
     assert.match((await app.work.get("w-1"))!.result!.text, /cancelled/);
   } finally {
     release.resolve();
+    await done();
+  }
+}, 30_000);
+
+test("a long result is cut to what the chat can hold, with a note", () => {
+  const text = outcomeText("completed", "x".repeat(40_000));
+  assert.ok(text.length <= 32_000);
+  assert.match(text, /The reply was cut here/);
+  assert.equal(outcomeText("completed", "Short."), "Short.");
+});
+
+test("a long brief runs, and the bot closing a running item stops it quietly", async () => {
+  const release = Promise.withResolvers<void>();
+  const { app, say, done } = await bot(
+    {
+      open: { name: "work_open", args: { title: "Long draft" } },
+      start: {
+        name: "work_start",
+        args: {
+          id: "w-1",
+          brief: `Draft the report. ${"Detail. ".repeat(700)}`,
+        },
+      },
+      drop: {
+        name: "work_close",
+        args: { id: "w-1", outcome: "dropped" },
+      },
+    },
+    { pauseOn: { text: "Draft the report", until: release.promise } },
+  );
+  const ask = async (text: string) => {
+    const sent = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: crypto.randomUUID(),
+      text,
+    });
+    await until(async () =>
+      (await app.chats.state()).turns.some(
+        (t) => t.id === sent.id && t.status !== "pending",
+      ),
+    );
+  };
+  try {
+    await say("open an item");
+    await ask("start it");
+    // Over 4,000 characters, the brief is still delivered.
+    await until(async () => !!(await app.work.get("w-1"))?.run?.turnId);
+    const { turns } = await app.chats.state();
+    assert.ok(
+      turns.some((t) => t.work?.kind === "brief" && t.text.length > 4_000),
+    );
+    // The bot drops it mid-run: the run stops, and the chat hears nothing.
+    await ask("drop it");
+    await until(async () => !(await app.work.get("w-1"))?.run);
+    assert.equal((await app.work.get("w-1"))?.status, "dropped");
+    assert.ok(
+      !(await app.chats.state()).turns.some((t) => t.work?.kind === "result"),
+    );
+  } finally {
+    release.resolve();
+    await done();
+  }
+}, 30_000);
+
+test("a work result never follows the owner to a server thread", async () => {
+  const release = Promise.withResolvers<void>();
+  const { app, say, done } = await bot(runCalls, {
+    pauseOn: { text: "Find three venues", until: release.promise },
+  });
+  try {
+    await say("open an item");
+    const sent = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "start",
+      text: "start it",
+    });
+    await until(async () => !!(await app.work.get("w-1"))?.run?.turnId);
+    // While it runs, the owner's last message came from a Discord server
+    // thread bound to the chat, as a chat migrated from before chats can be.
+    const thread = {
+      provider: "discord" as const,
+      connectionId: "discord-app",
+      owner: "owner" as const,
+      conversation: "discord:guild:channel:one",
+    };
+    await app.root.commit(async (tx) => {
+      const state = await tx.doc(Chats);
+      const chat = state.conversations.find((c) => c.chat)!;
+      (await tx.doc(ChannelBindings)).bindings.push({
+        ...thread,
+        sessionId: chat.sessionId,
+      });
+      state.turns.find((t) => t.id === sent.id)!.replyTo = { ...thread };
+    }, context);
+    release.resolve();
+    await until(async () => !(await app.work.get("w-1"))?.run);
+    const { turns, deliveries } = await app.chats.state();
+    const result = turns.find((t) => t.work?.kind === "result")!;
+    assert.equal(result.replyTo ?? null, null);
+    assert.ok(!deliveries.some((d) => d.turnId === result.id));
+  } finally {
+    release.resolve();
+    await done();
+  }
+}, 30_000);
+
+test("an item's session never counts as unread, and Cancel lets go of a stuck run", async () => {
+  const { app, say, done } = await bot(runCalls);
+  try {
+    await say("open an item");
+    await say("start it");
+    await until(async () => !(await app.work.get("w-1"))?.run);
+    const item = (await app.work.get("w-1"))!;
+    const summary = (
+      await app.queries.sessions(app.actors.establish("web"))
+    ).items.find((s) => s.sessionId === item.sessionId)!;
+    assert.ok((summary.replyCount ?? 0) > 0);
+    assert.equal(summary.readReplyCount, summary.replyCount);
+
+    // A run left over on a turn that already ended.
+    const ended = (await app.chats.state()).turns.find(
+      (t) => t.work?.kind === "brief",
+    )!;
+    await app.root.commit(async (tx) => {
+      const stored = (await tx.doc(WorkItems)).items.find(
+        (i) => i.id === "w-1",
+      )!;
+      stored.run = { startedAt: Date.now(), turnId: ended.id };
+    }, context);
+    await app.work.cancel("w-1");
+    assert.equal((await app.work.get("w-1"))?.run, undefined);
+  } finally {
     await done();
   }
 }, 30_000);

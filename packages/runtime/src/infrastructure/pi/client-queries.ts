@@ -146,7 +146,12 @@ export class PiClientQueries implements ClientQueries {
           replyCount: turns.filter(
             (t) => t.status === "done" && t.answer !== null,
           ).length,
-          readReplyCount: c.readReplyCount ?? 0,
+          // A work item's session is never read directly: its replies come
+          // back to the chat, so none of them is new.
+          readReplyCount: c.work
+            ? turns.filter((t) => t.status === "done" && t.answer !== null)
+                .length
+            : (c.readReplyCount ?? 0),
           ...(c.handedOffBy ? { handedOffBy: { ...c.handedOffBy } } : {}),
           ...(c.chat ? { chat: true as const } : {}),
           replyPreview:
@@ -368,7 +373,14 @@ export class PiClientQueries implements ClientQueries {
             t.status === "done" &&
             t.answer !== null,
         ).length,
-        readReplyCount: session.readReplyCount ?? 0,
+        readReplyCount: session.work
+          ? chats.turns.filter(
+              (t) =>
+                t.conversationId === session.id &&
+                t.status === "done" &&
+                t.answer !== null,
+            ).length
+          : (session.readReplyCount ?? 0),
         ...(session.handedOffBy
           ? { handedOffBy: { ...session.handedOffBy } }
           : {}),
