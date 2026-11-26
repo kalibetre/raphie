@@ -55,6 +55,7 @@ import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.
 import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
 import { chatFromHistory } from "../domains/conversations/domain/chat.ts";
 import { compactionPolicy } from "../domains/conversations/domain/compaction.ts";
+import { removeHistory } from "../domains/conversations/infrastructure/history-removal.ts";
 import {
   Chats,
   ChatService,
@@ -82,7 +83,10 @@ import { RuntimeWorkspace } from "../domains/workspaces/infrastructure/runtime-w
 import { createWorkspaceTools } from "../domains/workspaces/infrastructure/workspace-tools.ts";
 import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
 import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
-import { openBunSqliteStorage } from "../infrastructure/storage/bun-sqlite.ts";
+import {
+  backupSqlite,
+  openBunSqliteStorage,
+} from "../infrastructure/storage/bun-sqlite.ts";
 import { appDataIdentity } from "../infrastructure/workspace/app-data.ts";
 import {
   noTelemetry,
@@ -464,6 +468,21 @@ export class Gateway {
       for (const delivery of [...toolApprovals.deliveries, ...asks.deliveries])
         if (delivery.status === "sending") delivery.status = "uncertain";
     }, context);
+    // Sessions from before chats go, after a copy of the bot's storage.
+    const database = join(options.directory, "gateway.sqlite");
+    await removeHistory(
+      app,
+      () =>
+        backupSqlite(
+          database,
+          join(
+            options.directory,
+            "backups",
+            `before-one-chat-${Date.now()}.sqlite`,
+          ),
+        ),
+      context,
+    );
     for (const conversation of (await app.chats.state()).conversations)
       await app.observations.attach(conversation.id);
     if (!options.deferResume) app.harness.resume();

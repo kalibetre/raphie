@@ -120,14 +120,12 @@ test("session models survive defaults, retries, migration and reopen without cro
     app = await Gateway.open({ directory, ...config, model: alternate });
     http = await startServer(app, { port: 0 });
     const sessions = (await app.chats.state()).conversations;
-    assert.equal(
-      sessions.find((s) => s.sessionId === first.sessionId)?.model?.modelId,
-      "alternate",
+    // Only the chat outlives the restart; the sessions before it are removed.
+    assert.deepEqual(
+      sessions.map((s) => s.sessionId),
+      [third.sessionId],
     );
-    assert.equal(
-      sessions.find((s) => s.sessionId === second.sessionId)?.model?.modelId,
-      "alternate",
-    );
+    assert.ok(second.sessionId !== third.sessionId);
     assert.equal(
       sessions.find((s) => s.sessionId === third.sessionId)?.model?.modelId,
       "history",

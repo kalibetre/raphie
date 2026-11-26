@@ -32,11 +32,11 @@ export function chatFromHistory(
 }
 
 /**
- * Whether the owner may still write in a session: the chat, a group's or a
- * server channel's, or a task another bot handed off. Any other session is
- * from before chats and is kept as history.
+ * Whether a session belongs beside the bot's one chat: the chat itself, a
+ * group's or a server channel's, or a task another bot handed off. Any other
+ * is from before chats.
  */
-export function ownerCanWrite(
+export function isKept(
   conversation: ChatConversation,
   bindings: readonly ChannelBinding[],
 ) {
@@ -46,5 +46,28 @@ export function ownerCanWrite(
     bindings.some(
       (b) => b.sessionId === conversation.sessionId && !isPrivateDestination(b),
     )
+  );
+}
+
+/**
+ * The sessions to remove: every one from before chats, so only the chat,
+ * groups', server channels' and handed-off sessions stay.
+ * One with a turn still running, or named in `busy`, waits for a later
+ * start.
+ */
+export function historyToRemove(
+  conversations: readonly ChatConversation[],
+  turns: readonly ChatTurn[],
+  bindings: readonly ChannelBinding[],
+  busy: ReadonlySet<string> = new Set(),
+) {
+  return conversations.filter(
+    (conversation) =>
+      !isKept(conversation, bindings) &&
+      !busy.has(conversation.sessionId) &&
+      !turns.some(
+        (turn) =>
+          turn.conversationId === conversation.id && turn.status === "pending",
+      ),
   );
 }

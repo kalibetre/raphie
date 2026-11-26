@@ -40,7 +40,6 @@ export type ScheduledJob = SaveScheduledJob & {
   id: string;
   enabled: boolean;
   nextRunAt: number;
-  sessionId: string | null;
   lastRunAt: number | null;
   lastStatus: "submitted" | "failed" | null;
   lastRun?: ScheduledJobRun;

@@ -58,7 +58,7 @@ async function open(
   return { gateway, jobs, offered, actor };
 }
 
-test("agent reminder saves without approval, survives restart and replies once in the originating conversation", async () => {
+test("agent reminder saves without approval, survives restart and replies once in the chat", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-reminder-"));
   let app = await open(directory);
   try {
@@ -77,8 +77,6 @@ test("agent reminder saves without approval, survives restart and replies once i
       '"saved":true',
     );
     expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
-    const [job] = await app.jobs.read();
-    expect(job.sessionId).toBe(receipt.sessionId);
     await app.gateway.close();
     app = await open(directory);
     await until(

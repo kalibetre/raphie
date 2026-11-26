@@ -61,7 +61,6 @@ import {
   HANDOFF_RESULT_MAX_LENGTH,
   messageViolation,
 } from "../domain/admission.ts";
-import { ownerCanWrite } from "../domain/chat.ts";
 import {
   EMPTY_REPLY,
   INTERRUPTED_REPLY,
@@ -550,12 +549,14 @@ export class ChatService implements ConversationCommands {
           );
         const conversationId = addressed?.id ?? input.conversationId;
         // The owner writing from an app, to no session in particular, or from
-        // a private channel chat writes in the bot's one chat.
+        // a private channel chat, and every scheduled job's run, land in the
+        // bot's one chat.
         const toChat =
           conversationId === undefined &&
-          !input.scheduled &&
           !input.handoff &&
-          (input.source === "web" || isPrivateDestination(replyTo));
+          (!!input.scheduled ||
+            input.source === "web" ||
+            isPrivateDestination(replyTo));
         // Preserve the fingerprint of pre-migration commands when addressed by UUID.
         const fingerprint = new Bun.CryptoHasher("sha256")
           .update(
@@ -616,18 +617,6 @@ export class ChatService implements ConversationCommands {
               : undefined;
         if (conversationId && !conversation)
           throw new InputError("Conversation not found.", 404);
-        // Scheduled runs and handoffs still land; the owner writes in the chat.
-        if (
-          conversation &&
-          !input.scheduled &&
-          !input.handoff &&
-          !ownerCanWrite(conversation, bindings)
-        )
-          throw new InputError(
-            "This conversation is from before chats and is kept as history. Write in the chat instead.",
-            409,
-            "history",
-          );
         // A quote points at an earlier message of this session.
         const quote =
           input.quote && conversation

@@ -1,12 +1,15 @@
+import { Database } from "bun:sqlite";
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
+import { ToolApprovals } from "../src/domains/approvals/infrastructure/pi-tool-approvals.ts";
+import { JobRuns } from "../src/domains/schedules/infrastructure/job-runs.ts";
 import { chatModel } from "./chat-model.ts";
 import { withoutChat } from "./without-chat.ts";
 
@@ -124,7 +127,7 @@ test("private channel chats join the chat; groups and server channels keep their
   }
 });
 
-test("a private channel chat from before chats moves to the chat; its old session stays", async () => {
+test("a private channel chat from before chats moves to the chat; its old session goes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-rebind-"));
   const config = chatModel();
   let app = await Gateway.open({ directory, ...config });
@@ -142,8 +145,8 @@ test("a private channel chat from before chats moves to the chat; its old sessio
       latest.sessionId,
     );
     assert.ok(
-      (await app.chats.state()).conversations.some(
-        (c) => c.sessionId === telegram.sessionId && !c.chat,
+      !(await app.chats.state()).conversations.some(
+        (c) => c.sessionId === telegram.sessionId,
       ),
     );
   } finally {
@@ -152,46 +155,88 @@ test("a private channel chat from before chats moves to the chat; its old sessio
   }
 });
 
-test("a session from before chats is history: the owner writes in the chat instead", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-history-"));
-  const app = await Gateway.open({ directory, ...chatModel() });
+test("a restart removes sessions from before chats, after a copy of the bot's storage", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-removal-"));
+  const config = chatModel();
+  let app = await Gateway.open({ directory, ...config });
   try {
     const old = await app.chats.send(web("old"));
     await withoutChat(app);
     const chat = await app.chats.send(web("chat"));
     const group = await app.chats.send(channel("group", "telegram:-100"));
     await app.harness.waitForIdle(context);
-    // Clients list the chat first and mark what is history.
-    const listed = (await app.queries.sessions(app.actors.establish("web")))
-      .items;
-    assert.equal(listed[0]?.sessionId, chat.sessionId);
+    const before = await app.chats.state();
+    const oldId = before.conversations.find(
+      (c) => c.sessionId === old.sessionId,
+    )!.id;
+    // What refers to the old session: its approval mode and a job's run.
+    await app.root.commit(async (tx) => {
+      (await tx.doc(ToolApprovals)).commandModes = {
+        [String(oldId)]: "full-access",
+      };
+      (await tx.doc(JobRuns)).items.push({
+        id: "run-1",
+        jobId: "job-1",
+        name: "Brief",
+        scheduledFor: 1,
+        startedAt: 1,
+        finishedAt: 2,
+        status: "completed",
+        sessionId: old.sessionId,
+        turnId: before.turns.find((t) => t.conversationId === oldId)!.id,
+        acknowledgedAt: null,
+      });
+    }, context);
+    await app.close();
+
+    app = await Gateway.open({ directory, ...config });
+    const after = await app.chats.state();
     assert.deepEqual(
-      listed.filter((s) => s.history).map((s) => s.sessionId),
-      [old.sessionId],
+      after.conversations.map((c) => c.sessionId).sort(),
+      [chat.sessionId, group.sessionId].sort(),
     );
+    assert.ok(!after.turns.some((t) => t.conversationId === oldId));
+    assert.equal(
+      (await app.toolApprovals.state()).commandModes?.[String(oldId)],
+      undefined,
+    );
+    const [run] = (await app.harness.snapshot(JobRuns, context))!.items;
+    assert.equal(run?.sessionId, null);
+    assert.equal(run?.turnId, null);
     await assert.rejects(
-      app.chats.send({ ...web("again"), sessionId: old.sessionId }),
-      (error: Error & { status?: number; code?: string }) =>
-        error.status === 409 && error.code === "history",
+      app.queries.session(app.actors.establish("web"), old.sessionId),
     );
-    // The chat and a group's session still take messages.
-    for (const [eventId, sessionId] of [
-      ["more", chat.sessionId],
-      ["group-more", group.sessionId],
-    ] as const)
-      assert.equal(
-        (await app.chats.send({ ...web(eventId), sessionId })).sessionId,
-        sessionId,
-      );
-    // A scheduled run still lands in the session it was given.
-    const run = await app.chats.send({
-      ...web("job"),
-      sessionId: old.sessionId,
-      scheduled: { name: "Morning briefing" },
-    });
-    assert.equal(run.sessionId, old.sessionId);
+    // The copy was taken before, and holds the old session.
+    const backups = await readdir(join(directory, "backups"));
+    assert.equal(backups.length, 1);
+    assert.ok(holds(join(directory, "backups", backups[0]!), old.sessionId));
+    await app.close();
+
+    // Nothing more to remove: no second copy.
+    app = await Gateway.open({ directory, ...config });
+    assert.equal((await readdir(join(directory, "backups"))).length, 1);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+/** Whether any row of a SQLite file mentions `text`. */
+function holds(path: string, text: string) {
+  const database = new Database(path, { readonly: true });
+  try {
+    const tables = database
+      .query<{ name: string }, []>(
+        "SELECT name FROM sqlite_master WHERE type = 'table'",
+      )
+      .all();
+    return tables.some(({ name }) =>
+      database
+        .query(`SELECT * FROM "${name}"`)
+        .all()
+        .some((row) => JSON.stringify(row).includes(text)),
+    );
+  } finally {
+    database.close();
+  }
+}

@@ -21,7 +21,6 @@ import type { Ask } from "../../domains/asks/domain/ask.ts";
 import type { AskService } from "../../domains/asks/infrastructure/pi-asks.ts";
 import type { CardService } from "../../domains/cards/infrastructure/pi-cards.ts";
 import { ChannelBindings } from "../../domains/channels/infrastructure/pi-bindings.ts";
-import { ownerCanWrite } from "../../domains/conversations/domain/chat.ts";
 import type { ChatService } from "../../domains/conversations/infrastructure/pi-conversation-service.ts";
 import type { Observations } from "../../domains/conversations/infrastructure/pi-observations.ts";
 import { InputError } from "../../shared/application/input-error.ts";
@@ -131,7 +130,6 @@ export class PiClientQueries implements ClientQueries {
     const chats = await this.visible(actor);
     const tools = await this.app.toolApprovals.state();
     const asks = (await this.app.asks.state()).asks;
-    const bindings = await this.bindings();
     const items: SessionSummary[] = chats.conversations
       .filter((c) => !!c.archivedAt === archived)
       .map((c) => {
@@ -158,7 +156,6 @@ export class PiClientQueries implements ClientQueries {
           ...(c.archivedAt ? { archivedAt: c.archivedAt } : {}),
           ...(c.handedOffBy ? { handedOffBy: { ...c.handedOffBy } } : {}),
           ...(c.chat ? { chat: true as const } : {}),
-          ...(ownerCanWrite(c, bindings) ? {} : { history: true as const }),
           replyPreview:
             turns
               .findLast((t) => t.status === "done" && t.answer !== null)
@@ -383,9 +380,6 @@ export class PiClientQueries implements ClientQueries {
           ? { handedOffBy: { ...session.handedOffBy } }
           : {}),
         ...(session.chat ? { chat: true as const } : {}),
-        ...(ownerCanWrite(session, await this.bindings())
-          ? {}
-          : { history: true as const }),
         replyPreview:
           chats.turns
             .findLast(

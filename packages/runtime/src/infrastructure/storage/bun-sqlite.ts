@@ -138,3 +138,17 @@ export async function openBunSqliteStorage(path: string) {
     throw error;
   }
 }
+
+/**
+ * Copies a database to a new file as it stands now, beside the process
+ * writing it. The copy is complete or not made.
+ */
+export async function backupSqlite(path: string, target: string) {
+  await mkdir(dirname(target), { recursive: true });
+  const database = new Database(path, { readonly: true });
+  try {
+    database.run("VACUUM INTO ?", [target]);
+  } finally {
+    database.close();
+  }
+}

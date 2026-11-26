@@ -19,7 +19,6 @@ import {
 } from "@earendil-works/pi-schema";
 import type { SaveScheduledJob } from "@raphie/contracts";
 
-import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import type { BotJobs } from "./bot-jobs.ts";
 
 type MutationResult = { text: string; retiredTaskId: TaskId | null };
@@ -86,7 +85,7 @@ export function createScheduleTools(jobs: BotJobs) {
         if (!names.length) return;
         return [
           `Scheduling is enabled. Your available scheduling tools on this turn are: ${names.join(", ")}. These current capabilities supersede earlier assistant claims that a tool is missing.`,
-          "Manage this bot's schedules directly on the owner's request, without approval or another confirmation. Delivery is a reply in the originating conversation while the runtime is running, not a device push notification. External actions performed by a job still require approval.",
+          "Manage this bot's schedules directly on the owner's request, without approval or another confirmation. Each run is a message in this bot's chat with the owner while the runtime is running, not a device push notification. External actions performed by a job still require approval.",
           names.includes("schedule_list") &&
             "Use schedule_list to identify the owner's existing reminder before editing or deleting it.",
           names.includes("schedule_update") &&
@@ -104,7 +103,7 @@ export function createScheduleTools(jobs: BotJobs) {
       defineTool({
         name: "schedule_create",
         description:
-          "Create a NEW reminder or recurring prompt in this conversation directly on the owner's request, without approval or confirmation. To edit an existing reminder, use schedule_update instead; do not delete and recreate it. Omit everyMinutes for a one-time reminder. The runtime must be running; delivery is a conversation reply, not a device push notification. Only confirm success after saved:true. External actions performed by the job still require approval.",
+          "Create a NEW reminder or recurring prompt directly on the owner's request, without approval or confirmation. To edit an existing reminder, use schedule_update instead; do not delete and recreate it. Omit everyMinutes for a one-time reminder. The runtime must be running; each run is a message in the chat, not a device push notification. Only confirm success after saved:true. External actions performed by the job still require approval.",
         parameters: obj({
           name,
           prompt,
@@ -127,16 +126,10 @@ export function createScheduleTools(jobs: BotJobs) {
           if (!input.name || !input.prompt)
             throw new Error("A schedule needs a name and prompt.");
           return mutate(jobs, api, ctx, async (tx) => {
-            const session = (await tx.doc(Chats)).conversations.find(
-              (item) => item.id === api.conversationId,
-            );
-            if (!session)
-              throw new Error("The schedule's conversation is unavailable.");
             const job = await jobs.schedule(
               tx,
               input,
               `schedule:${api.taskId}`,
-              session.sessionId,
             );
             return {
               retiredTaskId: null,
@@ -146,7 +139,7 @@ export function createScheduleTools(jobs: BotJobs) {
                 name: job.name,
                 firstRunAt: new Date(job.firstRunAt).toISOString(),
                 everyMinutes: job.everyMinutes,
-                destination: "This conversation",
+                destination: "The chat",
               }),
             };
           });
@@ -213,7 +206,7 @@ export function createScheduleTools(jobs: BotJobs) {
       defineTool({
         name: "schedule_delete",
         description:
-          "Remove or cancel this bot's schedule directly when the owner asks, without approval or confirmation. Do not use this to edit a reminder or change its topic; use schedule_update for that. List schedules first to identify the right ID. Stops future scheduled prompts; keeps the conversation and does not cancel a reply already submitted.",
+          "Remove or cancel this bot's schedule directly when the owner asks, without approval or confirmation. Do not use this to edit a reminder or change its topic; use schedule_update for that. List schedules first to identify the right ID. Stops future scheduled prompts; keeps the chat and does not cancel a reply already submitted.",
         parameters: obj({ id }),
         replay: "safe",
         execute: (args, api, ctx) =>
