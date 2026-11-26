@@ -1,4 +1,4 @@
-import type { WorkItem, WorkStatus } from "@raphie/contracts";
+import type { WorkActor, WorkItem, WorkStatus } from "@raphie/contracts";
 
 /** The most open items listed with each message; `work_list` shows the rest. */
 export const MAX_LISTED = 20;
@@ -89,4 +89,50 @@ export function listWork(
           .includes(query),
     )
     .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** A change to a work item: only the fields given change. */
+export type WorkChange = {
+  title?: string;
+  status?: WorkStatus;
+  waitingOn?: string;
+  notes?: string;
+  result?: string;
+};
+
+/**
+ * Applies `change` to `item` as `by` makes it, or says why not. A closed item
+ * takes no changes, except the owner reopening it; closing records who did.
+ */
+export function changeWork(
+  item: WorkItem,
+  change: WorkChange,
+  by: WorkActor,
+  now: number,
+): string | undefined {
+  const reopening =
+    !isOpen(item.status) &&
+    change.status !== undefined &&
+    isOpen(change.status);
+  if (!isOpen(item.status) && !(reopening && by === "owner"))
+    return by === "owner"
+      ? `${item.id} is ${item.status}. Reopen it to change it.`
+      : `${item.id} is ${item.status}. Open a new item if the work starts again.`;
+  if (change.title !== undefined) {
+    const title = clip(change.title, LIMITS.title);
+    if (!title) return "A work item needs a title.";
+    item.title = title;
+  }
+  if (change.status) item.status = change.status;
+  if (item.status === "waiting") {
+    if (change.waitingOn !== undefined)
+      item.waitingOn = clip(change.waitingOn, LIMITS.waitingOn);
+  } else delete item.waitingOn;
+  if (change.notes !== undefined) item.notes = clip(change.notes, LIMITS.notes);
+  if (change.result)
+    item.result = { text: clip(change.result, LIMITS.result), at: now };
+  if (isOpen(item.status)) delete item.closed;
+  else if (!item.closed) item.closed = { at: now, by };
+  item.updatedAt = now;
+  return undefined;
 }

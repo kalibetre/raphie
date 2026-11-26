@@ -156,7 +156,7 @@ test("the bot opens, updates and closes a work item from its chat", async () => 
     assert.equal(closed?.status, "done");
     assert.equal(closed?.closed?.by, "bot");
     // A closed item stays closed, and leaves the messages.
-    assert.match((await say("again")).answer!, /w-1 is closed/);
+    assert.match((await say("again")).answer!, /w-1 is done\. Open a new item/);
     assert.doesNotMatch(seen.at(-1)!, /Open work/);
   } finally {
     await done();
@@ -283,6 +283,56 @@ test("a private Telegram chat with the owner keeps the list and the tools", asyn
     assert.equal(listed.replyTo?.conversation, "telegram:42");
     assert.match(seen.at(-1)!, /\[Open work \(1\)/);
     assert.match(listed.answer!, /w-1 Private plan: active/);
+
+test("the owner opens, changes, closes and reopens work items over the API", async () => {
+  const { app, done } = await bot({});
+  try {
+    const routes = workRoutes(app.work).onError((error, c) =>
+      error instanceof InputError
+        ? c.json({ error: error.message }, error.status as 404)
+        : c.json({ error: String(error) }, 500),
+    );
+    const send = (method: string, path: string, body: unknown) =>
+      routes.request(path, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    const created = await send("POST", "/", { title: "Renew passport" });
+    assert.equal(created.status, 201);
+    const item = (await created.json()) as WorkItem;
+    assert.equal(item.id, "w-1");
+    assert.equal(item.opened.by, "owner");
+    assert.equal(item.status, "active");
+
+    const waiting = (await (
+      await send("PATCH", "/w-1", {
+        status: "waiting",
+        waitingOn: "the photo booth",
+        notes: "Form filled in",
+      })
+    ).json()) as WorkItem;
+    assert.equal(waiting.waitingOn, "the photo booth");
+    assert.equal(waiting.notes, "Form filled in");
+
+    const closed = (await (
+      await send("PATCH", "/w-1", { status: "dropped" })
+    ).json()) as WorkItem;
+    assert.equal(closed.waitingOn, undefined);
+    assert.equal(closed.closed?.by, "owner");
+    // A closed item takes no changes until the owner reopens it.
+    assert.equal((await send("PATCH", "/w-1", { notes: "x" })).status, 409);
+    const reopened = (await (
+      await send("PATCH", "/w-1", { status: "active" })
+    ).json()) as WorkItem;
+    assert.equal(reopened.closed, undefined);
+    assert.equal((await app.work.list({ open: true })).length, 1);
+
+    assert.equal((await send("PATCH", "/w-9", { notes: "x" })).status, 404);
+    assert.equal((await send("POST", "/", { title: "" })).status, 400);
+    assert.equal((await send("POST", "/", { title: "   " })).status, 409);
+    assert.equal((await send("PATCH", "/w-1", { colour: "red" })).status, 400);
   } finally {
     await done();
   }
