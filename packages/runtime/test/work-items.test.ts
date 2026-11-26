@@ -283,6 +283,10 @@ test("a private Telegram chat with the owner keeps the list and the tools", asyn
     assert.equal(listed.replyTo?.conversation, "telegram:42");
     assert.match(seen.at(-1)!, /\[Open work \(1\)/);
     assert.match(listed.answer!, /w-1 Private plan: active/);
+  } finally {
+    await done();
+  }
+});
 
 test("the owner opens, changes, closes and reopens work items over the API", async () => {
   const { app, done } = await bot({});
