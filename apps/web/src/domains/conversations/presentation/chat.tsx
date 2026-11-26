@@ -284,7 +284,8 @@ export function Chat({
             </div>
           );
         }
-        if (message.role === "user" && turn?.work)
+        // A job's posted result reads as the job, below.
+        if (message.role === "user" && turn?.work && !turn.scheduled)
           return (
             <div key={message.id} className="turn-user">
               {divider}
@@ -576,7 +577,10 @@ function ScheduledMarker({
   instruction: string;
 }) {
   return (
-    <p className="turn-scheduled" title={`Saved instruction: ${instruction}`}>
+    <p
+      className="turn-scheduled"
+      title={instruction ? `Saved instruction: ${instruction}` : undefined}
+    >
       <CalendarClock size={13} aria-hidden="true" />
       <span>
         Scheduled · <strong>{name}</strong>
