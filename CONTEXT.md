@@ -86,9 +86,8 @@ repeat them. A rewind can be undone.
 _Avoid_: Undo, which suggests effects outside the chat are reversed.
 
 **Reset** (of a bot): Returning a bot to new: its chat, work items,
-scheduled jobs and memory are cleared, while its configuration and workspace
-files are kept. The cleared chat and work items stay as read-only history;
-memory is deleted.
+scheduled jobs and memory are deleted, while its configuration and workspace
+files are kept. Nothing of the cleared chat stays to read.
 _Avoid_: Clear chat, new conversation.
 
 **Turn**: One admitted message and the agent work that answers it: usually the
