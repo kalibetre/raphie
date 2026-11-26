@@ -73,7 +73,6 @@ fn first_origin(flavor: Flavor, ports_file: Option<&std::path::Path>) -> String 
 pub enum InboxFilter {
     #[default]
     All,
-    Replies,
     Approvals,
     Jobs,
 }
@@ -356,6 +355,8 @@ pub struct Ui {
     pub drop_hover: bool,
     /// The earlier message the next one quotes, in the open session.
     pub quoting: Option<Quote>,
+    /// A turn whose message to bring into view once it is shown.
+    pub reveal: Option<String>,
     /// Whether the bot roster on the left shows (⌘B).
     pub roster_open: bool,
     /// In a narrow window, where one column shows at a time: whether it is
@@ -584,6 +585,7 @@ impl Ui {
             composer: TextEdit::new(""),
             drop_hover: false,
             quoting: None,
+            reveal: None,
             roster_open: true,
             narrow_home: true,
             settings_nav_home: false,
@@ -947,26 +949,37 @@ impl Ui {
             .count()
     }
 
-    /// The notifications across every bot, newest first, and how many the
-    /// bell counts.
+    /// What the inbox lists, and the bell's count: approvals and job runs.
+    /// New messages show on the bot in the roster instead.
     pub fn notifications(&self) -> (Vec<Item>, usize) {
+        let jobs = self.model.inbox.job_entries(&self.model.bots).len();
+        let list: Vec<Item> = self
+            .updates()
+            .into_iter()
+            .filter(|item| item.kind != inbox::Kind::Reply)
+            .collect();
+        let count = inbox::count(list.len(), self.model.inbox.job_total(), jobs);
+        (list, count)
+    }
+
+    /// Every update worth a system notification, new messages included.
+    fn updates(&self) -> Vec<Item> {
         let bots = &self.model.bots;
         let jobs = self.model.inbox.job_entries(bots);
-        let (list, _) = inbox::items(
+        inbox::items(
             bots,
             |bot_id| self.sessions_of(bot_id),
             |bot_id, session| self.unread_in(bot_id, session),
             &jobs,
-        );
-        let count = inbox::count(list.len(), self.model.inbox.job_total(), jobs.len());
-        (list, count)
+        )
+        .0
     }
 
     /// Tells the owner, through the system, about updates that are new
     /// since the last look. Only while this window is not in front: in
     /// front, the bell and its count already show them.
     pub fn announce(&mut self) {
-        let (items, _) = self.notifications();
+        let items = self.updates();
         // Always look, so what was seen in front is not announced later.
         let news = self.announced.news(&items);
         if self.window_focused {
@@ -1033,7 +1046,10 @@ impl Ui {
             self.dismiss_run(&target.bot_id, run_id);
         }
         match (bot_exists, &target.session_id) {
-            (true, Some(session_id)) => self.open_conversation(&target.bot_id, session_id),
+            (true, Some(session_id)) => {
+                self.open_conversation(&target.bot_id, session_id);
+                self.reveal = target.turn_id.clone();
+            }
             _ => {
                 self.close_settings();
                 self.inbox_open = true;
@@ -1438,6 +1454,24 @@ impl Ui {
                     .map(|s| s.history)
             })
             .unwrap_or(false)
+    }
+
+    /// Brings the message an inbox entry led to into view, once the open
+    /// session has loaded the turn it belongs to.
+    fn reveal_message(&mut self, tx: &mut Tx) {
+        let Some(turn_id) = &self.reveal else {
+            return;
+        };
+        let loaded = self
+            .model
+            .conversation
+            .as_ref()
+            .and_then(|c| c.observation.as_ref())
+            .is_some_and(|o| o.turns.iter().any(|turn| &turn.id == turn_id));
+        if loaded {
+            tx.scroll_into_view(format!("rd-reply-{turn_id}"));
+            self.reveal = None;
+        }
     }
 
     /// Leaves a session for the selected bot's chat: it opens once its
@@ -4024,6 +4058,7 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         return decoded;
     };
     let events = client.drain();
+    ui.reveal_message(tx);
     // A search box has no "changed" handler, so each frame looks at it.
     let searched = ui.watch_memory_query(clock);
     if ui.memories.search_pending() {

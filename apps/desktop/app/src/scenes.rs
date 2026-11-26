@@ -1960,8 +1960,9 @@ pub fn unread(ui: &mut Ui) {
     }
 }
 
-/// The inbox with something of every kind: new replies in two bots, an
-/// approval, a scheduled reply that is ready and a job that failed.
+/// The inbox with something of every kind: an approval, a job that failed
+/// and one that was interrupted in another bot's chat. New replies in two
+/// bots show on the roster instead.
 pub fn inbox(ui: &mut Ui) {
     unread(ui);
     let now = now_ms();
@@ -1977,17 +1978,25 @@ pub fn inbox(ui: &mut Ui) {
         bot_id: "b-research".into(),
         sessions: vec![papers],
     });
-    let run = |id: &str, name: &str, status: &str, ago_ms: i64| -> JobRun {
-        from_json(json!({
-            "id": id, "jobId": "j-1", "name": name, "startedAt": now - ago_ms - 30_000,
-            "finishedAt": now - ago_ms, "status": status, "sessionId": null, "turnId": null,
-            "failureReason": if status == "failed" { json!("no_model") } else { json!(null) },
-        }))
-    };
+    let run =
+        |id: &str, name: &str, status: &str, ago_ms: i64, at: Option<(&str, &str)>| -> JobRun {
+            from_json(json!({
+                "id": id, "jobId": "j-1", "name": name, "startedAt": now - ago_ms - 30_000,
+                "finishedAt": now - ago_ms, "status": status,
+                "sessionId": at.map(|(session, _)| session), "turnId": at.map(|(_, turn)| turn),
+                "failureReason": if status == "failed" { json!("no_model") } else { json!(null) },
+            }))
+        };
     ui.model.apply(Event::JobUpdates {
         bot_id: "default".into(),
         updates: JobUpdates {
-            runs: vec![run("run-2", "Morning brief", "failed", 26 * 3_600_000)],
+            runs: vec![run(
+                "run-2",
+                "Morning brief",
+                "failed",
+                26 * 3_600_000,
+                None,
+            )],
             total: 1,
             more: false,
         },
@@ -1995,7 +2004,13 @@ pub fn inbox(ui: &mut Ui) {
     ui.model.apply(Event::JobUpdates {
         bot_id: "b-research".into(),
         updates: JobUpdates {
-            runs: vec![run("run-1", "Weekly digest", "interrupted", 2 * 3_600_000)],
+            runs: vec![run(
+                "run-1",
+                "Weekly digest",
+                "interrupted",
+                2 * 3_600_000,
+                Some(("r-1", "rt-2")),
+            )],
             total: 1,
             more: false,
         },

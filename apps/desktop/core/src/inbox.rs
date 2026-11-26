@@ -160,6 +160,7 @@ impl Item {
             bot_id: self.bot_id.clone(),
             session_id: self.session_id().map(str::to_owned),
             run_id: self.run.as_ref().map(|run| run.id.clone()),
+            turn_id: self.run.as_ref().and_then(|run| run.turn_id.clone()),
         }
     }
 
@@ -312,6 +313,8 @@ pub struct Target {
     pub session_id: Option<String>,
     /// The job run to dismiss on opening, as a click in the inbox does.
     pub run_id: Option<String>,
+    /// The turn whose message the conversation opens at: a job run's.
+    pub turn_id: Option<String>,
 }
 
 /// Which notifications the owner has already been told about, so each is
@@ -455,13 +458,14 @@ mod tests {
         assert_eq!(list[0].title(), "Your scheduled job’s message is ready");
         assert_eq!(list[0].session_id(), Some("s-1"));
         assert_eq!(list[0].time, 60, "when the job finished");
-        // Its notification opens the conversation and dismisses the run.
+        // Its notification opens the chat at the job's message and dismisses the run.
         assert_eq!(
             list[0].target(),
             Target {
                 bot_id: "default".into(),
                 session_id: Some("s-1".into()),
                 run_id: Some("r-1".into()),
+                turn_id: Some("t-7".into()),
             }
         );
 
@@ -523,6 +527,7 @@ mod tests {
                     bot_id: "default".into(),
                     session_id: Some("s-1".into()),
                     run_id: None,
+                    turn_id: None,
                 },
             }]
         );

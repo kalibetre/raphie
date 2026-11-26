@@ -4200,15 +4200,16 @@ fn opening_a_conversation_reads_its_replies_only_at_its_end_in_the_front_window(
 fn the_bell_counts_updates_and_opens_the_inbox_across_bots() {
     for dark in [false, true] {
         let mut rt = render(scenes::unread, dark);
-        // One conversation with new replies and one approval, both Raphie's.
+        // One approval, Raphie's. New replies show on the roster instead.
         assert!(rt.find("rd-bell-count").is_some());
-        assert_eq!(rt.state.notifications().1, 2);
+        assert_eq!(rt.state.notifications().1, 1);
         click(&mut rt, "rd-bell");
         assert!(rt.state.inbox_open);
         assert_eq!(
             element(&rt, "rd-inbox-count").text.as_deref(),
-            Some("2 new")
+            Some("1 new")
         );
+        assert!(rt.find("rd-notice-reply:default:s-1").is_none());
         // The composer gives way to the inbox.
         assert!(rt.find("rd-composer").is_none());
         click(&mut rt, "rd-inbox-back");
@@ -4222,22 +4223,22 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
     let shown = screen_text(&rt);
     assert_eq!(
         element(&rt, "rd-inbox-count").text.as_deref(),
-        Some("5 new")
+        Some("3 new")
     );
     for expected in [
         "Today",
         "Earlier",
-        "2 new messages",
         "Needs your approval",
         "Action required",
         "Scheduled job interrupted",
         "Scheduled job failed",
         "No model configured. Connect a model provider in Settings.",
-        "All three argue for smaller, cheaper evaluation sets.",
     ] {
         assert!(shown.contains(expected), "missing: {expected}");
     }
-    // The other bot's row in the roster counts its conversation too.
+    // New messages are not listed; the bots' rows in the roster show them.
+    assert!(rt.find("rd-notice-reply:default:s-1").is_none());
+    assert!(rt.find("rd-notice-reply:b-research:r-1").is_none());
     assert_eq!(
         needs_you(&rt, "b-research").as_deref(),
         Some("1 new message")
@@ -4246,7 +4247,6 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
     click(&mut rt, "rd-inbox-jobs");
     assert_eq!(rt.state.inbox_filter, InboxFilter::Jobs);
     assert!(rt.find("rd-notice-job:default:run-2").is_some());
-    assert!(rt.find("rd-notice-reply:default:s-1").is_none());
     click(&mut rt, "rd-inbox-approvals");
     assert!(rt.find("rd-notice-approval:default:s-2").is_some());
     assert!(rt.find("rd-notice-job:default:run-2").is_none());
@@ -4271,20 +4271,22 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
     assert!(rt.find("rd-notice-job:default:run-2").is_none());
     assert_eq!(
         element(&rt, "rd-inbox-count").text.as_deref(),
-        Some("4 new")
+        Some("2 new")
     );
     // A refused dismissal says so.
     click(&mut rt, "rd-notice-job:b-research:run-1-dismiss");
     deliver(&mut rt, Event::RunAcknowledgeFailed);
     assert!(screen_text(&rt).contains("Couldn’t dismiss the update. Please try again."));
 
-    // Another bot's update opens that bot's conversation and closes the inbox.
-    click(&mut rt, "rd-notice-reply:b-research:r-1");
+    // Another bot's job opens that bot's chat at the job's message and
+    // closes the inbox.
+    click(&mut rt, "rd-notice-job:b-research:run-1");
     assert!(!rt.state.inbox_open);
     assert_eq!(rt.state.model.bot_id.as_deref(), Some("b-research"));
     assert!(rt.state.sent.contains(&Command::SelectSession {
         session_id: Some("r-1".into())
     }));
+    assert_eq!(rt.state.reveal.as_deref(), Some("rt-2"));
 }
 
 #[test]
@@ -4295,7 +4297,7 @@ fn an_empty_inbox_says_so_and_failed_job_updates_can_be_retried() {
         Some("You’re all caught up.")
     );
     assert!(rt.find("rd-inbox-count").is_none());
-    click(&mut rt, "rd-inbox-replies");
+    click(&mut rt, "rd-inbox-approvals");
     assert_eq!(
         element(&rt, "rd-inbox-empty").text.as_deref(),
         Some("No updates in this view.")
@@ -4384,6 +4386,7 @@ fn updates_that_arrive_behind_another_app_are_announced_by_the_system_once() {
             bot_id: "default".into(),
             session_id: Some("s-3".into()),
             run_id: None,
+            turn_id: None,
         }
     );
 }
@@ -4393,6 +4396,7 @@ fn target(bot_id: &str, session_id: Option<&str>, run_id: Option<&str>) -> Targe
         bot_id: bot_id.into(),
         session_id: session_id.map(Into::into),
         run_id: run_id.map(Into::into),
+        turn_id: None,
     }
 }
 

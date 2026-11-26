@@ -66,10 +66,6 @@ pub fn page(s: &Ui, look: &Look) -> El {
         .iter()
         .filter(|item| match s.inbox_filter {
             InboxFilter::All => true,
-            // A finished job's line stands for its reply too.
-            InboxFilter::Replies => {
-                item.kind == Kind::Reply || (item.kind == Kind::Job && item.session.is_some())
-            }
             InboxFilter::Approvals => item.kind == Kind::Approval,
             InboxFilter::Jobs => item.kind == Kind::Job,
         })
@@ -193,7 +189,7 @@ pub fn page(s: &Ui, look: &Look) -> El {
         .child(col().w_full().items_center().child(body))
 }
 
-/// The four filters, underlined like the web's tabs.
+/// The three filters, underlined like the web's tabs.
 fn tabs(chosen: InboxFilter, t: &Theme) -> El {
     let mut tabs = row()
         .role("group")
@@ -204,7 +200,6 @@ fn tabs(chosen: InboxFilter, t: &Theme) -> El {
         .border_sides([0.0, 0.0, 1.0, 0.0], t.border);
     for (filter, key, label) in [
         (InboxFilter::All, "rd-inbox-all", "All"),
-        (InboxFilter::Replies, "rd-inbox-replies", "Messages"),
         (InboxFilter::Approvals, "rd-inbox-approvals", "Approvals"),
         (InboxFilter::Jobs, "rd-inbox-jobs", "Jobs"),
     ] {
