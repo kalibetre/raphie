@@ -39,6 +39,7 @@ use crate::contracts::NewBot;
 use crate::contracts::QuoteRef;
 use crate::contracts::SaveOwnerProfile;
 use crate::contracts::SaveSkill;
+use crate::contracts::WorkChange;
 use crate::contracts::{
     ApprovalStatus, BotProfile, ControlAction, Decision, Page, Scope, SessionObservation,
     SessionSummary, SubmitMessage, UpdateBotProfile,
@@ -370,6 +371,22 @@ pub enum Command {
     CancelHandoff {
         bot_id: String,
         id: String,
+    },
+    /// Load a bot's work items, open and closed.
+    LoadWork {
+        bot_id: String,
+    },
+    /// Open a work item, as the owner.
+    OpenWork {
+        bot_id: String,
+        title: String,
+        notes: String,
+    },
+    /// Change, close or reopen one work item, as the owner.
+    ChangeWork {
+        bot_id: String,
+        id: String,
+        change: WorkChange,
     },
     /// Load a bot's scheduled jobs.
     LoadJobs {
@@ -861,6 +878,21 @@ impl Engine {
             Command::SaveExport { name, contents } => self.save_export(name, contents),
             Command::LoadHandoffs { bot_id } => self.load_handoffs(bot_id),
             Command::CancelHandoff { bot_id, id } => self.cancel_handoff(bot_id, id),
+            Command::LoadWork { bot_id } => self.load_work(bot_id),
+            Command::OpenWork {
+                bot_id,
+                title,
+                notes,
+            } => self.save_work(
+                bot_id,
+                None,
+                WorkChange {
+                    title: Some(title),
+                    notes: Some(notes),
+                    status: None,
+                },
+            ),
+            Command::ChangeWork { bot_id, id, change } => self.save_work(bot_id, Some(id), change),
             Command::LoadJobs { bot_id } => self.load_jobs(bot_id),
             Command::AddJob { bot_id, job } => self.add_job(bot_id, job),
             Command::ChangeJob { bot_id, id, action } => self.change_job(bot_id, id, action),
@@ -2169,6 +2201,54 @@ impl Engine {
         });
     }
 
+    fn load_work(&mut self, bot_id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            fetch_work(&api, bot_id, &inbox, &emit).await;
+        });
+    }
+
+    /// Opens a work item (without `id`) or changes one, then fetches the
+    /// lists again.
+    fn save_work(&mut self, bot_id: String, id: Option<String>, change: WorkChange) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            let saved = match &id {
+                Some(id) => api.change_work(&bot_id, id, &change).await,
+                None => {
+                    api.open_work(
+                        &bot_id,
+                        change.title.as_deref().unwrap_or_default(),
+                        change.notes.as_deref().unwrap_or_default(),
+                    )
+                    .await
+                }
+            };
+            match saved {
+                Ok(_) => {
+                    emit.emit(Event::WorkSaved {
+                        bot_id: bot_id.clone(),
+                    });
+                    fetch_work(&api, bot_id, &inbox, &emit).await;
+                }
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::WorkChangeFailed {
+                    message: error.to_string(),
+                }),
+            }
+        });
+    }
+
     fn load_jobs(&mut self, bot_id: String) {
         let Some(api) = self.api.clone() else {
             return;
@@ -2783,6 +2863,35 @@ fn report(error: ApiError, inbox: &mpsc::UnboundedSender<Input>, emit: &Emitter)
         let _ = inbox.send(Input::Expired);
     } else {
         emit.emit(Event::Problem(error.to_string()));
+    }
+}
+
+/// Fetches a bot's open and closed work items and reports them, or why not.
+async fn fetch_work(
+    api: &ApiClient,
+    bot_id: String,
+    inbox: &mpsc::UnboundedSender<Input>,
+    emit: &Emitter,
+) {
+    let lists = async {
+        Ok::<_, ApiError>((
+            api.work_items(&bot_id, false).await?,
+            api.work_items(&bot_id, true).await?,
+        ))
+    };
+    match lists.await {
+        Ok((open, closed)) => emit.emit(Event::Work {
+            bot_id,
+            open,
+            closed,
+        }),
+        Err(ApiError::Unauthenticated) => {
+            let _ = inbox.send(Input::Expired);
+        }
+        Err(error) => emit.emit(Event::WorkFailed {
+            bot_id,
+            message: error.to_string(),
+        }),
     }
 }
 

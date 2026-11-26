@@ -15,6 +15,7 @@ use raphie_core::contracts::{
     SandboxProvider, Scope, TelegramPairingCode,
 };
 use raphie_core::contracts::{ReplyLength, ReplyStyle, ReplyWarmth};
+use raphie_core::contracts::{WorkChange, WorkStatus};
 use raphie_core::engine::{Command, ConnectionChange, SkillSource};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::Target;
@@ -2622,7 +2623,7 @@ fn jobs_are_listed_with_their_state_and_what_can_be_done() {
     );
     assert_eq!(
         element(&rt, "rd-jobs-message").text.as_deref(),
-        Some("Run queued. Its result will appear in the job's conversation.")
+        Some("Run queued. Its result will appear in the chat.")
     );
     click(&mut rt, "rd-job-job-digest-remove");
     deliver(
@@ -6399,4 +6400,137 @@ fn a_quote_shows_inside_the_message_that_quotes() {
             bar.label
         );
     }
+}
+
+#[test]
+fn work_items_are_listed_and_the_owner_changes_them() {
+    let mut rt = render_sized(scenes::settings_account, false, (1280.0, 2000.0));
+    click(&mut rt, "rd-nav-default-work");
+    assert!(rt.state.sent.contains(&Command::LoadWork {
+        bot_id: "default".into()
+    }));
+    assert!(screen_text(&rt).contains("Loading work…"));
+    let lists = scenes::work_items();
+    deliver(
+        &mut rt,
+        Event::Work {
+            bot_id: "default".into(),
+            open: lists.open,
+            closed: lists.closed,
+        },
+    );
+    let badge = |rt: &Runtime<Ui>, id: &str| element(rt, &format!("rd-work-{id}-badge")).text;
+    assert_eq!(badge(&rt, "w-2").as_deref(), Some("Active"));
+    assert_eq!(badge(&rt, "w-1").as_deref(), Some("Waiting"));
+    assert_eq!(badge(&rt, "w-4").as_deref(), Some("Dropped"));
+    assert_eq!(
+        element(&rt, "rd-work-w-1-waiting").text.as_deref(),
+        Some("Waiting on you to pick a date")
+    );
+    let text = screen_text(&rt);
+    for expected in [
+        "Latest: Three venues have the second week free.",
+        "w-2 · Opened by Raphie, ",
+        "w-4 · Opened by you, ",
+        " · Dropped by you, ",
+        " · Done by Raphie, ",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?}");
+    }
+    // Open items can be finished, edited or dropped; closed ones reopened.
+    assert!(rt.find("rd-work-w-2-done").is_some());
+    assert!(rt.find("rd-work-w-2-reopen").is_none());
+    assert!(rt.find("rd-work-w-3-reopen").is_some());
+    assert!(rt.find("rd-work-w-3-edit").is_none());
+
+    click(&mut rt, "rd-work-w-2-done");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ChangeWork {
+            bot_id: "default".into(),
+            id: "w-2".into(),
+            change: WorkChange {
+                status: Some(WorkStatus::Done),
+                ..WorkChange::default()
+            },
+        })
+    );
+    // One change at a time: the buttons wait for its answer.
+    let sent = rt.state.sent.len();
+    click(&mut rt, "rd-work-w-3-reopen");
+    assert_eq!(rt.state.sent.len(), sent);
+    deliver(
+        &mut rt,
+        Event::WorkSaved {
+            bot_id: "default".into(),
+        },
+    );
+    click(&mut rt, "rd-work-w-3-reopen");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ChangeWork {
+            bot_id: "default".into(),
+            id: "w-3".into(),
+            change: WorkChange {
+                status: Some(WorkStatus::Active),
+                ..WorkChange::default()
+            },
+        })
+    );
+    // A refused change says why.
+    deliver(
+        &mut rt,
+        Event::WorkChangeFailed {
+            message: "w-3 is done. Reopen it to change it.".into(),
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-work-error").text.as_deref(),
+        Some("w-3 is done. Reopen it to change it.")
+    );
+}
+
+#[test]
+fn a_work_item_is_opened_and_edited_in_a_dialog() {
+    let mut rt = render_sized(scenes::settings_work, false, (1280.0, 1400.0));
+    click(&mut rt, "rd-work-new");
+    assert!(rt.find("rd-work-form").is_some());
+    // Nothing to save without a title.
+    let sent = rt.state.sent.len();
+    click(&mut rt, "rd-work-save");
+    assert_eq!(rt.state.sent.len(), sent);
+    rt.update(|ui, _| {
+        ui.work_form.title = TextEdit::new("  Quarterly tax filing ");
+        ui.work_form.notes = TextEdit::new("Receipts to the accountant.");
+    });
+    settle(&mut rt);
+    click(&mut rt, "rd-work-save");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::OpenWork {
+            bot_id: "default".into(),
+            title: "Quarterly tax filing".into(),
+            notes: "Receipts to the accountant.".into(),
+        })
+    );
+    deliver(
+        &mut rt,
+        Event::WorkSaved {
+            bot_id: "default".into(),
+        },
+    );
+    assert!(rt.find("rd-work-form").is_none());
+
+    // Editing starts from the item's title and notes.
+    click(&mut rt, "rd-work-w-1-edit");
+    assert_eq!(rt.state.work_form.title.text, "Flights to Lisbon");
+    assert_eq!(rt.state.work_form.id.as_deref(), Some("w-1"));
+    rt.update(|ui, _| ui.work_form.title = TextEdit::new("Flights to Porto"));
+    settle(&mut rt);
+    click(&mut rt, "rd-work-save");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::ChangeWork { id, change, .. })
+            if id == "w-1" && change.title.as_deref() == Some("Flights to Porto")
+    ));
 }

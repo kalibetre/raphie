@@ -2090,6 +2090,97 @@ pub(crate) struct JobActionBody {
     pub action: crate::jobs::JobAction,
 }
 
+/// `WorkStatus` in `packages/contracts/src/bots/work.ts`: `Active` while
+/// the bot works on it, `Waiting` while it is blocked, `Done` or `Dropped`
+/// once closed.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkStatus {
+    Active,
+    Waiting,
+    Done,
+    Dropped,
+}
+
+impl WorkStatus {
+    pub fn is_open(self) -> bool {
+        matches!(self, WorkStatus::Active | WorkStatus::Waiting)
+    }
+}
+
+/// `WorkActor`: who opened, changed or closed a work item.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkActor {
+    Bot,
+    Owner,
+}
+
+/// When something happened to a work item, and who did it.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct WorkMark {
+    pub at: i64,
+    pub by: WorkActor,
+}
+
+/// A work item's latest result.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkResult {
+    pub text: String,
+    pub at: i64,
+    #[serde(default)]
+    pub turn_id: Option<String>,
+}
+
+/// `WorkItem` in `packages/contracts/src/bots/work.ts`: something a bot is
+/// keeping track of for longer than one turn.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkItem {
+    /// Short and stable, such as "w-12".
+    pub id: String,
+    pub title: String,
+    pub status: WorkStatus,
+    /// While waiting: on whom or what.
+    #[serde(default)]
+    pub waiting_on: Option<String>,
+    #[serde(default)]
+    pub source_turn_id: Option<String>,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub result: Option<WorkResult>,
+    pub opened: WorkMark,
+    pub updated_at: i64,
+    #[serde(default)]
+    pub closed: Option<WorkMark>,
+}
+
+/// What `GET /api/work-items` answers.
+#[derive(Debug, Deserialize)]
+pub(crate) struct WorkList {
+    pub items: Vec<WorkItem>,
+}
+
+/// The body of `POST /api/work-items`.
+#[derive(Serialize)]
+pub(crate) struct OpenWorkBody<'a> {
+    pub title: &'a str,
+    pub notes: &'a str,
+}
+
+/// The body of `PATCH /api/work-items/:id`: only what changes.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct WorkChange {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<WorkStatus>,
+}
+
 /// A span's outcome.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

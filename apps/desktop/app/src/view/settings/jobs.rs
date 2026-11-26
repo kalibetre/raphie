@@ -142,7 +142,7 @@ fn scheduled(s: &Ui, jobs: &[ScheduledJob], t: &Theme) -> El {
     group_with(
         t,
         "Scheduled prompts",
-        "Reminders created in chat reply in that conversation. Jobs created here keep their own conversation. The runtime must be running; tool actions still need approval.",
+        "Every run posts in the bot's chat, whether the job was made here or in the chat. The runtime must be running; tool actions still need approval.",
         Some(create),
         rows,
     )
