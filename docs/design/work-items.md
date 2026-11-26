@@ -40,7 +40,7 @@ The open items go with each message, in `messageContext` beside the sent time, n
 [Open work (3)]
 w-12 Flights to Lisbon: waiting on the owner (pick a date); last: two options sent Nov 25
 w-14 Morning brief: job, next run Nov 27 07:00; last: sent Nov 26 07:02
-w-15 Venue research: handed to Research, active
+w-15 Venue research: waiting on Research
 ```
 
 One line each, newest activity first, at most 20 items and about 1,500 tokens; past that, the line says how many more and `work_list` shows them. Full notes and results are fetched with `work_read` only when needed. Instructions tell the bot to check this list before answering "what's going on?", to quote an item's source message when its result comes back, and not to open items for one-turn requests.
@@ -53,7 +53,7 @@ An item that needs work done outside the chat gets its own session, created on f
 - **Following up.** `work_start` on an item with a session sends another turn to that same session. The owner's "any news on this?" quoting the item's source message lets the bot find the item.
 - **Results.** When the session's turn finishes, its answer becomes the item's `result` and comes back to the chat as a marked turn, the way a handoff's result does today, framed as data. The chat's model then tells the owner, quoting the source message. Approvals and questions from the session already reach the owner through the inbox; showing them as cards in the chat is a later step.
 - **Cancel** stops the item's running turn only. **Stop** in the chat stops only the chat's reply.
-- **Keeping sessions.** The cleanup at start removes sessions the owner can't write in. An item's session is marked (`ChatConversation.work = itemId`) and kept while its item exists.
+- **Keeping sessions.** The cleanup at start removes sessions the owner can't write in. An item's session is marked (`ChatConversation.work = itemId`) and kept while its item is open.
 
 ## Scheduled jobs
 
@@ -90,6 +90,9 @@ Each slice ships on its own, with web and desktop together where it has a screen
 
 ## Open questions
 
-- **Posting without a model turn.** Job results should go into the chat as the bot's message without a chat turn rewriting them. That needs a way to add an assistant message to the chat's Pi conversation directly; not yet checked against `pi-durable`. Until then, a result comes back as a marked turn, as handoffs do.
+- **Posting without a model turn.** Job results should go into the chat as the bot's message without a chat turn rewriting them. `pi-durable` appears to allow it: `Tx.appendEntry` with `EntryDraft.model` adds messages to the model context without a request (to be confirmed in slice 3). The result must still reach the home channel, as runs do today.
+- **One session, two received handoffs.** Handoffs from the same sending session join one receiving session today. Two received items would then share a session, so Cancel on one would stop the other. Decide before slice 5: one item per sender-receiver thread, or one session per handoff.
+- **Jobs crowding the list.** A bot can have 100 jobs, each an open item, and the list shows 20. Order requests and waiting items ahead of idle jobs, or show jobs as a count.
+- **Late results on a closed item.** If the owner closes an item while its session's turn runs, decide whether closing cancels the turn, and record a late result without reopening the item or posting it.
 - **Too many items.** If the bot opens items too eagerly the list becomes noise. The instructions and the 20-item cap are the first defence; measure how many items real use creates before adding rules.
 - **Matching follow-ups.** "How's the Lisbon thing going?" without a quote relies on the bot matching titles. Search in `work_list` helps; transcript search (from the research) would help more.

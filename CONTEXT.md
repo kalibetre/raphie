@@ -68,7 +68,7 @@ Sessions from before chats existed are removed when the runtime starts.
 _Avoid_: Conversation; session as something the owner picks or starts.
 
 **Work item**: Something a bot is keeping track of for longer than one turn:
-a request with follow-ups, a scheduled job, or a handoff it received. It has a
+a request with follow-ups, a scheduled job, or a handoff, sent or received. It has a
 title, a status, notes and its latest result, and the bot keeps its list of
 open work items in mind in every turn of the chat. The bot opens and closes
 work items itself; the owner can also open, rename, close or drop one. Work

@@ -17,7 +17,7 @@ Four central claims were checked against the cited pages:
 
 - **Hermes** compacts a session in place under the same session id, summarizes the middle turns with a structured template, keeps a token-budgeted recent tail, and keeps older turns searchable through `session_search`. Its documentation does not mention SQLite or FTS5; that detail comes from the report's reading of the source and was not checked.
 - **OpenClaw** shares one session across all direct messages by default, with no automatic reset, and compaction manages its context.
-- **OpenAI dots**: a dot keeps working between conversations, and delegated work can get "separate, visible threads". The page does not describe a single main chat where results and scheduled runs land; a dot is one entity across ChatGPT and Slack, whose visible conversations stay distinct.
+- **OpenAI dots**: a dot keeps working between conversations, and delegated work can get "separate, visible threads" (the [tasks and memory guide](https://learn.chatgpt.com/docs/dots/tasks-and-memory)). The page does not describe a single main chat where results and scheduled runs land; a dot is one entity across ChatGPT and Slack, whose visible conversations stay distinct.
 - **Digger OpenDots**: one main conversation hands longer jobs to "topics", reusable worker sessions with notes the owner can edit, and their results come back to the main conversation.
 
 ## Where the projects agree
@@ -33,7 +33,7 @@ Raphie already matches point 1, and its compaction (a 64k working size on large 
 
 In order of value:
 
-1. **Build work items** as [CONTEXT.md](../../CONTEXT.md) and [ADR 0001](../adr/0001-one-chat-per-bot-with-work-items.md) describe: a durable record per ongoing responsibility, with a stable id, status, what it waits on, its latest result, and its own background session. Give every chat turn a short list of open items and a tool to read one in full. All four reports rank this first or second.
+1. **Build work items** as [CONTEXT.md](../../CONTEXT.md) and [ADR 0001](../adr/0001-one-chat-per-bot-with-work-items.md) describe: a durable record per ongoing responsibility, with a stable id, status, what it waits on, its latest result, and its own background session. Give every chat turn a short list of open items and a tool to read one in full. All four reports recommend it; two rank it first.
 2. **Add transcript recall**: a bounded search over the bot's chat that returns exact excerpts with message ids, so the bot can quote what a summary dropped. It respects rewinds, and is scoped to the bot.
 3. **Measure before tuning compaction**: per owner turn, uncached and cached input, summary calls and their cost, and overflow retries, on warm and cold caches. Also record the summary hook's own spend, which Pi's usage probably does not count (read from Pi's source, not tested).
 4. **Later**: background memory consolidation after compaction, with sources kept and corrections honoured.
