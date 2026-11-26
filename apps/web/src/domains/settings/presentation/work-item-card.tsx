@@ -61,6 +61,16 @@ export function WorkItemCard({
           under Scheduled jobs.
         </p>
       )}
+      {item.origin?.kind === "handoff-sent" && (
+        <p className="automation-note">
+          Handed to {item.origin.bot.name} · Its result comes back to the chat.
+        </p>
+      )}
+      {item.origin?.kind === "handoff-received" && (
+        <p className="automation-note">
+          A task from {item.origin.bot.name} · The result goes back to it.
+        </p>
+      )}
       {item.notes && <p className="automation-prompt">{item.notes}</p>}
       {item.result && (
         <p className="automation-note">
