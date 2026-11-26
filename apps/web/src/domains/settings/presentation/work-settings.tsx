@@ -17,7 +17,11 @@ import {
   type Draft,
   type WorkChange,
 } from "../application/work-draft";
-import { useWorkChange, useWorkItems } from "../infrastructure/use-work-items";
+import {
+  useWorkCancel,
+  useWorkChange,
+  useWorkItems,
+} from "../infrastructure/use-work-items";
 import { Group } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
 import { WorkItemCard } from "./work-item-card";
@@ -27,9 +31,10 @@ export function WorkSettings({ bot }: { bot: string }) {
   const open = useWorkItems(false);
   const closed = useWorkItems(true);
   const change = useWorkChange();
+  const cancel = useWorkCancel();
   const [draft, setDraft] = useState<Draft>();
   const [error, setError] = useState("");
-  const pending = change.isPending;
+  const pending = change.isPending || cancel.isPending;
 
   async function save(id: string | undefined, input: WorkChange) {
     setError("");
@@ -67,6 +72,17 @@ export function WorkSettings({ bot }: { bot: string }) {
         })
       }
       onChange={(input) => void save(item.id, input)}
+      onCancel={() =>
+        void cancel
+          .mutateAsync(item.id)
+          .catch((cause: unknown) =>
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Could not cancel the run.",
+            ),
+          )
+      }
     />
   );
   return (

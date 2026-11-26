@@ -1,10 +1,11 @@
-import type { Handoff, Quote } from "@raphie/contracts";
+import type { Handoff, Quote, TurnWork } from "@raphie/contracts";
 import { useChat } from "@tanstack/ai-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock,
   CircleAlert,
   CornerUpRight,
+  ListChecks,
   ListEnd,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -283,6 +284,14 @@ export function Chat({
             </div>
           );
         }
+        if (message.role === "user" && turn?.work)
+          return (
+            <div key={message.id} className="turn-user">
+              {divider}
+              <WorkMarker work={turn.work} at={turn.createdAt} />
+              {turnWork(turn, steps.get(turn.id) ?? [])}
+            </div>
+          );
         if (message.role === "user" && turn?.scheduled)
           return (
             <div key={message.id} className="turn-user">
@@ -530,6 +539,29 @@ function ScheduledFailure({
         </details>
       )}
     </div>
+  );
+}
+
+/**
+ * Where a work item's background run came back to the chat: its result is
+ * the bot's to tell, not an owner message.
+ */
+function WorkMarker({ work, at }: { work: TurnWork; at: number }) {
+  const how =
+    work.outcome === "cancelled"
+      ? " · Cancelled"
+      : work.outcome === "failed"
+        ? " · Failed"
+        : "";
+  return (
+    <p className="turn-scheduled" title={`Work item ${work.itemId}`}>
+      <ListChecks size={13} aria-hidden="true" />
+      <span>
+        Background work · <strong>{work.title}</strong>
+        {how}
+      </span>
+      <time dateTime={new Date(at).toISOString()}>{time(at)}</time>
+    </p>
   );
 }
 

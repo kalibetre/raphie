@@ -24,6 +24,7 @@ const render = (each: WorkItem) =>
       pending={false}
       onEdit={() => {}}
       onChange={() => {}}
+      onCancel={() => {}}
     />,
   );
 
@@ -55,4 +56,19 @@ test("a closed item says who closed it and can only be reopened", () => {
   expect(html).toContain("Reopen");
   expect(html).not.toContain("Waiting on");
   expect(html).not.toContain("Mark done");
+});
+
+test("a running item says so and can be cancelled", () => {
+  const html = render({
+    ...item,
+    status: "active",
+    waitingOn: undefined,
+    run: { startedAt: Date.UTC(2026, 10, 26, 9), turnId: "t-9" },
+  });
+  expect(html).toContain("Working");
+  expect(html).toContain("Cancel run");
+});
+
+test("an item at rest has nothing to cancel", () => {
+  expect(render(item)).not.toContain("Cancel run");
 });

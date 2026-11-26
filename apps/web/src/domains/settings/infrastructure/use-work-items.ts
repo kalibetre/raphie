@@ -17,6 +17,17 @@ export function useWorkItems(closed: boolean) {
   });
 }
 
+/** Stops an item's running background work; the lists refresh after. */
+export function useWorkCancel() {
+  const { workspace } = useBackend();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      workspace.api(`/api/work-items/${encodeURIComponent(id)}/cancel`, {}),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["work-items"] }),
+  });
+}
+
 /** Opens an item (without `id`) or changes one; both lists refresh after. */
 export function useWorkChange() {
   const { workspace } = useBackend();
