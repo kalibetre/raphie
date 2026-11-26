@@ -20,7 +20,10 @@ export type ChatConversation = {
   createdAt: number;
   /** Completed replies the owner has read, in any client; absent means none. */
   readReplyCount?: number;
-  /** When the owner archived it. A new message brings it back. */
+  /**
+   * When the owner archived it, before chats; only choosing the chat reads
+   * it, and the runtime clears it on start.
+   */
   archivedAt?: number;
   /** The bot that handed this session's task off. Only that bot directs it. */
   handedOffBy?: { id: string; name: string; sessionId?: string };

@@ -29,8 +29,6 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   waiting: boolean;
   /** A bot is waiting for the owner to answer a question; optional for older runtimes. */
   asking?: boolean;
-  /** When the owner archived it; archived sessions are listed apart. */
-  archivedAt?: number;
   /** The bot that handed this session's task off, and its session it came from. */
   handedOffBy?: { id: string; name: string; sessionId?: string };
   /** The session behind the bot's one chat with the owner; optional for older runtimes. */

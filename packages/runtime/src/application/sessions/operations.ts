@@ -218,14 +218,6 @@ export class Sessions implements SessionOperations {
     await this.conversations.chooseModel(sessionId, model);
   }
 
-  /** Archives a session, or brings it back. */
-  async archive(actor: ActorContext, sessionId: string, archived: boolean) {
-    const verified = this.authority.require(actor);
-    if (verified.source !== "web")
-      throw new InputError("Archiving requires a client interface.", 403);
-    await this.conversations.archive(sessionId, archived);
-  }
-
   /** Records how many of a session's replies the owner has read. */
   async markRead(actor: ActorContext, sessionId: string, replyCount: number) {
     const verified = this.authority.require(actor);

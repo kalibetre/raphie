@@ -24,12 +24,7 @@ const message = z.object({
 export function conversationRoutes(
   conversations: Pick<
     Sessions,
-    | "submit"
-    | "submitLegacy"
-    | "chooseModel"
-    | "control"
-    | "markRead"
-    | "archive"
+    "submit" | "submitLegacy" | "chooseModel" | "control" | "markRead"
   >,
   actor: ActorContext,
 ) {
@@ -67,16 +62,6 @@ export function conversationRoutes(
           c.req.valid("json"),
         );
         return c.json({ model: c.req.valid("json") });
-      },
-    )
-    .post(
-      "/sessions/:id/archive",
-      limitBody(1024),
-      jsonInput(z.object({ archived: z.boolean() }).strict()),
-      async (c) => {
-        const { archived } = c.req.valid("json");
-        await conversations.archive(actor, c.req.param("id"), archived);
-        return c.json({ archived });
       },
     )
     .post(

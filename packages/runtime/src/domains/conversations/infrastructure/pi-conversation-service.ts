@@ -624,8 +624,6 @@ export class ChatService implements ConversationCommands {
             : undefined;
         if (input.quote && !quote)
           throw new InputError("That message can't be quoted here.", 400);
-        // A new message, from any client or channel, brings it back.
-        if (conversation?.archivedAt) delete conversation.archivedAt;
         if (!conversation) {
           const created = await tx.createConversation({
             ownership: { kind: "ownerless" },
@@ -870,17 +868,6 @@ export class ChatService implements ConversationCommands {
         );
       session.model = { ...model };
       await configure(tx, session.id as ConversationId, { model });
-    }, context);
-  }
-
-  async archive(sessionId: string, archived: boolean) {
-    await this.app.root.commit(async (tx) => {
-      const session = (await tx.doc(Chats)).conversations.find(
-        (c) => c.sessionId === sessionId,
-      );
-      if (!session) throw new InputError("Session not found.", 404);
-      if (archived) session.archivedAt ??= Date.now();
-      else delete session.archivedAt;
     }, context);
   }
 

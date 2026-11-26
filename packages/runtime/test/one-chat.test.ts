@@ -1,14 +1,18 @@
 import { Database } from "bun:sqlite";
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+import type { Handoff } from "@raphie/contracts";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
+import { Activity } from "../src/domains/activity/infrastructure/pi-activity-journal.ts";
 import { ToolApprovals } from "../src/domains/approvals/infrastructure/pi-tool-approvals.ts";
+import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
+import { Handoffs } from "../src/domains/handoffs/infrastructure/bot-handoffs.ts";
 import { JobRuns } from "../src/domains/schedules/infrastructure/job-runs.ts";
 import { chatModel } from "./chat-model.ts";
 import { withoutChat } from "./without-chat.ts";
@@ -240,3 +244,145 @@ function holds(path: string, text: string) {
     database.close();
   }
 }
+
+test("an archived conversation never becomes the chat over one in use", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-archived-"));
+  const config = chatModel();
+  let app = await Gateway.open({ directory, ...config });
+  try {
+    // Put away before chats, though written in last.
+    const archived = await app.chats.send(web("archived"));
+    await withoutChat(app);
+    const used = await app.chats.send(web("used"));
+    await withoutChat(app);
+    await app.harness.waitForIdle(context);
+    await app.chats.send({ ...web("later"), sessionId: archived.sessionId });
+    await app.harness.waitForIdle(context);
+    await app.root.commit(async (tx) => {
+      (await tx.doc(Chats)).conversations.find(
+        (c) => c.sessionId === archived.sessionId,
+      )!.archivedAt = Date.now();
+    }, context);
+    await app.close();
+
+    app = await Gateway.open({ directory, ...config });
+    const { conversations } = await app.chats.state();
+    assert.deepEqual(
+      conversations.map((c) => [c.sessionId, !!c.chat, !!c.archivedAt]),
+      [[used.sessionId, true, false]],
+    );
+    const listed = await app.queries.sessions(app.actors.establish("web"));
+    assert.deepEqual(
+      listed.items.map((s) => s.sessionId),
+      [used.sessionId],
+    );
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a restart keeps sessions with work in progress and handed-off tasks", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-guards-"));
+  const release = Promise.withResolvers<void>();
+  let app = await Gateway.open({
+    directory,
+    ...chatModel({ pause: release.promise }),
+  });
+  try {
+    // A reply still running when the runtime stops.
+    const running = await app.chats.send(web("running"));
+    await withoutChat(app);
+    const chat = await app.chats.send(web("chat"));
+    await withoutChat(app);
+    await app.root.commit(async (tx) => {
+      const state = await tx.doc(Chats);
+      // The chat is `chat`; restore it after the helper cleared it.
+      for (const c of state.conversations)
+        if (c.sessionId === chat.sessionId) c.chat = true;
+      // Idle sessions, made without the paused model: one a working handoff
+      // reports back to, and a task another bot handed off to this one.
+      for (const [sessionId, handedOffBy] of [
+        ["delegating-session", undefined],
+        ["handed-off-session", { id: "b-chief", name: "Chief" }],
+      ] as const) {
+        const created = await tx.createConversation({
+          ownership: { kind: "ownerless" },
+        });
+        state.conversations.push({
+          id: created.id,
+          sessionId,
+          title: sessionId,
+          createdAt: Date.now(),
+          ...(handedOffBy ? { handedOffBy: { ...handedOffBy } } : {}),
+        });
+        state.turns.push({
+          id: crypto.randomUUID(),
+          requestKey: `web:${sessionId}`,
+          fingerprint: sessionId,
+          conversationId: created.id,
+          source: "web",
+          text: sessionId,
+          createdAt: Date.now(),
+          status: "done",
+          answer: "Done.",
+        });
+      }
+      (await tx.doc(Handoffs)).items.push({
+        id: "h-1",
+        to: { id: "b-research", name: "Research" },
+        title: "Find papers",
+        fromSessionId: "delegating-session",
+        toSessionId: null,
+        status: "working",
+        createdAt: Date.now(),
+        requests: [],
+      } satisfies Handoff);
+    }, context);
+    await app.close();
+    release.resolve();
+
+    app = await Gateway.open({ directory, ...chatModel() });
+    const kept = (await app.chats.state()).conversations.map(
+      (c) => c.sessionId,
+    );
+    for (const sessionId of [
+      running.sessionId,
+      chat.sessionId,
+      "delegating-session",
+      "handed-off-session",
+    ])
+      assert.ok(kept.includes(sessionId), sessionId);
+  } finally {
+    release.resolve();
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a failed backup keeps the sessions and the bot still starts", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-no-backup-"));
+  const config = chatModel();
+  let app = await Gateway.open({ directory, ...config });
+  try {
+    const old = await app.chats.send(web("old"));
+    await withoutChat(app);
+    await app.chats.send(web("chat"));
+    await app.harness.waitForIdle(context);
+    await app.close();
+    // A file where the backups folder would go.
+    await writeFile(join(directory, "backups"), "");
+
+    app = await Gateway.open({ directory, ...config });
+    assert.ok(
+      (await app.chats.state()).conversations.some(
+        (c) => c.sessionId === old.sessionId,
+      ),
+    );
+    const events = (await app.harness.snapshot(Activity, context))!.events;
+    assert.ok(events.some((e) => e.type === "sessions.cleanup_failed"));
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

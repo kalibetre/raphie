@@ -5,7 +5,6 @@ import { ToolApprovals } from "../../approvals/infrastructure/pi-tool-approvals.
 import { Asks } from "../../asks/infrastructure/pi-asks.ts";
 import { ChannelBindings } from "../../channels/infrastructure/pi-bindings.ts";
 import { Handoffs } from "../../handoffs/infrastructure/bot-handoffs.ts";
-import { Jobs } from "../../schedules/infrastructure/bot-jobs.ts";
 import { JobRuns } from "../../schedules/infrastructure/job-runs.ts";
 import { historyToRemove } from "../domain/chat.ts";
 import { Chats } from "./pi-conversation-service.ts";
@@ -91,9 +90,6 @@ export async function removeHistory(
         run.sessionId = null;
         run.turnId = null;
       }
-    // Jobs from before chats named a session of their own.
-    for (const job of (await tx.doc(Jobs)).items)
-      Reflect.deleteProperty(job, "sessionId");
     const handoffs = await tx.doc(Handoffs);
     handoffs.items = handoffs.items.filter((h) => !gone.has(h.fromSessionId));
     return removed.length;

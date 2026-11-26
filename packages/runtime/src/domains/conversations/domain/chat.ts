@@ -6,8 +6,9 @@ import type { ChatConversation, ChatTurn } from "./model.ts";
 
 /**
  * The session that becomes a bot's chat when it has none yet: the owner's
- * most recent conversation started from an app or a private channel chat. A
- * handed-off task, a scheduled job's session or a group's never does.
+ * most recent conversation started from an app or a private channel chat,
+ * preferring one they had not archived. A handed-off task, a scheduled job's
+ * session or a group's never does.
  */
 export function chatFromHistory(
   conversations: readonly ChatConversation[],
@@ -26,7 +27,13 @@ export function chatFromHistory(
     )
       continue;
     const lastAt = own.at(-1)!.createdAt;
-    if (!chosen || lastAt > chosen.lastAt) chosen = { conversation, lastAt };
+    const archived = !!conversation.archivedAt;
+    if (
+      !chosen ||
+      (!archived && !!chosen.conversation.archivedAt) ||
+      (archived === !!chosen.conversation.archivedAt && lastAt > chosen.lastAt)
+    )
+      chosen = { conversation, lastAt };
   }
   return chosen?.conversation;
 }

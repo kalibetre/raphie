@@ -70,6 +70,7 @@ import {
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
+import { Jobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
 import { connectedServicesInstructions } from "../domains/settings/domain/connected-services.ts";
 import {
   createSkillTools,
@@ -387,6 +388,12 @@ export class Gateway {
         const chat = chatFromHistory(chats.conversations, chats.turns);
         if (chat) chat.chat = true;
       }
+      // Nothing is archived any more.
+      for (const conversation of chats.conversations)
+        Reflect.deleteProperty(conversation, "archivedAt");
+      // Jobs from before chats named a session of their own.
+      for (const job of (await tx.doc(Jobs)).items)
+        Reflect.deleteProperty(job, "sessionId");
       const chat = chats.conversations.find((c) => c.chat);
       if (chat)
         for (const binding of bindings)
@@ -468,21 +475,33 @@ export class Gateway {
       for (const delivery of [...toolApprovals.deliveries, ...asks.deliveries])
         if (delivery.status === "sending") delivery.status = "uncertain";
     }, context);
-    // Sessions from before chats go, after a copy of the bot's storage.
+    // Sessions from before chats go, after a copy of the bot's storage. A
+    // failure keeps them all, and the bot starts anyway.
     const database = join(options.directory, "gateway.sqlite");
-    await removeHistory(
-      app,
-      () =>
-        backupSqlite(
-          database,
-          join(
-            options.directory,
-            "backups",
-            `before-one-chat-${Date.now()}.sqlite`,
+    try {
+      await removeHistory(
+        app,
+        () =>
+          backupSqlite(
+            database,
+            join(
+              options.directory,
+              "backups",
+              `before-one-chat-${Date.now()}.sqlite`,
+            ),
           ),
-        ),
-      context,
-    );
+        context,
+      );
+    } catch (error) {
+      await app.root.commit(async (tx) => {
+        record(
+          await tx.doc(Activity),
+          "sessions.cleanup_failed",
+          "Sessions from before chats were kept: backing up or removing them failed",
+          { details: { error: String(error) } },
+        );
+      }, context);
+    }
     for (const conversation of (await app.chats.state()).conversations)
       await app.observations.attach(conversation.id);
     if (!options.deferResume) app.harness.resume();
