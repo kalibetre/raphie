@@ -285,7 +285,6 @@ mod tests {
             every_minutes: Some(60),
             enabled: true,
             next_run_at: 1_700_000_600_000,
-            session_id: None,
             last_run_at: None,
             last_status: None,
             last_run: None,

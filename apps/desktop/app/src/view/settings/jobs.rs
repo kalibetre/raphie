@@ -202,14 +202,6 @@ fn card(job: &ScheduledJob, busy: bool, t: &Theme) -> El {
             act(action),
         ));
     }
-    if let Some(session) = &job.session_id {
-        let session = session.clone();
-        buttons = buttons.child(pressable(
-            button(t, Kind::Ghost, Size::Small, None, "Open conversation").key(key("open")),
-            true,
-            move |s: &mut Ui| s.open_job_session(&session),
-        ));
-    }
     buttons = buttons.child(pressable(
         button(t, Kind::Ghost, Size::Small, None, "Remove").key(key("remove")),
         !busy,
@@ -406,7 +398,7 @@ fn run_row(bot_id: &str, run: &JobRun, t: &Theme) -> El {
         )
         .child(copy);
     if let Some(session) = &run.session_id {
-        let (bot_id, session) = (bot_id.to_owned(), session.clone());
+        let (bot_id, session, turn) = (bot_id.to_owned(), session.clone(), run.turn_id.clone());
         line = line
             .child(
                 icon(&icons::ARROW_UP_RIGHT, 15.0)
@@ -415,12 +407,12 @@ fn run_row(bot_id: &str, run: &JobRun, t: &Theme) -> El {
                     .a11y_hidden(),
             )
             .role("button")
-            .label(format!("{}, {status}, open run conversation", run.name))
+            .label(format!("{}, {status}, open in the chat", run.name))
             .focusable(true)
             .radius(6.0)
             .hover(t.hover)
             .focus_ring(2.0, -2.0, t.accent)
-            .on_press(move |s: &mut Ui| s.open_conversation(&bot_id, &session));
+            .on_press(move |s: &mut Ui| s.open_message(&bot_id, &session, turn.clone()));
     }
     line
 }

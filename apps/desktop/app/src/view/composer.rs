@@ -28,7 +28,7 @@ use super::permissions::permissions;
 use crate::icons;
 use crate::state::Ui;
 use crate::theme::font;
-use crate::widgets::{Kind, Size, button, centered, icon_button, pressable};
+use crate::widgets::{centered, icon_button, pressable};
 
 pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let t = &look.theme;
@@ -347,55 +347,4 @@ fn band(share: f32) -> Path {
         path = path.line_to(on_circle(inner, turn(step)));
     }
     path.close()
-}
-
-/// In place of the composer, in a session kept from before chats: a note
-/// and the way back to the chat.
-///
-/// Mirrors the web's `history-notice.tsx` and the `.history-notice` rules
-/// in `chat.css`.
-pub fn history_notice(s: &Ui, look: &Look) -> El {
-    let t = &look.theme;
-    let mut card = row()
-        .key("rd-history-notice")
-        .role("note")
-        .w_full()
-        .gap(10.0)
-        .center_y()
-        .fill(t.card)
-        .border(1.0, t.border)
-        .radius(14.0)
-        .pl(14.0)
-        .pr(10.0)
-        .py(10.0)
-        .child(
-            icon(&icons::HISTORY, 16.0)
-                .color(t.muted_foreground)
-                .a11y_hidden(),
-        )
-        .child(
-            text("This conversation is from before chats. It’s kept as history.")
-                .font(font(13.0, 400.0))
-                .color(t.muted_foreground)
-                .wrap()
-                .grow(1.0)
-                .min_w(0.0),
-        )
-        .child(pressable(
-            button(t, Kind::Primary, Size::Small, None, "Go to the chat").key("rd-go-to-chat"),
-            true,
-            |s: &mut Ui| s.go_to_chat(),
-        ));
-    for shadow in t.shadow {
-        card = card.box_shadow(shadow);
-    }
-    col().key("rd-composer-area").w_full().items_center().child(
-        col()
-            .w_full()
-            .max_w(READING_WIDTH)
-            .px(if s.narrow() { 12.0 } else { 28.0 })
-            .pt(4.0)
-            .pb(if s.narrow() { 12.0 } else { 14.0 })
-            .child(card),
-    )
 }

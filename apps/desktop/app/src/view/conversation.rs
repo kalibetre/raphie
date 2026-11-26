@@ -342,7 +342,7 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
         .center_y()
         .hover_group();
     // Quoting it, beside the bubble while the message is pointed at.
-    if can_quote(s) && !turn.text.trim().is_empty() && !queued {
+    if !turn.text.trim().is_empty() && !queued {
         line = line.child(super::quote::action(
             format!("rd-quote-owner-{}", turn.id),
             &turn.id,
@@ -352,12 +352,6 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
         ));
     }
     line.child(bubble)
-}
-
-/// Whether the open session's messages can be quoted: not in a session
-/// kept as history.
-fn can_quote(s: &Ui) -> bool {
-    !s.open_is_history()
 }
 
 /// Under a queued message: how it will join the run, and a button to change
@@ -442,7 +436,7 @@ fn reply(
         .px(2.0)
         .hover_group();
     // Quoting it, level with the bot's name while it is pointed at.
-    if done && can_quote(s) && !source.trim().is_empty() {
+    if done && !source.trim().is_empty() {
         reply = reply.child(
             super::quote::action(
                 format!("rd-quote-bot-{}", turn.id),

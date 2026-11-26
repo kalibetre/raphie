@@ -55,7 +55,6 @@ pub const SCENES: &[Scene] = &[
     ("inbox", inbox),
     ("inbox-empty", inbox_empty),
     ("conversation", conversation),
-    ("conversation-history", conversation_history),
     ("conversation-quote", conversation_quote),
     ("compaction", compaction),
     ("compaction-open", compaction_open),
@@ -872,7 +871,6 @@ pub fn scheduled_jobs() -> Vec<ScheduledJob> {
             "prompt": "Summarize the project's open tasks and suggest today's priorities.",
             "everyMinutes": 1440, "firstRunAt": 1_794_200_400_000_i64,
             "enabled": true, "nextRunAt": 1_794_718_800_000_i64,
-            "sessionId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
             "lastRunAt": 1_794_632_400_000_i64, "lastStatus": "submitted",
             "lastRun": {
                 "id": "run-104", "jobId": "job-brief", "name": "Morning project brief",
@@ -886,7 +884,7 @@ pub fn scheduled_jobs() -> Vec<ScheduledJob> {
             "id": "job-renewal", "name": "Renew the domain",
             "prompt": "Remind me to renew the domain before it lapses.",
             "everyMinutes": null, "firstRunAt": 1_794_546_000_000_i64,
-            "enabled": false, "nextRunAt": 1_794_546_000_000_i64, "sessionId": null,
+            "enabled": false, "nextRunAt": 1_794_546_000_000_i64,
             "lastRunAt": 1_794_546_000_000_i64, "lastStatus": "failed",
             "lastRun": {
                 "id": "run-101", "jobId": "job-renewal", "name": "Renew the domain",
@@ -900,7 +898,7 @@ pub fn scheduled_jobs() -> Vec<ScheduledJob> {
             "id": "job-digest", "name": "Weekly reading digest",
             "prompt": "List what I saved to read this week, shortest first.",
             "everyMinutes": 10080, "firstRunAt": 1_794_805_200_000_i64,
-            "enabled": false, "nextRunAt": 1_794_805_200_000_i64, "sessionId": null,
+            "enabled": false, "nextRunAt": 1_794_805_200_000_i64,
             "lastRunAt": null, "lastStatus": null,
         },
     ]))
@@ -2055,20 +2053,6 @@ pub fn conversation_quote(ui: &mut Ui) {
             raphie_core::contracts::QuoteAuthor::Owner,
             &first.text,
         );
-    }
-}
-
-/// "Plan the week" from before chats: kept as history, with the way back
-/// to the chat in place of the composer.
-pub fn conversation_history(ui: &mut Ui) {
-    conversation(ui);
-    if let Some(observation) = ui
-        .model
-        .conversation
-        .as_mut()
-        .and_then(|c| c.observation.as_mut())
-    {
-        observation.session.history = true;
     }
 }
 

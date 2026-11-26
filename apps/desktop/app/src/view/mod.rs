@@ -164,9 +164,7 @@ fn workspace(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
             None if s.needs_setup() => main.child(setup::setup(s, look)),
             None => main.child(welcome::welcome(s, look)),
         };
-        if s.open_is_history() {
-            main = main.child(composer::history_notice(s, look));
-        } else if s.model.conversation.is_some() || !s.needs_setup() {
+        if s.model.conversation.is_some() || !s.needs_setup() {
             main = main.child(composer::composer(s, look, overlays));
         }
     }

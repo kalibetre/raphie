@@ -1047,8 +1047,7 @@ impl Ui {
         }
         match (bot_exists, &target.session_id) {
             (true, Some(session_id)) => {
-                self.open_conversation(&target.bot_id, session_id);
-                self.reveal = target.turn_id.clone();
+                self.open_message(&target.bot_id, session_id, target.turn_id.clone())
             }
             _ => {
                 self.close_settings();
@@ -1435,25 +1434,6 @@ impl Ui {
                 name: bot.name.clone(),
             })
             .collect()
-    }
-
-    /// Whether the open session is from before chats, kept as history: the
-    /// owner reads it but no longer writes in it.
-    pub fn open_is_history(&self) -> bool {
-        let Some(conversation) = self.model.conversation.as_ref() else {
-            return false;
-        };
-        conversation
-            .observation
-            .as_ref()
-            .map(|o| o.session.history)
-            .or_else(|| {
-                self.model
-                    .session_list()
-                    .find(|s| s.id == conversation.session_id)
-                    .map(|s| s.history)
-            })
-            .unwrap_or(false)
     }
 
     /// Brings the message an inbox entry led to into view, once the open
@@ -3076,10 +3056,11 @@ impl Ui {
     }
 
     /// Leaves Settings for the conversation a job's results are in.
-    pub fn open_job_session(&mut self, session_id: &str) {
-        if let Some(bot_id) = self.jobs_bot() {
-            self.open_conversation(&bot_id, session_id);
-        }
+    /// Opens a session at one turn's message, as a job run or an inbox
+    /// entry leads to it.
+    pub fn open_message(&mut self, bot_id: &str, session_id: &str, turn_id: Option<String>) {
+        self.open_conversation(bot_id, session_id);
+        self.reveal = turn_id;
     }
 
     /// Shows one job's runs, or with `None` every job's, from the newest.

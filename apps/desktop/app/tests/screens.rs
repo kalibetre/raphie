@@ -539,32 +539,6 @@ fn a_bot_opens_on_its_chat_once_its_sessions_arrive() {
     );
 }
 
-#[test]
-fn a_session_from_before_chats_offers_the_chat_instead_of_a_composer() {
-    for dark in [false, true] {
-        let mut rt = render(scenes::conversation, dark);
-        assert!(rt.find("rd-composer").is_some());
-        rt.update(|ui, _| {
-            if let Some(observation) = ui
-                .model
-                .conversation
-                .as_mut()
-                .and_then(|c| c.observation.as_mut())
-            {
-                observation.session.history = true;
-            }
-        });
-        settle(&mut rt);
-        assert!(rt.find("rd-composer").is_none());
-        assert!(screen_text(&rt).contains("kept as history"));
-        click(&mut rt, "rd-go-to-chat");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::SelectSession { session_id: None })
-        );
-    }
-}
-
 /// The key of the element whose accessible label is `label`.
 fn element_with_label(rt: &Runtime<Ui>, label: &str) -> String {
     rt.elements()
@@ -2662,15 +2636,8 @@ fn jobs_are_listed_with_their_state_and_what_can_be_done() {
         Some("Scheduled job not found.")
     );
 
-    // A job's conversation opens in the workspace.
-    click(&mut rt, "rd-job-job-brief-open");
-    assert_eq!(rt.state.screen, Screen::Workspace);
-    assert_eq!(
-        rt.state.sent.last(),
-        Some(&Command::SelectSession {
-            session_id: Some("0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b".into()),
-        })
-    );
+    // A job has no conversation of its own: its runs post in the chat.
+    assert!(rt.find("rd-job-job-brief-open").is_none());
 }
 
 /// The ticket of the runs load the page last asked for.
@@ -2773,9 +2740,16 @@ fn run_history_pages_filters_by_job_and_refreshes() {
     // The jobs and the newest runs, once.
     assert_eq!(rt.state.sent.len(), before + 2);
 
-    // A run with a conversation opens it.
+    // A run opens the chat at its message.
     click(&mut rt, "rd-run-run-104");
     assert_eq!(rt.state.screen, Screen::Workspace);
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::SelectSession {
+            session_id: Some("0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b".into()),
+        })
+    );
+    assert_eq!(rt.state.reveal.as_deref(), Some("t-311"));
 }
 
 #[test]
@@ -6421,9 +6395,5 @@ fn a_quote_shows_inside_the_message_that_quotes() {
             "{:?}",
             bar.label
         );
-        // A session from before chats offers no Quote.
-        let mut rt = render(scenes::conversation_history, dark);
-        settle(&mut rt);
-        assert!(rt.find(&format!("rd-quote-bot-{quoted}")).is_none());
     }
 }

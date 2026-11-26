@@ -661,10 +661,6 @@ pub struct SessionSummary {
     /// The session behind the bot's one chat with the owner.
     #[serde(default)]
     pub chat: bool,
-    /// From before chats: kept as history, and the owner no longer writes
-    /// in it.
-    #[serde(default)]
-    pub history: bool,
 }
 
 /// `SessionView["handedOffBy"]` in `packages/contracts`.
@@ -2010,9 +2006,6 @@ pub struct ScheduledJob {
     pub enabled: bool,
     /// When it runs next, in milliseconds since the Unix epoch.
     pub next_run_at: i64,
-    /// The conversation its results go to, once it has one.
-    #[serde(default)]
-    pub session_id: Option<String>,
     #[serde(default)]
     pub last_run_at: Option<i64>,
     #[serde(default)]
