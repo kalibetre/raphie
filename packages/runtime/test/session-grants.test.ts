@@ -8,6 +8,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { ToolApprovals } from "../src/domains/approvals/infrastructure/pi-tool-approvals.ts";
 import { chatModel } from "./chat-model.ts";
+import { withoutChat } from "./without-chat.ts";
 
 test("Full access persists across restart and approves commands and MCP tools; Ask makes both wait", async () => {
   const directory = await mkdtemp(join(tmpdir(), "command-permissions-"));
@@ -224,6 +225,7 @@ test("first message persists its command mode and later conversations default to
     expect(await app.toolApprovals.approvalMode("owner", first.sessionId)).toBe(
       "full-access",
     );
+    await withoutChat(app);
     const second = await app.chats.send({
       source: "web",
       actor: "owner",

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { BotWorkspace } from "../src/domains/workspaces/infrastructure/bot-workspace.ts";
+import { withoutChat } from "./without-chat.ts";
 
 test("workspace serializes sessions, deduplicates checkpoints and recovers without cross-bot files", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-workspace-"));
@@ -91,6 +92,8 @@ test("model tool executions derive the bot and session from the runtime, with sh
     decision: "approved" | "rejected" = "approved",
   ) => {
     const actor = gateway.actors.establish("web");
+    // Each request is a session of its own, to show what they share.
+    await withoutChat(gateway);
     const receipt = await gateway.sessions.submit(actor, {
       eventId: crypto.randomUUID(),
       text,

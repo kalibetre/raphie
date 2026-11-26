@@ -31,6 +31,8 @@ async function open(
     deferResume: true,
     ...chatModel({
       offeredTools: (names) => offered.push(names),
+      // Edits continue the owner's chat, so each message calls its tool.
+      repeatTool: tool !== undefined,
       tool: tool ?? {
         name: "schedule_create",
         args: {

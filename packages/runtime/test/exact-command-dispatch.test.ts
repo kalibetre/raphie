@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { chatModel } from "./chat-model.ts";
+import { withoutChat } from "./without-chat.ts";
 
 test("dispatch requires once again, persists exact session grants and their revocation", async () => {
   const directory = await mkdtemp(join(tmpdir(), "exact-dispatch-"));
@@ -100,6 +101,8 @@ test("first-turn dispatch honors Full access, explicit Ask and the safe default 
   });
   try {
     for (const approvalMode of ["full-access", "ask", undefined] as const) {
+      // Each mode is a new session's first message.
+      await withoutChat(app);
       const receipt = await app.sessions.submit(app.actors.establish("web"), {
         eventId: crypto.randomUUID(),
         text: "execute",

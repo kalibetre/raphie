@@ -52,6 +52,7 @@ import {
 } from "../domains/cards/infrastructure/pi-cards.ts";
 import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.ts";
 import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
+import { chatFromHistory } from "../domains/conversations/domain/chat.ts";
 import { compactionPolicy } from "../domains/conversations/domain/compaction.ts";
 import {
   Chats,
@@ -338,6 +339,11 @@ export class Gateway {
           conversation.model = previousModels.get(conversation.id)!;
         if (!conversation.sessionId)
           conversation.sessionId = newSessionId(conversation.createdAt);
+      }
+      // Bots from before chats keep their latest app conversation as the chat.
+      if (!chats.conversations.some((c) => c.chat)) {
+        const chat = chatFromHistory(chats.conversations, chats.turns);
+        if (chat) chat.chat = true;
       }
       const bindings = (await tx.doc(ChannelBindings)).bindings;
       // Backfill only persisted associations, never the current default channel.

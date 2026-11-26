@@ -544,6 +544,13 @@ export class ChatService implements ConversationCommands {
             403,
           );
         const conversationId = addressed?.id ?? input.conversationId;
+        // The owner writing from an app, to no session in particular, writes
+        // in the bot's one chat.
+        const toChat =
+          input.source === "web" &&
+          conversationId === undefined &&
+          !input.scheduled &&
+          !input.handoff;
         // Preserve the fingerprint of pre-migration commands when addressed by UUID.
         const fingerprint = new Bun.CryptoHasher("sha256")
           .update(
@@ -596,7 +603,9 @@ export class ChatService implements ConversationCommands {
           ? state.conversations.find((c) => c.id === conversationId)
           : binding
             ? state.conversations.find((c) => c.sessionId === binding.sessionId)
-            : undefined;
+            : toChat
+              ? state.conversations.find((c) => c.chat)
+              : undefined;
         if (conversationId && !conversation)
           throw new InputError("Conversation not found.", 404);
         // A new message, from any client or channel, brings it back.
@@ -617,6 +626,7 @@ export class ChatService implements ConversationCommands {
               .slice(0, 70),
             createdAt: Date.now(),
             model: { ...(input.model ?? this.model!) },
+            ...(toChat ? { chat: true as const } : {}),
             ...(input.handoff?.kind === "task"
               ? {
                   handedOffBy: {

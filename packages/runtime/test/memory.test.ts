@@ -493,11 +493,13 @@ test("memory tools retain host provenance and recall in a new Pi session after r
       memory: f.memory,
       ...chatModel({ tool: { name: "memory_recall", args: { query: "tea" } } }),
     });
+    // Another session: a Discord thread, not the app's chat.
     const second = await app.chats.send({
-      source: "web",
+      source: "discord",
       eventId: "recall",
       actor: "owner",
       text: "What tea do I like?",
+      discordThreadId: "discord:guild:channel:tea",
     });
     for (
       let n = 0;
@@ -717,7 +719,11 @@ test("agent tools revise and forget evidence with persisted results and useful e
       app = await Gateway.open({
         directory: f.directory,
         memory: f.memory,
-        ...chatModel({ tool: { name: operation.name, args: operation.args } }),
+        // Each operation is a new message in the same chat.
+        ...chatModel({
+          tool: { name: operation.name, args: operation.args },
+          repeatTool: true,
+        }),
       });
       const turn = await app.chats.send({
         source: "web",

@@ -9,6 +9,7 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { chatModel } from "./chat-model.ts";
+import { withoutChat } from "./without-chat.ts";
 
 test("an archived session leaves the list, is listed apart, and a new message brings it back", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-session-archive-"));
@@ -36,6 +37,7 @@ test("an archived session leaves the list, is listed apart, and a new message br
       eventId: "kept",
       text: "Keep me",
     });
+    await withoutChat(app);
     const old = await app.sessions.submit(owner, {
       eventId: "old",
       text: "Put me away",

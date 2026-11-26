@@ -10,6 +10,7 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
 import { chatModel } from "./chat-model.ts";
+import { withoutChat } from "./without-chat.ts";
 
 test("session models survive defaults, retries, migration and reopen without crossing sessions", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-session-model-"));
@@ -43,6 +44,7 @@ test("session models survive defaults, retries, migration and reopen without cro
       sessionId: first.sessionId,
     });
     await app.harness.waitForIdle(context);
+    await withoutChat(app);
     const second = await app.sessions.submit(app.actors.establish("web"), {
       eventId: "new-session",
       text: "New",
@@ -80,6 +82,7 @@ test("session models survive defaults, retries, migration and reopen without cro
       (await post(`/sessions/${crypto.randomUUID()}/model`, alternate)).status,
       404,
     );
+    await withoutChat(app);
     const thirdResponse = await post("/sessions/messages", {
       eventId: "selected-first-message",
       text: "Chosen",

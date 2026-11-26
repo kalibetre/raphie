@@ -23,6 +23,8 @@ export type ChatConversation = {
   archivedAt?: number;
   /** The bot that handed this session's task off. Only that bot directs it. */
   handedOffBy?: { id: string; name: string; sessionId?: string };
+  /** The session behind the bot's one chat with the owner. */
+  chat?: true;
 };
 
 /**

@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { chatModel } from "./chat-model.ts";
+import { withoutChat } from "./without-chat.ts";
 
 test("steering during a text reply preserves the next run's distinct answer", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-steer-text-"));
@@ -156,6 +157,7 @@ test("queued messages can steer or remain queued, and stopping retires work", as
       )?.failed,
       false,
     );
+    await withoutChat(app);
     const next = await app.sessions.submit(actor, {
       eventId: "next",
       text: "Another task",

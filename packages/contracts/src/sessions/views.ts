@@ -33,6 +33,8 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   archivedAt?: number;
   /** The bot that handed this session's task off, and its session it came from. */
   handedOffBy?: { id: string; name: string; sessionId?: string };
+  /** The session behind the bot's one chat with the owner; optional for older runtimes. */
+  chat?: true;
 };
 
 export type SessionTurn = Omit<

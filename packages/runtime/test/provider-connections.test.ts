@@ -13,6 +13,7 @@ import { startServer } from "../src/bootstrap/http-server.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
+import { withoutChat } from "./without-chat.ts";
 
 function fixtureModels(requests: string[]) {
   const { models } = chatModel();
@@ -112,6 +113,7 @@ test("two connections to OpenRouter isolate credentials, session choices, edits 
       model: { provider: personal!.id, modelId: "history" },
     });
     await app.harness.waitForIdle(context);
+    await withoutChat(app);
     const b = await app.chats.send({
       source: "web",
       eventId: "work",
