@@ -268,7 +268,7 @@ test("a work item's title can't add lines to a message's header", () => {
 });
 
 test("a private Telegram chat with the owner keeps the list and the tools", async () => {
-  const { app, say, seen, done } = await bot({
+  const { say, seen, done } = await bot({
     open: { name: "work_open", args: { title: "Private plan" } },
     list: { name: "work_list", args: {} },
   });
