@@ -64,7 +64,7 @@ as a synonym for a single message or a temporary browser connection.
 **Session**: A bot's model context with its own ordered history: the one
 behind a chat, or one the bot runs in the background for longer work. The
 owner follows background work through the chat, never by opening its session.
-Sessions from before chats existed remain as read-only history.
+Sessions from before chats existed are removed when the runtime starts.
 _Avoid_: Conversation; session as something the owner picks or starts.
 
 **Work item**: Something a bot is keeping track of for longer than one turn:

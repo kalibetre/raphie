@@ -38,7 +38,9 @@ Read state is shared through the runtime: a reply you read on the desktop app is
 
 ### Conversations from before chats
 
-Conversations started before bots had one chat are kept as history. The most recent one you started from an app became the bot's chat; the others still open from their links, such as a memory's source or a scheduled job's run, with **This conversation is from before chats. It's kept as history.** where the composer was. **Go to the chat** takes you back. Nothing in them is deleted, and you can no longer write in them.
+Conversations started before bots had one chat are removed when Raphie starts. The most recent one you started from an app became the bot's chat and stays, as do group and server-channel sessions and tasks another bot handed off. Scheduled jobs' own conversations go too: their runs now post in the chat. A conversation with a reply still in progress waits for a later start.
+
+Before removing anything, Raphie copies the bot's storage to `backups/before-one-chat-<time>.sqlite` in the bot's [data folder](/architecture/state/#what-each-bot-stores). Links to a removed conversation, such as a memory's source or an earlier job run, no longer open it.
 
 ## The composer
 
@@ -72,7 +74,7 @@ Stopping withdraws queued messages, marks the interrupted reply as stopped and e
 
 To talk about an earlier message, yours or the bot's, point at it and choose **Quote** (on a phone it sits under the message). The quote appears above the composer with the author and how the message starts; **✕** drops it. When you send, your message carries the quote inside it, with a green edge for the bot's words and a grey one for yours. Choosing a quote scrolls to the message it came from, if it is loaded.
 
-A message quotes at most one other. The bot reads the quoted words before your message, so "Shorter, please" next to a quote means that message. Quoting is not offered in a conversation from before chats.
+A message quotes at most one other. The bot reads the quoted words before your message, so "Shorter, please" next to a quote means that message.
 
 ## Choosing a model
 

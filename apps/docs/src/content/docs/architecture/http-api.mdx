@@ -218,7 +218,7 @@ These remain for older callers. The web workspace still calls `/sessions/legacy/
 | `attachments`  | Up to four unique upload IDs from `POST /attachments`; an ID this bot does not hold is 404                                                                                                                                    |
 | `quote`        | Optional. One earlier message of the same session: `author` is `owner` for the owner's words in that turn, `bot` for the bot's. The turn stores `{ turnId, author, excerpt }`, the first 280 characters; anything else is 400 |
 
-Admission returns 503 `no_model` when no model is configured, 400 when the chosen model is not in the catalogue, and 409 `history` for a session from before chats, which is kept as history: write in the chat instead. The receipt confirms durable admission, not completion. Follow the session's events or poll its observation to see the reply.
+Admission returns 503 `no_model` when no model is configured, 400 when the chosen model is not in the catalogue, and 404 when the session is not found. The receipt confirms durable admission, not completion. Follow the session's events or poll its observation to see the reply.
 
 ## Session model selection
 
