@@ -185,11 +185,16 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
     } else {
         (t.muted, t.muted_foreground)
     };
+    let running = item.run.is_some();
     let badge = row().px(6.0).py(2.0).radius(6.0).fill(fill).child(
-        text(status_label(item.status))
-            .key(key("badge"))
-            .font(font(11.0, 400.0).lh(16.0))
-            .color(ink),
+        text(if running {
+            "Working"
+        } else {
+            status_label(item.status)
+        })
+        .key(key("badge"))
+        .font(font(11.0, 400.0).lh(16.0))
+        .color(ink),
     );
     let mut card = col()
         .key(format!("rd-work-{}", item.id))
@@ -258,6 +263,14 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
     card = card.child(note(t, meta).key(key("meta")));
 
     let mut buttons = row().w_full().gap(8.0).flex_wrap().center_y().mt(12.0);
+    if running {
+        let id = item.id.clone();
+        buttons = buttons.child(pressable(
+            button(t, Kind::Outline, Size::Small, None, "Cancel run").key(key("cancel")),
+            !busy,
+            move |s: &mut Ui| s.cancel_work(&id),
+        ));
+    }
     if item.status.is_open() {
         let edit = item.id.clone();
         buttons = buttons
@@ -347,8 +360,13 @@ fn dialog(s: &Ui, bot: &str, look: &Look, overlays: &mut Vec<El>) {
         ))
         .child(caption("Notes"))
         .child(notes_box);
-    if let Some(error) = &s.model.work_change_error {
-        body = body.child(error_line(t, error).key("rd-work-form-error"));
+    // What is wrong with the form first, then what the runtime refused.
+    let error = form
+        .error
+        .map(str::to_owned)
+        .or_else(|| s.model.work_change_error.clone());
+    if let Some(error) = error {
+        body = body.child(error_line(t, &error).key("rd-work-form-error"));
     }
     body = body.child(
         row()

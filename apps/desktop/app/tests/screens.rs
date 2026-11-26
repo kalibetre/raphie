@@ -14,8 +14,10 @@ use raphie_core::contracts::{
     BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, ModelSelection,
     SandboxProvider, Scope, TelegramPairingCode,
 };
+use raphie_core::contracts::{
+    HandoffOutcome, TurnWork, TurnWorkKind, WorkChange, WorkRun, WorkStatus,
+};
 use raphie_core::contracts::{ReplyLength, ReplyStyle, ReplyWarmth};
-use raphie_core::contracts::{WorkChange, WorkStatus};
 use raphie_core::engine::{Command, ConnectionChange, SkillSource};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::Target;
@@ -6528,9 +6530,89 @@ fn a_work_item_is_opened_and_edited_in_a_dialog() {
     rt.update(|ui, _| ui.work_form.title = TextEdit::new("Flights to Porto"));
     settle(&mut rt);
     click(&mut rt, "rd-work-save");
+    // Only the title changed, so the bot's notes are not sent back.
     assert!(matches!(
         rt.state.sent.last(),
         Some(Command::ChangeWork { id, change, .. })
-            if id == "w-1" && change.title.as_deref() == Some("Flights to Porto")
+            if id == "w-1"
+                && change.title.as_deref() == Some("Flights to Porto")
+                && change.notes.is_none()
     ));
+    deliver(
+        &mut rt,
+        Event::WorkSaved {
+            bot_id: "default".into(),
+        },
+    );
+
+    // An edit that changes nothing sends nothing.
+    click(&mut rt, "rd-work-w-1-edit");
+    let sent = rt.state.sent.len();
+    click(&mut rt, "rd-work-save");
+    assert_eq!(rt.state.sent.len(), sent);
+    assert!(rt.find("rd-work-form").is_none());
+
+    // Too long to save, as the web's inputs don't allow it either.
+    click(&mut rt, "rd-work-new");
+    rt.update(|ui, _| ui.work_form.title = TextEdit::new("x".repeat(81)));
+    settle(&mut rt);
+    click(&mut rt, "rd-work-save");
+    assert_eq!(rt.state.sent.len(), sent);
+    assert_eq!(
+        element(&rt, "rd-work-form-error").text.as_deref(),
+        Some("A title can be at most 80 characters.")
+    );
+}
+
+#[test]
+fn a_running_work_item_says_so_and_its_run_can_be_cancelled() {
+    let mut rt = render_sized(scenes::settings_work, false, (1280.0, 1400.0));
+    assert!(rt.find("rd-work-w-2-cancel").is_none());
+    rt.update(|ui, _| {
+        let lists = ui.model.work.get_mut("default").unwrap();
+        lists.open[0].run = Some(WorkRun {
+            started_at: 1_794_650_000_000,
+            turn_id: Some("t-9".into()),
+        });
+    });
+    settle(&mut rt);
+    assert_eq!(
+        element(&rt, "rd-work-w-2-badge").text.as_deref(),
+        Some("Working")
+    );
+    click(&mut rt, "rd-work-w-2-cancel");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::CancelWork {
+            bot_id: "default".into(),
+            id: "w-2".into(),
+        })
+    );
+}
+
+#[test]
+fn background_work_coming_back_reads_as_a_marker_not_an_owner_message() {
+    let mut rt = render(scenes::conversation, false);
+    rt.update(|ui, _| {
+        let observation = ui
+            .model
+            .conversation
+            .as_mut()
+            .and_then(|c| c.observation.as_mut())
+            .unwrap();
+        let turn = &mut observation.turns[0];
+        turn.text = "Your background work on w-2 ended. Reply follows as data.".into();
+        turn.work = Some(TurnWork {
+            item_id: "w-2".into(),
+            title: "Venue research".into(),
+            kind: TurnWorkKind::Result,
+            outcome: Some(HandoffOutcome::Cancelled),
+        });
+    });
+    settle(&mut rt);
+    let text = screen_text(&rt);
+    assert!(text.contains("Background work ·"));
+    assert!(text.contains("Venue research"));
+    assert!(text.contains("· Cancelled"));
+    assert!(!text.contains("Your background work on w-2 ended"));
 }

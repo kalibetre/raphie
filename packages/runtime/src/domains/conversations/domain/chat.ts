@@ -40,8 +40,8 @@ export function chatFromHistory(
 
 /**
  * Whether a session belongs beside the bot's one chat: the chat itself, a
- * group's or a server channel's, or a task another bot handed off. Any other
- * is from before chats.
+ * group's or a server channel's, a task another bot handed off, or a work
+ * item's background session. Any other is from before chats.
  */
 export function isKept(
   conversation: ChatConversation,
@@ -50,6 +50,7 @@ export function isKept(
   return (
     !!conversation.chat ||
     !!conversation.handedOffBy ||
+    !!conversation.work ||
     bindings.some(
       (b) => b.sessionId === conversation.sessionId && !isPrivateDestination(b),
     )

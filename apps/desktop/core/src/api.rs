@@ -708,6 +708,15 @@ impl ApiClient {
         .await
     }
 
+    /// Stops one work item's running background work.
+    pub async fn cancel_work(&self, bot_id: &str, id: &str) -> Result<(), ApiError> {
+        let path = format!("/api/work-items/{}/cancel", encode(id));
+        let _: serde_json::Value = self
+            .post_json(&bot_path(bot_id, &path), &serde_json::json!({}))
+            .await?;
+        Ok(())
+    }
+
     /// Changes, closes or reopens one work item, as the owner.
     pub async fn change_work(
         &self,

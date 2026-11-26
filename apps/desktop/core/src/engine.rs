@@ -382,6 +382,11 @@ pub enum Command {
         title: String,
         notes: String,
     },
+    /// Stop one work item's running background work.
+    CancelWork {
+        bot_id: String,
+        id: String,
+    },
     /// Change, close or reopen one work item, as the owner.
     ChangeWork {
         bot_id: String,
@@ -893,6 +898,7 @@ impl Engine {
                 },
             ),
             Command::ChangeWork { bot_id, id, change } => self.save_work(bot_id, Some(id), change),
+            Command::CancelWork { bot_id, id } => self.cancel_work(bot_id, id),
             Command::LoadJobs { bot_id } => self.load_jobs(bot_id),
             Command::AddJob { bot_id, job } => self.add_job(bot_id, job),
             Command::ChangeJob { bot_id, id, action } => self.change_job(bot_id, id, action),
@@ -2209,6 +2215,31 @@ impl Engine {
         let inbox = self.inbox.clone();
         tokio::spawn(async move {
             fetch_work(&api, bot_id, &inbox, &emit).await;
+        });
+    }
+
+    /// Stops an item's run, then fetches the lists again.
+    fn cancel_work(&mut self, bot_id: String, id: String) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
+        let emit = self.emit.clone();
+        let inbox = self.inbox.clone();
+        tokio::spawn(async move {
+            match api.cancel_work(&bot_id, &id).await {
+                Ok(()) => {
+                    emit.emit(Event::WorkSaved {
+                        bot_id: bot_id.clone(),
+                    });
+                    fetch_work(&api, bot_id, &inbox, &emit).await;
+                }
+                Err(ApiError::Unauthenticated) => {
+                    let _ = inbox.send(Input::Expired);
+                }
+                Err(error) => emit.emit(Event::WorkChangeFailed {
+                    message: error.to_string(),
+                }),
+            }
         });
     }
 

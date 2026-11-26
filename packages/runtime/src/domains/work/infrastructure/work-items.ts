@@ -11,6 +11,7 @@ import {
 import { bool, obj, oneOf, opt, str } from "@earendil-works/pi-schema";
 import type { WorkActor, WorkItem, WorkStatus } from "@raphie/contracts";
 
+import { InputError } from "../../../shared/application/input-error.ts";
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
 import {
   Activity,
@@ -28,6 +29,7 @@ import {
   workId,
   workLine,
 } from "../domain/work-item.ts";
+import type { WorkRuns } from "./work-runs.ts";
 import { WorkItems, type WorkState } from "./work-store.ts";
 
 /** A tool call's result, stored with its change so a replay repeats neither. */
@@ -41,9 +43,17 @@ const Receipt = defineDoc<{ text: string | null; error?: true }>({
 
 export class WorkService {
   app: DurableContext;
+  /** The background runs, once the bot has them. */
+  runs?: WorkRuns;
 
   constructor(app: DurableContext) {
     this.app = app;
+  }
+
+  /** Stops an item's running background work. */
+  async cancel(id: string) {
+    if (!this.runs) throw new InputError("Work items have no runs here.", 409);
+    await this.runs.cancel(await this.get(id));
   }
 
   async state(): Promise<Readonly<WorkState>> {
@@ -69,12 +79,18 @@ export class WorkService {
     return this.app.root.commit((tx) => openWork(tx, input, "owner"), context);
   }
 
-  /** The owner changes, closes or reopens an item. */
+  /**
+   * The owner changes, closes or reopens an item. Closing one stops its
+   * running work; the run then keeps its result without telling the chat.
+   */
   async change(id: string, change: WorkChange) {
-    return this.app.root.commit(
+    const item = await this.app.root.commit(
       (tx) => changeWorkItem(tx, id, change, "owner"),
       context,
     );
+    if (typeof item !== "string" && !isOpen(item.status) && item.run?.turnId)
+      await this.runs?.cancel(item).catch(() => {});
+    return item;
   }
 }
 
@@ -93,8 +109,9 @@ async function openWork(
     notes?: string;
   },
   by: WorkActor,
-  sourceTurnId?: string,
+  from?: { conversationId: number; turnId?: string },
 ): Promise<WorkItem | string> {
+  const sourceTurnId = from?.turnId;
   const title = clip(input.title, LIMITS.title);
   if (!title) return "A work item needs a title.";
   const state = await tx.doc(WorkItems);
@@ -115,6 +132,7 @@ async function openWork(
   state.next += 1;
   state.items.push(item);
   record(await tx.doc(Activity), "work.opened", "Opened a work item", {
+    ...(from ? { conversationId: from.conversationId } : {}),
     operationId: item.id,
     details: { title: item.title, by },
   });
@@ -127,6 +145,7 @@ async function changeWorkItem(
   id: string,
   change: WorkChange,
   by: WorkActor,
+  conversationId?: number,
 ): Promise<WorkItem | string> {
   const item = find(await tx.doc(WorkItems), id);
   if (!item) return `No work item ${id}.`;
@@ -139,6 +158,7 @@ async function changeWorkItem(
       isOpen(item.status) ? "work.reopened" : "work.closed",
       isOpen(item.status) ? "Reopened a work item" : "Closed a work item",
       {
+        ...(conversationId === undefined ? {} : { conversationId }),
         operationId: item.id,
         details: { title: item.title, status: item.status, by },
       },
@@ -222,7 +242,7 @@ const result = str({
 });
 
 /** The tools and instructions that let a bot keep its work items. */
-export function createWorkTools() {
+export function createWorkTools(runs: WorkRuns) {
   return defineExtension({
     name: "raphie.work-items",
     sections: [
@@ -232,6 +252,7 @@ export function createWorkTools() {
           "Open one with work_open when something will outlive this turn. Never open one for a request you settle in the same reply, and check the open items first so you do not open the same thing twice.",
           "Keep an item current with work_update as it changes: its status (active while you work on it, waiting while it is blocked, with what it waits on), short notes, and its latest result. Close it with work_close, done or dropped, as soon as it is finished or the owner no longer wants it.",
           "When the owner asks what is going on, answer from your work items, not from memory of the chat. Use work_read for one item's notes, and work_list for closed items or more than the message lists.",
+          "For work that takes a while, such as research, comparisons or drafting something long, start it in the background with work_start instead of doing it in this reply: it runs in the item's own session, keeps that context for follow-ups, and its result comes back to this chat as a new message. Tell the owner you are on it; don't wait for it or invent its result. Send a follow-up to the same item with work_start again once its run has ended.",
           "Work items are only for your chat with the owner; never mention them anywhere else.",
         ].join("\n"),
       ),
@@ -252,7 +273,10 @@ export function createWorkTools() {
           mutate(api, ctx, async (tx) => {
             const chat = await chatTurn(tx, api);
             if (!chat) return { error: NOT_IN_CHAT };
-            const item = await openWork(tx, args, "bot", chat.turnId);
+            const item = await openWork(tx, args, "bot", {
+              conversationId: api.conversationId,
+              turnId: chat.turnId,
+            });
             if (typeof item === "string") return { error: item };
             return JSON.stringify({ opened: true, item: workLine(item) });
           }),
@@ -274,7 +298,13 @@ export function createWorkTools() {
           mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
             const { id: itemId, ...change } = args;
-            const item = await changeWorkItem(tx, itemId, change, "bot");
+            const item = await changeWorkItem(
+              tx,
+              itemId,
+              change,
+              "bot",
+              api.conversationId,
+            );
             if (typeof item === "string") return { error: item };
             return JSON.stringify({ updated: true, item: workLine(item) });
           }),
@@ -289,17 +319,48 @@ export function createWorkTools() {
           result: opt(result),
         }),
         replay: "safe",
-        execute: (args, api, ctx) =>
-          mutate(api, ctx, async (tx) => {
+        execute: async (args, api, ctx) => {
+          const result = await mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
             const item = await changeWorkItem(
               tx,
               args.id,
               { status: args.outcome, result: args.result },
               "bot",
+              api.conversationId,
             );
             if (typeof item === "string") return { error: item };
             return JSON.stringify({ closed: true, item: workLine(item) });
+          });
+          // Closing a running item stops its work, as on the Work page.
+          const item = (await api.snapshot(WorkItems, ctx))?.items.find(
+            (each) => each.id === args.id.trim(),
+          );
+          if (item && !isOpen(item.status) && item.run?.turnId)
+            await runs.cancel(item).catch(() => {});
+          return result;
+        },
+      }),
+      defineTool({
+        name: "work_start",
+        description:
+          "Start background work on an open work item: the brief runs in the item's own session, and its result returns to this chat as a new message. Returns at once. One run at a time per item.",
+        parameters: obj({
+          id,
+          brief: str({
+            minLength: 1,
+            maxLength: 8_000,
+            description:
+              "Everything the background run needs, since it can't see this chat: the goal, what you know, constraints and what to return.",
+          }),
+        }),
+        replay: "safe",
+        execute: (args, api, ctx) =>
+          mutate(api, ctx, async (tx) => {
+            if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
+            const item = await runs.start(tx, args.id, args.brief);
+            if (typeof item === "string") return { error: item };
+            return JSON.stringify({ started: true, item: workLine(item) });
           }),
       }),
       defineTool({

@@ -251,6 +251,45 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
         return handoffs::turn(s, turn, handoff, look);
     }
     let key = format!("rd-turn-{}", turn.id);
+    // A work item's result: the bot's to tell, not an owner message.
+    if let Some(work) = &turn.work {
+        let how = match work.outcome {
+            Some(raphie_core::contracts::HandoffOutcome::Cancelled) => "· Cancelled",
+            Some(raphie_core::contracts::HandoffOutcome::Failed) => "· Failed",
+            _ => "",
+        };
+        return row().key(key).w_full().justify_center().child(
+            row()
+                .px(12.0)
+                .py(4.0)
+                .gap(7.0)
+                .center_y()
+                .radius(13.0)
+                .fill(t.accent_soft)
+                .help(format!("Work item {}", work.item_id))
+                .child(
+                    icon(&icons::LIST_CHECKS, 13.0)
+                        .color(t.accent)
+                        .a11y_hidden(),
+                )
+                .child(
+                    text("Background work ·")
+                        .font(font(12.0, 400.0))
+                        .color(t.accent),
+                )
+                .child(
+                    text(work.title.clone())
+                        .font(font(12.0, 600.0))
+                        .color(t.accent),
+                )
+                .child(text(how).font(font(12.0, 400.0)).color(t.accent))
+                .child(
+                    text(format::clock(turn.created_at))
+                        .font(font(12.0, 400.0))
+                        .color(t.muted_foreground),
+                ),
+        );
+    }
     if let Some(job) = &turn.scheduled {
         return row().key(key).w_full().justify_center().child(
             row()

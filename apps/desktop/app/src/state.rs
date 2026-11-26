@@ -3042,27 +3042,45 @@ impl Ui {
         let Some(bot_id) = self.work_bot() else {
             return;
         };
-        if !self.work_form.is_complete() || !self.model.begin_change_work() {
+        if !self.work_form.is_complete() {
             return;
         }
-        let title = self.work_form.title.text.trim().to_owned();
-        let notes = self.work_form.notes.text.trim().to_owned();
-        self.command(match self.work_form.id.clone() {
-            Some(id) => Command::ChangeWork {
-                bot_id,
-                id,
-                change: WorkChange {
-                    title: Some(title),
-                    notes: Some(notes),
-                    status: None,
-                },
+        if let Some(problem) = self.work_form.problem() {
+            self.work_form.error = Some(problem);
+            return;
+        }
+        self.work_form.error = None;
+        let command = match self.work_form.id.clone() {
+            // Only what the owner changed, so the bot's later edits stay.
+            Some(id) => match self.work_form.change() {
+                Some(change) => Command::ChangeWork { bot_id, id, change },
+                None => {
+                    self.work_form = WorkForm::default();
+                    return;
+                }
             },
             None => Command::OpenWork {
                 bot_id,
-                title,
-                notes,
+                title: self.work_form.title.text.trim().to_owned(),
+                notes: self.work_form.notes.text.trim().to_owned(),
             },
-        });
+        };
+        if self.model.begin_change_work() {
+            self.command(command);
+        }
+    }
+
+    /// Stops an item's running background work.
+    pub fn cancel_work(&mut self, id: &str) {
+        let Some(bot_id) = self.work_bot() else {
+            return;
+        };
+        if self.model.begin_change_work() {
+            self.command(Command::CancelWork {
+                bot_id,
+                id: id.to_owned(),
+            });
+        }
     }
 
     /// Marks an item done, drops it, or reopens it.

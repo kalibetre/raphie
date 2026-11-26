@@ -20,7 +20,7 @@ for scene in sign-in sign-in-this-mac device-code onboarding onboarding-teammate
   settings-channels settings-channels-discord settings-channels-telegram \
   settings-sandbox settings-sandbox-container \
   settings-workspace settings-workspace-folder \
-  settings-work settings-work-edit \
+  settings-work settings-work-edit settings-work-running conversation-work \
   settings-jobs settings-jobs-create \
   settings-account settings-account-unreachable settings-account-runtime-down \
   settings-owner settings-owner-edited \

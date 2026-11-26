@@ -19,6 +19,8 @@ export function chatModel(
     systemMessages?: (text: string) => void;
     offeredTools?: (names: string[]) => void;
     pause?: Promise<void>;
+    /** Holds only requests whose newest message contains `text`. */
+    pauseOn?: { text: string; until: Promise<void> };
     streamChunkPause?: Promise<void>;
     tool?: { name: string; args: JsonObject };
     repeatTool?: boolean;
@@ -179,9 +181,14 @@ export function chatModel(
         ]);
         message.content = [{ type: "text", text: "First second third" }];
       }
-      if (options.pause)
+      const held =
+        options.pause ??
+        (options.pauseOn && (texts.at(-1) ?? "").includes(options.pauseOn.text)
+          ? options.pauseOn.until
+          : undefined);
+      if (held)
         await Promise.race([
-          options.pause,
+          held,
           new Promise<void>((done) =>
             streamOptions?.signal?.addEventListener("abort", () => done(), {
               once: true,

@@ -8,6 +8,7 @@ import type {
   TurnCompaction,
   TurnFailure,
   TurnHandoff,
+  TurnWork,
 } from "@raphie/contracts";
 
 import type { ReplyDestination } from "../../channels/domain/binding.ts";
@@ -29,6 +30,8 @@ export type ChatConversation = {
   handedOffBy?: { id: string; name: string; sessionId?: string };
   /** The session behind the bot's one chat with the owner. */
   chat?: true;
+  /** The work item whose background session this is. */
+  work?: string;
 };
 
 /**
@@ -68,6 +71,8 @@ export type ChatTurn = {
   scheduledDelivery?: "home" | "web-only" | "home-unavailable";
   /** Started by another bot; its text is that bot's brief or result. */
   handoff?: TurnHandoff;
+  /** Started by a work item's background run: its brief, or its result. */
+  work?: TurnWork;
   /** Other bots' sessions the reply read, for tasks it handed off. */
   readSessions?: ReadSession[];
   /** Earlier messages were summarized during this turn. */

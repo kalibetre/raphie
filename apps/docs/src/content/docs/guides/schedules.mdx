@@ -49,7 +49,7 @@ There is no cron syntax. A job has a first run time and, optionally, a repeat in
 
 The interval is elapsed time, not a calendar rule: "every 1,440 minutes" drifts by an hour across a daylight saving change, and the next run is counted from when the previous one was sent, not from the original time.
 
-When a job is due, its prompt is submitted to the chat as a **scheduled** turn rather than an owner message. If the bot is busy, the run waits until it is free. The chat shows a "Scheduled · job name" marker in place of your message, and the bot writes the reminder itself. When a run fails, the bot says it couldn't run the job, with a card saying what didn't run and why; failed runs of the same job in a row read as one, with the number of attempts and when they were made.
+When a job is due, its prompt is submitted to the chat as a **scheduled** turn rather than an owner message. If the bot is replying in the chat, the run waits until it is free; background work on a [work item](/guides/conversations/#background-work) doesn't hold it back. The chat shows a "Scheduled · job name" marker in place of your message, and the bot writes the reminder itself. When a run fails, the bot says it couldn't run the job, with a card saying what didn't run and why; failed runs of the same job in a row read as one, with the number of attempts and when they were made.
 
 ## Manage jobs
 

@@ -1,14 +1,8 @@
-import type { WorkItem, WorkStatus } from "@raphie/contracts";
+import type { WorkItem } from "@raphie/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
-
-/** What the owner changes on a work item; only the fields given change. */
-export type WorkChange = {
-  title?: string;
-  notes?: string;
-  status?: WorkStatus;
-};
+import type { WorkChange } from "../application/work-draft";
 
 /** The bot's open work items, or its closed ones, refreshed while shown. */
 export function useWorkItems(closed: boolean) {
@@ -20,6 +14,17 @@ export function useWorkItems(closed: boolean) {
         `/api/work-items${closed ? "?status=closed" : ""}`,
       ),
     refetchInterval: 5000,
+  });
+}
+
+/** Stops an item's running background work; the lists refresh after. */
+export function useWorkCancel() {
+  const { workspace } = useBackend();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      workspace.api(`/api/work-items/${encodeURIComponent(id)}/cancel`, {}),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["work-items"] }),
   });
 }
 

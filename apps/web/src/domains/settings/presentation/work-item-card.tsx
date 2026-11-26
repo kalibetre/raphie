@@ -1,7 +1,7 @@
 import type { WorkItem } from "@raphie/contracts";
 
 import { Button } from "../../../shared/ui/button";
-import type { WorkChange } from "../infrastructure/use-work-items";
+import type { WorkChange } from "../application/work-draft";
 
 const statusLabel: Record<WorkItem["status"], string> = {
   active: "Active",
@@ -23,6 +23,7 @@ export function WorkItemCard({
   pending,
   onEdit,
   onChange,
+  onCancel,
 }: {
   item: WorkItem;
   /** The bot's name, for who opened or closed it. */
@@ -30,8 +31,11 @@ export function WorkItemCard({
   pending: boolean;
   onEdit: () => void;
   onChange: (change: WorkChange) => void;
+  /** Stops its running background work. */
+  onCancel: () => void;
 }) {
   const open = item.status === "active" || item.status === "waiting";
+  const running = !!item.run;
   const by = (actor: "bot" | "owner") => (actor === "bot" ? bot : "you");
   return (
     <article className="automation-job work-item" aria-label={item.title}>
@@ -40,7 +44,7 @@ export function WorkItemCard({
         <span
           className={`session-status${item.status === "active" ? " working" : ""}`}
         >
-          {statusLabel[item.status]}
+          {running ? "Working" : statusLabel[item.status]}
         </span>
       </div>
       {item.status === "waiting" && item.waitingOn && (
@@ -60,6 +64,16 @@ export function WorkItemCard({
           ` · ${item.status === "done" ? "Done" : "Dropped"} by ${by(item.closed.by)}, ${when(item.closed.at)}`}
       </p>
       <div className="automation-actions">
+        {running && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={onCancel}
+          >
+            Cancel run
+          </Button>
+        )}
         {open ? (
           <>
             <Button
