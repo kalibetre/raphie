@@ -4,6 +4,11 @@ import type { Handoff, TurnHandoff, WorkItem } from "@raphie/contracts";
 import { clip, isOpen, LIMITS, workId } from "../domain/work-item.ts";
 import { WorkItems, type WorkState } from "./work-store.ts";
 
+/** The sending bot's item for a handoff, if it keeps one. */
+export function sentItem(state: WorkState | undefined, handoffId: string) {
+  return state && itemOf(state, "handoff-sent", handoffId);
+}
+
 type Side = "handoff-sent" | "handoff-received";
 
 function itemOf(state: WorkState, side: Side, handoffId: string) {
@@ -51,17 +56,24 @@ function reopen(item: WorkItem) {
  * each result as it returns. `open` makes the item when there is none yet;
  * otherwise a handoff without one is left alone. `started` says a request
  * was just sent, which reopens a closed item; other changes leave it closed.
+ * `finished` is a request whose result is being reported: it counts as done.
+ * Returns whether the item is open, or undefined when there is none.
  */
 export async function syncSentHandoff(
   tx: Tx,
   handoff: Handoff,
-  options: { open?: boolean; started?: boolean; result?: string } = {},
-) {
+  options: {
+    open?: boolean;
+    started?: boolean;
+    finished?: number;
+    result?: string;
+  } = {},
+): Promise<boolean | undefined> {
   const state = await tx.doc(WorkItems);
   const now = Date.now();
   let item = itemOf(state, "handoff-sent", handoff.id);
   if (!item) {
-    if (!options.open) return;
+    if (!options.open) return undefined;
     item = openItem(
       state,
       {
@@ -74,7 +86,9 @@ export async function syncSentHandoff(
       now,
     );
   }
-  const n = handoff.requests.findLastIndex((r) => r.outcome === null);
+  const n = handoff.requests.findLastIndex(
+    (r, i) => r.outcome === null && i !== options.finished,
+  );
   const runPrefix = `handoff:${handoff.id}:`;
   if (options.started) reopen(item);
   if (n >= 0 && isOpen(item.status)) {
@@ -94,6 +108,7 @@ export async function syncSentHandoff(
   if (options.result !== undefined)
     item.result = { text: clip(options.result, LIMITS.result), at: now };
   item.updatedAt = now;
+  return isOpen(item.status);
 }
 
 /**

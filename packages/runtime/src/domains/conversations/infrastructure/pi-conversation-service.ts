@@ -261,6 +261,13 @@ export const chatWorkflow = defineTask<
       }
       if (turn?.scheduled)
         await finishJobRun(tx, task.input.turnId, "interrupted");
+      if (turn?.handoff?.kind === "task")
+        await settleReceivedHandoff(tx, {
+          handoffId: turn.handoff.id,
+          turnId: turn.id,
+          cancelled: true,
+          result: "The task was interrupted before it finished.",
+        });
       return { status: "terminal", outcome: { status: "aborted" } };
     }, ctx);
   },

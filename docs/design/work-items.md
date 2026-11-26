@@ -63,7 +63,7 @@ This reverses the chat runs from PR #163: the chat holds each run's result, not 
 
 ## Handoffs
 
-A handoff opens an item on each side. The sender's item (`handoff-sent`) waits on the other bot; its `result` is the handoff's result. The receiver's item (`handoff-received`) is marked with the sender, and its session is the session the handoff already runs in. `handoff_list` and the sender's handoff panel become the sender's work items; `handoff_follow_up` and `handoff_read` keep working, keyed by the item.
+A handoff from the bot's chat opens an item on each side, and each handoff has its own session on the receiving side. The sender's item (`handoff-sent`) waits on the other bot while a request is out and keeps each result; closing it while it runs cancels the handoff, and a result that ends on a closed item isn't posted to the chat. The receiver's item (`handoff-received`) runs with the task's turn in that session and closes with its answer. Both reopen only with a follow-up. The in-chat cards, the composer's delegates and the `handoff_*` tools stay as the live view of a task, keyed by the handoff.
 
 ## Owner surfaces
 

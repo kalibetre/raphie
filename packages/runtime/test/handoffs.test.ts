@@ -11,6 +11,7 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotHost } from "../src/bootstrap/bot-host.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { transcriptText } from "../src/domains/handoffs/infrastructure/handoff-tools.ts";
+import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 
@@ -883,6 +884,164 @@ test("cancelling the sender's item stops the task in the other bot", async () =>
     );
     expect(received?.status).toBe("dropped");
     expect(received?.run).toBeUndefined();
+  } finally {
+    release.resolve();
+    await app.close();
+  }
+});
+
+const textOf = (messages: { content: unknown }[]) =>
+  messages
+    .map((m) =>
+      typeof m.content === "string"
+        ? m.content
+        : (m.content as { type: string; text?: string }[])
+            .flatMap((c) => (c.type === "text" ? [c.text ?? ""] : []))
+            .join(""),
+    )
+    .join("\n---\n");
+
+test("the result's turn sees the sender's item already settled", async () => {
+  const seen: string[] = [];
+  const app = await twoBots(
+    {},
+    { userMessages: (messages) => seen.push(textOf(messages)) },
+  );
+  try {
+    await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(
+      async () =>
+        (await app.chief.gateway.chats.state()).turns.some(
+          (t) => t.handoff?.kind === "result" && t.status !== "pending",
+        ),
+      1000,
+    );
+    const request = seen.findLast((text) =>
+      text.includes("Compare memory backends"),
+    )!;
+    expect(request).toContain("handed to Research");
+    expect(request).not.toContain("waiting on Research to finish");
+  } finally {
+    await app.close();
+  }
+});
+
+test("closing the sender's item before delivery stops the task and posts nothing", async () => {
+  const release = Promise.withResolvers<void>();
+  const app = await twoBots(
+    { pauseOn: { text: "Compare Hindsight", until: release.promise } },
+    { tool: { name: "handoff_list", args: {} } },
+  );
+  try {
+    const owner = await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Hello.",
+    });
+    await app.chief.gateway.root.commit(async (tx) => {
+      await app.handoffs.create(
+        tx,
+        {
+          id: "early",
+          to: "Research",
+          title: "Compare memory backends",
+          brief: "Compare Hindsight and Honcho.",
+        },
+        { sessionId: owner.sessionId, turnId: null, chat: true },
+      );
+      const item = (await tx.doc(WorkItems)).items.find(
+        (i) => i.origin?.kind === "handoff-sent",
+      )!;
+      item.status = "dropped";
+      item.closed = { at: Date.now(), by: "owner" };
+    }, context);
+    app.chief.gateway.harness.resume();
+    await until(
+      async () => (await app.handoffs.read())[0]?.status === "cancelled",
+      1000,
+    );
+    await delay(200);
+    expect(
+      (await app.chief.gateway.chats.state()).turns.some(
+        (t) => t.handoff?.kind === "result",
+      ),
+    ).toBe(false);
+    const item = (await app.chief.gateway.work.state()).items[0]!;
+    expect(item.status).toBe("dropped");
+    expect(item.run).toBeUndefined();
+  } finally {
+    release.resolve();
+    await app.close();
+  }
+});
+
+test("a follow-up reopens both items; a handoff from outside the chat opens none", async () => {
+  const release = Promise.withResolvers<void>();
+  const app = await twoBots({
+    pauseOn: { text: "Add Mem0", until: release.promise },
+  });
+  try {
+    const owner = await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(
+      async () => (await app.handoffs.read())[0]?.status === "completed",
+      1000,
+    );
+    const [handoff] = await app.handoffs.read();
+    const recipient = app.host.runtime(app.research.id).gateway;
+    const sent = async () =>
+      (await app.chief.gateway.work.state()).items.find(
+        (i) => i.origin?.kind === "handoff-sent",
+      )!;
+    const received = async () =>
+      (await recipient.work.state()).items.find(
+        (i) => i.origin?.kind === "handoff-received",
+      )!;
+    await until(async () => (await received())?.status === "done");
+    await app.chief.gateway.work.change((await sent()).id, { status: "done" });
+    // Neither reopens by hand.
+    expect(
+      await app.chief.gateway.work.change((await sent()).id, {
+        status: "active",
+      }),
+    ).toMatch(/handoff_follow_up/);
+    expect(
+      await recipient.work.change((await received()).id, { status: "active" }),
+    ).toMatch(/reopens when/);
+    await app.chief.gateway.root.commit(
+      (tx) =>
+        app.handoffs.followUp(tx, handoff!.id, "Add Mem0 too.", {
+          sessionId: owner.sessionId,
+          turnId: null,
+        }),
+      context,
+    );
+    await until(async () => (await sent()).status === "waiting");
+    await until(async () => (await received()).status === "active", 1000);
+    // A handoff that doesn't come from the chat keeps no item.
+    await app.chief.gateway.root.commit(
+      (tx) =>
+        app.handoffs.create(
+          tx,
+          {
+            id: "elsewhere",
+            to: "Research",
+            title: "Elsewhere",
+            brief: "From another session.",
+          },
+          { sessionId: owner.sessionId, turnId: null },
+        ),
+      context,
+    );
+    expect(
+      (await app.chief.gateway.work.state()).items.filter(
+        (i) => i.origin?.kind === "handoff-sent",
+      ),
+    ).toHaveLength(1);
   } finally {
     release.resolve();
     await app.close();

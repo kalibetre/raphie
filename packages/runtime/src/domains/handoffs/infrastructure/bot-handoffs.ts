@@ -381,18 +381,24 @@ export class BotHandoffs {
                   sessionId: handoff.fromSessionId,
                 },
               });
+              let closed = false;
               await runtime.commit(async (tx) => {
                 const stored = await find(tx, handoffId);
                 if (stored) {
                   stored.toSessionId = receipt.sessionId;
                   stored.requests[n]!.turnId = receipt.id;
-                  await syncSentHandoff(tx, stored);
+                  closed = (await syncSentHandoff(tx, stored)) === false;
                 }
                 return {
                   status: "running",
                   checkpoint: { phase: "wait", turnId: receipt.id },
                 };
               }, ctx);
+              // Its item was closed while the brief went out: stop the task.
+              if (closed)
+                await this.options.peers
+                  .stop(handoff.to.id, receipt.sessionId)
+                  .catch(() => {});
             } catch (error) {
               const attempts = (task.state.checkpoint.attempts ?? 0) + 1;
               if (retryable(error) && attempts < MAX_ATTEMPTS) {
@@ -485,7 +491,20 @@ export class BotHandoffs {
             const handoff = (await runtime.snapshot(Handoffs, ctx))?.items.find(
               (item) => item.id === handoffId,
             );
-            if (handoff)
+            // The sender's item learns the result before the chat hears of
+            // it, so the result's turn sees the item as it now stands.
+            let open: boolean | undefined;
+            await runtime.commit(async (tx) => {
+              const stored = await find(tx, handoffId);
+              if (stored)
+                open = await syncSentHandoff(tx, stored, {
+                  finished: n,
+                  result: checkpoint.text,
+                });
+              return { status: "running", checkpoint };
+            }, ctx);
+            // A closed item keeps its result but tells the chat nothing.
+            if (handoff && open !== false)
               try {
                 await this.options.report({
                   eventId: `handoff:${handoffId}:${n}:result`,

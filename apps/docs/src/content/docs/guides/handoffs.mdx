@@ -48,7 +48,7 @@ Each task gets its own session on the other bot's side. A follow-up on a task co
 
 ### As work items
 
-A task handed off from a bot's chat is also one of that bot's [work items](/guides/conversations/#work-items), under **Settings → Work**, marked **Handed to** the other bot. It waits on the other bot while a request is out, and keeps each result as its latest. **Cancel run** on it cancels the task, as does marking it done or dropping it while it runs.
+A task handed off from a bot's chat is also one of that bot's [work items](/guides/conversations/#work-items), under **Settings → Work**, marked **Handed to** the other bot. It waits on the other bot while a request is out, and keeps each result as its latest. **Cancel run** on it cancels the task, as does marking it done or dropping it while it runs; the task's result is then kept on the item but not posted to the chat. The bot closes the item once it has told you what came back. A handoff's item reopens only with a follow-up, not by hand.
 
 The bot that receives a task keeps a work item for it too, marked as **a task from** the bot that sent it. It is active while the bot works on the task and closes with its answer; a follow-up reopens it. Closing it while it runs stops the task, and the sending bot is told it was cancelled.
 
