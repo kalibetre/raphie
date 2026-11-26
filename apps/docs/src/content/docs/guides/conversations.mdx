@@ -157,7 +157,7 @@ Each item has a short id such as `w-12`, a title, and a status: **active** while
 - **Only in your chat:** work items are yours. A Telegram group or Discord server channel with the bot never sees them, and the bot can't open or change them there. A scheduled job's run whose [home channel](/guides/schedules/#send-results-to-a-home-channel) is a group isn't sent the list and can't use the work tools, but like any run in the chat it reads the chat's earlier messages, so only choose a group as home for jobs whose output you would share there.
 - **Closed items** are kept, listed apart from open ones.
 
-The bot opens, updates and closes items itself. To change one, ask it.
+The bot opens, updates and closes items itself. You can also see and change them under **Settings → Work** for that bot: add an item, edit its title and notes, mark it done, drop it, or reopen a closed one. The bot reads your changes with your next message.
 
 ## Long chats
 
@@ -217,6 +217,7 @@ Open Settings from the gear. Bot pages are grouped under each bot; app pages app
 | Channels          | Telegram and Discord connections, home channel                 | [Telegram](/guides/telegram/)              |
 | Sandbox           | How commands run and their limits                              | [Workspaces](/guides/workspaces/)          |
 | Workspace         | Browse and download the bot's files                            | [Workspaces](/guides/workspaces/)          |
+| Work              | What the bot is keeping track of, open and done                | [Work items](#work-items)                  |
 | Scheduled jobs    | Reminders and recurring prompts, with run history              | [Schedules](/guides/schedules/)            |
 | Activity          | The bot's recent events                                        | [Observability](/operate/observability/)   |
 | Account (app)     | Passkeys, authorized devices and signing out of this browser   | [Authentication](/operate/authentication/) |
