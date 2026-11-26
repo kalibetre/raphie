@@ -34,6 +34,14 @@ type Options = {
     sessionId?: string;
     work: TurnWork;
   }) => Promise<{ id: string; sessionId: string }>;
+  /** Posts a job's result into the chat as the bot's message, with no model turn. */
+  post: (input: {
+    runKey: string;
+    work: TurnWork;
+    scheduled?: { name: string };
+    text: string;
+    fromTurnId?: string;
+  }) => Promise<string>;
   /** A turn by id; undefined once it no longer exists. */
   turn: (turnId: string) => Promise<RunTurn | undefined>;
   /** Stops the running turn of a session. */
@@ -99,18 +107,21 @@ export class WorkRuns {
   async start(tx: Tx, id: string, brief: string): Promise<WorkItem | string> {
     const item = (await tx.doc(WorkItems)).items.find((i) => i.id === id);
     if (!item) return `No work item ${id}.`;
+    if (item.origin?.kind === "job")
+      return `${item.id} follows a scheduled job; it runs on the job's schedule, or when the owner chooses Run now under Scheduled jobs.`;
     if (!isOpen(item.status))
       return `${item.id} is ${item.status}. Open a new item if the work starts again.`;
     if (item.run)
       return `${item.id} is already running. Wait for its result, or ask the owner to cancel it.`;
     const now = Date.now();
-    item.run = { startedAt: now };
+    const runId = crypto.randomUUID();
+    item.run = { id: runId, startedAt: now };
     item.status = "active";
     delete item.waitingOn;
     item.updatedAt = now;
     await tx.createTask(
       this.task,
-      { itemId: item.id, runId: crypto.randomUUID(), brief },
+      { itemId: item.id, runId, brief },
       {
         conversationId: this.options.root().id,
         ownership: { kind: "conversation" },
@@ -118,6 +129,39 @@ export class WorkRuns {
       },
     );
     return JSON.parse(JSON.stringify(item)) as WorkItem;
+  }
+
+  /**
+   * Follows a job's run already delivered to its item's session, in the
+   * caller's transaction: when the turn ends, its result is posted to the
+   * chat as the bot's message. It marks the item as running, so the owner
+   * can cancel it, unless another run already holds the marker.
+   */
+  async follow(
+    tx: Tx,
+    itemId: string,
+    run: { turnId: string; sessionId: string; scheduled: { name: string } },
+  ) {
+    const item = (await tx.doc(WorkItems)).items.find((i) => i.id === itemId);
+    if (!item) return;
+    const runId = `job:${run.turnId}`;
+    item.sessionId = run.sessionId;
+    item.run ??= { id: runId, startedAt: Date.now(), turnId: run.turnId };
+    await tx.createTask(
+      this.task,
+      {
+        itemId,
+        runId,
+        brief: "",
+        turnId: run.turnId,
+        scheduled: run.scheduled,
+      },
+      {
+        conversationId: this.options.root().id,
+        ownership: { kind: "conversation" },
+        background: true,
+      },
+    );
   }
 
   /**
@@ -152,20 +196,31 @@ export class WorkRuns {
       outcome: { status: "completed", result: null },
     } as const;
     return defineTask<
-      { itemId: string; runId: string; brief: string },
+      {
+        itemId: string;
+        runId: string;
+        brief: string;
+        /** A job's run, already delivered: follow its turn and post the result. */
+        turnId?: string;
+        scheduled?: { name: string };
+      },
       Checkpoint,
       null
     >({
       name: "raphie.work-run",
       version: 1,
-      initial: () => ({ phase: "deliver" }),
+      initial: (input) =>
+        input.turnId
+          ? { phase: "wait", turnId: input.turnId }
+          : { phase: "deliver" },
       // An aborted run frees its item for the next one.
       abort: (task, runtime, ctx) =>
         runtime.commit(async (tx) => {
           const stored = (await tx.doc(WorkItems)).items.find(
             (i) => i.id === task.input.itemId,
           );
-          if (stored) delete stored.run;
+          // Only this run's marker: a later run may already have started.
+          if (stored?.run?.id === task.input.runId) delete stored.run;
           return { status: "terminal", outcome: { status: "aborted" } };
         }, ctx),
       phases: {
@@ -174,13 +229,13 @@ export class WorkRuns {
           const item = (await runtime.snapshot(WorkItems, ctx))?.items.find(
             (i) => i.id === itemId,
           );
-          // Closed before its brief went out: nothing is sent.
-          if (!item?.run || !isOpen(item.status)) {
+          // Closed, or let go of, before its brief went out: nothing is sent.
+          if (item?.run?.id !== runId || !isOpen(item.status)) {
             await runtime.commit(async (tx) => {
               const stored = (await tx.doc(WorkItems)).items.find(
                 (i) => i.id === itemId,
               );
-              if (stored) delete stored.run;
+              if (stored?.run?.id === runId) delete stored.run;
               return finish;
             }, ctx);
             return;
@@ -193,19 +248,23 @@ export class WorkRuns {
               ...(item.sessionId ? { sessionId: item.sessionId } : {}),
               work: { itemId, title: item.title, kind: "brief" },
             });
+            let closed = false;
             await runtime.commit(async (tx) => {
               const stored = (await tx.doc(WorkItems)).items.find(
                 (i) => i.id === itemId,
               );
               if (stored) {
                 stored.sessionId = receipt.sessionId;
-                if (stored.run) stored.run.turnId = receipt.id;
+                if (stored.run?.id === runId) stored.run.turnId = receipt.id;
+                closed = !isOpen(stored.status);
               }
               return {
                 status: "running",
                 checkpoint: { phase: "wait", turnId: receipt.id },
               };
             }, ctx);
+            // Closed while the brief was going out: stop what it started.
+            if (closed) await this.options.stop(receipt.sessionId);
           } catch (error) {
             const attempts = (task.state.checkpoint.attempts ?? 0) + 1;
             if (retryable(error) && attempts < MAX_ATTEMPTS) {
@@ -274,21 +333,34 @@ export class WorkRuns {
             (i) => i.id === itemId,
           );
           let resultTurn: string | undefined;
-          // A closed item keeps its result but tells the chat nothing.
-          if (item && isOpen(item.status))
+          // A closed item keeps its result but tells the chat nothing, except
+          // a job's own run: a one-time job's item closes as it runs.
+          if (item && (isOpen(item.status) || task.input.scheduled))
             try {
-              resultTurn = (
-                await this.options.submit({
-                  eventId: `work:${runId}:result`,
-                  text: checkpoint.text,
-                  work: {
-                    itemId,
-                    title: item.title,
-                    kind: "result",
-                    outcome: checkpoint.outcome,
-                  },
-                })
-              ).id;
+              const work = {
+                itemId,
+                title: item.title,
+                kind: "result" as const,
+                outcome: checkpoint.outcome,
+              };
+              // A job's result is the bot's message already: posted as it is.
+              resultTurn = task.input.scheduled
+                ? await this.options.post({
+                    runKey: runId,
+                    work,
+                    scheduled: task.input.scheduled,
+                    text: checkpoint.text,
+                    ...(task.input.turnId
+                      ? { fromTurnId: task.input.turnId }
+                      : {}),
+                  })
+                : (
+                    await this.options.submit({
+                      eventId: `work:${runId}:result`,
+                      text: checkpoint.text,
+                      work,
+                    })
+                  ).id;
             } catch (error) {
               const attempts = (checkpoint.attempts ?? 0) + 1;
               if (retryable(error) && attempts < MAX_ATTEMPTS) {
@@ -307,7 +379,7 @@ export class WorkRuns {
             );
             if (stored) {
               const now = Date.now();
-              delete stored.run;
+              if (stored.run?.id === runId) delete stored.run;
               if (checkpoint.text)
                 stored.result = {
                   text: clip(checkpoint.text, LIMITS.result),

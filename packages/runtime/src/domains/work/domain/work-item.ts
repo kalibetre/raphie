@@ -44,7 +44,11 @@ export function workLine(item: WorkItem) {
     ? `; last: ${clip(item.result.text.replace(/\s+/g, " "), 100)} (${day(item.result.at)})`
     : "";
   const running = item.run ? "; working on it in the background" : "";
-  return `${item.id} ${flat(item.title)}: ${where}${running}${last}`;
+  const job =
+    item.origin?.kind === "job"
+      ? `; scheduled job${item.nextAt ? `, next run ${new Date(item.nextAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}`
+      : "";
+  return `${item.id} ${flat(item.title)}: ${where}${job}${running}${last}`;
 }
 
 /**
@@ -111,6 +115,10 @@ export function changeWork(
   by: WorkActor,
   now: number,
 ): string | undefined {
+  if (item.origin?.kind === "job")
+    return by === "owner"
+      ? `${item.id} follows a scheduled job. Change, pause or remove the job under Scheduled jobs.`
+      : `${item.id} follows a scheduled job. Change, pause or remove the job with the schedule tools.`;
   const reopening =
     !isOpen(item.status) &&
     change.status !== undefined &&

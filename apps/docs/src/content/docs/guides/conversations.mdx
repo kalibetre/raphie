@@ -154,10 +154,11 @@ A bot keeps a **work item** for each thing it tracks for you beyond one reply: a
 Each item has a short id such as `w-12`, a title, and a status: **active** while the bot works on it, **waiting** while it is blocked (with what it waits on), and **done** or **dropped** once closed. The bot keeps notes on it and its latest result, and closes it when it is finished or you no longer want it.
 
 - **Asking about them:** ask the bot what is going on, or about one thing by name. It answers from its open items, which it reads with each of your messages, and can read any item in full, closed ones included.
-- **Only in your chat:** work items are yours. A Telegram group or Discord server channel with the bot never sees them, and the bot can't open or change them there. A scheduled job's run whose [home channel](/guides/schedules/#send-results-to-a-home-channel) is a group isn't sent the list and can't use the work tools, but like any run in the chat it reads the chat's earlier messages, so only choose a group as home for jobs whose output you would share there.
+- **Only in your chat:** work items are yours. A Telegram group or Discord server channel with the bot never sees them, and the bot can't open or change them there. A [scheduled job](/guides/schedules/)'s run happens in the job's own session, so it isn't sent the list, can't use the work tools and doesn't read the chat; what it reads is the job's earlier runs. If its [home channel](/guides/schedules/#send-results-to-a-home-channel) is a group, those runs' replies go there too.
+- **Scheduled jobs** are items too, opened when the job is saved and closed when it is removed. Each run happens in the item's session, and its reply posts in the chat as the bot's message; see [Scheduled jobs](/guides/schedules/#how-schedules-work).
 - **Closed items** are kept, listed apart from open ones.
 
-The bot opens, updates and closes items itself. You can also see and change them under **Settings → Work** for that bot: add an item, edit its title and notes, mark it done, drop it, or reopen a closed one. The bot reads your changes with your next message.
+The bot opens, updates and closes items itself. You can also see and change them under **Settings → Work** for that bot: add an item, edit its title and notes, mark it done, drop it, or reopen a closed one. A scheduled job's item changes only with its job, under **Scheduled jobs**. The bot reads your changes with your next message.
 
 ### Background work
 

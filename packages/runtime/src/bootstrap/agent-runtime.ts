@@ -225,6 +225,7 @@ export class Gateway {
       root: () => this.root,
       submit: (input) =>
         this.sessions.submitWork(this.actors.establish("web"), input),
+      post: (input) => this.chats.postWorkResult(input),
       turn: (turnId) => this.chats.turn(turnId),
       stop: (sessionId) => this.chats.control(sessionId, "stop"),
     });

@@ -21,10 +21,14 @@ export type WorkItem = {
   notes: string;
   /** The latest result, and the chat turn that carried it. */
   result?: { text: string; at: number; turnId?: string };
+  /** Where it came from, when not from the chat: a scheduled job. */
+  origin?: { kind: "job"; jobId: string };
+  /** When it next wakes on its own: a job's next run. */
+  nextAt?: number;
   /** Its own background session, once work has run there. */
   sessionId?: string;
-  /** The run in progress, if any: since when, and its turn once delivered. */
-  run?: { startedAt: number; turnId?: string };
+  /** The run in progress, if any: which, since when, and its turn once delivered. */
+  run?: { id?: string; startedAt: number; turnId?: string };
   opened: { at: number; by: WorkActor };
   /** When it last changed. */
   updatedAt: number;

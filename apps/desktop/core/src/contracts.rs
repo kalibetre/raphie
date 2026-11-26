@@ -2195,6 +2195,20 @@ pub struct WorkItem {
     /// The run in progress, if any.
     #[serde(default)]
     pub run: Option<WorkRun>,
+    /// Where it came from, when not from the chat: a scheduled job.
+    #[serde(default)]
+    pub origin: Option<WorkOrigin>,
+    /// When it next wakes on its own: a job's next run.
+    #[serde(default)]
+    pub next_at: Option<i64>,
+}
+
+/// `WorkItem["origin"]`: the scheduled job an item follows.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkOrigin {
+    pub kind: String,
+    pub job_id: String,
 }
 
 /// What `GET /api/work-items` answers.

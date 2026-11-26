@@ -36,6 +36,8 @@ export function WorkItemCard({
 }) {
   const open = item.status === "active" || item.status === "waiting";
   const running = !!item.run;
+  // A scheduled job's item follows the job; it is changed there.
+  const job = item.origin?.kind === "job";
   const by = (actor: "bot" | "owner") => (actor === "bot" ? bot : "you");
   return (
     <article className="automation-job work-item" aria-label={item.title}>
@@ -52,6 +54,13 @@ export function WorkItemCard({
           Waiting on {item.waitingOn}
         </p>
       )}
+      {job && (
+        <p className="automation-note">
+          Scheduled job
+          {item.nextAt ? ` · Next run ${when(item.nextAt)}` : ""} · Change it
+          under Scheduled jobs.
+        </p>
+      )}
       {item.notes && <p className="automation-prompt">{item.notes}</p>}
       {item.result && (
         <p className="automation-note">
@@ -63,55 +72,57 @@ export function WorkItemCard({
         {item.closed &&
           ` · ${item.status === "done" ? "Done" : "Dropped"} by ${by(item.closed.by)}, ${when(item.closed.at)}`}
       </p>
-      <div className="automation-actions">
-        {running && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={pending}
-            onClick={onCancel}
-          >
-            Cancel run
-          </Button>
-        )}
-        {open ? (
-          <>
+      {(running || !job) && (
+        <div className="automation-actions">
+          {running && (
             <Button
               variant="outline"
               size="sm"
               disabled={pending}
-              onClick={() => onChange({ status: "done" })}
+              onClick={onCancel}
             >
-              Mark done
+              Cancel run
             </Button>
+          )}
+          {job ? null : open ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pending}
+                onClick={() => onChange({ status: "done" })}
+              >
+                Mark done
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={pending}
+                onClick={onEdit}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={pending}
+                onClick={() => onChange({ status: "dropped" })}
+              >
+                Drop
+              </Button>
+            </>
+          ) : (
             <Button
               variant="ghost"
               size="sm"
               disabled={pending}
-              onClick={onEdit}
+              onClick={() => onChange({ status: "active" })}
             >
-              Edit
+              Reopen
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={pending}
-              onClick={() => onChange({ status: "dropped" })}
-            >
-              Drop
-            </Button>
-          </>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={pending}
-            onClick={() => onChange({ status: "active" })}
-          >
-            Reopen
-          </Button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </article>
   );
 }

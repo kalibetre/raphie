@@ -84,14 +84,15 @@ Each slice ships on its own, with web and desktop together where it has a screen
 1. **Record and tools.** The document, `work_open/update/close/read/list`, the per-message list, instructions, and the API read endpoints. The bot can track threads; nothing runs in the background yet.
 2. **Work page** on web and desktop, with the owner's actions.
 3. **Background sessions**: `work_start`, results back to the chat, Cancel, keeping item sessions in the cleanup. Done in #168; results don't quote the source message yet.
-4. **Jobs as items**: runs in the item's session, results posted to the chat, PR #163's chat runs removed.
+4. **Jobs as items**: runs in the item's session, results posted to the chat, PR #163's chat runs removed. Done: a job's item follows the job's lifecycle, and the owner changes it through the job, not the Work page.
 5. **Handoffs as items** on both sides; the handoff list folds into work items.
 6. **Approvals and questions as chat cards** from background sessions.
 
 ## Open questions
 
-- **Posting without a model turn.** Job results should go into the chat as the bot's message without a chat turn rewriting them. `pi-durable` appears to allow it: `Tx.appendEntry` with `EntryDraft.model` adds messages to the model context without a request (to be confirmed in slice 3). The result must still reach the home channel, as runs do today.
+- **Posting without a model turn.** Settled in slice 4: a `write` submission to the chat's conversation adds the post to the model context with no request, and the chat records it as a finished bot message. The home channel gets the run's reply from the run itself, so it is sent once.
 - **One session, two received handoffs.** Handoffs from the same sending session join one receiving session today. Two received items would then share a session, so Cancel on one would stop the other. Decide before slice 5: one item per sender-receiver thread, or one session per handoff.
+- **A post during a chat reply.** A job's result is written to the chat with a Pi `write`, which the model reads at the next boundary like a steer. If a chat reply is mid-run, the model sees the "[Your scheduled job …]" note partway through it. Check that this is harmless with a tool-calling reply, or hold posts until the chat is idle.
 - **Jobs crowding the list.** A bot can have 100 jobs, each an open item, and the list shows 20. Order requests and waiting items ahead of idle jobs, or show jobs as a count.
 - **Late results on a closed item.** Settled in #168: closing an item, by the owner or the bot, stops its running turn, and a run that ends on a closed item records its result without posting it to the chat.
 - **Too many items.** If the bot opens items too eagerly the list becomes noise. The instructions and the 20-item cap are the first defence; measure how many items real use creates before adding rules.

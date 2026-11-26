@@ -606,6 +606,11 @@ test("an item's session never counts as unread, and Cancel lets go of a stuck ru
     ).items.find((s) => s.sessionId === item.sessionId)!;
     assert.ok((summary.replyCount ?? 0) > 0);
     assert.equal(summary.readReplyCount, summary.replyCount);
+    const opened = await app.queries.session(
+      app.actors.establish("web"),
+      item.sessionId!,
+    );
+    assert.equal(opened.session.readReplyCount, opened.session.replyCount);
 
     // A run left over on a turn that already ended.
     const ended = (await app.chats.state()).turns.find(
@@ -623,3 +628,53 @@ test("an item's session never counts as unread, and Cancel lets go of a stuck ru
     await done();
   }
 }, 30_000);
+
+test("the open work never goes with a reply that will be posted to a server thread", async () => {
+  const { app, say, seen, done } = await bot({
+    open: { name: "work_open", args: { title: "Private plan" } },
+  });
+  try {
+    await say("open an item");
+    const thread = {
+      provider: "discord" as const,
+      connectionId: "discord-app",
+      owner: "owner" as const,
+      conversation: "discord:guild:channel:one",
+    };
+    let chatSession = "";
+    await app.root.commit(async (tx) => {
+      const state = await tx.doc(Chats);
+      const chat = state.conversations.find((c) => c.chat)!;
+      chatSession = chat.sessionId;
+      (await tx.doc(ChannelBindings)).bindings.push({
+        ...thread,
+        sessionId: chat.sessionId,
+      });
+      for (const t of state.turns) t.replyTo = { ...thread };
+    }, context);
+    // A handoff's result answers where the owner last wrote: the thread.
+    const result = await app.sessions.submitHandoff(
+      app.actors.establish("web"),
+      {
+        eventId: "handoff-result",
+        text: "Here is what I found.",
+        sessionId: chatSession,
+        handoff: {
+          id: "h-1",
+          kind: "result",
+          bot: { id: "b-research", name: "Research" },
+          title: "Venues",
+          outcome: "completed",
+        },
+      },
+    );
+    await app.harness.waitForIdle(context);
+    const turn = (await app.chats.state()).turns.find(
+      (t) => t.id === result.id,
+    )!;
+    assert.equal(turn.replyTo?.conversation, thread.conversation);
+    assert.doesNotMatch(seen.at(-1)!, /Open work|Private plan/);
+  } finally {
+    await done();
+  }
+});
