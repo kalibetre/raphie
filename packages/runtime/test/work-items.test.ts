@@ -678,3 +678,51 @@ test("the open work never goes with a reply that will be posted to a server thre
     await done();
   }
 });
+
+test("what background work waits on the owner for shows in the chat, with its item", async () => {
+  const { app, say, done } = await bot({
+    ...runCalls,
+    "You are working": {
+      name: "workspace_exec",
+      args: { command: "echo venues" },
+    },
+  });
+  try {
+    await say("open an item");
+    // The run then waits on the owner, so the bot never goes idle.
+    await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "start",
+      text: "start it",
+    });
+    const owner = app.actors.establish("web");
+    const chat = (await app.chats.state()).conversations.find((c) => c.chat)!;
+    const observe = () => app.queries.session(owner, chat.sessionId);
+    await until(async () => !!(await observe()).background?.length);
+    const [request] = (await observe()).background!;
+    const item = (await app.work.get("w-1"))!;
+    assert.equal(request!.itemId, "w-1");
+    assert.equal(request!.title, "Venue research");
+    assert.equal(request!.sessionId, item.sessionId);
+    assert.equal(request!.toolApprovals.length, 1);
+    assert.equal(request!.toolApprovals[0]!.tool, "workspace_exec");
+    // The chat's own approvals are unchanged; the item's session has none
+    // of the chat's.
+    assert.equal((await observe()).toolApprovals.length, 0);
+    assert.equal(
+      (await app.queries.session(owner, item.sessionId!)).background,
+      undefined,
+    );
+    // Deciding it clears it from the chat.
+    await app.toolApprovals.decide(
+      request!.toolApprovals[0]!.id,
+      "rejected",
+      "owner",
+      "web",
+    );
+    await until(async () => !(await observe()).background?.length);
+  } finally {
+    await done();
+  }
+}, 30_000);

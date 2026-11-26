@@ -880,7 +880,18 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
         },
       }),
     );
-    work.next = 6;
+    work.items.push(
+      item("w-6", "Tidy the reports folder", {
+        notes: "Remove reports older than a month.",
+      }),
+    );
+    work.next = 7;
+    // A real run, which stops for an approval: the chat shows it.
+    await app.workRuns.start(
+      tx,
+      "w-6",
+      "Remove the reports older than a month from the reports folder.",
+    );
   }, durableContext);
 }
 settings.onChange = () => {

@@ -238,6 +238,7 @@ export type {
   Page,
   RunPhase,
   SessionObservation,
+  BackgroundRequest,
   RuntimeInfo,
   ClientWorkspace,
 } from "./sessions/views.ts";

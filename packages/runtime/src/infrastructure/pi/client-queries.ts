@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type {
+  BackgroundRequest,
   SessionActivity,
   SessionApproval,
   SessionAsk,
@@ -23,6 +24,8 @@ import type { CardService } from "../../domains/cards/infrastructure/pi-cards.ts
 import { ChannelBindings } from "../../domains/channels/infrastructure/pi-bindings.ts";
 import type { ChatService } from "../../domains/conversations/infrastructure/pi-conversation-service.ts";
 import type { Observations } from "../../domains/conversations/infrastructure/pi-observations.ts";
+import { isOpen } from "../../domains/work/domain/work-item.ts";
+import { WorkItems } from "../../domains/work/infrastructure/work-store.ts";
 import { InputError } from "../../shared/application/input-error.ts";
 import type { DurableContext } from "../../shared/infrastructure/durable-context.ts";
 
@@ -324,6 +327,39 @@ export class PiClientQueries implements ClientQueries {
     return { items, next: start ? String(items[0]!.id) : null };
   }
 
+  /**
+   * What the bot's open work items wait on the owner for in their own
+   * sessions: pending approvals and questions, newest item first.
+   */
+  async background(actor: ActorContext): Promise<BackgroundRequest[]> {
+    const items = (
+      (await this.app.harness.snapshot(WorkItems, context))?.items ?? []
+    ).filter((item) => isOpen(item.status) && item.sessionId);
+    const requests: BackgroundRequest[] = [];
+    for (const item of items.toReversed()) {
+      const sessionId = item.sessionId!;
+      try {
+        const toolApprovals = (await this.approvals(actor, sessionId)).filter(
+          (a) => a.status === "pending" && a.expiresAt > Date.now(),
+        );
+        const asks = (await this.asks(actor, sessionId)).filter(
+          (a) => a.status === "pending",
+        );
+        if (toolApprovals.length || asks.length)
+          requests.push({
+            itemId: item.id,
+            title: item.title,
+            sessionId,
+            toolApprovals,
+            asks,
+          });
+      } catch {
+        // A session that is gone has nothing to ask.
+      }
+    }
+    return requests;
+  }
+
   async session(actor: ActorContext, id: string): Promise<SessionObservation> {
     const { chats, session } = await this.selected(actor, id);
     const history = await this.history(actor, id);
@@ -424,6 +460,7 @@ export class PiClientQueries implements ClientQueries {
       cards,
       live,
       activity,
+      ...(session.chat ? { background: await this.background(actor) } : {}),
       phase: waiting
         ? "approval"
         : asking
