@@ -40,7 +40,7 @@ Read state is shared through the runtime: a reply you read on the desktop app is
 
 Conversations started before bots had one chat are removed when Raphie starts. The most recent one you started from an app became the bot's chat and stays, as do group and server-channel sessions and tasks another bot handed off. Scheduled jobs' own conversations go too: their runs now post in the chat. A conversation with a reply still in progress waits for a later start.
 
-Before removing anything, Raphie copies the bot's storage to `backups/before-one-chat-<time>.sqlite` in the bot's [data folder](/architecture/state/#what-each-bot-stores). Links to a removed conversation, such as a memory's source or an earlier job run, no longer open it.
+Before removing anything, Raphie copies the bot's storage to `backups/before-one-chat-<time>.sqlite` in the bot's [data folder](/architecture/state/#what-each-bot-stores). Links to a removed conversation, such as a memory's source or an earlier job run, no longer open it. The copy is for recovering what was in them, not for going back: restoring it into this version removes them again on the next start. If the copy cannot be made, nothing is removed and the bot starts as usual; Activity records why. Raphie never deletes the copies.
 
 ## The composer
 

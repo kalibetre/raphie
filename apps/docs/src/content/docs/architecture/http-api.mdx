@@ -83,7 +83,7 @@ All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and tho
 | Method | Path                                           | Purpose                                                                               |
 | ------ | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
 | POST   | `/sessions/messages`                           | Admit a turn. Returns 201 with the receipt `{ id, sessionId }`.                       |
-| GET    | `/sessions?after=<id>&limit=50&archived=1`     | Session summaries, `{ items, next }`, the chat first: active ones, or `archived=1`    |
+| GET    | `/sessions?after=<id>&limit=50`                | Session summaries, `{ items, next }`, the chat first                                  |
 | GET    | `/sessions/events`                             | SSE: the first 100 session summaries, re-sent on change                               |
 | GET    | `/sessions/:id`                                | Session observation: recent turns, approvals, live text, activity, phase, saved model |
 | GET    | `/sessions/:id/history?before=<turn>&limit=50` | Older turns, oldest first within each page                                            |
@@ -91,7 +91,6 @@ All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and tho
 | POST   | `/sessions/:id/control`                        | `{ action: "stop" \| "steer" \| "queue", turnId? }`                                   |
 | POST   | `/sessions/:id/model`                          | Change an idle session's model                                                        |
 | POST   | `/sessions/:id/read`                           | `{ replyCount }`; returns `{ readReplyCount }`                                        |
-| POST   | `/sessions/:id/archive`                        | `{ archived }`; archives or brings back. The clients no longer offer it               |
 | GET    | `/runtime`                                     | Model and MCP metadata, uncertain notification IDs                                    |
 
 ### Approvals and permissions
