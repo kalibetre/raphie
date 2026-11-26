@@ -83,6 +83,7 @@ import {
   createWorkTools,
   WorkService,
 } from "../domains/work/infrastructure/work-items.ts";
+import { WorkRuns } from "../domains/work/infrastructure/work-runs.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
 import { createDocumentTools } from "../domains/workspaces/infrastructure/document-tools.ts";
 import { RuntimeWorkspace } from "../domains/workspaces/infrastructure/runtime-workspace.ts";
@@ -171,6 +172,7 @@ export class Gateway {
   asks: AskService;
   cards: CardService;
   work: WorkService;
+  workRuns: WorkRuns;
   observations: Observations;
 
   private constructor(options: Options) {
@@ -219,6 +221,26 @@ export class Gateway {
       ),
       this.telemetry,
     );
+    this.workRuns = new WorkRuns({
+      root: () => this.root,
+      submit: (input) =>
+        this.sessions.submitWork(this.actors.establish("web"), input),
+      turn: async (turnId) => {
+        const turn = (await this.chats.state()).turns.find(
+          (t) => t.id === turnId,
+        );
+        return (
+          turn && {
+            status: turn.status,
+            answer: turn.answer,
+            ...(turn.cancelled ? { cancelled: true } : {}),
+            ...(turn.failure ? { failure: turn.failure } : {}),
+          }
+        );
+      },
+      stop: (sessionId) => this.chats.control(sessionId, "stop"),
+    });
+    this.work.runs = this.workRuns;
   }
 
   static async open(options: Options) {
@@ -269,7 +291,8 @@ export class Gateway {
       );
     registry.install(createWebSearchTools(() => app.models, options.webFetch));
     registry.install(chatSummaries);
-    registry.install(createWorkTools());
+    registry.install(createWorkTools(app.workRuns));
+    registry.install(app.workRuns.extension());
     registry.install(createAskTools(app.asks));
     registry.install(
       createCardTools(app.cards, () => app.chats.owner?.().timeZone ?? ""),

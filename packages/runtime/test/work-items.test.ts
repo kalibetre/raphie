@@ -63,12 +63,17 @@ test("a long list stops at its limit and says how many more there are", () => {
 });
 
 /** A bot whose replies call the tool each message names. */
-async function bot(calls: Record<string, { name: string; args: JsonObject }>) {
-  const directory = await mkdtemp(join(tmpdir(), "raphie-work-"));
+async function bot(
+  calls: Record<string, { name: string; args: JsonObject }>,
+  model: Parameters<typeof chatModel>[0] = {},
+  existing?: string,
+) {
+  const directory = existing ?? (await mkdtemp(join(tmpdir(), "raphie-work-")));
   const seen: string[] = [];
   const app = await Gateway.open({
     directory,
     ...chatModel({
+      ...model,
       toolFor: (text) =>
         Object.entries(calls).find(([word]) => text.startsWith(word))?.[1],
       userMessages: (messages: UserMessage[]) => {
@@ -98,6 +103,8 @@ async function bot(calls: Record<string, { name: string; args: JsonObject }>) {
     app,
     say,
     seen,
+    directory,
+    close: () => app.close(),
     done: async () => {
       await app.close();
       await rm(directory, { recursive: true, force: true });
@@ -358,3 +365,123 @@ test("the owner opens, changes, closes and reopens work items over the API", asy
     await done();
   }
 });
+
+/** Waits for `check` to hold, as background runs settle on their own time. */
+async function until(check: () => Promise<boolean>) {
+  for (let n = 0; n < 200; n++) {
+    if (await check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("Background work did not settle.");
+}
+
+const runCalls = {
+  open: { name: "work_open", args: { title: "Venue research" } },
+  start: {
+    name: "work_start",
+    args: { id: "w-1", brief: "Find three venues for 30 people" },
+  },
+};
+
+test("background work runs in the item's own session and its result comes back to the chat", async () => {
+  const { app, say, close, directory, done } = await bot(runCalls);
+  try {
+    await say("open an item");
+    const started = await say("start it");
+    assert.match(started.answer!, /"started":true/);
+    await until(async () => !(await app.work.get("w-1"))?.run);
+    const item = (await app.work.get("w-1"))!;
+    const { conversations, turns } = await app.chats.state();
+    // Its own session, marked with the item, apart from the chat.
+    const session = conversations.find((c) => c.sessionId === item.sessionId)!;
+    assert.equal(session.work, "w-1");
+    assert.ok(!session.chat);
+    const brief = turns.find(
+      (t) => t.conversationId === session.id && t.work?.kind === "brief",
+    )!;
+    assert.match(brief.text, /Find three venues/);
+    // The result came back to the chat as a marked turn, and onto the item.
+    const chat = conversations.find((c) => c.chat)!;
+    const result = turns.find(
+      (t) => t.conversationId === chat.id && t.work?.kind === "result",
+    )!;
+    assert.equal(result.work?.outcome, "completed");
+    assert.equal(result.status, "done");
+    assert.equal(item.result?.turnId, result.id);
+    assert.match(item.result!.text, /Find three venues/);
+
+    // A follow-up keeps the item's session.
+    await say("start it");
+    await until(async () => !(await app.work.get("w-1"))?.run);
+    assert.equal((await app.work.get("w-1"))?.sessionId, item.sessionId);
+    assert.equal(
+      (await app.chats.state()).turns.filter(
+        (t) => t.conversationId === session.id && t.work?.kind === "brief",
+      ).length,
+      2,
+    );
+
+    // The session outlives a restart's cleanup.
+    await close();
+    const again = await bot(runCalls, {}, directory);
+    assert.ok(
+      (await again.app.chats.state()).conversations.some(
+        (c) => c.sessionId === item.sessionId,
+      ),
+    );
+    await again.close();
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("the owner cancels background work, and closing an item mid-run keeps its result quiet", async () => {
+  const release = Promise.withResolvers<void>();
+  const { app, say, done } = await bot(runCalls, {
+    pauseOn: { text: "Find three venues", until: release.promise },
+  });
+  // The run stays in progress, so the harness is never idle: send without
+  // waiting for it, and wait for each reply instead.
+  const ask = async (text: string) => {
+    const sent = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: crypto.randomUUID(),
+      text,
+    });
+    await until(async () =>
+      (await app.chats.state()).turns.some(
+        (t) => t.id === sent.id && t.status !== "pending",
+      ),
+    );
+  };
+  try {
+    await say("open an item");
+    await ask("start it");
+    await until(async () => !!(await app.work.get("w-1"))?.run?.turnId);
+    await app.work.cancel("w-1");
+    await until(async () => !(await app.work.get("w-1"))?.run);
+    const chat = (await app.chats.state()).conversations.find((c) => c.chat)!;
+    const results = () =>
+      app.chats
+        .state()
+        .then((s) =>
+          s.turns.filter(
+            (t) => t.conversationId === chat.id && t.work?.kind === "result",
+          ),
+        );
+    assert.equal((await results())[0]?.work?.outcome, "cancelled");
+    await assert.rejects(app.work.cancel("w-1"), /nothing running/);
+
+    // Closing a running item stops it; the chat hears nothing more.
+    await ask("start it");
+    await until(async () => !!(await app.work.get("w-1"))?.run?.turnId);
+    await app.work.change("w-1", { status: "dropped" });
+    await until(async () => !(await app.work.get("w-1"))?.run);
+    assert.equal((await results()).length, 1);
+    assert.match((await app.work.get("w-1"))!.result!.text, /cancelled/);
+  } finally {
+    release.resolve();
+    await done();
+  }
+}, 30_000);

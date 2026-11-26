@@ -4,6 +4,7 @@ import type {
   ModelSelection,
   Quote,
   TurnHandoff,
+  TurnWork,
 } from "@raphie/contracts";
 
 export type SendMessage = {
@@ -26,6 +27,7 @@ export type SendMessage = {
   scheduled?: { name: string };
   /** Internal only: another bot's task or result. Never accepted from HTTP input. */
   handoff?: TurnHandoff;
+  work?: TurnWork;
 };
 
 export interface ConversationCommands {

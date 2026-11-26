@@ -97,9 +97,11 @@ async function longChat(
     const summarized = (await app.chats.state()).turns.filter(
       (turn) => turn.conversationId === first.conversationId && turn.compaction,
     );
-    // Scaled to the 24k window: once, late. The library's fixed defaults
-    // would summarize from the first few turns on.
-    expect(summarized.length).toBe(1);
+    // Scaled to the 24k window: late, and once or twice as the instructions
+    // grow. The library's fixed defaults would summarize from the first few
+    // turns on.
+    expect(summarized.length).toBeGreaterThanOrEqual(1);
+    expect(summarized.length).toBeLessThanOrEqual(2);
     expect(
       turns.findIndex((turn) => turn.id === summarized[0]!.id),
     ).toBeGreaterThan(10);
@@ -122,12 +124,15 @@ test("a long chat is summarized as the bot's notes and keeps answering", async (
         summary: "## Commitments\n- Fixture notes of the earlier messages.",
       });
       // The summarizer read a transcript of the earliest messages.
-      expect(read).toHaveLength(1);
+      expect(read.length).toBeGreaterThanOrEqual(1);
       expect(read[0]).toContain("[Message]: ");
       expect(read[0]).toContain("Message 0 ");
 
       // The newest request starts from the notes, not from message 0.
-      const last = seen.at(-1)!;
+      // The chat's newest request, not a summary's own.
+      const last = seen
+        .filter((request) => !request.some((m) => m.startsWith("<transcript>")))
+        .at(-1)!;
       expect(last.some((m) => m.includes("Fixture notes"))).toBe(true);
       expect(last.some((m) => m.includes("Message 0 "))).toBe(false);
       expect(last.at(-1)).toContain("Message 19 ");

@@ -2,6 +2,7 @@ import type {
   ApprovalStatus,
   ModelSelection,
   TurnHandoff,
+  TurnWork,
 } from "@raphie/contracts";
 
 import type {
@@ -187,6 +188,25 @@ export class Sessions implements SessionOperations {
   }
 
   /** Internal: a due scheduled job, marked so clients show it as scheduled. */
+  /** A work item's brief to its own session, or its result to the chat. */
+  async submitWork(
+    actor: ActorContext,
+    input: {
+      eventId: string;
+      text: string;
+      sessionId?: string;
+      work: TurnWork;
+    },
+  ) {
+    const verified = this.authority.require(actor);
+    const receipt = await this.conversations.send({
+      ...input,
+      source: verified.source,
+      actor: verified.subject,
+    });
+    return { id: receipt.id, sessionId: receipt.sessionId };
+  }
+
   async submitScheduled(
     actor: ActorContext,
     input: {

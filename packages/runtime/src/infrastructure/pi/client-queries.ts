@@ -220,6 +220,7 @@ export class PiClientQueries implements ClientQueries {
         ? { scheduled: t.scheduled, scheduledDelivery: t.scheduledDelivery }
         : {}),
       ...(t.handoff ? { handoff: t.handoff } : {}),
+      ...(t.work ? { work: t.work } : {}),
       ...(t.readSessions?.length ? { readSessions: t.readSessions } : {}),
       ...(t.compaction ? { compaction: t.compaction } : {}),
       ...(t.quote ? { quote: t.quote } : {}),

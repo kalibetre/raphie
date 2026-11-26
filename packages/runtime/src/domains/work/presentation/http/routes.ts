@@ -33,6 +33,10 @@ export function workRoutes(work: WorkService) {
       if (!item) throw new InputError("Work item not found.", 404);
       return c.json(item);
     })
+    .post("/:id/cancel", async (c) => {
+      await work.cancel(c.req.param("id"));
+      return c.json({ cancelled: true });
+    })
     .post(
       "/",
       limitBody(16_384),
