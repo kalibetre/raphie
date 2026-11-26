@@ -42,6 +42,7 @@ import {
 import { Cards } from "../../cards/infrastructure/card-store.ts";
 import {
   channelNames,
+  isPrivateDestination,
   isSharedTelegramDestination,
   sameDestination,
 } from "../../channels/domain/binding.ts";
@@ -544,13 +545,13 @@ export class ChatService implements ConversationCommands {
             403,
           );
         const conversationId = addressed?.id ?? input.conversationId;
-        // The owner writing from an app, to no session in particular, writes
-        // in the bot's one chat.
+        // The owner writing from an app, to no session in particular, or from
+        // a private channel chat writes in the bot's one chat.
         const toChat =
-          input.source === "web" &&
           conversationId === undefined &&
           !input.scheduled &&
-          !input.handoff;
+          !input.handoff &&
+          (input.source === "web" || isPrivateDestination(replyTo));
         // Preserve the fingerprint of pre-migration commands when addressed by UUID.
         const fingerprint = new Bun.CryptoHasher("sha256")
           .update(

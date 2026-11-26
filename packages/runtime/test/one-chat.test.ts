@@ -7,8 +7,8 @@ import { join } from "node:path";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
-import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
 import { chatModel } from "./chat-model.ts";
+import { withoutChat } from "./without-chat.ts";
 
 const web = (eventId: string, text = eventId) => ({
   source: "web" as const,
@@ -43,17 +43,12 @@ test("a bot from before chats keeps its latest app conversation as its chat", as
   const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-legacy-"));
   const config = chatModel();
   let app = await Gateway.open({ directory, ...config });
-  // Before chats, every message without a session started a new one.
-  const unmark = () =>
-    app.root.commit(async (tx) => {
-      for (const item of (await tx.doc(Chats)).conversations)
-        Reflect.deleteProperty(item, "chat");
-    }, context);
   try {
+    // Before chats, every message without a session started a new one.
     const older = await app.chats.send(web("older"));
-    await unmark();
+    await withoutChat(app);
     const latest = await app.chats.send(web("latest"));
-    await unmark();
+    await withoutChat(app);
     // A channel's conversation is newer, but never becomes the app's chat.
     const channel = await app.chats.send({
       ...web("channel"),
@@ -74,6 +69,82 @@ test("a bot from before chats keeps its latest app conversation as its chat", as
     assert.equal(
       (await app.chats.send(web("next"))).sessionId,
       latest.sessionId,
+    );
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+const channel = (
+  eventId: string,
+  conversation: string,
+  provider: "telegram" | "discord" = "telegram",
+) => ({
+  source: provider,
+  actor: "owner",
+  eventId,
+  text: eventId,
+  discordThreadId: conversation,
+  connectionId: provider === "telegram" ? "telegram:1" : "discord-app",
+  discordUserId: "42",
+});
+
+test("private channel chats join the chat; groups and server channels keep their own", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-channels-"));
+  const app = await Gateway.open({ directory, ...chatModel() });
+  try {
+    const chat = (await app.chats.send(web("app"))).sessionId;
+    assert.equal(
+      (await app.chats.send(channel("telegram", "telegram:42"))).sessionId,
+      chat,
+    );
+    assert.equal(
+      (await app.chats.send(channel("dm", "discord:@me:7", "discord")))
+        .sessionId,
+      chat,
+    );
+    const group = (await app.chats.send(channel("group", "telegram:-100")))
+      .sessionId;
+    const server = (
+      await app.chats.send(channel("server", "discord:guild:7", "discord"))
+    ).sessionId;
+    assert.equal(new Set([chat, group, server]).size, 3);
+    // Each reply goes back where its message came from.
+    await app.harness.waitForIdle(context);
+    const { turns } = await app.chats.state();
+    assert.equal(
+      turns.find((t) => t.text === "telegram")?.replyTo?.conversation,
+      "telegram:42",
+    );
+    assert.equal(turns.find((t) => t.text === "app")?.replyTo, null);
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a private channel chat from before chats moves to the chat; its old session stays", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-rebind-"));
+  const config = chatModel();
+  let app = await Gateway.open({ directory, ...config });
+  try {
+    const telegram = await app.chats.send(channel("before", "telegram:42"));
+    await withoutChat(app);
+    const latest = await app.chats.send(web("latest"));
+    await withoutChat(app);
+    await app.harness.waitForIdle(context);
+    assert.notEqual(telegram.sessionId, latest.sessionId);
+    await app.close();
+    app = await Gateway.open({ directory, ...config });
+    assert.equal(
+      (await app.chats.send(channel("after", "telegram:42"))).sessionId,
+      latest.sessionId,
+    );
+    assert.ok(
+      (await app.chats.state()).conversations.some(
+        (c) => c.sessionId === telegram.sessionId && !c.chat,
+      ),
     );
   } finally {
     await app.close();

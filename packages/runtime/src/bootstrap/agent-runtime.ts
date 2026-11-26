@@ -50,6 +50,7 @@ import {
   CardService,
   createCardTools,
 } from "../domains/cards/infrastructure/pi-cards.ts";
+import { isPrivateDestination } from "../domains/channels/domain/binding.ts";
 import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.ts";
 import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
 import { chatFromHistory } from "../domains/conversations/domain/chat.ts";
@@ -340,11 +341,6 @@ export class Gateway {
         if (!conversation.sessionId)
           conversation.sessionId = newSessionId(conversation.createdAt);
       }
-      // Bots from before chats keep their latest app conversation as the chat.
-      if (!chats.conversations.some((c) => c.chat)) {
-        const chat = chatFromHistory(chats.conversations, chats.turns);
-        if (chat) chat.chat = true;
-      }
       const bindings = (await tx.doc(ChannelBindings)).bindings;
       // Backfill only persisted associations, never the current default channel.
       for (const conversation of chats.conversations) {
@@ -380,6 +376,17 @@ export class Gateway {
       }
       for (const delivery of chats.deliveries)
         if (delivery.status === "sending") delivery.status = "uncertain";
+      // Bots from before chats keep their latest conversation from an app or
+      // a private channel chat as the chat, and every private channel chat
+      // joins it.
+      if (!chats.conversations.some((c) => c.chat)) {
+        const chat = chatFromHistory(chats.conversations, chats.turns);
+        if (chat) chat.chat = true;
+      }
+      const chat = chats.conversations.find((c) => c.chat);
+      if (chat)
+        for (const binding of bindings)
+          if (isPrivateDestination(binding)) binding.sessionId = chat.sessionId;
       const toolApprovals = await tx.doc(ToolApprovals);
       // Created up front, as the approvals are, so a tool waiting on a
       // question watches a doc that already exists.

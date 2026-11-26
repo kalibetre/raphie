@@ -23,6 +23,23 @@ export function sameDestination(a: ReplyDestination, b: ReplyDestination) {
   );
 }
 
+/**
+ * A chat only the owner reads: a private Telegram chat or a Discord direct
+ * message. It joins the owner's one chat with the bot; a group or a server
+ * channel, which others read, keeps its own.
+ */
+export function isPrivateDestination(
+  destination:
+    Pick<ReplyDestination, "provider" | "conversation"> | null | undefined,
+) {
+  if (destination?.provider === "telegram")
+    return /^telegram:[1-9]\d*$/.test(destination.conversation);
+  return (
+    destination?.provider === "discord" &&
+    destination.conversation.startsWith("discord:@me:")
+  );
+}
+
 /** Telegram group/supergroup IDs are negative; private-user IDs are positive. */
 export function isSharedTelegramDestination(
   destination:

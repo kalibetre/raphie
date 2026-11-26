@@ -1,9 +1,10 @@
+import { isPrivateDestination } from "../../channels/domain/binding.ts";
 import type { ChatConversation, ChatTurn } from "./model.ts";
 
 /**
  * The session that becomes a bot's chat when it has none yet: the owner's
- * most recent conversation started from an app. A handed-off task, a
- * scheduled job's session or one a channel started never becomes the chat.
+ * most recent conversation started from an app or a private channel chat. A
+ * handed-off task, a scheduled job's session or a group's never does.
  */
 export function chatFromHistory(
   conversations: readonly ChatConversation[],
@@ -14,7 +15,12 @@ export function chatFromHistory(
     if (conversation.handedOffBy) continue;
     const own = turns.filter((t) => t.conversationId === conversation.id);
     const first = own[0];
-    if (!first || first.source !== "web" || first.scheduled || first.handoff)
+    if (
+      !first ||
+      first.scheduled ||
+      first.handoff ||
+      (first.source !== "web" && !isPrivateDestination(first.replyTo))
+    )
       continue;
     const lastAt = own.at(-1)!.createdAt;
     if (!chosen || lastAt > chosen.lastAt) chosen = { conversation, lastAt };
