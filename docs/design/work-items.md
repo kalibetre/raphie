@@ -86,7 +86,7 @@ Each slice ships on its own, with web and desktop together where it has a screen
 3. **Background sessions**: `work_start`, results back to the chat, Cancel, keeping item sessions in the cleanup. Done in #168; results don't quote the source message yet.
 4. **Jobs as items**: runs in the item's session, results posted to the chat, PR #163's chat runs removed. Done: a job's item follows the job's lifecycle, and the owner changes it through the job, not the Work page.
 5. **Handoffs as items** on both sides; the handoff list folds into work items. Done: each handoff has its own session on the receiving side, and both sides keep an item. The in-chat cards, the composer's delegates and the `handoff_*` tools stay: they are the live view of a task, and the Work page lists the items.
-6. **Approvals and questions as chat cards** from background sessions.
+6. **Approvals and questions as chat cards** from background sessions. Done: the chat's snapshot carries each open item's pending approvals and questions, and both clients show them at the end of the chat with the usual decision and answer controls.
 
 ## Open questions
 
