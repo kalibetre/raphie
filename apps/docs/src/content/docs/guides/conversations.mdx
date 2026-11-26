@@ -147,6 +147,18 @@ Telegram and Discord cannot draw a card, so there it is added to the reply as a 
 The bot copies links from what its tools returned. Raphie checks that a link is a web address, not that it leads where the row says, so glance at the address before you sign in anywhere.
 :::
 
+## Work items
+
+A bot keeps a **work item** for each thing it tracks for you beyond one reply: a request it is still chasing, something it promised to come back to, a decision it waits on from you. A request it settles in the same reply never becomes one.
+
+Each item has a short id such as `w-12`, a title, and a status: **active** while the bot works on it, **waiting** while it is blocked (with what it waits on), and **done** or **dropped** once closed. The bot keeps notes on it and its latest result, and closes it when it is finished or you no longer want it.
+
+- **Asking about them:** ask the bot what is going on, or about one thing by name. It answers from its open items, which it reads with each of your messages, and can read any item in full, closed ones included.
+- **Only in your chat:** work items are yours. A Telegram group or Discord server channel with the bot never sees them, and the bot can't open or change them there. A scheduled job's run whose [home channel](/guides/schedules/#send-results-to-a-home-channel) is a group isn't sent the list and can't use the work tools, but like any run in the chat it reads the chat's earlier messages, so only choose a group as home for jobs whose output you would share there.
+- **Closed items** are kept, listed apart from open ones.
+
+The bot opens, updates and closes items itself. To change one, ask it.
+
 ## Long chats
 
 A chat can go on as long as you like. Every message you send makes the model read the chat again, so the bot keeps it short: once it grows past a working size, the bot writes notes on its earlier messages and reads those instead of them from then on. Its most recent messages stay word for word.

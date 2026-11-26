@@ -79,6 +79,10 @@ import {
 } from "../domains/skills/infrastructure/skill-tools.ts";
 import { WorkspaceSkills } from "../domains/skills/infrastructure/workspace-skills.ts";
 import { createWebSearchTools } from "../domains/web/infrastructure/web-search-tools.ts";
+import {
+  createWorkTools,
+  WorkService,
+} from "../domains/work/infrastructure/work-items.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
 import { createDocumentTools } from "../domains/workspaces/infrastructure/document-tools.ts";
 import { RuntimeWorkspace } from "../domains/workspaces/infrastructure/runtime-workspace.ts";
@@ -166,6 +170,7 @@ export class Gateway {
   toolApprovals: ToolApprovalService;
   asks: AskService;
   cards: CardService;
+  work: WorkService;
   observations: Observations;
 
   private constructor(options: Options) {
@@ -201,6 +206,7 @@ export class Gateway {
     this.toolApprovals = new ToolApprovalService(this);
     this.asks = new AskService(this);
     this.cards = new CardService(this);
+    this.work = new WorkService(this);
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
     this.queries = new PiClientQueries(this);
@@ -263,6 +269,7 @@ export class Gateway {
       );
     registry.install(createWebSearchTools(() => app.models, options.webFetch));
     registry.install(chatSummaries);
+    registry.install(createWorkTools());
     registry.install(createAskTools(app.asks));
     registry.install(
       createCardTools(app.cards, () => app.chats.owner?.().timeZone ?? ""),
