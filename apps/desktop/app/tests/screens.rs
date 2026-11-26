@@ -6612,6 +6612,7 @@ fn background_work_coming_back_reads_as_a_marker_not_an_owner_message() {
     settle(&mut rt);
     let text = screen_text(&rt);
     assert!(text.contains("Background work ·"));
-    assert!(text.contains("Venue research · Cancelled"));
+    assert!(text.contains("Venue research"));
+    assert!(text.contains("· Cancelled"));
     assert!(!text.contains("Your background work on w-2 ended"));
 }

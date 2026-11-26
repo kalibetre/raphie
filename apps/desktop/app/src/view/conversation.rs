@@ -254,8 +254,8 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
     // A work item's result: the bot's to tell, not an owner message.
     if let Some(work) = &turn.work {
         let how = match work.outcome {
-            Some(raphie_core::contracts::HandoffOutcome::Cancelled) => " · Cancelled",
-            Some(raphie_core::contracts::HandoffOutcome::Failed) => " · Failed",
+            Some(raphie_core::contracts::HandoffOutcome::Cancelled) => "· Cancelled",
+            Some(raphie_core::contracts::HandoffOutcome::Failed) => "· Failed",
             _ => "",
         };
         return row().key(key).w_full().justify_center().child(
@@ -278,10 +278,11 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
                         .color(t.accent),
                 )
                 .child(
-                    text(format!("{}{how}", work.title))
+                    text(work.title.clone())
                         .font(font(12.0, 600.0))
                         .color(t.accent),
                 )
+                .child(text(how).font(font(12.0, 400.0)).color(t.accent))
                 .child(
                     text(format::clock(turn.created_at))
                         .font(font(12.0, 400.0))

@@ -141,6 +141,8 @@ pub const SCENES: &[Scene] = &[
     ("settings-memories-empty", settings_memories_empty),
     ("settings-work", settings_work),
     ("settings-work-edit", settings_work_edit),
+    ("settings-work-running", settings_work_running),
+    ("conversation-work", conversation_work),
     ("settings-jobs", settings_jobs),
     ("settings-jobs-create", settings_jobs_create),
     ("settings-jobs-empty", settings_jobs_empty),
@@ -1017,6 +1019,43 @@ pub fn settings_work(ui: &mut Ui) {
         open: lists.open,
         closed: lists.closed,
     });
+}
+
+/// Work with its first item running in the background.
+pub fn settings_work_running(ui: &mut Ui) {
+    settings_work(ui);
+    if let Some(lists) = ui.model.work.get_mut("default") {
+        lists.open[0].run = Some(raphie_core::contracts::WorkRun {
+            started_at: now_ms() - 60_000,
+            turn_id: Some("t-run".into()),
+        });
+    }
+}
+
+/// The chat with two background results come back: one completed, one
+/// cancelled.
+pub fn conversation_work(ui: &mut Ui) {
+    conversation(ui);
+    let Some(observation) = ui
+        .model
+        .conversation
+        .as_mut()
+        .and_then(|c| c.observation.as_mut())
+    else {
+        return;
+    };
+    use raphie_core::contracts::{HandoffOutcome, TurnWork, TurnWorkKind};
+    for (turn, (title, outcome)) in observation.turns.iter_mut().zip([
+        ("Venue research", HandoffOutcome::Completed),
+        ("Catering quotes", HandoffOutcome::Cancelled),
+    ]) {
+        turn.work = Some(TurnWork {
+            item_id: "w-2".into(),
+            title: title.into(),
+            kind: TurnWorkKind::Result,
+            outcome: Some(outcome),
+        });
+    }
 }
 
 /// Work with an item open in the "Edit item" dialog.
