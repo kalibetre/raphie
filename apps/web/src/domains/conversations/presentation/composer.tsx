@@ -287,8 +287,8 @@ export function Composer({
           <Textarea
             ref={input}
             className="min-h-6 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[14.5px] leading-6 shadow-none focus-visible:ring-0 md:text-[14.5px] dark:bg-transparent"
-            aria-label={`${conversationId ? "Reply to" : "Message"} ${botName}`}
-            placeholder={`${conversationId ? "Reply to" : "Message"} ${botName}…`}
+            aria-label={`Message ${botName}`}
+            placeholder={`Message ${botName}…`}
             value={draft}
             maxLength={4000}
             {...menuProps}

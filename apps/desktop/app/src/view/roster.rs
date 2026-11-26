@@ -34,8 +34,8 @@ impl Presence {
             Presence::NeedsYou => "Needs you".into(),
             Presence::NeedsSetup => "Needs setup".into(),
             Presence::Working => "Working".into(),
-            Presence::Replied(1) => "1 new reply".into(),
-            Presence::Replied(n) => format!("{n} new replies"),
+            Presence::Replied(1) => "1 new message".into(),
+            Presence::Replied(n) => format!("{n} new messages"),
             Presence::Available => "Available".into(),
         }
     }

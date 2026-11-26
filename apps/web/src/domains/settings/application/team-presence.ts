@@ -23,7 +23,7 @@ export function presence(
   if (replies)
     return {
       state: "replied",
-      label: replies === 1 ? "1 new reply" : `${replies} new replies`,
+      label: replies === 1 ? "1 new message" : `${replies} new messages`,
     };
   return { state: "available", label: "Available" };
 }

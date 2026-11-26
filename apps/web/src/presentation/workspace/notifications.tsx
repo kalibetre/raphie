@@ -111,7 +111,7 @@ export function Notifications({
         {(
           [
             ["all", "All"],
-            ["reply", "Replies"],
+            ["reply", "Messages"],
             ["approval", "Approvals"],
             ["job", "Jobs"],
           ] as const
@@ -160,9 +160,9 @@ export function Notifications({
                   item.kind === "approval"
                     ? "Needs your approval"
                     : item.kind === "reply"
-                      ? `${item.unread} new ${item.unread === 1 ? "reply" : "replies"}`
+                      ? `${item.unread} new ${item.unread === 1 ? "message" : "messages"}`
                       : item.run!.status === "completed"
-                        ? "Your scheduled reply is ready"
+                        ? "Your scheduled job’s message is ready"
                         : `Scheduled job ${jobRunStatus[item.run!.status].toLowerCase()}`;
                 const preview =
                   item.kind === "approval"

@@ -4223,7 +4223,7 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
     for expected in [
         "Today",
         "Earlier",
-        "2 new replies",
+        "2 new messages",
         "Needs your approval",
         "Action required",
         "Scheduled job interrupted",
@@ -4234,7 +4234,10 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
         assert!(shown.contains(expected), "missing: {expected}");
     }
     // The other bot's row in the roster counts its conversation too.
-    assert_eq!(needs_you(&rt, "b-research").as_deref(), Some("1 new reply"));
+    assert_eq!(
+        needs_you(&rt, "b-research").as_deref(),
+        Some("1 new message")
+    );
 
     click(&mut rt, "rd-inbox-jobs");
     assert_eq!(rt.state.inbox_filter, InboxFilter::Jobs);
@@ -4370,7 +4373,7 @@ fn updates_that_arrive_behind_another_app_are_announced_by_the_system_once() {
     let posted = &rt.state.posted;
     assert_eq!(posted.len(), 1);
     assert_eq!(posted[0].title, "Raphie · Tea preferences");
-    assert_eq!(posted[0].body, "2 new replies");
+    assert_eq!(posted[0].body, "2 new messages");
     assert_eq!(
         posted[0].target,
         Target {

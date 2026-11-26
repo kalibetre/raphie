@@ -204,7 +204,7 @@ fn tabs(chosen: InboxFilter, t: &Theme) -> El {
         .border_sides([0.0, 0.0, 1.0, 0.0], t.border);
     for (filter, key, label) in [
         (InboxFilter::All, "rd-inbox-all", "All"),
-        (InboxFilter::Replies, "rd-inbox-replies", "Replies"),
+        (InboxFilter::Replies, "rd-inbox-replies", "Messages"),
         (InboxFilter::Approvals, "rd-inbox-approvals", "Approvals"),
         (InboxFilter::Jobs, "rd-inbox-jobs", "Jobs"),
     ] {

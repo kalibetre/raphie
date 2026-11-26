@@ -40,7 +40,7 @@ test("pending activity distinguishes model output, tool execution, and the next 
     "mcp_calendar_list started",
   );
   const steps = toolSteps("run", [start], []);
-  assert.equal(activeRunLabel(live, [], []), "Writing reply…");
+  assert.equal(activeRunLabel(live, [], []), "Writing…");
   assert.equal(
     activeRunLabel({ generating: false, text: live.text }, [], []),
     "Waiting for model…",

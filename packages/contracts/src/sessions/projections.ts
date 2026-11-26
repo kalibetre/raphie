@@ -37,7 +37,7 @@ export function activeRunLabel(
       ? `Running ${step.server ? `${step.server} · ` : ""}${step.tool}…`
       : "Running tool…";
   }
-  if (live?.generating && live.text) return "Writing reply…";
+  if (live?.generating && live.text) return "Writing…";
   if (
     latest?.type === "model.completed" &&
     details(latest).stopReason === "toolUse"
