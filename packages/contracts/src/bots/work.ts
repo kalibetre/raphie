@@ -23,8 +23,8 @@ export type WorkItem = {
   result?: { text: string; at: number; turnId?: string };
   /** Its own background session, once work has run there. */
   sessionId?: string;
-  /** The run in progress, if any: since when, and its turn once delivered. */
-  run?: { startedAt: number; turnId?: string };
+  /** The run in progress, if any: which, since when, and its turn once delivered. */
+  run?: { id?: string; startedAt: number; turnId?: string };
   opened: { at: number; by: WorkActor };
   /** When it last changed. */
   updatedAt: number;

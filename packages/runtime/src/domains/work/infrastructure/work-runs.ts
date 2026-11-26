@@ -104,13 +104,14 @@ export class WorkRuns {
     if (item.run)
       return `${item.id} is already running. Wait for its result, or ask the owner to cancel it.`;
     const now = Date.now();
-    item.run = { startedAt: now };
+    const runId = crypto.randomUUID();
+    item.run = { id: runId, startedAt: now };
     item.status = "active";
     delete item.waitingOn;
     item.updatedAt = now;
     await tx.createTask(
       this.task,
-      { itemId: item.id, runId: crypto.randomUUID(), brief },
+      { itemId: item.id, runId, brief },
       {
         conversationId: this.options.root().id,
         ownership: { kind: "conversation" },
@@ -165,7 +166,8 @@ export class WorkRuns {
           const stored = (await tx.doc(WorkItems)).items.find(
             (i) => i.id === task.input.itemId,
           );
-          if (stored) delete stored.run;
+          // Only this run's marker: a later run may already have started.
+          if (stored?.run?.id === task.input.runId) delete stored.run;
           return { status: "terminal", outcome: { status: "aborted" } };
         }, ctx),
       phases: {
@@ -174,13 +176,13 @@ export class WorkRuns {
           const item = (await runtime.snapshot(WorkItems, ctx))?.items.find(
             (i) => i.id === itemId,
           );
-          // Closed before its brief went out: nothing is sent.
-          if (!item?.run || !isOpen(item.status)) {
+          // Closed, or let go of, before its brief went out: nothing is sent.
+          if (item?.run?.id !== runId || !isOpen(item.status)) {
             await runtime.commit(async (tx) => {
               const stored = (await tx.doc(WorkItems)).items.find(
                 (i) => i.id === itemId,
               );
-              if (stored) delete stored.run;
+              if (stored?.run?.id === runId) delete stored.run;
               return finish;
             }, ctx);
             return;
@@ -193,19 +195,23 @@ export class WorkRuns {
               ...(item.sessionId ? { sessionId: item.sessionId } : {}),
               work: { itemId, title: item.title, kind: "brief" },
             });
+            let closed = false;
             await runtime.commit(async (tx) => {
               const stored = (await tx.doc(WorkItems)).items.find(
                 (i) => i.id === itemId,
               );
               if (stored) {
                 stored.sessionId = receipt.sessionId;
-                if (stored.run) stored.run.turnId = receipt.id;
+                if (stored.run?.id === runId) stored.run.turnId = receipt.id;
+                closed = !isOpen(stored.status);
               }
               return {
                 status: "running",
                 checkpoint: { phase: "wait", turnId: receipt.id },
               };
             }, ctx);
+            // Closed while the brief was going out: stop what it started.
+            if (closed) await this.options.stop(receipt.sessionId);
           } catch (error) {
             const attempts = (task.state.checkpoint.attempts ?? 0) + 1;
             if (retryable(error) && attempts < MAX_ATTEMPTS) {
@@ -307,7 +313,7 @@ export class WorkRuns {
             );
             if (stored) {
               const now = Date.now();
-              delete stored.run;
+              if (stored.run?.id === runId) delete stored.run;
               if (checkpoint.text)
                 stored.result = {
                   text: clip(checkpoint.text, LIMITS.result),
