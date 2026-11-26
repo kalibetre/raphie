@@ -16,7 +16,12 @@ import type {
 } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
-import { syncSentHandoff } from "../../work/infrastructure/handoff-items.ts";
+import { isOpen } from "../../work/domain/work-item.ts";
+import {
+  sentItem,
+  syncSentHandoff,
+} from "../../work/infrastructure/handoff-items.ts";
+import { WorkItems } from "../../work/infrastructure/work-store.ts";
 import {
   handoffStatus,
   MAX_OPEN_HANDOFFS_PER_BOT,
@@ -362,6 +367,28 @@ export class BotHandoffs {
                 }),
                 ctx,
               );
+              return;
+            }
+            // Its item was closed before the brief went out: send nothing.
+            const item = sentItem(
+              await runtime.snapshot(WorkItems, ctx),
+              handoffId,
+            );
+            if (item && !isOpen(item.status)) {
+              await runtime.commit(async (tx) => {
+                const stored = await find(tx, handoffId);
+                const pending = stored?.requests[n];
+                if (stored && pending && pending.outcome === null) {
+                  pending.outcome = "cancelled";
+                  pending.finishedAt = Date.now();
+                  stored.status = handoffStatus(stored);
+                  await syncSentHandoff(tx, stored);
+                }
+                return {
+                  status: "terminal",
+                  outcome: { status: "completed", result: null },
+                };
+              }, ctx);
               return;
             }
             // Each handoff has its own session on the other side; its

@@ -265,7 +265,6 @@ export const chatWorkflow = defineTask<
         await settleReceivedHandoff(tx, {
           handoffId: turn.handoff.id,
           turnId: turn.id,
-          cancelled: true,
           result: "The task was interrupted before it finished.",
         });
       return { status: "terminal", outcome: { status: "aborted" } };

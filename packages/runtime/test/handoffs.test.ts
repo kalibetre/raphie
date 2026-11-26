@@ -968,6 +968,10 @@ test("closing the sender's item before delivery stops the task and posts nothing
         (t) => t.handoff?.kind === "result",
       ),
     ).toBe(false);
+    // Nothing reached the other bot.
+    expect(
+      (await app.host.runtime(app.research.id).gateway.chats.state()).turns,
+    ).toHaveLength(0);
     const item = (await app.chief.gateway.work.state()).items[0]!;
     expect(item.status).toBe("dropped");
     expect(item.run).toBeUndefined();

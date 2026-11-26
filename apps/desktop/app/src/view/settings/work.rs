@@ -228,6 +228,11 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
     }
     // A scheduled job's item follows the job; it is changed there.
     let job = item.origin.as_ref().is_some_and(|o| o.kind == "job");
+    // A handoff's item reopens with its next request, not by hand.
+    let handoff = item
+        .origin
+        .as_ref()
+        .is_some_and(|o| o.kind.starts_with("handoff"));
     if job {
         let next = item
             .next_at
@@ -319,14 +324,14 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
                 !busy,
                 set(WorkStatus::Dropped),
             ));
-    } else {
+    } else if !handoff {
         buttons = buttons.child(pressable(
             button(t, Kind::Ghost, Size::Small, None, "Reopen").key(key("reopen")),
             !busy,
             set(WorkStatus::Active),
         ));
     }
-    if running || !job {
+    if running || (!job && (item.status.is_open() || !handoff)) {
         card = card.child(buttons);
     }
     card

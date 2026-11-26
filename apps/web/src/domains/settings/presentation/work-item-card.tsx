@@ -38,6 +38,8 @@ export function WorkItemCard({
   const running = !!item.run;
   // A scheduled job's item follows the job; it is changed there.
   const job = item.origin?.kind === "job";
+  // A handoff's item reopens with its next request, not by hand.
+  const handoff = !!item.origin?.kind.startsWith("handoff");
   const by = (actor: "bot" | "owner") => (actor === "bot" ? bot : "you");
   return (
     <article className="automation-job work-item" aria-label={item.title}>
@@ -82,7 +84,7 @@ export function WorkItemCard({
         {item.closed &&
           ` · ${item.status === "done" ? "Done" : "Dropped"} by ${by(item.closed.by)}, ${when(item.closed.at)}`}
       </p>
-      {(running || !job) && (
+      {(running || (!job && (open || !handoff))) && (
         <div className="automation-actions">
           {running && (
             <Button
@@ -121,7 +123,7 @@ export function WorkItemCard({
                 Drop
               </Button>
             </>
-          ) : (
+          ) : handoff ? null : (
             <Button
               variant="ghost"
               size="sm"
