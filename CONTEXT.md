@@ -68,7 +68,7 @@ Sessions from before chats existed are removed when the runtime starts.
 _Avoid_: Conversation; session as something the owner picks or starts.
 
 **Work item**: Something a bot is keeping track of for longer than one turn:
-a request with follow-ups, a scheduled job, or a handoff it received. It has a
+a request with follow-ups, a scheduled job, or a handoff, sent or received. It has a
 title, a status, notes and its latest result, and the bot keeps its list of
 open work items in mind in every turn of the chat. The bot opens and closes
 work items itself; the owner can also open, rename, close or drop one. Work
@@ -112,9 +112,10 @@ Pi calls the step compaction.
 _Avoid_: Memory, which is what a bot keeps across sessions.
 
 **Handoff**: A work item one bot gives another of the owner's bots, with the
-brief, its follow-ups and the results that come back. It appears among the
-receiving bot's work items, marked with the sender, and the receiving bot
-works on it in the background; its chat with the owner shows only a note.
+brief, its follow-ups and the results that come back. It is a work item on
+both sides: the sending bot's waits on the other bot, and the receiving bot's
+is marked with the sender. The receiving bot works on it in the background;
+its chat with the owner shows only a note.
 Only the sending bot directs it, though the owner may write to it. A handoff
 never carries the owner's authority.
 _Avoid_: Delegation or bot message as names for it.
