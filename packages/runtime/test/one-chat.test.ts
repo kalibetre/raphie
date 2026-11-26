@@ -151,3 +151,39 @@ test("a private channel chat from before chats moves to the chat; its old sessio
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a session from before chats is history: the owner writes in the chat instead", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-one-chat-history-"));
+  const app = await Gateway.open({ directory, ...chatModel() });
+  try {
+    const old = await app.chats.send(web("old"));
+    await withoutChat(app);
+    const chat = await app.chats.send(web("chat"));
+    const group = await app.chats.send(channel("group", "telegram:-100"));
+    await app.harness.waitForIdle(context);
+    await assert.rejects(
+      app.chats.send({ ...web("again"), sessionId: old.sessionId }),
+      (error: Error & { status?: number; code?: string }) =>
+        error.status === 409 && error.code === "history",
+    );
+    // The chat and a group's session still take messages.
+    for (const [eventId, sessionId] of [
+      ["more", chat.sessionId],
+      ["group-more", group.sessionId],
+    ] as const)
+      assert.equal(
+        (await app.chats.send({ ...web(eventId), sessionId })).sessionId,
+        sessionId,
+      );
+    // A scheduled run still lands in the session it was given.
+    const run = await app.chats.send({
+      ...web("job"),
+      sessionId: old.sessionId,
+      scheduled: { name: "Morning briefing" },
+    });
+    assert.equal(run.sessionId, old.sessionId);
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

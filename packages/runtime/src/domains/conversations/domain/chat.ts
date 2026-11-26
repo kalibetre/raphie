@@ -1,4 +1,7 @@
-import { isPrivateDestination } from "../../channels/domain/binding.ts";
+import {
+  type ChannelBinding,
+  isPrivateDestination,
+} from "../../channels/domain/binding.ts";
 import type { ChatConversation, ChatTurn } from "./model.ts";
 
 /**
@@ -26,4 +29,22 @@ export function chatFromHistory(
     if (!chosen || lastAt > chosen.lastAt) chosen = { conversation, lastAt };
   }
   return chosen?.conversation;
+}
+
+/**
+ * Whether the owner may still write in a session: the chat, a group's or a
+ * server channel's, or a task another bot handed off. Any other session is
+ * from before chats and is kept as history.
+ */
+export function ownerCanWrite(
+  conversation: ChatConversation,
+  bindings: readonly ChannelBinding[],
+) {
+  return (
+    !!conversation.chat ||
+    !!conversation.handedOffBy ||
+    bindings.some(
+      (b) => b.sessionId === conversation.sessionId && !isPrivateDestination(b),
+    )
+  );
 }

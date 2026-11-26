@@ -60,6 +60,7 @@ import {
   HANDOFF_RESULT_MAX_LENGTH,
   messageViolation,
 } from "../domain/admission.ts";
+import { ownerCanWrite } from "../domain/chat.ts";
 import {
   EMPTY_REPLY,
   INTERRUPTED_REPLY,
@@ -609,6 +610,18 @@ export class ChatService implements ConversationCommands {
               : undefined;
         if (conversationId && !conversation)
           throw new InputError("Conversation not found.", 404);
+        // Scheduled runs and handoffs still land; the owner writes in the chat.
+        if (
+          conversation &&
+          !input.scheduled &&
+          !input.handoff &&
+          !ownerCanWrite(conversation, bindings)
+        )
+          throw new InputError(
+            "This conversation is from before chats and is kept as history. Write in the chat instead.",
+            409,
+            "history",
+          );
         // A new message, from any client or channel, brings it back.
         if (conversation?.archivedAt) delete conversation.archivedAt;
         if (!conversation) {

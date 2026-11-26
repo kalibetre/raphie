@@ -13,7 +13,6 @@ import { startServer } from "../src/bootstrap/http-server.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
-import { withoutChat } from "./without-chat.ts";
 
 function fixtureModels(requests: string[]) {
   const { models } = chatModel();
@@ -113,13 +112,14 @@ test("two connections to OpenRouter isolate credentials, session choices, edits 
       model: { provider: personal!.id, modelId: "history" },
     });
     await app.harness.waitForIdle(context);
-    await withoutChat(app);
+    // A second session the owner still writes in: a server channel's.
     const b = await app.chats.send({
-      source: "web",
+      source: "discord",
       eventId: "work",
       actor: "owner",
       text: "Work",
       model: { provider: work!.id, modelId: "history" },
+      discordThreadId: "discord:guild:work",
     });
     await app.harness.waitForIdle(context);
     assert.deepEqual(requests, ["PRIVATE_PERSONAL", "PRIVATE_WORK"]);
