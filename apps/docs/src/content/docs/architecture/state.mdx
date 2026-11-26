@@ -165,19 +165,19 @@ Saving sandbox settings runs under the workspace gate and is refused (409) while
 
 ## What each bot stores
 
-| Store                         | Contents                                                                                                                |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `gateway.sqlite`              | Pi Durable journal and every `raphie.*` document: sessions, turns, approvals, activity, deliveries, bindings, schedules |
-| `settings.sqlite`             | Provider connections, default model, encrypted keys; the default bot's copy also holds the host-wide telemetry switch   |
-| `memory.sqlite`               | Memory configuration, built-in evidence and search indexes                                                              |
-| `mcp.sqlite`                  | Encrypted MCP connections, including tokens and OAuth grants                                                            |
-| `channels.sqlite`             | Encrypted Discord configuration, including its token                                                                    |
-| `telegram.sqlite`             | Encrypted Telegram configuration and the durable polling position                                                       |
-| `files/`                      | Content-addressed uploaded originals                                                                                    |
-| `workspace/checkpoint.sqlite` | Sandbox settings, the just-bash checkpoint and execution receipts                                                       |
-| `workspace/container.sqlite`  | Container lease and command journal                                                                                     |
-| `workspace/files/`            | The disk view of `/workspace`                                                                                           |
-| `backups/`                    | Copies of `gateway.sqlite` taken before removing conversations from before chats; delete them when no longer needed     |
+| Store                         | Contents                                                                                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `gateway.sqlite`              | Pi Durable journal and every `raphie.*` document: sessions, turns, approvals, activity, deliveries, bindings, schedules, work items |
+| `settings.sqlite`             | Provider connections, default model, encrypted keys; the default bot's copy also holds the host-wide telemetry switch               |
+| `memory.sqlite`               | Memory configuration, built-in evidence and search indexes                                                                          |
+| `mcp.sqlite`                  | Encrypted MCP connections, including tokens and OAuth grants                                                                        |
+| `channels.sqlite`             | Encrypted Discord configuration, including its token                                                                                |
+| `telegram.sqlite`             | Encrypted Telegram configuration and the durable polling position                                                                   |
+| `files/`                      | Content-addressed uploaded originals                                                                                                |
+| `workspace/checkpoint.sqlite` | Sandbox settings, the just-bash checkpoint and execution receipts                                                                   |
+| `workspace/container.sqlite`  | Container lease and command journal                                                                                                 |
+| `workspace/files/`            | The disk view of `/workspace`                                                                                                       |
+| `backups/`                    | Copies of `gateway.sqlite` taken before removing conversations from before chats; delete them when no longer needed                 |
 
 The default bot keeps these at the root of the data directory; each named bot has the same layout under `bots/<id>/`. See [storage](/architecture/storage-and-telemetry/) for host-level stores.
 
