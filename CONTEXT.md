@@ -104,9 +104,10 @@ the quoted message is in that chat.
 _Avoid_: Reply for a bot's message, which suggests it only ever answers the
 latest one; thread.
 
-**Summary** (of earlier messages): What a session's model reads in place of
-its earlier messages once the session grows near the model's context window.
-The transcript keeps every message; only the model's context is shortened.
+**Summary** (of earlier messages): The notes a session's model reads in place
+of its earlier messages once the session grows past a working size: what the
+bot promised, open threads, preferences and details to keep. The transcript
+keeps every message; only the model's context is shortened.
 Pi calls the step compaction.
 _Avoid_: Memory, which is what a bot keeps across sessions.
 

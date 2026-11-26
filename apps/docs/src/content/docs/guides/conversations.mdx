@@ -149,10 +149,11 @@ The bot copies links from what its tools returned. Raphie checks that a link is 
 
 ## Long chats
 
-A chat can go on as long as you like. When it grows close to the size the model can read at once, the bot summarizes its earlier messages and reads the summary instead of them from then on. Its most recent messages stay word for word.
+A chat can go on as long as you like. Every message you send makes the model read the chat again, so the bot keeps it short: once it grows past a working size, the bot writes notes on its earlier messages and reads those instead of them from then on. Its most recent messages stay word for word.
 
-- **When:** a summary starts in the background once the chat fills most of the model's context window (about 154k tokens of a 200k window), and the reply waits for one only when it is nearly full (about 184k). If the provider still rejects a request as too long, the bot summarizes and tries again. A model with no known context window is summarized only after such a rejection.
+- **When:** notes start in the background once the chat holds about 64k tokens, whatever the model's context window, or most of a smaller window (about 24k of a 32k one). A reply waits for them only when the chat nearly fills the window (about 184k of a 200k window). If the provider still rejects a request as too long, the bot summarizes and tries again. A model with no known context window is summarized only after such a rejection.
 - **What you see:** while a reply waits for a summary, it says **Summarizing earlier messages…**. Afterwards a line above your message reads **Earlier messages summarized**; **View summary** opens what the bot now reads. The desktop app shows the same.
+- **What the notes keep:** what the bot promised, open threads, your preferences and decisions, the people and things that came up, exact details such as dates and links, and what the chat was about most recently. Each new set of notes folds in the last, dropping what is finished. If the notes can't be written, the bot falls back to a general summary.
 - **What stays:** your transcript keeps every message, tool step and reply. Only the model's context is shortened.
 - **What it costs:** the summary is one more call to the chat's model, about the size of the chat, and that turn can't read the earlier messages from the provider's prompt cache.
 

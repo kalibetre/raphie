@@ -28,6 +28,10 @@ export function chatModel(
      * conversation reaches the summary thresholds.
      */
     contextWindow?: number;
+    /** Raphie's own summary of earlier messages: what the summarizer reads. */
+    notes?: (transcript: string) => void;
+    /** Raphie's own summary fails, so Pi writes one instead. */
+    failNotes?: boolean;
   } = {},
 ) {
   const models = createModels();
@@ -81,11 +85,19 @@ export function chatModel(
         m.role === "system" &&
         JSON.stringify(m.content).includes("context summarization assistant"),
     );
-    const answer = !options.contextWindow
-      ? texts.join(" | ")
-      : summarizing
-        ? "Fixture summary of the earlier messages."
-        : `Noted: ${texts.at(-1)?.slice(0, 40) ?? ""}`;
+    const noting = context.messages.some(
+      (m) =>
+        m.role === "system" &&
+        JSON.stringify(m.content).includes("You keep the working notes"),
+    );
+    if (noting) options.notes?.(texts.join("\n"));
+    const answer = noting
+      ? "## Commitments\n- Fixture notes of the earlier messages."
+      : !options.contextWindow
+        ? texts.join(" | ")
+        : summarizing
+          ? "Fixture summary of the earlier messages."
+          : `Noted: ${texts.at(-1)?.slice(0, 40) ?? ""}`;
     const input = options.contextWindow
       ? Math.ceil(JSON.stringify(context.messages).length / 4)
       : 1;
@@ -96,7 +108,8 @@ export function chatModel(
       api: model.api,
       provider: "fixture",
       model: _model.id,
-      stopReason: options.fail ? "error" : "stop",
+      stopReason:
+        options.fail || (noting && options.failNotes) ? "error" : "stop",
       timestamp: Date.now(),
       usage: {
         input,

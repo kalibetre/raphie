@@ -55,6 +55,7 @@ import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.
 import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
 import { chatFromHistory } from "../domains/conversations/domain/chat.ts";
 import { compactionPolicy } from "../domains/conversations/domain/compaction.ts";
+import { chatSummaries } from "../domains/conversations/infrastructure/chat-summary.ts";
 import { removeHistory } from "../domains/conversations/infrastructure/history-removal.ts";
 import {
   Chats,
@@ -261,6 +262,7 @@ export class Gateway {
         }),
       );
     registry.install(createWebSearchTools(() => app.models, options.webFetch));
+    registry.install(chatSummaries);
     registry.install(createAskTools(app.asks));
     registry.install(
       createCardTools(app.cards, () => app.chats.owner?.().timeZone ?? ""),
