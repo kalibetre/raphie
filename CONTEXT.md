@@ -96,6 +96,15 @@ owner's in a chat, but also a scheduled job's prompt or another bot's handoff
 in a work item's session. A turn may
 include several model responses and tool actions before it finishes.
 
+**Quote**: A message's pointer to one earlier message in the same chat, the
+owner's or the bot's, shown with its author and an excerpt. Either side
+quotes to say which earlier message it is talking about; the bot also quotes
+the owner's request when the work it asked for comes back. A message quotes
+at most one other. In Telegram and Discord a quote is their native reply when
+the quoted message is in that chat.
+_Avoid_: Reply for a bot's message, which suggests it only ever answers the
+latest one; thread.
+
 **Summary** (of earlier messages): What a session's model reads in place of
 its earlier messages once the session grows near the model's context window.
 The transcript keeps every message; only the model's context is shortened.
