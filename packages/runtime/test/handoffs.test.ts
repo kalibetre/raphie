@@ -1051,3 +1051,47 @@ test("a follow-up reopens both items; a handoff from outside the chat opens none
     await app.close();
   }
 });
+
+test("closing the item while a follow-up waits to go out stops the request still running", async () => {
+  const release = Promise.withResolvers<void>();
+  const app = await twoBots({
+    pauseOn: { text: "Compare Hindsight", until: release.promise },
+  });
+  try {
+    const owner = await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    await until(
+      async () => !!(await app.handoffs.read())[0]?.requests[0]?.turnId,
+      1000,
+    );
+    const [handoff] = await app.handoffs.read();
+    await app.chief.gateway.root.commit(async (tx) => {
+      await app.handoffs.followUp(tx, handoff!.id, "Add Mem0 too.", {
+        sessionId: owner.sessionId,
+        turnId: null,
+      });
+      const item = (await tx.doc(WorkItems)).items.find(
+        (i) => i.origin?.kind === "handoff-sent",
+      )!;
+      item.status = "dropped";
+      item.closed = { at: Date.now(), by: "owner" };
+    }, context);
+    await until(
+      async () => (await app.handoffs.read())[0]?.status === "cancelled",
+      1000,
+    );
+    expect(
+      (await app.handoffs.read())[0]!.requests.map((r) => r.outcome),
+    ).toEqual(["cancelled", "cancelled"]);
+    expect(
+      (
+        await app.host.runtime(app.research.id).gateway.chats.state()
+      ).turns.every((t) => t.status !== "pending"),
+    ).toBe(true);
+  } finally {
+    release.resolve();
+    await app.close();
+  }
+});

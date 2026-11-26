@@ -389,6 +389,12 @@ export class BotHandoffs {
                   outcome: { status: "completed", result: null },
                 };
               }, ctx);
+              // An earlier request may still be running there: closing the
+              // item stops the whole task.
+              if (handoff.toSessionId)
+                await this.options.peers
+                  .stop(handoff.to.id, handoff.toSessionId)
+                  .catch(() => {});
               return;
             }
             // Each handoff has its own session on the other side; its
