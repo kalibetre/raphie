@@ -81,6 +81,7 @@ pub const SCENES: &[Scene] = &[
     ("streaming", streaming),
     ("working", working),
     ("approval", approval),
+    ("chat-background", chat_background),
     ("ask", ask),
     ("ask-rows", ask_rows),
     ("ask-confirm", ask_confirm),
@@ -3008,6 +3009,44 @@ pub fn approval(ui: &mut Ui) {
             ],
         ),
     );
+}
+
+/// The chat, with an approval and a question from background work waiting
+/// at its end.
+pub fn chat_background(ui: &mut Ui) {
+    let now = now_ms();
+    let mut seen = observation(
+        "Chat",
+        vec![turn(
+            "t1",
+            -120_000,
+            "Tidy the reports folder in the background.",
+            Some("On it. I've started it in the background."),
+            "done",
+        )],
+        None,
+        "idle",
+        vec![],
+        vec![],
+    );
+    seen.background = from_json(json!([{
+        "itemId": "w-6", "title": "Tidy the reports folder", "sessionId": "s-work",
+        "toolApprovals": [{
+            "id": APPROVAL_ID, "conversationId": "s-work",
+            "connectionIdentity": "raphie.workspace.command",
+            "server": "workspace", "tool": "bash",
+            "argumentsJson": "{\"command\":\"rm reports/2026-09-*.pdf\"}",
+            "createdAt": now - 30_000, "expiresAt": now + 570_000, "status": "pending",
+            "decidedVia": null, "execution": "waiting"
+        }],
+        "asks": [{
+            "id": "ask-bg", "turnId": "t-work",
+            "question": "Keep the September summary, or remove it with the rest?",
+            "options": [{ "label": "Keep it" }, { "label": "Remove it" }],
+            "expiresAt": now + 570_000, "status": "pending"
+        }]
+    }]));
+    open(ui, "s-2", seen);
 }
 
 /// A shell command waiting for approval, which can also be allowed for the
