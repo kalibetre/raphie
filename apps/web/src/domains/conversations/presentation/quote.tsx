@@ -2,6 +2,7 @@ import type { Quote } from "@raphie/contracts";
 import { Reply, X } from "lucide-react";
 
 import { Button } from "../../../shared/ui/button";
+import { sessionPreview } from "../application/session-summaries";
 
 /** Where an earlier message is drawn, so a quote can bring it into view. */
 export const messageId = (turnId: string, author: Quote["author"]) =>
@@ -38,7 +39,9 @@ export function QuoteBar({
       onClick={() => show(quote)}
     >
       <strong className="message-quote-author">{who}</strong>
-      <span className="message-quote-excerpt">{quote.excerpt}</span>
+      <span className="message-quote-excerpt">
+        {sessionPreview(quote.excerpt)}
+      </span>
     </button>
   );
 }
@@ -70,7 +73,9 @@ export function ComposerQuote({
     <div className="composer-quote" data-author={quote.author}>
       <Reply className="composer-quote-icon" size={14} aria-hidden="true" />
       <strong className="message-quote-author">{who}</strong>
-      <span className="message-quote-excerpt">{quote.excerpt}</span>
+      <span className="message-quote-excerpt">
+        {sessionPreview(quote.excerpt)}
+      </span>
       <Button
         variant="ghost"
         size="icon-xs"

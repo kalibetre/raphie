@@ -165,6 +165,13 @@ pub static CORNER_UP_RIGHT: Icon = Icon {
     body: r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></g>"#,
 };
 
+/// Lucide's `reply`: quoting a message.
+pub static CORNER_UP_LEFT: Icon = Icon {
+    name: "rd-reply",
+    view: 24.0,
+    body: r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 18v-2a4 4 0 0 0-4-4H4"/><path d="m9 17-5-5 5-5"/></g>"#,
+};
+
 pub static SETTINGS_2: Icon = Icon {
     name: "rd-settings-2",
     view: 24.0,

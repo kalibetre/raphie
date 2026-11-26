@@ -32,6 +32,7 @@ mod inbox;
 mod model_picker;
 mod onboarding;
 mod permissions;
+mod quote;
 mod roster;
 mod self_updates;
 mod settings;

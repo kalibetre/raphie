@@ -2036,6 +2036,7 @@ fn the_composer_sends_what_was_typed() {
             attachments: Vec::new(),
             model: None,
             approval_mode: None,
+            quote: None,
         })
     );
     assert!(rt.state.model.sending, "the button waits for the receipt");
@@ -3673,6 +3674,7 @@ fn files_wait_in_the_composer_and_go_with_the_message() {
             attachments: vec![d.clone()],
             model: None,
             approval_mode: None,
+            quote: None,
         })
     );
     // The file stays until the runtime admits the message, then leaves.
@@ -3927,6 +3929,7 @@ fn a_new_conversation_starts_with_the_model_picked_for_it() {
             }),
             // A new conversation asks before commands unless told otherwise.
             approval_mode: Some(ApprovalMode::Ask),
+            quote: None,
         })
     );
 }
@@ -4105,6 +4108,7 @@ fn a_new_conversation_starts_with_the_command_mode_chosen_for_it() {
             attachments: Vec::new(),
             model: None,
             approval_mode: Some(ApprovalMode::FullAccess),
+            quote: None,
         })
     );
 }
@@ -6348,4 +6352,74 @@ fn a_bots_own_instructions_are_edited_on_its_profile() {
         rt.state.profile.update().unwrap().instructions.as_deref(),
         Some("Calendar: Executor.")
     );
+}
+
+#[test]
+fn a_message_is_quoted_from_its_action_and_sent_with_the_quote() {
+    use raphie_core::contracts::{QuoteAuthor, QuoteRef};
+    for dark in [false, true] {
+        let mut rt = render(scenes::conversation, dark);
+        let first = rt
+            .state
+            .model
+            .conversation
+            .as_ref()
+            .and_then(|c| c.observation.as_ref())
+            .map(|o| o.turns[0].id.clone())
+            .unwrap();
+        // Each message offers Quote: the bot's and the owner's.
+        assert!(rt.find(&format!("rd-quote-bot-{first}")).is_some());
+        assert!(rt.find(&format!("rd-quote-owner-{first}")).is_some());
+        click(&mut rt, &format!("rd-quote-bot-{first}"));
+        assert_eq!(
+            rt.state.quoting.as_ref().map(|q| q.author),
+            Some(QuoteAuthor::Bot)
+        );
+        assert!(rt.find("rd-composer-quote").is_some());
+        // Dropping it leaves the draft without a quote.
+        click(&mut rt, "rd-composer-quote-clear");
+        assert!(rt.state.quoting.is_none());
+
+        click(&mut rt, &format!("rd-quote-owner-{first}"));
+        click(&mut rt, "rd-composer");
+        rt.paste("Still true?");
+        settle(&mut rt);
+        click(&mut rt, "rd-send");
+        let Some(Command::Send { quote, .. }) = rt.state.sent.last() else {
+            panic!("a message was sent");
+        };
+        assert_eq!(
+            quote.as_ref(),
+            Some(&QuoteRef {
+                turn_id: first.clone(),
+                author: QuoteAuthor::Owner,
+            })
+        );
+        assert!(rt.state.quoting.is_none(), "sent with the message");
+    }
+}
+
+#[test]
+fn a_quote_shows_inside_the_message_that_quotes() {
+    for dark in [false, true] {
+        let rt = render(scenes::conversation_quote, dark);
+        let quoted = rt
+            .state
+            .model
+            .conversation
+            .as_ref()
+            .and_then(|c| c.observation.as_ref())
+            .map(|o| o.turns[0].id.clone())
+            .unwrap();
+        let bar = element(&rt, &format!("rd-quote-{quoted}"));
+        assert!(
+            bar.label.as_deref().unwrap().starts_with("Quoting Raphie:"),
+            "{:?}",
+            bar.label
+        );
+        // A session from before chats offers no Quote.
+        let mut rt = render(scenes::conversation_history, dark);
+        settle(&mut rt);
+        assert!(rt.find(&format!("rd-quote-bot-{quoted}")).is_none());
+    }
 }

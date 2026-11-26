@@ -362,6 +362,7 @@ fn a_first_message_creates_and_opens_a_session() {
         attachments: Vec::new(),
         model: None,
         approval_mode: None,
+        quote: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     assert!(driver.seen.contains(&Event::SessionCreated {
@@ -1905,6 +1906,7 @@ fn files_are_uploaded_sent_with_a_message_and_saved_back() {
         attachments: ids.clone(),
         model: None,
         approval_mode: None,
+        quote: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     assert!(driver.model.attachments.files.is_empty());
@@ -2093,6 +2095,7 @@ fn a_sessions_model_is_changed_and_a_new_session_starts_with_the_one_chosen() {
         attachments: Vec::new(),
         model: Some(pick("openai/gpt-x")),
         approval_mode: None,
+        quote: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     host.with(|h| assert!(h.submits.last().unwrap().get("model").is_none()));
@@ -2106,6 +2109,7 @@ fn a_sessions_model_is_changed_and_a_new_session_starts_with_the_one_chosen() {
         attachments: Vec::new(),
         model: Some(pick("openai/gpt-x")),
         approval_mode: None,
+        quote: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     host.with(|h| {
@@ -2188,6 +2192,7 @@ fn a_sessions_command_mode_is_read_changed_and_sent_with_a_new_session() {
         attachments: Vec::new(),
         model: None,
         approval_mode: Some(ApprovalMode::FullAccess),
+        quote: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     host.with(|h| assert!(h.submits.last().unwrap().get("approvalMode").is_none()));
@@ -2201,6 +2206,7 @@ fn a_sessions_command_mode_is_read_changed_and_sent_with_a_new_session() {
         attachments: Vec::new(),
         model: None,
         approval_mode: Some(ApprovalMode::FullAccess),
+        quote: None,
     });
     driver.until("acceptance", |m, _| !m.sending);
     host.with(|h| assert_eq!(h.submits.last().unwrap()["approvalMode"], "full-access"));

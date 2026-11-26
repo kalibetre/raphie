@@ -69,6 +69,7 @@ fn main() {
         attachments: Vec::new(),
         model: None,
         approval_mode: None,
+        quote: None,
     });
     wait(&client, &mut model, "the streamed reply", 60, |m, e| {
         if let Event::Observation { observation, .. } = e
@@ -102,6 +103,7 @@ fn main() {
         attachments: Vec::new(),
         model: None,
         approval_mode: None,
+        quote: None,
     });
     wait(&client, &mut model, "an approval", 60, |m, _| {
         m.conversation

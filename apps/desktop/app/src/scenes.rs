@@ -56,6 +56,7 @@ pub const SCENES: &[Scene] = &[
     ("inbox-empty", inbox_empty),
     ("conversation", conversation),
     ("conversation-history", conversation_history),
+    ("conversation-quote", conversation_quote),
     ("compaction", compaction),
     ("compaction-open", compaction_open),
     ("attachments", attachments),
@@ -2014,6 +2015,32 @@ pub fn inbox_empty(ui: &mut Ui) {
 
 pub fn conversation(ui: &mut Ui) {
     conversation_with(ui, finished_activity());
+}
+
+/// "Plan the week" with quotes: the second message quotes the bot's
+/// first, and the owner is about to quote their own first message.
+pub fn conversation_quote(ui: &mut Ui) {
+    conversation(ui);
+    if let Some(observation) = ui
+        .model
+        .conversation
+        .as_mut()
+        .and_then(|c| c.observation.as_mut())
+    {
+        let first = observation.turns[0].clone();
+        if let Some(second) = observation.turns.get_mut(1) {
+            second.quote = Some(raphie_core::contracts::Quote {
+                turn_id: first.id.clone(),
+                author: raphie_core::contracts::QuoteAuthor::Bot,
+                excerpt: first.answer.clone().unwrap_or_default(),
+            });
+        }
+        ui.quote(
+            &first.id,
+            raphie_core::contracts::QuoteAuthor::Owner,
+            &first.text,
+        );
+    }
 }
 
 /// "Plan the week" from before chats: kept as history, with the way back

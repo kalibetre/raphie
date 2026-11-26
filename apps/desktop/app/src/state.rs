@@ -17,6 +17,7 @@ use raphie_core::contracts::{
 };
 use raphie_core::contracts::{BotRef, HandedOffBy, Handoff, HandoffStatus};
 use raphie_core::contracts::{ProviderSignIn, SignInEvent, SignInStatus};
+use raphie_core::contracts::{Quote, QuoteAuthor, QuoteRef};
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::{self, Announcement, Announcements, Item, Target};
@@ -353,6 +354,8 @@ pub struct Ui {
     handoff_signal: String,
     /// Files are being dragged over the conversation.
     pub drop_hover: bool,
+    /// The earlier message the next one quotes, in the open session.
+    pub quoting: Option<Quote>,
     /// Whether the bot roster on the left shows (⌘B).
     pub roster_open: bool,
     /// In a narrow window, where one column shows at a time: whether it is
@@ -580,6 +583,7 @@ impl Ui {
             origin_field: TextEdit::new(origin),
             composer: TextEdit::new(""),
             drop_hover: false,
+            quoting: None,
             roster_open: true,
             narrow_home: true,
             settings_nav_home: false,
@@ -703,6 +707,7 @@ impl Ui {
     }
 
     pub fn select_bot(&mut self, bot_id: &str) {
+        self.quoting = None;
         self.inbox_open = false;
         // A model chosen for one bot's new conversation is not another's.
         self.new_model = None;
@@ -770,6 +775,8 @@ impl Ui {
     }
 
     pub fn select_session(&mut self, session_id: Option<&str>) {
+        // A quote belongs to the session it was taken from.
+        self.quoting = None;
         // In a narrow window the conversation takes the roster's place.
         self.narrow_home = false;
         self.inbox_open = false;
@@ -830,11 +837,33 @@ impl Ui {
             Some(_) => (None, None),
             None => (self.new_model.clone(), Some(self.draft_mode)),
         };
+        let quote = self.quoting.take().map(|quote| QuoteRef {
+            turn_id: quote.turn_id,
+            author: quote.author,
+        });
         self.command(Command::Send {
             text,
             attachments,
             model,
             approval_mode,
+            quote,
+        });
+    }
+
+    /// Quotes a message of the open session in the next one: the owner's
+    /// own words, or the bot's. The excerpt is cut as the runtime cuts it.
+    pub fn quote(&mut self, turn_id: &str, author: QuoteAuthor, text: &str) {
+        let excerpt: String = text
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .chars()
+            .take(280)
+            .collect();
+        self.quoting = Some(Quote {
+            turn_id: turn_id.to_owned(),
+            author,
+            excerpt,
         });
     }
 

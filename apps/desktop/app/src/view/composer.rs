@@ -149,6 +149,9 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
                 t.border
             },
         );
+    if let Some(quote) = super::quote::in_composer(s, look) {
+        card = card.child(quote);
+    }
     if !files.is_empty() {
         // The web scrolls the cards sideways; here they wrap onto new rows.
         let mut chips = row()

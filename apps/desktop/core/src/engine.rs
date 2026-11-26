@@ -36,6 +36,7 @@ use crate::channels::{Channel, ChannelChange};
 use crate::contracts::ApprovalMode;
 use crate::contracts::ModelSelection;
 use crate::contracts::NewBot;
+use crate::contracts::QuoteRef;
 use crate::contracts::SaveOwnerProfile;
 use crate::contracts::SaveSkill;
 use crate::contracts::{
@@ -146,6 +147,8 @@ pub enum Command {
         model: Option<ModelSelection>,
         /// The command mode to start a new session with.
         approval_mode: Option<ApprovalMode>,
+        /// An earlier message of the open session that this one quotes.
+        quote: Option<QuoteRef>,
     },
     /// Ask what needs the owner beyond the conversation on screen: the
     /// first page of each of `session_bots`' conversations, and each of
@@ -748,7 +751,8 @@ impl Engine {
                 attachments,
                 model,
                 approval_mode,
-            } => self.send(text, attachments, model, approval_mode),
+                quote,
+            } => self.send(text, attachments, model, approval_mode, quote),
             Command::LoadInbox {
                 session_bots,
                 job_bots,
@@ -1206,6 +1210,7 @@ impl Engine {
         attachments: Vec<String>,
         model: Option<ModelSelection>,
         approval_mode: Option<ApprovalMode>,
+        quote: Option<QuoteRef>,
     ) {
         let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
             self.emit.emit(Event::MessageFailed {
@@ -1223,6 +1228,8 @@ impl Engine {
             // the message. `filter` keeps a value only when the test holds.
             model: model.filter(|_| self.session_id.is_none()),
             approval_mode: approval_mode.filter(|_| self.session_id.is_none()),
+            // A quote points into the open session, so needs one.
+            quote: quote.filter(|_| self.session_id.is_some()),
         };
         let new_session = message.session_id.is_none();
         let retries = self.config.send_retries.clone();
