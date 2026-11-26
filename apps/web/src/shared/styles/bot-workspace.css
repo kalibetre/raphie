@@ -20,6 +20,19 @@
     white-space: nowrap;
     color: var(--muted-foreground);
   }
+  /* Background work waiting on the owner, at the end of the chat. */
+  .background-requests {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-top: 6px;
+  }
+  .background-request {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
   .welcome-avatar {
     margin-bottom: 14px;
   }

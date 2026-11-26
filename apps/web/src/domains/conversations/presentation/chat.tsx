@@ -25,6 +25,7 @@ import { chatAdapter } from "../infrastructure/chat-adapter";
 import { ActiveRun } from "./active-run";
 import { AskCard } from "./ask-card";
 import { AttachmentCard } from "./attachment-card";
+import { BackgroundRequests } from "./background-requests";
 import { CompactionDivider } from "./compaction-divider";
 import { Conversation } from "./conversation";
 import {
@@ -449,6 +450,7 @@ export function Chat({
             cards={cards.filter((c) => c.turnId === turn.id)}
           />
         ))}
+      <BackgroundRequests requests={state.background ?? []} />
     </Conversation>
   );
 
