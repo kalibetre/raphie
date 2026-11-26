@@ -650,14 +650,13 @@ pub struct SessionSummary {
     /// The model chosen for this session; `None` uses the bot's default.
     #[serde(default)]
     pub model: Option<ModelSelection>,
-    /// When the owner archived the session (milliseconds since the Unix
-    /// epoch); `None` while it is active.
-    #[serde(default)]
-    pub archived_at: Option<i64>,
     /// The bot that handed this session's task off, and its session the
     /// task came from.
     #[serde(default)]
     pub handed_off_by: Option<HandedOffBy>,
+    /// The session behind the bot's one chat with the owner.
+    #[serde(default)]
+    pub chat: bool,
 }
 
 /// `SessionView["handedOffBy"]` in `packages/contracts`.
@@ -830,6 +829,33 @@ pub struct Attachment {
     pub mime_type: Option<String>,
 }
 
+/// Whose words a quote is: the owner's, or the bot's.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QuoteAuthor {
+    Owner,
+    Bot,
+}
+
+/// `Quote` in `packages/contracts/src/index.ts`: one earlier message in the
+/// same chat that a message quotes, with how it started when quoted.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Quote {
+    pub turn_id: String,
+    pub author: QuoteAuthor,
+    pub excerpt: String,
+}
+
+/// The earlier message a message to send quotes: which turn, and whose
+/// words in it.
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuoteRef {
+    pub turn_id: String,
+    pub author: QuoteAuthor,
+}
+
 /// `SessionTurn` in `packages/contracts/src/sessions/views.ts`: one owner
 /// message and the reply that answers it.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -863,6 +889,9 @@ pub struct SessionTurn {
     /// Set when the session's earlier messages were summarized in this turn.
     #[serde(default)]
     pub compaction: Option<TurnCompaction>,
+    /// The earlier message the owner's message quotes.
+    #[serde(default)]
+    pub quote: Option<Quote>,
     /// Set while the message waits behind the run in progress.
     #[serde(default)]
     pub queue_mode: Option<QueueMode>,
@@ -1349,13 +1378,6 @@ pub struct SessionObservation {
     pub error: Option<ObservationError>,
 }
 
-/// The body and the answer of `POST /api/sessions/<id>/archive`
-/// (`packages/runtime/src/domains/conversations/presentation/http/routes.ts`).
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
-pub struct ArchiveBody {
-    pub archived: bool,
-}
-
 /// Body of `POST /api/sessions/messages`
 /// (`packages/runtime/src/domains/conversations/presentation/http/routes.ts`).
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -1378,6 +1400,9 @@ pub struct SubmitMessage {
     /// session's own route.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub approval_mode: Option<ApprovalMode>,
+    /// An earlier message of the session that this one quotes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quote: Option<QuoteRef>,
 }
 
 /// The runtime's receipt for an admitted message. Admission, not completion.
@@ -1970,9 +1995,6 @@ pub struct ScheduledJob {
     pub enabled: bool,
     /// When it runs next, in milliseconds since the Unix epoch.
     pub next_run_at: i64,
-    /// The conversation its results go to, once it has one.
-    #[serde(default)]
-    pub session_id: Option<String>,
     #[serde(default)]
     pub last_run_at: Option<i64>,
     #[serde(default)]

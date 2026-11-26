@@ -15,6 +15,7 @@ import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { startServer } from "../src/bootstrap/http-server.ts";
 import { ContainerCli } from "../src/domains/workspaces/infrastructure/container-cli.ts";
 import { chatModel } from "./chat-model.ts";
+import { withoutChat } from "./without-chat.ts";
 
 const cli = new ContainerCli();
 let available = true;
@@ -181,6 +182,8 @@ containerTest(
       ).toBe(409);
       expect((await gateway.workspace.info()).provider.id).toBe("container");
       for (let i = 0; i < 2; i++) {
+        // Two sessions, sharing one workspace.
+        await withoutChat(gateway);
         await gateway.sessions.submit(gateway.actors.establish("web"), {
           eventId: `native-${i}`,
           text: "Write in the workspace",
@@ -278,6 +281,7 @@ containerTest(
       for (const call of calls) {
         tool.name = call.name;
         tool.args = call.args;
+        await withoutChat(gateway);
         await gateway.sessions.submit(gateway.actors.establish("web"), {
           eventId: `coding-${call.name}`,
           text: `Use ${call.name}`,

@@ -160,6 +160,7 @@ impl Item {
             bot_id: self.bot_id.clone(),
             session_id: self.session_id().map(str::to_owned),
             run_id: self.run.as_ref().map(|run| run.id.clone()),
+            turn_id: self.run.as_ref().and_then(|run| run.turn_id.clone()),
         }
     }
 
@@ -168,10 +169,10 @@ impl Item {
     pub fn title(&self) -> String {
         match (self.kind, &self.run) {
             (Kind::Approval, _) => "Needs your approval".to_owned(),
-            (Kind::Reply, _) if self.unread == 1 => "1 new reply".to_owned(),
-            (Kind::Reply, _) => format!("{} new replies", self.unread),
+            (Kind::Reply, _) if self.unread == 1 => "1 new message".to_owned(),
+            (Kind::Reply, _) => format!("{} new messages", self.unread),
             (Kind::Job, Some(run)) if run.status == RunStatus::Completed => {
-                "Your scheduled reply is ready".to_owned()
+                "Your scheduled job’s message is ready".to_owned()
             }
             (Kind::Job, Some(run)) => format!("Scheduled job {}", status_word(run.status)),
             (Kind::Job, None) => "Scheduled job".to_owned(),
@@ -312,6 +313,8 @@ pub struct Target {
     pub session_id: Option<String>,
     /// The job run to dismiss on opening, as a click in the inbox does.
     pub run_id: Option<String>,
+    /// The turn whose message the conversation opens at: a job run's.
+    pub turn_id: Option<String>,
 }
 
 /// Which notifications the owner has already been told about, so each is
@@ -433,7 +436,7 @@ mod tests {
         assert_eq!(merged, 0);
         assert_eq!(list[0].title(), "Needs your approval");
         assert_eq!(list[0].tag().as_deref(), Some("Action required"));
-        assert_eq!(list[1].title(), "1 new reply");
+        assert_eq!(list[1].title(), "1 new message");
         assert_eq!(list[1].tag(), None);
         assert_eq!(list[1].bot_name, "Research");
         assert_eq!(list[3].title(), "Scheduled job failed");
@@ -452,16 +455,17 @@ mod tests {
         assert_eq!(merged, 1);
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].kind, Kind::Job);
-        assert_eq!(list[0].title(), "Your scheduled reply is ready");
+        assert_eq!(list[0].title(), "Your scheduled job’s message is ready");
         assert_eq!(list[0].session_id(), Some("s-1"));
         assert_eq!(list[0].time, 60, "when the job finished");
-        // Its notification opens the conversation and dismisses the run.
+        // Its notification opens the chat at the job's message and dismisses the run.
         assert_eq!(
             list[0].target(),
             Target {
                 bot_id: "default".into(),
                 session_id: Some("s-1".into()),
                 run_id: Some("r-1".into()),
+                turn_id: Some("t-7".into()),
             }
         );
 
@@ -469,7 +473,7 @@ mod tests {
         let (list, merged) = items(&bots, |_| sessions.iter().collect(), |_, _| 2, &jobs);
         assert_eq!(merged, 0);
         assert_eq!(list.len(), 2);
-        assert!(list.iter().any(|item| item.title() == "2 new replies"));
+        assert!(list.iter().any(|item| item.title() == "2 new messages"));
     }
 
     #[test]
@@ -518,11 +522,12 @@ mod tests {
             news,
             [Announcement {
                 title: "Raphie · Session s-1".into(),
-                body: "2 new replies".into(),
+                body: "2 new messages".into(),
                 target: Target {
                     bot_id: "default".into(),
                     session_id: Some("s-1".into()),
                     run_id: None,
+                    turn_id: None,
                 },
             }]
         );
@@ -531,7 +536,7 @@ mod tests {
         assert!(announced.news(&list(0)).is_empty());
         let news = announced.news(&list(1));
         assert_eq!(news.len(), 1);
-        assert_eq!(news[0].body, "1 new reply");
+        assert_eq!(news[0].body, "1 new message");
     }
 
     #[test]

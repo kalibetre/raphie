@@ -8,9 +8,10 @@ const bot = { id: "default", name: "Raphie" };
 const session = {
   id: "s",
   sessionId: "s",
-  title: "Brief",
+  title: "Chat",
   lastAt: 10,
-  replyTurnId: "turn",
+  replyCount: 3,
+  readReplyCount: 0,
   waiting: false,
 } as SessionSummary;
 const run = {
@@ -20,36 +21,16 @@ const run = {
   status: "completed",
   finishedAt: 11,
 } as ScheduledJobRun;
-const jobs = [{ bot, run }];
 
-test("only the exact single unread job reply is combined, without hiding approvals or other replies", () => {
-  const project = (s: SessionSummary, count: number, entries = jobs) =>
-    notificationItems([bot], new Map([[bot.id, [s]]]), () => count, entries)
-      .items;
-  expect(project(session, 1).map((item) => item.kind)).toEqual(["job"]);
-  expect(
-    project({ ...session, waiting: true }, 1)
-      .map((item) => item.kind)
-      .sort(),
-  ).toEqual(["approval", "job"]);
-  expect(
-    project(session, 2)
-      .map((item) => item.kind)
-      .sort(),
-  ).toEqual(["job", "reply"]);
-  expect(
-    project({ ...session, replyTurnId: "other" }, 1)
-      .map((item) => item.kind)
-      .sort(),
-  ).toEqual(["job", "reply"]);
-  expect(
-    project({ ...session, replyTurnId: undefined }, 1)
-      .map((item) => item.kind)
-      .sort(),
-  ).toEqual(["job", "reply"]);
-  expect(
-    project(session, 1, [{ bot: { ...bot, id: "other" }, run }])
-      .map((item) => item.kind)
-      .sort(),
-  ).toEqual(["job", "reply"]);
+test("the inbox holds approvals and job runs; new messages stay on the bot in the sidebar", () => {
+  const kinds = (s: SessionSummary, jobs = [{ bot, run }]) =>
+    notificationItems([bot], new Map([[bot.id, [s]]]), jobs).map(
+      (item) => item.kind,
+    );
+  expect(kinds(session)).toEqual(["job"]);
+  expect(kinds(session, [])).toEqual([]);
+  expect(kinds({ ...session, waiting: true }).sort()).toEqual([
+    "approval",
+    "job",
+  ]);
 });

@@ -211,7 +211,7 @@ test("the instructions stay the same from turn to turn; each message carries its
   const app = await Gateway.open({
     directory,
     ...chatModel({
-      systemPrompt: (text) => {
+      systemMessages: (text) => {
         system = text;
       },
       userMessages: (messages) => {

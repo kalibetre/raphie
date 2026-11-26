@@ -9,7 +9,6 @@ mod about;
 mod account;
 mod activity;
 mod appearance;
-mod archived;
 mod channels;
 mod diagnostics;
 mod history;
@@ -73,10 +72,6 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::Activity,
         } => activity::activity(s, bot_id, look),
-        Page::Bot {
-            bot_id,
-            section: BotSection::Archived,
-        } => archived::archived(s, bot_id, look),
         Page::Bot {
             bot_id,
             section: BotSection::Jobs,
@@ -336,7 +331,6 @@ pub fn page_icon(page: &Page) -> &'static Icon {
             BotSection::Workspace => &icons::FOLDER_OPEN,
             BotSection::Jobs => &icons::CLOCK,
             BotSection::Activity => &icons::LIST_TREE,
-            BotSection::Archived => &icons::ARCHIVE,
         },
     }
 }

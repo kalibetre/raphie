@@ -3,6 +3,7 @@ import type {
   Channel as Source,
   ChannelOrigin,
   ModelSelection,
+  Quote,
   ReadSession,
   TurnCompaction,
   TurnFailure,
@@ -19,10 +20,15 @@ export type ChatConversation = {
   createdAt: number;
   /** Completed replies the owner has read, in any client; absent means none. */
   readReplyCount?: number;
-  /** When the owner archived it. A new message brings it back. */
+  /**
+   * When the owner archived it, before chats; only choosing the chat reads
+   * it, and the runtime clears it on start.
+   */
   archivedAt?: number;
   /** The bot that handed this session's task off. Only that bot directs it. */
   handedOffBy?: { id: string; name: string; sessionId?: string };
+  /** The session behind the bot's one chat with the owner. */
+  chat?: true;
 };
 
 /**
@@ -66,6 +72,8 @@ export type ChatTurn = {
   readSessions?: ReadSession[];
   /** Earlier messages were summarized during this turn. */
   compaction?: TurnCompaction;
+  /** The earlier message the owner's message quotes. */
+  quote?: Quote;
 };
 
 export type ChatDelivery = {

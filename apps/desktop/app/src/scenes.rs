@@ -55,7 +55,7 @@ pub const SCENES: &[Scene] = &[
     ("inbox", inbox),
     ("inbox-empty", inbox_empty),
     ("conversation", conversation),
-    ("conversation-archived", conversation_archived),
+    ("conversation-quote", conversation_quote),
     ("compaction", compaction),
     ("compaction-open", compaction_open),
     ("attachments", attachments),
@@ -178,8 +178,6 @@ pub const SCENES: &[Scene] = &[
         settings_diagnostics_unavailable,
     ),
     ("settings-activity", settings_activity),
-    ("settings-archived", settings_archived),
-    ("settings-archived-empty", settings_archived_empty),
     ("settings-activity-empty", settings_activity_empty),
     ("settings-activity-loading", settings_activity_loading),
 ];
@@ -873,7 +871,6 @@ pub fn scheduled_jobs() -> Vec<ScheduledJob> {
             "prompt": "Summarize the project's open tasks and suggest today's priorities.",
             "everyMinutes": 1440, "firstRunAt": 1_794_200_400_000_i64,
             "enabled": true, "nextRunAt": 1_794_718_800_000_i64,
-            "sessionId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
             "lastRunAt": 1_794_632_400_000_i64, "lastStatus": "submitted",
             "lastRun": {
                 "id": "run-104", "jobId": "job-brief", "name": "Morning project brief",
@@ -887,7 +884,7 @@ pub fn scheduled_jobs() -> Vec<ScheduledJob> {
             "id": "job-renewal", "name": "Renew the domain",
             "prompt": "Remind me to renew the domain before it lapses.",
             "everyMinutes": null, "firstRunAt": 1_794_546_000_000_i64,
-            "enabled": false, "nextRunAt": 1_794_546_000_000_i64, "sessionId": null,
+            "enabled": false, "nextRunAt": 1_794_546_000_000_i64,
             "lastRunAt": 1_794_546_000_000_i64, "lastStatus": "failed",
             "lastRun": {
                 "id": "run-101", "jobId": "job-renewal", "name": "Renew the domain",
@@ -901,7 +898,7 @@ pub fn scheduled_jobs() -> Vec<ScheduledJob> {
             "id": "job-digest", "name": "Weekly reading digest",
             "prompt": "List what I saved to read this week, shortest first.",
             "everyMinutes": 10080, "firstRunAt": 1_794_805_200_000_i64,
-            "enabled": false, "nextRunAt": 1_794_805_200_000_i64, "sessionId": null,
+            "enabled": false, "nextRunAt": 1_794_805_200_000_i64,
             "lastRunAt": null, "lastStatus": null,
         },
     ]))
@@ -1937,71 +1934,6 @@ pub fn conversations(ui: &mut Ui) {
     conversation(ui);
 }
 
-/// Settings → Archived: two archived conversations.
-pub fn settings_archived(ui: &mut Ui) {
-    conversation(ui);
-    ui.open_settings(Some(Page::Bot {
-        bot_id: "default".into(),
-        section: BotSection::Archived,
-    }));
-    let now = now_ms();
-    let archived = |mut session: SessionSummary, at: i64| {
-        session.archived_at = Some(at);
-        session
-    };
-    ui.model.apply(Event::ArchivedSessions {
-        bot_id: "default".into(),
-        sessions: vec![
-            archived(
-                summary(
-                    "s-4",
-                    "Holiday packing list",
-                    "Sun cream, adapters and the blue notebook.",
-                    now - 3 * 86_400_000,
-                    false,
-                    false,
-                ),
-                now - 86_400_000,
-            ),
-            archived(
-                summary(
-                    "s-5",
-                    "Birthday gift ideas",
-                    "A pottery class, or a good pair of gloves.",
-                    now - 12 * 86_400_000,
-                    false,
-                    false,
-                ),
-                now - 5 * 86_400_000,
-            ),
-        ],
-    });
-}
-
-/// Settings → Archived with nothing archived yet.
-pub fn settings_archived_empty(ui: &mut Ui) {
-    conversation(ui);
-    ui.open_settings(Some(Page::Bot {
-        bot_id: "default".into(),
-        section: BotSection::Archived,
-    }));
-    ui.model.apply(Event::ArchivedSessions {
-        bot_id: "default".into(),
-        sessions: Vec::new(),
-    });
-}
-
-/// "Plan the week" open after it was archived: the title bar offers to
-/// bring it back.
-pub fn conversation_archived(ui: &mut Ui) {
-    conversation(ui);
-    ui.model.apply(Event::Archived {
-        bot_id: "default".into(),
-        session_id: "s-1".into(),
-        archived_at: Some(now_ms()),
-    });
-}
-
 /// The sidebar's conversations with replies not read yet: two new in one
 /// conversation, and one that was read to its end.
 pub fn unread(ui: &mut Ui) {
@@ -2026,8 +1958,9 @@ pub fn unread(ui: &mut Ui) {
     }
 }
 
-/// The inbox with something of every kind: new replies in two bots, an
-/// approval, a scheduled reply that is ready and a job that failed.
+/// The inbox with something of every kind: an approval, a job that failed
+/// and one that was interrupted in another bot's chat. New replies in two
+/// bots show on the roster instead.
 pub fn inbox(ui: &mut Ui) {
     unread(ui);
     let now = now_ms();
@@ -2043,17 +1976,25 @@ pub fn inbox(ui: &mut Ui) {
         bot_id: "b-research".into(),
         sessions: vec![papers],
     });
-    let run = |id: &str, name: &str, status: &str, ago_ms: i64| -> JobRun {
-        from_json(json!({
-            "id": id, "jobId": "j-1", "name": name, "startedAt": now - ago_ms - 30_000,
-            "finishedAt": now - ago_ms, "status": status, "sessionId": null, "turnId": null,
-            "failureReason": if status == "failed" { json!("no_model") } else { json!(null) },
-        }))
-    };
+    let run =
+        |id: &str, name: &str, status: &str, ago_ms: i64, at: Option<(&str, &str)>| -> JobRun {
+            from_json(json!({
+                "id": id, "jobId": "j-1", "name": name, "startedAt": now - ago_ms - 30_000,
+                "finishedAt": now - ago_ms, "status": status,
+                "sessionId": at.map(|(session, _)| session), "turnId": at.map(|(_, turn)| turn),
+                "failureReason": if status == "failed" { json!("no_model") } else { json!(null) },
+            }))
+        };
     ui.model.apply(Event::JobUpdates {
         bot_id: "default".into(),
         updates: JobUpdates {
-            runs: vec![run("run-2", "Morning brief", "failed", 26 * 3_600_000)],
+            runs: vec![run(
+                "run-2",
+                "Morning brief",
+                "failed",
+                26 * 3_600_000,
+                None,
+            )],
             total: 1,
             more: false,
         },
@@ -2061,7 +2002,13 @@ pub fn inbox(ui: &mut Ui) {
     ui.model.apply(Event::JobUpdates {
         bot_id: "b-research".into(),
         updates: JobUpdates {
-            runs: vec![run("run-1", "Weekly digest", "interrupted", 2 * 3_600_000)],
+            runs: vec![run(
+                "run-1",
+                "Weekly digest",
+                "interrupted",
+                2 * 3_600_000,
+                Some(("r-1", "rt-2")),
+            )],
             total: 1,
             more: false,
         },
@@ -2081,6 +2028,32 @@ pub fn inbox_empty(ui: &mut Ui) {
 
 pub fn conversation(ui: &mut Ui) {
     conversation_with(ui, finished_activity());
+}
+
+/// "Plan the week" with quotes: the second message quotes the bot's
+/// first, and the owner is about to quote their own first message.
+pub fn conversation_quote(ui: &mut Ui) {
+    conversation(ui);
+    if let Some(observation) = ui
+        .model
+        .conversation
+        .as_mut()
+        .and_then(|c| c.observation.as_mut())
+    {
+        let first = observation.turns[0].clone();
+        if let Some(second) = observation.turns.get_mut(1) {
+            second.quote = Some(raphie_core::contracts::Quote {
+                turn_id: first.id.clone(),
+                author: raphie_core::contracts::QuoteAuthor::Bot,
+                excerpt: first.answer.clone().unwrap_or_default(),
+            });
+        }
+        ui.quote(
+            &first.id,
+            raphie_core::contracts::QuoteAuthor::Owner,
+            &first.text,
+        );
+    }
 }
 
 fn conversation_with(ui: &mut Ui, activity: Vec<Value>) {

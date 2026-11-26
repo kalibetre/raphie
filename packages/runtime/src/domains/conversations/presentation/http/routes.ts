@@ -24,12 +24,7 @@ const message = z.object({
 export function conversationRoutes(
   conversations: Pick<
     Sessions,
-    | "submit"
-    | "submitLegacy"
-    | "chooseModel"
-    | "control"
-    | "markRead"
-    | "archive"
+    "submit" | "submitLegacy" | "chooseModel" | "control" | "markRead"
   >,
   actor: ActorContext,
 ) {
@@ -70,16 +65,6 @@ export function conversationRoutes(
       },
     )
     .post(
-      "/sessions/:id/archive",
-      limitBody(1024),
-      jsonInput(z.object({ archived: z.boolean() }).strict()),
-      async (c) => {
-        const { archived } = c.req.valid("json");
-        await conversations.archive(actor, c.req.param("id"), archived);
-        return c.json({ archived });
-      },
-    )
-    .post(
       "/sessions/:id/read",
       limitBody(1024),
       jsonInput(z.object({ replyCount: z.number().int().min(0) }).strict()),
@@ -100,6 +85,13 @@ export function conversationRoutes(
           sessionId: z.uuid().optional(),
           model: model.optional(),
           approvalMode: z.enum(["ask", "full-access"]).optional(),
+          quote: z
+            .object({
+              turnId: z.string().min(1).max(100),
+              author: z.enum(["owner", "bot"]),
+            })
+            .strict()
+            .optional(),
           attachments: z
             .array(z.string().regex(/^[a-f0-9]{64}$/))
             .max(4)

@@ -3,7 +3,6 @@ import { useMutation, useQueries } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
 
-import { sessionPreview } from "../../domains/conversations/application/session-summaries";
 import {
   jobRunDescription,
   jobRunStatus,
@@ -50,7 +49,8 @@ export function Notifications({
   items: NotificationItem[];
   jobs: ReturnType<typeof useJobNotifications>;
   count: number;
-  onOpen: (botId: string, sessionId: string) => void;
+  /** Opens a bot's session, at one of its messages when there is one. */
+  onOpen: (botId: string, sessionId: string, turnId?: string) => void;
 }) {
   const { backend } = useBackend();
   const [filter, setFilter] = useState<"all" | NotificationItem["kind"]>("all");
@@ -72,10 +72,7 @@ export function Notifications({
   const failed = jobs.queries.some((query) => query.isError);
   const loading = jobs.queries.some((query) => query.isPending);
   const visible = items.filter(
-    (item) =>
-      filter === "all" ||
-      item.kind === filter ||
-      (filter === "reply" && item.kind === "job" && !!item.session),
+    (item) => filter === "all" || item.kind === filter,
   );
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -93,7 +90,11 @@ export function Notifications({
   function open(item: NotificationItem) {
     if (!item.run?.sessionId && !item.session) return;
     if (item.run) acknowledge.mutate({ botId: item.bot.id, id: item.run.id });
-    onOpen(item.bot.id, item.run?.sessionId ?? item.session!.sessionId);
+    onOpen(
+      item.bot.id,
+      item.run?.sessionId ?? item.session!.sessionId,
+      item.run?.turnId ?? undefined,
+    );
   }
 
   return (
@@ -111,7 +112,6 @@ export function Notifications({
         {(
           [
             ["all", "All"],
-            ["reply", "Replies"],
             ["approval", "Approvals"],
             ["job", "Jobs"],
           ] as const
@@ -159,19 +159,13 @@ export function Notifications({
                 const title =
                   item.kind === "approval"
                     ? "Needs your approval"
-                    : item.kind === "reply"
-                      ? `${item.unread} new ${item.unread === 1 ? "reply" : "replies"}`
-                      : item.run!.status === "completed"
-                        ? "Your scheduled reply is ready"
-                        : `Scheduled job ${jobRunStatus[item.run!.status].toLowerCase()}`;
+                    : item.run!.status === "completed"
+                      ? "Your scheduled job’s message is ready"
+                      : `Scheduled job ${jobRunStatus[item.run!.status].toLowerCase()}`;
                 const preview =
                   item.kind === "approval"
                     ? "Review the proposed action before continuing."
-                    : item.session
-                      ? sessionPreview(
-                          item.session.replyPreview || item.session.preview,
-                        )
-                      : "";
+                    : "";
                 const body = (
                   <>
                     <span className="notifications-avatar">
@@ -191,13 +185,11 @@ export function Notifications({
                       <span className="notifications-title">
                         {title}
                         {item.run?.late ? " · Late" : ""}
-                        {item.kind !== "reply" && (
-                          <span className="notifications-tag">
-                            {item.kind === "approval"
-                              ? "Action required"
-                              : `Job ${jobRunStatus[item.run!.status].toLowerCase()}`}
-                          </span>
-                        )}
+                        <span className="notifications-tag">
+                          {item.kind === "approval"
+                            ? "Action required"
+                            : `Job ${jobRunStatus[item.run!.status].toLowerCase()}`}
+                        </span>
                       </span>
                       {item.run?.status === "failed" && (
                         <span className="notifications-preview">
@@ -252,8 +244,8 @@ export function Notifications({
         </p>
       )}
       <p className="notifications-hint">
-        Select an update to open its conversation. Approvals stay here until you
-        decide.
+        Select an update to open the chat at its message. Approvals stay here
+        until you decide.
       </p>
     </div>
   );

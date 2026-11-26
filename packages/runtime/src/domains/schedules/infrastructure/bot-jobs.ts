@@ -27,11 +27,11 @@ import {
 
 const LATE_AFTER_MS = 60_000;
 
-type Submission = { eventId: string; text: string; sessionId?: string };
+type Submission = { eventId: string; text: string };
 
 type StoredJob = ScheduledJob & { taskId: TaskId };
 
-const Jobs = defineDoc<{ items: StoredJob[] }>({
+export const Jobs = defineDoc<{ items: StoredJob[] }>({
   kind: "raphie.scheduled-jobs",
   version: 1,
   scope: "session",
@@ -136,7 +136,6 @@ export class BotJobs {
     tx: Tx,
     input: SaveScheduledJob,
     id: string = crypto.randomUUID(),
-    sessionId: string | null = null,
   ): Promise<ScheduledJob> {
     const jobs = await tx.doc(Jobs);
     const existing = jobs.items.find((job) => job.id === id);
@@ -158,7 +157,6 @@ export class BotJobs {
       taskId,
       enabled: true,
       nextRunAt: input.firstRunAt,
-      sessionId,
       lastRunAt: null,
       lastStatus: null,
     };
@@ -267,7 +265,7 @@ export class BotJobs {
           startedAt: Date.now(),
           finishedAt: null,
           status: "queued",
-          sessionId: job.sessionId,
+          sessionId: null,
           turnId: null,
           acknowledgedAt: null,
           waitingForBot: true,
@@ -334,7 +332,6 @@ export class BotJobs {
                 input: {
                   eventId: `job:${task.id}:${at}`,
                   text: job.prompt,
-                  ...(job.sessionId ? { sessionId: job.sessionId } : {}),
                 },
               },
             }),
@@ -375,27 +372,6 @@ export class BotJobs {
               );
               return;
             }
-            let sessionId = job.sessionId;
-            // Another queued run may have created the job's conversation since
-            // this task checkpointed. Persist the address before using it so a
-            // crash retry keeps the same admission fingerprint.
-            if (sessionId && !task.state.checkpoint.input.sessionId) {
-              const addressedInput = {
-                ...task.state.checkpoint.input,
-                sessionId,
-              };
-              await runtime.commit(
-                () => ({
-                  status: "running",
-                  checkpoint: {
-                    ...task.state.checkpoint,
-                    input: addressedInput,
-                  },
-                }),
-                ctx,
-              );
-              return;
-            }
             let status: "submitted" | "failed" = "failed";
             let failureReason: "unknown" | "no_model" = "unknown";
             const runId = task.state.checkpoint.input.eventId;
@@ -410,7 +386,7 @@ export class BotJobs {
                   startedAt: Date.now(),
                   finishedAt: null,
                   status: "queued",
-                  sessionId: sessionId ?? null,
+                  sessionId: null,
                   turnId: null,
                   acknowledgedAt: null,
                 });
@@ -423,12 +399,12 @@ export class BotJobs {
               return { status: "running", checkpoint: task.state.checkpoint };
             }, ctx);
             try {
-              sessionId = (
-                await this.options.submit({
-                  ...task.state.checkpoint.input,
-                  scheduled: { name: job.name },
-                })
-              ).sessionId;
+              // The run lands in the bot's one chat.
+              await this.options.submit({
+                eventId: task.state.checkpoint.input.eventId,
+                text: task.state.checkpoint.input.text,
+                scheduled: { name: job.name },
+              });
               status = "submitted";
             } catch (error) {
               if (error instanceof InputError && error.code === "no_model")
@@ -470,7 +446,6 @@ export class BotJobs {
               if (current && !replaced) {
                 current.lastRunAt = task.state.checkpoint.at;
                 current.lastStatus = status;
-                current.sessionId = sessionId;
                 if (!task.input.manual) current.nextRunAt = next;
                 if (once && !task.input.manual) current.enabled = false;
               }

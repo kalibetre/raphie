@@ -18,7 +18,7 @@ async function until(check: () => Promise<boolean>) {
   throw new Error("Scheduled work did not settle.");
 }
 
-test("Pi sleeping jobs recover after restart and manual runs reuse the bot's conversation", async () => {
+test("Pi sleeping jobs recover after restart and every run lands in the bot's chat", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-jobs-"));
   const open = async () => {
     const gateway = await Gateway.open({
@@ -66,10 +66,10 @@ test("Pi sleeping jobs recover after restart and manual runs reuse the bot's con
     expect(delivery.scheduled).toEqual({ name: "Brief" });
     expect(delivery.answer).toContain('Scheduled job "Brief" is due now');
     expect(delivery.answer).toContain("did not just send this message");
-    expect((await app.gateway.chats.state()).conversations[0].title).toBe(
-      "Brief",
-    );
-    const session = (await app.jobs.read())[0].sessionId;
+    // The run started the bot's one chat, as the owner's first message would.
+    const [chat] = (await app.gateway.chats.state()).conversations;
+    expect(chat.chat).toBe(true);
+    expect((await app.jobs.runs()).items[0]?.sessionId).toBe(chat.sessionId);
     app.gateway.harness.resume();
     await delay(20);
     expect((await app.gateway.chats.state()).turns).toHaveLength(1);
@@ -78,7 +78,6 @@ test("Pi sleeping jobs recover after restart and manual runs reuse the bot's con
       async () => (await app.gateway.chats.state()).turns.length === 2,
     );
     expect((await app.gateway.chats.state()).conversations).toHaveLength(1);
-    expect((await app.jobs.read())[0].sessionId).toBe(session);
     await app.jobs.change(job.id, "disable");
     expect((await app.jobs.read())[0].enabled).toBe(false);
     await app.jobs.change(job.id, "remove");
@@ -89,11 +88,11 @@ test("Pi sleeping jobs recover after restart and manual runs reuse the bot's con
   }
 });
 
-test("overlapping first runs checkpoint the shared conversation before submitting", async () => {
+test("runs never name a session; the chat takes them", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-job-overlap-"));
   const gateway = await Gateway.open({ directory, ...chatModel() });
   const release = Promise.withResolvers<void>();
-  const submissions: Array<{ sessionId?: string }> = [];
+  const submissions: object[] = [];
   const jobs = BotJobs.open({
     root: gateway.root,
     harness: gateway.harness,
@@ -102,7 +101,7 @@ test("overlapping first runs checkpoint the shared conversation before submittin
     submit: async (input) => {
       submissions.push(input);
       if (submissions.length === 1) await release.promise;
-      return { sessionId: "shared-job-conversation" };
+      return { sessionId: "chat" };
     },
   });
   try {
@@ -118,8 +117,8 @@ test("overlapping first runs checkpoint the shared conversation before submittin
     release.resolve();
     await queued;
     await until(async () => submissions.length === 2);
-    expect(submissions[0].sessionId).toBeUndefined();
-    expect(submissions[1].sessionId).toBe("shared-job-conversation");
+    expect(submissions).toHaveLength(2);
+    expect(submissions.some((input) => "sessionId" in input)).toBe(false);
   } finally {
     release.resolve();
     await gateway.close();

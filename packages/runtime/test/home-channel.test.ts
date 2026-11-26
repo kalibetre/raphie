@@ -79,7 +79,7 @@ test("home is verified, bot-scoped and durable; settings accepts only known dest
   }
 });
 
-test("scheduled turns freeze the bot home without linking sessions; ordinary web replies stay local", async () => {
+test("scheduled turns freeze the bot home; both they and web messages land in the chat, and web replies stay local", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-home-frozen-"));
   let release!: () => void;
   const pause = new Promise<void>((resolve) => {
@@ -129,7 +129,7 @@ test("scheduled turns freeze the bot home without linking sessions; ordinary web
     assert.equal(state.deliveries.length, 1);
     assert.equal(state.deliveries[0]!.threadId, "telegram:42");
     assert.match(state.deliveries[0]!.text, /^Scheduled: Morning/);
-    assert.notEqual(submitted.sessionId, web.sessionId);
+    assert.equal(submitted.sessionId, web.sessionId);
     app.home.available = () => false;
     const unavailable = await app.sessions.submitScheduled(owner, {
       eventId: "job-2",

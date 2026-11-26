@@ -1,12 +1,4 @@
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowLeft,
-  Bell,
-  ChevronsLeft,
-  ChevronsRight,
-  SquarePen,
-} from "lucide-react";
+import { ArrowLeft, Bell, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 import { BotAvatar } from "../../domains/settings/presentation/bot-avatar";
 import { Button } from "../../shared/ui/button";
@@ -20,13 +12,11 @@ export function WorkspaceHeader({
   onToggleNavigation,
   onBack,
   onList,
-  onNew,
-  archived,
-  onArchive,
   onBotSettings,
   onNotifications,
   notificationCount,
 }: {
+  /** A session other than the chat; the chat is named by its bot alone. */
   title: string | undefined;
   breadcrumb: string;
   botId: string;
@@ -34,13 +24,8 @@ export function WorkspaceHeader({
   collapsed: boolean;
   onToggleNavigation: () => void;
   onBack?: () => void;
-  /** On a phone: back to the bot's conversation list. */
+  /** On a phone: back to your team. */
   onList?: () => void;
-  onNew?: () => void;
-  /** Whether the open conversation is archived. */
-  archived?: boolean;
-  /** Archives the open conversation, or brings it back. */
-  onArchive?: () => void;
   onBotSettings: () => void;
   onNotifications: () => void;
   notificationCount: number;
@@ -52,8 +37,8 @@ export function WorkspaceHeader({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Back to conversations"
-            title="Back to conversations"
+            aria-label="Back to your team"
+            title="Back to your team"
             onClick={onList}
           >
             <ArrowLeft size={16} />
@@ -79,44 +64,19 @@ export function WorkspaceHeader({
           <strong>{breadcrumb}</strong>
         </button>
       </div>
-      <h1 className="header-conversation-title">
-        {title}
-        {archived && <span className="header-archived">Archived</span>}
+      <h1 className={title ? "header-conversation-title" : "sr-only"}>
+        {title ?? `Chat with ${breadcrumb}`}
       </h1>
       <div className="header-actions">
         {onBack && (
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Back to conversations"
-            title="Back to conversations"
+            aria-label="Back to the chat"
+            title="Back to the chat"
             onClick={onBack}
           >
             <ArrowLeft size={16} />
-          </Button>
-        )}
-        {onArchive && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={
-              archived ? "Unarchive conversation" : "Archive conversation"
-            }
-            title={archived ? "Unarchive" : "Archive"}
-            onClick={onArchive}
-          >
-            {archived ? <ArchiveRestore size={17} /> : <Archive size={17} />}
-          </Button>
-        )}
-        {onNew && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="New conversation"
-            title="New conversation"
-            onClick={onNew}
-          >
-            <SquarePen size={17} />
           </Button>
         )}
         <Button

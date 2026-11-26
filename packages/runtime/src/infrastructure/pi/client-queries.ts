@@ -63,14 +63,16 @@ export class PiClientQueries implements ClientQueries {
     this.app = app;
   }
 
+  private async bindings() {
+    return (await this.app.harness.snapshot(ChannelBindings, context))!
+      .bindings;
+  }
+
   private async visible(actor: ActorContext) {
     this.app.actors.require(actor);
     const chats = await this.app.chats.state();
     if (actor.source === "web") return chats;
-    const bindings = (await this.app.harness.snapshot(
-      ChannelBindings,
-      context,
-    ))!.bindings;
+    const bindings = await this.bindings();
     const allowed = new Set(
       bindings
         .filter(
@@ -118,18 +120,12 @@ export class PiClientQueries implements ClientQueries {
     };
   }
 
-  async sessions(
-    actor: ActorContext,
-    after?: string,
-    limit = 50,
-    archived = false,
-  ) {
+  async sessions(actor: ActorContext, after?: string, limit = 50) {
     const size = pageSize(limit);
     const chats = await this.visible(actor);
     const tools = await this.app.toolApprovals.state();
     const asks = (await this.app.asks.state()).asks;
     const items: SessionSummary[] = chats.conversations
-      .filter((c) => !!c.archivedAt === archived)
       .map((c) => {
         const turns = chats.turns.filter((t) => t.conversationId === c.id);
         const latest = turns.at(-1);
@@ -151,8 +147,8 @@ export class PiClientQueries implements ClientQueries {
             (t) => t.status === "done" && t.answer !== null,
           ).length,
           readReplyCount: c.readReplyCount ?? 0,
-          ...(c.archivedAt ? { archivedAt: c.archivedAt } : {}),
           ...(c.handedOffBy ? { handedOffBy: { ...c.handedOffBy } } : {}),
+          ...(c.chat ? { chat: true as const } : {}),
           replyPreview:
             turns
               .findLast((t) => t.status === "done" && t.answer !== null)
@@ -176,7 +172,13 @@ export class PiClientQueries implements ClientQueries {
           ),
         };
       })
-      .sort((a, b) => b.lastAt - a.lastAt || a.id.localeCompare(b.id));
+      // The chat first, so a client always has it on the first page.
+      .sort(
+        (a, b) =>
+          Number(!!b.chat) - Number(!!a.chat) ||
+          b.lastAt - a.lastAt ||
+          a.id.localeCompare(b.id),
+      );
     const start = after ? items.findIndex((s) => s.sessionId === after) + 1 : 0;
     if (after && !start)
       throw new InputError("Session page anchor not found.", 404);
@@ -220,6 +222,7 @@ export class PiClientQueries implements ClientQueries {
       ...(t.handoff ? { handoff: t.handoff } : {}),
       ...(t.readSessions?.length ? { readSessions: t.readSessions } : {}),
       ...(t.compaction ? { compaction: t.compaction } : {}),
+      ...(t.quote ? { quote: t.quote } : {}),
     }));
     return { items, next: start > 0 ? items[0]!.id : null };
   }
@@ -365,10 +368,10 @@ export class PiClientQueries implements ClientQueries {
             t.answer !== null,
         ).length,
         readReplyCount: session.readReplyCount ?? 0,
-        ...(session.archivedAt ? { archivedAt: session.archivedAt } : {}),
         ...(session.handedOffBy
           ? { handedOffBy: { ...session.handedOffBy } }
           : {}),
+        ...(session.chat ? { chat: true as const } : {}),
         replyPreview:
           chats.turns
             .findLast(

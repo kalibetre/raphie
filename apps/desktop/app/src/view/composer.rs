@@ -44,17 +44,12 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     let locked = s.model.sending || draft.uploading;
     let has_content = !empty || !files.is_empty();
 
-    // The empty field names the bot: a reply in an open conversation, a
-    // message to start one.
+    // The empty field names the bot.
     let name = s
         .model
         .selected_bot()
         .map_or("Raphie", |bot| bot.name.as_str());
-    let verb = if s.model.conversation.is_some() {
-        "Reply to"
-    } else {
-        "Message"
-    };
+    let verb = "Message";
     let input = text_input(&s.composer, font(14.5, 400.0).lh(21.0))
         .key("rd-composer")
         .label(format!("{verb} {name}"))
@@ -154,6 +149,9 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
                 t.border
             },
         );
+    if let Some(quote) = super::quote::in_composer(s, look) {
+        card = card.child(quote);
+    }
     if !files.is_empty() {
         // The web scrolls the cards sideways; here they wrap onto new rows.
         let mut chips = row()

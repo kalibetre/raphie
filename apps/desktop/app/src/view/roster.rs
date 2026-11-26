@@ -1,6 +1,6 @@
 //! The team down the left edge: requests that wait on the owner, one row
-//! per bot with what it is doing, the selected bot's conversations, and the
-//! brand with where Raphie runs and the settings gear.
+//! per bot with what it is doing, and the brand with where Raphie runs and
+//! the settings gear.
 //!
 //! Mirrors `apps/web/src/domains/settings/presentation/bot-sidebar.tsx` and
 //! the `.bot-roster` rules in `bot-workspace.css`.
@@ -8,10 +8,9 @@
 use raphie_core::contracts::{BotProfile, SessionSummary};
 use raphie_core::model::StreamStatus;
 use rune::color::hex;
-use rune::{Color, El, Icon, LiveRegion, ScrollSpec, TextCase, col, el, icon, row, text};
+use rune::{Color, El, LiveRegion, ScrollSpec, TextCase, col, el, icon, row, text};
 
 use super::Look;
-use super::sessions::sessions;
 use crate::avatar::{bot_avatar, tone_of};
 use crate::icons;
 use crate::sections::Page;
@@ -35,8 +34,8 @@ impl Presence {
             Presence::NeedsYou => "Needs you".into(),
             Presence::NeedsSetup => "Needs setup".into(),
             Presence::Working => "Working".into(),
-            Presence::Replied(1) => "1 new reply".into(),
-            Presence::Replied(n) => format!("{n} new replies"),
+            Presence::Replied(1) => "1 new message".into(),
+            Presence::Replied(n) => format!("{n} new messages"),
             Presence::Available => "Available".into(),
         }
     }
@@ -109,20 +108,18 @@ pub fn roster(s: &Ui, look: &Look) -> El {
         list = list.child(bot_row(s, bot, look));
     }
     list = list.child(add_row(t));
-    let mut bots_list = col()
+    // The team fills the roster and scrolls past it.
+    let bots_list = col()
         .key("rd-bots")
         .role("navigation")
         .label("Your team")
         .w_full()
+        .grow(1.0)
+        .min_h(0.0)
         .scroll(ScrollSpec {
             stick_bottom: false,
         })
         .child(list);
-    // The bots take what they need, up to two fifths of the window, and
-    // scroll past that; the selected bot's conversations fill the rest.
-    if s.workspace_height > 0.0 {
-        bots_list = bots_list.max_h((s.workspace_height * 0.4).floor());
-    }
     col()
         .key("rd-roster")
         .w(width)
@@ -137,7 +134,6 @@ pub fn roster(s: &Ui, look: &Look) -> El {
         .children(requests(s, look))
         .child(row().w_full().px(20.0).pb(8.0).child(label(t, "Your team")))
         .child(bots_list)
-        .child(sessions(s, look))
         .child(footer(s, look))
 }
 
@@ -294,26 +290,6 @@ fn add_row(t: &Theme) -> El {
             t.muted_foreground,
         ));
     pressable(row, true, |s: &mut Ui| s.open_settings(Some(Page::NewBot)))
-}
-
-/// The small ghost button at the end of a roster label (the web's
-/// `.roster-label-action`, an `icon-xs` button): 21 points with a 10.5-point
-/// glyph, pulled into the label's padding so the row stays as tall as its
-/// text.
-pub fn label_action(t: &Theme, glyph: &'static Icon, label: &str) -> El {
-    row()
-        .role("button")
-        .label(label)
-        .help(label)
-        .size(21.0, 21.0)
-        .mx(-4.0)
-        .my(-6.0)
-        .center()
-        .radius(5.25)
-        .hover(t.hover)
-        .press(t.hover)
-        .focus_ring(2.0, 2.0, t.accent)
-        .child(icon(glyph, 10.5).color(t.muted_foreground).a11y_hidden())
 }
 
 /// A preview without Markdown markers, on one line (the web's `sessionPreview`).

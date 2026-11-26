@@ -37,8 +37,8 @@ test("working outranks unread replies, which outrank being available", () => {
   expect(presence([session({ working: true }), unread], count).label).toBe(
     "Working",
   );
-  expect(presence([read, unread], count).label).toBe("1 new reply");
-  expect(presence([unread, unread], count).label).toBe("2 new replies");
+  expect(presence([read, unread], count).label).toBe("1 new message");
+  expect(presence([unread, unread], count).label).toBe("2 new messages");
   expect(presence([read], none)).toEqual({
     state: "available",
     label: "Available",

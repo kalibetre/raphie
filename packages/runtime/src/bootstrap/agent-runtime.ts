@@ -50,9 +50,12 @@ import {
   CardService,
   createCardTools,
 } from "../domains/cards/infrastructure/pi-cards.ts";
+import { isPrivateDestination } from "../domains/channels/domain/binding.ts";
 import { ChannelBindings } from "../domains/channels/infrastructure/pi-bindings.ts";
 import { PiChannelHome } from "../domains/channels/infrastructure/pi-home.ts";
+import { chatFromHistory } from "../domains/conversations/domain/chat.ts";
 import { compactionPolicy } from "../domains/conversations/domain/compaction.ts";
+import { removeHistory } from "../domains/conversations/infrastructure/history-removal.ts";
 import {
   Chats,
   ChatService,
@@ -67,6 +70,7 @@ import {
 } from "../domains/delivery/infrastructure/pi-delivery-queue.ts";
 import type { MemoryService } from "../domains/memory/application/ports.ts";
 import { createMemoryTools } from "../domains/memory/infrastructure/pi-memory-tools.ts";
+import { Jobs } from "../domains/schedules/infrastructure/bot-jobs.ts";
 import { connectedServicesInstructions } from "../domains/settings/domain/connected-services.ts";
 import {
   createSkillTools,
@@ -80,7 +84,10 @@ import { RuntimeWorkspace } from "../domains/workspaces/infrastructure/runtime-w
 import { createWorkspaceTools } from "../domains/workspaces/infrastructure/workspace-tools.ts";
 import { traceSessions } from "../infrastructure/observability/session-tracing.ts";
 import { PiClientQueries } from "../infrastructure/pi/client-queries.ts";
-import { openBunSqliteStorage } from "../infrastructure/storage/bun-sqlite.ts";
+import {
+  backupSqlite,
+  openBunSqliteStorage,
+} from "../infrastructure/storage/bun-sqlite.ts";
 import { appDataIdentity } from "../infrastructure/workspace/app-data.ts";
 import {
   noTelemetry,
@@ -374,6 +381,23 @@ export class Gateway {
       }
       for (const delivery of chats.deliveries)
         if (delivery.status === "sending") delivery.status = "uncertain";
+      // Bots from before chats keep their latest conversation from an app or
+      // a private channel chat as the chat, and every private channel chat
+      // joins it.
+      if (!chats.conversations.some((c) => c.chat)) {
+        const chat = chatFromHistory(chats.conversations, chats.turns);
+        if (chat) chat.chat = true;
+      }
+      // Nothing is archived any more.
+      for (const conversation of chats.conversations)
+        Reflect.deleteProperty(conversation, "archivedAt");
+      // Jobs from before chats named a session of their own.
+      for (const job of (await tx.doc(Jobs)).items)
+        Reflect.deleteProperty(job, "sessionId");
+      const chat = chats.conversations.find((c) => c.chat);
+      if (chat)
+        for (const binding of bindings)
+          if (isPrivateDestination(binding)) binding.sessionId = chat.sessionId;
       const toolApprovals = await tx.doc(ToolApprovals);
       // Created up front, as the approvals are, so a tool waiting on a
       // question watches a doc that already exists.
@@ -451,6 +475,33 @@ export class Gateway {
       for (const delivery of [...toolApprovals.deliveries, ...asks.deliveries])
         if (delivery.status === "sending") delivery.status = "uncertain";
     }, context);
+    // Sessions from before chats go, after a copy of the bot's storage. A
+    // failure keeps them all, and the bot starts anyway.
+    const database = join(options.directory, "gateway.sqlite");
+    try {
+      await removeHistory(
+        app,
+        () =>
+          backupSqlite(
+            database,
+            join(
+              options.directory,
+              "backups",
+              `before-one-chat-${Date.now()}.sqlite`,
+            ),
+          ),
+        context,
+      );
+    } catch (error) {
+      await app.root.commit(async (tx) => {
+        record(
+          await tx.doc(Activity),
+          "sessions.cleanup_failed",
+          "Sessions from before chats were kept: backing up or removing them failed",
+          { details: { error: String(error) } },
+        );
+      }, context);
+    }
     for (const conversation of (await app.chats.state()).conversations)
       await app.observations.attach(conversation.id);
     if (!options.deferResume) app.harness.resume();

@@ -1,5 +1,4 @@
 import {
-  Archive,
   BookOpen,
   Bot,
   Box,
@@ -97,13 +96,6 @@ export const sections = [
     icon: Bot,
     lede: () =>
       "A separate assistant with its own personality, memory and model connections.",
-  },
-  {
-    id: "archived",
-    label: "Archived",
-    icon: Archive,
-    lede: (bot: string) =>
-      `Conversations with ${bot} you put away. Search them, open one to read it, or bring it back.`,
   },
   {
     id: "owner",

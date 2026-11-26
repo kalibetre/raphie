@@ -177,6 +177,7 @@ Saving sandbox settings runs under the workspace gate and is refused (409) while
 | `workspace/checkpoint.sqlite` | Sandbox settings, the just-bash checkpoint and execution receipts                                                       |
 | `workspace/container.sqlite`  | Container lease and command journal                                                                                     |
 | `workspace/files/`            | The disk view of `/workspace`                                                                                           |
+| `backups/`                    | Copies of `gateway.sqlite` taken before removing conversations from before chats; delete them when no longer needed     |
 
 The default bot keeps these at the root of the data directory; each named bot has the same layout under `bots/<id>/`. See [storage](/architecture/storage-and-telemetry/) for host-level stores.
 

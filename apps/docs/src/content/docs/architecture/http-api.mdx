@@ -83,7 +83,7 @@ All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and tho
 | Method | Path                                           | Purpose                                                                               |
 | ------ | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
 | POST   | `/sessions/messages`                           | Admit a turn. Returns 201 with the receipt `{ id, sessionId }`.                       |
-| GET    | `/sessions?after=<id>&limit=50&archived=1`     | Session summaries, `{ items, next }`: active ones, or with `archived=1` the archived  |
+| GET    | `/sessions?after=<id>&limit=50`                | Session summaries, `{ items, next }`, the chat first                                  |
 | GET    | `/sessions/events`                             | SSE: the first 100 session summaries, re-sent on change                               |
 | GET    | `/sessions/:id`                                | Session observation: recent turns, approvals, live text, activity, phase, saved model |
 | GET    | `/sessions/:id/history?before=<turn>&limit=50` | Older turns, oldest first within each page                                            |
@@ -91,7 +91,6 @@ All paths are relative to `/api`. Mutations need `x-raphie-client: web`, and tho
 | POST   | `/sessions/:id/control`                        | `{ action: "stop" \| "steer" \| "queue", turnId? }`                                   |
 | POST   | `/sessions/:id/model`                          | Change an idle session's model                                                        |
 | POST   | `/sessions/:id/read`                           | `{ replyCount }`; returns `{ readReplyCount }`                                        |
-| POST   | `/sessions/:id/archive`                        | `{ archived }`; archives or brings back. A new message also brings it back            |
 | GET    | `/runtime`                                     | Model and MCP metadata, uncertain notification IDs                                    |
 
 ### Approvals and permissions
@@ -204,23 +203,25 @@ These remain for older callers. The web workspace still calls `/sessions/legacy/
     "modelId": "anthropic/claude-haiku-5.5"
   },
   "approvalMode": "ask",
-  "attachments": ["<64-hex upload id>"]
+  "attachments": ["<64-hex upload id>"],
+  "quote": { "turnId": "<turn id>", "author": "bot" }
 }
 ```
 
-| Field          | Rule                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `text`         | Up to 4,000 characters; may be empty (or whitespace) only with attachments                                                      |
-| `eventId`      | 1 to 200 characters, stable across retries. Same `eventId` and same content returns the same receipt; different content is 409. |
-| `sessionId`    | A UUID. Omit to start a new session; an unknown ID is 404                                                                       |
-| `approvalMode` | Only for a new session; saved before its first turn runs. Defaults to Ask.                                                      |
-| `attachments`  | Up to four unique upload IDs from `POST /attachments`; an ID this bot does not hold is 404                                      |
+| Field          | Rule                                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text`         | Up to 4,000 characters; may be empty (or whitespace) only with attachments                                                                                                                                                    |
+| `eventId`      | 1 to 200 characters, stable across retries. Same `eventId` and same content returns the same receipt; different content is 409.                                                                                               |
+| `sessionId`    | A UUID. Omit to write in the bot's chat, which the first message starts; an unknown ID is 404                                                                                                                                 |
+| `approvalMode` | Only for the message that starts the chat; saved before its first turn runs. Defaults to Ask.                                                                                                                                 |
+| `attachments`  | Up to four unique upload IDs from `POST /attachments`; an ID this bot does not hold is 404                                                                                                                                    |
+| `quote`        | Optional. One earlier message of the same session: `author` is `owner` for the owner's words in that turn, `bot` for the bot's. The turn stores `{ turnId, author, excerpt }`, the first 280 characters; anything else is 400 |
 
-Admission returns 503 `no_model` when no model is configured, and 400 when the chosen model is not in the catalogue. The receipt confirms durable admission, not completion. Follow the session's events or poll its observation to see the reply.
+Admission returns 503 `no_model` when no model is configured, 400 when the chosen model is not in the catalogue, and 404 when the session is not found. The receipt confirms durable admission, not completion. Follow the session's events or poll its observation to see the reply.
 
 ## Session model selection
 
-- A new session uses the bot's default model unless the message carries `model: { provider, modelId }`. An explicit choice is saved with the first turn.
+- A bot's chat starts with its default model unless the first message carries `model: { provider, modelId }`. An explicit choice is saved with the first turn.
 - The model is part of the admission fingerprint, so retrying an `eventId` with a different explicit model is a 409.
 - `POST /sessions/:id/model` changes an idle session's model without sending a message. It returns 400 if the model is not in the runtime's model catalogue and 409 while a turn is pending.
 - A session keeps its model through default-model changes and restarts. The observation exposes it as `session.model`.

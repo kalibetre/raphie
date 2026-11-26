@@ -7,8 +7,6 @@
 /// What a "/" entry does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SlashKind {
-    /// Start a new conversation.
-    New,
     /// Open the model picker.
     Model,
     /// Stop the reply in progress.
@@ -124,7 +122,7 @@ mod tests {
     #[test]
     fn matches_and_a_chosen_skill_keep_the_rest() {
         let items = [
-            item(SlashKind::New, "new"),
+            item(SlashKind::Model, "model"),
             item(SlashKind::Skill, "weekly-report"),
         ];
         let names: Vec<_> = slash_matches(&items, "w")

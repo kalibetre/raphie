@@ -61,6 +61,7 @@ export interface SessionOperations {
       sessionId?: string;
       model?: ModelSelection;
       approvalMode?: "ask" | "full-access";
+      quote?: SendMessage["quote"];
     },
   ): Promise<MessageReceipt>;
   decide(
@@ -144,6 +145,7 @@ export class Sessions implements SessionOperations {
       sessionId?: string;
       model?: ModelSelection;
       approvalMode?: "ask" | "full-access";
+      quote?: SendMessage["quote"];
     },
   ) {
     const verified = this.authority.require(actor);
@@ -154,6 +156,7 @@ export class Sessions implements SessionOperations {
       sessionId: input.sessionId,
       model: input.model,
       approvalMode: verified.source === "web" ? input.approvalMode : undefined,
+      quote: input.quote,
       origin: verified.origin,
       source: verified.source,
       actor: verified.subject,
@@ -213,14 +216,6 @@ export class Sessions implements SessionOperations {
     if (verified.source !== "web")
       throw new InputError("Model selection requires a client interface.", 403);
     await this.conversations.chooseModel(sessionId, model);
-  }
-
-  /** Archives a session, or brings it back. */
-  async archive(actor: ActorContext, sessionId: string, archived: boolean) {
-    const verified = this.authority.require(actor);
-    if (verified.source !== "web")
-      throw new InputError("Archiving requires a client interface.", 403);
-    await this.conversations.archive(sessionId, archived);
   }
 
   /** Records how many of a session's replies the owner has read. */

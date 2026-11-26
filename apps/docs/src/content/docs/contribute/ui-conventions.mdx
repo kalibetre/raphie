@@ -69,7 +69,7 @@ Use only the disposable fixture, on ports 4317 and 4321. Never test against the 
    RAPHIE_FIXTURE_LONG_HISTORY=true bun run --parallel dev:fixture dev:web:fixture
    ```
 
-2. Open `http://127.0.0.1:4321` and sign in; the first time, create the fixture's administrator with `bun run fixture:auth`. Open the fixture's saved session. It holds 60 long synthetic replies with wide code, tables and detailed activity. The data is temporary and calls no remote model.
+2. Open `http://127.0.0.1:4321` and sign in; the first time, create the fixture's administrator with `bun run fixture:auth`. The bot opens on its chat, which holds 60 long synthetic replies with wide code, tables and detailed activity. The data is temporary and calls no remote model.
 3. Run the layout probe. `scripts/check-scroll-layout.browser.js` exports `checkScrollLayout()`; strip the `export` and evaluate it in the page. It throws if a native scroll container appears, the transcript stops above the composer, or the page overflows sideways.
 4. Check by eye in light and dark, at 2x zoom and at a mobile width (320 px), plus 768, 1024 and 1440 px.
 

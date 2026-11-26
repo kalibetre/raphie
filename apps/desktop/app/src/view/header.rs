@@ -1,5 +1,5 @@
-//! The bar over the conversation: which bot, which conversation, and the
-//! buttons to archive it, start a new one and open the inbox.
+//! The bar over the chat: which bot, the session's title when it is not
+//! the chat, and the button that opens the inbox.
 //!
 //! Mirrors `apps/web/src/presentation/workspace/workspace-header.tsx` and the
 //! `.bot-workspace-header` rules in `bot-workspace.css`.
@@ -18,12 +18,13 @@ pub fn header(s: &Ui, look: &Look) -> El {
     let model = &s.model;
     let bot = model.selected_bot();
     let bot_id = bot.map_or("default", |b| b.id.as_str());
-    let conversation = model.conversation.as_ref();
-    let title = conversation
+    // The chat is named by its bot alone; any other session by its title.
+    let title = model
+        .conversation
+        .as_ref()
         .and_then(|c| c.observation.as_ref())
-        .map(|o| o.session.title.clone())
-        .or_else(|| conversation.map(|_| "Loading…".to_owned()))
-        .unwrap_or_else(|| "New conversation".to_owned());
+        .filter(|o| !o.session.chat)
+        .map(|o| o.session.title.clone());
 
     let narrow = s.narrow();
     // In a narrow window the roster is a screen of its own: back to it.
@@ -60,45 +61,18 @@ pub fn header(s: &Ui, look: &Look) -> El {
         identity = identity.child(name);
     }
 
-    let mut actions = row().gap(8.0).center_y();
-    // An open conversation can be archived, or brought back; it stays open
-    // either way.
-    if let Some(open) = conversation {
-        let archived = model.open_archived();
-        let (glyph, label) = if archived {
-            (&icons::ARCHIVE_RESTORE, "Unarchive conversation")
-        } else {
-            (&icons::ARCHIVE, "Archive conversation")
-        };
-        let session_id = open.session_id.clone();
-        actions = actions.child(pressable(
-            icon_button(t, glyph, 17.0, label).key("rd-archive"),
-            true,
-            move |s: &mut Ui| {
-                if let Some(bot_id) = s.model.bot_id.clone() {
-                    s.archive(&bot_id, &session_id, !archived);
-                }
-            },
-        ));
-    }
-    let actions = actions
-        .child(pressable(
-            icon_button(t, &icons::SQUARE_PEN, 17.0, "New conversation").key("rd-new"),
-            true,
-            |s: &mut Ui| s.select_session(None),
-        ))
-        .child(bell(s, t));
+    let actions = row().gap(8.0).center_y().child(bell(s, t));
 
     // `grow` takes the room between the two sides, and the title centres in
-    // it, with "Archived" beside it for an archived conversation (the web's
-    // `.header-archived`).
+    // it.
     let mut heading = row()
         .grow(1.0)
         .min_w(0.0)
         .gap(8.0)
         .center_y()
-        .justify_center()
-        .child(
+        .justify_center();
+    if let Some(title) = title {
+        heading = heading.child(
             text(title)
                 .key("rd-title")
                 .role("heading")
@@ -107,20 +81,6 @@ pub fn header(s: &Ui, look: &Look) -> El {
                 .truncate()
                 .align(Align::Center)
                 .shrink(),
-        );
-    if conversation.is_some() && model.open_archived() {
-        heading = heading.child(
-            row()
-                .key("rd-title-archived")
-                .px(7.0)
-                .py(1.0)
-                .radius(9.0)
-                .border(1.0, t.border)
-                .child(
-                    text("Archived")
-                        .font(font(11.0, 500.0))
-                        .color(t.muted_foreground),
-                ),
         );
     }
 

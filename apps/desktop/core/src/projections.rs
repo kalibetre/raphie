@@ -313,7 +313,7 @@ pub fn active_run_label(
         };
     }
     if live.is_some_and(|live| live.generating && !live.text.is_empty()) {
-        return "Writing reply…".into();
+        return "Writing…".into();
     }
     let wants_tool = latest.is_some_and(|event| {
         event.kind == "model.completed" && details(event)["stopReason"] == "toolUse"
@@ -759,7 +759,7 @@ mod tests {
             active_run_label(None, &t2_steps, &of_run("t2")),
             "Running fixture · execute…"
         );
-        assert_eq!(active_run_label(Some(&writing), &[], &[]), "Writing reply…");
+        assert_eq!(active_run_label(Some(&writing), &[], &[]), "Writing…");
         assert_eq!(
             active_run_label(None, &[], &journal[..2]),
             "Preparing tool call…"

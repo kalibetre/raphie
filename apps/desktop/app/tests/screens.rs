@@ -27,7 +27,7 @@ use raphie_core::sandbox::SandboxUpdate;
 use raphie_core::settings::ThemeChoice;
 use raphie_core::updates::{ReleaseChannel, current_version};
 use raphie_desktop::sections::{BotSection, Page};
-use raphie_desktop::state::{self, Filter, InboxFilter, Screen};
+use raphie_desktop::state::{self, InboxFilter, Screen};
 use raphie_desktop::{Ui, scenes, view::view};
 use rune::{ElementInfo, Env, ImageCache, Key, KeyEvent, Runtime, TextEdit};
 
@@ -224,49 +224,29 @@ fn inside(rt: &Runtime<Ui>, key: &str, outer: &str) -> bool {
 }
 
 #[test]
-fn the_selected_bots_conversations_are_in_the_roster_under_its_bots() {
+fn the_roster_holds_the_team_and_no_conversations() {
     for (size, dark) in [((1280.0, 800.0), false), ((960.0, 560.0), true)] {
         let mut rt = render_sized(scenes::conversations, dark, size);
-        // No conversations panel on the right, nor a button for one.
+        // A bot has one chat: no list of its conversations, no way to start
+        // another, nothing to search or filter.
         for gone in [
             "rd-panel",
             "rd-toggle-panel",
-            "rd-panel-resize",
-            "rd-results",
-        ] {
-            assert!(rt.find(gone).is_none(), "{gone}");
-        }
-        for key in [
             "rd-conversations",
             "rd-new-conversation",
             "rd-search",
             "rd-filter-all",
             "rd-session-s-1",
+            "rd-new",
+            "rd-archive",
         ] {
-            assert!(inside(&rt, key, "rd-roster"), "{key} in the roster");
+            assert!(rt.find(gone).is_none(), "{gone}");
         }
-        // Below the bots, and labelled with the bot's name.
+        assert!(!screen_text(&rt).contains("With Raphie"));
+        // The team fills the roster down to its footer.
+        let roster = element(&rt, "rd-roster").rect;
         let bots = element(&rt, "rd-bots").rect;
-        let list = element(&rt, "rd-conversations").rect;
-        assert!(list[1] >= bots[1] + bots[3], "{bots:?} {list:?}");
-        assert!(screen_text(&rt).contains("With Raphie"));
-        assert!(!screen_text(&rt).contains("Most recent first"));
-
-        // A row opens its conversation; the pen starts a new one.
-        // (The second row: in the smaller window the third is scrolled
-        // below the list's visible part.)
-        click(&mut rt, "rd-session-s-2");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::SelectSession {
-                session_id: Some("s-2".into())
-            })
-        );
-        click(&mut rt, "rd-new-conversation");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::SelectSession { session_id: None })
-        );
+        assert!(bots[3] > roster[3] / 2.0, "{roster:?} {bots:?}");
         // The team's last row creates a bot.
         click(&mut rt, "rd-add-teammate");
         assert_eq!(rt.state.screen, Screen::Settings(Page::NewBot));
@@ -386,16 +366,13 @@ fn a_narrow_window_shows_one_column_at_a_time() {
         assert!((roster[2] - PHONE.0).abs() < 0.5, "{roster:?}");
         assert!(rt.find("rd-main").is_none() && rt.find("rd-roster-resize").is_none());
 
-        // A conversation takes its place, with a way back.
-        click(&mut rt, "rd-session-s-2");
+        // Choosing a teammate opens its chat in the roster's place, with a
+        // way back.
+        click(&mut rt, "rd-bot-default");
         assert!(!rt.state.narrow_home);
         assert!(rt.find("rd-roster").is_none() && rt.find("rd-main").is_some());
         click(&mut rt, "rd-back-home");
         assert!(rt.find("rd-roster").is_some() && rt.find("rd-main").is_none());
-
-        // So does a new conversation, from the pen above the list.
-        click(&mut rt, "rd-new-conversation");
-        assert!(rt.find("rd-main").is_some() && rt.find("rd-back-home").is_some());
     }
 }
 
@@ -481,237 +458,85 @@ fn a_bot_without_a_model_asks_for_one_instead_of_a_chat() {
 }
 
 #[test]
-fn the_bots_take_at_most_two_fifths_of_the_window_and_scroll() {
-    let mut rt = render_sized(scenes::conversations, false, (960.0, 560.0));
-    rt.update(|ui, _| {
-        let research = ui.model.bots[1].clone();
-        for n in 0..12 {
-            let mut bot = research.clone();
-            bot.id = format!("b-more-{n}");
-            bot.name = format!("Helper {n}");
-            ui.model.bots.push(bot);
-        }
-    });
-    settle(&mut rt);
-    let bots = element(&rt, "rd-bots").rect;
-    assert!(bots[3] <= 224.0 + 0.5, "{bots:?}");
-    assert!(bots[3] > 200.0, "the bots use their share: {bots:?}");
-    // The conversations keep the rest, rows and all.
-    assert!(element(&rt, "rd-conversations").rect[3] > 150.0);
-    assert!(inside(&rt, "rd-session-s-1", "rd-roster"));
-}
-
-#[test]
-fn the_roster_opens_and_closes_with_its_conversations() {
+fn the_roster_opens_and_closes() {
     let mut rt = render(scenes::new_conversation, false);
-    assert!(rt.find("rd-conversations").is_some());
     click(&mut rt, "rd-toggle-roster");
     assert!(rt.find("rd-roster").is_none());
-    assert!(rt.find("rd-conversations").is_none());
     click(&mut rt, "rd-toggle-roster");
     assert!(rt.find("rd-roster").is_some());
 }
 
 #[test]
-fn the_sidebar_lists_searches_and_filters_sessions() {
+fn the_title_bar_names_the_chat_by_its_bot_and_other_sessions_by_title() {
     for dark in [false, true] {
-        let mut rt = render(scenes::new_conversation, dark);
-        for id in ["s-1", "s-2", "s-3"] {
-            assert!(rt.find(&format!("rd-session-{id}")).is_some(), "row {id}");
-        }
+        // The chat before its first message: the bot's name, no title.
+        let rt = render(scenes::new_conversation, dark);
+        assert!(rt.find("rd-title").is_none());
+        assert!(rt.find("rd-archive").is_none() && rt.find("rd-new").is_none());
 
-        // The Approvals chip keeps only the session waiting for the owner.
-        click(&mut rt, "rd-filter-approvals");
-        assert_eq!(rt.state.filter, Filter::Approvals);
-        assert!(rt.find("rd-session-s-2").is_some() && rt.find("rd-session-s-1").is_none());
-        click(&mut rt, "rd-filter-all");
-
-        // Search matches titles, whatever the case.
-        click(&mut rt, "rd-search");
-        rt.paste("TEA");
-        settle(&mut rt);
-        assert!(rt.find("rd-session-s-3").is_some() && rt.find("rd-session-s-1").is_none());
-        click(&mut rt, "rd-search-clear");
-        assert!(rt.find("rd-session-s-1").is_some());
-
-        click(&mut rt, "rd-session-s-2");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::SelectSession {
-                session_id: Some("s-2".into())
-            })
-        );
-        // The title bar's own button starts one too.
-        click(&mut rt, "rd-new");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::SelectSession { session_id: None })
-        );
-    }
-}
-
-#[test]
-fn the_sidebar_has_no_archived_or_new_replies_filter() {
-    let rt = render(scenes::new_conversation, false);
-    assert!(rt.find("rd-filter-archived").is_none());
-    assert!(rt.find("rd-filter-new").is_none());
-    assert!(rt.find("rd-filter-approvals").is_some());
-}
-
-#[test]
-fn settings_archived_fetches_searches_opens_and_unarchives() {
-    for dark in [false, true] {
+        // A session that is not the chat keeps its title.
         let mut rt = render(scenes::conversation, dark);
-        // Its page is listed under the bot, last.
-        rt.update(|ui, _| ui.open_settings(None));
-        settle(&mut rt);
-        assert!(screen_text(&rt).contains("Archived"));
-        // Opening the page fetches the bot's archived conversations.
+        assert!(rt.find("rd-title").is_some());
+        assert!(rt.find("rd-archive").is_none() && rt.find("rd-new").is_none());
+
+        // The chat itself is named by its bot alone.
         rt.update(|ui, _| {
-            ui.open_settings(Some(Page::Bot {
-                bot_id: "default".into(),
-                section: BotSection::Archived,
-            }));
+            if let Some(observation) = ui
+                .model
+                .conversation
+                .as_mut()
+                .and_then(|c| c.observation.as_mut())
+            {
+                observation.session.chat = true;
+            }
         });
         settle(&mut rt);
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::LoadArchived {
-                bot_id: "default".into()
-            })
-        );
-        assert!(screen_text(&rt).contains("Loading archived conversations…"));
-
-        let mut rt = render(scenes::settings_archived, dark);
-        for id in ["s-4", "s-5"] {
-            assert!(rt.find(&format!("rd-archived-{id}")).is_some(), "row {id}");
-        }
-        assert!(screen_text(&rt).contains("2 conversations · Most recent first"));
-
-        // Search matches titles, whatever the case.
-        click(&mut rt, "rd-archived-search");
-        rt.paste("GIFT");
-        settle(&mut rt);
-        assert!(rt.find("rd-archived-s-5").is_some() && rt.find("rd-archived-s-4").is_none());
-        assert!(screen_text(&rt).contains("1 conversation matching “GIFT”"));
-
-        // Its button brings it back.
-        let restore = element(&rt, "rd-archived-s-5-restore");
-        assert_eq!(
-            restore.label.as_deref(),
-            Some("Unarchive Birthday gift ideas")
-        );
-        click(&mut rt, "rd-archived-s-5-restore");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::Archive {
-                bot_id: "default".into(),
-                session_id: "s-5".into(),
-                archived: false
-            })
-        );
-
-        // Pressing the row leaves Settings for the conversation.
-        click(&mut rt, "rd-archived-s-5");
-        assert_eq!(rt.state.screen, Screen::Workspace);
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::SelectSession {
-                session_id: Some("s-5".into())
-            })
-        );
-
-        let rt = render(scenes::settings_archived_empty, dark);
-        assert!(screen_text(&rt).contains("No archived conversations."));
+        assert!(rt.find("rd-title").is_none());
     }
 }
 
 #[test]
-fn a_rows_button_archives_its_conversation() {
+fn a_bot_opens_on_its_chat_once_its_sessions_arrive() {
     let mut rt = render(scenes::new_conversation, false);
-    let button = element(&rt, "rd-session-s-3-archive");
-    assert_eq!(button.label.as_deref(), Some("Archive Tea preferences"));
-    // Over the row's top-right corner, where its time is.
-    let row = element(&rt, "rd-session-s-3").rect;
-    let [x, y, w, h] = button.rect;
-    assert!(
-        x + w <= row[0] + row[2] && x > row[0] + row[2] / 2.0,
-        "{row:?}"
+    assert!(rt.state.model.conversation.is_none());
+    rt.update(|ui, _| {
+        for session in &mut ui.model.sessions {
+            session.chat = session.id == "s-2";
+        }
+    });
+    // The next news from the engine finds the chat among its sessions.
+    deliver(
+        &mut rt,
+        Event::BotSettings {
+            bot_id: "default".into(),
+            settings: Box::new(scenes::model_settings()),
+        },
     );
-    assert!(
-        y >= row[1] && y + h <= row[1] + row[3] / 2.0 + 4.0,
-        "{row:?}"
-    );
-    let sent = rt.state.sent.len();
-    click(&mut rt, "rd-session-s-3-archive");
     assert_eq!(
         rt.state.sent.last(),
-        Some(&Command::Archive {
-            bot_id: "default".into(),
-            session_id: "s-3".into(),
-            archived: true
+        Some(&Command::SelectSession {
+            session_id: Some("s-2".into())
         })
     );
-    // The press archives only: it does not open the conversation.
-    assert_eq!(rt.state.sent.len(), sent + 1);
-}
-
-#[test]
-fn the_title_bar_archives_and_unarchives_the_open_conversation() {
-    for dark in [false, true] {
-        // A new conversation has nothing to archive.
-        let rt = render(scenes::new_conversation, dark);
-        assert!(rt.find("rd-archive").is_none());
-
-        let mut rt = render(scenes::conversation, dark);
-        assert_eq!(
-            element(&rt, "rd-archive").label.as_deref(),
-            Some("Archive conversation")
-        );
-        assert!(rt.find("rd-title-archived").is_none());
-        click(&mut rt, "rd-archive");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::Archive {
-                bot_id: "default".into(),
-                session_id: "s-1".into(),
-                archived: true
-            })
-        );
-
-        // Archived, it stays open, out of the list, and the same button
-        // brings it back.
-        let mut rt = render(scenes::conversation_archived, dark);
-        assert_eq!(
-            element(&rt, "rd-archive").label.as_deref(),
-            Some("Unarchive conversation")
-        );
-        assert!(rt.find("rd-session-s-1").is_none());
-        // Marked beside its title, as on the web.
-        assert!(rt.find("rd-title-archived").is_some());
-        assert_eq!(rt.state.attention_in("default"), 1, "only the approval");
-        click(&mut rt, "rd-archive");
-        assert_eq!(
-            rt.state.sent.last(),
-            Some(&Command::Archive {
-                bot_id: "default".into(),
-                session_id: "s-1".into(),
-                archived: false
-            })
-        );
-        rt.update(|ui, _| {
-            ui.model.apply(Event::Archived {
-                bot_id: "default".into(),
-                session_id: "s-1".into(),
-                archived_at: None,
-            });
-        });
-        settle(&mut rt);
-        assert_eq!(
-            element(&rt, "rd-archive").label.as_deref(),
-            Some("Archive conversation")
-        );
-    }
+    // Leaving it for history and back again returns to the chat.
+    rt.update(|ui, _| ui.select_session(Some("s-1")));
+    settle(&mut rt);
+    rt.update(|ui, _| ui.go_to_chat());
+    deliver(
+        &mut rt,
+        Event::BotSettings {
+            bot_id: "default".into(),
+            settings: Box::new(scenes::model_settings()),
+        },
+    );
+    assert_eq!(
+        rt.state
+            .model
+            .conversation
+            .as_ref()
+            .map(|c| c.session_id.as_str()),
+        Some("s-2")
+    );
 }
 
 /// The key of the element whose accessible label is `label`.
@@ -2185,6 +2010,7 @@ fn the_composer_sends_what_was_typed() {
             attachments: Vec::new(),
             model: None,
             approval_mode: None,
+            quote: None,
         })
     );
     assert!(rt.state.model.sending, "the button waits for the receipt");
@@ -2810,15 +2636,8 @@ fn jobs_are_listed_with_their_state_and_what_can_be_done() {
         Some("Scheduled job not found.")
     );
 
-    // A job's conversation opens in the workspace.
-    click(&mut rt, "rd-job-job-brief-open");
-    assert_eq!(rt.state.screen, Screen::Workspace);
-    assert_eq!(
-        rt.state.sent.last(),
-        Some(&Command::SelectSession {
-            session_id: Some("0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b".into()),
-        })
-    );
+    // A job has no conversation of its own: its runs post in the chat.
+    assert!(rt.find("rd-job-job-brief-open").is_none());
 }
 
 /// The ticket of the runs load the page last asked for.
@@ -2921,9 +2740,19 @@ fn run_history_pages_filters_by_job_and_refreshes() {
     // The jobs and the newest runs, once.
     assert_eq!(rt.state.sent.len(), before + 2);
 
-    // A run with a conversation opens it.
+    // A run opens the chat at its message.
     click(&mut rt, "rd-run-run-104");
     assert_eq!(rt.state.screen, Screen::Workspace);
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::SelectSession {
+            session_id: Some("0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b".into()),
+        })
+    );
+    assert_eq!(rt.state.reveal.as_deref(), Some("t-311"));
+    // Going elsewhere before it loads forgets it.
+    rt.update(|ui, _| ui.go_to_chat());
+    assert_eq!(rt.state.reveal, None);
 }
 
 #[test]
@@ -3822,6 +3651,7 @@ fn files_wait_in_the_composer_and_go_with_the_message() {
             attachments: vec![d.clone()],
             model: None,
             approval_mode: None,
+            quote: None,
         })
     );
     // The file stays until the runtime admits the message, then leaves.
@@ -4076,6 +3906,7 @@ fn a_new_conversation_starts_with_the_model_picked_for_it() {
             }),
             // A new conversation asks before commands unless told otherwise.
             approval_mode: Some(ApprovalMode::Ask),
+            quote: None,
         })
     );
 }
@@ -4254,38 +4085,25 @@ fn a_new_conversation_starts_with_the_command_mode_chosen_for_it() {
             attachments: Vec::new(),
             model: None,
             approval_mode: Some(ApprovalMode::FullAccess),
+            quote: None,
         })
     );
 }
 
 #[test]
-fn replies_not_read_yet_are_marked_counted_and_listed_first() {
+fn replies_not_read_yet_are_counted() {
     for dark in [false, true] {
-        let mut rt = render(scenes::unread, dark);
-        let shown = screen_text(&rt);
-        assert!(shown.contains("2 new replies"));
-        assert!(rt.find("rd-session-s-1-dot").is_some());
-        // A conversation read to its end has no marker.
-        assert!(rt.find("rd-session-s-3-dot").is_none());
+        let rt = render(scenes::unread, dark);
+        let unread: u32 = rt
+            .state
+            .model
+            .session_list()
+            .map(|session| rt.state.unread(session))
+            .sum();
+        assert_eq!(unread, 2);
         // Two conversations have something for the owner: one with new
         // replies, one waiting for approval.
         assert_eq!(needs_you(&rt, "default").as_deref(), Some("Needs you"));
-
-        // The list is most recent first, with new replies ahead of the
-        // rest: a new reply in the oldest conversation lifts it to the top.
-        let top = |rt: &Runtime<Ui>, key: &str| element(rt, key).rect[1];
-        assert!(top(&rt, "rd-session-s-1") < top(&rt, "rd-session-s-2"));
-        assert!(top(&rt, "rd-session-s-2") < top(&rt, "rd-session-s-3"));
-        rt.update(|ui, _| {
-            for session in &mut ui.model.sessions {
-                if session.id == "s-3" {
-                    session.reply_count = Some(2);
-                }
-            }
-        });
-        settle(&mut rt);
-        assert!(top(&rt, "rd-session-s-3") < top(&rt, "rd-session-s-2"));
-        assert!(top(&rt, "rd-session-s-1") < top(&rt, "rd-session-s-2"));
     }
 }
 
@@ -4303,7 +4121,8 @@ fn opening_a_conversation_reads_its_replies_only_at_its_end_in_the_front_window(
         rt.state.unread(&session)
     };
     assert_eq!(unread(&rt), 2);
-    click(&mut rt, "rd-session-s-1");
+    rt.update(|ui, _| ui.select_session(Some("s-1")));
+    settle(&mut rt);
     // The next news from the engine finds the conversation on screen.
     deliver(
         &mut rt,
@@ -4313,7 +4132,6 @@ fn opening_a_conversation_reads_its_replies_only_at_its_end_in_the_front_window(
         },
     );
     assert_eq!(unread(&rt), 0);
-    assert!(rt.find("rd-session-s-1-dot").is_none());
 
     // A reply that arrives while another app is in front stays new...
     let arrive = |rt: &mut Runtime<Ui>, count: u32| {
@@ -4330,7 +4148,6 @@ fn opening_a_conversation_reads_its_replies_only_at_its_end_in_the_front_window(
     rt.update(|ui, _| ui.window_focused = false);
     arrive(&mut rt, 4);
     assert_eq!(unread(&rt), 1);
-    assert!(screen_text(&rt).contains("1 new reply"));
     // ...until the window is looked at again.
     rt.update(|ui, _| {
         ui.window_focused = true;
@@ -4360,15 +4177,16 @@ fn opening_a_conversation_reads_its_replies_only_at_its_end_in_the_front_window(
 fn the_bell_counts_updates_and_opens_the_inbox_across_bots() {
     for dark in [false, true] {
         let mut rt = render(scenes::unread, dark);
-        // One conversation with new replies and one approval, both Raphie's.
+        // One approval, Raphie's. New replies show on the roster instead.
         assert!(rt.find("rd-bell-count").is_some());
-        assert_eq!(rt.state.notifications().1, 2);
+        assert_eq!(rt.state.notifications().1, 1);
         click(&mut rt, "rd-bell");
         assert!(rt.state.inbox_open);
         assert_eq!(
             element(&rt, "rd-inbox-count").text.as_deref(),
-            Some("2 new")
+            Some("1 new")
         );
+        assert!(rt.find("rd-notice-reply:default:s-1").is_none());
         // The composer gives way to the inbox.
         assert!(rt.find("rd-composer").is_none());
         click(&mut rt, "rd-inbox-back");
@@ -4382,28 +4200,30 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
     let shown = screen_text(&rt);
     assert_eq!(
         element(&rt, "rd-inbox-count").text.as_deref(),
-        Some("5 new")
+        Some("3 new")
     );
     for expected in [
         "Today",
         "Earlier",
-        "2 new replies",
         "Needs your approval",
         "Action required",
         "Scheduled job interrupted",
         "Scheduled job failed",
         "No model configured. Connect a model provider in Settings.",
-        "All three argue for smaller, cheaper evaluation sets.",
     ] {
         assert!(shown.contains(expected), "missing: {expected}");
     }
-    // The other bot's row in the roster counts its conversation too.
-    assert_eq!(needs_you(&rt, "b-research").as_deref(), Some("1 new reply"));
+    // New messages are not listed; the bots' rows in the roster show them.
+    assert!(rt.find("rd-notice-reply:default:s-1").is_none());
+    assert!(rt.find("rd-notice-reply:b-research:r-1").is_none());
+    assert_eq!(
+        needs_you(&rt, "b-research").as_deref(),
+        Some("1 new message")
+    );
 
     click(&mut rt, "rd-inbox-jobs");
     assert_eq!(rt.state.inbox_filter, InboxFilter::Jobs);
     assert!(rt.find("rd-notice-job:default:run-2").is_some());
-    assert!(rt.find("rd-notice-reply:default:s-1").is_none());
     click(&mut rt, "rd-inbox-approvals");
     assert!(rt.find("rd-notice-approval:default:s-2").is_some());
     assert!(rt.find("rd-notice-job:default:run-2").is_none());
@@ -4428,20 +4248,22 @@ fn the_inbox_lists_filters_opens_and_dismisses_updates() {
     assert!(rt.find("rd-notice-job:default:run-2").is_none());
     assert_eq!(
         element(&rt, "rd-inbox-count").text.as_deref(),
-        Some("4 new")
+        Some("2 new")
     );
     // A refused dismissal says so.
     click(&mut rt, "rd-notice-job:b-research:run-1-dismiss");
     deliver(&mut rt, Event::RunAcknowledgeFailed);
     assert!(screen_text(&rt).contains("Couldn’t dismiss the update. Please try again."));
 
-    // Another bot's update opens that bot's conversation and closes the inbox.
-    click(&mut rt, "rd-notice-reply:b-research:r-1");
+    // Another bot's job opens that bot's chat at the job's message and
+    // closes the inbox.
+    click(&mut rt, "rd-notice-job:b-research:run-1");
     assert!(!rt.state.inbox_open);
     assert_eq!(rt.state.model.bot_id.as_deref(), Some("b-research"));
     assert!(rt.state.sent.contains(&Command::SelectSession {
         session_id: Some("r-1".into())
     }));
+    assert_eq!(rt.state.reveal.as_deref(), Some("rt-2"));
 }
 
 #[test]
@@ -4452,7 +4274,7 @@ fn an_empty_inbox_says_so_and_failed_job_updates_can_be_retried() {
         Some("You’re all caught up.")
     );
     assert!(rt.find("rd-inbox-count").is_none());
-    click(&mut rt, "rd-inbox-replies");
+    click(&mut rt, "rd-inbox-approvals");
     assert_eq!(
         element(&rt, "rd-inbox-empty").text.as_deref(),
         Some("No updates in this view.")
@@ -4534,13 +4356,14 @@ fn updates_that_arrive_behind_another_app_are_announced_by_the_system_once() {
     let posted = &rt.state.posted;
     assert_eq!(posted.len(), 1);
     assert_eq!(posted[0].title, "Raphie · Tea preferences");
-    assert_eq!(posted[0].body, "2 new replies");
+    assert_eq!(posted[0].body, "2 new messages");
     assert_eq!(
         posted[0].target,
         Target {
             bot_id: "default".into(),
             session_id: Some("s-3".into()),
             run_id: None,
+            turn_id: None,
         }
     );
 }
@@ -4550,6 +4373,7 @@ fn target(bot_id: &str, session_id: Option<&str>, run_id: Option<&str>) -> Targe
         bot_id: bot_id.into(),
         session_id: session_id.map(Into::into),
         run_id: run_id.map(Into::into),
+        turn_id: None,
     }
 }
 
@@ -4860,7 +4684,8 @@ fn reading_is_shared_with_the_runtime_once_and_its_count_reads_here() {
             }
         }
     });
-    click(&mut rt, "rd-session-s-1");
+    rt.update(|ui, _| ui.select_session(Some("s-1")));
+    settle(&mut rt);
     rt.update(|ui, _| {
         ui.mark_read();
         ui.mark_read();
@@ -4869,7 +4694,8 @@ fn reading_is_shared_with_the_runtime_once_and_its_count_reads_here() {
 
     // A runtime too old to keep read counts is not asked.
     let mut rt = render(scenes::unread, false);
-    click(&mut rt, "rd-session-s-1");
+    rt.update(|ui, _| ui.select_session(Some("s-1")));
+    settle(&mut rt);
     rt.update(|ui, _| ui.mark_read());
     assert!(shared_reads(&rt).is_empty());
 }
@@ -5323,43 +5149,26 @@ fn a_named_bot_shows_as_its_name_without_the_at() {
 }
 
 #[test]
-fn choosing_a_bot_again_reopens_the_conversation_last_open_with_it() {
+fn choosing_a_bot_opens_its_chat_rather_than_what_was_last_open() {
     let mut rt = render(scenes::handoff_task, false);
-    let research = rt
-        .state
-        .model
-        .conversation
-        .as_ref()
-        .map(|c| c.session_id.clone())
-        .expect("a Research conversation is open");
-    // Raphie has no last conversation yet: it opens on a new one.
+    assert!(
+        rt.state.model.conversation.is_some(),
+        "a Research session is open"
+    );
+    // Raphie has no chat yet: it opens on its empty chat.
     click(&mut rt, "rd-bot-default");
     assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
     assert!(rt.state.model.conversation.is_none());
-    // Back to Research: the conversation that was open, not a new one.
+    // Back to Research: its chat, not the session that was open.
     click(&mut rt, "rd-bot-b-research");
     assert_eq!(rt.state.model.bot_id.as_deref(), Some("b-research"));
+    assert!(rt.state.model.conversation.is_none());
     assert_eq!(
-        rt.state
-            .model
-            .conversation
-            .as_ref()
-            .map(|c| c.session_id.as_str()),
-        Some(research.as_str())
+        rt.state.sent.last(),
+        Some(&Command::SelectBot {
+            bot_id: "b-research".into()
+        })
     );
-    assert!(rt.state.sent.contains(&Command::SelectSession {
-        session_id: Some(research.clone()),
-    }));
-    // "Open Raphie" from a link goes the same way: back to the one last
-    // open there.
-    click(&mut rt, "rd-bot-default");
-    rt.update(|ui, _| ui.select_session(Some("s-raphie")));
-    rt.update(|ui, _| ui.choose_bot("b-research"));
-    rt.update(|ui, _| ui.open_bot("default", None));
-    assert_eq!(rt.state.model.bot_id.as_deref(), Some("default"));
-    assert!(rt.state.sent.ends_with(&[Command::SelectSession {
-        session_id: Some("s-raphie".into()),
-    }]));
 }
 
 #[test]
@@ -6042,13 +5851,14 @@ fn typing_slash_offers_commands_and_skills() {
         rt.paste("/");
         settle(&mut rt);
         assert!(rt.find("rd-slash").is_some());
-        assert!(rt.find("rd-slash-new").is_some() && rt.find("rd-slash-model").is_some());
+        // A bot has one chat, so there is no /new.
+        assert!(rt.find("rd-slash-new").is_none() && rt.find("rd-slash-model").is_some());
         // Skills that are off or broken are not offered.
         assert!(rt.find("rd-slash-literature-review").is_none());
         assert!(rt.find("rd-slash-notes").is_none());
         rt.paste("we");
         settle(&mut rt);
-        assert!(rt.find("rd-slash-new").is_none(), "the list narrows");
+        assert!(rt.find("rd-slash-model").is_none(), "the list narrows");
         rt.key(KeyEvent {
             key: Key::Enter,
             mods: Default::default(),
@@ -6090,10 +5900,10 @@ fn slash_commands_act_without_sending() {
     });
     settle(&mut rt);
     assert!(rt.find("rd-slash").is_none(), "Escape closes it");
-    rt.paste("n");
+    rt.paste("m");
     settle(&mut rt);
     assert!(
-        rt.find("rd-slash-new").is_some(),
+        rt.find("rd-slash-model").is_some(),
         "typing more opens it again"
     );
 }
@@ -6130,31 +5940,16 @@ fn the_slash_menu_says_what_return_does_and_links_to_skills() {
 }
 
 #[test]
-fn slash_new_leaves_an_open_conversation_for_a_new_one() {
+fn slash_new_is_plain_text() {
     let mut rt = render(scenes::conversation_skill, false);
-    rt.update(|ui, _| {
-        ui.model.apply(Event::Skills {
-            bot_id: "default".into(),
-            items: scenes::skill_list(),
-        });
-    });
-    assert!(
-        rt.state.model.conversation.is_some(),
-        "a conversation is open"
-    );
     click(&mut rt, "rd-composer");
     rt.paste("/new");
     settle(&mut rt);
-    rt.key(KeyEvent {
-        key: Key::Enter,
-        mods: Default::default(),
-    });
-    settle(&mut rt);
+    assert!(rt.find("rd-slash-new").is_none());
     assert!(
-        rt.state.model.conversation.is_none(),
-        "/new opens a new conversation, as the button does"
+        rt.state.model.conversation.is_some(),
+        "the open session stays open"
     );
-    assert_eq!(rt.state.composer.text, "");
 }
 
 #[test]
@@ -6538,4 +6333,70 @@ fn a_bots_own_instructions_are_edited_on_its_profile() {
         rt.state.profile.update().unwrap().instructions.as_deref(),
         Some("Calendar: Executor.")
     );
+}
+
+#[test]
+fn a_message_is_quoted_from_its_action_and_sent_with_the_quote() {
+    use raphie_core::contracts::{QuoteAuthor, QuoteRef};
+    for dark in [false, true] {
+        let mut rt = render(scenes::conversation, dark);
+        let first = rt
+            .state
+            .model
+            .conversation
+            .as_ref()
+            .and_then(|c| c.observation.as_ref())
+            .map(|o| o.turns[0].id.clone())
+            .unwrap();
+        // Each message offers Quote: the bot's and the owner's.
+        assert!(rt.find(&format!("rd-quote-bot-{first}")).is_some());
+        assert!(rt.find(&format!("rd-quote-owner-{first}")).is_some());
+        click(&mut rt, &format!("rd-quote-bot-{first}"));
+        assert_eq!(
+            rt.state.quoting.as_ref().map(|q| q.author),
+            Some(QuoteAuthor::Bot)
+        );
+        assert!(rt.find("rd-composer-quote").is_some());
+        // Dropping it leaves the draft without a quote.
+        click(&mut rt, "rd-composer-quote-clear");
+        assert!(rt.state.quoting.is_none());
+
+        click(&mut rt, &format!("rd-quote-owner-{first}"));
+        click(&mut rt, "rd-composer");
+        rt.paste("Still true?");
+        settle(&mut rt);
+        click(&mut rt, "rd-send");
+        let Some(Command::Send { quote, .. }) = rt.state.sent.last() else {
+            panic!("a message was sent");
+        };
+        assert_eq!(
+            quote.as_ref(),
+            Some(&QuoteRef {
+                turn_id: first.clone(),
+                author: QuoteAuthor::Owner,
+            })
+        );
+        assert!(rt.state.quoting.is_none(), "sent with the message");
+    }
+}
+
+#[test]
+fn a_quote_shows_inside_the_message_that_quotes() {
+    for dark in [false, true] {
+        let rt = render(scenes::conversation_quote, dark);
+        let quoted = rt
+            .state
+            .model
+            .conversation
+            .as_ref()
+            .and_then(|c| c.observation.as_ref())
+            .map(|o| o.turns[0].id.clone())
+            .unwrap();
+        let bar = element(&rt, &format!("rd-quote-{quoted}"));
+        assert!(
+            bar.label.as_deref().unwrap().starts_with("Quoting Raphie:"),
+            "{:?}",
+            bar.label
+        );
+    }
 }

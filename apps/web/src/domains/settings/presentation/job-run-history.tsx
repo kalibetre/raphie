@@ -13,7 +13,7 @@ export function JobRunHistory({
 }: {
   jobId?: string;
   onClear: () => void;
-  onOpen: (sessionId: string) => void;
+  onOpen: (sessionId: string, turnId: string | null) => void;
 }) {
   const history = useJobRuns(jobId);
   const client = useQueryClient();
@@ -144,8 +144,8 @@ export function JobRunHistory({
               {run.sessionId ? (
                 <button
                   className="job-history-target"
-                  onClick={() => onOpen(run.sessionId!)}
-                  aria-label={`${run.name}, ${jobRunStatus[run.status]}, open run conversation`}
+                  onClick={() => onOpen(run.sessionId!, run.turnId)}
+                  aria-label={`${run.name}, ${jobRunStatus[run.status]}, open in the chat`}
                 >
                   {content}
                 </button>

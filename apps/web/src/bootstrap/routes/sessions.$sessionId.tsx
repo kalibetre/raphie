@@ -13,6 +13,7 @@ export const Route = createFileRoute("/sessions/$sessionId")({
     view?: "settings" | "notifications";
     section?: Section;
     bot?: string;
+    message?: string;
   } => ({
     bot:
       typeof search.bot === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(search.bot)
@@ -25,6 +26,11 @@ export const Route = createFileRoute("/sessions/$sessionId")({
         : search.view === "diagnostics" || search.view === "settings"
           ? "settings"
           : undefined,
+    message:
+      typeof search.message === "string" &&
+      /^[a-zA-Z0-9-]{1,100}$/.test(search.message)
+        ? search.message
+        : undefined,
     section:
       search.view === "diagnostics"
         ? "telemetry"

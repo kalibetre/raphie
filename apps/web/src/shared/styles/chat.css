@@ -102,7 +102,89 @@
     margin-bottom: 0;
   }
   .message-assistant {
+    position: relative;
     padding: 0 2px;
+  }
+  /* A quote, inside the message that quotes: a bar with an edge in the
+     author's colour, the author and how the quoted message starts. */
+  .message-quote {
+    --quote-edge: var(--muted-foreground);
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    gap: 1px;
+    margin: 0 0 7px;
+    padding: 5px 9px;
+    border: 0;
+    border-left: 3px solid var(--quote-edge);
+    border-radius: 4px 8px 8px 4px;
+    background: color-mix(in srgb, var(--quote-edge) 12%, transparent);
+    text-align: left;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .message-quote[data-author="bot"],
+  .composer-quote[data-author="bot"] {
+    --quote-edge: var(--accent);
+  }
+  .message-quote:hover {
+    background: color-mix(in srgb, var(--quote-edge) 20%, transparent);
+  }
+  .message-quote-author {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .message-quote[data-author="bot"] .message-quote-author {
+    color: var(--accent);
+  }
+  .message-quote-excerpt {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted-foreground);
+  }
+  /* The message a quote was chosen from, marked for a moment. */
+  .message[data-quoted] {
+    outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    outline-offset: 4px;
+    border-radius: 10px;
+  }
+  /* A message's actions, over its top corner while it is pointed at. */
+  .message-actions {
+    position: absolute;
+    top: -14px;
+    right: 6px;
+    z-index: 1;
+    display: flex;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  /* On the bot's message, level with its name rather than in the gap above. */
+  .message-assistant > .message-actions {
+    top: -3px;
+    right: 0;
+  }
+  .message:hover > .message-actions,
+  .message:focus-within > .message-actions {
+    opacity: 1;
+  }
+  /* Without hover, as on a phone, they sit under the message. */
+  @media (hover: none) {
+    .message-actions {
+      position: static;
+      width: fit-content;
+      margin: 6px 0 0 auto;
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+      opacity: 1;
+    }
   }
   .message-meta {
     display: flex;
@@ -610,6 +692,27 @@
   }
   .context-ring[data-nearly-full] .context-ring-fill {
     stroke: var(--attention);
+  }
+  /* The message the draft will quote, above it. */
+  .composer-quote {
+    --quote-edge: var(--muted-foreground);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: -4px 0 10px -6px;
+    padding: 4px 4px 4px 9px;
+    border-left: 3px solid var(--quote-edge);
+    border-radius: 4px 10px 10px 4px;
+    background: var(--muted);
+    font-size: 12.5px;
+  }
+  .composer-quote-icon {
+    flex: none;
+    color: var(--muted-foreground);
+  }
+  .composer-quote .message-quote-excerpt {
+    flex: 1;
   }
   .composer-hint {
     margin: 8px 0 0;

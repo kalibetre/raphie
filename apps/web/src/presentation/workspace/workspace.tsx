@@ -1,4 +1,4 @@
-import type { ModelSelection, Page, SessionSummary } from "@raphie/contracts";
+import type { ModelSelection, Quote } from "@raphie/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
@@ -18,12 +18,7 @@ import {
 import { useHandoffs } from "../../domains/conversations/infrastructure/use-handoffs";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
-import { ArchivedConversations } from "../../domains/conversations/presentation/sessions/archived-conversations";
-import { ConversationList } from "../../domains/conversations/presentation/sessions/conversation-list";
-import {
-  lastSessionKey,
-  useLastSession,
-} from "../../domains/conversations/presentation/sessions/last-session";
+import { lastSessionKey } from "../../domains/conversations/presentation/sessions/last-session";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
 import { useEnabledPlugins } from "../../domains/settings/infrastructure/plugins/use-enabled-plugins";
@@ -66,6 +61,7 @@ export function Workspace({
   view,
   section = "bot",
   skill,
+  message,
 }: {
   sessionId?: string;
   legacyConversationId?: number;
@@ -73,6 +69,8 @@ export function Workspace({
   section?: Section;
   /** A skill to open when `section` is Skills. */
   skill?: string;
+  /** The turn whose message the chat opens at, as an inbox entry links. */
+  message?: string;
 }) {
   const { workspace } = useBackend();
   const api = workspace.api;
@@ -90,13 +88,8 @@ export function Workspace({
     nextBefore,
     loadOlder,
     loadingOlder,
-    loadMoreSessions,
-    hasMoreSessions,
   } = useLiveState(sessionId, legacyConversationId);
-  // An archived conversation stays open while you read it, but it is not
-  // listed and counts toward no badge.
-  const active = data?.conversations.filter((c) => !c.archivedAt);
-  const inbox = useBotInbox(active);
+  const inbox = useBotInbox(data?.conversations);
   const notificationBots = inbox.bots.data?.items ?? [];
   const skillItems = useSkills().list.data?.items;
   // Skills a message can invoke, so "/name" at its start shows as a skill.
@@ -111,11 +104,12 @@ export function Workspace({
   const notifications = notificationItems(
     notificationBots,
     inbox.byBot,
-    inbox.unread,
     jobNotifications.entries,
   );
+  // Approvals, and every job run not yet dismissed, including those past
+  // the loaded page.
   const notificationCount =
-    notifications.items.length +
+    notifications.length +
     jobNotifications.count -
     jobNotifications.entries.length;
   const botProfile = inbox.bots.data?.items.find(
@@ -123,14 +117,13 @@ export function Workspace({
   );
   const summaries = [
     ...new Map(
-      [...(active ?? []), ...(inbox.byBot.get(workspace.botId) ?? [])].map(
-        (s) => [s.id, s],
-      ),
+      [
+        ...(data?.conversations ?? []),
+        ...(inbox.byBot.get(workspace.botId) ?? []),
+      ].map((s) => [s.id, s]),
     ).values(),
   ].sort((a, b) => b.lastAt - a.lastAt);
-  const unread = (session: (typeof summaries)[number]) =>
-    inbox.unread(workspace.botId, session);
-  const lastSession = useLastSession();
+  const chat = summaries.find((s) => s.chat);
   const conversation = data?.conversations.find(
     (c) => c.sessionId === (sessionId ?? legacySessionId),
   );
@@ -144,6 +137,10 @@ export function Workspace({
     navigationMax,
   } = useWorkspaceLayout();
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
+  // The earlier message the next one quotes, in the open session only.
+  const [quoting, setQuoting] = useState<Quote & { sessionId: string }>();
+  const quote =
+    quoting && quoting.sessionId === sessionId ? quoting : undefined;
   const handoffQuery = useHandoffs();
   const handoffs = handoffQuery.data?.items;
   // A handoff is saved inside its tool call, so once a tool step completes or
@@ -164,8 +161,8 @@ export function Workspace({
   // with onboarding; skipping it shows the bot's own setup instead.
   const [skippedOnboarding, setSkippedOnboarding] = useState(false);
   const mobile = useIsMobile();
-  // A phone opens on the bot's conversation list; this is a new conversation
-  // started from it, before its first message gives it an address.
+  // A phone opens on your team; this is the chosen bot's chat, open before
+  // its first message gives it an address.
   const [composing, setComposing] = useState(false);
   useEffect(() => {
     if (sessionId) setComposing(false);
@@ -244,8 +241,12 @@ export function Workspace({
       sessionId: conversationId,
       approvalMode,
       model,
+      ...(quote
+        ? { quote: { turnId: quote.turnId, author: quote.author } }
+        : {}),
     });
     setSuggestion(undefined);
+    setQuoting(undefined);
     await refetch();
     workspace.assertActive();
     if (conversationId !== sent.sessionId)
@@ -261,8 +262,7 @@ export function Workspace({
   function select(id?: string, nextView?: "settings") {
     setSuggestion(undefined);
     setComposing(!id && mobile && !nextView);
-    // An archived conversation is not among the summaries; its id is its
-    // session id.
+    // A session not among the summaries is named by its session id.
     const selected = summaries.find((c) => c.id === id)?.sessionId ?? id;
     if (selected)
       void navigate({
@@ -311,36 +311,38 @@ export function Workspace({
       });
   }
 
-  let title: string | undefined =
-    conversation?.title ??
-    (missing ? "Conversation unavailable" : "New conversation");
+  // The chat is named by its bot; any other session by its own title.
+  const title =
+    conversation && !conversation.chat
+      ? conversation.title
+      : missing
+        ? "Conversation unavailable"
+        : undefined;
   const settings = view === "settings";
 
-  // Archiving keeps the conversation open, so its header can bring it back.
-  async function archive(sessionId: string, archived: boolean) {
-    await api(`/api/sessions/${sessionId}/archive`, { archived });
-    await Promise.all([
-      queries.invalidateQueries({ queryKey: ["sessions"] }),
-      queries.invalidateQueries({ queryKey: ["session", sessionId] }),
-    ]);
-  }
-
-  const conversationList = (
-    <ConversationList
-      name={botProfile?.name ?? "Raphie"}
-      sessions={summaries}
-      selectedId={conversationId}
-      unread={unread}
-      onSelect={select}
-      hasMore={!!hasMoreSessions}
-      loadMore={() => void loadMoreSessions()}
-      onArchive={(session) => void archive(session.sessionId, true)}
-    />
-  );
-  // On a phone the bot's conversations are a screen of their own, until one
-  // is opened or started.
+  // On a phone your team is a screen of its own, until a bot is chosen.
   const listScreen =
     mobile && !view && !sessionId && !legacyConversationId && !composing;
+  // A bot opens on its chat, once it has one.
+  const chatId = chat?.sessionId;
+  useEffect(() => {
+    if (view || sessionId || legacyConversationId || listScreen || !chatId)
+      return;
+    void navigate({
+      to: "/sessions/$sessionId",
+      params: { sessionId: chatId },
+      search: { bot },
+      replace: true,
+    });
+  }, [
+    view,
+    sessionId,
+    legacyConversationId,
+    listScreen,
+    chatId,
+    navigate,
+    bot,
+  ]);
   const roster = (
     <BotSidebar
       bots={inbox.bots.data?.items ?? []}
@@ -350,9 +352,7 @@ export function Workspace({
       connected={connected}
       error={!!inbox.bots.error}
       onRetry={() => void inbox.bots.refetch()}
-      conversations={conversationList}
       needsSetup={needsSetup}
-      onNew={() => select()}
       onOpen={(botId, id) =>
         void navigate({
           to: "/sessions/$sessionId",
@@ -361,17 +361,12 @@ export function Workspace({
         })
       }
       onSelect={(id) => {
-        const nextBot = id === "default" ? undefined : id;
-        // A phone shows the bot's conversations; a wide screen reopens the
-        // one you were in, with the list beside it.
-        const last = mobile ? undefined : lastSession(id);
-        if (last)
-          void navigate({
-            to: "/sessions/$sessionId",
-            params: { sessionId: last },
-            search: { bot: nextBot },
-          });
-        else void navigate({ to: "/", search: { bot: nextBot } });
+        // Choosing a teammate opens its chat.
+        setComposing(mobile);
+        void navigate({
+          to: "/",
+          search: { bot: id === "default" ? undefined : id },
+        });
       }}
       onSettings={() => {
         openSettings("bot");
@@ -438,20 +433,6 @@ export function Workspace({
                 setEnabled={setEnabled}
                 traces={<Diagnostics bots={inbox.bots.data?.items ?? []} />}
                 activity={<BotActivity />}
-                archived={
-                  <ArchivedConversations
-                    botId={workspace.botId}
-                    fetchArchived={async () =>
-                      (
-                        await api<Page<SessionSummary>>(
-                          "/api/sessions?archived=1&limit=100",
-                        )
-                      ).items
-                    }
-                    onOpen={(session) => select(session.sessionId)}
-                    onUnarchive={(session) => archive(session.sessionId, false)}
-                  />
-                }
                 onParent={(next) => selectSettings(workspace.botId, next)}
               />
             </SettingsMain>
@@ -498,17 +479,6 @@ export function Workspace({
                         }
                       : undefined
                   }
-                  onNew={!view && !mobile ? () => select() : undefined}
-                  archived={!!conversation?.archivedAt}
-                  onArchive={
-                    !view && conversation
-                      ? () =>
-                          void archive(
-                            conversation.sessionId,
-                            !conversation.archivedAt,
-                          )
-                      : undefined
-                  }
                   onBotSettings={() => openSettings("bot")}
                   notificationCount={notificationCount}
                   onNotifications={() =>
@@ -524,14 +494,17 @@ export function Workspace({
               )}
               {listScreen ? null : view === "notifications" ? (
                 <Notifications
-                  items={notifications.items}
+                  items={notifications}
                   jobs={jobNotifications}
                   count={notificationCount}
-                  onOpen={(botId, id) =>
+                  onOpen={(botId, id, turnId) =>
                     void navigate({
                       to: "/sessions/$sessionId",
                       params: { sessionId: id },
-                      search: { bot: botId === "default" ? undefined : botId },
+                      search: {
+                        bot: botId === "default" ? undefined : botId,
+                        message: turnId,
+                      },
                     })
                   }
                 />
@@ -553,10 +526,10 @@ export function Workspace({
               ) : missing && !view ? (
                 <WorkspaceAlert
                   title="Session not found"
-                  description="This link doesn’t match a session in the current workspace. Choose a saved session from the sidebar or start a new one."
+                  description="This link doesn’t match a session in the current workspace."
                   icon="missing"
                   onAction={() => select()}
-                  action="New conversation"
+                  action="Go to the chat"
                 />
               ) : (
                 <>
@@ -591,6 +564,13 @@ export function Workspace({
                           }}
                           onCancelHandoff={(id) =>
                             handoffQuery.cancel.mutateAsync(id)
+                          }
+                          reveal={message}
+                          onQuote={(next) =>
+                            setQuoting({
+                              ...next,
+                              sessionId: conversation.sessionId,
+                            })
                           }
                         />
                       ) : (
@@ -628,7 +608,8 @@ export function Workspace({
                           await refetch();
                         }}
                         onSend={send}
-                        onNewConversation={() => select()}
+                        quote={quote}
+                        onClearQuote={() => setQuoting(undefined)}
                         onManageSkills={() =>
                           void navigate({
                             to: "/",

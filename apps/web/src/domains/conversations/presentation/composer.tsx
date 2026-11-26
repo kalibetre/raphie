@@ -1,4 +1,4 @@
-import type { Handoff, ModelSelection } from "@raphie/contracts";
+import type { Handoff, ModelSelection, Quote } from "@raphie/contracts";
 import { useEffect, useRef, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -18,6 +18,7 @@ import { HandoffDelegates, HandoffNote } from "./handoffs/handoff-delegates";
 import { useMentions } from "./handoffs/mention-menu";
 import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
+import { ComposerQuote } from "./quote";
 import { type SlashCommand, useSlashMenu } from "./slash-menu";
 import { useComposerAttachments } from "./use-composer-attachments";
 import { useComposerLayout } from "./use-composer-layout";
@@ -40,8 +41,9 @@ export function Composer({
   onStop,
   onChooseModel,
   onModelSettings,
-  onNewConversation,
   onManageSkills,
+  quote,
+  onClearQuote,
 }: {
   /** The bot this conversation is with, named in the empty field. */
   botName?: string;
@@ -71,10 +73,11 @@ export function Composer({
   ) => Promise<void>;
   onChooseModel: (model: ModelSelection) => Promise<void>;
   onModelSettings: () => void;
-  /** The /new command: open a new conversation with this bot. */
-  onNewConversation?: () => void;
   /** Opens this bot's Skills settings, from the / menu. */
   onManageSkills?: () => void;
+  /** The earlier message the next one quotes. */
+  quote?: Quote;
+  onClearQuote?: () => void;
 }) {
   const [permission, setPermission] = useState<{
     key: string;
@@ -137,20 +140,10 @@ export function Composer({
   const [modelRequest, setModelRequest] = useState(0);
   const skills = useSkills().list.data?.items ?? [];
   const commands: SlashCommand[] = [
-    ...(onNewConversation
-      ? [
-          {
-            kind: "command" as const,
-            name: "new",
-            description: "Start a new conversation",
-            run: onNewConversation,
-          },
-        ]
-      : []),
     {
       kind: "command",
       name: "model",
-      description: "Choose the model for this conversation",
+      description: "Choose the model for this chat",
       run: () => setModelRequest((n) => n + 1),
     },
     ...(busy
@@ -271,6 +264,11 @@ export function Composer({
     }
   }
 
+  // Quoting a message puts the caret in the draft that will quote it.
+  useEffect(() => {
+    if (quote) input.current?.focus();
+  }, [quote, input]);
+
   return (
     <div className="composer-wrap" ref={wrapper}>
       {error && (
@@ -287,6 +285,13 @@ export function Composer({
         }}
       >
         {slash.menu ?? mentions.menu}
+        {quote && (
+          <ComposerQuote
+            quote={quote}
+            botName={botName}
+            onClear={() => onClearQuote?.()}
+          />
+        )}
         <AttachmentChips
           files={files}
           workspace={workspace}
@@ -300,8 +305,8 @@ export function Composer({
           <Textarea
             ref={input}
             className="min-h-6 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[14.5px] leading-6 shadow-none focus-visible:ring-0 md:text-[14.5px] dark:bg-transparent"
-            aria-label={`${conversationId ? "Reply to" : "Message"} ${botName}`}
-            placeholder={`${conversationId ? "Reply to" : "Message"} ${botName}…`}
+            aria-label={`Message ${botName}`}
+            placeholder={`Message ${botName}…`}
             value={draft}
             maxLength={4000}
             {...menuProps}

@@ -44,16 +44,10 @@
     letter-spacing: 1px;
     color: var(--muted-foreground);
   }
-  /* The bots take what they need, up to two fifths of the window; the
-     selected bot's conversations fill the rest. */
+  /* The team fills the sidebar and scrolls past it. */
   .bot-roster-scroll {
-    flex: none;
-  }
-  /* A percentage of an auto height would not bound the viewport, so the
-     bots are capped by the window's height and scroll past it. */
-  .bot-roster-scroll,
-  .bot-roster-scroll .scroll-area-viewport {
-    max-height: 40vh;
+    flex: 1;
+    min-height: 0;
   }
   /* Rows sit inside the sidebar's edges, rounded, in neutral greys: the
      hover a wash, the selected row the full hover colour. */
@@ -212,52 +206,7 @@
     width: 30px;
     height: 30px;
   }
-  .roster-label-action {
-    margin: -6px -4px;
-    color: var(--muted-foreground);
-  }
-  .roster-label-text {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .roster-conversations {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    margin: 14px 0 0;
-  }
-  .roster-conversations > .roster-label {
-    padding: 0 10px 4px;
-  }
-  .roster-conversations .library-page {
-    padding: 6px 0 12px;
-  }
-  .roster-conversations .conversation-list {
-    padding: 2px 0 12px;
-  }
-  /* The filters already say what is shown; the sidebar keeps the room. */
-  .roster-conversations .library-results {
-    display: none;
-  }
-  .roster-conversations .library-search {
-    padding: 7px 10px;
-  }
-  /* In the sidebar an empty list is a line of text, not a panel. */
-  .roster-conversations .library-empty {
-    align-items: flex-start;
-    padding: 4px 10px;
-    border: 0;
-    font-size: 12px;
-  }
-  .roster-conversations .library-empty svg {
-    display: none;
-  }
-  .roster-conversations .library-filters {
-    margin: 8px 0 6px;
-  }
+
   /* The brand marks where the team lives; the gear is the mark's size. */
   .roster-footer {
     display: flex;
@@ -333,16 +282,6 @@
     flex: 1;
     text-align: center;
     min-width: 0;
-  }
-  .header-archived {
-    margin-left: 8px;
-    padding: 1px 7px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    color: var(--muted-foreground);
-    font-size: 11px;
-    font-weight: 500;
-    vertical-align: 2px;
   }
   .header-actions {
     flex: none;
@@ -650,172 +589,7 @@
     font-size: 11px;
     color: var(--accent);
   }
-  .conversation-library {
-    flex: 1;
-    min-height: 0;
-  }
-  .library-page {
-    padding: 10px 10px 16px;
-  }
-  /* Search narrows the text; these compact chips narrow the reply state. */
-  .library-filters {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-  }
-  .library-filter {
-    flex: none;
-    border-color: transparent;
-    color: var(--muted-foreground);
-  }
-  .library-filter[aria-pressed="true"] {
-    background: var(--accent-soft);
-    border-color: color-mix(in srgb, var(--accent) 25%, transparent);
-    color: var(--accent);
-  }
-  .library-filter-count {
-    font-size: 10px;
-    font-variant-numeric: tabular-nums;
-    opacity: 0.75;
-  }
-  .library-search {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--card);
-    color: var(--faint);
-  }
-  .library-search input {
-    min-width: 0;
-    flex: 1;
-    font-size: 12px;
-    border: 0;
-    background: none;
-    outline: 0;
-  }
-  .library-search:focus-within {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-  /* Flat, compact rows: no card, no per-row pills. Unread shows as a dot. */
-  .library-list {
-    display: grid;
-    gap: 2px;
-  }
-  .library-list:empty {
-    display: none;
-  }
-  .library-list .conversation-entry {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-height: 0;
-    padding: 8px 10px;
-    border-radius: 8px;
-  }
-  /* The open conversation is lifted onto the card colour, like the
-     composer; others wash grey under the pointer. */
-  .library-list .conversation-entry.selected {
-    background: var(--card);
-    box-shadow: 0 1px 2px #2a241410;
-  }
-  .conversation-row-top {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-  .library-list .conversation-title {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--foreground);
-  }
-  .library-list .conversation-entry[data-unread] .conversation-title {
-    font-weight: 650;
-  }
-  .library-list .conversation-row-top time {
-    margin-left: auto;
-    font-size: 11px;
-    color: var(--faint);
-  }
-  .conversation-dot {
-    flex: none;
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--accent);
-  }
-  .conversation-origin {
-    flex: none;
-    color: var(--faint);
-  }
-  .library-list .conversation-preview {
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--muted-foreground);
-  }
-  .conversation-status {
-    font-size: 11px;
-    line-height: 16px;
-    color: var(--muted-foreground);
-  }
-  .conversation-status.needs-approval {
-    color: var(--attention);
-  }
-  .conversation-status.working,
-  .conversation-status.unread {
-    color: var(--accent);
-  }
-  .conversation-status.failed {
-    color: var(--error);
-  }
-  .library-row {
-    position: relative;
-  }
-  /* Archive shows where the time is, while the row is hovered or focused.
-     Touch screens archive from the conversation's header instead. */
-  .library-row-archive {
-    position: absolute;
-    top: 7px;
-    right: 8px;
-    opacity: 0;
-    color: var(--muted-foreground);
-  }
-  .library-row:hover .library-row-archive,
-  .library-row:focus-within .library-row-archive {
-    opacity: 1;
-  }
-  .library-row:hover .conversation-row-top time,
-  .library-row:focus-within .conversation-row-top time {
-    visibility: hidden;
-  }
-  @media (hover: none) {
-    .library-row-archive {
-      display: none;
-    }
-  }
-  .library-results {
-    margin: 10px 4px 6px;
-    font-size: 11px;
-    color: var(--muted-foreground);
-    overflow-wrap: anywhere;
-  }
-  .library-empty {
-    display: flex;
-    align-items: center;
-    flex-direction: column;
-    gap: 14px;
-    padding: 40px 24px;
-    border: 1px dashed var(--border);
-    border-radius: 14px;
-    color: var(--muted-foreground);
-    font-size: 13px;
-    text-align: center;
-  }
+
   @media (max-width: 1100px) and (min-width: 768px) {
     .header-bot {
       max-width: 105px;
@@ -832,10 +606,6 @@
       height: auto;
       padding: 14px 10px 16px;
       background: var(--sidebar);
-    }
-    .bot-roster-scroll,
-    .bot-roster-scroll .scroll-area-viewport {
-      max-height: 45vh;
     }
     .bot-workspace-header {
       min-height: 44px;

@@ -13,7 +13,10 @@ export function chatModel(
     userMessages?: (messages: UserMessage[]) => void;
     started?: () => void;
     requestedModel?: (id: string) => void;
+    /** The instructions in effect, as JSON of their sections. */
     systemPrompt?: (text: string) => void;
+    /** Every system message in the context, as sent, as JSON. */
+    systemMessages?: (text: string) => void;
     offeredTools?: (names: string[]) => void;
     pause?: Promise<void>;
     streamChunkPause?: Promise<void>;
@@ -47,9 +50,19 @@ export function chatModel(
           : [],
       ),
     );
-    options.systemPrompt?.(
+    options.systemMessages?.(
       JSON.stringify(context.messages.filter((m) => m.role === "system")),
     );
+    // The instructions in effect: later system messages patch earlier
+    // sections by key, as Pi replays them, so a continuing chat reports what
+    // it follows now rather than everything it was ever told.
+    const sections = new Map<string, unknown>();
+    for (const message of context.messages)
+      if (message.role === "system")
+        for (const [key, value] of Object.entries(message.sections ?? {}))
+          if (value === null) sections.delete(key);
+          else sections.set(key, value);
+    options.systemPrompt?.(JSON.stringify(Object.fromEntries(sections)));
     const stream = createAssistantMessageEventStream();
     const texts = context.messages
       .filter((m) => m.role === "user")

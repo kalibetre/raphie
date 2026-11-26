@@ -108,7 +108,7 @@ type Options = {
   pollMs?: number;
 };
 
-const Handoffs = defineDoc<{ items: Handoff[] }>({
+export const Handoffs = defineDoc<{ items: Handoff[] }>({
   kind: "raphie.handoffs",
   version: 1,
   scope: "session",

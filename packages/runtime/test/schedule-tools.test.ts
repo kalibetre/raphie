@@ -31,6 +31,8 @@ async function open(
     deferResume: true,
     ...chatModel({
       offeredTools: (names) => offered.push(names),
+      // Edits continue the owner's chat, so each message calls its tool.
+      repeatTool: tool !== undefined,
       tool: tool ?? {
         name: "schedule_create",
         args: {
@@ -56,7 +58,7 @@ async function open(
   return { gateway, jobs, offered, actor };
 }
 
-test("agent reminder saves without approval, survives restart and replies once in the originating conversation", async () => {
+test("agent reminder saves without approval, survives restart and replies once in the chat", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-reminder-"));
   let app = await open(directory);
   try {
@@ -75,8 +77,6 @@ test("agent reminder saves without approval, survives restart and replies once i
       '"saved":true',
     );
     expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
-    const [job] = await app.jobs.read();
-    expect(job.sessionId).toBe(receipt.sessionId);
     await app.gateway.close();
     app = await open(directory);
     await until(

@@ -46,13 +46,11 @@ pub enum BotSection {
     Workspace,
     Jobs,
     Activity,
-    /// The bot's archived conversations.
-    Archived,
 }
 
 impl BotSection {
     /// The pages the navigation lists, in its order.
-    pub const ALL: [BotSection; 12] = [
+    pub const ALL: [BotSection; 11] = [
         BotSection::Profile,
         BotSection::Providers,
         BotSection::Models,
@@ -64,7 +62,6 @@ impl BotSection {
         BotSection::Workspace,
         BotSection::Jobs,
         BotSection::Activity,
-        BotSection::Archived,
     ];
 
     pub fn label(self) -> &'static str {
@@ -82,7 +79,6 @@ impl BotSection {
             BotSection::Workspace => "Workspace",
             BotSection::Jobs => "Scheduled jobs",
             BotSection::Activity => "Activity",
-            BotSection::Archived => "Archived",
         }
     }
 
@@ -102,7 +98,6 @@ impl BotSection {
             BotSection::Workspace => "workspace",
             BotSection::Jobs => "jobs",
             BotSection::Activity => "activity",
-            BotSection::Archived => "archived",
         }
     }
 
@@ -161,9 +156,6 @@ impl BotSection {
             BotSection::Activity => {
                 format!("Recent activity from {bot}, across its conversations.")
             }
-            BotSection::Archived => format!(
-                "Conversations with {bot} you put away. Search them, open one to read it, or bring it back."
-            ),
         }
     }
 }

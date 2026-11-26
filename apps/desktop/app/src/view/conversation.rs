@@ -6,7 +6,7 @@
 //! `active-run.tsx`, and the message rules in `chat.css`.
 
 use raphie_core::contracts::{
-    AskStatus, ControlAction, QueueMode, SessionActivity, SessionAsk, SessionCard,
+    AskStatus, ControlAction, QueueMode, QuoteAuthor, SessionActivity, SessionAsk, SessionCard,
     SessionObservation, SessionTurn, TurnStatus,
 };
 use raphie_core::model::Conversation;
@@ -300,6 +300,9 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
         .corners([16.0, 16.0, 4.0, 16.0])
         // The time the message was sent, on hover.
         .help(format::clock(turn.created_at));
+    if let Some(quote) = &turn.quote {
+        bubble = bubble.child(super::quote::bar(s, quote, look));
+    }
     // A message can be files alone.
     if !turn.text.is_empty() {
         bubble = bubble.child(handoffs::message_text(s, &turn.text, look));
@@ -331,7 +334,24 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
         }
         bubble = bubble.child(files);
     }
-    row().key(key).w_full().justify_end().child(bubble)
+    let mut line = row()
+        .key(key)
+        .w_full()
+        .justify_end()
+        .gap(8.0)
+        .center_y()
+        .hover_group();
+    // Quoting it, beside the bubble while the message is pointed at.
+    if !turn.text.trim().is_empty() && !queued {
+        line = line.child(super::quote::action(
+            format!("rd-quote-owner-{}", turn.id),
+            &turn.id,
+            QuoteAuthor::Owner,
+            &turn.text,
+            t,
+        ));
+    }
+    line.child(bubble)
 }
 
 /// Under a queued message: how it will join the run, and a button to change
@@ -410,7 +430,24 @@ fn reply(
         _ => return None,
     };
     let done = turn.status == TurnStatus::Done;
-    let mut reply = col().key(format!("rd-reply-{}", turn.id)).w_full().px(2.0);
+    let mut reply = col()
+        .key(format!("rd-reply-{}", turn.id))
+        .w_full()
+        .px(2.0)
+        .hover_group();
+    // Quoting it, level with the bot's name while it is pointed at.
+    if done && !source.trim().is_empty() {
+        reply = reply.child(
+            super::quote::action(
+                format!("rd-quote-bot-{}", turn.id),
+                &turn.id,
+                QuoteAuthor::Bot,
+                source,
+                t,
+            )
+            .pin(None, Some(0.0), Some(0.0), None),
+        );
+    }
     if done {
         // Tokens and cost are for the curious, not the conversation.
         let usage = run_usage(&turn.id, activity).map(|usage| {

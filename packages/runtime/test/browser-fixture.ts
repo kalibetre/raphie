@@ -705,6 +705,7 @@ if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
       sessionId: newSessionId(),
       title: "Scroll layout acceptance",
       createdAt: now,
+      chat: true,
     });
     for (let n = 0; n < 60; n++) {
       const id = crypto.randomUUID();

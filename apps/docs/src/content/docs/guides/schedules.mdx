@@ -7,9 +7,9 @@ sidebar:
 
 import { Steps, TabItem, Tabs } from "@astrojs/starlight/components";
 
-A scheduled job sends a saved prompt to its bot once or at a fixed interval, and keeps the replies in one conversation. Jobs run only while Raphie is running; overdue work runs once when it comes back.
+A scheduled job sends a saved prompt to its bot once or at a fixed interval. Every run posts in the bot's [chat](/guides/conversations/), wherever the job was created. Jobs run only while Raphie is running; overdue work runs once when it comes back.
 
-Results always appear in the web workspace. You can also send them to one home channel per bot, such as a Telegram chat.
+Results always appear in the chat. You can also send them to one home channel per bot, such as a Telegram chat.
 
 ## Create a job
 
@@ -22,14 +22,14 @@ Results always appear in the web workspace. You can also send them to one home c
 2. Enter a **Job name** and the **Prompt** the bot should act on.
 3. Under **Schedule**, choose **Once** or **Recurring**. For Recurring, set **Repeat every (minutes)**.
 4. Pick the **First run date** and **Time (local)**, in your browser's time zone.
-5. Choose **Schedule job**. The job gets its own conversation, titled with the job name.
+5. Choose **Schedule job**.
 
 </Steps>
 
 </TabItem>
-<TabItem label="In a conversation">
+<TabItem label="In the chat">
 
-Ask the bot, for example "In two minutes, tell me the time and a funny saying" or "Every 24 hours, summarise my open tasks". The bot saves the job with its scheduling tools, without asking for approval, and replies in the same conversation when the job runs.
+Ask the bot, for example "In two minutes, tell me the time and a funny saying" or "Every 24 hours, summarise my open tasks". The bot saves the job with its scheduling tools, without asking for approval, and posts in the chat when the job runs.
 
 You can also ask the bot to list, change, pause or delete its jobs. A bot can only see and change its own jobs.
 
@@ -49,7 +49,7 @@ There is no cron syntax. A job has a first run time and, optionally, a repeat in
 
 The interval is elapsed time, not a calendar rule: "every 1,440 minutes" drifts by an hour across a daylight saving change, and the next run is counted from when the previous one was sent, not from the original time.
 
-When a job is due, its prompt is submitted as a **scheduled** turn rather than an owner message. The conversation shows a "Scheduled · job name" marker in place of your message, and the bot writes the reminder itself. When a run fails, the bot says it couldn't run the job, with a card saying what didn't run and why; failed runs of the same job in a row read as one, with the number of attempts and when they were made.
+When a job is due, its prompt is submitted to the chat as a **scheduled** turn rather than an owner message. If the bot is busy, the run waits until it is free. The chat shows a "Scheduled · job name" marker in place of your message, and the bot writes the reminder itself. When a run fails, the bot says it couldn't run the job, with a card saying what didn't run and why; failed runs of the same job in a row read as one, with the number of attempts and when they were made.
 
 ## Manage jobs
 
@@ -60,11 +60,11 @@ Each job card in **Scheduled jobs** shows its state and last run.
 | **Run now** | Queues one extra run without moving the schedule. Works on paused jobs; refused if the bot is busy. |
 | **Pause**   | Stops future runs. A run already submitted continues.                                               |
 | **Resume**  | Restarts the job; an overdue job runs straight away.                                                |
-| **Remove**  | Stops future runs and keeps the conversation.                                                       |
+| **Remove**  | Stops future runs. Its earlier runs stay in the chat.                                               |
 
-Pausing or removing a job does not cancel a turn already in progress or undo actions it took.
+Pausing or removing a job does not cancel a turn already in progress or undo actions it took. Runs share the chat with your messages, so **Stop** in the chat also stops a run in progress; it is recorded as interrupted.
 
-**Run history** lists each run as queued, running, completed, failed or interrupted, with a link to its conversation. Finished runs also appear on the Notifications page until you open or dismiss them.
+**Run history** lists each run as queued, running, completed, failed or interrupted, each opening the chat at that run's message. Finished runs also appear on the Notifications page until you open or dismiss them.
 
 ## Send results to a home channel
 
@@ -86,7 +86,7 @@ Open **Settings**, choose the bot, then **Channels**. Under **Home channel**, ch
 - Replies at home are labelled "Scheduled: job name" and use the channel's normal [delivery](/guides/telegram/#delivery-limits-and-recovery), including chunking and retries.
 - The destination is fixed when each run starts. Changing home affects later runs only.
 - If home is disconnected, disabled or its account was revoked, runs stay web-only. Raphie does not fall back to another channel or resend missed notifications later.
-- Replying in the home chat continues that channel's own session, not the job's conversation.
+- Replying in a private home chat writes in the bot's [chat](/guides/conversations/); replying in a home group continues that group's session.
 - Approvals for a scheduled run are decided in the web workspace. Home receives only an "Approval needed" notice.
 
 :::caution

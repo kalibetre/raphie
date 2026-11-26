@@ -36,6 +36,7 @@ use crate::channels::{Channel, ChannelChange};
 use crate::contracts::ApprovalMode;
 use crate::contracts::ModelSelection;
 use crate::contracts::NewBot;
+use crate::contracts::QuoteRef;
 use crate::contracts::SaveOwnerProfile;
 use crate::contracts::SaveSkill;
 use crate::contracts::{
@@ -121,17 +122,6 @@ pub enum Command {
     LoadMoreSessions {
         after: String,
     },
-    /// Fetch a bot's archived sessions (Settings → Archived).
-    LoadArchived {
-        bot_id: String,
-    },
-    /// Archive one of a bot's sessions (`archived: true`), or bring it
-    /// back.
-    Archive {
-        bot_id: String,
-        session_id: String,
-        archived: bool,
-    },
     LoadOlder {
         session_id: String,
         before: String,
@@ -146,6 +136,8 @@ pub enum Command {
         model: Option<ModelSelection>,
         /// The command mode to start a new session with.
         approval_mode: Option<ApprovalMode>,
+        /// An earlier message of the open session that this one quotes.
+        quote: Option<QuoteRef>,
     },
     /// Ask what needs the owner beyond the conversation on screen: the
     /// first page of each of `session_bots`' conversations, and each of
@@ -736,19 +728,14 @@ impl Engine {
             Command::SelectBot { bot_id } => self.select_bot(bot_id),
             Command::SelectSession { session_id } => self.open_session(session_id),
             Command::LoadMoreSessions { after } => self.load_more_sessions(after),
-            Command::LoadArchived { bot_id } => self.load_archived(bot_id),
-            Command::Archive {
-                bot_id,
-                session_id,
-                archived,
-            } => self.archive(bot_id, session_id, archived),
             Command::LoadOlder { session_id, before } => self.load_older(session_id, before),
             Command::Send {
                 text,
                 attachments,
                 model,
                 approval_mode,
-            } => self.send(text, attachments, model, approval_mode),
+                quote,
+            } => self.send(text, attachments, model, approval_mode, quote),
             Command::LoadInbox {
                 session_bots,
                 job_bots,
@@ -1121,40 +1108,6 @@ impl Engine {
         });
     }
 
-    fn load_archived(&mut self, bot_id: String) {
-        let Some(api) = self.api.clone() else {
-            return;
-        };
-        let emit = self.emit.clone();
-        let inbox = self.inbox.clone();
-        tokio::spawn(async move {
-            fetch_archived(&api, bot_id, &inbox, &emit).await;
-        });
-    }
-
-    /// Archives a session or brings it back. The live list follows on its
-    /// own stream; the archived list is fetched again.
-    fn archive(&mut self, bot_id: String, session_id: String, archived: bool) {
-        let Some(api) = self.api.clone() else {
-            return;
-        };
-        let emit = self.emit.clone();
-        let inbox = self.inbox.clone();
-        tokio::spawn(async move {
-            match api.archive(&bot_id, &session_id, archived).await {
-                Ok(archived) => {
-                    emit.emit(Event::Archived {
-                        bot_id: bot_id.clone(),
-                        session_id,
-                        archived_at: archived.then(now_ms),
-                    });
-                    fetch_archived(&api, bot_id, &inbox, &emit).await;
-                }
-                Err(error) => report(error, &inbox, &emit),
-            }
-        });
-    }
-
     fn open_session(&mut self, session_id: Option<String>) {
         self.session_id = session_id.clone();
         self.session_stream = None;
@@ -1206,6 +1159,7 @@ impl Engine {
         attachments: Vec<String>,
         model: Option<ModelSelection>,
         approval_mode: Option<ApprovalMode>,
+        quote: Option<QuoteRef>,
     ) {
         let (Some(api), Some(bot_id)) = (self.api.clone(), self.bot_id.clone()) else {
             self.emit.emit(Event::MessageFailed {
@@ -1223,6 +1177,8 @@ impl Engine {
             // the message. `filter` keeps a value only when the test holds.
             model: model.filter(|_| self.session_id.is_none()),
             approval_mode: approval_mode.filter(|_| self.session_id.is_none()),
+            // A quote points into the open session, so needs one.
+            quote: quote.filter(|_| self.session_id.is_some()),
         };
         let new_session = message.session_id.is_none();
         let retries = self.config.send_retries.clone();
@@ -2828,35 +2784,6 @@ fn report(error: ApiError, inbox: &mpsc::UnboundedSender<Input>, emit: &Emitter)
     } else {
         emit.emit(Event::Problem(error.to_string()));
     }
-}
-
-/// Fetches a bot's archived sessions and reports them, or why not.
-async fn fetch_archived(
-    api: &ApiClient,
-    bot_id: String,
-    inbox: &mpsc::UnboundedSender<Input>,
-    emit: &Emitter,
-) {
-    match api.archived_sessions(&bot_id).await {
-        Ok(page) => emit.emit(Event::ArchivedSessions {
-            bot_id,
-            sessions: page.items,
-        }),
-        Err(ApiError::Unauthenticated) => {
-            let _ = inbox.send(Input::Expired);
-        }
-        Err(error) => emit.emit(Event::ArchivedFailed {
-            bot_id,
-            message: error.to_string(),
-        }),
-    }
-}
-
-/// Milliseconds since the Unix epoch, as the runtime counts time.
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.as_millis() as i64)
 }
 
 fn default_bot(bots: &[BotProfile]) -> Option<String> {

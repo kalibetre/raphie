@@ -19,6 +19,5 @@
 @import "./settings/page.css";
 @import "./settings/automation.css";
 @import "./settings/workspace.css";
-@import "./settings/archived.css";
 
 /* App styles stay layered so component utilities can override them. */
