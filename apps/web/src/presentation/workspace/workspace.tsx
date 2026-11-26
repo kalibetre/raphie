@@ -89,10 +89,7 @@ export function Workspace({
     loadOlder,
     loadingOlder,
   } = useLiveState(sessionId, legacyConversationId);
-  // A session archived before chats counts toward no badge; the chat always
-  // counts, even if it was archived then.
-  const active = data?.conversations.filter((c) => !c.archivedAt || c.chat);
-  const inbox = useBotInbox(active);
+  const inbox = useBotInbox(data?.conversations);
   const notificationBots = inbox.bots.data?.items ?? [];
   const skillItems = useSkills().list.data?.items;
   // Skills a message can invoke, so "/name" at its start shows as a skill.
@@ -120,9 +117,10 @@ export function Workspace({
   );
   const summaries = [
     ...new Map(
-      [...(active ?? []), ...(inbox.byBot.get(workspace.botId) ?? [])].map(
-        (s) => [s.id, s],
-      ),
+      [
+        ...(data?.conversations ?? []),
+        ...(inbox.byBot.get(workspace.botId) ?? []),
+      ].map((s) => [s.id, s]),
     ).values(),
   ].sort((a, b) => b.lastAt - a.lastAt);
   const chat = summaries.find((s) => s.chat);
@@ -264,8 +262,7 @@ export function Workspace({
   function select(id?: string, nextView?: "settings") {
     setSuggestion(undefined);
     setComposing(!id && mobile && !nextView);
-    // An archived conversation is not among the summaries; its id is its
-    // session id.
+    // A session not among the summaries is named by its session id.
     const selected = summaries.find((c) => c.id === id)?.sessionId ?? id;
     if (selected)
       void navigate({
