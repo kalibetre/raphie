@@ -14,8 +14,8 @@ import { transcriptText } from "../src/domains/handoffs/infrastructure/handoff-t
 import { chatModel } from "./chat-model.ts";
 import { memoryCredentialKeyStore } from "./credential-store.ts";
 
-async function until(check: () => Promise<boolean>) {
-  for (let n = 0; n < 300; n++) {
+async function until(check: () => Promise<boolean>, tries = 300) {
+  for (let n = 0; n < tries; n++) {
     if (await check()) return;
     await delay(10);
   }
@@ -542,7 +542,7 @@ test("deleting the only other bot withdraws the handoff tools", async () => {
   }
 });
 
-test("tasks one conversation hands the same bot continue in one session on its side", async () => {
+test("each task one conversation hands the same bot gets its own session on its side", async () => {
   const app = await twoBots();
   try {
     const owner = await app.chief.gateway.sessions.submit(app.actor, {
@@ -573,11 +573,11 @@ test("tasks one conversation hands the same bot continue in one session on its s
       (await app.handoffs.read()).every((item) => item.status === "completed"),
     );
     const [first, second] = await app.handoffs.read();
-    expect(second!.toSessionId).toBe(first!.toSessionId);
+    expect(second!.toSessionId).not.toBe(first!.toSessionId);
     const received = await app.host
       .runtime(app.research.id)
       .gateway.chats.state();
-    expect(received.conversations).toHaveLength(1);
+    expect(received.conversations).toHaveLength(2);
     expect(received.turns.map((turn) => turn.handoff?.id)).toEqual([
       first!.id,
       "second",
@@ -779,5 +779,112 @@ test("a reply that read the other bot's session records which one, for the way t
     ).toBeUndefined();
   } finally {
     await close();
+  }
+});
+
+test("a task handed off from the chat is a work item on both sides, each keeping its result", async () => {
+  const release = Promise.withResolvers<void>();
+  const app = await twoBots({
+    pauseOn: { text: "Compare Hindsight", until: release.promise },
+  });
+  try {
+    await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    const recipient = app.host.runtime(app.research.id).gateway;
+    const sent = async () =>
+      (await app.chief.gateway.work.list({ open: true })).find(
+        (i) => i.origin?.kind === "handoff-sent",
+      );
+    const received = async () =>
+      (await recipient.work.state()).items.find(
+        (i) => i.origin?.kind === "handoff-received",
+      );
+    await until(async () => !!(await sent())?.run?.turnId, 1000);
+    await until(async () => !!(await received())?.run);
+    const [handoff] = await app.handoffs.read();
+    // The sender's item waits on the other bot while it works.
+    expect(await sent()).toMatchObject({
+      title: "Compare memory backends",
+      status: "waiting",
+      waitingOn: "Research to finish",
+      origin: {
+        kind: "handoff-sent",
+        handoffId: handoff!.id,
+        bot: { id: app.research.id, name: "Research" },
+      },
+      notes: "Compare Hindsight and Honcho.",
+    });
+    // The receiver's item runs in the task's own session.
+    expect(await received()).toMatchObject({
+      status: "active",
+      sessionId: handoff!.toSessionId,
+      origin: { kind: "handoff-received", handoffId: handoff!.id },
+      run: { turnId: handoff!.requests[0]!.turnId },
+    });
+    // The receiver doesn't start background work of its own on it.
+    const task = (await received())!;
+    expect(
+      await recipient.root.commit(
+        (tx) => recipient.workRuns.start(tx, task.id, "More"),
+        context,
+      ),
+    ).toMatch(/task from/);
+    release.resolve();
+    await until(
+      async () => (await app.handoffs.read())[0]?.status === "completed",
+    );
+    const answer = (await recipient.chats.state()).turns[0]!.answer!;
+    const done = await sent();
+    expect(done?.run).toBeUndefined();
+    expect(done?.status).toBe("active");
+    expect(done?.result?.text).toBe(answer);
+    const closed = await received();
+    expect(closed?.status).toBe("done");
+    expect(closed?.result?.text).toBe(answer);
+  } finally {
+    release.resolve();
+    await app.close();
+  }
+});
+
+test("cancelling the sender's item stops the task in the other bot", async () => {
+  const release = Promise.withResolvers<void>();
+  const app = await twoBots({
+    pauseOn: { text: "Compare Hindsight", until: release.promise },
+  });
+  try {
+    await app.chief.gateway.sessions.submit(app.actor, {
+      eventId: "owner-1",
+      text: "Ask Research to compare memory backends.",
+    });
+    const recipient = app.host.runtime(app.research.id).gateway;
+    const sent = async () =>
+      (await app.chief.gateway.work.state()).items.find(
+        (i) => i.origin?.kind === "handoff-sent",
+      );
+    await until(async () => !!(await sent())?.run?.turnId, 1000);
+    const item = (await sent())!;
+    expect(
+      await app.chief.gateway.root.commit(
+        (tx) => app.chief.gateway.workRuns.start(tx, item.id, "More"),
+        context,
+      ),
+    ).toMatch(/handoff_follow_up/);
+    await app.chief.gateway.work.cancel(item.id);
+    await until(
+      async () => (await app.handoffs.read())[0]?.status === "cancelled",
+    );
+    await until(async () => !(await sent())?.run);
+    expect((await sent())?.result?.text).toMatch(/cancelled/);
+    const received = (await recipient.work.state()).items.find(
+      (i) => i.origin?.kind === "handoff-received",
+    );
+    expect(received?.status).toBe("dropped");
+    expect(received?.run).toBeUndefined();
+  } finally {
+    release.resolve();
+    await app.close();
   }
 });

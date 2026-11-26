@@ -58,6 +58,10 @@ import {
   JobRuns,
 } from "../../schedules/infrastructure/job-runs.ts";
 import { openWorkContext } from "../../work/domain/work-item.ts";
+import {
+  receiveHandoff,
+  settleReceivedHandoff,
+} from "../../work/infrastructure/handoff-items.ts";
 import { WorkItems } from "../../work/infrastructure/work-store.ts";
 import type { ConversationCommands } from "../application/ports.ts";
 import {
@@ -173,6 +177,18 @@ export const chatWorkflow = defineTask<
           );
         turn.answerEntryId = answerEntryId;
         turn.answer = duplicate ? null : answer;
+        // A task another bot handed this one: its item keeps the outcome.
+        if (turn.handoff?.kind === "task")
+          await settleReceivedHandoff(tx, {
+            handoffId: turn.handoff.id,
+            turnId: turn.id,
+            cancelled: !!turn.cancelled,
+            result:
+              answer ??
+              (turn.cancelled
+                ? "The task was stopped before it finished."
+                : `The task failed: ${turn.failure?.message ?? "no reply."}`),
+          });
         if (turn.scheduled)
           await finishJobRun(
             tx,
@@ -803,6 +819,13 @@ export class ChatService implements ConversationCommands {
           ...(quote ? { quote } : {}),
         };
         state.turns.push(turn);
+        if (input.handoff?.kind === "task")
+          await receiveHandoff(tx, {
+            handoff: input.handoff,
+            brief: input.text,
+            sessionId: conversation.sessionId,
+            turnId: turn.id,
+          });
         if (input.scheduled) {
           const run = (await tx.doc(JobRuns)).items.find(
             (item) => item.id === input.eventId,

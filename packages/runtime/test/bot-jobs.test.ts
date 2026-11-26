@@ -72,6 +72,7 @@ test("Pi sleeping jobs recover after restart; each run happens in the job's item
     const [item] = await app.gateway.work.list({ open: true });
     expect(item?.origin).toEqual({ kind: "job", jobId: job.id });
     expect(item?.title).toBe("Brief");
+    expect(item?.nextAt).toBe(job.nextRunAt);
     await delay(30);
     await app.gateway.close();
     await delay(220);

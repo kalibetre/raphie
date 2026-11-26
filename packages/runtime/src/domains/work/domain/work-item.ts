@@ -48,7 +48,13 @@ export function workLine(item: WorkItem) {
     item.origin?.kind === "job"
       ? `; scheduled job${item.nextAt ? `, next run ${new Date(item.nextAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}`
       : "";
-  return `${item.id} ${flat(item.title)}: ${where}${job}${running}${last}`;
+  const handoff =
+    item.origin?.kind === "handoff-sent"
+      ? `; handed to ${item.origin.bot.name} (handoff ${item.origin.handoffId})`
+      : item.origin?.kind === "handoff-received"
+        ? `; a task from ${item.origin.bot.name}`
+        : "";
+  return `${item.id} ${flat(item.title)}: ${where}${job}${handoff}${running}${last}`;
 }
 
 /**

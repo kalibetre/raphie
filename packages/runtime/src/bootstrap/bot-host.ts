@@ -462,6 +462,7 @@ export class BotHost implements BotProfiles {
         report: (input) => gateway.sessions.submitHandoff(actor, input),
         pollMs: this.automation.handoffPollMs,
       });
+      gateway.workRuns.cancelHandoff = (id) => handoffs.cancel(id);
       return {
         ...runtime,
         mcp,

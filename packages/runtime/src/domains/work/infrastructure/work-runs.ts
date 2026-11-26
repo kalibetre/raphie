@@ -90,6 +90,8 @@ export function outcomeText(
  * result back to the chat. One run at a time per item.
  */
 export class WorkRuns {
+  /** Cancels a task this bot handed off, once the bot has handoffs. */
+  cancelHandoff?: (handoffId: string) => Promise<void>;
   private options: Options;
   private task: ReturnType<WorkRuns["createTask"]>;
 
@@ -109,6 +111,10 @@ export class WorkRuns {
     if (!item) return `No work item ${id}.`;
     if (item.origin?.kind === "job")
       return `${item.id} follows a scheduled job; it runs on the job's schedule, or when the owner chooses Run now under Scheduled jobs.`;
+    if (item.origin?.kind === "handoff-sent")
+      return `${item.id} is a task handed to ${item.origin.bot.name}. Send more instructions with handoff_follow_up.`;
+    if (item.origin?.kind === "handoff-received")
+      return `${item.id} is a task from ${item.origin.bot.name}; it continues when ${item.origin.bot.name} follows up.`;
     if (!isOpen(item.status))
       return `${item.id} is ${item.status}. Open a new item if the work starts again.`;
     if (item.run)
@@ -171,6 +177,13 @@ export class WorkRuns {
   async cancel(item: WorkItem | undefined) {
     if (!item) throw new InputError("Work item not found.", 404);
     if (!item.run) throw new InputError(`${item.id} has nothing running.`, 409);
+    // A task handed to another bot is stopped there; its result says so.
+    if (item.origin?.kind === "handoff-sent") {
+      if (!this.cancelHandoff)
+        throw new InputError("Handoffs are unavailable here.", 409);
+      await this.cancelHandoff(item.origin.handoffId);
+      return;
+    }
     if (!item.run.turnId || !item.sessionId)
       throw new InputError(
         `${item.id} is still starting. Try again in a moment.`,

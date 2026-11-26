@@ -16,8 +16,8 @@ import type {
 } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
+import { syncSentHandoff } from "../../work/infrastructure/handoff-items.ts";
 import {
-  continuedSession,
   handoffStatus,
   MAX_OPEN_HANDOFFS_PER_BOT,
   openHandoffs,
@@ -247,11 +247,14 @@ export class BotHandoffs {
     await this.options.peers.stop(handoff.to.id, handoff.toSessionId);
   }
 
-  /** Records a new handoff and starts delivering it, in the caller's transaction. */
+  /**
+   * Records a new handoff and starts delivering it, in the caller's
+   * transaction. One from the bot's chat opens a work item that follows it.
+   */
   async create(
     tx: Tx,
     input: { id: string; to: string; title: string; brief: string },
-    from: { sessionId: string; turnId: string | null },
+    from: { sessionId: string; turnId: string | null; chat?: boolean },
   ) {
     const doc = await tx.doc(Handoffs);
     const existing = doc.items.find((item) => item.id === input.id);
@@ -287,6 +290,7 @@ export class BotHandoffs {
       ],
     };
     doc.items.push(handoff);
+    await syncSentHandoff(tx, handoff, { open: from.chat, started: true });
     await this.start(tx, handoff.id, 0);
     return handoff;
   }
@@ -317,6 +321,7 @@ export class BotHandoffs {
       outcome: null,
     });
     handoff.status = "working";
+    await syncSentHandoff(tx, handoff, { started: true });
     await this.start(tx, handoff.id, handoff.requests.length - 1);
     return handoff;
   }
@@ -359,22 +364,9 @@ export class BotHandoffs {
               );
               return;
             }
-            // One conversation talks to another bot in one session: a new
-            // task joins the session earlier tasks from here went to. Save
-            // the address first, so a retried delivery keeps the same one.
-            const joined = !handoff.toSessionId
-              ? continuedSession(
-                  (await runtime.snapshot(Handoffs, ctx))?.items ?? [],
-                  handoff,
-                )
-              : undefined;
-            if (joined)
-              await runtime.commit(async (tx) => {
-                const stored = await find(tx, handoffId);
-                if (stored && !stored.toSessionId) stored.toSessionId = joined;
-                return { status: "running", checkpoint: task.state.checkpoint };
-              }, ctx);
-            const sessionId = handoff.toSessionId ?? joined;
+            // Each handoff has its own session on the other side; its
+            // follow-ups continue there.
+            const sessionId = handoff.toSessionId;
             try {
               // A retry reuses the event ID, so the other bot admits one turn.
               const receipt = await this.options.peers.submit(handoff.to.id, {
@@ -394,6 +386,7 @@ export class BotHandoffs {
                 if (stored) {
                   stored.toSessionId = receipt.sessionId;
                   stored.requests[n]!.turnId = receipt.id;
+                  await syncSentHandoff(tx, stored);
                 }
                 return {
                   status: "running",
@@ -525,6 +518,7 @@ export class BotHandoffs {
                 request.outcome = checkpoint.outcome;
                 request.finishedAt = Date.now();
                 stored.status = handoffStatus(stored);
+                await syncSentHandoff(tx, stored, { result: checkpoint.text });
               }
               return {
                 status: "terminal",
@@ -541,6 +535,7 @@ export class BotHandoffs {
               request.outcome = "cancelled";
               request.finishedAt = Date.now();
               stored.status = handoffStatus(stored);
+              await syncSentHandoff(tx, stored);
             }
             return { status: "terminal", outcome: { status: "aborted" } };
           }, ctx),
