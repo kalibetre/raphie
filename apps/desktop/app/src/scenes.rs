@@ -964,7 +964,8 @@ fn open_jobs(ui: &mut Ui, jobs: Option<Vec<ScheduledJob>>, runs: Option<Paged<Jo
     }
 }
 
-/// A made-up bot's work items: three open, one a scheduled job's, and two closed.
+/// A made-up bot's work items: four open, one a scheduled job's and one
+/// handed to another bot, and two closed.
 pub fn work_items() -> raphie_core::model::WorkLists {
     let item = |value: serde_json::Value| -> raphie_core::contracts::WorkItem {
         serde_json::from_value(value).expect("the scene's work items match the contract")
@@ -993,6 +994,14 @@ pub fn work_items() -> raphie_core::model::WorkLists {
                 "result": { "text": "Good morning. You have two meetings today.", "at": 1_794_630_000_000_i64 },
                 "opened": { "at": 1_794_100_000_000_i64, "by": "owner" },
                 "updatedAt": 1_794_630_000_000_i64,
+            })),
+            item(json!({
+                "id": "w-6", "title": "Compare memory backends", "status": "waiting",
+                "waitingOn": "Research to finish",
+                "notes": "Compare Hindsight and Honcho and recommend one.",
+                "origin": { "kind": "handoff-sent", "handoffId": "h-1", "bot": { "id": "research", "name": "Research" } },
+                "opened": { "at": 1_794_620_000_000_i64, "by": "bot" },
+                "updatedAt": 1_794_620_000_000_i64,
             })),
         ],
         closed: vec![

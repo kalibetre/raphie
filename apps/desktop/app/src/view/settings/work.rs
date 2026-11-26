@@ -241,6 +241,19 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
             .key(key("job")),
         );
     }
+    let other = item.origin.as_ref().and_then(|o| {
+        let bot = o.bot.as_ref()?.name.as_str();
+        match o.kind.as_str() {
+            "handoff-sent" => Some(format!(
+                "Handed to {bot} · Its result comes back to the chat."
+            )),
+            "handoff-received" => Some(format!("A task from {bot} · The result goes back to it.")),
+            _ => None,
+        }
+    });
+    if let Some(text) = other {
+        card = card.child(note(t, text).key(key("handoff")));
+    }
     if !item.notes.is_empty() {
         card = card.child(
             text(item.notes.clone())
