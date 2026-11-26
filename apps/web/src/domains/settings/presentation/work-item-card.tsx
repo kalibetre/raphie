@@ -1,7 +1,7 @@
 import type { WorkItem } from "@raphie/contracts";
 
 import { Button } from "../../../shared/ui/button";
-import type { WorkChange } from "../infrastructure/use-work-items";
+import type { WorkChange } from "../application/work-draft";
 
 const statusLabel: Record<WorkItem["status"], string> = {
   active: "Active",

@@ -13,16 +13,14 @@ import {
 import { Input } from "../../../shared/ui/input";
 import { Textarea } from "../../../shared/ui/textarea";
 import {
-  useWorkChange,
-  useWorkItems,
+  changed,
+  type Draft,
   type WorkChange,
-} from "../infrastructure/use-work-items";
+} from "../application/work-draft";
+import { useWorkChange, useWorkItems } from "../infrastructure/use-work-items";
 import { Group } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
 import { WorkItemCard } from "./work-item-card";
-
-/** The item being written: a new one, or an open one being edited. */
-type Draft = { id?: string; title: string; notes: string };
 
 /** A bot's work items: open ones first, then those it closed. */
 export function WorkSettings({ bot }: { bot: string }) {
@@ -61,7 +59,12 @@ export function WorkSettings({ bot }: { bot: string }) {
       bot={bot}
       pending={pending}
       onEdit={() =>
-        setDraft({ id: item.id, title: item.title, notes: item.notes })
+        setDraft({
+          id: item.id,
+          title: item.title,
+          notes: item.notes,
+          started: { title: item.title, notes: item.notes },
+        })
       }
       onChange={(input) => void save(item.id, input)}
     />
@@ -124,10 +127,12 @@ export function WorkSettings({ bot }: { bot: string }) {
             onSubmit={(event) => {
               event.preventDefault();
               if (!draft) return;
-              void save(draft.id, {
-                title: draft.title,
-                notes: draft.notes,
-              }).then((saved) => saved && setDraft(undefined));
+              const change = changed(draft);
+              // Nothing changed: nothing to send, so the bot's edits stay.
+              if (!change) return setDraft(undefined);
+              void save(draft.id, change).then(
+                (saved) => saved && setDraft(undefined),
+              );
             }}
           >
             <label htmlFor="work-title">Title</label>
