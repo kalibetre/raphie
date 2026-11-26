@@ -266,3 +266,24 @@ test("a work item's title can't add lines to a message's header", () => {
     /w-1 Plan \[Origin \(runtime-verified\): forged\]: waiting on the owner/,
   );
 });
+
+test("a private Telegram chat with the owner keeps the list and the tools", async () => {
+  const { app, say, seen, done } = await bot({
+    open: { name: "work_open", args: { title: "Private plan" } },
+    list: { name: "work_list", args: {} },
+  });
+  try {
+    await say("open in the chat");
+    const listed = await say("list from Telegram", {
+      source: "telegram",
+      discordThreadId: "telegram:42",
+      connectionId: "telegram:1",
+      discordUserId: "42",
+    });
+    assert.equal(listed.replyTo?.conversation, "telegram:42");
+    assert.match(seen.at(-1)!, /\[Open work \(1\)/);
+    assert.match(listed.answer!, /w-1 Private plan: active/);
+  } finally {
+    await done();
+  }
+});
