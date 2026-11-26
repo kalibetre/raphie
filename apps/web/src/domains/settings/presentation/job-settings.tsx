@@ -48,12 +48,14 @@ export function JobSettings() {
   const [open, setOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [historyJobId, setHistoryJobId] = useState<string>();
-  const openRun = (sessionId: string) =>
+  // A run opens the chat at its message.
+  const openRun = (sessionId: string, turnId: string | null) =>
     void navigate({
       to: "/sessions/$sessionId",
       params: { sessionId },
       search: {
         bot: workspace.botId === "default" ? undefined : workspace.botId,
+        message: turnId ?? undefined,
       },
     });
   const [name, setName] = useState("");
@@ -147,7 +149,7 @@ export function JobSettings() {
             <Plus size={15} /> Create job
           </Button>
         }
-        note="Reminders created in chat reply in that conversation. Jobs created here keep their own conversation. The runtime must be running; tool actions still need approval."
+        note="Every run posts in the bot's chat, whether the job was made here or in the chat. The runtime must be running; tool actions still need approval."
       >
         {data.data.items.length ? (
           data.data.items.map((job) => (
@@ -162,18 +164,6 @@ export function JobSettings() {
                   ?.scrollIntoView({ block: "center" });
               }}
               onChange={(id, action) => void change(id, action)}
-              onOpen={(sessionId) =>
-                void navigate({
-                  to: "/sessions/$sessionId",
-                  params: { sessionId },
-                  search: {
-                    bot:
-                      workspace.botId === "default"
-                        ? undefined
-                        : workspace.botId,
-                  },
-                })
-              }
             />
           ))
         ) : (

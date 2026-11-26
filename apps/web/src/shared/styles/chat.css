@@ -693,28 +693,6 @@
   .context-ring[data-nearly-full] .context-ring-fill {
     stroke: var(--attention);
   }
-  /* In place of the composer, in a session kept from before chats. */
-  .history-notice {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    box-shadow: var(--shadow);
-    padding: 10px 10px 10px 14px;
-  }
-  .history-notice-icon {
-    flex: none;
-    color: var(--muted-foreground);
-  }
-  .history-notice-text {
-    flex: 1;
-    min-width: 0;
-    margin: 0;
-    font-size: 13px;
-    color: var(--muted-foreground);
-  }
   /* The message the draft will quote, above it. */
   .composer-quote {
     --quote-edge: var(--muted-foreground);

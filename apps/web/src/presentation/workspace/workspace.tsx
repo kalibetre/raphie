@@ -18,7 +18,6 @@ import {
 import { useHandoffs } from "../../domains/conversations/infrastructure/use-handoffs";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
-import { HistoryNotice } from "../../domains/conversations/presentation/sessions/history-notice";
 import { lastSessionKey } from "../../domains/conversations/presentation/sessions/last-session";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
@@ -570,14 +569,11 @@ export function Workspace({
                             handoffQuery.cancel.mutateAsync(id)
                           }
                           reveal={message}
-                          onQuote={
-                            conversation.history
-                              ? undefined
-                              : (next) =>
-                                  setQuoting({
-                                    ...next,
-                                    sessionId: conversation.sessionId,
-                                  })
+                          onQuote={(next) =>
+                            setQuoting({
+                              ...next,
+                              sessionId: conversation.sessionId,
+                            })
                           }
                         />
                       ) : (
@@ -589,81 +585,74 @@ export function Workspace({
                           }
                         />
                       )}
-                      {conversation?.history ? (
-                        <HistoryNotice onChat={() => select()} />
-                      ) : (
-                        <Composer
-                          key={`composer-${conversationId ?? "new"}`}
-                          handoffs={handoffs}
-                          mentionables={handoffQuery.data?.targets}
-                          handedOffBy={conversation?.handedOffBy}
-                          conversationId={conversationId}
-                          suggestion={suggestion}
-                          model={conversation?.model ?? data?.model ?? null}
-                          needsModel={!data?.model}
-                          usage={usage?.tokens ? usage : undefined}
-                          contextUsed={contextUsed}
-                          disabled={
-                            !connected ||
-                            !data?.model ||
-                            (!!conversationId && !conversation)
-                          }
-                          busy={busy}
-                          enabledPlugins={enabled}
-                          onStop={async () => {
-                            if (!conversationId) return;
-                            await api(
-                              `/api/sessions/${conversationId}/control`,
-                              {
-                                action: "stop",
+                      <Composer
+                        key={`composer-${conversationId ?? "new"}`}
+                        handoffs={handoffs}
+                        mentionables={handoffQuery.data?.targets}
+                        handedOffBy={conversation?.handedOffBy}
+                        conversationId={conversationId}
+                        suggestion={suggestion}
+                        model={conversation?.model ?? data?.model ?? null}
+                        needsModel={!data?.model}
+                        usage={usage?.tokens ? usage : undefined}
+                        contextUsed={contextUsed}
+                        disabled={
+                          !connected ||
+                          !data?.model ||
+                          (!!conversationId && !conversation)
+                        }
+                        busy={busy}
+                        enabledPlugins={enabled}
+                        onStop={async () => {
+                          if (!conversationId) return;
+                          await api(`/api/sessions/${conversationId}/control`, {
+                            action: "stop",
+                          });
+                          await refetch();
+                        }}
+                        onSend={send}
+                        quote={quote}
+                        onClearQuote={() => setQuoting(undefined)}
+                        onManageSkills={() =>
+                          void navigate({
+                            to: "/",
+                            search: {
+                              bot,
+                              view: "settings",
+                              section: "skills",
+                            },
+                          })
+                        }
+                        onChooseModel={async (model) => {
+                          if (!conversationId) return;
+                          await api(
+                            `/api/sessions/${conversationId}/model`,
+                            model,
+                          );
+                          await refetch();
+                        }}
+                        onModelSettings={() => {
+                          if (conversation)
+                            void navigate({
+                              to: "/sessions/$sessionId",
+                              params: { sessionId: conversation.sessionId },
+                              search: {
+                                bot,
+                                view: "settings",
+                                section: "models",
                               },
-                            );
-                            await refetch();
-                          }}
-                          onSend={send}
-                          quote={quote}
-                          onClearQuote={() => setQuoting(undefined)}
-                          onManageSkills={() =>
+                            });
+                          else
                             void navigate({
                               to: "/",
                               search: {
                                 bot,
                                 view: "settings",
-                                section: "skills",
+                                section: "models",
                               },
-                            })
-                          }
-                          onChooseModel={async (model) => {
-                            if (!conversationId) return;
-                            await api(
-                              `/api/sessions/${conversationId}/model`,
-                              model,
-                            );
-                            await refetch();
-                          }}
-                          onModelSettings={() => {
-                            if (conversation)
-                              void navigate({
-                                to: "/sessions/$sessionId",
-                                params: { sessionId: conversation.sessionId },
-                                search: {
-                                  bot,
-                                  view: "settings",
-                                  section: "models",
-                                },
-                              });
-                            else
-                              void navigate({
-                                to: "/",
-                                search: {
-                                  bot,
-                                  view: "settings",
-                                  section: "models",
-                                },
-                              });
-                          }}
-                        />
-                      )}
+                            });
+                        }}
+                      />
                     </div>
                   )}
                 </>

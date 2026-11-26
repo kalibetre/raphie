@@ -7,7 +7,6 @@ export function ScheduledJobCard({
   job,
   pending,
   onChange,
-  onOpen,
   onHistory,
 }: {
   job: ScheduledJob;
@@ -16,7 +15,6 @@ export function ScheduledJobCard({
     id: string,
     action: "enable" | "disable" | "remove" | "run",
   ) => void;
-  onOpen: (sessionId: string) => void;
   onHistory: () => void;
 }) {
   const once = job.everyMinutes === null;
@@ -75,15 +73,6 @@ export function ScheduledJobCard({
             onClick={() => onChange(job.id, job.enabled ? "disable" : "enable")}
           >
             {job.enabled ? "Pause" : "Resume"}
-          </Button>
-        )}
-        {job.sessionId && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onOpen(job.sessionId!)}
-          >
-            Open conversation
           </Button>
         )}
         <Button
