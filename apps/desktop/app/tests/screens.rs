@@ -6528,9 +6528,36 @@ fn a_work_item_is_opened_and_edited_in_a_dialog() {
     rt.update(|ui, _| ui.work_form.title = TextEdit::new("Flights to Porto"));
     settle(&mut rt);
     click(&mut rt, "rd-work-save");
+    // Only the title changed, so the bot's notes are not sent back.
     assert!(matches!(
         rt.state.sent.last(),
         Some(Command::ChangeWork { id, change, .. })
-            if id == "w-1" && change.title.as_deref() == Some("Flights to Porto")
+            if id == "w-1"
+                && change.title.as_deref() == Some("Flights to Porto")
+                && change.notes.is_none()
     ));
+    deliver(
+        &mut rt,
+        Event::WorkSaved {
+            bot_id: "default".into(),
+        },
+    );
+
+    // An edit that changes nothing sends nothing.
+    click(&mut rt, "rd-work-w-1-edit");
+    let sent = rt.state.sent.len();
+    click(&mut rt, "rd-work-save");
+    assert_eq!(rt.state.sent.len(), sent);
+    assert!(rt.find("rd-work-form").is_none());
+
+    // Too long to save, as the web's inputs don't allow it either.
+    click(&mut rt, "rd-work-new");
+    rt.update(|ui, _| ui.work_form.title = TextEdit::new("x".repeat(81)));
+    settle(&mut rt);
+    click(&mut rt, "rd-work-save");
+    assert_eq!(rt.state.sent.len(), sent);
+    assert_eq!(
+        element(&rt, "rd-work-form-error").text.as_deref(),
+        Some("A title can be at most 80 characters.")
+    );
 }
