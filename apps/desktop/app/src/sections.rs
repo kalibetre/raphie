@@ -44,13 +44,15 @@ pub enum BotSection {
     Channels,
     Sandbox,
     Workspace,
+    /// What the bot is keeping track of, open and done.
+    Work,
     Jobs,
     Activity,
 }
 
 impl BotSection {
     /// The pages the navigation lists, in its order.
-    pub const ALL: [BotSection; 11] = [
+    pub const ALL: [BotSection; 12] = [
         BotSection::Profile,
         BotSection::Providers,
         BotSection::Models,
@@ -60,6 +62,7 @@ impl BotSection {
         BotSection::Channels,
         BotSection::Sandbox,
         BotSection::Workspace,
+        BotSection::Work,
         BotSection::Jobs,
         BotSection::Activity,
     ];
@@ -77,6 +80,7 @@ impl BotSection {
             BotSection::Channels => "Channels",
             BotSection::Sandbox => "Sandbox",
             BotSection::Workspace => "Workspace",
+            BotSection::Work => "Work",
             BotSection::Jobs => "Scheduled jobs",
             BotSection::Activity => "Activity",
         }
@@ -96,6 +100,7 @@ impl BotSection {
             BotSection::Channels => "channels",
             BotSection::Sandbox => "sandbox",
             BotSection::Workspace => "workspace",
+            BotSection::Work => "work",
             BotSection::Jobs => "jobs",
             BotSection::Activity => "activity",
         }
@@ -150,8 +155,11 @@ impl BotSection {
             BotSection::Workspace => format!(
                 "The files {bot} keeps between conversations. Browse folders and download saved work."
             ),
+            BotSection::Work => {
+                format!("What {bot} is keeping track of for you, open and done.")
+            }
             BotSection::Jobs => format!(
-                "Give {bot} reminders and recurring work, with results saved in a conversation."
+                "Give {bot} reminders and recurring work, with each result posted in the chat."
             ),
             BotSection::Activity => {
                 format!("Recent activity from {bot}, across its conversations.")

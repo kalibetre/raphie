@@ -39,6 +39,7 @@ use crate::contracts::{AnswerSignInBody, ProviderSignIn, StartSignInBody};
 use crate::contracts::{ApprovalMode, ApprovalModeBody};
 use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
+use crate::contracts::{OpenWorkBody, WorkChange, WorkItem, WorkList};
 use crate::contracts::{OwnerProfile, SaveOwnerProfile};
 use crate::contracts::{PersonalityPreset, PersonalityPresetList};
 use crate::contracts::{SaveSkill, SkillDetail, SkillImport, SkillList, SkillSummary};
@@ -679,6 +680,47 @@ impl ApiClient {
             .post_json(&bot_path(bot_id, &path), &JobActionBody { action })
             .await?;
         Ok(list.items)
+    }
+
+    /// A bot's open work items, or with `closed` its closed ones, newest
+    /// activity first.
+    pub async fn work_items(&self, bot_id: &str, closed: bool) -> Result<Vec<WorkItem>, ApiError> {
+        let path = if closed {
+            "/api/work-items?status=closed"
+        } else {
+            "/api/work-items"
+        };
+        let list: WorkList = self.get_json(&bot_path(bot_id, path)).await?;
+        Ok(list.items)
+    }
+
+    /// Opens a work item for the bot, as the owner.
+    pub async fn open_work(
+        &self,
+        bot_id: &str,
+        title: &str,
+        notes: &str,
+    ) -> Result<WorkItem, ApiError> {
+        self.post_json(
+            &bot_path(bot_id, "/api/work-items"),
+            &OpenWorkBody { title, notes },
+        )
+        .await
+    }
+
+    /// Changes, closes or reopens one work item, as the owner.
+    pub async fn change_work(
+        &self,
+        bot_id: &str,
+        id: &str,
+        change: &WorkChange,
+    ) -> Result<WorkItem, ApiError> {
+        let path = format!("/api/work-items/{}", encode(id));
+        let request = self
+            .authorized(self.http.patch(self.origin.url(&bot_path(bot_id, &path))))
+            .header("x-raphie-client", "web")
+            .json(change);
+        read_json(send(request).await?).await
     }
 
     /// The bots this one can hand tasks to, and the tasks it handed off,

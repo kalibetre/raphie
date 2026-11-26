@@ -26,6 +26,7 @@ mod profile;
 mod providers;
 mod sandbox;
 mod skills;
+mod work;
 mod workspace;
 
 use rune::{El, Icon, ScrollSpec, col, icon, row, text};
@@ -72,6 +73,10 @@ pub fn settings(s: &Ui, page: &Page, look: &Look, overlays: &mut Vec<El>) -> El 
             bot_id,
             section: BotSection::Activity,
         } => activity::activity(s, bot_id, look),
+        Page::Bot {
+            bot_id,
+            section: BotSection::Work,
+        } => work::work(s, bot_id, look, overlays),
         Page::Bot {
             bot_id,
             section: BotSection::Jobs,
@@ -329,6 +334,7 @@ pub fn page_icon(page: &Page) -> &'static Icon {
             BotSection::Channels => &icons::MESSAGES_SQUARE,
             BotSection::Sandbox => &icons::BOX,
             BotSection::Workspace => &icons::FOLDER_OPEN,
+            BotSection::Work => &icons::LIST_CHECKS,
             BotSection::Jobs => &icons::CLOCK,
             BotSection::Activity => &icons::LIST_TREE,
         },

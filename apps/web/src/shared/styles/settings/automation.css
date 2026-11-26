@@ -162,6 +162,17 @@
   .automation-job .automation-actions {
     margin-top: 12px;
   }
+  /* A work item: its title, then its notes and facts, evenly spaced. */
+  .work-item .automation-job-heading {
+    margin-bottom: 6px;
+  }
+  .work-item .automation-prompt {
+    margin: 4px 0 8px;
+  }
+  /* What it waits on stands out from the rest of its notes. */
+  .work-item-waiting {
+    color: var(--attention);
+  }
   .automation-empty {
     padding: 20px;
     color: var(--muted-foreground);

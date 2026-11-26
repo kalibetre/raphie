@@ -16,6 +16,7 @@ use crate::contracts::AskAnswer;
 use crate::contracts::Attachment;
 use crate::contracts::ModelSelection;
 use crate::contracts::OwnerProfile;
+use crate::contracts::WorkItem;
 use crate::contracts::WorkspaceListing;
 use crate::contracts::{
     Account, ApprovalStatus, BotProfile, ChannelHomeSettings, ChannelSettings, HandoffList,
@@ -233,6 +234,23 @@ pub enum Event {
     },
     HandoffCancelFailed {
         id: String,
+        message: String,
+    },
+    /// A bot's work items, open and closed.
+    Work {
+        bot_id: String,
+        open: Vec<WorkItem>,
+        closed: Vec<WorkItem>,
+    },
+    WorkFailed {
+        bot_id: String,
+        message: String,
+    },
+    /// The owner's change to a work item went through; the lists follow.
+    WorkSaved {
+        bot_id: String,
+    },
+    WorkChangeFailed {
         message: String,
     },
     /// A bot's scheduled jobs.
@@ -597,9 +615,19 @@ pub enum SkillOutcome {
     Imported(Vec<String>),
 }
 
+/// A bot's work items: those still open, then those closed, each newest
+/// activity first.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct WorkLists {
+    pub open: Vec<WorkItem>,
+    pub closed: Vec<WorkItem>,
+}
+
 /// Something the UI should do once, beyond redrawing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
+    /// The owner's change to a work item went through: close its dialog.
+    WorkSaved,
     /// The message was admitted: empty the composer.
     ClearComposer,
     /// The session's model was changed: close the picker.
@@ -851,6 +879,14 @@ pub struct Model {
     pub cancelling_handoff: Option<String>,
     /// Why a cancel failed: the handoff, and the reason.
     pub handoff_error: Option<(String, String)>,
+    /// Each bot's work items, once loaded.
+    pub work: HashMap<String, WorkLists>,
+    /// The bot whose work items could not be loaded, and why.
+    pub work_error: Option<(String, String)>,
+    /// A work item is being opened or changed.
+    pub changing_work: bool,
+    /// Why the last change to a work item failed, until the next attempt.
+    pub work_change_error: Option<String>,
     /// Each bot's scheduled jobs, once loaded.
     pub jobs: HashMap<String, Vec<ScheduledJob>>,
     /// The bot whose jobs could not be loaded, and why.
@@ -1008,6 +1044,10 @@ impl Default for Model {
             handoffs: HashMap::new(),
             cancelling_handoff: None,
             handoff_error: None,
+            work: HashMap::new(),
+            work_error: None,
+            changing_work: false,
+            work_change_error: None,
             jobs: HashMap::new(),
             jobs_error: None,
             changing_job: false,
@@ -1331,6 +1371,31 @@ impl Model {
                 self.cancelling_handoff = None;
                 self.handoff_error = Some((id, message));
             }
+            Event::Work {
+                bot_id,
+                open,
+                closed,
+            } => {
+                if self
+                    .work_error
+                    .as_ref()
+                    .is_some_and(|(bot, _)| *bot == bot_id)
+                {
+                    self.work_error = None;
+                }
+                self.work.insert(bot_id, WorkLists { open, closed });
+            }
+            Event::WorkFailed { bot_id, message } => {
+                self.work_error = Some((bot_id, message));
+            }
+            Event::WorkSaved { .. } => {
+                self.changing_work = false;
+                return vec![Effect::WorkSaved];
+            }
+            Event::WorkChangeFailed { message } => {
+                self.changing_work = false;
+                self.work_change_error = Some(message);
+            }
             Event::Jobs { bot_id, items } => {
                 self.jobs_error = None;
                 self.jobs.insert(bot_id, items);
@@ -1348,9 +1413,8 @@ impl Model {
             Event::JobChanged { bot_id, items, ran } => {
                 self.changing_job = false;
                 if ran {
-                    self.job_message = Some(
-                        "Run queued. Its result will appear in the job's conversation.".to_owned(),
-                    );
+                    self.job_message =
+                        Some("Run queued. Its result will appear in the chat.".to_owned());
                 }
                 self.jobs.insert(bot_id, items);
             }
@@ -1770,6 +1834,16 @@ impl Model {
 
     /// The owner scheduled or changed a job. Returns false while another
     /// change is on its way.
+    /// Starts opening or changing a work item, unless one is on its way.
+    pub fn begin_change_work(&mut self) -> bool {
+        if self.changing_work {
+            return false;
+        }
+        self.changing_work = true;
+        self.work_change_error = None;
+        true
+    }
+
     pub fn begin_change_job(&mut self) -> bool {
         if self.changing_job {
             return false;

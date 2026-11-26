@@ -40,6 +40,7 @@ pub mod state;
 pub mod theme;
 pub mod view;
 pub mod widgets;
+pub mod work;
 
 use raphie_core::flavor::Flavor;
 use rune::{AppSpec, Key, KeyEvent, Tx};

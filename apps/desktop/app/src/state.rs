@@ -18,6 +18,7 @@ use raphie_core::contracts::{
 use raphie_core::contracts::{BotRef, HandedOffBy, Handoff, HandoffStatus};
 use raphie_core::contracts::{ProviderSignIn, SignInEvent, SignInStatus};
 use raphie_core::contracts::{Quote, QuoteAuthor, QuoteRef};
+use raphie_core::contracts::{WorkChange, WorkStatus};
 use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::{self, Announcement, Announcements, Item, Target};
@@ -52,6 +53,7 @@ use crate::profile::{NEW_BOT, ProfileDraft};
 use crate::sandbox::SandboxDraft;
 use crate::sections::{BotSection, Page};
 use crate::skills::{SkillEditor, SkillsMode, SkillsView};
+use crate::work::WorkForm;
 
 /// The fixture's web host: the default for a first launch from a checkout.
 /// The test fixture's web host (`bun run dev:web:fixture`), which the dev
@@ -442,6 +444,10 @@ pub struct Ui {
     pub job: JobForm,
     /// The frame clock when the Scheduled jobs page last asked for news.
     jobs_asked_at: f64,
+    /// The "New item" or "Edit item" dialog on Settings → Work.
+    pub work_form: WorkForm,
+    /// When the Work page last asked for its items, on the frame clock.
+    work_asked_at: f64,
     /// The frame clock when the Workspace page last asked for its folder.
     files_asked_at: f64,
     /// Settings → You: its form.
@@ -626,6 +632,8 @@ impl Ui {
             inspect_asked_at: 0.0,
             job: JobForm::new_at(0),
             jobs_asked_at: 0.0,
+            work_form: WorkForm::default(),
+            work_asked_at: 0.0,
             delegates_open: false,
             open_reports: HashSet::new(),
             open_summaries: HashSet::new(),
@@ -2022,6 +2030,13 @@ impl Ui {
                     bot_id: bot_id.clone(),
                 });
             }
+            if *section == BotSection::Work {
+                self.work_form = WorkForm::default();
+                self.model.work_change_error = None;
+                self.command(Command::LoadWork {
+                    bot_id: bot_id.clone(),
+                });
+            }
             if *section == BotSection::Jobs {
                 self.job = JobForm::new_at(now_ms());
                 self.model.job_message = None;
@@ -2985,6 +3000,102 @@ impl Ui {
         }
         if let Some(bot_id) = activity {
             self.command(Command::LoadBotActivity { bot_id });
+        }
+        true
+    }
+
+    /// The bot whose Work page is on screen.
+    fn work_bot(&self) -> Option<String> {
+        match &self.screen {
+            Screen::Settings(Page::Bot {
+                bot_id,
+                section: BotSection::Work,
+            }) => Some(bot_id.clone()),
+            _ => None,
+        }
+    }
+
+    /// Opens the dialog for a new item, or for editing the item `id`.
+    pub fn open_work_form(&mut self, id: Option<&str>) {
+        let item = id.and_then(|id| {
+            let bot_id = self.work_bot()?;
+            let lists = self.model.work.get(&bot_id)?;
+            lists.open.iter().find(|item| item.id == id).cloned()
+        });
+        if id.is_some() && item.is_none() {
+            return;
+        }
+        self.work_form = WorkForm::opened(item.as_ref());
+        self.model.work_change_error = None;
+    }
+
+    /// Closes the dialog, unless a save is on its way.
+    pub fn close_work_form(&mut self) {
+        if !self.model.changing_work {
+            self.work_form = WorkForm::default();
+            self.model.work_change_error = None;
+        }
+    }
+
+    /// Saves the dialog: a new item, or the edited title and notes.
+    pub fn save_work_form(&mut self) {
+        let Some(bot_id) = self.work_bot() else {
+            return;
+        };
+        if !self.work_form.is_complete() || !self.model.begin_change_work() {
+            return;
+        }
+        let title = self.work_form.title.text.trim().to_owned();
+        let notes = self.work_form.notes.text.trim().to_owned();
+        self.command(match self.work_form.id.clone() {
+            Some(id) => Command::ChangeWork {
+                bot_id,
+                id,
+                change: WorkChange {
+                    title: Some(title),
+                    notes: Some(notes),
+                    status: None,
+                },
+            },
+            None => Command::OpenWork {
+                bot_id,
+                title,
+                notes,
+            },
+        });
+    }
+
+    /// Marks an item done, drops it, or reopens it.
+    pub fn set_work_status(&mut self, id: &str, status: WorkStatus) {
+        let Some(bot_id) = self.work_bot() else {
+            return;
+        };
+        if self.model.begin_change_work() {
+            self.command(Command::ChangeWork {
+                bot_id,
+                id: id.to_owned(),
+                change: WorkChange {
+                    status: Some(status),
+                    ..WorkChange::default()
+                },
+            });
+        }
+    }
+
+    /// While the Work page shows, asks for its items again every few
+    /// seconds, so what the bot changes shows up; `clock` is the frame
+    /// clock in seconds. Returns true while the page shows.
+    pub fn refresh_work(&mut self, clock: f64) -> bool {
+        let Some(bot_id) = self.work_bot() else {
+            return false;
+        };
+        if clock - self.work_asked_at < JOBS_REFRESH {
+            return true;
+        }
+        self.work_asked_at = clock;
+        // Not while a change is on its way: its answer brings the lists.
+        if !self.model.changing_work {
+            self.command(Command::LoadWork { bot_id });
         }
         true
     }
@@ -4056,6 +4167,7 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
         | ui.refresh_sandbox(clock)
         | ui.watch_files(clock)
         | ui.refresh_jobs(clock)
+        | ui.refresh_work(clock)
         | ui.refresh_handoffs(clock)
         | ui.refresh_inspection(clock);
     if watching {
@@ -4136,6 +4248,10 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
                     if ui.model.bot_id.as_deref() == Some(bot_id.as_str()) {
                         ui.select_bot("default");
                     }
+                }
+                Effect::WorkSaved => {
+                    // The change went through: close the dialog if it is open.
+                    ui.work_form = WorkForm::default();
                 }
                 Effect::JobAdded => {
                     // The job is scheduled: close its dialog and empty it.

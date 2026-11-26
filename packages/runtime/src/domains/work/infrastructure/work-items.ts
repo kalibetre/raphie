@@ -9,7 +9,7 @@ import {
   type Tx,
 } from "@earendil-works/pi-durable";
 import { bool, obj, oneOf, opt, str } from "@earendil-works/pi-schema";
-import type { WorkItem, WorkStatus } from "@raphie/contracts";
+import type { WorkActor, WorkItem, WorkStatus } from "@raphie/contracts";
 
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
 import {
@@ -19,10 +19,12 @@ import {
 import { isPrivateDestination } from "../../channels/domain/binding.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import {
+  changeWork,
   clip,
   isOpen,
   LIMITS,
   listWork,
+  type WorkChange,
   workId,
   workLine,
 } from "../domain/work-item.ts";
@@ -61,6 +63,87 @@ export class WorkService {
   async get(id: string) {
     return (await this.state()).items.find((item) => item.id === id);
   }
+
+  /** The owner opens an item. */
+  async open(input: { title: string; notes?: string }) {
+    return this.app.root.commit((tx) => openWork(tx, input, "owner"), context);
+  }
+
+  /** The owner changes, closes or reopens an item. */
+  async change(id: string, change: WorkChange) {
+    return this.app.root.commit(
+      (tx) => changeWorkItem(tx, id, change, "owner"),
+      context,
+    );
+  }
+}
+
+/** A plain copy of an item read in a transaction, usable after it settles. */
+function detached(item: WorkItem): WorkItem {
+  return JSON.parse(JSON.stringify(item)) as WorkItem;
+}
+
+/** Opens an item as `by` opens it, or says why not. */
+async function openWork(
+  tx: Tx,
+  input: {
+    title: string;
+    status?: WorkStatus;
+    waitingOn?: string;
+    notes?: string;
+  },
+  by: WorkActor,
+  sourceTurnId?: string,
+): Promise<WorkItem | string> {
+  const title = clip(input.title, LIMITS.title);
+  if (!title) return "A work item needs a title.";
+  const state = await tx.doc(WorkItems);
+  const now = Date.now();
+  const status = input.status === "waiting" ? "waiting" : "active";
+  const item: WorkItem = {
+    id: workId(state.next),
+    title,
+    status,
+    ...(status === "waiting" && input.waitingOn
+      ? { waitingOn: clip(input.waitingOn, LIMITS.waitingOn) }
+      : {}),
+    ...(sourceTurnId ? { sourceTurnId } : {}),
+    notes: clip(input.notes ?? "", LIMITS.notes),
+    opened: { at: now, by },
+    updatedAt: now,
+  };
+  state.next += 1;
+  state.items.push(item);
+  record(await tx.doc(Activity), "work.opened", "Opened a work item", {
+    operationId: item.id,
+    details: { title: item.title, by },
+  });
+  return detached(item);
+}
+
+/** Changes an item as `by` changes it, or says why not. */
+async function changeWorkItem(
+  tx: Tx,
+  id: string,
+  change: WorkChange,
+  by: WorkActor,
+): Promise<WorkItem | string> {
+  const item = find(await tx.doc(WorkItems), id);
+  if (!item) return `No work item ${id}.`;
+  const was = item.status;
+  const refused = changeWork(item, change, by, Date.now());
+  if (refused) return refused;
+  if (isOpen(was) !== isOpen(item.status))
+    record(
+      await tx.doc(Activity),
+      isOpen(item.status) ? "work.reopened" : "work.closed",
+      isOpen(item.status) ? "Reopened a work item" : "Closed a work item",
+      {
+        operationId: item.id,
+        details: { title: item.title, status: item.status, by },
+      },
+    );
+  return detached(item);
 }
 
 /** Runs one change and stores its result under the tool call. */
@@ -169,33 +252,8 @@ export function createWorkTools() {
           mutate(api, ctx, async (tx) => {
             const chat = await chatTurn(tx, api);
             if (!chat) return { error: NOT_IN_CHAT };
-            const state = await tx.doc(WorkItems);
-            const now = Date.now();
-            const status: WorkStatus = args.status ?? "active";
-            const item: WorkItem = {
-              id: workId(state.next),
-              title: clip(args.title, LIMITS.title),
-              status,
-              ...(status === "waiting" && args.waitingOn
-                ? { waitingOn: clip(args.waitingOn, LIMITS.waitingOn) }
-                : {}),
-              ...(chat.turnId ? { sourceTurnId: chat.turnId } : {}),
-              notes: clip(args.notes ?? "", LIMITS.notes),
-              opened: { at: now, by: "bot" },
-              updatedAt: now,
-            };
-            state.next += 1;
-            state.items.push(item);
-            record(
-              await tx.doc(Activity),
-              "work.opened",
-              "Opened a work item",
-              {
-                conversationId: api.conversationId,
-                operationId: item.id,
-                details: { title: item.title },
-              },
-            );
+            const item = await openWork(tx, args, "bot", chat.turnId);
+            if (typeof item === "string") return { error: item };
             return JSON.stringify({ opened: true, item: workLine(item) });
           }),
       }),
@@ -215,23 +273,9 @@ export function createWorkTools() {
         execute: (args, api, ctx) =>
           mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
-            const item = find(await tx.doc(WorkItems), args.id);
-            if (!item) return { error: `No work item ${args.id}.` };
-            if (!isOpen(item.status))
-              return {
-                error: `${item.id} is closed. Open a new item if the work starts again.`,
-              };
-            const now = Date.now();
-            if (args.title) item.title = clip(args.title, LIMITS.title);
-            if (args.status) item.status = args.status;
-            if (item.status === "active") delete item.waitingOn;
-            else if (args.waitingOn !== undefined)
-              item.waitingOn = clip(args.waitingOn, LIMITS.waitingOn);
-            if (args.notes !== undefined)
-              item.notes = clip(args.notes, LIMITS.notes);
-            if (args.result)
-              item.result = { text: clip(args.result, LIMITS.result), at: now };
-            item.updatedAt = now;
+            const { id: itemId, ...change } = args;
+            const item = await changeWorkItem(tx, itemId, change, "bot");
+            if (typeof item === "string") return { error: item };
             return JSON.stringify({ updated: true, item: workLine(item) });
           }),
       }),
@@ -248,27 +292,13 @@ export function createWorkTools() {
         execute: (args, api, ctx) =>
           mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
-            const item = find(await tx.doc(WorkItems), args.id);
-            if (!item) return { error: `No work item ${args.id}.` };
-            if (!isOpen(item.status))
-              return { error: `${item.id} is already ${item.status}.` };
-            const now = Date.now();
-            item.status = args.outcome;
-            delete item.waitingOn;
-            if (args.result)
-              item.result = { text: clip(args.result, LIMITS.result), at: now };
-            item.updatedAt = now;
-            item.closed = { at: now, by: "bot" };
-            record(
-              await tx.doc(Activity),
-              "work.closed",
-              "Closed a work item",
-              {
-                conversationId: api.conversationId,
-                operationId: item.id,
-                details: { title: item.title, outcome: args.outcome },
-              },
+            const item = await changeWorkItem(
+              tx,
+              args.id,
+              { status: args.outcome, result: args.result },
+              "bot",
             );
+            if (typeof item === "string") return { error: item };
             return JSON.stringify({ closed: true, item: workLine(item) });
           }),
       }),

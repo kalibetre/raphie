@@ -139,6 +139,8 @@ pub const SCENES: &[Scene] = &[
     ("settings-memories-editing", settings_memories_editing),
     ("settings-memories-search", settings_memories_search),
     ("settings-memories-empty", settings_memories_empty),
+    ("settings-work", settings_work),
+    ("settings-work-edit", settings_work_edit),
     ("settings-jobs", settings_jobs),
     ("settings-jobs-create", settings_jobs_create),
     ("settings-jobs-empty", settings_jobs_empty),
@@ -958,6 +960,69 @@ fn open_jobs(ui: &mut Ui, jobs: Option<Vec<ScheduledJob>>, runs: Option<Paged<Jo
             page,
         });
     }
+}
+
+/// A made-up bot's work items: two open, two closed.
+pub fn work_items() -> raphie_core::model::WorkLists {
+    let item = |value: serde_json::Value| -> raphie_core::contracts::WorkItem {
+        serde_json::from_value(value).expect("the scene's work items match the contract")
+    };
+    raphie_core::model::WorkLists {
+        open: vec![
+            item(json!({
+                "id": "w-2", "title": "Venue research for the team offsite", "status": "active",
+                "notes": "Shortlist of five venues in Lisbon and Porto with room for 30, catering and a meeting room. Checking availability for the second week of December.",
+                "result": { "text": "Three venues have the second week free.", "at": 1_794_650_000_000_i64 },
+                "opened": { "at": 1_794_600_000_000_i64, "by": "bot" },
+                "updatedAt": 1_794_650_000_000_i64,
+            })),
+            item(json!({
+                "id": "w-1", "title": "Flights to Lisbon", "status": "waiting",
+                "waitingOn": "you to pick a date",
+                "notes": "Two direct options for the first week of December. Prices hold until Friday.",
+                "opened": { "at": 1_794_500_000_000_i64, "by": "bot" },
+                "updatedAt": 1_794_640_000_000_i64,
+            })),
+        ],
+        closed: vec![
+            item(json!({
+                "id": "w-4", "title": "Book a dentist appointment", "status": "dropped",
+                "notes": "",
+                "opened": { "at": 1_794_400_000_000_i64, "by": "owner" },
+                "updatedAt": 1_794_450_000_000_i64,
+                "closed": { "at": 1_794_450_000_000_i64, "by": "owner" },
+            })),
+            item(json!({
+                "id": "w-3", "title": "Renew passport", "status": "done",
+                "notes": "",
+                "result": { "text": "Appointment booked for 3 December.", "at": 1_794_300_000_000_i64 },
+                "opened": { "at": 1_794_200_000_000_i64, "by": "bot" },
+                "updatedAt": 1_794_300_000_000_i64,
+                "closed": { "at": 1_794_300_000_000_i64, "by": "bot" },
+            })),
+        ],
+    }
+}
+
+/// Settings → Work with open and closed items.
+pub fn settings_work(ui: &mut Ui) {
+    settings_account(ui);
+    ui.open_settings(Some(Page::Bot {
+        bot_id: "default".into(),
+        section: BotSection::Work,
+    }));
+    let lists = work_items();
+    ui.model.apply(Event::Work {
+        bot_id: "default".into(),
+        open: lists.open,
+        closed: lists.closed,
+    });
+}
+
+/// Work with an item open in the "Edit item" dialog.
+pub fn settings_work_edit(ui: &mut Ui) {
+    settings_work(ui);
+    ui.open_work_form(Some("w-1"));
 }
 
 /// Settings → Scheduled jobs with three jobs and their recent runs.

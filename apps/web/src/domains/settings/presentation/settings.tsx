@@ -30,6 +30,7 @@ import {
   type SkillView,
 } from "./skill-settings";
 import { TelemetrySettings } from "./telemetry-settings";
+import { WorkSettings } from "./work-settings";
 import { WorkspaceFiles } from "./workspace-files";
 
 export {
@@ -131,6 +132,8 @@ export function Settings({
           <SandboxSettings onBrowse={() => onParent("workspace")} />
         ) : section === "workspace" ? (
           <WorkspaceFiles onSandbox={() => onParent("sandbox")} />
+        ) : section === "work" ? (
+          <WorkSettings bot={name} />
         ) : section === "jobs" ? (
           <JobSettings />
         ) : section === "memory" ? (
