@@ -62,6 +62,7 @@ export function Workspace({
   view,
   section = "bot",
   skill,
+  message,
 }: {
   sessionId?: string;
   legacyConversationId?: number;
@@ -69,6 +70,8 @@ export function Workspace({
   section?: Section;
   /** A skill to open when `section` is Skills. */
   skill?: string;
+  /** The turn whose message the chat opens at, as an inbox entry links. */
+  message?: string;
 }) {
   const { workspace } = useBackend();
   const api = workspace.api;
@@ -105,11 +108,12 @@ export function Workspace({
   const notifications = notificationItems(
     notificationBots,
     inbox.byBot,
-    inbox.unread,
     jobNotifications.entries,
   );
+  // Approvals, and every job run not yet dismissed, including those past
+  // the loaded page.
   const notificationCount =
-    notifications.items.length +
+    notifications.length +
     jobNotifications.count -
     jobNotifications.entries.length;
   const botProfile = inbox.bots.data?.items.find(
@@ -494,14 +498,17 @@ export function Workspace({
               )}
               {listScreen ? null : view === "notifications" ? (
                 <Notifications
-                  items={notifications.items}
+                  items={notifications}
                   jobs={jobNotifications}
                   count={notificationCount}
-                  onOpen={(botId, id) =>
+                  onOpen={(botId, id, turnId) =>
                     void navigate({
                       to: "/sessions/$sessionId",
                       params: { sessionId: id },
-                      search: { bot: botId === "default" ? undefined : botId },
+                      search: {
+                        bot: botId === "default" ? undefined : botId,
+                        message: turnId,
+                      },
                     })
                   }
                 />
@@ -562,6 +569,7 @@ export function Workspace({
                           onCancelHandoff={(id) =>
                             handoffQuery.cancel.mutateAsync(id)
                           }
+                          reveal={message}
                           onQuote={
                             conversation.history
                               ? undefined

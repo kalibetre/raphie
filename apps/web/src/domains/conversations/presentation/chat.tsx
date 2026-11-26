@@ -7,7 +7,7 @@ import {
   CornerUpRight,
   ListEnd,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -37,7 +37,7 @@ import {
   remarkMentions,
   remarkSkills,
 } from "./handoffs/mention-markdown";
-import { messageId, QuoteAction, QuoteBar } from "./quote";
+import { messageId, QuoteAction, QuoteBar, showMessage } from "./quote";
 import { SelfUpdateNotes } from "./self-update-notes";
 import { ShownCard } from "./shown-card";
 
@@ -89,6 +89,7 @@ export function Chat({
   skills = noSkills,
   author,
   onQuote,
+  reveal,
 }: {
   /** The bot replying here: its name and avatar sign each reply. */
   author: { name: string; avatar: ReactNode };
@@ -105,6 +106,8 @@ export function Chat({
   skills?: readonly string[];
   /** Quotes a message in the next one the owner sends. */
   onQuote?: (quote: Quote) => void;
+  /** A turn whose message to bring into view once it is shown. */
+  reveal?: string;
 }) {
   const mentions = useMemo(
     () => ({
@@ -154,6 +157,13 @@ export function Chat({
     threadId: conversationId,
   });
   const turns = state.turns.filter((t) => t.conversationId === conversationId);
+  // Brought into view once, when its message first shows.
+  const revealed = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!reveal || revealed.current === reveal) return;
+    if (showMessage(reveal, "bot") || showMessage(reveal, "owner"))
+      revealed.current = reveal;
+  }, [reveal, messages.length]);
   const steps = useMemo(() => {
     const approvals = state.toolApprovals.filter(
       (a) => a.conversationId === conversationId,

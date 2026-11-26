@@ -8,13 +8,17 @@ import { sessionPreview } from "../application/session-summaries";
 export const messageId = (turnId: string, author: Quote["author"]) =>
   `message-${turnId}-${author}`;
 
-/** Scrolls to the quoted message and marks it briefly; nothing if it is not loaded. */
-function show(quote: Quote) {
-  const target = document.getElementById(messageId(quote.turnId, quote.author));
-  if (!target) return;
+/**
+ * Scrolls to a message and marks it briefly. Returns whether it was shown:
+ * nothing happens for a message that is not loaded.
+ */
+export function showMessage(turnId: string, author: Quote["author"]) {
+  const target = document.getElementById(messageId(turnId, author));
+  if (!target) return false;
   target.scrollIntoView({ block: "center", behavior: "smooth" });
   target.dataset.quoted = "true";
   window.setTimeout(() => delete target.dataset.quoted, 1600);
+  return true;
 }
 
 /**
@@ -36,7 +40,7 @@ export function QuoteBar({
       data-author={quote.author}
       title={quote.excerpt}
       aria-label={`Quoting ${who}: ${quote.excerpt}. Show the message`}
-      onClick={() => show(quote)}
+      onClick={() => showMessage(quote.turnId, quote.author)}
     >
       <strong className="message-quote-author">{who}</strong>
       <span className="message-quote-excerpt">
