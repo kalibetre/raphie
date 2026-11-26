@@ -1,6 +1,6 @@
 # Raphie
 
-Raphie assists its owner through conversations and connected actions. These terms
+Raphie assists its owner through chats with its bots and connected actions. These terms
 apply consistently to the web workspace and the agent runtime.
 
 ## Language
@@ -19,7 +19,7 @@ personality and instructions, the owner profile, and its
 skills. Each change
 is saved at once and can be undone.
 
-**Instructions**: What a bot follows in every conversation about how to
+**Instructions**: What a bot follows in every turn about how to
 work: what the owner wants done every time, and how to use its tools. Raphie's
 instructions for every bot cover the tools every bot has; they ship with each
 release and nobody edits them. Each bot's own, kept in its profile, start
@@ -54,13 +54,46 @@ bot and the session that requested it.
 **Compute lease**: Temporary, exclusive use of native execution capacity for a
 bot's work.
 
-**Session**: A durable conversation with its own identity and ordered history,
-belonging to one bot, independent of the interface through which the owner
-participates.
-_Avoid_: Chat as a synonym for a single message or a temporary browser connection.
+**Chat**: The one ongoing exchange between the owner and a bot, like a direct
+message with a teammate. Every client and every private channel chat with that
+bot shows the same chat; the owner never starts, lists or archives chats. A
+channel group has its own chat with the bot, because others read it.
+_Avoid_: Conversation, which suggests the owner opens and juggles many; chat
+as a synonym for a single message or a temporary browser connection.
+
+**Session**: A bot's model context with its own ordered history: the one
+behind a chat, or one the bot runs in the background for longer work. The
+owner follows background work through the chat, never by opening its session.
+Sessions from before chats existed remain as read-only history.
+_Avoid_: Conversation; session as something the owner picks or starts.
+
+**Work item**: Something a bot is keeping track of for longer than one turn:
+a request with follow-ups, a scheduled job, or a handoff it received. It has a
+title, a status, notes and its latest result, and the bot keeps its list of
+open work items in mind in every turn of the chat. The bot opens and closes
+work items itself; the owner can also open, rename, close or drop one. Work
+that needs a background session keeps that one session for as long as the item
+is open, so follow-ups keep its context. Requests settled in one turn never
+become work items. The owner mostly asks the bot about its work items; they
+are also listed on the bot's Work page, never beside the chat.
+_Avoid_: Task, which named handoffs before; thread; conversation.
+
+**Rewind**: Taking a chat back to just before one of the owner's messages,
+to edit and send it again. Only the chat goes back: the later messages stay in
+the transcript marked as rewound, and the bot is told what they did outside
+the chat (actions taken, work items opened, jobs scheduled) so it does not
+repeat them. A rewind can be undone.
+_Avoid_: Undo, which suggests effects outside the chat are reversed.
+
+**Reset** (of a bot): Returning a bot to new: its chat, work items,
+scheduled jobs and memory are cleared, while its configuration and workspace
+files are kept. The cleared chat and work items stay as read-only history;
+memory is deleted.
+_Avoid_: Clear chat, new conversation.
 
 **Turn**: One admitted message and the agent work that answers it: usually the
-owner's, but also a scheduled job's prompt or another bot's handoff. A turn may
+owner's in a chat, but also a scheduled job's prompt or another bot's handoff
+in a work item's session. A turn may
 include several model responses and tool actions before it finishes.
 
 **Summary** (of earlier messages): What a session's model reads in place of
@@ -69,10 +102,12 @@ The transcript keeps every message; only the model's context is shortened.
 Pi calls the step compaction.
 _Avoid_: Memory, which is what a bot keeps across sessions.
 
-**Handoff**: A task one bot gives another of the owner's bots, with the brief,
-its follow-ups and the results that come back. The receiving bot works on
-it in its own session, which only the sending bot directs. A handoff never
-carries the owner's authority.
+**Handoff**: A work item one bot gives another of the owner's bots, with the
+brief, its follow-ups and the results that come back. It appears among the
+receiving bot's work items, marked with the sender, and the receiving bot
+works on it in the background; its chat with the owner shows only a note.
+Only the sending bot directs it, though the owner may write to it. A handoff
+never carries the owner's authority.
 _Avoid_: Delegation or bot message as names for it.
 
 **Approval**: An owner decision about an exact proposed action and its arguments.
@@ -89,11 +124,11 @@ drawn by the client from a fixed set of parts. A card is a snapshot of what the 
 settles nothing and takes no input.
 _Avoid_: View, which names a read model; widget.
 
-**Command permission mode**: A conversation's Ask or Full access setting for
+**Command permission mode**: A bot's Ask or Full access setting for
 workspace command tools. It does not authorize MCP calls or change sandbox limits.
 
-**Command session grant**: Permission to repeat a command tool's exact arguments
-within the same bot and conversation, until revoked. It persists across restart
+**Command grant**: Permission to repeat a command tool's exact arguments
+for the same bot, until revoked. It persists across restart
 and does not authorize other commands or MCP calls.
 
 **Action**: A proposed or attempted effect in a connected service. An uncertain
@@ -115,7 +150,7 @@ supports built-in SQLite evidence and Hindsight; Honcho and Markdown remain
 planned. Switching backends preserves data without copying or merging it.
 
 **Reflection**: Reasoning from retained evidence, with support and uncertainty.
-Built-in memory supplies evidence for the conversation model to synthesize;
+Built-in memory supplies evidence for the bot's model to synthesize;
 Hindsight can supply provider reflection. An inferred reflection is not a new
 confirmed fact unless explicitly retained as such.
 
@@ -125,9 +160,9 @@ with Raphie, such as Discord or Telegram.
 **Client**: An application through which the owner interacts with Raphie, such as
 the web workspace, a desktop application, or a CLI.
 
-**Channel binding**: The association between an external messaging conversation
-and a Raphie session. A binding identifies where messages belong; it does not
-imply that the session is shared with other conversations.
+**Channel binding**: The association between an external messaging chat and a
+bot's chat: a private chat joins the owner's chat with that bot, and a group
+gets the group's own chat. A binding identifies where messages belong.
 
 **Actor**: The person making a request or approval decision. Using a different
 client or channel does not change that person's authority.
