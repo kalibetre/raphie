@@ -86,7 +86,7 @@ Open **Settings**, choose the bot, then **Channels**. Under **Home channel**, ch
 - Replies at home are labelled "Scheduled: job name" and use the channel's normal [delivery](/guides/telegram/#delivery-limits-and-recovery), including chunking and retries.
 - The destination is fixed when each run starts. Changing home affects later runs only.
 - If home is disconnected, disabled or its account was revoked, runs stay web-only. Raphie does not fall back to another channel or resend missed notifications later.
-- Replying in the home chat continues that channel's own session, not the job's conversation.
+- Replying in a private home chat writes in the bot's [chat](/guides/conversations/); replying in a home group continues that group's session. Neither continues the job's conversation.
 - Approvals for a scheduled run are decided in the web workspace. Home receives only an "Approval needed" notice.
 
 :::caution

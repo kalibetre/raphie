@@ -21,7 +21,7 @@ Only Telegram accounts you pair with a one-time code can talk to the bot. Anyone
 2. In Raphie, open **Settings**, choose the bot, then **Channels**. Under **Telegram**, choose **Connect**, paste the token, and choose **Save and connect**.
 3. Once it shows as connected, choose **Create pairing code**. The code looks like `ABCDE-FGHJK`.
 4. Open a **private** chat with your Telegram bot and send `/pair ABCDE-FGHJK`. The chat confirms, and your numeric Telegram user ID appears under **Verified accounts**.
-5. Send a message. It starts a conversation, marked with a chat icon in the web workspace's conversation list.
+5. Send a message. It goes to the bot's [chat](/guides/conversations/), the same one you see in the web workspace and the desktop app.
 
 </Steps>
 
@@ -44,7 +44,7 @@ Telegram usernames can change hands, so Raphie trusts only the numeric user ID T
 - Pair only in a private chat. Codes sent in groups are never accepted.
 - An unpaired private chat gets a refusal explaining how to pair, at most once every ten minutes per chat. Its messages never reach a model, memory or the workspace.
 
-You can verify several accounts. Each gets its own private chat, binding and session.
+Your private chat with the bot is its one chat with you: what you write from Telegram shows in the web workspace too, and each reply goes back where its message came from. You can verify several accounts; each verified account is you, so each private chat joins the same chat.
 
 ## Groups and supergroups
 
@@ -118,7 +118,7 @@ When a bot needs you to decide something, its [question](/guides/conversations/#
 | Forum topics                                         | A notice in the topic; no turn starts                        |
 | Broadcast channels and anonymous admin posts         | Ignored                                                      |
 | Webhooks                                             | Raphie uses long polling only                                |
-| Linking a Telegram chat to an existing web session   | Each chat has its own session                                |
+| Linking a group to the bot's chat                    | Each group has its own session                               |
 
 ## Security notes
 

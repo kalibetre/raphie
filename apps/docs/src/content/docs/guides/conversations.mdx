@@ -1,13 +1,13 @@
 ---
-title: Conversations
-description: Find your way around the web workspace, send messages, choose models, follow progress and decide on tool requests.
+title: Chat
+description: Find your way around the web workspace, chat with a bot, choose models, follow progress and decide on tool requests.
 sidebar:
   order: 1
 ---
 
-The web workspace is the browser app where you talk to your bots. Pick a bot in the sidebar, type in the composer, and the reply streams in as the bot works; tool steps and approval requests appear inline in the same conversation.
+The web workspace is the browser app where you talk to your bots. Each bot has one **chat** with you, like a direct message with a teammate: pick the bot in the sidebar, type in the composer, and the reply streams in as the bot works; tool steps and approval requests appear inline in the chat.
 
-Every conversation is a durable **session** stored by the runtime, not the browser. Closing the tab never cancels work, and the session looks the same from the desktop app or a channel.
+The chat is stored by the runtime, not the browser. Closing the tab never cancels work, and the chat is the same in the desktop app and in your private Telegram or Discord chat with the bot.
 
 Its address depends on how you installed Raphie:
 
@@ -19,40 +19,37 @@ Its address depends on how you installed Raphie:
 
 `raphie port` prints the web port of the install on this machine. A user install made before ports were saved keeps `4320`. From another computer, use the `https://` address from [remote access](/operate/remote-access/).
 
-## Sessions
+## Your team and the chat
 
-| Where                | What it does                                                                                                                                                                                                                                                                           |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sidebar, top         | Conversations waiting on you, from every bot: an approval to give or a question to answer. Choose one to open it.                                                                                                                                                                      |
-| **Your team**        | Your bots, each with what it is doing: **Needs you**, **Needs setup**, **Working**, new replies or **Available**. Choosing one resumes the conversation you last had open with it in this browser. **Add a teammate** opens the flow that [creates a bot](/guides/bots/#create-a-bot). |
-| **With** _bot_       | The selected bot's conversations, with search and an **Approvals** filter. Those with new replies come first, then the rest, each most recent first. The pen icon beside the heading starts a new one.                                                                                 |
-| Sidebar, bottom      | Where Raphie runs (**This computer**, or the host's name) and the gear that opens Settings. **Reconnecting…** shows while the connection is down.                                                                                                                                      |
-| **Archive**          | The box icon on a conversation while you point at it, or in the title bar of an open one. Archived conversations are under **Settings → Archived**.                                                                                                                                    |
-| **New conversation** | The pen icon in the title bar also starts an empty session with the current bot.                                                                                                                                                                                                       |
-| Notifications (bell) | Replies, approval requests and finished scheduled jobs from every bot in one place.                                                                                                                                                                                                    |
+| Where                | What it does                                                                                                                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar, top         | Requests waiting on you, from every bot: an approval to give or a question to answer. Choose one to open it.                                                                                                                       |
+| **Your team**        | Your bots, each with what it is doing: **Needs you**, **Needs setup**, **Working**, new replies or **Available**. Choosing one opens its chat. **Add a teammate** opens the flow that [creates a bot](/guides/bots/#create-a-bot). |
+| Sidebar, bottom      | Where Raphie runs (**This computer**, or the host's name) and the gear that opens Settings. **Reconnecting…** shows while the connection is down.                                                                                  |
+| Notifications (bell) | Replies, approval requests and finished scheduled jobs from every bot in one place.                                                                                                                                                |
 
-On a phone the sidebar is the home screen, at full width. Opening one fills the screen; the arrow at the top left goes back to the list.
+On a phone the sidebar is the home screen, at full width. Choosing a bot fills the screen with its chat; the arrow at the top left goes back to your team.
 
-A new conversation opens on the bot's empty desk: **I'm ready when you are.** with four things to ask, such as a morning briefing or research. Choosing one puts the request in the composer to finish and send; nothing is sent until you send it.
+A bot you have not talked to yet opens on its empty desk: **I'm ready when you are.** with four things to ask, such as a morning briefing or research. Choosing one puts the request in the composer to finish and send; nothing is sent until you send it. Your first message starts the chat.
 
-Each session has its own link, `/sessions/<id>`. Links to a bot other than the default carry `?bot=<id>`, so a bookmarked session always opens with the right bot.
+There is no new conversation: you keep talking to the bot in its one chat. When the chat grows long, the bot reads a [summary of earlier messages](#long-chats) in their place.
 
 Read state is shared through the runtime: a reply you read on the desktop app is marked read here too.
 
-### Archiving
+### Conversations from before chats
 
-Archiving puts a conversation away without deleting anything. It leaves the sidebar and the notification counts. **Settings → Archived**, under each bot, lists that bot's archived conversations, most recent first, with a search box for titles. Choosing one opens it, marked **Archived** beside its title; the title bar's icon, now **Unarchive**, brings it back, as does **Unarchive** on its row in Settings. A new message also brings it back, whether you send it from an app, a channel such as Telegram sends it, or a scheduled job runs in it. Conversations cannot be deleted.
+Conversations started before bots had one chat are kept as history. The most recent one you started from an app became the bot's chat; the others still open from their links, such as a memory's source or a scheduled job's run, with **This conversation is from before chats. It's kept as history.** where the composer was. **Go to the chat** takes you back. Nothing in them is deleted, and you can no longer write in them.
 
 ## The composer
 
-| Control       | Use                                                                                                                                |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Text box      | Up to 4,000 characters. **Enter** sends; **Shift+Enter** adds a line.                                                              |
-| Attach files  | Up to four files per message. See [attachments](/guides/attachments/).                                                             |
-| Model picker  | The model for this session. See [choosing a model](#choosing-a-model).                                                             |
-| Permissions   | **Ask** (the default) or **Full access** for workspace commands and MCP tools. See [approvals](#tool-approvals).                   |
-| Context donut | How full the model's context is. Hover it for the numbers, and the tokens and cost of the session so far; it turns amber past 80%. |
-| Send / Stop   | Send turns into Stop while the bot is working and the draft is empty. With text in the draft, **Stop task** is under the ⋯ menu.   |
+| Control       | Use                                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Text box      | Up to 4,000 characters. **Enter** sends; **Shift+Enter** adds a line.                                                            |
+| Attach files  | Up to four files per message. See [attachments](/guides/attachments/).                                                           |
+| Model picker  | The model for this chat. See [choosing a model](#choosing-a-model).                                                              |
+| Permissions   | **Ask** (the default) or **Full access** for workspace commands and MCP tools. See [approvals](#tool-approvals).                 |
+| Context donut | How full the model's context is. Hover it for the numbers, and the tokens and cost of the chat so far; it turns amber past 80%.  |
+| Send / Stop   | Send turns into Stop while the bot is working and the draft is empty. With text in the draft, **Stop task** is under the ⋯ menu. |
 
 ### Commands and skills
 
@@ -60,7 +57,6 @@ Type **/** at the start of the draft for a menu of commands and the bot's [skill
 
 | Entry           | Does                                                                        |
 | --------------- | --------------------------------------------------------------------------- |
-| `/new`          | Starts a new conversation with this bot                                     |
 | `/model`        | Opens the model picker                                                      |
 | `/stop`         | Stops the reply in progress (only while the bot is working)                 |
 | `/handoff`      | Writes `@` so you can choose a bot to [hand the task to](/guides/handoffs/) |
@@ -76,9 +72,9 @@ Stopping withdraws queued messages, marks the interrupted reply as stopped and e
 
 The model picker lists models from the providers connected to this bot, with search, family filters and favourites. Favourites are kept in this browser.
 
-- Choosing **before** the first message sets the new session's model.
-- Choosing **later** changes only this session, and only while it is idle.
-- A session keeps its model across restarts and when you change the bot's default under **Settings → Models**.
+- Choosing **before** the first message sets the chat's model.
+- Choosing **later** changes the chat's model, while the bot is idle.
+- The chat keeps its model across restarts and when you change the bot's default under **Settings → Models**.
 
 If the bot has no provider yet, the workspace prompts you to connect one; see [first run](/start/first-run/).
 
@@ -143,26 +139,26 @@ Telegram and Discord cannot draw a card, so there it is added to the reply as a 
 The bot copies links from what its tools returned. Raphie checks that a link is a web address, not that it leads where the row says, so glance at the address before you sign in anywhere.
 :::
 
-## Long conversations
+## Long chats
 
-A session can go on as long as you like. When it grows close to the size the model can read at once, the bot summarizes its earlier messages and reads the summary instead of them from then on. Its most recent messages stay word for word.
+A chat can go on as long as you like. When it grows close to the size the model can read at once, the bot summarizes its earlier messages and reads the summary instead of them from then on. Its most recent messages stay word for word.
 
-- **When:** a summary starts in the background once the conversation fills most of the model's context window (about 154k tokens of a 200k window), and the reply waits for one only when it is nearly full (about 184k). If the provider still rejects a request as too long, the bot summarizes and tries again. A model with no known context window is summarized only after such a rejection.
+- **When:** a summary starts in the background once the chat fills most of the model's context window (about 154k tokens of a 200k window), and the reply waits for one only when it is nearly full (about 184k). If the provider still rejects a request as too long, the bot summarizes and tries again. A model with no known context window is summarized only after such a rejection.
 - **What you see:** while a reply waits for a summary, it says **Summarizing earlier messages…**. Afterwards a line above your message reads **Earlier messages summarized**; **View summary** opens what the bot now reads. The desktop app shows the same.
 - **What stays:** your transcript keeps every message, tool step and reply. Only the model's context is shortened.
-- **What it costs:** the summary is one more call to the session's model, about the size of the conversation, and that turn can't read the earlier messages from the provider's prompt cache.
+- **What it costs:** the summary is one more call to the chat's model, about the size of the chat, and that turn can't read the earlier messages from the provider's prompt cache.
 
 A summary is a record of what was said, not new instructions. Whatever it says another bot, a tool or the web wrote is still data, and it never grants permissions or approves a tool call.
 
 ## Questions from a bot
 
-When a bot needs you to decide something before it can go on, it asks with buttons instead of writing the question out. The turn waits, and **Waiting for your answer…** shows above the question; in the conversation list the session reads **Needs your answer**.
+When a bot needs you to decide something before it can go on, it asks with buttons instead of writing the question out. The turn waits, and **Waiting for your answer…** shows above the question; at the top of the sidebar it shows as _bot_ **has a question**.
 
 - **Pick an answer** with one press. Answers that carry details, such as a time and a place, show as rows.
 - **Answer in your own words** opens a field for anything the buttons don't cover.
 - **Before something that can't be taken back**, such as deleting or sending, the action itself is the red button and the way out sits beside it.
 
-Afterwards the question stays in the conversation with what you answered. A question waits an hour; after that, or if you stop the turn, the bot goes on without an answer and says what it still needs.
+Afterwards the question stays in the chat with what you answered. A question waits an hour; after that, or if you stop the turn, the bot goes on without an answer and says what it still needs.
 
 When you wrote from Telegram or Discord, the question also arrives there, with a button per answer. Only you can press them, in the chat you wrote from; once answered, the message shows your answer and loses its buttons. To answer in your own words, use the web workspace or the desktop app. An answer from any of them settles the question everywhere.
 
@@ -172,15 +168,15 @@ A turn started by a schedule, by another bot or in a group chat has nobody to pr
 
 When a bot wants to run something that needs your say-so, the turn pauses and an approval card shows the exact tool and arguments.
 
-| Choice                  | Effect                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Reject**              | The action does not run.                                                                                                                                      |
-| **Approve once**        | Runs this exact call once.                                                                                                                                    |
-| **Approve for session** | Workspace commands only. Allows the same command with the same arguments again in this session. Survives restarts; the workspace has no control to revoke it. |
+| Choice                  | Effect                                                                                                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reject**              | The action does not run.                                                                                                                                   |
+| **Approve once**        | Runs this exact call once.                                                                                                                                 |
+| **Approve for session** | Workspace commands only. Allows the same command with the same arguments again in this chat. Survives restarts; the workspace has no control to revoke it. |
 
 Each card shows when it expires; an expired request cannot be approved. A decision made in any client or channel settles the same request everywhere.
 
-**Permissions** apply to workspace commands and [MCP tools](/guides/tools/). **Full access** lets both run without asking in this session. It does not change sandbox limits, and an MCP server with approvals of its own still asks for them. Switching back to **Ask** stops calls that have not started yet.
+**Permissions** apply to workspace commands and [MCP tools](/guides/tools/). **Full access** lets both run without asking in this chat. It does not change sandbox limits, and an MCP server with approvals of its own still asks for them. Switching back to **Ask** stops calls that have not started yet.
 
 :::caution
 An action interrupted by a crash or restart is marked uncertain and is never repeated automatically, because it may already have taken effect. Check the result before asking again.
@@ -194,7 +190,7 @@ Open Settings from the gear. Bot pages are grouped under each bot; app pages app
 | ----------------- | -------------------------------------------------------------- | ------------------------------------------ |
 | Profile           | Name, description, colour, personality and its revisions       | [Bots](/guides/bots/)                      |
 | Providers         | This bot's model connections: API keys or subscription sign-in | [Credentials](/operate/credentials/)       |
-| Models            | Compare models and choose the default for new sessions         | [First run](/start/first-run/)             |
+| Models            | Compare models and choose the default for a bot's chat         | [First run](/start/first-run/)             |
 | Memory            | Backend, scope, and browsing saved memories                    | [Memory](/guides/memory/)                  |
 | MCP tools         | Tool servers this bot can use                                  | [Tools](/guides/tools/)                    |
 | Channels          | Telegram and Discord connections, home channel                 | [Telegram](/guides/telegram/)              |
