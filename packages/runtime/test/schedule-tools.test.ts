@@ -33,15 +33,24 @@ async function open(
       offeredTools: (names) => offered.push(names),
       // Edits continue the owner's chat, so each message calls its tool.
       repeatTool: tool !== undefined,
-      tool: tool ?? {
-        name: "schedule_create",
-        args: {
-          name: "Funny reminder",
-          prompt: "Tell me the time and a funny saying.",
-          delaySeconds: 2,
-          ...(everyMinutes ? { everyMinutes } : {}),
-        },
-      },
+      ...(tool
+        ? { tool }
+        : {
+            // The owner's request schedules it; the job's own run, in its
+            // item's fresh session, doesn't schedule it again.
+            toolFor: (text: string) =>
+              text.startsWith("Scheduled job")
+                ? undefined
+                : {
+                    name: "schedule_create",
+                    args: {
+                      name: "Funny reminder",
+                      prompt: "Tell me the time and a funny saying.",
+                      delaySeconds: 2,
+                      ...(everyMinutes ? { everyMinutes } : {}),
+                    },
+                  },
+          }),
     }),
   });
   const actor = gateway.actors.establish("web");
@@ -52,6 +61,7 @@ async function open(
     busy: async () =>
       (await gateway.chats.state()).turns.some((t) => t.status === "pending"),
     submit: (input) => gateway.sessions.submitScheduled(actor, input),
+    follow: (tx, itemId, run) => gateway.workRuns.follow(tx, itemId, run),
   });
   gateway.install(createScheduleTools(jobs));
   gateway.harness.resume();
@@ -79,20 +89,32 @@ test("agent reminder saves without approval, survives restart and replies once i
     expect((await app.gateway.toolApprovals.state()).approvals).toEqual([]);
     await app.gateway.close();
     app = await open(directory);
-    await until(
-      async () => (await app.jobs.read())[0].lastStatus === "submitted",
-    );
-    await until(async () =>
-      (await app.gateway.chats.state()).turns.every((t) => t.status === "done"),
-    );
-    expect((await app.gateway.chats.state()).turns).toHaveLength(2);
-    expect((await app.gateway.chats.state()).conversations).toHaveLength(1);
-    expect((await app.gateway.chats.state()).turns[1].text).toBe(
-      "Tell me the time and a funny saying.",
-    );
-    // Delivered as a scheduled message, not an owner message the bot answers.
-    const delivered = (await app.gateway.chats.state()).turns[1];
-    expect(delivered.scheduled).toEqual({ name: "Funny reminder" });
+    // The run happens in the job's work item; its result is posted to the
+    // chat, after the owner's message.
+    const chatId = async () =>
+      (await app.gateway.chats.state()).conversations.find((c) => c.chat)!.id;
+    const posted = async () => {
+      const id = await chatId();
+      return (await app.gateway.chats.state()).turns.filter(
+        (t) => t.conversationId === id && t.work?.kind === "result",
+      );
+    };
+    await until(async () => (await posted()).length === 1);
+    const { turns } = await app.gateway.chats.state();
+    const run = turns.find((t) => t.work?.kind === "brief")!;
+    expect(run.text).toBe("Tell me the time and a funny saying.");
+    expect(run.scheduled).toEqual({ name: "Funny reminder" });
+    expect(run.conversationId).not.toBe(await chatId());
+    const [post] = await posted();
+    expect(post!.scheduled).toEqual({ name: "Funny reminder" });
+    expect(post!.answer).toBe(run.answer);
+    const chatTurns = async () => {
+      const id = await chatId();
+      return (await app.gateway.chats.state()).turns.filter(
+        (t) => t.conversationId === id,
+      );
+    };
+    expect(await chatTurns()).toHaveLength(2);
     const [history] = (
       await app.gateway.queries.history(app.actor, receipt.sessionId)
     ).items.slice(-1);
@@ -100,7 +122,7 @@ test("agent reminder saves without approval, survives restart and replies once i
     expect((await app.jobs.read())[0].enabled).toBe(false);
     app.gateway.harness.resume();
     await delay(60);
-    expect((await app.gateway.chats.state()).turns).toHaveLength(2);
+    expect(await chatTurns()).toHaveLength(2);
     expect(await app.jobs.read()).toHaveLength(1);
   } finally {
     await app.gateway.close();

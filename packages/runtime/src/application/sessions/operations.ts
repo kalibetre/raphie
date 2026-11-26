@@ -215,6 +215,8 @@ export class Sessions implements SessionOperations {
       attachments?: string[];
       sessionId?: string;
       scheduled: { name: string };
+      /** The job's work item: the run goes to its session. */
+      work?: TurnWork;
     },
   ) {
     const verified = this.authority.require(actor);

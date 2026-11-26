@@ -34,6 +34,14 @@ type Options = {
     sessionId?: string;
     work: TurnWork;
   }) => Promise<{ id: string; sessionId: string }>;
+  /** Posts a job's result into the chat as the bot's message, with no model turn. */
+  post: (input: {
+    runKey: string;
+    work: TurnWork;
+    scheduled?: { name: string };
+    text: string;
+    fromTurnId?: string;
+  }) => Promise<string>;
   /** A turn by id; undefined once it no longer exists. */
   turn: (turnId: string) => Promise<RunTurn | undefined>;
   /** Stops the running turn of a session. */
@@ -122,6 +130,39 @@ export class WorkRuns {
   }
 
   /**
+   * Follows a job's run already delivered to its item's session, in the
+   * caller's transaction: when the turn ends, its result is posted to the
+   * chat as the bot's message. It marks the item as running, so the owner
+   * can cancel it, unless another run already holds the marker.
+   */
+  async follow(
+    tx: Tx,
+    itemId: string,
+    run: { turnId: string; sessionId: string; scheduled: { name: string } },
+  ) {
+    const item = (await tx.doc(WorkItems)).items.find((i) => i.id === itemId);
+    if (!item) return;
+    const runId = `job:${run.turnId}`;
+    item.sessionId = run.sessionId;
+    item.run ??= { id: runId, startedAt: Date.now(), turnId: run.turnId };
+    await tx.createTask(
+      this.task,
+      {
+        itemId,
+        runId,
+        brief: "",
+        turnId: run.turnId,
+        scheduled: run.scheduled,
+      },
+      {
+        conversationId: this.options.root().id,
+        ownership: { kind: "conversation" },
+        background: true,
+      },
+    );
+  }
+
+  /**
    * Stops an item's running turn; the run then reports it as cancelled. A
    * run whose turn already ended without reporting is let go of.
    */
@@ -153,13 +194,23 @@ export class WorkRuns {
       outcome: { status: "completed", result: null },
     } as const;
     return defineTask<
-      { itemId: string; runId: string; brief: string },
+      {
+        itemId: string;
+        runId: string;
+        brief: string;
+        /** A job's run, already delivered: follow its turn and post the result. */
+        turnId?: string;
+        scheduled?: { name: string };
+      },
       Checkpoint,
       null
     >({
       name: "raphie.work-run",
       version: 1,
-      initial: () => ({ phase: "deliver" }),
+      initial: (input) =>
+        input.turnId
+          ? { phase: "wait", turnId: input.turnId }
+          : { phase: "deliver" },
       // An aborted run frees its item for the next one.
       abort: (task, runtime, ctx) =>
         runtime.commit(async (tx) => {
@@ -280,21 +331,34 @@ export class WorkRuns {
             (i) => i.id === itemId,
           );
           let resultTurn: string | undefined;
-          // A closed item keeps its result but tells the chat nothing.
-          if (item && isOpen(item.status))
+          // A closed item keeps its result but tells the chat nothing, except
+          // a job's own run: a one-time job's item closes as it runs.
+          if (item && (isOpen(item.status) || task.input.scheduled))
             try {
-              resultTurn = (
-                await this.options.submit({
-                  eventId: `work:${runId}:result`,
-                  text: checkpoint.text,
-                  work: {
-                    itemId,
-                    title: item.title,
-                    kind: "result",
-                    outcome: checkpoint.outcome,
-                  },
-                })
-              ).id;
+              const work = {
+                itemId,
+                title: item.title,
+                kind: "result" as const,
+                outcome: checkpoint.outcome,
+              };
+              // A job's result is the bot's message already: posted as it is.
+              resultTurn = task.input.scheduled
+                ? await this.options.post({
+                    runKey: runId,
+                    work,
+                    scheduled: task.input.scheduled,
+                    text: checkpoint.text,
+                    ...(task.input.turnId
+                      ? { fromTurnId: task.input.turnId }
+                      : {}),
+                  })
+                : (
+                    await this.options.submit({
+                      eventId: `work:${runId}:result`,
+                      text: checkpoint.text,
+                      work,
+                    })
+                  ).id;
             } catch (error) {
               const attempts = (checkpoint.attempts ?? 0) + 1;
               if (retryable(error) && attempts < MAX_ATTEMPTS) {

@@ -839,10 +839,11 @@ export class ChatService implements ConversationCommands {
               (invoked ?? "") +
               (input.handoff
                 ? handoffInstruction(input.handoff, turn.text)
-                : input.work
-                  ? workInstruction(input.work, turn.text)
-                  : input.scheduled
-                    ? scheduledInstruction(input.scheduled.name, turn.text)
+                : // A job's run is in its item's session, but is a job's run.
+                  input.scheduled
+                  ? scheduledInstruction(input.scheduled.name, turn.text)
+                  : input.work
+                    ? workInstruction(input.work, turn.text)
                     : (conversation.handedOffBy
                         ? `The owner writes to you directly in this task from ${conversation.handedOffBy.name}. Reply to the owner; this reply does not go to ${conversation.handedOffBy.name}.\n\n`
                         : "") +
@@ -903,6 +904,92 @@ export class ChatService implements ConversationCommands {
         );
       session.model = { ...model };
       await configure(tx, session.id as ConversationId, { model });
+    }, context);
+  }
+
+  /**
+   * Posts a scheduled job's result into the chat as the bot's message,
+   * without asking the model again: a turn record for the clients, and a
+   * write into the chat's context so the bot knows it said it. The job's
+   * run then links to it. Posting the same run twice posts once.
+   */
+  async postWorkResult(input: {
+    runKey: string;
+    work: TurnWork;
+    scheduled?: { name: string };
+    text: string;
+    /** The run's turn in the item's session, whose job run moves here. */
+    fromTurnId?: string;
+  }) {
+    const requestKey = `work:${input.runKey}:post`;
+    // A bot with no chat yet gets one first: a write must come before any
+    // other change in its commit.
+    await this.app.root.commit(async (tx) => {
+      const state = await tx.doc(Chats);
+      if (state.conversations.some((c) => c.chat)) return;
+      const created = await tx.createConversation({
+        ownership: { kind: "ownerless" },
+      });
+      state.conversations.push({
+        id: created.id,
+        sessionId: newSessionId(),
+        title: "Chat",
+        createdAt: Date.now(),
+        model: { ...this.model! },
+        chat: true,
+      });
+    }, context);
+    const chatId = (await this.state()).conversations.find((c) => c.chat)!.id;
+    const conversation = await this.app.harness.conversation(
+      chatId as ConversationId,
+      context,
+    );
+    return this.app.root.commit(async (tx) => {
+      const existing = (await tx.doc(Chats)).turns.find(
+        (t) => t.requestKey === requestKey,
+      );
+      if (existing) return existing.id;
+      const id = crypto.randomUUID();
+      const lead = input.scheduled
+        ? `Your scheduled job "${input.scheduled.name}" ran in the background, and you posted this message to the owner:`
+        : `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and you posted this message to the owner:`;
+      await conversation!.submit(tx, {
+        type: "write",
+        entry: {
+          kind: "raphie.work-result",
+          data: { turnId: id },
+          model: [
+            {
+              role: "user",
+              content: `[${lead}]\n\n${input.text}`,
+              timestamp: Date.now(),
+            },
+          ],
+        },
+      });
+      const state = await tx.doc(Chats);
+      const chat = state.conversations.find((c) => c.id === chatId)!;
+      state.turns.push({
+        id,
+        requestKey,
+        fingerprint: requestKey,
+        conversationId: chat.id,
+        source: "web",
+        text: "",
+        createdAt: Date.now(),
+        status: "done",
+        answer: input.text,
+        work: input.work,
+        ...(input.scheduled ? { scheduled: input.scheduled } : {}),
+      });
+      // The job's run now opens the chat at this message.
+      if (input.fromTurnId)
+        for (const run of (await tx.doc(JobRuns)).items)
+          if (run.turnId === input.fromTurnId) {
+            run.sessionId = chat.sessionId;
+            run.turnId = id;
+          }
+      return id;
     }, context);
   }
 

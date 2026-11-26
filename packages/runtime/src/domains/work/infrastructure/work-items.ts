@@ -139,6 +139,72 @@ async function openWork(
   return detached(item);
 }
 
+/**
+ * Keeps a scheduled job's work item in step with the job, in the caller's
+ * transaction: opened with the job, named after it, waiting while it is
+ * paused, and done once it is removed or a one-time job has run. `job` is
+ * undefined once removed.
+ */
+export async function syncJobItem(
+  tx: Tx,
+  jobId: string,
+  job:
+    | {
+        name: string;
+        prompt: string;
+        enabled: boolean;
+        nextRunAt: number;
+        everyMinutes: number | null;
+        lastRunAt: number | null;
+      }
+    | undefined,
+  by: WorkActor,
+) {
+  const state = await tx.doc(WorkItems);
+  let item = state.items.find(
+    (i) => i.origin?.kind === "job" && i.origin.jobId === jobId,
+  );
+  const now = Date.now();
+  if (!item) {
+    if (!job) return;
+    item = {
+      id: workId(state.next),
+      title: clip(job.name, LIMITS.title),
+      status: "active",
+      origin: { kind: "job", jobId },
+      notes: clip(job.prompt, LIMITS.notes),
+      opened: { at: now, by },
+      updatedAt: now,
+    };
+    state.next += 1;
+    state.items.push(item);
+  }
+  const finished =
+    !job || (!job.enabled && job.everyMinutes === null && !!job.lastRunAt);
+  if (finished) {
+    if (isOpen(item.status)) {
+      item.status = "done";
+      delete item.waitingOn;
+      delete item.nextAt;
+      item.closed = { at: now, by };
+      item.updatedAt = now;
+    }
+    return;
+  }
+  item.title = clip(job.name, LIMITS.title);
+  if (job.enabled) {
+    item.status = "active";
+    delete item.waitingOn;
+    item.nextAt = job.nextRunAt;
+  } else {
+    item.status = "waiting";
+    item.waitingOn = "the owner to resume the job";
+    delete item.nextAt;
+  }
+  delete item.closed;
+  item.updatedAt = now;
+}
+
 /** Changes an item as `by` changes it, or says why not. */
 async function changeWorkItem(
   tx: Tx,

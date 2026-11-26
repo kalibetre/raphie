@@ -812,6 +812,26 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
       "I stopped the catering comparison, as you asked. Nothing was booked.",
       { itemId: "w-3", title: "Catering quotes", outcome: "cancelled" },
     );
+    // A scheduled job's run, posted to the chat as the bot's message.
+    state.turns.push({
+      id: "work-job",
+      requestKey: "fixture:work-job",
+      fingerprint: "fixture",
+      conversationId: chat.id,
+      source: "web",
+      text: "",
+      createdAt: now - 60_000,
+      status: "done",
+      answer:
+        "Good morning. You have two meetings today, and the venue shortlist is waiting for your pick.",
+      scheduled: { name: "Morning brief" },
+      work: {
+        itemId: "w-4",
+        title: "Morning brief",
+        kind: "result",
+        outcome: "completed",
+      },
+    });
     const work = await tx.doc(WorkItems);
     const item = (
       id: string,
@@ -838,8 +858,18 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
           turnId: "work-venues",
         },
       }),
+      item("w-4", "Morning brief", {
+        notes: "Summarise today's calendar and open work.",
+        origin: { kind: "job", jobId: "fixture-job" },
+        nextAt: now + 20 * 3_600_000,
+        result: {
+          text: "Good morning. You have two meetings today.",
+          at: now - 60_000,
+          turnId: "work-job",
+        },
+      }),
     );
-    work.next = 4;
+    work.next = 5;
   }, durableContext);
 }
 settings.onChange = () => {

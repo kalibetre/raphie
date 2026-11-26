@@ -448,6 +448,7 @@ export class BotHost implements BotProfiles {
           );
         },
         submit: (input) => gateway.sessions.submitScheduled(actor, input),
+        follow: (tx, itemId, run) => gateway.workRuns.follow(tx, itemId, run),
       });
       const connections = mcp;
       gateway.install(createScheduleTools(jobs));

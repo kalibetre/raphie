@@ -18,13 +18,27 @@ async function until(check: () => Promise<boolean>) {
   throw new Error("Scheduled work did not settle.");
 }
 
-test("Pi sleeping jobs recover after restart and every run lands in the bot's chat", async () => {
+test("Pi sleeping jobs recover after restart; each run happens in the job's item and is posted to the chat", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-jobs-"));
+  const seen: string[] = [];
   const open = async () => {
     const gateway = await Gateway.open({
       directory,
       deferResume: true,
-      ...chatModel(),
+      ...chatModel({
+        userMessages: (messages) =>
+          seen.push(
+            messages
+              .map((m) =>
+                typeof m.content === "string"
+                  ? m.content
+                  : m.content
+                      .flatMap((c) => (c.type === "text" ? [c.text] : []))
+                      .join(""),
+              )
+              .join("\n---\n"),
+          ),
+      }),
     });
     // Simulate async credential/MCP setup before installing job definitions.
     await delay(40);
@@ -36,11 +50,16 @@ test("Pi sleeping jobs recover after restart and every run lands in the bot's ch
       busy: async () =>
         (await gateway.chats.state()).turns.some((t) => t.status === "pending"),
       submit: (input) => gateway.sessions.submitScheduled(actor, input),
+      follow: (tx, itemId, run) => gateway.workRuns.follow(tx, itemId, run),
     });
     gateway.harness.resume();
     return { gateway, jobs };
   };
   let app = await open();
+  const posts = async () =>
+    (await app.gateway.chats.state()).turns.filter(
+      (t) => t.work?.kind === "result",
+    );
   try {
     const [job] = await app.jobs.add({
       name: "Brief",
@@ -48,45 +67,125 @@ test("Pi sleeping jobs recover after restart and every run lands in the bot's ch
       everyMinutes: 60,
       firstRunAt: Date.now() + 200,
     });
+    // The job is a work item.
+    const [item] = await app.gateway.work.list({ open: true });
+    expect(item?.origin).toEqual({ kind: "job", jobId: job.id });
+    expect(item?.title).toBe("Brief");
     await delay(30);
     await app.gateway.close();
     await delay(220);
     app = await open();
-    await until(
-      async () => (await app.jobs.read())[0].lastStatus === "submitted",
+    await until(async () => (await posts()).length === 1);
+    const { conversations, turns } = await app.gateway.chats.state();
+    // The run happened in the item's own session, framed as the job's run
+    // (the fixture echoes its input).
+    const session = conversations.find((c) => c.work === item!.id)!;
+    const run = turns.find((t) => t.conversationId === session.id)!;
+    expect(run.text).toBe("Give me a brief");
+    expect(run.scheduled).toEqual({ name: "Brief" });
+    expect(run.answer).toContain('Scheduled job "Brief" is due now');
+    // Its answer was posted to the chat as it is, with no model turn there.
+    const chat = conversations.find((c) => c.chat)!;
+    const [post] = await posts();
+    expect(post!.conversationId).toBe(chat.id);
+    expect(post!.answer).toBe(run.answer);
+    expect(post!.scheduled).toEqual({ name: "Brief" });
+    expect(
+      turns.filter((t) => t.conversationId === chat.id && t.id !== post!.id),
+    ).toEqual([]);
+    // The job's run opens the chat at that message.
+    const [history] = (await app.jobs.runs()).items;
+    expect(history?.sessionId).toBe(chat.sessionId);
+    expect(history?.turnId).toBe(post!.id);
+    expect((await app.gateway.work.get(item!.id))?.result?.turnId).toBe(
+      post!.id,
     );
+
+    // The chat's model knows what was posted: the next request carries it.
+    await app.gateway.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "after",
+      text: "Thanks",
+    });
     await until(async () =>
-      (await app.gateway.chats.state()).turns.every((t) => t.status === "done"),
+      (await app.gateway.chats.state()).turns.every(
+        (t) => t.status !== "pending",
+      ),
     );
-    expect((await app.gateway.chats.state()).turns).toHaveLength(1);
-    // A delivery, not an owner message: marked, titled by the job, and the
-    // model is told to write the reminder (the fixture echoes its input).
-    const [delivery] = (await app.gateway.chats.state()).turns;
-    expect(delivery.text).toBe("Give me a brief");
-    expect(delivery.scheduled).toEqual({ name: "Brief" });
-    expect(delivery.answer).toContain('Scheduled job "Brief" is due now');
-    expect(delivery.answer).toContain("did not just send this message");
-    // The run started the bot's one chat, as the owner's first message would.
-    const [chat] = (await app.gateway.chats.state()).conversations;
-    expect(chat.chat).toBe(true);
-    expect((await app.jobs.runs()).items[0]?.sessionId).toBe(chat.sessionId);
-    app.gateway.harness.resume();
-    await delay(20);
-    expect((await app.gateway.chats.state()).turns).toHaveLength(1);
+    expect(seen.at(-1)).toContain(
+      'Your scheduled job "Brief" ran in the background, and you posted this message to the owner:',
+    );
+    expect(seen.at(-1)).toContain('Scheduled job "Brief" is due now');
+
+    // A manual run reuses the item's session and posts once more.
     await app.jobs.change(job.id, "run");
-    await until(
-      async () => (await app.gateway.chats.state()).turns.length === 2,
-    );
-    expect((await app.gateway.chats.state()).conversations).toHaveLength(1);
+    await until(async () => (await posts()).length === 2);
+    expect(
+      (await app.gateway.chats.state()).conversations.filter(
+        (c) => c.work === item!.id,
+      ),
+    ).toHaveLength(1);
+    // Pausing waits; removing closes the item.
     await app.jobs.change(job.id, "disable");
-    expect((await app.jobs.read())[0].enabled).toBe(false);
+    expect((await app.gateway.work.get(item!.id))?.status).toBe("waiting");
     await app.jobs.change(job.id, "remove");
     expect(await app.jobs.read()).toEqual([]);
+    expect((await app.gateway.work.get(item!.id))?.status).toBe("done");
   } finally {
     await app.gateway.close();
     await rm(directory, { recursive: true, force: true });
   }
-});
+}, 30_000);
+
+test("a job's run shows as running on its item, and the owner can cancel it there", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-jobs-cancel-"));
+  const release = Promise.withResolvers<void>();
+  const gateway = await Gateway.open({
+    directory,
+    ...chatModel({
+      pauseOn: { text: "Check the feeds", until: release.promise },
+    }),
+  });
+  const actor = gateway.actors.establish("web");
+  const jobs = BotJobs.open({
+    root: gateway.root,
+    harness: gateway.harness,
+    install: (e) => gateway.install(e),
+    busy: async () => false,
+    submit: (input) => gateway.sessions.submitScheduled(actor, input),
+    follow: (tx, itemId, run) => gateway.workRuns.follow(tx, itemId, run),
+  });
+  try {
+    const [job] = await jobs.add({
+      name: "Feeds",
+      prompt: "Check the feeds",
+      everyMinutes: 60,
+      firstRunAt: Date.now() + 60 * 60_000,
+    });
+    const [item] = await gateway.work.list({ open: true });
+    await jobs.change(job.id, "run");
+    await until(async () => !!(await gateway.work.get(item!.id))?.run?.turnId);
+    // A second run of the item cannot start while the job's run holds it.
+    expect(
+      await gateway.root.commit(
+        (tx) => gateway.workRuns.start(tx, item!.id, "More"),
+        context,
+      ),
+    ).toMatch(/already running/);
+    await gateway.work.cancel(item!.id);
+    await until(async () => !(await gateway.work.get(item!.id))?.run);
+    const post = (await gateway.chats.state()).turns.find(
+      (t) => t.work?.kind === "result",
+    );
+    expect(post?.work?.outcome).toBe("cancelled");
+    expect(post?.scheduled).toEqual({ name: "Feeds" });
+  } finally {
+    release.resolve();
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 30_000);
 
 test("runs never name a session; the chat takes them", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-job-overlap-"));
@@ -101,7 +200,7 @@ test("runs never name a session; the chat takes them", async () => {
     submit: async (input) => {
       submissions.push(input);
       if (submissions.length === 1) await release.promise;
-      return { sessionId: "chat" };
+      return { id: "t-1", sessionId: "chat" };
     },
   });
   try {
@@ -180,7 +279,7 @@ test("a transient submission failure retries the same one-time event", async () 
     submit: async (input) => {
       events.push(input.eventId);
       if (events.length === 1) throw new Error("private transport detail");
-      return { sessionId: "retry-session" };
+      return { id: "t-1", sessionId: "retry-session" };
     },
   });
   try {
@@ -213,7 +312,7 @@ test("overdue work visibly waits for a busy bot and starts late once released", 
     busy: async () => busy,
     submit: async () => {
       deliveries++;
-      return { sessionId: "late-session" };
+      return { id: "t-1", sessionId: "late-session" };
     },
   });
   try {

@@ -14,10 +14,14 @@ import type {
   SaveScheduledJob,
   ScheduledJob,
   ScheduledJobRun,
+  TurnWork,
+  WorkActor,
 } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import { ModelConnectionGate } from "../../../shared/infrastructure/model-connection-gate.ts";
+import { syncJobItem } from "../../work/infrastructure/work-items.ts";
+import { WorkItems } from "../../work/infrastructure/work-store.ts";
 import {
   interruptUnadmittedJobRun,
   isFinished,
@@ -45,8 +49,22 @@ type Options = {
   install: (extension: Extension) => void;
   /** Marked as scheduled, so the turn shows as a delivery, not an owner message. */
   submit: (
-    input: Submission & { scheduled: { name: string } },
-  ) => Promise<{ sessionId: string }>;
+    input: Submission & {
+      scheduled: { name: string };
+      /** The job's work item, whose session the run goes to. */
+      work?: TurnWork;
+      sessionId?: string;
+    },
+  ) => Promise<{ id: string; sessionId: string }>;
+  /**
+   * Follows a run in its item's session, in the caller's transaction, so
+   * its result is posted to the chat when it ends.
+   */
+  follow?: (
+    tx: Tx,
+    itemId: string,
+    run: { turnId: string; sessionId: string; scheduled: { name: string } },
+  ) => Promise<void>;
   busy: () => Promise<boolean>;
 };
 
@@ -125,7 +143,10 @@ export class BotJobs {
 
   async add(input: SaveScheduledJob) {
     return this.gate.run(async () => {
-      await this.options.root.commit((tx) => this.schedule(tx, input), context);
+      await this.options.root.commit(
+        (tx) => this.schedule(tx, input, crypto.randomUUID(), "owner"),
+        context,
+      );
       this.options.harness.resume();
       return this.read();
     });
@@ -136,6 +157,7 @@ export class BotJobs {
     tx: Tx,
     input: SaveScheduledJob,
     id: string = crypto.randomUUID(),
+    by: WorkActor = "bot",
   ): Promise<ScheduledJob> {
     const jobs = await tx.doc(Jobs);
     const existing = jobs.items.find((job) => job.id === id);
@@ -161,6 +183,8 @@ export class BotJobs {
       lastStatus: null,
     };
     jobs.items.push(job);
+    // Every job is a work item, so "what's going on?" includes it.
+    await syncJobItem(tx, id, job, by);
     return job;
   }
 
@@ -187,6 +211,7 @@ export class BotJobs {
           background: true,
         },
       );
+    await syncJobItem(tx, id, job, "bot");
     return { job, retiredTaskId };
   }
 
@@ -195,6 +220,7 @@ export class BotJobs {
     const job = jobs.items.find((item) => item.id === id);
     if (!job) throw new InputError("Scheduled job not found.", 404);
     jobs.items = jobs.items.filter((item) => item.id !== id);
+    await syncJobItem(tx, id, undefined, "bot");
     return job.taskId;
   }
 
@@ -234,6 +260,12 @@ export class BotJobs {
           if (action === "remove")
             jobs.items = jobs.items.filter((j) => j.id !== id);
         }
+        await syncJobItem(
+          tx,
+          id,
+          action === "remove" ? undefined : job,
+          "owner",
+        );
       }, context);
     });
     if (abort) await this.options.harness.abortTask(abort, context);
@@ -398,12 +430,27 @@ export class BotJobs {
               }
               return { status: "running", checkpoint: task.state.checkpoint };
             }, ctx);
+            // The run goes to the job's work item's own session; only its
+            // result is posted to the chat.
+            const item = (await runtime.snapshot(WorkItems, ctx))?.items.find(
+              (i) => i.origin?.kind === "job" && i.origin.jobId === job.id,
+            );
+            let receipt: { id: string; sessionId: string } | undefined;
             try {
-              // The run lands in the bot's one chat.
-              await this.options.submit({
+              receipt = await this.options.submit({
                 eventId: task.state.checkpoint.input.eventId,
                 text: task.state.checkpoint.input.text,
                 scheduled: { name: job.name },
+                ...(item
+                  ? {
+                      work: {
+                        itemId: item.id,
+                        title: item.title,
+                        kind: "brief",
+                      },
+                      ...(item.sessionId ? { sessionId: item.sessionId } : {}),
+                    }
+                  : {}),
               });
               status = "submitted";
             } catch (error) {
@@ -423,6 +470,12 @@ export class BotJobs {
             const once = job.everyMinutes === null;
             const next = runtime.now() + (job.everyMinutes ?? 0) * 60_000;
             await runtime.commit(async (tx) => {
+              if (receipt && item && this.options.follow)
+                await this.options.follow(tx, item.id, {
+                  turnId: receipt.id,
+                  sessionId: receipt.sessionId,
+                  scheduled: { name: job.name },
+                });
               const run = (await tx.doc(JobRuns)).items.find(
                 (item) => item.id === runId,
               );
@@ -448,6 +501,7 @@ export class BotJobs {
                 current.lastStatus = status;
                 if (!task.input.manual) current.nextRunAt = next;
                 if (once && !task.input.manual) current.enabled = false;
+                await syncJobItem(tx, current.id, current, "bot");
               }
               return task.input.manual || once || replaced
                 ? {

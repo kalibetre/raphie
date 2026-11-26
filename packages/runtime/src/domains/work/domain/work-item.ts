@@ -44,7 +44,11 @@ export function workLine(item: WorkItem) {
     ? `; last: ${clip(item.result.text.replace(/\s+/g, " "), 100)} (${day(item.result.at)})`
     : "";
   const running = item.run ? "; working on it in the background" : "";
-  return `${item.id} ${flat(item.title)}: ${where}${running}${last}`;
+  const job =
+    item.origin?.kind === "job"
+      ? `; scheduled job${item.nextAt ? `, next run ${new Date(item.nextAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}`
+      : "";
+  return `${item.id} ${flat(item.title)}: ${where}${job}${running}${last}`;
 }
 
 /**
