@@ -34,14 +34,16 @@ function day(at: number) {
 
 /** One item as a line of the list: id, title, where it stands, its last result. */
 export function workLine(item: WorkItem) {
+  // One line each: text with line breaks can't start a header line of its own.
+  const flat = (text: string) => text.replace(/\s+/g, " ").trim();
   const where =
     item.status === "waiting"
-      ? `waiting on ${item.waitingOn || "something"}`
+      ? `waiting on ${flat(item.waitingOn || "something")}`
       : item.status;
   const last = item.result
     ? `; last: ${clip(item.result.text.replace(/\s+/g, " "), 100)} (${day(item.result.at)})`
     : "";
-  return `${item.id} ${item.title}: ${where}${last}`;
+  return `${item.id} ${flat(item.title)}: ${where}${last}`;
 }
 
 /**

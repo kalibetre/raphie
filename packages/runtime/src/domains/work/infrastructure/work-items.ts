@@ -16,6 +16,7 @@ import {
   Activity,
   record,
 } from "../../activity/infrastructure/pi-activity-journal.ts";
+import { isPrivateDestination } from "../../channels/domain/binding.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import {
   clip,
@@ -90,8 +91,10 @@ const NOT_IN_CHAT =
   "Work items belong to your chat with the owner. Keep track of this in your reply instead.";
 
 /**
- * Work items are the owner's: only the bot's chat reads and changes them, so
- * a group never hears of them. Returns the chat turn being answered, if any.
+ * Work items are the owner's: only the bot's chat reads and changes them,
+ * and only in a turn whose reply stays private, so a group never hears of
+ * them (a scheduled run whose home is a group is in the chat but answers the
+ * group). Returns the chat turn being answered, if any.
  */
 async function chatTurn(tx: Tx, api: ToolExecutionApi) {
   const chats = await tx.doc(Chats);
@@ -102,6 +105,7 @@ async function chatTurn(tx: Tx, api: ToolExecutionApi) {
   const turn = chats.turns.find(
     (t) => t.conversationId === conversation.id && t.status === "pending",
   );
+  if (turn?.replyTo && !isPrivateDestination(turn.replyTo)) return undefined;
   return { turnId: turn?.id };
 }
 

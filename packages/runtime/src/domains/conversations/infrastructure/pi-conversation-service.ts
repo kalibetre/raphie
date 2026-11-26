@@ -809,8 +809,9 @@ export class ChatService implements ConversationCommands {
                 input.origin,
                 owner.timeZone,
                 // The owner's open work goes with the chat's messages only,
-                // so a group never hears of it.
-                conversation.chat
+                // and only when the reply stays private: a scheduled run
+                // whose home is a group is the chat, but answers the group.
+                conversation.chat && (!replyTo || isPrivateDestination(replyTo))
                   ? openWorkContext((await tx.doc(WorkItems)).items)
                   : "",
               ) +
