@@ -883,6 +883,10 @@ pub struct SessionTurn {
     /// handed off, or the result of one coming back.
     #[serde(default)]
     pub handoff: Option<TurnHandoff>,
+    /// Set when a work item's background run started the turn: its brief,
+    /// or its result coming back to the chat.
+    #[serde(default)]
+    pub work: Option<TurnWork>,
     /// Other bots' sessions the reply read, for tasks it handed off.
     #[serde(default)]
     pub read_sessions: Vec<ReadSession>,
@@ -2108,6 +2112,36 @@ impl WorkStatus {
     }
 }
 
+/// `TurnWork` in `packages/contracts/src/index.ts`: a turn of a work item's
+/// background run.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnWork {
+    pub item_id: String,
+    pub title: String,
+    pub kind: TurnWorkKind,
+    /// How the run ended. Only on results.
+    #[serde(default)]
+    pub outcome: Option<HandoffOutcome>,
+}
+
+/// The brief sent to the item's session, or the result back in the chat.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TurnWorkKind {
+    Brief,
+    Result,
+}
+
+/// A work item's run in progress.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkRun {
+    pub started_at: i64,
+    #[serde(default)]
+    pub turn_id: Option<String>,
+}
+
 /// `WorkActor`: who opened, changed or closed a work item.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -2155,6 +2189,12 @@ pub struct WorkItem {
     pub updated_at: i64,
     #[serde(default)]
     pub closed: Option<WorkMark>,
+    /// Its own background session, once work has run there.
+    #[serde(default)]
+    pub session_id: Option<String>,
+    /// The run in progress, if any.
+    #[serde(default)]
+    pub run: Option<WorkRun>,
 }
 
 /// What `GET /api/work-items` answers.

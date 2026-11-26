@@ -3070,6 +3070,19 @@ impl Ui {
         }
     }
 
+    /// Stops an item's running background work.
+    pub fn cancel_work(&mut self, id: &str) {
+        let Some(bot_id) = self.work_bot() else {
+            return;
+        };
+        if self.model.begin_change_work() {
+            self.command(Command::CancelWork {
+                bot_id,
+                id: id.to_owned(),
+            });
+        }
+    }
+
     /// Marks an item done, drops it, or reopens it.
     pub fn set_work_status(&mut self, id: &str, status: WorkStatus) {
         let Some(bot_id) = self.work_bot() else {
