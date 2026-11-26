@@ -204,17 +204,19 @@ These remain for older callers. The web workspace still calls `/sessions/legacy/
     "modelId": "anthropic/claude-haiku-5.5"
   },
   "approvalMode": "ask",
-  "attachments": ["<64-hex upload id>"]
+  "attachments": ["<64-hex upload id>"],
+  "quote": { "turnId": "<turn id>", "author": "bot" }
 }
 ```
 
-| Field          | Rule                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `text`         | Up to 4,000 characters; may be empty (or whitespace) only with attachments                                                      |
-| `eventId`      | 1 to 200 characters, stable across retries. Same `eventId` and same content returns the same receipt; different content is 409. |
-| `sessionId`    | A UUID. Omit to write in the bot's chat, which the first message starts; an unknown ID is 404                                   |
-| `approvalMode` | Only for the message that starts the chat; saved before its first turn runs. Defaults to Ask.                                   |
-| `attachments`  | Up to four unique upload IDs from `POST /attachments`; an ID this bot does not hold is 404                                      |
+| Field          | Rule                                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text`         | Up to 4,000 characters; may be empty (or whitespace) only with attachments                                                                                                                                                    |
+| `eventId`      | 1 to 200 characters, stable across retries. Same `eventId` and same content returns the same receipt; different content is 409.                                                                                               |
+| `sessionId`    | A UUID. Omit to write in the bot's chat, which the first message starts; an unknown ID is 404                                                                                                                                 |
+| `approvalMode` | Only for the message that starts the chat; saved before its first turn runs. Defaults to Ask.                                                                                                                                 |
+| `attachments`  | Up to four unique upload IDs from `POST /attachments`; an ID this bot does not hold is 404                                                                                                                                    |
+| `quote`        | Optional. One earlier message of the same session: `author` is `owner` for the owner's words in that turn, `bot` for the bot's. The turn stores `{ turnId, author, excerpt }`, the first 280 characters; anything else is 400 |
 
 Admission returns 503 `no_model` when no model is configured, 400 when the chosen model is not in the catalogue, and 409 `history` for a session from before chats, which is kept as history: write in the chat instead. The receipt confirms durable admission, not completion. Follow the session's events or poll its observation to see the reply.
 
