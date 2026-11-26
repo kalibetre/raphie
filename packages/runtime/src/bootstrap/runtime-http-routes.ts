@@ -23,6 +23,7 @@ import type { BotMcp } from "../domains/settings/infrastructure/bot-mcp.ts";
 import { mcpRoutes } from "../domains/settings/presentation/http/mcp-routes.ts";
 import { settingsRoutes } from "../domains/settings/presentation/http/routes.ts";
 import { skillRoutes } from "../domains/skills/presentation/http/routes.ts";
+import { workRoutes } from "../domains/work/presentation/http/routes.ts";
 import { workspaceRoutes } from "../domains/workspaces/presentation/http/routes.ts";
 import { clientRoutes } from "../infrastructure/http/client-routes.ts";
 import { snapshot } from "../infrastructure/pi/workspace-snapshot.ts";
@@ -73,6 +74,7 @@ export function runtimeRoutes(
     );
   if (options.mcp) app.route("/api/mcp", mcpRoutes(options.mcp));
   if (options.jobs) app.route("/api/jobs", jobRoutes(options.jobs));
+  app.route("/api/work-items", workRoutes(runtime.work));
   if (options.handoffs)
     app.route("/api/handoffs", handoffRoutes(options.handoffs));
   // The outer host owns sanitized transport error responses.

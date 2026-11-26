@@ -16,6 +16,8 @@ export type {
   TelegramProblem,
 } from "./bots/channels.ts";
 
+export type { WorkActor, WorkItem, WorkStatus } from "./bots/work.ts";
+
 export type {
   Handoff,
   HandoffOutcome,

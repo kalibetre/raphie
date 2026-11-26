@@ -23,6 +23,11 @@ export function chatModel(
     tool?: { name: string; args: JsonObject };
     repeatTool?: boolean;
     /**
+     * The tool each owner message calls, chosen from its text; undefined
+     * answers without one. Every message gets its own call.
+     */
+    toolFor?: (text: string) => { name: string; args: JsonObject } | undefined;
+    /**
      * A model with this window that reports realistic usage (about four
      * characters a token) and replies only to the newest message, so a long
      * conversation reaches the summary thresholds.
@@ -120,23 +125,27 @@ export function chatModel(
         cost: { input: 0, output: 0, total: 0, cacheRead: 0, cacheWrite: 0 },
       },
     };
-    const latestUser = options.repeatTool
-      ? context.messages.findLastIndex((m) => m.role === "user")
-      : -1;
+    const latestUser =
+      options.repeatTool || options.toolFor
+        ? context.messages.findLastIndex((m) => m.role === "user")
+        : -1;
     const result = context.messages
       .slice(latestUser + 1)
       .findLast((m) => m.role === "toolResult");
-    if (options.tool && !result) {
+    const tool = options.toolFor
+      ? options.toolFor(texts.at(-1) ?? "")
+      : options.tool;
+    if (tool && !result) {
       message.content = [
         {
           type: "toolCall",
           id: "fixture-call",
-          name: options.tool.name,
-          arguments: options.tool.args,
+          name: tool.name,
+          arguments: tool.args,
         },
       ];
       message.stopReason = "toolUse";
-    } else if (options.tool && result?.role === "toolResult") {
+    } else if (tool && result?.role === "toolResult") {
       message.content = [
         {
           type: "text",
@@ -215,5 +224,7 @@ export function chatModel(
 
 /** A message's text after the runtime's leading `[Sent …]` and `[Origin …]` lines. */
 export function withoutContext(text: string) {
-  return text.replace(/^(\[[^\n]*\]\n)+\n/, "");
+  // The bracketed lines up to the first blank line, and the open work
+  // listed among them.
+  return text.replace(/^\[[^\n]*\]\n(?:[^\n]+\n)*\n/, "");
 }

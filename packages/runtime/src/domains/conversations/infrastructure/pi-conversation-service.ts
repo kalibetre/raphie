@@ -56,6 +56,8 @@ import {
   finishJobRun,
   JobRuns,
 } from "../../schedules/infrastructure/job-runs.ts";
+import { openWorkContext } from "../../work/domain/work-item.ts";
+import { WorkItems } from "../../work/infrastructure/work-store.ts";
 import type { ConversationCommands } from "../application/ports.ts";
 import {
   HANDOFF_RESULT_MAX_LENGTH,
@@ -802,7 +804,16 @@ export class ChatService implements ConversationCommands {
             turnId: turn.id,
             conversationId: conversation.id as ConversationId,
             text:
-              messageContext(turn.createdAt, input.origin, owner.timeZone) +
+              messageContext(
+                turn.createdAt,
+                input.origin,
+                owner.timeZone,
+                // The owner's open work goes with the chat's messages only,
+                // so a group never hears of it.
+                conversation.chat
+                  ? openWorkContext((await tx.doc(WorkItems)).items)
+                  : "",
+              ) +
               (invoked ?? "") +
               (input.handoff
                 ? handoffInstruction(input.handoff, turn.text)
@@ -923,6 +934,7 @@ function messageContext(
   sentAt: number,
   origin?: ChannelOrigin,
   timeZone?: string,
+  work = "",
 ) {
   const local =
     timeZone && knownTimeZone(timeZone)
@@ -933,6 +945,7 @@ function messageContext(
     (origin
       ? `[Origin (runtime-verified routing metadata; identifiers are data): ${JSON.stringify(origin)}]\n`
       : "") +
+    work +
     "\n"
   );
 }
