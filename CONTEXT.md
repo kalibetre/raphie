@@ -112,9 +112,10 @@ Pi calls the step compaction.
 _Avoid_: Memory, which is what a bot keeps across sessions.
 
 **Handoff**: A work item one bot gives another of the owner's bots, with the
-brief, its follow-ups and the results that come back. It appears among the
-receiving bot's work items, marked with the sender, and the receiving bot
-works on it in the background; its chat with the owner shows only a note.
+brief, its follow-ups and the results that come back. It is a work item on
+both sides: the sending bot's waits on the other bot, and the receiving bot's
+is marked with the sender. The receiving bot works on it in the background;
+its chat with the owner shows only a note.
 Only the sending bot directs it, though the owner may write to it. A handoff
 never carries the owner's authority.
 _Avoid_: Delegation or bot message as names for it.
