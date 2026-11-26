@@ -1,4 +1,4 @@
-import type { Handoff, ModelSelection } from "@raphie/contracts";
+import type { Handoff, ModelSelection, Quote } from "@raphie/contracts";
 import { useEffect, useRef, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
@@ -18,6 +18,7 @@ import { HandoffDelegates, HandoffNote } from "./handoffs/handoff-delegates";
 import { useMentions } from "./handoffs/mention-menu";
 import { McpPermissions } from "./mcp-permissions";
 import { ModelPicker } from "./model-picker";
+import { ComposerQuote } from "./quote";
 import { type SlashCommand, useSlashMenu } from "./slash-menu";
 import { useComposerAttachments } from "./use-composer-attachments";
 import { useComposerLayout } from "./use-composer-layout";
@@ -41,6 +42,8 @@ export function Composer({
   onChooseModel,
   onModelSettings,
   onManageSkills,
+  quote,
+  onClearQuote,
 }: {
   /** The bot this conversation is with, named in the empty field. */
   botName?: string;
@@ -72,6 +75,9 @@ export function Composer({
   onModelSettings: () => void;
   /** Opens this bot's Skills settings, from the / menu. */
   onManageSkills?: () => void;
+  /** The earlier message the next one quotes. */
+  quote?: Quote;
+  onClearQuote?: () => void;
 }) {
   const [permission, setPermission] = useState<{
     key: string;
@@ -258,6 +264,11 @@ export function Composer({
     }
   }
 
+  // Quoting a message puts the caret in the draft that will quote it.
+  useEffect(() => {
+    if (quote) input.current?.focus();
+  }, [quote, input]);
+
   return (
     <div className="composer-wrap" ref={wrapper}>
       {error && (
@@ -274,6 +285,13 @@ export function Composer({
         }}
       >
         {slash.menu ?? mentions.menu}
+        {quote && (
+          <ComposerQuote
+            quote={quote}
+            botName={botName}
+            onClear={() => onClearQuote?.()}
+          />
+        )}
         <AttachmentChips
           files={files}
           workspace={workspace}

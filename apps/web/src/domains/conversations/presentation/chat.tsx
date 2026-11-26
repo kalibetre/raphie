@@ -1,4 +1,4 @@
-import type { Handoff } from "@raphie/contracts";
+import type { Handoff, Quote } from "@raphie/contracts";
 import { useChat } from "@tanstack/ai-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -37,6 +37,7 @@ import {
   remarkMentions,
   remarkSkills,
 } from "./handoffs/mention-markdown";
+import { messageId, QuoteAction, QuoteBar } from "./quote";
 import { SelfUpdateNotes } from "./self-update-notes";
 import { ShownCard } from "./shown-card";
 
@@ -87,6 +88,7 @@ export function Chat({
   bots = noBots,
   skills = noSkills,
   author,
+  onQuote,
 }: {
   /** The bot replying here: its name and avatar sign each reply. */
   author: { name: string; avatar: ReactNode };
@@ -101,6 +103,8 @@ export function Chat({
   bots?: readonly { id: string; name: string }[];
   /** This bot's skills, so a message starting "/name" shows the skill. */
   skills?: readonly string[];
+  /** Quotes a message in the next one the owner sends. */
+  onQuote?: (quote: Quote) => void;
 }) {
   const mentions = useMemo(
     () => ({
@@ -192,6 +196,12 @@ export function Chat({
       .filter((m) => m.role === "assistant")
       .map((m) => m.id.replace(/:reply$/, "")),
   );
+  // An excerpt as the runtime keeps it, so the composer shows what is sent.
+  const quoteOf = (turnId: string, author: Quote["author"], text: string) => ({
+    turnId,
+    author,
+    excerpt: text.trim().replace(/\s+/g, " ").slice(0, 280),
+  });
   const signature = (at?: number, title?: string) => (
     <header className="message-author">
       {author.avatar}
@@ -281,8 +291,12 @@ export function Chat({
               {divider}
               <article
                 className="message message-user"
+                id={turn ? messageId(turn.id, "owner") : undefined}
                 data-queued={turn?.queueMode ? true : undefined}
               >
+                {turn?.quote && (
+                  <QuoteBar quote={turn.quote} botName={author.name} />
+                )}
                 <div className="markdown">
                   <ReactMarkdown
                     components={mentions.components}
@@ -315,6 +329,11 @@ export function Chat({
                   <time dateTime={new Date(turn.createdAt).toISOString()}>
                     {time(turn.createdAt)}
                   </time>
+                )}
+                {turn && onQuote && text.trim() && !turn.queueMode && (
+                  <QuoteAction
+                    onQuote={() => onQuote(quoteOf(turn.id, "owner", text))}
+                  />
                 )}
               </article>
               {turn?.queueMode && (
@@ -351,7 +370,16 @@ export function Chat({
         )?.at;
         const turnSteps = (turn && steps.get(turn.id)) ?? [];
         return (
-          <article key={message.id} className="message message-assistant">
+          <article
+            key={message.id}
+            className="message message-assistant"
+            id={turn ? messageId(turn.id, "bot") : undefined}
+          >
+            {turn?.status === "done" && onQuote && text.trim() && (
+              <QuoteAction
+                onQuote={() => onQuote(quoteOf(turn.id, "bot", text))}
+              />
+            )}
             {turn?.status === "done" &&
               signature(
                 at,

@@ -1,4 +1,4 @@
-import type { ModelSelection } from "@raphie/contracts";
+import type { ModelSelection, Quote } from "@raphie/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
@@ -136,6 +136,10 @@ export function Workspace({
     navigationMax,
   } = useWorkspaceLayout();
   const [suggestion, setSuggestion] = useState<{ text: string; at: number }>();
+  // The earlier message the next one quotes, in the open session only.
+  const [quoting, setQuoting] = useState<Quote & { sessionId: string }>();
+  const quote =
+    quoting && quoting.sessionId === sessionId ? quoting : undefined;
   const handoffQuery = useHandoffs();
   const handoffs = handoffQuery.data?.items;
   // A handoff is saved inside its tool call, so once a tool step completes or
@@ -236,8 +240,12 @@ export function Workspace({
       sessionId: conversationId,
       approvalMode,
       model,
+      ...(quote
+        ? { quote: { turnId: quote.turnId, author: quote.author } }
+        : {}),
     });
     setSuggestion(undefined);
+    setQuoting(undefined);
     await refetch();
     workspace.assertActive();
     if (conversationId !== sent.sessionId)
@@ -554,6 +562,15 @@ export function Workspace({
                           onCancelHandoff={(id) =>
                             handoffQuery.cancel.mutateAsync(id)
                           }
+                          onQuote={
+                            conversation.history
+                              ? undefined
+                              : (next) =>
+                                  setQuoting({
+                                    ...next,
+                                    sessionId: conversation.sessionId,
+                                  })
+                          }
                         />
                       ) : (
                         <Welcome
@@ -596,6 +613,8 @@ export function Workspace({
                             await refetch();
                           }}
                           onSend={send}
+                          quote={quote}
+                          onClearQuote={() => setQuoting(undefined)}
                           onManageSkills={() =>
                             void navigate({
                               to: "/",
