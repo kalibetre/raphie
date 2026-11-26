@@ -178,6 +178,8 @@ export async function syncJobItem(
     };
     state.next += 1;
     state.items.push(item);
+    // The document keeps its own copy: later changes go to that one.
+    item = state.items.at(-1)!;
   }
   const finished =
     !job || (!job.enabled && job.everyMinutes === null && !!job.lastRunAt);

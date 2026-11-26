@@ -48,7 +48,13 @@ export function workLine(item: WorkItem) {
     item.origin?.kind === "job"
       ? `; scheduled job${item.nextAt ? `, next run ${new Date(item.nextAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}`
       : "";
-  return `${item.id} ${flat(item.title)}: ${where}${job}${running}${last}`;
+  const handoff =
+    item.origin?.kind === "handoff-sent"
+      ? `; handed to ${item.origin.bot.name} (handoff ${item.origin.handoffId})`
+      : item.origin?.kind === "handoff-received"
+        ? `; a task from ${item.origin.bot.name}`
+        : "";
+  return `${item.id} ${flat(item.title)}: ${where}${job}${handoff}${running}${last}`;
 }
 
 /**
@@ -123,6 +129,11 @@ export function changeWork(
     !isOpen(item.status) &&
     change.status !== undefined &&
     isOpen(change.status);
+  // A handoff's item reopens with its next request, not by hand.
+  if (reopening && item.origin?.kind === "handoff-sent")
+    return `${item.id} is a task handed to ${item.origin.bot.name}. It reopens when ${by === "owner" ? "the bot sends" : "you send"} a follow-up with handoff_follow_up.`;
+  if (reopening && item.origin?.kind === "handoff-received")
+    return `${item.id} is a task from ${item.origin.bot.name}. It reopens when ${item.origin.bot.name} follows up.`;
   if (!isOpen(item.status) && !(reopening && by === "owner"))
     return by === "owner"
       ? `${item.id} is ${item.status}. Reopen it to change it.`

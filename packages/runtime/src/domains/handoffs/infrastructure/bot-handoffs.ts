@@ -16,8 +16,13 @@ import type {
 } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
+import { isOpen } from "../../work/domain/work-item.ts";
 import {
-  continuedSession,
+  sentItem,
+  syncSentHandoff,
+} from "../../work/infrastructure/handoff-items.ts";
+import { WorkItems } from "../../work/infrastructure/work-store.ts";
+import {
   handoffStatus,
   MAX_OPEN_HANDOFFS_PER_BOT,
   openHandoffs,
@@ -247,11 +252,14 @@ export class BotHandoffs {
     await this.options.peers.stop(handoff.to.id, handoff.toSessionId);
   }
 
-  /** Records a new handoff and starts delivering it, in the caller's transaction. */
+  /**
+   * Records a new handoff and starts delivering it, in the caller's
+   * transaction. One from the bot's chat opens a work item that follows it.
+   */
   async create(
     tx: Tx,
     input: { id: string; to: string; title: string; brief: string },
-    from: { sessionId: string; turnId: string | null },
+    from: { sessionId: string; turnId: string | null; chat?: boolean },
   ) {
     const doc = await tx.doc(Handoffs);
     const existing = doc.items.find((item) => item.id === input.id);
@@ -287,6 +295,7 @@ export class BotHandoffs {
       ],
     };
     doc.items.push(handoff);
+    await syncSentHandoff(tx, handoff, { open: from.chat, started: true });
     await this.start(tx, handoff.id, 0);
     return handoff;
   }
@@ -317,6 +326,7 @@ export class BotHandoffs {
       outcome: null,
     });
     handoff.status = "working";
+    await syncSentHandoff(tx, handoff, { started: true });
     await this.start(tx, handoff.id, handoff.requests.length - 1);
     return handoff;
   }
@@ -359,22 +369,37 @@ export class BotHandoffs {
               );
               return;
             }
-            // One conversation talks to another bot in one session: a new
-            // task joins the session earlier tasks from here went to. Save
-            // the address first, so a retried delivery keeps the same one.
-            const joined = !handoff.toSessionId
-              ? continuedSession(
-                  (await runtime.snapshot(Handoffs, ctx))?.items ?? [],
-                  handoff,
-                )
-              : undefined;
-            if (joined)
+            // Its item was closed before the brief went out: send nothing.
+            const item = sentItem(
+              await runtime.snapshot(WorkItems, ctx),
+              handoffId,
+            );
+            if (item && !isOpen(item.status)) {
               await runtime.commit(async (tx) => {
                 const stored = await find(tx, handoffId);
-                if (stored && !stored.toSessionId) stored.toSessionId = joined;
-                return { status: "running", checkpoint: task.state.checkpoint };
+                const pending = stored?.requests[n];
+                if (stored && pending && pending.outcome === null) {
+                  pending.outcome = "cancelled";
+                  pending.finishedAt = Date.now();
+                  stored.status = handoffStatus(stored);
+                  await syncSentHandoff(tx, stored);
+                }
+                return {
+                  status: "terminal",
+                  outcome: { status: "completed", result: null },
+                };
               }, ctx);
-            const sessionId = handoff.toSessionId ?? joined;
+              // An earlier request may still be running there: closing the
+              // item stops the whole task.
+              if (handoff.toSessionId)
+                await this.options.peers
+                  .stop(handoff.to.id, handoff.toSessionId)
+                  .catch(() => {});
+              return;
+            }
+            // Each handoff has its own session on the other side; its
+            // follow-ups continue there.
+            const sessionId = handoff.toSessionId;
             try {
               // A retry reuses the event ID, so the other bot admits one turn.
               const receipt = await this.options.peers.submit(handoff.to.id, {
@@ -389,17 +414,24 @@ export class BotHandoffs {
                   sessionId: handoff.fromSessionId,
                 },
               });
+              let closed = false;
               await runtime.commit(async (tx) => {
                 const stored = await find(tx, handoffId);
                 if (stored) {
                   stored.toSessionId = receipt.sessionId;
                   stored.requests[n]!.turnId = receipt.id;
+                  closed = (await syncSentHandoff(tx, stored)) === false;
                 }
                 return {
                   status: "running",
                   checkpoint: { phase: "wait", turnId: receipt.id },
                 };
               }, ctx);
+              // Its item was closed while the brief went out: stop the task.
+              if (closed)
+                await this.options.peers
+                  .stop(handoff.to.id, receipt.sessionId)
+                  .catch(() => {});
             } catch (error) {
               const attempts = (task.state.checkpoint.attempts ?? 0) + 1;
               if (retryable(error) && attempts < MAX_ATTEMPTS) {
@@ -492,7 +524,20 @@ export class BotHandoffs {
             const handoff = (await runtime.snapshot(Handoffs, ctx))?.items.find(
               (item) => item.id === handoffId,
             );
-            if (handoff)
+            // The sender's item learns the result before the chat hears of
+            // it, so the result's turn sees the item as it now stands.
+            let open: boolean | undefined;
+            await runtime.commit(async (tx) => {
+              const stored = await find(tx, handoffId);
+              if (stored)
+                open = await syncSentHandoff(tx, stored, {
+                  finished: n,
+                  result: checkpoint.text,
+                });
+              return { status: "running", checkpoint };
+            }, ctx);
+            // A closed item keeps its result but tells the chat nothing.
+            if (handoff && open !== false)
               try {
                 await this.options.report({
                   eventId: `handoff:${handoffId}:${n}:result`,
@@ -525,6 +570,7 @@ export class BotHandoffs {
                 request.outcome = checkpoint.outcome;
                 request.finishedAt = Date.now();
                 stored.status = handoffStatus(stored);
+                await syncSentHandoff(tx, stored, { result: checkpoint.text });
               }
               return {
                 status: "terminal",
@@ -541,6 +587,7 @@ export class BotHandoffs {
               request.outcome = "cancelled";
               request.finishedAt = Date.now();
               stored.status = handoffStatus(stored);
+              await syncSentHandoff(tx, stored);
             }
             return { status: "terminal", outcome: { status: "aborted" } };
           }, ctx),

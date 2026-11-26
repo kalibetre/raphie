@@ -25,7 +25,12 @@ const Receipt = defineDoc<{ text: string | null }>({
 async function mutate(
   api: ToolExecutionApi,
   ctx: Context,
-  change: (tx: Tx, sessionId: string, turnId: string | null) => Promise<string>,
+  change: (
+    tx: Tx,
+    sessionId: string,
+    turnId: string | null,
+    chat: boolean,
+  ) => Promise<string>,
 ) {
   const text = await api.commit(async (tx) => {
     const receipt = await tx.doc(Receipt, api.taskId);
@@ -47,7 +52,12 @@ async function mutate(
         item.status === "pending" &&
         !item.queueMode,
     );
-    receipt.text = await change(tx, session.sessionId, turn?.id ?? null);
+    receipt.text = await change(
+      tx,
+      session.sessionId,
+      turn?.id ?? null,
+      !!session.chat,
+    );
     return receipt.text;
   }, ctx);
   return { output: [{ type: "text" as const, text }] };
@@ -122,7 +132,8 @@ export function createHandoffTools(handoffs: BotHandoffs) {
           ),
           "Hand a task off when the owner asks, or when it clearly suits one of them better, and only to a bot that can do it. If none can, for example the task needs the web and no bot has a connection for it, tell the owner what is missing instead of handing it off.",
           "When the owner names one of these bots with @, as in @Research, they want that bot to do the task: hand it off with handoff_create instead of doing it yourself. Write the brief from what you know of this conversation, since the other bot cannot see it. If the named bot cannot do it, say so before handing it off.",
-          "Everything you hand one bot from this conversation goes to the same session on its side, so it keeps the context of earlier tasks; refer to them freely in a brief.",
+          "Each task gets its own session on the other bot's side, which sees none of your earlier tasks, so make every brief stand on its own. A follow-up on a task continues in that task's session.",
+          "A task you hand off from your chat is also one of your work items, waiting on the other bot until its result returns; closing the item while it runs stops the task. Once you have told the owner what came back and nothing more is needed, close the item with work_close.",
           "Each handoff runs in the other bot's own session. Its result comes back into this conversation later as a new message, and you then tell the owner what came back. Do not wait for it, poll for it or invent its result.",
           "Use handoff_follow_up to send more instructions on a task you already handed off. Use handoff_list to see their status.",
           "The owner can also continue a handed-off task by writing in the other bot's session directly. Those messages and the other bot's replies to them stay there and never come back here as results. When the owner asks what happened there, read it with handoff_read instead of waiting for a result.",
@@ -153,7 +164,7 @@ export function createHandoffTools(handoffs: BotHandoffs) {
           // Task IDs repeat across bots, and the other bot keys its turns by
           // this ID. A replay of this call reuses the same one.
           const id = await api.memo("handoff-id", crypto.randomUUID(), ctx);
-          return mutate(api, ctx, async (tx, sessionId, turnId) =>
+          return mutate(api, ctx, async (tx, sessionId, turnId, chat) =>
             view(
               await handoffs.create(
                 tx,
@@ -163,7 +174,7 @@ export function createHandoffTools(handoffs: BotHandoffs) {
                   title: args.title.trim(),
                   brief: args.brief.trim(),
                 },
-                { sessionId, turnId },
+                { sessionId, turnId, chat },
               ),
             ),
           );
@@ -172,7 +183,7 @@ export function createHandoffTools(handoffs: BotHandoffs) {
       defineTool({
         name: "handoff_follow_up",
         description:
-          "Send more instructions on a task you already handed off. The other bot continues in the same session, and its new result returns here as a new message.",
+          "Send more instructions on a task you already handed off. The other bot continues in that task's session, and its new result returns here as a new message.",
         parameters: obj({
           id: str({
             minLength: 1,

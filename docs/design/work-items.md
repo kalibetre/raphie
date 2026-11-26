@@ -63,7 +63,7 @@ This reverses the chat runs from PR #163: the chat holds each run's result, not 
 
 ## Handoffs
 
-A handoff opens an item on each side. The sender's item (`handoff-sent`) waits on the other bot; its `result` is the handoff's result. The receiver's item (`handoff-received`) is marked with the sender, and its session is the session the handoff already runs in. `handoff_list` and the sender's handoff panel become the sender's work items; `handoff_follow_up` and `handoff_read` keep working, keyed by the item.
+A handoff from the bot's chat opens an item on each side, and each handoff has its own session on the receiving side. The sender's item (`handoff-sent`) waits on the other bot while a request is out and keeps each result; closing it while it runs cancels the handoff, and a result that ends on a closed item isn't posted to the chat. The receiver's item (`handoff-received`) runs with the task's turn in that session and closes with its answer. Both reopen only with a follow-up. The in-chat cards, the composer's delegates and the `handoff_*` tools stay as the live view of a task, keyed by the handoff.
 
 ## Owner surfaces
 
@@ -85,13 +85,13 @@ Each slice ships on its own, with web and desktop together where it has a screen
 2. **Work page** on web and desktop, with the owner's actions.
 3. **Background sessions**: `work_start`, results back to the chat, Cancel, keeping item sessions in the cleanup. Done in #168; results don't quote the source message yet.
 4. **Jobs as items**: runs in the item's session, results posted to the chat, PR #163's chat runs removed. Done: a job's item follows the job's lifecycle, and the owner changes it through the job, not the Work page.
-5. **Handoffs as items** on both sides; the handoff list folds into work items.
+5. **Handoffs as items** on both sides; the handoff list folds into work items. Done: each handoff has its own session on the receiving side, and both sides keep an item. The in-chat cards, the composer's delegates and the `handoff_*` tools stay: they are the live view of a task, and the Work page lists the items.
 6. **Approvals and questions as chat cards** from background sessions.
 
 ## Open questions
 
 - **Posting without a model turn.** Settled in slice 4: a `write` submission to the chat's conversation adds the post to the model context with no request, and the chat records it as a finished bot message. The home channel gets the run's reply from the run itself, so it is sent once.
-- **One session, two received handoffs.** Handoffs from the same sending session join one receiving session today. Two received items would then share a session, so Cancel on one would stop the other. Decide before slice 5: one item per sender-receiver thread, or one session per handoff.
+- **One session, two received handoffs.** Settled in slice 5: one session per handoff, so Cancel on one received item never stops another. A new task no longer sees earlier tasks' context, so briefs must stand alone.
 - **A post during a chat reply.** A job's result is written to the chat with a Pi `write`, which the model reads at the next boundary like a steer. If a chat reply is mid-run, the model sees the "[Your scheduled job …]" note partway through it. Check that this is harmless with a tool-calling reply, or hold posts until the chat is idle.
 - **Jobs crowding the list.** A bot can have 100 jobs, each an open item, and the list shows 20. Order requests and waiting items ahead of idle jobs, or show jobs as a count.
 - **Late results on a closed item.** Settled in #168: closing an item, by the owner or the bot, stops its running turn, and a run that ends on a closed item records its result without posting it to the chat.

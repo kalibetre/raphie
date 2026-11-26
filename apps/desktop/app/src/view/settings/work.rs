@@ -228,6 +228,11 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
     }
     // A scheduled job's item follows the job; it is changed there.
     let job = item.origin.as_ref().is_some_and(|o| o.kind == "job");
+    // A handoff's item reopens with its next request, not by hand.
+    let handoff = item
+        .origin
+        .as_ref()
+        .is_some_and(|o| o.kind.starts_with("handoff"));
     if job {
         let next = item
             .next_at
@@ -240,6 +245,19 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
             )
             .key(key("job")),
         );
+    }
+    let other = item.origin.as_ref().and_then(|o| {
+        let bot = o.bot.as_ref()?.name.as_str();
+        match o.kind.as_str() {
+            "handoff-sent" => Some(format!(
+                "Handed to {bot} · Its result comes back to the chat."
+            )),
+            "handoff-received" => Some(format!("A task from {bot} · The result goes back to it.")),
+            _ => None,
+        }
+    });
+    if let Some(text) = other {
+        card = card.child(note(t, text).key(key("handoff")));
     }
     if !item.notes.is_empty() {
         card = card.child(
@@ -306,14 +324,14 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
                 !busy,
                 set(WorkStatus::Dropped),
             ));
-    } else {
+    } else if !handoff {
         buttons = buttons.child(pressable(
             button(t, Kind::Ghost, Size::Small, None, "Reopen").key(key("reopen")),
             !busy,
             set(WorkStatus::Active),
         ));
     }
-    if running || !job {
+    if running || (!job && (item.status.is_open() || !handoff)) {
         card = card.child(buttons);
     }
     card

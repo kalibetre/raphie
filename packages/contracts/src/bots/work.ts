@@ -21,8 +21,18 @@ export type WorkItem = {
   notes: string;
   /** The latest result, and the chat turn that carried it. */
   result?: { text: string; at: number; turnId?: string };
-  /** Where it came from, when not from the chat: a scheduled job. */
-  origin?: { kind: "job"; jobId: string };
+  /**
+   * Where it came from, when not from the chat: a scheduled job, or a task
+   * handed to another bot (`handoff-sent`) or from one (`handoff-received`).
+   */
+  origin?:
+    | { kind: "job"; jobId: string }
+    | {
+        kind: "handoff-sent" | "handoff-received";
+        handoffId: string;
+        /** The other bot: the one it was handed to, or the one it came from. */
+        bot: { id: string; name: string };
+      };
   /** When it next wakes on its own: a job's next run. */
   nextAt?: number;
   /** Its own background session, once work has run there. */

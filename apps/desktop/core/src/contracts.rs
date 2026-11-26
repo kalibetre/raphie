@@ -2203,12 +2203,20 @@ pub struct WorkItem {
     pub next_at: Option<i64>,
 }
 
-/// `WorkItem["origin"]`: the scheduled job an item follows.
+/// `WorkItem["origin"]`: the scheduled job an item follows, or the task it
+/// handed to another bot (`handoff-sent`) or received from one
+/// (`handoff-received`).
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkOrigin {
     pub kind: String,
-    pub job_id: String,
+    #[serde(default)]
+    pub job_id: Option<String>,
+    #[serde(default)]
+    pub handoff_id: Option<String>,
+    /// The other bot of a handoff.
+    #[serde(default)]
+    pub bot: Option<BotRef>,
 }
 
 /// What `GET /api/work-items` answers.

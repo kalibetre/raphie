@@ -858,6 +858,17 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
           turnId: "work-venues",
         },
       }),
+      item("w-5", "Compare memory backends", {
+        status: "waiting",
+        waitingOn: "Research to finish",
+        notes: "Compare Hindsight and Honcho and recommend one.",
+        origin: {
+          kind: "handoff-sent",
+          handoffId: "fixture-handoff",
+          bot: { id: "research", name: "Research" },
+        },
+        run: { id: "handoff:fixture-handoff:0", startedAt: now - 30_000 },
+      }),
       item("w-4", "Morning brief", {
         notes: "Summarise today's calendar and open work.",
         origin: { kind: "job", jobId: "fixture-job" },
@@ -869,7 +880,7 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
         },
       }),
     );
-    work.next = 5;
+    work.next = 6;
   }, durableContext);
 }
 settings.onChange = () => {
