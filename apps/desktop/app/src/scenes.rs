@@ -55,7 +55,7 @@ pub const SCENES: &[Scene] = &[
     ("inbox", inbox),
     ("inbox-empty", inbox_empty),
     ("conversation", conversation),
-    ("conversation-archived", conversation_archived),
+    ("conversation-history", conversation_history),
     ("compaction", compaction),
     ("compaction-open", compaction_open),
     ("attachments", attachments),
@@ -178,8 +178,6 @@ pub const SCENES: &[Scene] = &[
         settings_diagnostics_unavailable,
     ),
     ("settings-activity", settings_activity),
-    ("settings-archived", settings_archived),
-    ("settings-archived-empty", settings_archived_empty),
     ("settings-activity-empty", settings_activity_empty),
     ("settings-activity-loading", settings_activity_loading),
 ];
@@ -1937,71 +1935,6 @@ pub fn conversations(ui: &mut Ui) {
     conversation(ui);
 }
 
-/// Settings → Archived: two archived conversations.
-pub fn settings_archived(ui: &mut Ui) {
-    conversation(ui);
-    ui.open_settings(Some(Page::Bot {
-        bot_id: "default".into(),
-        section: BotSection::Archived,
-    }));
-    let now = now_ms();
-    let archived = |mut session: SessionSummary, at: i64| {
-        session.archived_at = Some(at);
-        session
-    };
-    ui.model.apply(Event::ArchivedSessions {
-        bot_id: "default".into(),
-        sessions: vec![
-            archived(
-                summary(
-                    "s-4",
-                    "Holiday packing list",
-                    "Sun cream, adapters and the blue notebook.",
-                    now - 3 * 86_400_000,
-                    false,
-                    false,
-                ),
-                now - 86_400_000,
-            ),
-            archived(
-                summary(
-                    "s-5",
-                    "Birthday gift ideas",
-                    "A pottery class, or a good pair of gloves.",
-                    now - 12 * 86_400_000,
-                    false,
-                    false,
-                ),
-                now - 5 * 86_400_000,
-            ),
-        ],
-    });
-}
-
-/// Settings → Archived with nothing archived yet.
-pub fn settings_archived_empty(ui: &mut Ui) {
-    conversation(ui);
-    ui.open_settings(Some(Page::Bot {
-        bot_id: "default".into(),
-        section: BotSection::Archived,
-    }));
-    ui.model.apply(Event::ArchivedSessions {
-        bot_id: "default".into(),
-        sessions: Vec::new(),
-    });
-}
-
-/// "Plan the week" open after it was archived: the title bar offers to
-/// bring it back.
-pub fn conversation_archived(ui: &mut Ui) {
-    conversation(ui);
-    ui.model.apply(Event::Archived {
-        bot_id: "default".into(),
-        session_id: "s-1".into(),
-        archived_at: Some(now_ms()),
-    });
-}
-
 /// The sidebar's conversations with replies not read yet: two new in one
 /// conversation, and one that was read to its end.
 pub fn unread(ui: &mut Ui) {
@@ -2081,6 +2014,20 @@ pub fn inbox_empty(ui: &mut Ui) {
 
 pub fn conversation(ui: &mut Ui) {
     conversation_with(ui, finished_activity());
+}
+
+/// "Plan the week" from before chats: kept as history, with the way back
+/// to the chat in place of the composer.
+pub fn conversation_history(ui: &mut Ui) {
+    conversation(ui);
+    if let Some(observation) = ui
+        .model
+        .conversation
+        .as_mut()
+        .and_then(|c| c.observation.as_mut())
+    {
+        observation.session.history = true;
+    }
 }
 
 fn conversation_with(ui: &mut Ui, activity: Vec<Value>) {

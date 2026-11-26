@@ -658,6 +658,13 @@ pub struct SessionSummary {
     /// task came from.
     #[serde(default)]
     pub handed_off_by: Option<HandedOffBy>,
+    /// The session behind the bot's one chat with the owner.
+    #[serde(default)]
+    pub chat: bool,
+    /// From before chats: kept as history, and the owner no longer writes
+    /// in it.
+    #[serde(default)]
+    pub history: bool,
 }
 
 /// `SessionView["handedOffBy"]` in `packages/contracts`.

@@ -21,7 +21,6 @@ use raphie_core::engine::{Client, Command, ConnectionChange, EngineConfig};
 use raphie_core::flavor::Flavor;
 use raphie_core::inbox::{self, Announcement, Announcements, Item, Target};
 use raphie_core::jobs::JobAction;
-use raphie_core::last_sessions::LastSessions;
 use raphie_core::local_install;
 use raphie_core::mcp::McpAction;
 use raphie_core::memory::{CONTENT_LIMIT, QUERY_LIMIT};
@@ -66,15 +65,6 @@ fn first_origin(flavor: Flavor, ports_file: Option<&std::path::Path>) -> String 
         Flavor::Dev => FIXTURE_ORIGIN.to_owned(),
         Flavor::Release => local_install::origin_at(ports_file).as_str().to_owned(),
     }
-}
-
-/// Which conversations the sidebar lists (the web's filter chips).
-/// Archived ones are in Settings → Archived, not here.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Filter {
-    All,
-    /// Only conversations with an action waiting for approval.
-    Approvals,
 }
 
 /// Which notifications the inbox lists (the web's tabs).
@@ -385,11 +375,6 @@ pub struct Ui {
     /// The roster's chosen width, dragged by its edge and kept in the
     /// settings.
     pub roster_width: f32,
-    /// The search box over the selected bot's conversations.
-    pub search: TextEdit,
-    pub filter: Filter,
-    /// The search box on Settings → Archived.
-    pub archived_search: TextEdit,
     pub screen: Screen,
     /// Bots whose pages are unfolded in the Settings navigation.
     pub expanded_bots: HashSet<String>,
@@ -416,9 +401,6 @@ pub struct Ui {
     pub posted: Vec<Announcement>,
     /// How many of each conversation's replies were read on this computer.
     pub read_replies: ReadReplies,
-    /// The conversation last open with each bot, reopened when the bot is
-    /// chosen again.
-    pub last_sessions: LastSessions,
     /// The conversation on screen is scrolled to its end.
     pub at_bottom: bool,
     /// This window is the one in front.
@@ -583,9 +565,6 @@ impl Ui {
         ui.read_replies = ReadReplies::default_path()
             .map(|path| ReadReplies::load(&path))
             .unwrap_or_default();
-        ui.last_sessions = LastSessions::default_path()
-            .map(|path| LastSessions::load(&path))
-            .unwrap_or_default();
         ui
     }
 
@@ -610,9 +589,6 @@ impl Ui {
             workspace_width: 0.0,
             workspace_height: 0.0,
             roster_width: ROSTER_WIDTH,
-            search: TextEdit::new(""),
-            filter: Filter::All,
-            archived_search: TextEdit::new(""),
             screen: Screen::Workspace,
             expanded_bots: HashSet::new(),
             theme: ThemeChoice::System,
@@ -625,7 +601,6 @@ impl Ui {
             announced: Announcements::default(),
             posted: Vec::new(),
             read_replies: ReadReplies::default(),
-            last_sessions: LastSessions::default(),
             // A conversation opens at its end, in a window in front.
             at_bottom: true,
             window_focused: true,
@@ -728,9 +703,6 @@ impl Ui {
     }
 
     pub fn select_bot(&mut self, bot_id: &str) {
-        // What was open with the bot being left, including a conversation
-        // that started since it was chosen.
-        self.remember_session();
         self.inbox_open = false;
         // A model chosen for one bot's new conversation is not another's.
         self.new_model = None;
@@ -740,21 +712,6 @@ impl Ui {
         self.model.select_bot(bot_id.to_owned());
         self.command(Command::SelectBot {
             bot_id: bot_id.to_owned(),
-        });
-    }
-
-    /// Chooses which conversations the sidebar lists.
-    pub fn choose_filter(&mut self, filter: Filter) {
-        self.filter = filter;
-    }
-
-    /// Archives one of a bot's conversations, or brings it back. It stays
-    /// open if it is.
-    pub fn archive(&mut self, bot_id: &str, session_id: &str, archived: bool) {
-        self.command(Command::Archive {
-            bot_id: bot_id.to_owned(),
-            session_id: session_id.to_owned(),
-            archived,
         });
     }
 
@@ -1435,6 +1392,31 @@ impl Ui {
             .collect()
     }
 
+    /// Whether the open session is from before chats, kept as history: the
+    /// owner reads it but no longer writes in it.
+    pub fn open_is_history(&self) -> bool {
+        let Some(conversation) = self.model.conversation.as_ref() else {
+            return false;
+        };
+        conversation
+            .observation
+            .as_ref()
+            .map(|o| o.session.history)
+            .or_else(|| {
+                self.model
+                    .session_list()
+                    .find(|s| s.id == conversation.session_id)
+                    .map(|s| s.history)
+            })
+            .unwrap_or(false)
+    }
+
+    /// Leaves a session for the selected bot's chat: it opens once its
+    /// session is known (`ensure_chat`), or empty for a bot with none yet.
+    pub fn go_to_chat(&mut self) {
+        self.select_session(None);
+    }
+
     /// The bot that handed the open conversation's task off, if one did:
     /// only it sends messages there.
     pub fn handed_off_by(&self) -> Option<&HandedOffBy> {
@@ -1526,43 +1508,32 @@ impl Ui {
         }
     }
 
-    /// A bot chosen from the roster or a link: back to the conversation
-    /// last open with it, or a new one if there was none, as on the web.
+    /// A bot chosen from the roster or a link: its chat, as on the web.
+    /// The chat opens once the bot's sessions arrive (`ensure_chat`).
     pub fn choose_bot(&mut self, bot_id: &str) {
-        self.remember_session();
-        let last = self
-            .model
-            .origin
-            .as_ref()
-            .and_then(|origin| self.last_sessions.get(origin.as_str(), bot_id))
-            .map(str::to_owned);
-        match last {
-            Some(session_id) => self.open_conversation(bot_id, &session_id),
-            None => self.select_bot(bot_id),
-        }
+        self.select_bot(bot_id);
+        // In a narrow window the chat takes the roster's place.
+        self.narrow_home = false;
     }
 
-    /// Notes the open conversation as the last one with its bot. A new
-    /// conversation with no session yet leaves the last one as it was.
-    fn remember_session(&mut self) {
-        let (Some(origin), Some(bot_id), Some(open)) = (
-            &self.model.origin,
-            &self.model.bot_id,
-            &self.model.conversation,
-        ) else {
+    /// Opens the selected bot's chat once its sessions have arrived, when
+    /// nothing else is open. A bot with no chat yet stays on its empty
+    /// chat, which its first message starts.
+    fn ensure_chat(&mut self) {
+        if !matches!(self.model.auth, AuthState::SignedIn)
+            || !matches!(self.screen, Screen::Workspace)
+            || !self.model.sessions_loaded
+            || self.model.conversation.is_some()
+        {
+            return;
+        }
+        let Some(chat) = self.model.chat_session().map(|s| s.id.clone()) else {
             return;
         };
-        let changed = self
-            .last_sessions
-            .set(origin.as_str(), bot_id, &open.session_id);
-        // Tests and headless runs have no engine and must not write files.
-        if changed
-            && self.client.is_some()
-            && let Some(path) = LastSessions::default_path()
-        {
-            // Forgetting is harmless: the bot opens on a new conversation.
-            let _ = self.last_sessions.save(&path);
-        }
+        // Opening it is not a choice to leave the roster or the inbox.
+        let (home, inbox) = (self.narrow_home, self.inbox_open);
+        self.select_session(Some(&chat));
+        (self.narrow_home, self.inbox_open) = (home, inbox);
     }
 
     /// A link pressed in a message: a bot it names opens that bot, and a
@@ -1628,14 +1599,11 @@ impl Ui {
             name: name.to_owned(),
             description: description.to_owned(),
         };
-        let mut items = vec![
-            command(SlashKind::New, "new", "Start a new conversation"),
-            command(
-                SlashKind::Model,
-                "model",
-                "Choose the model for this conversation",
-            ),
-        ];
+        let mut items = vec![command(
+            SlashKind::Model,
+            "model",
+            "Choose the model for this chat",
+        )];
         if self.busy() {
             items.push(command(
                 SlashKind::Stop,
@@ -1681,8 +1649,6 @@ impl Ui {
         self.composer.replace_text("");
         self.composer.set_caret(0);
         match item.kind {
-            // The same as the New conversation buttons.
-            SlashKind::New => self.select_session(None),
             SlashKind::Model => self.model_picker.open = true,
             SlashKind::Stop => self.stop(),
             SlashKind::Handoff => {
@@ -1999,13 +1965,6 @@ impl Ui {
                 self.model.memory_message = None;
                 // Notice settings saved in another client.
                 self.command(Command::LoadMemory {
-                    bot_id: bot_id.clone(),
-                });
-            }
-            if *section == BotSection::Archived {
-                // Fetched each time the page opens, as on the web.
-                self.archived_search = TextEdit::new("");
-                self.command(Command::LoadArchived {
                     bot_id: bot_id.clone(),
                 });
             }
@@ -4223,6 +4182,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.ensure_skills();
     ui.ensure_self_update_sources();
     ui.ensure_command_mode();
+    ui.ensure_chat();
     ui.ask_previews();
     ui.open_announced_sign_in_page(tx);
     // A reply that arrived while its conversation is on screen is read.

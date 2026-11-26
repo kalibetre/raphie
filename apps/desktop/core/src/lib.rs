@@ -16,7 +16,6 @@
 //! - [`cards`]: a timeline card as it reads now: what is over, and where the present falls.
 //! - [`engine`]: the background runtime that does the I/O and reports events.
 //! - [`settings`]: non-secret preferences.
-//! - [`last_sessions`]: the conversation last open with each bot.
 //! - [`flavor`]: the dev build and the release build, kept apart.
 //! - [`updates`]: this app's version, and whether a newer one is released.
 //! - [`local_install`]: finding a Raphie installed on this computer.
@@ -39,7 +38,6 @@ pub mod handoffs;
 pub mod inbox;
 pub mod inspection;
 pub mod jobs;
-pub mod last_sessions;
 pub mod local_install;
 pub mod mcp;
 pub mod memory;

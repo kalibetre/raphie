@@ -925,7 +925,8 @@ pub struct Model {
     /// Each bot's archived sessions, newest first, by bot id; a bot is
     /// missing until they are fetched (when Settings → Archived opens).
     pub archived: HashMap<String, Vec<SessionSummary>>,
-    /// The open conversation; `None` means a new, unsent conversation.
+    /// The open session; `None` means the bot's chat before its first
+    /// message gives it a session.
     pub conversation: Option<Conversation>,
     pub sending: bool,
     /// What was last heard from the bots that are not on screen, and
@@ -2018,7 +2019,15 @@ impl Model {
                     .iter()
                     .filter(move |s| !first.contains(s.id.as_str())),
             )
-            .filter(|s| s.archived_at.is_none())
+            // A session archived before chats is not listed; the chat
+            // always is, even if it was archived then.
+            .filter(|s| s.archived_at.is_none() || s.chat)
+    }
+
+    /// The selected bot's chat, once its sessions have arrived; `None`
+    /// until then, or while the bot has no chat yet.
+    pub fn chat_session(&self) -> Option<&SessionSummary> {
+        self.session_list().find(|s| s.chat)
     }
 
     pub fn selected_bot(&self) -> Option<&BotProfile> {

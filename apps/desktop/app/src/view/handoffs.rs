@@ -1175,7 +1175,6 @@ pub fn slash_menu(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> bool {
 /// Each command's glyph, as the buttons that do the same show it.
 fn command_icon(kind: SlashKind) -> Option<&'static rune::Icon> {
     match kind {
-        SlashKind::New => Some(&icons::SQUARE_PEN),
         SlashKind::Model => Some(&icons::SPARKLES),
         SlashKind::Stop => Some(&icons::SQUARE),
         SlashKind::Handoff => Some(&icons::CORNER_UP_RIGHT),
