@@ -93,8 +93,9 @@ async function openWork(
     notes?: string;
   },
   by: WorkActor,
-  sourceTurnId?: string,
+  from?: { conversationId: number; turnId?: string },
 ): Promise<WorkItem | string> {
+  const sourceTurnId = from?.turnId;
   const title = clip(input.title, LIMITS.title);
   if (!title) return "A work item needs a title.";
   const state = await tx.doc(WorkItems);
@@ -115,6 +116,7 @@ async function openWork(
   state.next += 1;
   state.items.push(item);
   record(await tx.doc(Activity), "work.opened", "Opened a work item", {
+    ...(from ? { conversationId: from.conversationId } : {}),
     operationId: item.id,
     details: { title: item.title, by },
   });
@@ -127,6 +129,7 @@ async function changeWorkItem(
   id: string,
   change: WorkChange,
   by: WorkActor,
+  conversationId?: number,
 ): Promise<WorkItem | string> {
   const item = find(await tx.doc(WorkItems), id);
   if (!item) return `No work item ${id}.`;
@@ -139,6 +142,7 @@ async function changeWorkItem(
       isOpen(item.status) ? "work.reopened" : "work.closed",
       isOpen(item.status) ? "Reopened a work item" : "Closed a work item",
       {
+        ...(conversationId === undefined ? {} : { conversationId }),
         operationId: item.id,
         details: { title: item.title, status: item.status, by },
       },
@@ -252,7 +256,10 @@ export function createWorkTools() {
           mutate(api, ctx, async (tx) => {
             const chat = await chatTurn(tx, api);
             if (!chat) return { error: NOT_IN_CHAT };
-            const item = await openWork(tx, args, "bot", chat.turnId);
+            const item = await openWork(tx, args, "bot", {
+              conversationId: api.conversationId,
+              turnId: chat.turnId,
+            });
             if (typeof item === "string") return { error: item };
             return JSON.stringify({ opened: true, item: workLine(item) });
           }),
@@ -274,7 +281,13 @@ export function createWorkTools() {
           mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
             const { id: itemId, ...change } = args;
-            const item = await changeWorkItem(tx, itemId, change, "bot");
+            const item = await changeWorkItem(
+              tx,
+              itemId,
+              change,
+              "bot",
+              api.conversationId,
+            );
             if (typeof item === "string") return { error: item };
             return JSON.stringify({ updated: true, item: workLine(item) });
           }),
@@ -297,6 +310,7 @@ export function createWorkTools() {
               args.id,
               { status: args.outcome, result: args.result },
               "bot",
+              api.conversationId,
             );
             if (typeof item === "string") return { error: item };
             return JSON.stringify({ closed: true, item: workLine(item) });

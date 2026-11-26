@@ -10,6 +10,7 @@ import type { JsonObject } from "@earendil-works/pi-durable";
 import type { WorkItem } from "@raphie/contracts";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
+import { Activity } from "../src/domains/activity/infrastructure/pi-activity-journal.ts";
 import {
   MAX_LISTED,
   openWorkContext,
@@ -125,6 +126,7 @@ test("the bot opens, updates and closes a work item from its chat", async () => 
     },
     close: { name: "work_close", args: { id: "w-1", outcome: "done" } },
     again: { name: "work_update", args: { id: "w-1", notes: "More" } },
+    reopen: { name: "work_update", args: { id: "w-1", status: "active" } },
   });
   try {
     const opened = await say("open a flight search");
@@ -157,6 +159,21 @@ test("the bot opens, updates and closes a work item from its chat", async () => 
     assert.equal(closed?.closed?.by, "bot");
     // A closed item stays closed, and leaves the messages.
     assert.match((await say("again")).answer!, /w-1 is done\. Open a new item/);
+    // Only the owner reopens an item.
+    assert.match(
+      (await say("reopen it")).answer!,
+      /w-1 is done\. Open a new item/,
+    );
+    assert.equal((await app.work.list({ open: false }))[0]?.status, "done");
+    // The bot's changes are recorded against its chat.
+    const chat = (await app.chats.state()).conversations.find((c) => c.chat)!;
+    const events = (await app.harness.snapshot(Activity, context))!.events;
+    for (const type of ["work.opened", "work.closed"])
+      assert.equal(
+        events.find((e) => e.type === type)?.conversationId,
+        chat.id,
+        type,
+      );
     assert.doesNotMatch(seen.at(-1)!, /Open work/);
   } finally {
     await done();
