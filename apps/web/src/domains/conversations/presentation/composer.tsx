@@ -40,7 +40,6 @@ export function Composer({
   onStop,
   onChooseModel,
   onModelSettings,
-  onNewConversation,
   onManageSkills,
 }: {
   /** The bot this conversation is with, named in the empty field. */
@@ -71,8 +70,6 @@ export function Composer({
   ) => Promise<void>;
   onChooseModel: (model: ModelSelection) => Promise<void>;
   onModelSettings: () => void;
-  /** The /new command: open a new conversation with this bot. */
-  onNewConversation?: () => void;
   /** Opens this bot's Skills settings, from the / menu. */
   onManageSkills?: () => void;
 }) {
@@ -137,20 +134,10 @@ export function Composer({
   const [modelRequest, setModelRequest] = useState(0);
   const skills = useSkills().list.data?.items ?? [];
   const commands: SlashCommand[] = [
-    ...(onNewConversation
-      ? [
-          {
-            kind: "command" as const,
-            name: "new",
-            description: "Start a new conversation",
-            run: onNewConversation,
-          },
-        ]
-      : []),
     {
       kind: "command",
       name: "model",
-      description: "Choose the model for this conversation",
+      description: "Choose the model for this chat",
       run: () => setModelRequest((n) => n + 1),
     },
     ...(busy

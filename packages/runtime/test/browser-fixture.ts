@@ -705,6 +705,7 @@ if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
       sessionId: newSessionId(),
       title: "Scroll layout acceptance",
       createdAt: now,
+      chat: true,
     });
     for (let n = 0; n < 60; n++) {
       const id = crypto.randomUUID();
@@ -745,6 +746,33 @@ if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
         },
       );
     }
+  }, durableContext);
+}
+// A conversation from before chats, kept as history beside the chat.
+if (process.env.RAPHIE_FIXTURE_PRE_CHAT === "true") {
+  await app.root.commit(async (tx) => {
+    const created = await tx.createConversation({
+      ownership: { kind: "ownerless" },
+    });
+    const state = await tx.doc(Chats);
+    const at = Date.now() - 86_400_000;
+    state.conversations.push({
+      id: created.id,
+      sessionId: newSessionId(at),
+      title: "Planning the offsite",
+      createdAt: at,
+    });
+    state.turns.push({
+      id: crypto.randomUUID(),
+      requestKey: "fixture:pre-chat",
+      fingerprint: "fixture",
+      conversationId: created.id,
+      source: "web",
+      text: "Where should we hold the team offsite?",
+      createdAt: at,
+      status: "done",
+      answer: "Lisbon or Porto both work in December; Lisbon has more venues.",
+    });
   }, durableContext);
 }
 settings.onChange = () => {

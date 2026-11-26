@@ -1,6 +1,5 @@
 import type { BotProfile, SessionSummary } from "@raphie/contracts";
-import { Plus, Settings, SquarePen } from "lucide-react";
-import type { ReactNode } from "react";
+import { Plus, Settings } from "lucide-react";
 
 import brandMark from "../../../shared/favicon.svg?inline";
 import { Button } from "../../../shared/ui/button";
@@ -21,8 +20,6 @@ export function BotSidebar({
   connected,
   error,
   onRetry,
-  conversations,
-  onNew,
   needsSetup = false,
 }: {
   bots: BotProfile[];
@@ -30,22 +27,17 @@ export function BotSidebar({
   byBot: Map<string, SessionSummary[]>;
   unread: (botId: string, session: SessionSummary) => number;
   onSelect: (id: string) => void;
-  /** Opens one of a bot's conversations. */
+  /** Opens one of a bot's sessions, such as one waiting for an approval. */
   onOpen: (botId: string, sessionId: string) => void;
   onSettings: () => void;
   onCreate: () => void;
   connected: boolean;
   error: boolean;
   onRetry: () => void;
-  /** The selected bot's conversation list, below the team. */
-  conversations?: ReactNode;
-  onNew?: () => void;
   /** The selected bot has no model yet; others are not known here. */
   needsSetup?: boolean;
 }) {
   const botStyle = useBotStyle();
-  const current = bots.find((b) => b.id === botId);
-  const name = current?.name ?? "Raphie";
   // Requests that wait on the owner, from every teammate, pinned on top.
   const requests = bots
     .flatMap((b) =>
@@ -129,29 +121,6 @@ export function BotSidebar({
           </button>
         </nav>
       </ScrollArea>
-      {conversations && (
-        <section
-          className="roster-conversations"
-          aria-label={`Conversations with ${name}`}
-        >
-          <div className="roster-label">
-            <span className="roster-label-text">With {name}</span>
-            {onNew && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="roster-label-action"
-                aria-label={`New conversation with ${name}`}
-                title="New conversation"
-                onClick={onNew}
-              >
-                <SquarePen size={13} />
-              </Button>
-            )}
-          </div>
-          {conversations}
-        </section>
-      )}
       <footer className="roster-footer">
         <img className="roster-brand-mark" src={brandMark} alt="" />
         <span className="roster-brand-name">raphie</span>

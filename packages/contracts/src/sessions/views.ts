@@ -35,6 +35,8 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   handedOffBy?: { id: string; name: string; sessionId?: string };
   /** The session behind the bot's one chat with the owner; optional for older runtimes. */
   chat?: true;
+  /** From before chats: kept as history, and the owner no longer writes in it. */
+  history?: true;
 };
 
 export type SessionTurn = Omit<

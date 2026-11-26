@@ -161,6 +161,14 @@ test("a session from before chats is history: the owner writes in the chat inste
     const chat = await app.chats.send(web("chat"));
     const group = await app.chats.send(channel("group", "telegram:-100"));
     await app.harness.waitForIdle(context);
+    // Clients list the chat first and mark what is history.
+    const listed = (await app.queries.sessions(app.actors.establish("web")))
+      .items;
+    assert.equal(listed[0]?.sessionId, chat.sessionId);
+    assert.deepEqual(
+      listed.filter((s) => s.history).map((s) => s.sessionId),
+      [old.sessionId],
+    );
     await assert.rejects(
       app.chats.send({ ...web("again"), sessionId: old.sessionId }),
       (error: Error & { status?: number; code?: string }) =>
