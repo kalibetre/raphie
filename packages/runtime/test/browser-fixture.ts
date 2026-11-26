@@ -24,6 +24,7 @@ import { newSessionId } from "../src/domains/conversations/infrastructure/sessio
 import { openLocalOtlp } from "../src/domains/diagnostics/infrastructure/local-otlp.ts";
 import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memory.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
+import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
 import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
 import { switchableTelemetry } from "../src/infrastructure/observability/telemetry-switch.ts";
 import { appDataIdentity } from "../src/infrastructure/workspace/app-data.ts";
@@ -746,6 +747,99 @@ if (process.env.RAPHIE_FIXTURE_LONG_HISTORY === "true") {
         },
       );
     }
+  }, durableContext);
+}
+// Opt-in work items: one running in the background, and results that came
+// back to the chat, completed and cancelled.
+if (process.env.RAPHIE_FIXTURE_WORK === "true") {
+  await app.root.commit(async (tx) => {
+    const state = await tx.doc(Chats);
+    let chat = state.conversations.find((c) => c.chat);
+    if (!chat) {
+      const created = await tx.createConversation({
+        ownership: { kind: "ownerless" },
+      });
+      chat = {
+        id: created.id,
+        sessionId: newSessionId(),
+        title: "Chat",
+        createdAt: Date.now(),
+        chat: true,
+      };
+      state.conversations.push(chat);
+    }
+    const now = Date.now();
+    const turn = (
+      id: string,
+      at: number,
+      text: string,
+      answer: string,
+      work?: {
+        itemId: string;
+        title: string;
+        outcome: "completed" | "cancelled";
+      },
+    ) =>
+      state.turns.push({
+        id,
+        requestKey: `fixture:${id}`,
+        fingerprint: "fixture",
+        conversationId: chat.id,
+        source: "web",
+        text,
+        createdAt: at,
+        status: "done",
+        answer,
+        ...(work ? { work: { ...work, kind: "result" as const } } : {}),
+      });
+    turn(
+      "work-ask",
+      now - 600_000,
+      "Can you look into venues for the offsite, and check the catering quotes?",
+      "On it. I've started both in the background and will tell you what comes back.",
+    );
+    turn(
+      "work-venues",
+      now - 300_000,
+      "Your background work on w-2 ended.",
+      "Three venues have the second week of December free: two in Lisbon and one in Porto. The Porto one is cheapest and has a meeting room for 30.",
+      { itemId: "w-2", title: "Venue research", outcome: "completed" },
+    );
+    turn(
+      "work-catering",
+      now - 120_000,
+      "Your background work on w-3 ended.",
+      "I stopped the catering comparison, as you asked. Nothing was booked.",
+      { itemId: "w-3", title: "Catering quotes", outcome: "cancelled" },
+    );
+    const work = await tx.doc(WorkItems);
+    const item = (
+      id: string,
+      title: string,
+      extra: Record<string, unknown>,
+    ) => ({
+      id,
+      title,
+      status: "active" as const,
+      notes: "",
+      opened: { at: now - 600_000, by: "bot" as const },
+      updatedAt: now - 60_000,
+      ...extra,
+    });
+    work.items.push(
+      item("w-1", "Flights to Lisbon", {
+        notes: "Comparing direct flights for the first week of December.",
+        run: { startedAt: now - 60_000, turnId: "fixture-running" },
+      }),
+      item("w-2", "Venue research", {
+        result: {
+          text: "Three venues have the second week of December free.",
+          at: now - 300_000,
+          turnId: "work-venues",
+        },
+      }),
+    );
+    work.next = 4;
   }, durableContext);
 }
 settings.onChange = () => {
