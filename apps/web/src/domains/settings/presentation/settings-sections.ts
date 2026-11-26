@@ -10,6 +10,7 @@ import {
   History,
   KeyRound,
   Library,
+  ListChecks,
   ListTree,
   LogOut,
   MessagesSquare,
@@ -61,11 +62,18 @@ export const sections = [
     lede: (bot: string) => `Connect ${bot} to messaging channels.`,
   },
   {
+    id: "work",
+    label: "Work",
+    icon: ListChecks,
+    lede: (bot: string) =>
+      `What ${bot} is keeping track of for you, open and done.`,
+  },
+  {
     id: "jobs",
     label: "Scheduled jobs",
     icon: Clock,
     lede: (bot: string) =>
-      `Give ${bot} reminders and recurring work, with results saved in a conversation.`,
+      `Give ${bot} reminders and recurring work, with each result posted in the chat.`,
   },
   {
     id: "bot",

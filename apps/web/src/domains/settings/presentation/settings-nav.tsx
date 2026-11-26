@@ -43,6 +43,7 @@ const botEntries: readonly Section[] = [
   "channels",
   "sandbox",
   "workspace",
+  "work",
   "jobs",
   "activity",
 ];
