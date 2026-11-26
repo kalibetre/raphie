@@ -3,6 +3,7 @@ import type {
   Channel as Source,
   ChannelOrigin,
   ModelSelection,
+  Quote,
   ReadSession,
   TurnCompaction,
   TurnFailure,
@@ -68,6 +69,8 @@ export type ChatTurn = {
   readSessions?: ReadSession[];
   /** Earlier messages were summarized during this turn. */
   compaction?: TurnCompaction;
+  /** The earlier message the owner's message quotes. */
+  quote?: Quote;
 };
 
 export type ChatDelivery = {

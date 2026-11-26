@@ -61,6 +61,7 @@ export interface SessionOperations {
       sessionId?: string;
       model?: ModelSelection;
       approvalMode?: "ask" | "full-access";
+      quote?: SendMessage["quote"];
     },
   ): Promise<MessageReceipt>;
   decide(
@@ -144,6 +145,7 @@ export class Sessions implements SessionOperations {
       sessionId?: string;
       model?: ModelSelection;
       approvalMode?: "ask" | "full-access";
+      quote?: SendMessage["quote"];
     },
   ) {
     const verified = this.authority.require(actor);
@@ -154,6 +156,7 @@ export class Sessions implements SessionOperations {
       sessionId: input.sessionId,
       model: input.model,
       approvalMode: verified.source === "web" ? input.approvalMode : undefined,
+      quote: input.quote,
       origin: verified.origin,
       source: verified.source,
       actor: verified.subject,

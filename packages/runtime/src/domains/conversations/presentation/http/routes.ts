@@ -100,6 +100,13 @@ export function conversationRoutes(
           sessionId: z.uuid().optional(),
           model: model.optional(),
           approvalMode: z.enum(["ask", "full-access"]).optional(),
+          quote: z
+            .object({
+              turnId: z.string().min(1).max(100),
+              author: z.enum(["owner", "bot"]),
+            })
+            .strict()
+            .optional(),
           attachments: z
             .array(z.string().regex(/^[a-f0-9]{64}$/))
             .max(4)

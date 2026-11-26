@@ -101,6 +101,18 @@ export type Turn = {
   readSessions?: ReadSession[];
   /** Set when the session's earlier messages were summarized during this turn. */
   compaction?: TurnCompaction;
+  /** The earlier message the owner's message quotes. */
+  quote?: Quote;
+};
+
+/** One earlier message in the same chat that a message quotes. */
+export type Quote = {
+  /** The turn whose message is quoted. */
+  turnId: string;
+  /** Whose message: the owner's, or the bot's in that turn. */
+  author: "owner" | "bot";
+  /** The start of the quoted message, as it read when it was quoted. */
+  excerpt: string;
 };
 
 /**

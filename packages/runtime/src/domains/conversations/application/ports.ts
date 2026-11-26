@@ -2,6 +2,7 @@ import type {
   Channel,
   ChannelOrigin,
   ModelSelection,
+  Quote,
   TurnHandoff,
 } from "@raphie/contracts";
 
@@ -16,6 +17,8 @@ export type SendMessage = {
   sessionId?: string;
   model?: ModelSelection;
   approvalMode?: "ask" | "full-access";
+  /** An earlier message in the same session that this one quotes. */
+  quote?: Pick<Quote, "turnId" | "author">;
   discordThreadId?: string;
   connectionId?: string;
   discordUserId?: string;
