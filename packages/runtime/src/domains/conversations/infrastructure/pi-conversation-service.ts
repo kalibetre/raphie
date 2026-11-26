@@ -559,9 +559,9 @@ export class ChatService implements ConversationCommands {
           );
         const conversationId = addressed?.id ?? input.conversationId;
         // The owner writing from an app, to no session in particular, or from
-        // a private channel chat, and every scheduled job's run, land in the
-        // bot's one chat.
-        // A work item's brief goes to the item's own session, never the chat.
+        // a private channel chat, lands in the bot's one chat. A work item's
+        // brief, a scheduled job's run included, goes to the item's own
+        // session; only a job run with no item yet lands in the chat.
         const toChat =
           conversationId === undefined &&
           !input.handoff &&
@@ -829,8 +829,8 @@ export class ChatService implements ConversationCommands {
                 input.origin,
                 owner.timeZone,
                 // The owner's open work goes with the chat's messages only,
-                // and only when the reply stays private: a scheduled run
-                // whose home is a group is the chat, but answers the group.
+                // and only when the reply stays private: a job run with no
+                // item yet is in the chat, but may answer a group home.
                 conversation.chat &&
                   (!destination || isPrivateDestination(destination))
                   ? openWorkContext((await tx.doc(WorkItems)).items)
@@ -935,7 +935,7 @@ export class ChatService implements ConversationCommands {
         sessionId: newSessionId(),
         title: "Chat",
         createdAt: Date.now(),
-        model: { ...this.model! },
+        ...(this.model ? { model: { ...this.model } } : {}),
         chat: true,
       });
     }, context);

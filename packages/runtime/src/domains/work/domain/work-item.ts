@@ -115,6 +115,10 @@ export function changeWork(
   by: WorkActor,
   now: number,
 ): string | undefined {
+  if (item.origin?.kind === "job")
+    return by === "owner"
+      ? `${item.id} follows a scheduled job. Change, pause or remove the job under Scheduled jobs.`
+      : `${item.id} follows a scheduled job. Change, pause or remove the job with the schedule tools.`;
   const reopening =
     !isOpen(item.status) &&
     change.status !== undefined &&

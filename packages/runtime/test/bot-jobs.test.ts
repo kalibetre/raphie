@@ -8,6 +8,7 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { BotJobs } from "../src/domains/schedules/infrastructure/bot-jobs.ts";
+import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
 import { chatModel } from "./chat-model.ts";
 
 async function until(check: () => Promise<boolean>) {
@@ -166,13 +167,11 @@ test("a job's run shows as running on its item, and the owner can cancel it ther
     const [item] = await gateway.work.list({ open: true });
     await jobs.change(job.id, "run");
     await until(async () => !!(await gateway.work.get(item!.id))?.run?.turnId);
-    // A second run of the item cannot start while the job's run holds it.
-    expect(
-      await gateway.root.commit(
-        (tx) => gateway.workRuns.start(tx, item!.id, "More"),
-        context,
-      ),
-    ).toMatch(/already running/);
+    // Another run of the job waits for this one: Run now is refused.
+    await jobs.change(job.id, "run").then(
+      () => expect.unreachable(),
+      (error: Error) => expect(error.message).toMatch(/still running/),
+    );
     await gateway.work.cancel(item!.id);
     await until(async () => !(await gateway.work.get(item!.id))?.run);
     const post = (await gateway.chats.state()).turns.find(
@@ -182,6 +181,113 @@ test("a job's run shows as running on its item, and the owner can cancel it ther
     expect(post?.scheduled).toEqual({ name: "Feeds" });
   } finally {
     release.resolve();
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("a job's item changes only with its job, and waits for its own run", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-jobs-item-"));
+  const gateway = await Gateway.open({ directory, ...chatModel() });
+  const actor = gateway.actors.establish("web");
+  const jobs = BotJobs.open({
+    root: gateway.root,
+    harness: gateway.harness,
+    install: (e) => gateway.install(e),
+    busy: async () => false,
+    submit: (input) => gateway.sessions.submitScheduled(actor, input),
+    follow: (tx, itemId, run) => gateway.workRuns.follow(tx, itemId, run),
+  });
+  try {
+    const [job] = await jobs.add({
+      name: "Digest",
+      prompt: "Send the digest",
+      everyMinutes: 60,
+      firstRunAt: Date.now() + 60 * 60_000,
+    });
+    const [item] = await gateway.work.list({ open: true });
+    // Neither the owner nor the bot changes or starts it apart from the job.
+    expect(await gateway.work.change(item!.id, { status: "dropped" })).toMatch(
+      /follows a scheduled job/,
+    );
+    expect(
+      await gateway.root.commit(
+        (tx) => gateway.workRuns.start(tx, item!.id, "A private brief"),
+        context,
+      ),
+    ).toMatch(/follows a scheduled job/);
+    expect((await gateway.work.get(item!.id))?.status).toBe("active");
+    // Editing the job's prompt updates the item's notes.
+    await gateway.root.commit(
+      (tx) => jobs.update(tx, job.id, { prompt: "Send the weekly digest" }),
+      context,
+    );
+    expect((await gateway.work.get(item!.id))?.notes).toBe(
+      "Send the weekly digest",
+    );
+    // While the item has a run, a due run of the job waits for it.
+    await gateway.root.commit(async (tx) => {
+      const stored = (await tx.doc(WorkItems)).items.find(
+        (i) => i.id === item!.id,
+      )!;
+      stored.run = { id: "held", startedAt: Date.now() };
+    }, context);
+    await gateway.root.commit(
+      (tx) => jobs.update(tx, job.id, { firstRunAt: Date.now() }),
+      context,
+    );
+    await until(
+      async () => (await jobs.runs()).items[0]?.waitingForBot === true,
+    );
+    expect(
+      (await gateway.chats.state()).turns.filter((t) => t.scheduled),
+    ).toHaveLength(0);
+    await gateway.root.commit(async (tx) => {
+      const stored = (await tx.doc(WorkItems)).items.find(
+        (i) => i.id === item!.id,
+      )!;
+      delete stored.run;
+    }, context);
+    // A waiting run checks again every five seconds.
+    for (let n = 0; n < 800; n++) {
+      const turns = (await gateway.chats.state()).turns;
+      if (turns.some((t) => t.work?.kind === "result")) break;
+      await delay(10);
+    }
+    expect(
+      (await gateway.chats.state()).turns.some(
+        (t) => t.work?.kind === "result",
+      ),
+    ).toBe(true);
+  } finally {
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("posting one run's result twice posts it once", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-jobs-post-"));
+  const gateway = await Gateway.open({ directory, ...chatModel() });
+  try {
+    const input = {
+      runKey: "job:t-1",
+      work: {
+        itemId: "w-1",
+        title: "Digest",
+        kind: "result" as const,
+        outcome: "completed" as const,
+      },
+      scheduled: { name: "Digest" },
+      text: "Here is the digest.",
+    };
+    const first = await gateway.chats.postWorkResult(input);
+    expect(await gateway.chats.postWorkResult(input)).toBe(first);
+    expect(
+      (await gateway.chats.state()).turns.filter(
+        (t) => t.work?.kind === "result",
+      ),
+    ).toHaveLength(1);
+  } finally {
     await gateway.close();
     await rm(directory, { recursive: true, force: true });
   }

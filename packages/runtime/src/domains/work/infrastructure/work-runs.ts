@@ -107,6 +107,8 @@ export class WorkRuns {
   async start(tx: Tx, id: string, brief: string): Promise<WorkItem | string> {
     const item = (await tx.doc(WorkItems)).items.find((i) => i.id === id);
     if (!item) return `No work item ${id}.`;
+    if (item.origin?.kind === "job")
+      return `${item.id} follows a scheduled job; it runs on the job's schedule, or when the owner chooses Run now under Scheduled jobs.`;
     if (!isOpen(item.status))
       return `${item.id} is ${item.status}. Open a new item if the work starts again.`;
     if (item.run)

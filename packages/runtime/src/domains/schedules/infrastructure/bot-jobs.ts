@@ -16,6 +16,7 @@ import type {
   ScheduledJobRun,
   TurnWork,
   WorkActor,
+  WorkItem,
 } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
@@ -31,7 +32,15 @@ import {
 
 const LATE_AFTER_MS = 60_000;
 
-type Submission = { eventId: string; text: string };
+/**
+ * A run's prompt. `sessionId` is the item session its first attempt was sent
+ * to (null for none), so a retry is admitted as the same request.
+ */
+type Submission = { eventId: string; text: string; sessionId?: string | null };
+
+/** The work item that follows job `id`. */
+const jobItem = (items: WorkItem[] | undefined, id: string) =>
+  items?.find((i) => i.origin?.kind === "job" && i.origin.jobId === id);
 
 type StoredJob = ScheduledJob & { taskId: TaskId };
 
@@ -240,6 +249,14 @@ export class BotJobs {
         const jobs = await tx.doc(Jobs);
         const job = jobs.items.find((j) => j.id === id);
         if (!job) throw new InputError("Scheduled job not found.", 404);
+        if (
+          action === "run" &&
+          jobItem((await tx.doc(WorkItems)).items, id)?.run
+        )
+          throw new InputError(
+            "This job is still running. Wait for it to finish, or cancel the run under Work.",
+            409,
+          );
         if (action === "run") {
           await tx.createTask(
             this.task,
@@ -391,7 +408,12 @@ export class BotJobs {
               }, ctx);
               return;
             }
-            if (await this.options.busy()) {
+            // The job's previous run, still going in its item, holds this one back.
+            const item = jobItem(
+              (await runtime.snapshot(WorkItems, ctx))?.items,
+              job.id,
+            );
+            if ((await this.options.busy()) || item?.run) {
               await this.markWaiting(
                 job,
                 task.state.checkpoint.input.eventId,
@@ -431,10 +453,11 @@ export class BotJobs {
               return { status: "running", checkpoint: task.state.checkpoint };
             }, ctx);
             // The run goes to the job's work item's own session; only its
-            // result is posted to the chat.
-            const item = (await runtime.snapshot(WorkItems, ctx))?.items.find(
-              (i) => i.origin?.kind === "job" && i.origin.jobId === job.id,
-            );
+            // result is posted to the chat. A retry goes where the first
+            // attempt went, even if the item has a session by now.
+            const pinned = task.state.checkpoint.input.sessionId;
+            const sessionId =
+              pinned === undefined ? item?.sessionId : (pinned ?? undefined);
             let receipt: { id: string; sessionId: string } | undefined;
             try {
               receipt = await this.options.submit({
@@ -448,7 +471,7 @@ export class BotJobs {
                         title: item.title,
                         kind: "brief",
                       },
-                      ...(item.sessionId ? { sessionId: item.sessionId } : {}),
+                      ...(sessionId ? { sessionId } : {}),
                     }
                   : {}),
               });
@@ -461,7 +484,14 @@ export class BotJobs {
               if (attempts < 4) {
                 await runtime.sleepUntil(
                   runtime.now() + 1000 * 2 ** (attempts - 1),
-                  { ...task.state.checkpoint, attempts },
+                  {
+                    ...task.state.checkpoint,
+                    input: {
+                      ...task.state.checkpoint.input,
+                      sessionId: sessionId ?? null,
+                    },
+                    attempts,
+                  },
                   ctx,
                 );
                 return;

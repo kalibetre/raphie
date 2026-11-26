@@ -192,6 +192,7 @@ export async function syncJobItem(
     return;
   }
   item.title = clip(job.name, LIMITS.title);
+  item.notes = clip(job.prompt, LIMITS.notes);
   if (job.enabled) {
     item.status = "active";
     delete item.waitingOn;
@@ -262,8 +263,8 @@ const NOT_IN_CHAT =
 /**
  * Work items are the owner's: only the bot's chat reads and changes them,
  * and only in a turn whose reply stays private, so a group never hears of
- * them (a scheduled run whose home is a group is in the chat but answers the
- * group). Returns the chat turn being answered, if any.
+ * them (a job run with no item yet is in the chat but may answer a group
+ * home). Returns the chat turn being answered, if any.
  */
 async function chatTurn(tx: Tx, api: ToolExecutionApi) {
   const chats = await tx.doc(Chats);
