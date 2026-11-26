@@ -175,6 +175,7 @@ Secrets are write-only: keys and tokens are accepted but never returned.
 | GET       | `/work-items/:id`                                         | One work item, open or closed (404 if none)                                   |
 | POST      | `/work-items`                                             | `{ title, notes? }`: the owner opens an item (201)                            |
 | PATCH     | `/work-items/:id`                                         | `{ title?, notes?, status?, waitingOn? }`; a closed item only reopens (409)   |
+| POST      | `/work-items/:id/cancel`                                  | Stop the item's background run; `409` when nothing is running                 |
 | POST      | `/handoffs/:id/cancel`                                    | Stop the other bot's work; `409` once the task has finished                   |
 
 ### Inspection

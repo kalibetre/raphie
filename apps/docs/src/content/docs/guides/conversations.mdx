@@ -159,6 +159,16 @@ Each item has a short id such as `w-12`, a title, and a status: **active** while
 
 The bot opens, updates and closes items itself. You can also see and change them under **Settings → Work** for that bot: add an item, edit its title and notes, mark it done, drop it, or reopen a closed one. The bot reads your changes with your next message.
 
+### Background work
+
+For work that takes a while, such as research, comparing options or drafting something long, the bot can start it in the background instead of in its reply. The work runs in the item's own session, apart from your chat, so the chat stays quick and the item keeps its own context: a follow-up on the same item continues where the last run left off.
+
+- **While it runs:** the item shows **Working** under **Settings → Work**, and you can keep talking to the bot. **Stop** in the chat stops only the chat's reply; **Cancel run** on the item stops its background work.
+- **When it ends:** a **Background work** line appears in the chat with the item's title, and the bot tells you what came back, or that it was cancelled or failed. The item keeps the result as its latest.
+- **Closing a running item** stops its work, and the chat isn't told what came of it; the item still keeps the result.
+- **Approvals and questions** from background work show at the top of the sidebar, as the chat's do.
+- An item runs one piece of background work at a time. Its session is kept while the item exists.
+
 ## Long chats
 
 A chat can go on as long as you like. Every message you send makes the model read the chat again, so the bot keeps it short: once it grows past a working size, the bot writes notes on its earlier messages and reads those instead of them from then on. Its most recent messages stay word for word.
