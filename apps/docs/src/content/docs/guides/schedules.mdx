@@ -7,7 +7,7 @@ sidebar:
 
 import { Steps, TabItem, Tabs } from "@astrojs/starlight/components";
 
-A scheduled job sends a saved prompt to its bot once or at a fixed interval. Every run posts in the bot's [chat](/guides/conversations/), wherever the job was created. Jobs run only while Raphie is running; overdue work runs once when it comes back.
+A scheduled job sends a saved prompt to its bot once or at a fixed interval. Each job is a [work item](/guides/conversations/#work-items) of the bot's, and every run's result posts in the bot's [chat](/guides/conversations/), wherever the job was created. Jobs run only while Raphie is running; overdue work runs once when it comes back.
 
 Results always appear in the chat. You can also send them to one home channel per bot, such as a Telegram chat.
 
@@ -49,7 +49,9 @@ There is no cron syntax. A job has a first run time and, optionally, a repeat in
 
 The interval is elapsed time, not a calendar rule: "every 1,440 minutes" drifts by an hour across a daylight saving change, and the next run is counted from when the previous one was sent, not from the original time.
 
-When a job is due, its prompt is submitted to the chat as a **scheduled** turn rather than an owner message. If the bot is replying in the chat, the run waits until it is free; background work on a [work item](/guides/conversations/#background-work) doesn't hold it back. The chat shows a "Scheduled · job name" marker in place of your message, and the bot writes the reminder itself. When a run fails, the bot says it couldn't run the job, with a card saying what didn't run and why; failed runs of the same job in a row read as one, with the number of attempts and when they were made.
+When a job is due, its prompt runs as a **scheduled** turn in the job's own session, apart from your chat, the way [background work](/guides/conversations/#background-work) does. The session is kept while the job exists, so each run can build on the job's earlier runs; it doesn't read your chat. If the bot is replying in the chat, the run waits until it is free; background work on other items doesn't hold it back.
+
+When the run ends, its reply is posted in the chat as the bot's message, under a "Scheduled · job name" marker, exactly as the run wrote it. The bot reads it with your next message, so you can reply to it like any other. If the run fails, the post says it failed and why, or that it was cancelled.
 
 ## Manage jobs
 
@@ -62,9 +64,11 @@ Each job card in **Scheduled jobs** shows its state and last run.
 | **Resume**  | Restarts the job; an overdue job runs straight away.                                                |
 | **Remove**  | Stops future runs. Its earlier runs stay in the chat.                                               |
 
-Pausing or removing a job does not cancel a turn already in progress or undo actions it took. Runs share the chat with your messages, so **Stop** in the chat also stops a run in progress; it is recorded as interrupted.
+Pausing or removing a job does not cancel a run already in progress or undo actions it took. A run doesn't use the chat, so **Stop** in the chat leaves it running; **Cancel run** on the job's item under **Settings → Work** stops it.
 
-**Run history** lists each run as queued, running, completed, failed or interrupted, each opening the chat at that run's message. Finished runs also appear on the Notifications page until you open or dismiss them.
+Under **Settings → Work**, a job's item shows its next run and is active while the job runs on schedule, waiting while it is paused, and done once it is removed or a one-time job has run. Change the job itself under **Scheduled jobs**.
+
+**Run history** lists each run as queued, running, completed, failed or interrupted, each opening the chat at that run's post once it is made. Finished runs also appear on the Notifications page until you open or dismiss them.
 
 ## Send results to a home channel
 
