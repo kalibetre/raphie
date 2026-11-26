@@ -252,7 +252,8 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
     }
     let key = format!("rd-turn-{}", turn.id);
     // A work item's result: the bot's to tell, not an owner message.
-    if let Some(work) = &turn.work {
+    // A job's posted result reads as the job, below.
+    if let Some(work) = turn.work.as_ref().filter(|_| turn.scheduled.is_none()) {
         let how = match work.outcome {
             Some(raphie_core::contracts::HandoffOutcome::Cancelled) => "· Cancelled",
             Some(raphie_core::contracts::HandoffOutcome::Failed) => "· Failed",
@@ -299,7 +300,12 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
                 .center_y()
                 .radius(13.0)
                 .fill(t.accent_soft)
-                .help(format!("Saved instruction: {}", turn.text))
+                .help(if turn.text.is_empty() {
+                    // A job's posted result: its instruction is in its item.
+                    format!("Scheduled job {}", job.name)
+                } else {
+                    format!("Saved instruction: {}", turn.text)
+                })
                 .child(
                     icon(&icons::CALENDAR_CLOCK, 13.0)
                         .color(t.accent)

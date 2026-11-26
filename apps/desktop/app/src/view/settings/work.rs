@@ -226,6 +226,21 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
                 .wrap(),
         );
     }
+    // A scheduled job's item follows the job; it is changed there.
+    let job = item.origin.as_ref().is_some_and(|o| o.kind == "job");
+    if job {
+        let next = item
+            .next_at
+            .map(|at| format!(" · Next run {}", date_time(at)))
+            .unwrap_or_default();
+        card = card.child(
+            note(
+                t,
+                format!("Scheduled job{next} · Change it under Scheduled jobs."),
+            )
+            .key(key("job")),
+        );
+    }
     if !item.notes.is_empty() {
         card = card.child(
             text(item.notes.clone())
@@ -271,7 +286,9 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
             move |s: &mut Ui| s.cancel_work(&id),
         ));
     }
-    if item.status.is_open() {
+    if job {
+        // Nothing to do here but cancel a run.
+    } else if item.status.is_open() {
         let edit = item.id.clone();
         buttons = buttons
             .child(pressable(
@@ -296,7 +313,10 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
             set(WorkStatus::Active),
         ));
     }
-    card.child(buttons)
+    if running || !job {
+        card = card.child(buttons);
+    }
+    card
 }
 
 /// "New item" or "Edit item": a title and notes in a modal.
