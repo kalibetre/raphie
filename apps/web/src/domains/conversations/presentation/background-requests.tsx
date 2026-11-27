@@ -2,7 +2,7 @@ import type { BackgroundRequest } from "@raphie/contracts";
 
 import { ToolSteps } from "../../approvals/presentation/tool-steps";
 import { AskCard } from "./ask-card";
-import { WorkCard } from "./work-card";
+import { NeedsYouCard } from "./work-card";
 
 /**
  * What the bot's background work waits on the owner for, shown at the end of
@@ -23,11 +23,9 @@ export function BackgroundRequests({
       aria-label="Background work needs you"
     >
       {requests.map((request) => (
-        <WorkCard
+        <NeedsYouCard
           key={request.itemId}
-          kind="background"
           title={request.title}
-          status="needs-you"
           onOpenItem={onOpenItem && (() => onOpenItem(request.itemId))}
         >
           {request.toolApprovals.length > 0 && (
@@ -45,7 +43,7 @@ export function BackgroundRequests({
           {request.asks.map((ask) => (
             <AskCard key={ask.id} ask={ask} />
           ))}
-        </WorkCard>
+        </NeedsYouCard>
       ))}
     </section>
   );

@@ -51,7 +51,6 @@ export function QuoteBar({
   );
 }
 
-/** The action that quotes a message, shown when the message is pointed at. */
 /** A message's actions: Quote, then any the message adds (`children`). */
 export function QuoteAction({
   onQuote,

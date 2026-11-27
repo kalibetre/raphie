@@ -301,7 +301,19 @@ export function Chat({
         // post) was not written by the owner: only the bot's reply shows,
         // under its provenance tab, and what became of the turn.
         if (message.role === "user" && turn && (turn.work || turn.scheduled))
-          return (
+          return turn.status !== "pending" && !replied.has(turn.id) ? (
+            // It ended with no reply (failed or stopped): its tab still says
+            // which work it was, and a quote or notice can find it here.
+            <div
+              key={message.id}
+              className="work-unanswered"
+              id={messageId(turn.id, "bot")}
+            >
+              {divider}
+              <WorkTab turn={turn} />
+              {turnWork(turn, steps.get(turn.id) ?? [])}
+            </div>
+          ) : (
             <Fragment key={message.id}>
               {divider}
               {turnWork(turn, steps.get(turn.id) ?? [])}

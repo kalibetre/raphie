@@ -14,7 +14,7 @@
     color: var(--muted-foreground);
     font-size: 11.5px;
   }
-  .work-tab strong {
+  .work-tab-title {
     color: var(--foreground);
     font-weight: 600;
   }
@@ -52,6 +52,12 @@
   .work-tab[data-outcome="cancelled"] .work-tab-stamp {
     color: var(--muted-foreground);
   }
+  /* A work turn that ended with no reply: its tab, then why. */
+  .work-unanswered {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
   /* A work item's id beside a message's actions. */
   .message-action-id {
     align-self: center;
@@ -77,10 +83,6 @@
     padding: 9px 14px;
     border-bottom: 1px solid var(--border);
     font-size: 12.5px;
-  }
-  .work-card-header:last-child,
-  .work-card-header:has(+ .work-card-body:empty) {
-    border-bottom: 0;
   }
   .work-card-body:empty {
     display: none;
@@ -109,12 +111,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .work-card-time {
-    flex: none;
-    color: var(--muted-foreground);
-    font-size: 12px;
-    white-space: nowrap;
-  }
   .work-card-status {
     display: inline-flex;
     flex: none;
@@ -122,8 +118,8 @@
     gap: 5px;
     padding: 2px 8px;
     border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--attention-soft);
+    color: var(--attention);
     font-size: 11.5px;
     font-weight: 600;
   }
@@ -133,26 +129,6 @@
     border-radius: 50%;
     background: currentColor;
   }
-  .work-card-status[data-status="needs-you"] {
-    background: var(--attention-soft);
-    color: var(--attention);
-  }
-  .work-card-status[data-status="failed"] {
-    background: var(--muted);
-    color: var(--error);
-  }
-  .work-card-status[data-status="cancelled"] {
-    background: var(--muted);
-    color: var(--muted-foreground);
-  }
-  .work-card-status[data-status="working"] .work-card-status-dot {
-    animation: work-card-pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes work-card-pulse {
-    50% {
-      opacity: 0.3;
-    }
-  }
   .work-card-body {
     display: flex;
     flex-direction: column;
@@ -160,34 +136,11 @@
     min-width: 0;
     padding: 12px 14px;
   }
-  /* About four lines, faded out at the bottom, until unfolded. */
-  .work-card-content[data-folded] {
-    max-height: 6.6em;
-    overflow: hidden;
-  }
-  .work-card-content[data-folded][data-overflow] {
-    mask-image: linear-gradient(to bottom, #000 60%, transparent);
-  }
-  .work-card-content .markdown > :last-child {
-    margin-bottom: 0;
-  }
-  .work-card-more {
-    align-self: flex-start;
-  }
-  /* A quote's source, marked for a moment, as a message is. */
-  .work-card[data-quoted] {
-    outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-    outline-offset: 4px;
-  }
   .work-card-footer {
     display: flex;
     align-items: center;
     gap: 2px;
     padding: 0 10px 8px;
-  }
-  .work-card-footer .work-card-time {
-    margin-left: auto;
-    padding-right: 4px;
   }
   /* Background work waiting on the owner, at the end of the chat. */
   .background-requests {

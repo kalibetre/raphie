@@ -32,9 +32,9 @@ test("background work's result names its item, quotes the request and stamps how
     />,
   );
   expect(html).toContain('data-outcome="failed"');
-  expect(html).toContain("<strong>Venue research</strong>");
+  expect(html).toContain(">Venue research</strong>");
   expect(html).toContain("“look into venues for the offsite”");
-  expect(html).toContain(">Failed</span>");
+  expect(html).toContain("Run </span>Failed</span>");
   expect(html).not.toContain("w-2");
 });
 
@@ -72,4 +72,19 @@ test("a result without a request quotes nothing", () => {
   );
   expect(html).not.toContain(" · ");
   expect(html).toContain(">Cancelled</span>");
+});
+
+test("a message still being written names its work but stamps nothing yet", () => {
+  const html = renderToStaticMarkup(
+    <WorkTab
+      turn={turn({
+        status: "pending",
+        answer: null,
+        scheduled: { name: "Morning brief" },
+      })}
+    />,
+  );
+  expect(html).toContain("Morning brief");
+  expect(html).not.toContain("work-tab-stamp");
+  expect(html).not.toContain("data-outcome");
 });
