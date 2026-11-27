@@ -43,6 +43,12 @@ pub static CHECK: Icon = Icon {
     body: r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></g>"#,
 };
 
+pub static COPY: Icon = Icon {
+    name: "rd-copy",
+    view: 24.0,
+    body: r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>"#,
+};
+
 pub static ARROW_UP: Icon = Icon {
     name: "rd-arrow-up",
     view: 24.0,
