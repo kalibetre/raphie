@@ -1380,6 +1380,23 @@ pub struct SessionObservation {
     pub next_before: Option<String>,
     pub phase: RunPhase,
     pub error: Option<ObservationError>,
+    /// In the bot's chat: what its background work waits on the owner for.
+    #[serde(default)]
+    pub background: Vec<BackgroundRequest>,
+}
+
+/// `BackgroundRequest`: one work item's pending approvals and questions, in
+/// the item's own session.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundRequest {
+    pub item_id: String,
+    pub title: String,
+    pub session_id: String,
+    #[serde(default)]
+    pub tool_approvals: Vec<SessionApproval>,
+    #[serde(default)]
+    pub asks: Vec<SessionAsk>,
 }
 
 /// Body of `POST /api/sessions/messages`

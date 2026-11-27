@@ -11,6 +11,7 @@ import type { WorkItem } from "@raphie/contracts";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { Activity } from "../src/domains/activity/infrastructure/pi-activity-journal.ts";
+import { ToolApprovals } from "../src/domains/approvals/infrastructure/pi-tool-approvals.ts";
 import { ChannelBindings } from "../src/domains/channels/infrastructure/pi-bindings.ts";
 import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
 import {
@@ -678,3 +679,106 @@ test("the open work never goes with a reply that will be posted to a server thre
     await done();
   }
 });
+
+test("what background work waits on the owner for shows in the chat, with its item", async () => {
+  const { app, say, done } = await bot({
+    ...runCalls,
+    "You are working": {
+      name: "workspace_exec",
+      args: { command: "echo venues" },
+    },
+  });
+  try {
+    await say("open an item");
+    // The run then waits on the owner, so the bot never goes idle.
+    await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "start",
+      text: "start it",
+    });
+    const owner = app.actors.establish("web");
+    const chat = (await app.chats.state()).conversations.find((c) => c.chat)!;
+    const observe = () => app.queries.session(owner, chat.sessionId);
+    await until(async () => !!(await observe()).background?.length);
+    const [request] = (await observe()).background!;
+    const item = (await app.work.get("w-1"))!;
+    assert.equal(request!.itemId, "w-1");
+    assert.equal(request!.title, "Venue research");
+    assert.equal(request!.sessionId, item.sessionId);
+    assert.equal(request!.toolApprovals.length, 1);
+    assert.equal(request!.toolApprovals[0]!.tool, "workspace_exec");
+    // The chat's own approvals are unchanged; the item's session has none
+    // of the chat's.
+    assert.equal((await observe()).toolApprovals.length, 0);
+    assert.equal(
+      (await app.queries.session(owner, item.sessionId!)).background,
+      undefined,
+    );
+    // A closed item, or an expired approval, asks nothing of the owner.
+    const setStatus = (status: WorkItem["status"]) =>
+      app.root.commit(async (tx) => {
+        (await tx.doc(WorkItems)).items.find((i) => i.id === "w-1")!.status =
+          status;
+      }, context);
+    await setStatus("done");
+    assert.deepEqual((await observe()).background, []);
+    await setStatus("active");
+    assert.equal((await observe()).background?.length, 1);
+    const approvalId = request!.toolApprovals[0]!.id;
+    const expiry = (at: number) =>
+      app.root.commit(async (tx) => {
+        (await tx.doc(ToolApprovals)).approvals.find(
+          (a) => a.id === approvalId,
+        )!.expiresAt = at;
+      }, context);
+    const expiresAt = request!.toolApprovals[0]!.expiresAt;
+    await expiry(Date.now() - 1);
+    assert.deepEqual((await observe()).background, []);
+    await expiry(expiresAt);
+    // Deciding it clears it from the chat.
+    await app.toolApprovals.decide(
+      request!.toolApprovals[0]!.id,
+      "rejected",
+      "owner",
+      "web",
+    );
+    await until(async () => !(await observe()).background?.length);
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("a question from background work shows in the chat until it is answered", async () => {
+  const { app, say, done } = await bot({
+    ...runCalls,
+    "You are working": {
+      name: "ask_owner",
+      args: {
+        question: "Which city first?",
+        options: [{ label: "Lisbon" }, { label: "Porto" }],
+      },
+    },
+  });
+  try {
+    await say("open an item");
+    await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "start",
+      text: "start it",
+    });
+    const owner = app.actors.establish("web");
+    const chat = (await app.chats.state()).conversations.find((c) => c.chat)!;
+    const observe = () => app.queries.session(owner, chat.sessionId);
+    await until(async () => !!(await observe()).background?.length);
+    const [request] = (await observe()).background!;
+    assert.equal(request!.toolApprovals.length, 0);
+    assert.equal(request!.asks.length, 1);
+    assert.equal(request!.asks[0]!.question, "Which city first?");
+    await app.asks.answer(request!.asks[0]!.id, { choice: 1 }, "owner", "web");
+    await until(async () => !(await observe()).background?.length);
+  } finally {
+    await done();
+  }
+}, 30_000);

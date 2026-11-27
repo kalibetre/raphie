@@ -6,8 +6,8 @@
 //! `active-run.tsx`, and the message rules in `chat.css`.
 
 use raphie_core::contracts::{
-    AskStatus, ControlAction, QueueMode, QuoteAuthor, SessionActivity, SessionAsk, SessionCard,
-    SessionObservation, SessionTurn, TurnStatus,
+    AskStatus, BackgroundRequest, ControlAction, QueueMode, QuoteAuthor, SessionActivity,
+    SessionAsk, SessionCard, SessionObservation, SessionTurn, TurnStatus,
 };
 use raphie_core::model::Conversation;
 use raphie_core::projections::{
@@ -157,7 +157,108 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             items.push(active_run(s, turn, steps, observation, now, look));
         }
     }
+    // What the bot's background work waits on the owner for, last.
+    for request in &observation.background {
+        items.push(background_request(s, request, now, look));
+    }
     items
+}
+
+/// A work item's line in the chat: "Background work · title", then `tail`
+/// and the time, when given. A long title is cut to fit.
+fn work_pill(item_id: &str, title: &str, tail: &str, at: Option<i64>, t: &Theme) -> El {
+    let mut pill = row()
+        .min_w(0.0)
+        .shrink()
+        .px(12.0)
+        .py(4.0)
+        .gap(7.0)
+        .center_y()
+        .radius(13.0)
+        .fill(t.accent_soft)
+        .help(format!("Work item {item_id}"))
+        .child(
+            icon(&icons::LIST_CHECKS, 13.0)
+                .color(t.accent)
+                .a11y_hidden(),
+        )
+        .child(
+            text("Background work ·")
+                .font(font(12.0, 400.0))
+                .color(t.accent)
+                .single_line(),
+        )
+        .child(
+            text(title.to_string())
+                .font(font(12.0, 600.0))
+                .color(t.accent)
+                .truncate()
+                .shrink(),
+        );
+    if !tail.is_empty() {
+        pill = pill.child(
+            text(tail.to_string())
+                .font(font(12.0, 400.0))
+                .color(t.accent)
+                .single_line(),
+        );
+    }
+    if let Some(at) = at {
+        pill = pill.child(
+            text(format::clock(at))
+                .font(font(12.0, 400.0))
+                .color(t.muted_foreground)
+                .single_line(),
+        );
+    }
+    pill
+}
+
+/// One work item's pending approvals and questions, decided here without
+/// opening the item's session.
+fn background_request(s: &Ui, request: &BackgroundRequest, now: i64, look: &Look) -> El {
+    let t = &look.theme;
+    let key = |part: &str| format!("bg-{}-{part}", request.item_id);
+    let mut block = col().key(key("block")).w_full().gap(10.0).child(
+        row()
+            .key(key("head"))
+            .w_full()
+            .justify_center()
+            .child(work_pill(
+                &request.item_id,
+                &request.title,
+                "needs you",
+                None,
+                t,
+            )),
+    );
+    if !request.tool_approvals.is_empty() {
+        let steps: Vec<ToolStep> = request
+            .tool_approvals
+            .iter()
+            .map(|approval| ToolStep {
+                id: approval.id.clone(),
+                server: Some(approval.server.clone()),
+                tool: approval.tool.clone(),
+                started_at: approval.created_at,
+                done_at: None,
+                args: None,
+                result: None,
+                failed: false,
+                approval: Some(approval.clone()),
+            })
+            .collect();
+        let run = Run {
+            turn_id: &request.item_id,
+            steps: &steps,
+            working: None,
+        };
+        block = block.child(tool_steps(s, &run, now, look));
+    }
+    for ask in &request.asks {
+        block = block.child(asks::card(s, ask, look));
+    }
+    block
 }
 
 /// A turn Raphie is working on now (not one waiting in the queue).
@@ -259,37 +360,13 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
             Some(raphie_core::contracts::HandoffOutcome::Failed) => "· Failed",
             _ => "",
         };
-        return row().key(key).w_full().justify_center().child(
-            row()
-                .px(12.0)
-                .py(4.0)
-                .gap(7.0)
-                .center_y()
-                .radius(13.0)
-                .fill(t.accent_soft)
-                .help(format!("Work item {}", work.item_id))
-                .child(
-                    icon(&icons::LIST_CHECKS, 13.0)
-                        .color(t.accent)
-                        .a11y_hidden(),
-                )
-                .child(
-                    text("Background work ·")
-                        .font(font(12.0, 400.0))
-                        .color(t.accent),
-                )
-                .child(
-                    text(work.title.clone())
-                        .font(font(12.0, 600.0))
-                        .color(t.accent),
-                )
-                .child(text(how).font(font(12.0, 400.0)).color(t.accent))
-                .child(
-                    text(format::clock(turn.created_at))
-                        .font(font(12.0, 400.0))
-                        .color(t.muted_foreground),
-                ),
-        );
+        return row().key(key).w_full().justify_center().child(work_pill(
+            &work.item_id,
+            &work.title,
+            how,
+            Some(turn.created_at),
+            t,
+        ));
     }
     if let Some(job) = &turn.scheduled {
         return row().key(key).w_full().justify_center().child(

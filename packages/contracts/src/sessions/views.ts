@@ -65,6 +65,19 @@ export type RunPhase =
   | "question"
   | "failed";
 
+/**
+ * What one piece of the bot's background work waits on the owner for: its
+ * pending approvals and questions, with the work item it belongs to.
+ */
+export type BackgroundRequest = {
+  itemId: string;
+  title: string;
+  /** The item's own session, where the work runs. */
+  sessionId: string;
+  toolApprovals: SessionApproval[];
+  asks: SessionAsk[];
+};
+
 export type SessionObservation = {
   session: SessionSummary;
   turns: SessionTurn[];
@@ -78,6 +91,8 @@ export type SessionObservation = {
   nextBefore: string | null;
   phase: RunPhase;
   error: { code: "reply_failed"; message: string } | null;
+  /** In the bot's chat: what its background work waits on the owner for. */
+  background?: BackgroundRequest[];
 };
 
 export type RuntimeInfo = Pick<
@@ -94,4 +109,6 @@ export type ClientWorkspace = RuntimeInfo & {
   cards: SessionCard[];
   live: Record<string, LiveConversation>;
   activity: SessionActivity[];
+  /** What the bot's background work waits on the owner for, in its chat. */
+  background?: BackgroundRequest[];
 };

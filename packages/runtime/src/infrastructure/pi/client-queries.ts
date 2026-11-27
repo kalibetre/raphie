@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type {
+  BackgroundRequest,
   SessionActivity,
   SessionApproval,
   SessionAsk,
@@ -23,6 +24,8 @@ import type { CardService } from "../../domains/cards/infrastructure/pi-cards.ts
 import { ChannelBindings } from "../../domains/channels/infrastructure/pi-bindings.ts";
 import type { ChatService } from "../../domains/conversations/infrastructure/pi-conversation-service.ts";
 import type { Observations } from "../../domains/conversations/infrastructure/pi-observations.ts";
+import { isOpen } from "../../domains/work/domain/work-item.ts";
+import { WorkItems } from "../../domains/work/infrastructure/work-store.ts";
 import { InputError } from "../../shared/application/input-error.ts";
 import type { DurableContext } from "../../shared/infrastructure/durable-context.ts";
 
@@ -48,6 +51,59 @@ function waitingFor(ask: Ask, turn?: { status: string }) {
     ask.expiresAt > Date.now() &&
     turn?.status === "pending"
   );
+}
+
+type StoredApproval = Awaited<
+  ReturnType<ToolApprovalService["state"]>
+>["approvals"][number];
+
+/** An approval as clients see it, in session `sessionId`. */
+function approvalView(a: StoredApproval, sessionId: string): SessionApproval {
+  return {
+    id: a.id,
+    conversationId: sessionId,
+    server: a.server,
+    tool: a.tool,
+    argumentsJson: a.argumentsJson,
+    connectionIdentity: a.connectionIdentity,
+    createdAt: a.createdAt,
+    expiresAt: a.expiresAt,
+    status: a.status,
+    decidedVia: a.decidedVia,
+    ...(a.decidedApp ? { decidedApp: a.decidedApp } : {}),
+    ...(a.eachCall ? { eachCall: true as const } : {}),
+    execution: a.execution,
+  };
+}
+
+/** A question as clients see it, in session `sessionId`. */
+function askView(
+  a: Ask,
+  sessionId: string,
+  turns: readonly { id: string; status: string }[],
+): SessionAsk {
+  return {
+    id: a.id,
+    conversationId: sessionId,
+    turnId: a.turnId,
+    question: a.question,
+    options: a.options.map((o) => ({ ...o })),
+    ...(a.danger ? { danger: true as const } : {}),
+    createdAt: a.createdAt,
+    expiresAt: a.expiresAt,
+    // A question whose turn stopped can no longer be answered.
+    status:
+      a.status === "pending" &&
+      !waitingFor(
+        a,
+        turns.find((t) => t.id === a.turnId),
+      )
+        ? ("expired" as const)
+        : a.status,
+    answer: a.answer ? { ...a.answer } : null,
+    answeredVia: a.answeredVia,
+    ...(a.answeredApp ? { answeredApp: a.answeredApp } : {}),
+  };
 }
 
 function pageSize(limit = 50) {
@@ -238,21 +294,7 @@ export class PiClientQueries implements ClientQueries {
     return (await this.app.toolApprovals.state()).approvals
       .filter((a) => a.conversationId === session.id)
       .slice(-100)
-      .map((a) => ({
-        id: a.id,
-        conversationId: id,
-        server: a.server,
-        tool: a.tool,
-        argumentsJson: a.argumentsJson,
-        connectionIdentity: a.connectionIdentity,
-        createdAt: a.createdAt,
-        expiresAt: a.expiresAt,
-        status: a.status,
-        decidedVia: a.decidedVia,
-        ...(a.decidedApp ? { decidedApp: a.decidedApp } : {}),
-        ...(a.eachCall ? { eachCall: true as const } : {}),
-        execution: a.execution,
-      }));
+      .map((a) => approvalView(a, id));
   }
 
   async asks(actor: ActorContext, id: string): Promise<SessionAsk[]> {
@@ -260,28 +302,7 @@ export class PiClientQueries implements ClientQueries {
     return (await this.app.asks.state()).asks
       .filter((a) => a.conversationId === session.id)
       .slice(-100)
-      .map((a) => ({
-        id: a.id,
-        conversationId: id,
-        turnId: a.turnId,
-        question: a.question,
-        options: a.options.map((o) => ({ ...o })),
-        ...(a.danger ? { danger: true as const } : {}),
-        createdAt: a.createdAt,
-        expiresAt: a.expiresAt,
-        // A question whose turn stopped can no longer be answered.
-        status:
-          a.status === "pending" &&
-          !waitingFor(
-            a,
-            chats.turns.find((t) => t.id === a.turnId),
-          )
-            ? ("expired" as const)
-            : a.status,
-        answer: a.answer ? { ...a.answer } : null,
-        answeredVia: a.answeredVia,
-        ...(a.answeredApp ? { answeredApp: a.answeredApp } : {}),
-      }));
+      .map((a) => askView(a, id, chats.turns));
   }
 
   async cards(actor: ActorContext, id: string): Promise<SessionCard[]> {
@@ -322,6 +343,51 @@ export class PiClientQueries implements ClientQueries {
         : null,
     }));
     return { items, next: start ? String(items[0]!.id) : null };
+  }
+
+  /**
+   * What the bot's open work items wait on the owner for in their own
+   * sessions: pending approvals and questions, newest item first. Reads each
+   * store once, whatever the number of items.
+   */
+  private async background(
+    chats: Awaited<ReturnType<PiClientQueries["visible"]>>,
+  ): Promise<BackgroundRequest[]> {
+    const items = (
+      (await this.app.harness.snapshot(WorkItems, context))?.items ?? []
+    ).filter((item) => isOpen(item.status) && item.sessionId);
+    if (!items.length) return [];
+    const approvals = (await this.app.toolApprovals.state()).approvals;
+    const asks = (await this.app.asks.state()).asks;
+    const requests: BackgroundRequest[] = [];
+    for (const item of items.toReversed()) {
+      const sessionId = item.sessionId!;
+      const session = chats.conversations.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!session) continue;
+      const toolApprovals = approvals
+        .filter(
+          (a) =>
+            a.conversationId === session.id &&
+            a.status === "pending" &&
+            a.expiresAt > Date.now(),
+        )
+        .map((a) => approvalView(a, sessionId));
+      const pending = asks
+        .filter((a) => a.conversationId === session.id)
+        .map((a) => askView(a, sessionId, chats.turns))
+        .filter((a) => a.status === "pending");
+      if (toolApprovals.length || pending.length)
+        requests.push({
+          itemId: item.id,
+          title: item.title,
+          sessionId,
+          toolApprovals,
+          asks: pending,
+        });
+    }
+    return requests;
   }
 
   async session(actor: ActorContext, id: string): Promise<SessionObservation> {
@@ -424,6 +490,7 @@ export class PiClientQueries implements ClientQueries {
       cards,
       live,
       activity,
+      ...(session.chat ? { background: await this.background(chats) } : {}),
       phase: waiting
         ? "approval"
         : asking

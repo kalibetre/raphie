@@ -81,6 +81,7 @@ pub const SCENES: &[Scene] = &[
     ("streaming", streaming),
     ("working", working),
     ("approval", approval),
+    ("chat-background", chat_background),
     ("ask", ask),
     ("ask-rows", ask_rows),
     ("ask-confirm", ask_confirm),
@@ -2121,6 +2122,14 @@ pub fn inbox(ui: &mut Ui) {
             more: false,
         },
     });
+    // Two hours ago, or halfway back to midnight when that is sooner, so the
+    // run is always earlier today.
+    let midnight = chrono::Local::now()
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .and_then(|day| day.and_local_timezone(chrono::Local).earliest())
+        .map_or(now, |day| day.timestamp_millis());
+    let earlier_today = ((now - midnight) / 2).min(2 * 3_600_000);
     ui.model.apply(Event::JobUpdates {
         bot_id: "b-research".into(),
         updates: JobUpdates {
@@ -2128,7 +2137,7 @@ pub fn inbox(ui: &mut Ui) {
                 "run-1",
                 "Weekly digest",
                 "interrupted",
-                2 * 3_600_000,
+                earlier_today,
                 Some(("r-1", "rt-2")),
             )],
             total: 1,
@@ -3008,6 +3017,44 @@ pub fn approval(ui: &mut Ui) {
             ],
         ),
     );
+}
+
+/// The chat, with an approval and a question from background work waiting
+/// at its end.
+pub fn chat_background(ui: &mut Ui) {
+    let now = now_ms();
+    let mut seen = observation(
+        "Chat",
+        vec![turn(
+            "t1",
+            -120_000,
+            "Tidy the reports folder in the background.",
+            Some("On it. I've started it in the background."),
+            "done",
+        )],
+        None,
+        "idle",
+        vec![],
+        vec![],
+    );
+    seen.background = from_json(json!([{
+        "itemId": "w-6", "title": "Tidy the reports folder and archive everything older than a quarter, by month", "sessionId": "s-work",
+        "toolApprovals": [{
+            "id": APPROVAL_ID, "conversationId": "s-work",
+            "connectionIdentity": "raphie.workspace.command",
+            "server": "workspace", "tool": "bash",
+            "argumentsJson": "{\"command\":\"rm reports/2026-09-*.pdf\"}",
+            "createdAt": now - 30_000, "expiresAt": now + 570_000, "status": "pending",
+            "decidedVia": null, "execution": "waiting"
+        }],
+        "asks": [{
+            "id": "ask-bg", "turnId": "t-work",
+            "question": "Keep the September summary, or remove it with the rest?",
+            "options": [{ "label": "Keep it" }, { "label": "Remove it" }],
+            "expiresAt": now + 570_000, "status": "pending"
+        }]
+    }]));
+    open(ui, "s-2", seen);
 }
 
 /// A shell command waiting for approval, which can also be allowed for the
