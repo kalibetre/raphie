@@ -62,6 +62,7 @@ export function Workspace({
   section = "bot",
   skill,
   message,
+  item,
 }: {
   sessionId?: string;
   legacyConversationId?: number;
@@ -71,6 +72,8 @@ export function Workspace({
   skill?: string;
   /** The turn whose message the chat opens at, as an inbox entry links. */
   message?: string;
+  /** A work item to show when `section` is Work. */
+  item?: string;
 }) {
   const { workspace } = useBackend();
   const api = workspace.api;
@@ -284,18 +287,21 @@ export function Workspace({
     setSidebar(false);
   }
 
-  function openSettings(next: Section) {
+  /** Opens a settings page, and on Work, one item on it. */
+  function openSettings(next: Section, workItem?: string) {
+    const search = {
+      bot,
+      view: "settings" as const,
+      section: next,
+      ...(workItem ? { item: workItem } : {}),
+    };
     if (conversation)
       void navigate({
         to: "/sessions/$sessionId",
         params: { sessionId: conversation.sessionId },
-        search: { bot, view: "settings", section: next },
+        search,
       });
-    else
-      void navigate({
-        to: "/",
-        search: { bot, view: "settings", section: next },
-      });
+    else void navigate({ to: "/", search });
   }
 
   function selectSettings(id: string, next: Section) {
@@ -429,6 +435,7 @@ export function Workspace({
               <Settings
                 section={section}
                 skill={skill}
+                item={item}
                 enabled={enabled}
                 setEnabled={setEnabled}
                 traces={<Diagnostics bots={inbox.bots.data?.items ?? []} />}
@@ -566,7 +573,7 @@ export function Workspace({
                             handoffQuery.cancel.mutateAsync(id)
                           }
                           reveal={message}
-                          onOpenWorkItem={() => openSettings("work")}
+                          onOpenWorkItem={(id) => openSettings("work", id)}
                           onQuote={(next) =>
                             setQuoting({
                               ...next,

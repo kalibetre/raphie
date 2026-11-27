@@ -1,4 +1,95 @@
 @layer components {
+  /* Under a bot message that a work item's run brought: the item, the
+     owner's request that started it, and a stamp with how the run ended. */
+  .work-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    margin: 0 0 8px;
+    padding: 3px 9px 3px 7px;
+    border-left: 2px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    background: var(--accent-soft);
+    color: var(--muted-foreground);
+    font-size: 11.5px;
+  }
+  /* A tab that opens its item: it shows the way on hover or focus. */
+  .work-tab-link {
+    cursor: pointer;
+    text-align: left;
+  }
+  .work-tab-link:hover {
+    filter: brightness(0.97);
+  }
+  .work-tab-link:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .work-tab-open {
+    flex: none;
+    margin-left: -2px;
+    color: var(--muted-foreground);
+    opacity: 0;
+  }
+  .work-tab-link:hover .work-tab-open,
+  .work-tab-link:focus-visible .work-tab-open {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .work-tab-open {
+      opacity: 1;
+    }
+  }
+  .work-tab-title {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+  .work-tab-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .work-tab-stamp {
+    flex: none;
+    padding: 0 4px;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+    color: var(--accent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 14px;
+    text-transform: uppercase;
+    transform: rotate(-5deg);
+  }
+  .work-tab[data-outcome="failed"] {
+    border-left-color: var(--error);
+    background: color-mix(in srgb, var(--error) 13%, transparent);
+  }
+  .work-tab[data-outcome="failed"] .work-tab-stamp {
+    color: var(--error);
+  }
+  .work-tab[data-outcome="cancelled"] {
+    border-left-color: var(--muted-foreground);
+    background: var(--muted);
+  }
+  .work-tab[data-outcome="cancelled"] .work-tab-stamp {
+    color: var(--muted-foreground);
+  }
+  /* A work item a link asked for, marked for a moment on the Work page. */
+  .work-item[data-focused] {
+    outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    outline-offset: 3px;
+  }
+  /* A work turn that ended with no reply: its tab, then why. */
+  .work-unanswered {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
   /* A work item's run in the chat: a scheduled job's post, background
      work's result or what it waits on the owner for. Not a message. */
   .work-card {
@@ -16,10 +107,6 @@
     padding: 9px 14px;
     border-bottom: 1px solid var(--border);
     font-size: 12.5px;
-  }
-  .work-card-header:last-child,
-  .work-card-header:has(+ .work-card-body:empty) {
-    border-bottom: 0;
   }
   .work-card-body:empty {
     display: none;
@@ -48,12 +135,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .work-card-time {
-    flex: none;
-    color: var(--muted-foreground);
-    font-size: 12px;
-    white-space: nowrap;
-  }
   .work-card-status {
     display: inline-flex;
     flex: none;
@@ -61,8 +142,8 @@
     gap: 5px;
     padding: 2px 8px;
     border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--attention-soft);
+    color: var(--attention);
     font-size: 11.5px;
     font-weight: 600;
   }
@@ -72,26 +153,6 @@
     border-radius: 50%;
     background: currentColor;
   }
-  .work-card-status[data-status="needs-you"] {
-    background: var(--attention-soft);
-    color: var(--attention);
-  }
-  .work-card-status[data-status="failed"] {
-    background: var(--muted);
-    color: var(--error);
-  }
-  .work-card-status[data-status="cancelled"] {
-    background: var(--muted);
-    color: var(--muted-foreground);
-  }
-  .work-card-status[data-status="working"] .work-card-status-dot {
-    animation: work-card-pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes work-card-pulse {
-    50% {
-      opacity: 0.3;
-    }
-  }
   .work-card-body {
     display: flex;
     flex-direction: column;
@@ -99,34 +160,11 @@
     min-width: 0;
     padding: 12px 14px;
   }
-  /* About four lines, faded out at the bottom, until unfolded. */
-  .work-card-content[data-folded] {
-    max-height: 6.6em;
-    overflow: hidden;
-  }
-  .work-card-content[data-folded][data-overflow] {
-    mask-image: linear-gradient(to bottom, #000 60%, transparent);
-  }
-  .work-card-content .markdown > :last-child {
-    margin-bottom: 0;
-  }
-  .work-card-more {
-    align-self: flex-start;
-  }
-  /* A quote's source, marked for a moment, as a message is. */
-  .work-card[data-quoted] {
-    outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-    outline-offset: 4px;
-  }
   .work-card-footer {
     display: flex;
     align-items: center;
     gap: 2px;
     padding: 0 10px 8px;
-  }
-  .work-card-footer .work-card-time {
-    margin-left: auto;
-    padding-right: 4px;
   }
   /* Background work waiting on the owner, at the end of the chat. */
   .background-requests {

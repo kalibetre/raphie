@@ -50,7 +50,7 @@ export function QuoteBar({
   );
 }
 
-/** The action that quotes a message, shown when the message is pointed at. */
+/** The action that quotes a message, shown while it is pointed at. */
 export function QuoteAction({ onQuote }: { onQuote: () => void }) {
   return (
     <div className="message-actions">

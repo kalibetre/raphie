@@ -1,4 +1,4 @@
-import type { Handoff, Quote, TurnWork } from "@raphie/contracts";
+import type { Handoff, Quote } from "@raphie/contracts";
 import { useChat } from "@tanstack/ai-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,7 +7,14 @@ import {
   CornerUpRight,
   ListEnd,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -41,7 +48,7 @@ import {
 import { messageId, QuoteAction, QuoteBar, showMessage } from "./quote";
 import { SelfUpdateNotes } from "./self-update-notes";
 import { ShownCard } from "./shown-card";
-import { WorkCard, type WorkCardStatus } from "./work-card";
+import { WorkTab } from "./work-tab";
 
 const noBots: readonly { id: string; name: string }[] = [];
 const noSkills: readonly string[] = [];
@@ -217,6 +224,9 @@ export function Chat({
     author,
     excerpt: text.trim().replace(/\s+/g, " ").slice(0, 280),
   });
+  /** Opens a work item on the Work page, when the workspace can. */
+  const openItem = (id: string | undefined) =>
+    id && onOpenWorkItem ? () => onOpenWorkItem(id) : undefined;
   const signature = (at?: number, title?: string) => (
     <header className="message-author">
       {author.avatar}
@@ -289,13 +299,26 @@ export function Chat({
           );
         }
         // A work item's run (background work's result or a scheduled job's
-        // post) reads as one card with the bot's reply in it.
+        // post) was not written by the owner: only the bot's reply shows,
+        // under its provenance tab, and what became of the turn.
         if (message.role === "user" && turn && (turn.work || turn.scheduled))
-          return (
-            <div key={message.id} className="turn-user">
+          return turn.status !== "pending" && !replied.has(turn.id) ? (
+            // It ended with no reply (failed or stopped): its tab still says
+            // which work it was, and a quote or notice can find it here.
+            <div
+              key={message.id}
+              className="work-unanswered"
+              id={messageId(turn.id, "bot")}
+            >
               {divider}
-              {workCard(turn, text)}
+              <WorkTab turn={turn} onOpen={openItem(turn.work?.itemId)} />
+              {turnWork(turn, steps.get(turn.id) ?? [])}
             </div>
+          ) : (
+            <Fragment key={message.id}>
+              {divider}
+              {turnWork(turn, steps.get(turn.id) ?? [])}
+            </Fragment>
           );
         if (message.role === "user")
           return (
@@ -376,12 +399,13 @@ export function Chat({
               {turn && turnWork(turn, steps.get(turn.id) ?? [])}
             </div>
           );
-        // Shown in its work card, with the turn's owner side.
-        if (turn && (turn.work || turn.scheduled)) return null;
         const usage = turn && runUsage(turn.id, state.activity);
-        const at = state.activity.findLast(
-          (e) => e.runId === turnId && e.type === "model.completed",
-        )?.at;
+        // A job's post has no model call: it was said when it was posted.
+        const at =
+          state.activity.findLast(
+            (e) => e.runId === turnId && e.type === "model.completed",
+          )?.at ?? (turn?.work || turn?.scheduled ? turn.createdAt : undefined);
+        const itemId = turn?.work?.itemId;
         const turnSteps = (turn && steps.get(turn.id)) ?? [];
         return (
           <article
@@ -389,11 +413,6 @@ export function Chat({
             className="message message-assistant"
             id={turn ? messageId(turn.id, "bot") : undefined}
           >
-            {turn?.status === "done" && onQuote && text.trim() && (
-              <QuoteAction
-                onQuote={() => onQuote(quoteOf(turn.id, "bot", text))}
-              />
-            )}
             {turn?.status === "done" &&
               signature(
                 at,
@@ -402,6 +421,9 @@ export function Chat({
                   ? `${usage.tokens.toLocaleString()} tokens across ${usage.calls} model ${usage.calls === 1 ? "call" : "calls"} · ${formatCost(usage.cost)}, provider-reported`
                   : undefined,
               )}
+            {turn && (turn.work || turn.scheduled) && (
+              <WorkTab turn={turn} onOpen={openItem(itemId)} />
+            )}
             {turn && (
               <HandoffCards
                 turnId={turn.id}
@@ -428,6 +450,12 @@ export function Chat({
               <ToolSteps steps={turnSteps} working={false} />
             )}
             {turn?.status === "done" && <SelfUpdateNotes steps={turnSteps} />}
+            {/* Quote takes the whole reply, so it sits under it. */}
+            {turn?.status === "done" && onQuote && text.trim() && (
+              <QuoteAction
+                onQuote={() => onQuote(quoteOf(turn.id, "bot", text))}
+              />
+            )}
           </article>
         );
       })}
@@ -439,12 +467,7 @@ export function Chat({
             turn={turn}
             state={state}
             steps={steps.get(turn.id) ?? []}
-            // A work card holds its own run's questions.
-            asks={
-              turn.work || turn.scheduled
-                ? []
-                : asks.filter((a) => a.turnId === turn.id)
-            }
+            asks={asks.filter((a) => a.turnId === turn.id)}
             cards={cards.filter((c) => c.turnId === turn.id)}
           />
         ))}
@@ -457,101 +480,7 @@ export function Chat({
 
   // A plain render helper, not a component: a component declared here would
   // remount on every snapshot and collapse open step details.
-  /**
-   * A work item's run as a card: background work's result, which the bot
-   * tells in its reply, or a scheduled job's post. `instruction` is the
-   * job's saved prompt, kept as the header's tooltip.
-   */
-  function workCard(turn: Turn, instruction: string) {
-    const reply = messages.find(
-      (m) => m.role === "assistant" && m.id === `${turn.id}:reply`,
-    );
-    const answer = (reply?.parts ?? [])
-      .flatMap((p) => (p.type === "text" ? [p.content] : []))
-      .join("");
-    const turnSteps = steps.get(turn.id) ?? [];
-    const inReply = turn.status === "done" && replied.has(turn.id);
-    const scheduled = !!turn.scheduled;
-    const turnAsks = asks.filter((a) => a.turnId === turn.id);
-    const asking = turnAsks.some((a) => a.status === "pending");
-    const status: WorkCardStatus | undefined =
-      turn.status === "pending"
-        ? asking
-          ? "needs-you"
-          : "working"
-        : turn.cancelled
-          ? "cancelled"
-          : turn.status === "error"
-            ? "failed"
-            : scheduled
-              ? undefined
-              : workStatus(turn.work);
-    const itemId = turn.work?.itemId;
-    return (
-      <WorkCard
-        kind={scheduled ? "scheduled" : "background"}
-        title={turn.scheduled?.name ?? turn.work?.title ?? "Work"}
-        at={turn.createdAt}
-        status={status}
-        hint={
-          scheduled && instruction
-            ? `Saved instruction: ${instruction}`
-            : undefined
-        }
-        id={messageId(turn.id, "bot")}
-        onQuote={
-          onQuote && turn.status === "done" && answer.trim()
-            ? () => onQuote(quoteOf(turn.id, "bot", answer))
-            : undefined
-        }
-        onOpenItem={
-          onOpenWorkItem && itemId ? () => onOpenWorkItem(itemId) : undefined
-        }
-        // A reply still being written shows as it streams, unfolded.
-        fold={turn.status !== "pending"}
-        text={
-          answer.trim() ? (
-            <div className="markdown">
-              <ReactMarkdown
-                components={mentions.components}
-                remarkPlugins={mentions.plugins}
-              >
-                {answer}
-              </ReactMarkdown>
-            </div>
-          ) : undefined
-        }
-      >
-        {/* Tasks the reply handed off, and other bots' sessions it read. */}
-        <HandoffCards
-          turnId={turn.id}
-          handoffs={handoffItems}
-          onCancel={(id) => onCancelHandoff?.(id) ?? Promise.resolve()}
-        />
-        {inReply &&
-          cards
-            .filter((c) => c.turnId === turn.id)
-            .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
-        {turn.status === "done" && (
-          <HandoffSources read={turn.readSessions ?? []} />
-        )}
-        {inReply && turnSteps.length > 0 && (
-          <ToolSteps steps={turnSteps} working={false} />
-        )}
-        {inReply && <SelfUpdateNotes steps={turnSteps} />}
-        {/* While the reply waits on the owner, its question is here. */}
-        {turn.status === "pending" &&
-          turnAsks.map((ask) => <AskCard key={ask.id} ask={ask} />)}
-        {turnWork(turn, turnSteps, true)}
-      </WorkCard>
-    );
-  }
-
-  function turnWork(
-    turn: Snapshot["turns"][number],
-    steps: ToolStep[],
-    inCard = false,
-  ) {
+  function turnWork(turn: Snapshot["turns"][number], steps: ToolStep[]) {
     const working = turn.status === "pending";
     const inReply = turn.status === "done" && replied.has(turn.id);
     return (
@@ -569,12 +498,12 @@ export function Chat({
           cards
             .filter((c) => c.turnId === turn.id)
             .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
-        {turn.cancelled && !inCard && (
+        {turn.cancelled && (
           <p className="message-meta">Stopped · message not completed</p>
         )}
         {turn.status === "error" && !turn.cancelled && (
           <div className="turn-failure" role="alert">
-            {!inCard && signature(turn.createdAt)}
+            {signature(turn.createdAt)}
             <p className="turn-error">
               <CircleAlert size={14} className="turn-error-icon" />
               <span>
@@ -638,13 +567,4 @@ function ScheduledFailure({
       )}
     </div>
   );
-}
-
-/** A finished run's state, for its card: none when it simply finished. */
-function workStatus(work: TurnWork | undefined): WorkCardStatus | undefined {
-  return work?.outcome === "cancelled"
-    ? "cancelled"
-    : work?.outcome === "failed"
-      ? "failed"
-      : undefined;
 }

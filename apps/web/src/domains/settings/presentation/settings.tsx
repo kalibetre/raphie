@@ -44,6 +44,7 @@ export {
 export function Settings({
   section,
   skill: openSkill,
+  item,
   enabled,
   setEnabled,
   traces,
@@ -53,6 +54,8 @@ export function Settings({
   section: Section;
   /** A skill to open under Skills, as a reply's note links to it. */
   skill?: string;
+  /** A work item to show under Work, as a reply's tab links to it. */
+  item?: string;
   enabled: string[];
   setEnabled: (ids: string[]) => void;
   /** Trace list shown under Diagnostics; composed by the workspace. */
@@ -133,7 +136,7 @@ export function Settings({
         ) : section === "workspace" ? (
           <WorkspaceFiles onSandbox={() => onParent("sandbox")} />
         ) : section === "work" ? (
-          <WorkSettings bot={name} />
+          <WorkSettings bot={name} focus={item} />
         ) : section === "jobs" ? (
           <JobSettings />
         ) : section === "memory" ? (

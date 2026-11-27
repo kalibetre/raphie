@@ -28,12 +28,13 @@ pub fn work(s: &Ui, bot_id: &str, look: &Look, overlays: &mut Vec<El>) -> El {
         .iter()
         .find(|bot| bot.id == bot_id)
         .map_or(bot_id, |bot| bot.name.as_str());
+    let focus = s.work_focus.as_deref();
     let body = match s.model.work.get(bot_id) {
         Some(lists) => {
             let busy = s.model.changing_work;
             let mut body = vec![
-                open_group(&lists.open, name, busy, t),
-                closed_group(&lists.closed, name, busy, t),
+                open_group(&lists.open, name, busy, focus, t),
+                closed_group(&lists.closed, name, busy, focus, t),
             ];
             // While the dialog is open it shows the error itself.
             if let (false, Some(error)) = (s.work_form.open, &s.model.work_change_error) {
@@ -110,7 +111,7 @@ fn empty(t: &Theme, content: String) -> El {
 }
 
 /// "Open": the items still going, and "New item".
-fn open_group(items: &[WorkItem], bot: &str, busy: bool, t: &Theme) -> El {
+fn open_group(items: &[WorkItem], bot: &str, busy: bool, focus: Option<&str>, t: &Theme) -> El {
     let add = pressable(
         button(
             t,
@@ -123,7 +124,10 @@ fn open_group(items: &[WorkItem], bot: &str, busy: bool, t: &Theme) -> El {
         true,
         |s: &mut Ui| s.open_work_form(None),
     );
-    let mut rows: Vec<El> = items.iter().map(|item| card(item, bot, busy, t)).collect();
+    let mut rows: Vec<El> = items
+        .iter()
+        .map(|item| card(item, bot, busy, focus == Some(item.id.as_str()), t))
+        .collect();
     if rows.is_empty() {
         rows.push(empty(
             t,
@@ -144,8 +148,11 @@ fn open_group(items: &[WorkItem], bot: &str, busy: bool, t: &Theme) -> El {
 }
 
 /// "Done": finished and dropped items.
-fn closed_group(items: &[WorkItem], bot: &str, busy: bool, t: &Theme) -> El {
-    let mut rows: Vec<El> = items.iter().map(|item| card(item, bot, busy, t)).collect();
+fn closed_group(items: &[WorkItem], bot: &str, busy: bool, focus: Option<&str>, t: &Theme) -> El {
+    let mut rows: Vec<El> = items
+        .iter()
+        .map(|item| card(item, bot, busy, focus == Some(item.id.as_str()), t))
+        .collect();
     if rows.is_empty() {
         rows.push(empty(t, "Nothing closed yet.".to_owned()));
     }
@@ -168,8 +175,9 @@ fn status_label(status: WorkStatus) -> &'static str {
 }
 
 /// One item: where it stands, the bot's notes, its latest result, who
-/// opened and closed it, and what can be done to it.
-fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
+/// opened and closed it, and what can be done to it. `focused` marks the
+/// item a link from the chat asked for.
+fn card(item: &WorkItem, bot: &str, busy: bool, focused: bool, t: &Theme) -> El {
     let key = |part: &str| format!("rd-work-{}-{part}", item.id);
     let by = |actor: WorkActor| match actor {
         WorkActor::Bot => bot.to_owned(),
@@ -333,6 +341,10 @@ fn card(item: &WorkItem, bot: &str, busy: bool, t: &Theme) -> El {
     }
     if running || (!job && (item.status.is_open() || !handoff)) {
         card = card.child(buttons);
+    }
+    // The item a link from the chat asked for, marked.
+    if focused {
+        card = card.fill(t.accent_soft).radius(10.0);
     }
     card
 }

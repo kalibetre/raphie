@@ -66,17 +66,6 @@ fn element(rt: &Runtime<Ui>, key: &str) -> ElementInfo {
 }
 
 /// All text on screen, joined, for "does it say X" checks.
-/// The id of the open conversation's `n`th turn.
-fn turn_id(rt: &Runtime<Ui>, n: usize) -> String {
-    rt.state
-        .model
-        .conversation
-        .as_ref()
-        .and_then(|c| c.observation.as_ref())
-        .map(|o| o.turns[n].id.clone())
-        .unwrap()
-}
-
 fn screen_text(rt: &Runtime<Ui>) -> String {
     rt.elements()
         .into_iter()
@@ -742,7 +731,7 @@ fn failed_runs_of_a_scheduled_job_in_a_row_read_as_one() {
         assert!(rt.find("rd-scheduled-failure-t4").is_some());
         assert!(rt.find("rd-scheduled-failure-t2").is_none());
         assert!(rt.find("rd-turn-t3").is_none());
-        // The run that worked keeps its card, with the reply in it.
+        // The run that worked keeps its reply.
         assert!(rt.find("rd-reply-t1").is_some());
     }
 }
@@ -6354,7 +6343,8 @@ fn a_bots_own_instructions_are_edited_on_its_profile() {
 fn a_message_is_quoted_from_its_action_and_sent_with_the_quote() {
     use raphie_core::contracts::{QuoteAuthor, QuoteRef};
     for dark in [false, true] {
-        let mut rt = render(scenes::conversation, dark);
+        // Tall enough that the first message sits clear of the header.
+        let mut rt = render_sized(scenes::conversation, dark, (1280.0, 1400.0));
         let first = rt
             .state
             .model
@@ -6603,163 +6593,6 @@ fn a_running_work_item_says_so_and_its_run_can_be_cancelled() {
 }
 
 #[test]
-fn background_work_coming_back_reads_as_a_card_not_an_owner_message() {
-    let mut rt = render(scenes::conversation, false);
-    let mut answer = String::new();
-    rt.update(|ui, _| {
-        let observation = ui
-            .model
-            .conversation
-            .as_mut()
-            .and_then(|c| c.observation.as_mut())
-            .unwrap();
-        let turn = &mut observation.turns[0];
-        turn.text = "Your background work on w-2 ended. Reply follows as data.".into();
-        turn.work = Some(TurnWork {
-            item_id: "w-2".into(),
-            title: "Venue research".into(),
-            kind: TurnWorkKind::Result,
-            outcome: Some(HandoffOutcome::Cancelled),
-            request: None,
-        });
-        answer = turn.answer.clone().unwrap_or_default();
-    });
-    settle(&mut rt);
-    let id = turn_id(&rt, 0);
-    let text = screen_text(&rt);
-    // One card: the item and how its run ended, with the bot's reply in it.
-    // The card is where a quote of the reply, or a job notice, brings it.
-    assert_eq!(
-        element(&rt, &format!("rd-reply-{id}")).label.as_deref(),
-        Some("Background work: Venue research")
-    );
-    assert!(text.contains("Background work"), "{text}");
-    assert!(text.contains("Venue research"), "{text}");
-    assert!(!text.contains("w-2"), "no item id: {text}");
-    assert!(text.contains("Cancelled"), "{text}");
-    let first_line = answer.lines().next().unwrap_or_default().to_owned();
-    assert!(
-        text.contains(first_line.trim_start_matches(['#', ' '])),
-        "{text}"
-    );
-    assert!(!text.contains("Your background work on w-2 ended"));
-    // Not an owner message, and the reply is not signed as a message.
-    assert!(rt.find(&format!("rd-turn-{id}")).is_none());
-    assert!(rt.find(&format!("rd-meta-{id}")).is_none());
-
-    // Quote quotes the bot's reply; Open item opens the bot's Work page.
-    click(&mut rt, &format!("rd-reply-{id}-quote"));
-    assert_eq!(
-        rt.state.quoting.as_ref().map(|q| q.author),
-        Some(QuoteAuthor::Bot)
-    );
-    click(&mut rt, &format!("rd-reply-{id}-open"));
-    assert_eq!(
-        rt.state.screen,
-        Screen::Settings(Page::Bot {
-            bot_id: "default".into(),
-            section: BotSection::Work,
-        })
-    );
-}
-
-#[test]
-fn a_long_result_folds_until_shown_in_full() {
-    let mut rt = render(scenes::conversation, false);
-    rt.update(|ui, _| {
-        let observation = ui
-            .model
-            .conversation
-            .as_mut()
-            .and_then(|c| c.observation.as_mut())
-            .unwrap();
-        let turn = &mut observation.turns[0];
-        turn.work = Some(TurnWork {
-            item_id: "w-2".into(),
-            title: "Venue research".into(),
-            kind: TurnWorkKind::Result,
-            outcome: Some(HandoffOutcome::Completed),
-            request: None,
-        });
-        turn.answer = Some("Three venues are free in December. ".repeat(20));
-    });
-    settle(&mut rt);
-    let id = turn_id(&rt, 0);
-    let text_key = format!("rd-reply-{id}-text");
-    let folded = element(&rt, &text_key).rect[3];
-    assert_eq!(
-        element(&rt, &format!("rd-reply-{id}-more")).text.as_deref(),
-        Some("Show more")
-    );
-    click(&mut rt, &format!("rd-reply-{id}-more"));
-    assert!(element(&rt, &text_key).rect[3] > folded + 20.0);
-    assert_eq!(
-        element(&rt, &format!("rd-reply-{id}-more")).text.as_deref(),
-        Some("Show less")
-    );
-}
-
-#[test]
-fn a_short_result_in_paragraphs_does_not_fold() {
-    let mut rt = render(scenes::conversation, false);
-    rt.update(|ui, _| {
-        let observation = ui
-            .model
-            .conversation
-            .as_mut()
-            .and_then(|c| c.observation.as_mut())
-            .unwrap();
-        let turn = &mut observation.turns[0];
-        turn.work = Some(TurnWork {
-            item_id: "w-2".into(),
-            title: "Venue research".into(),
-            kind: TurnWorkKind::Result,
-            outcome: Some(HandoffOutcome::Completed),
-            request: None,
-        });
-        turn.answer = Some("Lisbon.\n\nPorto.\n\nBraga.".into());
-    });
-    settle(&mut rt);
-    let id = turn_id(&rt, 0);
-    assert!(rt.find(&format!("rd-reply-{id}-more")).is_none());
-}
-
-#[test]
-fn a_result_being_written_shows_in_its_card() {
-    let mut rt = render(scenes::conversation, false);
-    rt.update(|ui, _| {
-        let observation = ui
-            .model
-            .conversation
-            .as_mut()
-            .and_then(|c| c.observation.as_mut())
-            .unwrap();
-        observation.turns.truncate(1);
-        let turn = &mut observation.turns[0];
-        turn.work = Some(TurnWork {
-            item_id: "w-2".into(),
-            title: "Venue research".into(),
-            kind: TurnWorkKind::Result,
-            outcome: Some(HandoffOutcome::Completed),
-            request: None,
-        });
-        turn.status = raphie_core::contracts::TurnStatus::Pending;
-        turn.answer = None;
-        observation.live = Some(raphie_core::contracts::LiveConversation {
-            text: "Three venues are free so far".into(),
-            generating: true,
-        });
-    });
-    settle(&mut rt);
-    let text = screen_text(&rt);
-    assert!(text.contains("Working"), "{text}");
-    assert!(text.contains("Three venues are free so far"), "{text}");
-    // Nothing to quote until it is finished.
-    let id = turn_id(&rt, 0);
-    assert!(rt.find(&format!("rd-reply-{id}-quote")).is_none());
-}
-
-#[test]
 fn background_work_waiting_on_the_owner_needs_you() {
     let rt = render(scenes::chat_background, false);
     let text = screen_text(&rt);
@@ -6768,8 +6601,8 @@ fn background_work_waiting_on_the_owner_needs_you() {
 }
 
 #[test]
-fn a_question_asked_while_telling_a_result_sits_in_its_card() {
-    let mut rt = render(scenes::ask, false);
+fn background_work_coming_back_reads_as_the_bot_s_message_with_its_tab() {
+    let mut rt = render(scenes::conversation, false);
     rt.update(|ui, _| {
         let observation = ui
             .model
@@ -6777,27 +6610,176 @@ fn a_question_asked_while_telling_a_result_sits_in_its_card() {
             .as_mut()
             .and_then(|c| c.observation.as_mut())
             .unwrap();
-        observation.turns[0].work = Some(TurnWork {
-            item_id: "w-6".into(),
-            title: "Tidy the reports folder".into(),
+        // The newest turn, so its actions sit clear of the header.
+        let turn = observation.turns.last_mut().unwrap();
+        turn.text = "Your background work on w-2 ended. Reply follows as data.".into();
+        turn.work = Some(TurnWork {
+            item_id: "w-2".into(),
+            title: "Venue research".into(),
             kind: TurnWorkKind::Result,
-            outcome: Some(HandoffOutcome::Completed),
+            outcome: Some(HandoffOutcome::Cancelled),
+            request: Some("look into venues for the offsite".into()),
+        });
+    });
+    settle(&mut rt);
+    let id = rt
+        .state
+        .model
+        .conversation
+        .as_ref()
+        .and_then(|c| c.observation.as_ref())
+        .and_then(|o| o.turns.last())
+        .map(|t| t.id.clone())
+        .unwrap();
+    let text = screen_text(&rt);
+    // Not an owner message: the bot's reply, signed, under its tab.
+    assert!(
+        !text.contains("Your background work on w-2 ended"),
+        "{text}"
+    );
+    assert!(rt.find(&format!("rd-turn-{id}")).is_none());
+    assert!(rt.find(&format!("rd-meta-{id}")).is_some());
+    let tab = element(&rt, &format!("rd-work-tab-{id}"));
+    let tab_text = screen_text(&rt);
+    assert!(tab_text.contains("Venue research"), "{tab_text}");
+    assert!(
+        tab_text.contains("“look into venues for the offsite”"),
+        "{tab_text}"
+    );
+    assert!(tab_text.contains("CANCELLED"), "{tab_text}");
+    let meta = element(&rt, &format!("rd-meta-{id}")).rect;
+    assert!(
+        tab.rect[1] >= meta[1] + meta[3],
+        "the tab sits under the name"
+    );
+
+    // Quote, under the reply, quotes it.
+    click(&mut rt, &format!("rd-quote-bot-{id}"));
+    assert_eq!(
+        rt.state.quoting.as_ref().map(|q| q.author),
+        Some(QuoteAuthor::Bot)
+    );
+    // The tab is the link to its item: the Work page, at that item.
+    click(&mut rt, &format!("rd-work-tab-{id}"));
+    assert_eq!(
+        rt.state.screen,
+        Screen::Settings(Page::Bot {
+            bot_id: "default".into(),
+            section: BotSection::Work,
+        })
+    );
+    assert_eq!(rt.state.work_focus.as_deref(), Some("w-2"));
+}
+
+#[test]
+fn a_scheduled_post_says_scheduled_and_a_failed_run_is_stamped_failed() {
+    let mut rt = render(scenes::conversation, false);
+    rt.update(|ui, _| {
+        let observation = ui
+            .model
+            .conversation
+            .as_mut()
+            .and_then(|c| c.observation.as_mut())
+            .unwrap();
+        let turn = &mut observation.turns[0];
+        turn.scheduled = Some(raphie_core::contracts::ScheduledBy {
+            name: "Morning brief".into(),
+        });
+        turn.work = Some(TurnWork {
+            item_id: "w-4".into(),
+            title: "Morning brief".into(),
+            kind: TurnWorkKind::Result,
+            outcome: Some(HandoffOutcome::Failed),
             request: None,
         });
     });
     settle(&mut rt);
     let text = screen_text(&rt);
-    assert!(text.contains("Needs you"), "{text}");
-    // Once, inside the card, not again under the running reply.
-    assert_eq!(
-        text.matches("Dr. Amare has three openings").count(),
-        1,
-        "{text}"
-    );
-    let card = element(&rt, "rd-reply-t1").rect;
-    let ask = element(&rt, "rd-ask-ask-1").rect;
-    assert!(
-        ask[1] >= card[1] && ask[1] + ask[3] <= card[1] + card[3],
-        "the question is inside the card"
-    );
+    assert!(text.contains("· scheduled"), "{text}");
+    assert!(text.contains("FAILED"), "{text}");
+}
+
+/// The open conversation's last turn, made a background result with `edit`.
+fn last_result(
+    rt: &mut Runtime<Ui>,
+    edit: impl Fn(&mut raphie_core::contracts::SessionTurn),
+) -> String {
+    let mut id = String::new();
+    rt.update(|ui, _| {
+        let observation = ui
+            .model
+            .conversation
+            .as_mut()
+            .and_then(|c| c.observation.as_mut())
+            .unwrap();
+        let turn = observation.turns.last_mut().unwrap();
+        turn.work = Some(TurnWork {
+            item_id: "w-2".into(),
+            title: "Venue research".into(),
+            kind: TurnWorkKind::Result,
+            outcome: Some(HandoffOutcome::Completed),
+            request: Some("look into venues".into()),
+        });
+        edit(turn);
+        id = turn.id.clone();
+    });
+    settle(rt);
+    id
+}
+
+#[test]
+fn a_result_sits_one_gap_below_the_message_before_it() {
+    let mut rt = render(scenes::conversation, false);
+    let id = last_result(&mut rt, |_| {});
+    let ids: Vec<String> = rt
+        .state
+        .model
+        .conversation
+        .as_ref()
+        .and_then(|c| c.observation.as_ref())
+        .map(|o| o.turns.iter().map(|t| t.id.clone()).collect())
+        .unwrap();
+    let before = &ids[ids.len() - 2];
+    let above = element(&rt, &format!("rd-reply-{before}")).rect;
+    let reply = element(&rt, &format!("rd-reply-{id}")).rect;
+    let gap = reply[1] - (above[1] + above[3]);
+    assert!(gap < 30.0, "one gap, not two: {gap}");
+}
+
+#[test]
+fn a_result_still_being_written_is_not_stamped() {
+    let mut rt = render(scenes::conversation, false);
+    last_result(&mut rt, |turn| {
+        turn.status = raphie_core::contracts::TurnStatus::Pending;
+    });
+    rt.update(|ui, _| {
+        let observation = ui
+            .model
+            .conversation
+            .as_mut()
+            .and_then(|c| c.observation.as_mut())
+            .unwrap();
+        observation.live = Some(raphie_core::contracts::LiveConversation {
+            text: "Three venues so far".into(),
+            generating: true,
+        });
+    });
+    settle(&mut rt);
+    let text = screen_text(&rt);
+    assert!(text.contains("Venue research"), "{text}");
+    assert!(!text.contains("DONE"), "{text}");
+}
+
+#[test]
+fn a_result_that_failed_to_reply_keeps_its_tab_and_anchor() {
+    let mut rt = render(scenes::conversation, false);
+    let id = last_result(&mut rt, |turn| {
+        turn.status = raphie_core::contracts::TurnStatus::Error;
+        turn.answer = None;
+    });
+    let text = screen_text(&rt);
+    assert!(text.contains("Venue research"), "{text}");
+    assert!(text.contains("couldn’t finish this reply"), "{text}");
+    // A quote of it, or a job notice, still finds it.
+    assert!(rt.find(&format!("rd-reply-{id}")).is_some());
 }
