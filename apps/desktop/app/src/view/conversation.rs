@@ -189,12 +189,17 @@ fn background_markers(requests: &[BackgroundRequest], t: &Theme) -> Option<El> {
         for ask in &request.asks {
             markers = markers.child(asks::in_transcript(ask, &request.title, t));
         }
-        for approval in &request.tool_approvals {
+        // Only the live ones, as the dock has them.
+        let now = format::now_ms();
+        for approval in request.tool_approvals.iter().filter(|a| {
+            a.status == raphie_core::contracts::ApprovalStatus::Pending && a.expires_at > now
+        }) {
             markers = markers.child(asks::marker(
                 format!("rd-approval-marker-{}", approval.id),
                 format!(
-                    "{} needs approval · {}",
+                    "{} needs approval to run {} · {}",
                     request.title,
+                    approval.tool,
                     format::clock(approval.created_at)
                 ),
                 t,

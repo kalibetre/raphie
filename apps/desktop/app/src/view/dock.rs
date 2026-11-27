@@ -69,7 +69,12 @@ pub fn dock(s: &Ui, items: &[DockItem], look: &Look) -> Option<El> {
             let id = format!("dock-args:{}", approval.id);
             let open = s.open_steps.contains(&id);
             let lead = "Run ";
-            let words = format!("{lead}{} on {}?", approval.tool, approval.server);
+            // As the web says it: the server only when there is one.
+            let words = if approval.server.is_empty() {
+                format!("{lead}{}?", approval.tool)
+            } else {
+                format!("{lead}{} on {}?", approval.tool, approval.server)
+            };
             let code = Span::new(lead.len(), lead.len() + approval.tool.len())
                 .mono()
                 .size(12.5)

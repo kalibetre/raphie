@@ -65,11 +65,14 @@ pub fn needs_you(session: &SessionSummary) -> bool {
 }
 
 /// What waits on the owner from one teammate, for the roster: how many
-/// questions and approvals, whether one is a question, and the conversation
-/// to open, its chat when it has one, where the dock asks them all.
+/// questions and approvals, whether one is a question, what the newest is
+/// about, and the conversation to open. That is the chat when its dock holds
+/// them all (its own and its work items'); otherwise the newest conversation
+/// it doesn't hold, such as a group's.
 pub struct WaitingOnOwner<'a> {
     pub count: u32,
     pub asking: bool,
+    pub title: &'a str,
     pub session: &'a SessionSummary,
     pub last_at: i64,
 }
@@ -92,10 +95,13 @@ pub fn waiting_on_owner<'a>(sessions: &[&'a SessionSummary]) -> Option<WaitingOn
             .map(|session| session.pending.unwrap_or(1).max(1))
             .sum(),
         asking: waiting.iter().any(|session| session.asking),
-        session: sessions
+        title: &latest.title,
+        session: waiting
             .iter()
             .copied()
-            .find(|session| session.chat)
+            .filter(|session| !session.chat && session.work.is_none())
+            .max_by_key(|session| session.last_at)
+            .or_else(|| sessions.iter().copied().find(|session| session.chat))
             .unwrap_or(latest),
         last_at: latest.last_at,
     })
@@ -212,7 +218,7 @@ fn requests(s: &Ui, look: &Look) -> Option<El> {
         let card = row()
             .key(format!("rd-request-{}", bot.id))
             .role("button")
-            .label(format!("{headline}: {}", session.title))
+            .label(format!("{headline}: {}", waiting.title))
             .w_full()
             .px(10.0)
             .py(8.0)
@@ -228,7 +234,7 @@ fn requests(s: &Ui, look: &Look) -> Option<El> {
                     .min_w(0.0)
                     .child(one_line(headline, font(12.0, 600.0), t.foreground))
                     .child(one_line(
-                        session.title.clone(),
+                        waiting.title.to_owned(),
                         font(11.0, 400.0),
                         t.muted_foreground,
                     )),
@@ -450,21 +456,31 @@ mod tests {
         let asking = session(
             "work",
             30,
-            serde_json::json!({ "asking": true, "pending": 2 }),
+            serde_json::json!({ "asking": true, "pending": 2, "work": "w-6" }),
         );
         // A runtime that cannot count, or counts none, still counts one.
-        let approval = session("other", 20, serde_json::json!({ "waiting": true }));
+        let approval = session(
+            "other",
+            20,
+            serde_json::json!({ "waiting": true, "work": "w-7" }),
+        );
         let empty = session(
             "empty",
             5,
-            serde_json::json!({ "waiting": true, "pending": 0 }),
+            serde_json::json!({ "waiting": true, "pending": 0, "work": "w-8" }),
         );
         let waiting =
             waiting_on_owner(&[&chat, &asking, &approval, &empty]).expect("something waits");
         assert_eq!(waiting.count, 4);
         assert!(waiting.asking);
+        // All of it is the chat's or its work items': the chat's dock.
         assert_eq!(waiting.session.id, "chat");
+        assert_eq!(waiting.title, "work");
         assert_eq!(waiting.last_at, 30);
+        // A group's approval isn't in the chat's dock: the group opens.
+        let group = session("group", 40, serde_json::json!({ "waiting": true }));
+        let waiting = waiting_on_owner(&[&chat, &asking, &group]).expect("something waits");
+        assert_eq!(waiting.session.id, "group");
         // Without a chat, the latest session that waits opens.
         let waiting = waiting_on_owner(&[&approval, &asking]).expect("something waits");
         assert_eq!(waiting.session.id, "work");

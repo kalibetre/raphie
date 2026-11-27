@@ -26,6 +26,7 @@ pub fn in_transcript(ask: &SessionAsk, title: &str, t: &Theme) -> El {
             ),
             t,
         )
+        .label(format!("{title} asked you something: {}", ask.question))
         .help(ask.question.clone());
     }
     let (lead, value) = match &ask.answer {
@@ -52,6 +53,7 @@ pub fn in_transcript(ask: &SessionAsk, title: &str, t: &Theme) -> El {
         .my(4.0)
         .gap(8.0)
         .center_y()
+        .label(format!("{words}, to: {}", ask.question))
         .help(ask.question.clone())
         .child(
             row()

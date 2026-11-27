@@ -6664,7 +6664,7 @@ fn background_work_waiting_on_the_owner_is_marked_and_docked() {
         "{text}"
     );
     assert!(
-        text.contains(&format!("{title} needs approval · ")),
+        text.contains(&format!("{title} needs approval to run bash · ")),
         "{text}"
     );
     assert!(inside(&rt, "rd-background", "rd-transcript"));
@@ -6694,8 +6694,13 @@ fn the_roster_counts_what_a_teammate_waits_on_and_opens_its_chat() {
     let mut rt = render(
         |ui| {
             scenes::chat_dock(ui);
+            // What waits is in a work item's session, which the chat's dock
+            // holds: the line opens the chat.
             for session in &mut ui.model.sessions {
                 session.chat = session.id == "s-1";
+                if session.id == "s-2" {
+                    session.work = Some("w-6".into());
+                }
             }
         },
         false,
