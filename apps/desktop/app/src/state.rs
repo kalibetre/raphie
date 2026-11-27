@@ -363,6 +363,9 @@ pub struct Ui {
     /// there, and brought into view once the lists are in.
     pub work_focus: Option<String>,
     work_focus_shown: bool,
+    /// The reply whose text was just copied, and when: its Copy shows a
+    /// check for a moment.
+    pub copied: Option<(String, i64)>,
     /// How the owner arranged the dock in each conversation: what they
     /// skipped and whether they folded it.
     dock_views: HashMap<String, raphie_core::dock::DockView>,
@@ -600,6 +603,7 @@ impl Ui {
             quoting: None,
             reveal: None,
             work_focus: None,
+            copied: None,
             dock_views: HashMap::new(),
             work_focus_shown: false,
             roster_open: true,

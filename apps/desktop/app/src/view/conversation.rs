@@ -119,7 +119,31 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
         .find(|turn| is_running(turn));
 
     let failed = failed_runs(runs.iter().map(|(turn, _)| *turn));
+    // Receipts of the background work's settled questions, each placed in
+    // the chat where it was settled: above the first turn after it.
+    let mut receipts: Vec<(&SessionAsk, &str, i64)> = observation
+        .background
+        .iter()
+        .flat_map(|request| {
+            request
+                .asks
+                .iter()
+                .filter(|ask| ask.status != AskStatus::Pending)
+                .map(|ask| {
+                    (
+                        ask,
+                        request.title.as_str(),
+                        ask.settled_at.unwrap_or(ask.created_at),
+                    )
+                })
+        })
+        .collect();
+    receipts.sort_by_key(|(_, _, at)| *at);
+    let mut receipts = receipts.into_iter().peekable();
     for (turn, steps) in &runs {
+        while let Some((ask, title, _)) = receipts.next_if(|(_, _, at)| *at <= turn.created_at) {
+            items.push(asks::in_transcript(ask, title, t));
+        }
         // Above the turn whose run summarized the messages before it.
         if let Some(divider) = compaction::divider(s, turn, look) {
             items.push(divider);
@@ -158,6 +182,9 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             items.push(active_run(s, turn, steps, observation, now, look));
         }
     }
+    for (ask, title, _) in receipts {
+        items.push(asks::in_transcript(ask, title, t));
+    }
     // What the bot's background work waits on the owner for, last.
     if let Some(markers) = background_markers(&observation.background, t) {
         items.push(markers);
@@ -176,7 +203,19 @@ fn bot_name(s: &Ui) -> &str {
 /// of its chat: one line for each question or approval. The dock on the
 /// composer asks them.
 fn background_markers(requests: &[BackgroundRequest], t: &Theme) -> Option<El> {
-    if requests.is_empty() {
+    let now = format::now_ms();
+    let live = |a: &&raphie_core::contracts::SessionApproval| {
+        a.status == raphie_core::contracts::ApprovalStatus::Pending && a.expires_at > now
+    };
+    // Settled questions are receipts, placed where they were settled.
+    let waiting = requests.iter().any(|request| {
+        request
+            .asks
+            .iter()
+            .any(|ask| ask.status == AskStatus::Pending)
+            || request.tool_approvals.iter().any(|a| live(&a))
+    });
+    if !waiting {
         return None;
     }
     let mut markers = col()
@@ -186,14 +225,15 @@ fn background_markers(requests: &[BackgroundRequest], t: &Theme) -> Option<El> {
         .w_full()
         .gap(2.0);
     for request in requests {
-        for ask in &request.asks {
+        for ask in request
+            .asks
+            .iter()
+            .filter(|ask| ask.status == AskStatus::Pending)
+        {
             markers = markers.child(asks::in_transcript(ask, &request.title, t));
         }
         // Only the live ones, as the dock has them.
-        let now = format::now_ms();
-        for approval in request.tool_approvals.iter().filter(|a| {
-            a.status == raphie_core::contracts::ApprovalStatus::Pending && a.expires_at > now
-        }) {
+        for approval in request.tool_approvals.iter().filter(live) {
             markers = markers.child(asks::marker(
                 format!("rd-approval-marker-{}", approval.id),
                 format!(
@@ -534,7 +574,7 @@ fn reply(
     // Copy and Reply take the whole reply, so they sit under it, with when
     // it was said, while it is pointed at.
     if done {
-        reply = reply.child(super::quote::reply_actions(&turn.id, source, said, t));
+        reply = reply.child(super::quote::reply_actions(s, &turn.id, source, said, t));
     }
     Some(reply)
 }

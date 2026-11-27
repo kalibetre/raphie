@@ -6725,6 +6725,38 @@ fn skip_sends_the_top_item_back_and_folding_leaves_a_bar() {
 }
 
 #[test]
+fn an_answered_background_question_leaves_a_receipt_where_it_was_answered() {
+    let rt = render(scenes::chat_receipt, false);
+    let receipt = element(&rt, "rd-ask-receipt-ask-bg").rect;
+    let turn = element(&rt, "rd-turn-t1").rect;
+    // Answered before the owner last wrote: above that message.
+    assert!(receipt[1] < turn[1], "{receipt:?} {turn:?}");
+    let text = screen_text(&rt);
+    assert!(text.contains("You answered Keep it"), "{text}");
+    // Nothing waits any more: no marker at the end, and no dock.
+    assert!(rt.find("rd-background").is_none());
+    assert!(rt.find("rd-dock").is_none());
+}
+
+#[test]
+fn copying_a_reply_shows_a_check_for_a_moment() {
+    let mut rt = render(scenes::conversation, false);
+    let key = "rd-copy-bot-t1";
+    assert_eq!(element(&rt, key).label.as_deref(), Some("Copy"));
+    click(&mut rt, key);
+    assert_eq!(
+        rt.state.copied.as_ref().map(|(id, _)| id.as_str()),
+        Some("t1")
+    );
+    assert_eq!(element(&rt, key).label.as_deref(), Some("Copied"));
+    // Once the moment has passed, it says Copy again.
+    rt.state.copied.as_mut().unwrap().1 -= 2_000;
+    rt.invalidate();
+    rt.frame(1.0 / 60.0);
+    assert_eq!(element(&rt, key).label.as_deref(), Some("Copy"));
+}
+
+#[test]
 fn the_roster_counts_what_a_teammate_waits_on_and_opens_its_chat() {
     let mut rt = render(
         |ui| {
@@ -6740,7 +6772,7 @@ fn the_roster_counts_what_a_teammate_waits_on_and_opens_its_chat() {
         },
         false,
     );
-    assert!(screen_text(&rt).contains("Raphie has 3 questions"));
+    assert!(screen_text(&rt).contains("Raphie needs you for 3 things"));
     click(&mut rt, "rd-request-default");
     assert_eq!(
         rt.state.sent.last(),

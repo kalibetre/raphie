@@ -116,11 +116,15 @@ pub fn action(key: String, turn_id: &str, author: QuoteAuthor, text_: &str, t: &
     })
 }
 
+/// How long Copy shows its check after copying, in milliseconds.
+const COPIED_FOR_MS: i64 = 1500;
+
 /// Under a finished reply, shown while it is pointed at: copy its text,
 /// reply to it (the next message quotes it), and when it was said, with what
 /// it cost on hover. A reply with no words has only its time. Mirrors
 /// `reply-actions.tsx` on the web.
 pub fn reply_actions(
+    s: &Ui,
     turn_id: &str,
     text_: &str,
     said: Option<(i64, Option<String>)>,
@@ -141,6 +145,17 @@ pub fn reply_actions(
             .child(icon(glyph, 12.0).color(t.muted_foreground).a11y_hidden())
     };
     let copied = text_.to_owned();
+    let copy_id = turn_id.to_owned();
+    // Just copied: a check for a moment, as on the web.
+    let just_copied = s
+        .copied
+        .as_ref()
+        .is_some_and(|(id, at)| id == turn_id && crate::format::now_ms() - at < COPIED_FOR_MS);
+    let (copy_label, copy_glyph) = if just_copied {
+        ("Copied", &icons::CHECK)
+    } else {
+        ("Copy", &icons::COPY)
+    };
     let (reply_id, reply_text) = (turn_id.to_owned(), text_.to_owned());
     let mut actions = row()
         .key(format!("rd-reply-actions-{turn_id}"))
@@ -154,8 +169,14 @@ pub fn reply_actions(
     if !text_.trim().is_empty() {
         actions = actions
             .child(
-                button(format!("rd-copy-bot-{turn_id}"), "Copy", &icons::COPY)
-                    .on_press_tx(move |_: &mut Ui, tx: &mut Tx| tx.copy(copied.clone())),
+                button(format!("rd-copy-bot-{turn_id}"), copy_label, copy_glyph).on_press_tx(
+                    move |s: &mut Ui, tx: &mut Tx| {
+                        tx.copy(copied.clone());
+                        s.copied = Some((copy_id.clone(), crate::format::now_ms()));
+                        // Back to Copy once the moment has passed.
+                        tx.wake_after(std::time::Duration::from_millis(COPIED_FOR_MS as u64 + 50));
+                    },
+                ),
             )
             .child(
                 button(
