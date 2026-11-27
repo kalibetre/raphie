@@ -11,7 +11,15 @@ import {
 } from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
-import { dockItems } from "../../domains/conversations/application/dock";
+import {
+  arrangeDock,
+  dockItems,
+  type DockView,
+  foldDock,
+  openDock,
+  skipTop,
+  unfoldDock,
+} from "../../domains/conversations/application/dock";
 import {
   contextTokens,
   runUsage,
@@ -146,11 +154,25 @@ export function Workspace({
   const [quoting, setQuoting] = useState<Quote & { sessionId: string }>();
   const quote =
     quoting && quoting.sessionId === sessionId ? quoting : undefined;
-  // What waits on the owner here, docked on the composer.
-  const docked =
+  // What waits on the owner here, docked on the composer, arranged as the
+  // owner left it in this conversation.
+  const [dockViews, setDockViews] = useState<Record<string, DockView>>({});
+  const dockView = (conversation && dockViews[conversation.id]) || openDock;
+  const dock = arrangeDock(
     data && conversation
       ? dockItems(data, conversation.id, botProfile?.name ?? "Raphie")
-      : [];
+      : [],
+    dockView,
+  );
+  const docked = dock.items;
+  const arrange = (change: (view: DockView) => DockView) => {
+    if (!conversation) return;
+    const id = conversation.id;
+    setDockViews((views) => ({
+      ...views,
+      [id]: change(views[id] ?? openDock),
+    }));
+  };
   const handoffQuery = useHandoffs();
   const handoffs = handoffQuery.data?.items;
   // A handoff is saved inside its tool call, so once a tool step completes or
@@ -626,10 +648,22 @@ export function Workspace({
                         quote={quote}
                         onClearQuote={() => setQuoting(undefined)}
                         dock={
-                          docked.length > 0 && <QuestionDock items={docked} />
+                          docked.length > 0 && (
+                            <QuestionDock
+                              items={docked}
+                              folded={dock.folded}
+                              onSkip={() =>
+                                arrange((view) => skipTop(view, docked))
+                              }
+                              onFold={() =>
+                                arrange((view) => foldDock(view, docked))
+                              }
+                              onUnfold={() => arrange(unfoldDock)}
+                            />
+                          )
                         }
                         answering={
-                          docked[0]?.ask
+                          docked[0]?.ask && !dock.folded
                             ? (text) =>
                                 api(`/api/asks/${docked[0]!.ask!.id}`, {
                                   text,

@@ -741,6 +741,63 @@
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
+  /* Folded, the composer is back to the chat: only the bar stays amber. */
+  .question-dock[data-folded] + .composer[data-docked] {
+    border-color: var(--border);
+  }
+  .question-dock[data-folded] + .composer[data-docked]:focus-within {
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  }
+  .question-dock-skip,
+  .question-dock-fold {
+    flex: none;
+    color: var(--attention);
+  }
+  .question-dock-skip {
+    margin-right: -4px;
+  }
+  .question-dock[data-folded] {
+    padding-top: 0;
+  }
+  .question-dock-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    padding: 7px 12px;
+    border: 1px solid var(--attention);
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    background: var(--attention-soft);
+    color: var(--attention);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .question-dock-bar:hover {
+    background: color-mix(in oklab, var(--attention-soft), var(--attention) 8%);
+  }
+  .question-dock-bar:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .question-dock-count {
+    flex: none;
+  }
+  .question-dock-line {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--foreground);
+    font-weight: 400;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .question-dock-line-title {
+    font-weight: 600;
+  }
   /* Where a question was asked, in the conversation: one line while it
      waits, then a receipt of the answer. */
   .ask-marker,

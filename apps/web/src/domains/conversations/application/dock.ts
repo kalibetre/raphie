@@ -76,3 +76,73 @@ export function dockItems(
   ];
   return items.sort((a, b) => a.createdAt - b.createdAt);
 }
+
+/**
+ * How the owner has arranged the dock in one conversation: the items they
+ * skipped, in the order they skipped them, and, while it is folded away,
+ * what it held when they folded it.
+ */
+export type DockView = {
+  skipped: readonly string[];
+  foldedWith?: readonly string[];
+};
+
+export const openDock: DockView = { skipped: [] };
+
+/**
+ * The dock as the owner sees it: skipped items wait at the back, in the order
+ * they were skipped. It stays folded until something new arrives, so a new
+ * question is never hidden behind a bar.
+ */
+export function arrangeDock(items: readonly DockItem[], view: DockView) {
+  const rank = (item: DockItem) => view.skipped.indexOf(item.id);
+  const fresh = items.filter((item) => rank(item) < 0);
+  const skipped = items
+    .filter((item) => rank(item) >= 0)
+    .sort((a, b) => rank(a) - rank(b));
+  const folded =
+    !!view.foldedWith &&
+    items.length > 0 &&
+    items.every((item) => view.foldedWith!.includes(item.id));
+  return { items: [...fresh, ...skipped], folded };
+}
+
+/** Sends the top item to the back of the dock. */
+export function skipTop(
+  view: DockView,
+  arranged: readonly DockItem[],
+): DockView {
+  const top = arranged[0];
+  if (!top || arranged.length < 2) return view;
+  const live = new Set(arranged.map((item) => item.id));
+  return {
+    ...view,
+    skipped: [
+      ...view.skipped.filter((id) => id !== top.id && live.has(id)),
+      top.id,
+    ],
+  };
+}
+
+/** Folds the dock to a bar until something new arrives. */
+export const foldDock = (
+  view: DockView,
+  items: readonly DockItem[],
+): DockView => ({
+  ...view,
+  foldedWith: items.map((item) => item.id),
+});
+
+export const unfoldDock = (view: DockView): DockView => ({
+  skipped: view.skipped,
+});
+
+/** The dock's top item in one line, for the folded bar. */
+export function dockLine(item: DockItem) {
+  if (item.ask) return item.ask.question;
+  if (item.approval) {
+    const { tool, server } = item.approval;
+    return `Run ${tool}${server ? ` on ${server}` : ""}?`;
+  }
+  return "";
+}
