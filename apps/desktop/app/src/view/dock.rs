@@ -64,7 +64,7 @@ pub fn dock(s: &Ui, items: &[DockItem], look: &Look) -> Option<El> {
         .corners([14.0, 14.0, 0.0, 0.0])
         .child(header(top, more, t));
     body = body.child(match &top.waiting {
-        Waiting::Question(ask) => asks::card(s, ask, look).mt(6.0).mb(8.0),
+        Waiting::Question(ask) => asks::dock_card(s, ask, look).mt(6.0).mb(8.0),
         Waiting::Approval(approval) => {
             let id = format!("dock-args:{}", approval.id);
             let open = s.open_steps.contains(&id);

@@ -5226,7 +5226,8 @@ fn a_bots_question_takes_one_press_and_sends_one_answer() {
         assert!(!text.contains("Waiting for your answer"), "{text}");
         assert!(!text.contains("elapsed"), "{text}");
         assert!(text.contains("Dr. Amare has three openings next week. Which one?"));
-        assert!(text.contains("Answer in your own words"));
+        // The composer takes the owner's own words for the question on top.
+        assert_eq!(rt.state.docked_question().as_deref(), Some("ask-1"));
 
         click(&mut rt, "rd-ask-ask-1-1");
         assert_eq!(
@@ -5248,8 +5249,12 @@ fn a_bots_question_takes_one_press_and_sends_one_answer() {
 
 #[test]
 fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
-    let mut rt = render(scenes::ask_own_words, false);
-    click(&mut rt, "rd-ask-send-ask-1");
+    // Typed in the composer while the question is on top of the dock, the
+    // words answer it rather than going to the chat.
+    let mut rt = render(scenes::ask, false);
+    rt.update(|ui, _| ui.composer = TextEdit::new("Any morning works"));
+    settle(&mut rt);
+    click(&mut rt, "rd-send");
     assert_eq!(
         rt.state.sent.last(),
         Some(&Command::Answer {
@@ -5260,6 +5265,7 @@ fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
         })
     );
     assert!(screen_text(&rt).contains("You answered"));
+    assert!(rt.state.composer.text.is_empty());
 
     let rt = render(scenes::ask_rows, true);
     let text = screen_text(&rt);

@@ -53,12 +53,18 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         .selected_bot()
         .map_or("Raphie", |bot| bot.name.as_str());
     let verb = "Message";
+    // While a question is on top of the dock, typing answers it.
+    let empty_text = if s.docked_question().is_some() {
+        "Or answer in your own words…".to_owned()
+    } else {
+        format!("{verb} {name}…")
+    };
     let input = text_input(&s.composer, font(14.5, 400.0).lh(21.0))
         .key("rd-composer")
         .label(format!("{verb} {name}"))
         .w_full()
         .color(t.foreground)
-        .placeholder(format!("{verb} {name}…"), t.muted_foreground)
+        .placeholder(empty_text, t.muted_foreground)
         .caret(t.foreground, t.selection())
         .on_edit(|s: &mut Ui| &mut s.composer)
         // A pasted image or copied file is attached; text pastes as usual.

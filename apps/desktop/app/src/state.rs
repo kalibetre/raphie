@@ -831,9 +831,38 @@ impl Ui {
         }
     }
 
+    /// The question on top of the dock, which typed words answer.
+    pub fn docked_question(&self) -> Option<String> {
+        let observation = self.model.conversation.as_ref()?.observation.as_ref()?;
+        let name = self
+            .model
+            .selected_bot()
+            .map_or("Raphie", |bot| bot.name.as_str());
+        let items = raphie_core::dock::dock_items(observation, name, crate::format::now_ms());
+        match &items.first()?.waiting {
+            raphie_core::dock::Waiting::Question(ask) => Some(ask.id.clone()),
+            raphie_core::dock::Waiting::Approval(_) => None,
+        }
+    }
+
     pub fn send(&mut self) {
         let text = self.composer.text.trim().to_owned();
         let bot_id = self.model.bot_id.clone();
+        // Typed words answer the question on top of the dock; files still go
+        // to the chat.
+        let files = self
+            .model
+            .attachments
+            .files_for(bot_id.as_deref())
+            .is_empty();
+        if !text.is_empty()
+            && files
+            && let Some(ask_id) = self.docked_question()
+        {
+            self.answer(&ask_id, AskAnswer::Text { text });
+            self.composer = TextEdit::new("");
+            return;
+        }
         let draft = &self.model.attachments;
         // Files alone are a message; an upload still running is not ready.
         let nothing = text.is_empty() && draft.files_for(bot_id.as_deref()).is_empty();
