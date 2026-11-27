@@ -632,6 +632,10 @@ pub struct SessionSummary {
     /// A bot waits for the owner to answer its question.
     #[serde(default)]
     pub asking: bool,
+    /// How many questions and approvals wait on the owner here; `None` from
+    /// a runtime too old to count them.
+    #[serde(default)]
+    pub pending: Option<u32>,
     pub preview: String,
     pub turn_count: u32,
     #[serde(default)]
@@ -1014,6 +1018,9 @@ pub struct SessionAsk {
     /// The first option deletes, sends or spends something.
     #[serde(default)]
     pub danger: bool,
+    /// When it was asked; the dock on the composer asks the oldest first.
+    #[serde(default)]
+    pub created_at: i64,
     pub expires_at: i64,
     pub status: AskStatus,
     #[serde(default)]

@@ -64,6 +64,54 @@ pub fn needs_you(session: &SessionSummary) -> bool {
     session.waiting || session.asking
 }
 
+/// What waits on the owner from one teammate, for the roster: how many
+/// questions and approvals, whether one is a question, and the conversation
+/// to open, its chat when it has one, where the dock asks them all.
+pub struct WaitingOnOwner<'a> {
+    pub count: u32,
+    pub asking: bool,
+    pub session: &'a SessionSummary,
+    pub last_at: i64,
+}
+
+/// What waits on the owner in a teammate's `sessions`, if anything does.
+/// A session that cannot count what waits counts as one.
+pub fn waiting_on_owner<'a>(sessions: &[&'a SessionSummary]) -> Option<WaitingOnOwner<'a>> {
+    let waiting: Vec<&SessionSummary> = sessions
+        .iter()
+        .copied()
+        .filter(|session| needs_you(session))
+        .collect();
+    let latest = waiting
+        .iter()
+        .copied()
+        .max_by_key(|session| session.last_at)?;
+    Some(WaitingOnOwner {
+        count: waiting
+            .iter()
+            .map(|session| session.pending.unwrap_or(1).max(1))
+            .sum(),
+        asking: waiting.iter().any(|session| session.asking),
+        session: sessions
+            .iter()
+            .copied()
+            .find(|session| session.chat)
+            .unwrap_or(latest),
+        last_at: latest.last_at,
+    })
+}
+
+/// The roster's line for what one teammate waits on the owner for.
+pub fn waiting_line(name: &str, count: u32, asking: bool) -> String {
+    if count > 1 {
+        format!("{name} has {count} questions")
+    } else if asking {
+        format!("{name} has a question")
+    } else {
+        format!("{name} needs your OK")
+    }
+}
+
 pub fn presence(s: &Ui, bot_id: &str) -> Presence {
     let sessions = s.sessions_of(bot_id);
     // Known only once the bot's settings are here.
@@ -137,24 +185,19 @@ pub fn roster(s: &Ui, look: &Look) -> El {
         .child(footer(s, look))
 }
 
-/// Conversations waiting on the owner, from every bot, newest first.
+/// What waits on the owner, one line per teammate, newest first.
 fn requests(s: &Ui, look: &Look) -> Option<El> {
     let t = &look.theme;
-    let mut waiting: Vec<(&BotProfile, &SessionSummary)> = s
+    let mut waiting: Vec<(&BotProfile, WaitingOnOwner)> = s
         .model
         .bots
         .iter()
-        .flat_map(|bot| {
-            s.sessions_of(&bot.id)
-                .into_iter()
-                .filter(|session| needs_you(session))
-                .map(move |session| (bot, session))
-        })
+        .filter_map(|bot| Some((bot, waiting_on_owner(&s.sessions_of(&bot.id))?)))
         .collect();
     if waiting.is_empty() {
         return None;
     }
-    waiting.sort_by_key(|(_, session)| std::cmp::Reverse(session.last_at));
+    waiting.sort_by_key(|(_, waiting)| std::cmp::Reverse(waiting.last_at));
     let mut list = col()
         .key("rd-requests")
         .role("region")
@@ -163,18 +206,11 @@ fn requests(s: &Ui, look: &Look) -> Option<El> {
         .px(10.0)
         .pb(14.0)
         .gap(6.0);
-    for (bot, session) in waiting.into_iter().take(3) {
-        let headline = format!(
-            "{} {}",
-            bot.name,
-            if session.asking {
-                "has a question"
-            } else {
-                "needs your OK"
-            }
-        );
+    for (bot, waiting) in waiting.into_iter().take(3) {
+        let session = waiting.session;
+        let headline = waiting_line(&bot.name, waiting.count, waiting.asking);
         let card = row()
-            .key(format!("rd-request-{}", session.id))
+            .key(format!("rd-request-{}", bot.id))
             .role("button")
             .label(format!("{headline}: {}", session.title))
             .w_full()
@@ -392,3 +428,50 @@ fn band(s: &Ui, look: &Look, width: f32) -> El {
 /// gear's glyph is drawn that size to look as large.
 const MARK: f32 = 22.0;
 const GEAR: f32 = 18.0;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session(id: &str, last_at: i64, extra: serde_json::Value) -> SessionSummary {
+        let mut value = serde_json::json!({
+            "id": id, "title": id, "origin": "web", "lastAt": last_at, "working": false,
+            "failed": false, "waiting": false, "preview": "", "turnCount": 1
+        });
+        for (key, field) in extra.as_object().expect("an object") {
+            value[key] = field.clone();
+        }
+        serde_json::from_value(value).expect("a session summary")
+    }
+
+    #[test]
+    fn a_teammate_waiting_in_several_sessions_is_one_line_that_opens_its_chat() {
+        let chat = session("chat", 10, serde_json::json!({ "chat": true }));
+        let asking = session(
+            "work",
+            30,
+            serde_json::json!({ "asking": true, "pending": 2 }),
+        );
+        // A runtime that cannot count, or counts none, still counts one.
+        let approval = session("other", 20, serde_json::json!({ "waiting": true }));
+        let empty = session(
+            "empty",
+            5,
+            serde_json::json!({ "waiting": true, "pending": 0 }),
+        );
+        let waiting =
+            waiting_on_owner(&[&chat, &asking, &approval, &empty]).expect("something waits");
+        assert_eq!(waiting.count, 4);
+        assert!(waiting.asking);
+        assert_eq!(waiting.session.id, "chat");
+        assert_eq!(waiting.last_at, 30);
+        // Without a chat, the latest session that waits opens.
+        let waiting = waiting_on_owner(&[&approval, &asking]).expect("something waits");
+        assert_eq!(waiting.session.id, "work");
+        assert!(waiting_on_owner(&[&chat]).is_none());
+
+        assert_eq!(waiting_line("Raphie", 3, true), "Raphie has 3 questions");
+        assert_eq!(waiting_line("Raphie", 1, true), "Raphie has a question");
+        assert_eq!(waiting_line("Raphie", 1, false), "Raphie needs your OK");
+    }
+}

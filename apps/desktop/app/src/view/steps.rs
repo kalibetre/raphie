@@ -1,6 +1,7 @@
 //! The tools a run used: a one-line summary that unfolds into a list of
-//! steps, each with its arguments, result and, when it needs the owner, the
-//! decision bar.
+//! steps, each with its arguments and result, and the decision bar a pending
+//! approval is answered with. In a chat the dock on the composer holds that
+//! bar, so the steps only mark that one waits.
 //!
 //! Mirrors `apps/web/src/domains/approvals/presentation/tool-steps.tsx` and
 //! `tool-decision.tsx`, and the `.steps`, `.step` and `.decision` rules in
@@ -31,6 +32,9 @@ pub struct Run<'a> {
     /// What the run is doing right now, with how long it has been going.
     /// `None` once the run has finished.
     pub working: Option<Working>,
+    /// Whether a pending approval is decided here. In a chat, the dock on
+    /// the composer decides it, and the steps only mark that it waits.
+    pub decide: bool,
 }
 
 pub struct Working {
@@ -43,9 +47,9 @@ pub fn tool_steps(s: &Ui, run: &Run, now: i64, look: &Look) -> El {
         .steps
         .iter()
         .any(|step| step_state(step, now, run.working.is_some()) == StepState::Pending);
-    // Settled work stays folded; a pending approval forces it open because
-    // it needs the owner.
-    let expanded = needs_you || s.open_runs.contains(run.turn_id);
+    // Settled work stays folded; a pending approval decided here forces it
+    // open because it needs the owner.
+    let expanded = (needs_you && run.decide) || s.open_runs.contains(run.turn_id);
     let mut block = col()
         .key(format!("rd-steps-{}", run.turn_id))
         .role("group")
@@ -56,7 +60,7 @@ pub fn tool_steps(s: &Ui, run: &Run, now: i64, look: &Look) -> El {
         let mut list = col().w_full().mt(6.0);
         for (index, step) in run.steps.iter().enumerate() {
             let last = index + 1 == run.steps.len();
-            list = list.child(step_row(s, step, last, now, run.working.is_some(), look));
+            list = list.child(step_row(s, step, last, now, run, look));
         }
         block = block.child(list);
     }
@@ -72,8 +76,10 @@ pub fn tool_steps(s: &Ui, run: &Run, now: i64, look: &Look) -> El {
 fn header(run: &Run, needs_you: bool, expanded: bool, look: &Look) -> El {
     let t = &look.theme;
     let count = run.steps.len();
-    let label = if needs_you {
+    let label = if needs_you && run.decide {
         "Waiting for your approval".to_owned()
+    } else if needs_you {
+        "Needs your approval".to_owned()
     } else if let Some(working) = &run.working {
         working.label.clone()
     } else {
@@ -137,8 +143,8 @@ fn header(run: &Run, needs_you: bool, expanded: bool, look: &Look) -> El {
         );
     }
     // Nothing to unfold without steps, and nothing to fold while one of
-    // them waits for the owner.
-    let foldable = count > 0 && !needs_you;
+    // them waits for the owner's decision here.
+    let foldable = count > 0 && !(needs_you && run.decide);
     if foldable {
         let turn_id = run.turn_id.to_owned();
         header = header
@@ -158,9 +164,11 @@ fn header(run: &Run, needs_you: bool, expanded: bool, look: &Look) -> El {
 }
 
 /// One tool call: its state icon in the left gutter, details on the right.
-fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, working: bool, look: &Look) -> El {
+fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, run: &Run, look: &Look) -> El {
     let t = &look.theme;
-    let state = step_state(step, now, working);
+    let state = step_state(step, now, run.working.is_some());
+    // A step waiting for a decision made here.
+    let deciding = state == StepState::Pending && run.decide;
     let approval = step.approval.as_ref();
 
     // The icon and its colours say how the step went.
@@ -240,8 +248,9 @@ fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, working: bool, look: 
         .on_press(move |s: &mut Ui| Ui::toggle(&mut s.open_steps, &step_id));
 
     let mut body = col().grow(1.0).min_w(0.0).pb(8.0).child(summary);
-    // A step waiting for the owner always shows what it would run.
-    let open = state == StepState::Pending || s.open_steps.contains(&step.id);
+    // A step waiting for the owner's decision here always shows what it
+    // would run.
+    let open = deciding || s.open_steps.contains(&step.id);
     if open {
         // The approval holds the exact arguments; the journal's copy may be cut.
         let args = approval
@@ -272,7 +281,7 @@ fn step_row(s: &Ui, step: &ToolStep, last: bool, now: i64, working: bool, look: 
             );
         }
     }
-    if let (StepState::Pending, Some(approval)) = (state, approval) {
+    if let (true, Some(approval)) = (deciding, approval) {
         body = body.child(decision(
             approval,
             s.model.deciding.contains(&approval.id),
@@ -342,7 +351,7 @@ pub(crate) fn code_box(key: &str, content: String, t: &Theme) -> El {
 }
 
 /// When the approval expires, and the answers (the web's `.decision`).
-fn decision(approval: &SessionApproval, deciding: bool, t: &Theme) -> El {
+pub(crate) fn decision(approval: &SessionApproval, deciding: bool, t: &Theme) -> El {
     // Each closure needs its own copy of the id (see `learning-rust.md`,
     // "Cloning on purpose").
     let reject_id = approval.id.clone();

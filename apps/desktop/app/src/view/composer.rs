@@ -8,6 +8,9 @@
 //! picker, one file at a time), dragging them onto the conversation, or
 //! pasting an image or copied files into the text.
 //!
+//! What waits on the owner docks on top of the card (`dock.rs`), and the
+//! card joins it with an amber edge.
+//!
 //! Beside Send, a small ring fills towards the model's context window, as
 //! the web's `context-ring.tsx`; its tooltip gives the numbers.
 
@@ -128,6 +131,9 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         attach.disabled(true).layer_opacity(0.5)
     };
 
+    // What waits on the owner, docked on top of the card.
+    let waiting = super::dock::items(s);
+    let dock = super::dock::dock(s, &waiting, look);
     let mut card = col()
         .key("rd-composer-card")
         .w_full()
@@ -135,14 +141,22 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         .pr(12.0)
         .pb(10.0)
         .pl(16.0)
-        .radius(18.0)
+        // Square on top under the dock, which it closes.
+        .corners(if dock.is_some() {
+            [0.0, 0.0, 18.0, 18.0]
+        } else {
+            [18.0; 4]
+        })
         .fill(t.card)
         // The border warms towards the accent while typing, as on the web.
-        // The border turns to the accent while files are dragged over.
+        // The border turns to the accent while files are dragged over, and
+        // is amber under the dock.
         .border(
             1.0,
             if s.drop_hover {
                 t.accent
+            } else if dock.is_some() {
+                t.attention
             } else if s.composer.focused {
                 t.border.mix(t.accent, 0.4)
             } else {
@@ -226,7 +240,7 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     if let Some(from) = s.handed_off_by() {
         wrap = wrap.child(super::handoffs::note(s, from, look));
     }
-    wrap = wrap.child(card);
+    wrap = wrap.children(dock).child(card);
     if draft.uploading {
         wrap = wrap.child(
             centered("Uploading to workspace…", font(11.5, 400.0), t.faint)

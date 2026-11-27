@@ -26,6 +26,7 @@ mod cards;
 mod compaction;
 mod composer;
 mod conversation;
+mod dock;
 mod handoffs;
 mod header;
 mod inbox;
@@ -41,7 +42,6 @@ mod sign_in;
 mod steps;
 mod viewer;
 mod welcome;
-mod work_card;
 mod work_tab;
 
 use std::path::PathBuf;

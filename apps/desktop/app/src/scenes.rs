@@ -82,6 +82,7 @@ pub const SCENES: &[Scene] = &[
     ("working", working),
     ("approval", approval),
     ("chat-background", chat_background),
+    ("chat-dock", chat_dock),
     ("ask", ask),
     ("ask-rows", ask_rows),
     ("ask-confirm", ask_confirm),
@@ -3060,10 +3061,46 @@ pub fn chat_background(ui: &mut Ui) {
             "id": "ask-bg", "turnId": "t-work",
             "question": "Keep the September summary, or remove it with the rest?",
             "options": [{ "label": "Keep it" }, { "label": "Remove it" }],
-            "expiresAt": now + 570_000, "status": "pending"
+            "createdAt": now - 20_000, "expiresAt": now + 570_000, "status": "pending"
         }]
     }]));
     open(ui, "s-2", seen);
+}
+
+/// The chat with three things waiting on the owner: the bot's own question
+/// on top of the dock, and its background work's approval and question
+/// peeking behind it. The roster counts them on one line.
+pub fn chat_dock(ui: &mut Ui) {
+    chat_background(ui);
+    let now = now_ms();
+    if let Some(observation) = ui
+        .model
+        .conversation
+        .as_mut()
+        .and_then(|c| c.observation.as_mut())
+    {
+        observation.turns.push(from_json(turn(
+            "t2",
+            -90_000,
+            "And book the dentist next week.",
+            None,
+            "pending",
+        )));
+        let mut asked = question(
+            DENTIST,
+            json!([{ "label": "Tue 9:30" }, { "label": "Wed 14:00" }, { "label": "Fri 11:15" }]),
+            false,
+        );
+        asked["turnId"] = json!("t2");
+        asked["createdAt"] = json!(now - 60_000);
+        observation.asks = vec![from_json(asked)];
+    }
+    for session in &mut ui.model.sessions {
+        if session.id == "s-2" {
+            session.asking = true;
+            session.pending = Some(3);
+        }
+    }
 }
 
 /// A shell command waiting for approval, which can also be allowed for the

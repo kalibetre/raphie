@@ -25,7 +25,6 @@ use super::compaction;
 use super::handoffs;
 use super::self_updates;
 use super::steps::{Run, Working, code_box, tool_steps};
-use super::work_card;
 use super::work_tab;
 use crate::avatar::bot_avatar;
 use crate::format;
@@ -160,49 +159,49 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
         }
     }
     // What the bot's background work waits on the owner for, last.
-    for request in &observation.background {
-        items.push(background_request(s, request, now, look));
+    if let Some(markers) = background_markers(&observation.background, t) {
+        items.push(markers);
     }
     items
 }
 
-/// One work item's pending approvals and questions, as a card that needs
-/// the owner, decided here without opening the item's session.
-fn background_request(s: &Ui, request: &BackgroundRequest, now: i64, look: &Look) -> El {
-    let mut extra = Vec::new();
-    if !request.tool_approvals.is_empty() {
-        let steps: Vec<ToolStep> = request
-            .tool_approvals
-            .iter()
-            .map(|approval| ToolStep {
-                id: approval.id.clone(),
-                server: Some(approval.server.clone()),
-                tool: approval.tool.clone(),
-                started_at: approval.created_at,
-                done_at: None,
-                args: None,
-                result: None,
-                failed: false,
-                approval: Some(approval.clone()),
-            })
-            .collect();
-        let run = Run {
-            turn_id: &request.item_id,
-            steps: &steps,
-            working: None,
-        };
-        extra.push(tool_steps(s, &run, now, look));
+/// The bot's name, who asks the questions of its own conversation.
+fn bot_name(s: &Ui) -> &str {
+    s.model
+        .selected_bot()
+        .map_or("Raphie", |bot| bot.name.as_str())
+}
+
+/// What the bot's background work waits on the owner for, marked at the end
+/// of its chat: one line for each question or approval. The dock on the
+/// composer asks them.
+fn background_markers(requests: &[BackgroundRequest], t: &Theme) -> Option<El> {
+    if requests.is_empty() {
+        return None;
     }
-    for ask in &request.asks {
-        extra.push(asks::card(s, ask, look));
+    let mut markers = col()
+        .key("rd-background")
+        .role("region")
+        .label("Background work needs you")
+        .w_full()
+        .gap(2.0);
+    for request in requests {
+        for ask in &request.asks {
+            markers = markers.child(asks::in_transcript(ask, &request.title, t));
+        }
+        for approval in &request.tool_approvals {
+            markers = markers.child(asks::marker(
+                format!("rd-approval-marker-{}", approval.id),
+                format!(
+                    "{} needs approval · {}",
+                    request.title,
+                    format::clock(approval.created_at)
+                ),
+                t,
+            ));
+        }
     }
-    work_card::needs_you(
-        s,
-        format!("bg-{}", request.item_id),
-        &request.title,
-        extra,
-        look,
-    )
+    Some(markers)
 }
 
 /// A turn Raphie is working on now (not one waiting in the queue).
@@ -247,6 +246,7 @@ fn owner_turn(
             turn_id: &turn.id,
             steps,
             working: None,
+            decide: false,
         };
         block.push(tool_steps(s, &run, now, look));
     }
@@ -258,7 +258,7 @@ fn owner_turn(
     }
     if !working {
         for ask in asks {
-            block.push(asks::card(s, ask, look));
+            block.push(asks::in_transcript(ask, bot_name(s), t));
         }
     }
     // A turn that ended without a reply still shows the cards it made.
@@ -516,6 +516,7 @@ fn reply(
             turn_id: &turn.id,
             steps,
             working: None,
+            decide: false,
         };
         reply = reply.child(tool_steps(s, &run, now, look).mt(6.0));
     }
@@ -749,23 +750,22 @@ fn active_run(
         .iter()
         .filter(|ask| ask.turn_id == turn.id)
         .collect();
-    let waiting = asks.iter().any(|ask| ask.status == AskStatus::Pending);
+    // While it waits on a question the dock asks it: no spinner here, only
+    // the steps it settled.
+    let asking = asks.iter().any(|ask| ask.status == AskStatus::Pending);
     let run = Run {
         turn_id: &turn.id,
         steps,
-        working: Some(Working {
-            label: if waiting {
-                "Waiting for your answer…".to_owned()
-            } else {
-                active_run_label(observation.live.as_ref(), steps, &own)
-            },
+        working: (!asking).then(|| Working {
+            label: active_run_label(observation.live.as_ref(), steps, &own),
             elapsed: format_duration(now - turn.created_at),
         }),
+        decide: false,
     };
-    let mut block = col()
-        .key("rd-working")
-        .w_full()
-        .child(tool_steps(s, &run, now, look));
+    let mut block = col().key("rd-working").w_full();
+    if !asking || !steps.is_empty() {
+        block = block.child(tool_steps(s, &run, now, look));
+    }
     // Cards the turn has shown so far, then what it is waiting to hear.
     for shown in observation
         .cards
@@ -775,7 +775,7 @@ fn active_run(
         block = block.child(cards::card(s, shown, now, look));
     }
     for ask in asks {
-        block = block.child(asks::card(s, ask, look));
+        block = block.child(asks::in_transcript(ask, bot_name(s), &look.theme));
     }
     block
 }
