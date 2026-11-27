@@ -57,15 +57,46 @@ export function workLine(item: WorkItem) {
   return `${item.id} ${flat(item.title)}: ${where}${job}${handoff}${running}${last}`;
 }
 
+/** 0 for the bot's own items, 1 for a job's running item, 2 for an idle job's. */
+function rank(item: WorkItem) {
+  if (item.origin?.kind !== "job") return 0;
+  return item.run ? 1 : 2;
+}
+
 /**
- * The open items, sent with each of the chat's messages: newest activity
- * first, at most `MAX_LISTED` and about 1,500 tokens, saying how many more
+ * Open items in the order the bot should see them: its own requests, waits
+ * and handoffs first, then jobs that are running, then the rest of its
+ * scheduled jobs, each newest activity first. A bot with many jobs still sees
+ * what it is chasing for the owner.
+ */
+export function byAttention(a: WorkItem, b: WorkItem) {
+  return rank(a) - rank(b) || b.updatedAt - a.updatedAt;
+}
+
+/**
+ * "…and 3 more of your own and 40 scheduled jobs: use work_list.", for the
+ * items left out, ending with `hint`. Jobs past the end point to schedule_list.
+ */
+function moreLine(left: readonly WorkItem[], hint: string) {
+  const jobs = left.filter((item) => item.origin?.kind === "job").length;
+  const others = left.length - jobs;
+  const plural = jobs === 1 ? "" : "s";
+  const text =
+    others && jobs
+      ? `${others} more of your own and ${jobs} scheduled job${plural}`
+      : others
+        ? `${others} more`
+        : `${jobs} more scheduled job${plural}`;
+  return `…and ${text}: ${hint}.`;
+}
+
+/**
+ * The open items, sent with each of the chat's messages, in `byAttention`
+ * order: at most `MAX_LISTED` and about 1,500 tokens, saying how many more
  * there are. Empty when nothing is open.
  */
 export function openWorkContext(items: readonly WorkItem[]) {
-  const open = items
-    .filter((item) => isOpen(item.status))
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const open = items.filter((item) => isOpen(item.status)).sort(byAttention);
   if (!open.length) return "";
   const lines: string[] = [];
   let size = 0;
@@ -75,11 +106,11 @@ export function openWorkContext(items: readonly WorkItem[]) {
     lines.push(line);
     size += line.length + 1;
   }
-  const more = open.length - lines.length;
+  const left = open.slice(lines.length);
   return (
     `[Open work (${open.length}); work_read shows one in full]\n` +
     lines.join("\n") +
-    (more ? `\n…and ${more} more: use work_list.` : "") +
+    (left.length ? `\n${moreLine(left, "use work_list")}` : "") +
     "\n"
   );
 }
@@ -100,6 +131,32 @@ export function listWork(
           .includes(query),
     )
     .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** The most items `work_list` shows at once. */
+const MAX_TOOL_LISTED = 50;
+
+/**
+ * What `work_list` answers: open items in `byAttention` order or closed ones
+ * newest first, those matching `query` when given, at most
+ * `MAX_TOOL_LISTED` and how many more there are.
+ */
+export function workListText(
+  items: readonly WorkItem[],
+  filter: { closed: boolean; query?: string },
+) {
+  const all = listWork(items, { open: !filter.closed, query: filter.query });
+  if (!filter.closed) all.sort(byAttention);
+  const shown = all.slice(0, MAX_TOOL_LISTED);
+  const left = all.slice(shown.length);
+  if (!shown.length)
+    return `No ${filter.closed ? "closed" : "open"} work items${filter.query ? ` matching "${filter.query}"` : ""}.`;
+  return (
+    shown.map(workLine).join("\n") +
+    (left.length
+      ? `\n${moreLine(left, left.some((item) => item.origin?.kind === "job") ? "narrow it with query; schedule_list lists every job" : "narrow it with query")}`
+      : "")
+  );
 }
 
 /** A change to a work item: only the fields given change. */

@@ -43,7 +43,7 @@ w-14 Morning brief: job, next run Nov 27 07:00; last: sent Nov 26 07:02
 w-15 Venue research: waiting on Research
 ```
 
-One line each, newest activity first, at most 20 items and about 1,500 tokens; past that, the line says how many more and `work_list` shows them. Full notes and results are fetched with `work_read` only when needed. Instructions tell the bot to check this list before answering "what's going on?", to quote an item's source message when its result comes back, and not to open items for one-turn requests.
+One line each: the bot's own items first, then running jobs, then idle jobs, each newest activity first; at most 20 items and about 1,500 tokens; past that, the line says how many more, jobs counted apart, and `work_list` shows up to 50 in the same order, then finds the rest by `query`; `schedule_list` lists every job. Full notes and results are fetched with `work_read` only when needed. Instructions tell the bot to check this list before answering "what's going on?", to quote an item's source message when its result comes back, and not to open items for one-turn requests.
 
 ## Background sessions
 
@@ -93,7 +93,7 @@ Each slice ships on its own, with web and desktop together where it has a screen
 - **Posting without a model turn.** Settled in slice 4: a `write` submission to the chat's conversation adds the post to the model context with no request, and the chat records it as a finished bot message. The home channel gets the run's reply from the run itself, so it is sent once.
 - **One session, two received handoffs.** Settled in slice 5: one session per handoff, so Cancel on one received item never stops another. A new task no longer sees earlier tasks' context, so briefs must stand alone.
 - **A post during a chat reply.** A job's result is written to the chat with a Pi `write`, which the model reads at the next boundary like a steer. If a chat reply is mid-run, the model sees the "[Your scheduled job …]" note partway through it. Check that this is harmless with a tool-calling reply, or hold posts until the chat is idle.
-- **Jobs crowding the list.** A bot can have 100 jobs, each an open item, and the list shows 20. Order requests and waiting items ahead of idle jobs, or show jobs as a count.
+- **Jobs crowding the list.** Settled after slice 6: the list puts the bot's own items ahead of running jobs and running jobs ahead of idle ones, and its last line counts the jobs left out apart from other items. `work_list` uses the same order.
 - **Late results on a closed item.** Settled in #168: closing an item, by the owner or the bot, stops its running turn, and a run that ends on a closed item records its result without posting it to the chat.
 - **Too many items.** If the bot opens items too eagerly the list becomes noise. The instructions and the 20-item cap are the first defence; measure how many items real use creates before adding rules.
 - **Matching follow-ups.** "How's the Lisbon thing going?" without a quote relies on the bot matching titles. Search in `work_list` helps; transcript search (from the research) would help more.

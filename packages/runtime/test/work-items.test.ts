@@ -17,6 +17,7 @@ import { Chats } from "../src/domains/conversations/infrastructure/pi-conversati
 import {
   MAX_LISTED,
   openWorkContext,
+  workListText,
 } from "../src/domains/work/domain/work-item.ts";
 import { outcomeText } from "../src/domains/work/infrastructure/work-runs.ts";
 import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
@@ -65,6 +66,90 @@ test("a long list stops at its limit and says how many more there are", () => {
   assert.equal(listed[1], `w-${MAX_LISTED + 5} Item ${MAX_LISTED + 5}: active`);
   assert.equal(listed.length, MAX_LISTED + 2);
   assert.equal(listed.at(-1), "…and 5 more: use work_list.");
+});
+
+test("scheduled jobs come after the bot's own items, running ones first", () => {
+  const job = (n: number, patch: Partial<WorkItem> = {}) =>
+    item(n, {
+      title: `Job ${n}`,
+      origin: { kind: "job", jobId: `j-${n}` },
+      ...patch,
+    });
+  const jobs = Array.from({ length: 100 }, (_, n) => job(1_000 + n));
+  const listed = openWorkContext([
+    ...jobs,
+    item(1, {
+      title: "Flights to Lisbon",
+      status: "waiting",
+      waitingOn: "the owner",
+    }),
+    item(2, { title: "Venue research" }),
+    job(3, { run: { id: "r-1", startedAt: 3 } }),
+    // Running or not, a handoff is the bot's own: ahead of any job.
+    item(0, {
+      title: "Handed to Ada",
+      origin: {
+        kind: "handoff-sent",
+        handoffId: "h-1",
+        bot: { id: "b", name: "Ada" },
+      },
+      run: { id: "handoff:h-1:0", startedAt: 0 },
+    }),
+  ])
+    .trimEnd()
+    .split("\n");
+  assert.equal(listed[0], "[Open work (104); work_read shows one in full]");
+  assert.match(listed[1]!, /^w-2 Venue research/);
+  assert.match(listed[2]!, /^w-1 Flights to Lisbon/);
+  assert.match(listed[3]!, /^w-0 Handed to Ada/);
+  assert.match(listed[4]!, /^w-3 Job 3: .*working on it in the background/);
+  assert.match(listed[5]!, /^w-1099 Job 1099/);
+  assert.equal(listed.length, MAX_LISTED + 2);
+  assert.equal(listed.at(-1), "…and 84 more scheduled jobs: use work_list.");
+});
+
+test("the more line counts the bot's own items apart from jobs", () => {
+  const own = Array.from({ length: MAX_LISTED + 2 }, (_, n) => item(n + 1));
+  const listed = openWorkContext([
+    ...own,
+    item(500, { origin: { kind: "job", jobId: "j" } }),
+  ]);
+  assert.match(
+    listed,
+    /\n…and 2 more of your own and 1 scheduled job: use work_list\.\n$/,
+  );
+});
+
+test("work_list puts jobs last among open items and says how many it left out", () => {
+  const jobs = Array.from({ length: 60 }, (_, n) =>
+    item(100 + n, { origin: { kind: "job", jobId: `j-${n}` } }),
+  );
+  const open = workListText([...jobs, item(1, { title: "Lisbon" })], {
+    closed: false,
+  }).split("\n");
+  assert.match(open[0]!, /^w-1 Lisbon/);
+  assert.equal(open.length, 51);
+  assert.equal(
+    open.at(-1),
+    "…and 11 more scheduled jobs: narrow it with query; schedule_list lists every job.",
+  );
+  // A job past the first 50 is found by its name.
+  assert.match(
+    workListText([...jobs, item(1)], { closed: false, query: "Item 100" }),
+    /^w-100 Item 100: active; scheduled job$/,
+  );
+  const closed = workListText(
+    [
+      item(1, { status: "done" }),
+      item(2, { status: "done", origin: { kind: "job", jobId: "j" } }),
+    ],
+    { closed: true },
+  );
+  assert.match(closed, /^w-2 .*\nw-1 /);
+  assert.equal(
+    workListText([], { closed: false, query: "x" }),
+    'No open work items matching "x".',
+  );
 });
 
 /** A bot whose replies call the tool each message names. */
