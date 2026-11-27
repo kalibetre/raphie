@@ -68,7 +68,7 @@ A handoff from the bot's chat opens an item on each side, and each handoff has i
 ## Owner surfaces
 
 - **Work page** (web and desktop, same PR): open items first, then Done; each opens to its notes, result, source message and a link to its messages in the chat. Actions: rename, edit notes, close, drop, Cancel. Never beside the chat.
-- **Chat**: work shows up only when it needs the owner and when it ends. A result is the bot's own message, with a provenance tab under its name (the item, a quote of the request that started it or "scheduled", and a DONE / FAILED / CANCELLED stamp); Quote, Open item and the id show on hover. Questions and approvals from background work are cards marked Needs you at the end of the chat, until they move to a dock on the composer.
+- **Chat**: work shows up only when it needs the owner and when it ends. A result is the bot's own message, with a provenance tab under its name (the item, a quote of the request that started it or "scheduled", and a DONE / FAILED / CANCELLED stamp); the tab opens its item on the Work page, and Quote sits under every bot reply. Questions and approvals from background work are cards marked Needs you at the end of the chat, until they move to a dock on the composer.
 - **API** (`@raphie/contracts`): `GET /work-items?status=open|closed&q=`, `GET /work-items/:id`, `POST /work-items` (owner opens one), `PATCH /work-items/:id` (title, notes, status), `POST /work-items/:id/cancel`, and an SSE stream like `/sessions/events`.
 
 ## Other interactions
