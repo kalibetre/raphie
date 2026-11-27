@@ -11,6 +11,8 @@ export function chatModel(
     fail?: boolean;
     images?: boolean;
     userMessages?: (messages: UserMessage[]) => void;
+    /** Every request's messages, each as its role and text, in order. */
+    requests?: (messages: { role: string; text: string }[]) => void;
     started?: () => void;
     requestedModel?: (id: string) => void;
     /** The instructions in effect, as JSON of their sections. */
@@ -53,6 +55,25 @@ export function chatModel(
   };
   const reply: Provider["streamSimple"] = (_model, context, streamOptions) => {
     options.userMessages?.(context.messages.filter((m) => m.role === "user"));
+    options.requests?.(
+      context.messages.map((m) => ({
+        role: m.role,
+        text:
+          "content" in m && typeof m.content === "string"
+            ? m.content
+            : "content" in m && Array.isArray(m.content)
+              ? m.content
+                  .map((p) =>
+                    p.type === "text"
+                      ? p.text
+                      : p.type === "toolCall"
+                        ? `call ${p.name}`
+                        : "",
+                  )
+                  .join("")
+              : "",
+      })),
+    );
     options.requestedModel?.(_model.id);
     options.offeredTools?.(
       context.messages.flatMap((message) =>

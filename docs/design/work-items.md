@@ -51,7 +51,7 @@ An item that needs work done outside the chat gets its own session, created on f
 
 - **Starting it.** `work_start` (item id, brief) sends the brief to the item's session as a turn, like a handoff to oneself. The chat's turn ends at once; the bot tells the owner it is on it.
 - **Following up.** `work_start` on an item with a session sends another turn to that same session. The owner's "any news on this?" quoting the item's source message lets the bot find the item.
-- **Results.** When the session's turn finishes, its answer becomes the item's `result` and comes back to the chat as a marked turn, the way a handoff's result does today, framed as data. The chat's model then tells the owner, quoting the source message. Approvals and questions from the session already reach the owner through the inbox; showing them as cards in the chat is a later step.
+- **Results.** When the session's turn finishes, its answer becomes the item's `result` and comes back to the chat as a marked turn, framed as data, after any reply the chat is in the middle of. The chat's model then tells the owner in a message of its own, under a tab that quotes the request that started the item. Approvals and questions from the session dock on the chat's composer.
 - **Cancel** stops the item's running turn only. **Stop** in the chat stops only the chat's reply.
 - **Keeping sessions.** The cleanup at start removes sessions the owner can't write in. An item's session is marked (`ChatConversation.work = itemId`) and kept while its item exists, closed or not, so its history stays readable.
 
@@ -83,16 +83,16 @@ Each slice ships on its own, with web and desktop together where it has a screen
 
 1. **Record and tools.** The document, `work_open/update/close/read/list`, the per-message list, instructions, and the API read endpoints. The bot can track threads; nothing runs in the background yet.
 2. **Work page** on web and desktop, with the owner's actions.
-3. **Background sessions**: `work_start`, results back to the chat, Cancel, keeping item sessions in the cleanup. Done in #168; results don't quote the source message yet.
+3. **Background sessions**: `work_start`, results back to the chat, Cancel, keeping item sessions in the cleanup. Done in #168; results quote the request that started the item since #175.
 4. **Jobs as items**: runs in the item's session, results posted to the chat, PR #163's chat runs removed. Done: a job's item follows the job's lifecycle, and the owner changes it through the job, not the Work page.
 5. **Handoffs as items** on both sides; the handoff list folds into work items. Done: each handoff has its own session on the receiving side, and both sides keep an item. The in-chat cards, the composer's delegates and the `handoff_*` tools stay: they are the live view of a task, and the Work page lists the items.
-6. **Approvals and questions as chat cards** from background sessions. Done: the chat's snapshot carries each open item's pending approvals and questions, and both clients show them at the end of the chat with the usual decision and answer controls.
+6. **Approvals and questions in the chat** from background sessions. Done: the chat's snapshot carries each open item's pending approvals and questions, which dock on the composer with the chat's own (#177, #178); the end of the chat marks each one, and an answered question leaves a receipt where it was answered (#180).
 
 ## Open questions
 
 - **Posting without a model turn.** Settled in slice 4: a `write` submission to the chat's conversation adds the post to the model context with no request, and the chat records it as a finished bot message. The home channel gets the run's reply from the run itself, so it is sent once.
 - **One session, two received handoffs.** Settled in slice 5: one session per handoff, so Cancel on one received item never stops another. A new task no longer sees earlier tasks' context, so briefs must stand alone.
-- **A post during a chat reply.** A job's result is written to the chat with a Pi `write`, which the model reads at the next boundary like a steer. If a chat reply is mid-run, the model sees the "[Your scheduled job …]" note partway through it. Check that this is harmless with a tool-calling reply, or hold posts until the chat is idle.
+- **A post during a chat reply.** Settled for the message order: a job's result is written to the chat with a Pi `write`, which reaches the model at the reply's next step, after the step's tool call and result, the order a steer arrives in; it starts no request of its own. A background item's result is a turn of its own, queued as a follow-up, so it waits until the chat's reply ends. Both are covered in `work-items.test.ts`. Not yet checked with a real model: whether it still reports the tool's result when the post is the newest message. If that misleads replies, hold job posts until the chat is idle.
 - **Jobs crowding the list.** Settled after slice 6: the list puts the bot's own items ahead of running jobs and running jobs ahead of idle ones, and its last line counts the jobs left out apart from other items. `work_list` uses the same order.
 - **Late results on a closed item.** Settled in #168: closing an item, by the owner or the bot, stops its running turn, and a run that ends on a closed item records its result without posting it to the chat.
 - **Too many items.** If the bot opens items too eagerly the list becomes noise. The instructions and the 20-item cap are the first defence; measure how many items real use creates before adding rules.
