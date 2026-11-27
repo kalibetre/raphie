@@ -6803,7 +6803,26 @@ fn background_work_coming_back_reads_as_the_bot_s_message_with_its_tab() {
         "the tab sits under the name"
     );
 
-    // Quote, under the reply, quotes it.
+    // Under the reply: Copy, Reply and when it was said, which the
+    // header no longer repeats.
+    let actions = element(&rt, &format!("rd-reply-actions-{id}")).rect;
+    assert!(actions[1] > tab.rect[1], "the actions sit under the reply");
+    assert!(inside(
+        &rt,
+        &format!("rd-copy-bot-{id}"),
+        &format!("rd-reply-actions-{id}")
+    ));
+    assert!(inside(
+        &rt,
+        &format!("rd-reply-time-{id}"),
+        &format!("rd-reply-actions-{id}")
+    ));
+    assert!(!inside(
+        &rt,
+        &format!("rd-reply-time-{id}"),
+        &format!("rd-meta-{id}")
+    ));
+    // Reply quotes it.
     click(&mut rt, &format!("rd-quote-bot-{id}"));
     assert_eq!(
         rt.state.quoting.as_ref().map(|q| q.author),

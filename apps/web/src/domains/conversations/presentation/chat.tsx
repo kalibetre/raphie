@@ -46,6 +46,7 @@ import {
   remarkSkills,
 } from "./handoffs/mention-markdown";
 import { messageId, QuoteAction, QuoteBar, showMessage } from "./quote";
+import { ReplyActions } from "./reply-actions";
 import { SelfUpdateNotes } from "./self-update-notes";
 import { ShownCard } from "./shown-card";
 import { WorkTab } from "./work-tab";
@@ -413,14 +414,7 @@ export function Chat({
             className="message message-assistant"
             id={turn ? messageId(turn.id, "bot") : undefined}
           >
-            {turn?.status === "done" &&
-              signature(
-                at,
-                // Tokens and cost are for the curious, not the conversation.
-                usage
-                  ? `${usage.tokens.toLocaleString()} tokens across ${usage.calls} model ${usage.calls === 1 ? "call" : "calls"} · ${formatCost(usage.cost)}, provider-reported`
-                  : undefined,
-              )}
+            {turn?.status === "done" && signature()}
             {turn && (turn.work || turn.scheduled) && (
               <WorkTab turn={turn} onOpen={openItem(itemId)} />
             )}
@@ -450,10 +444,24 @@ export function Chat({
               <ToolSteps steps={turnSteps} working={false} decide={false} />
             )}
             {turn?.status === "done" && <SelfUpdateNotes steps={turnSteps} />}
-            {/* Quote takes the whole reply, so it sits under it. */}
-            {turn?.status === "done" && onQuote && text.trim() && (
-              <QuoteAction
-                onQuote={() => onQuote(quoteOf(turn.id, "bot", text))}
+            {/* Copy and Reply take the whole reply, so they sit under it,
+                with when it was said. */}
+            {turn?.status === "done" && (
+              <ReplyActions
+                text={text}
+                at={at}
+                time={at ? time(at) : undefined}
+                title={
+                  // Tokens and cost are for the curious, not the conversation.
+                  usage
+                    ? `${usage.tokens.toLocaleString()} tokens across ${usage.calls} model ${usage.calls === 1 ? "call" : "calls"} · ${formatCost(usage.cost)}, provider-reported`
+                    : undefined
+                }
+                onReply={
+                  onQuote
+                    ? () => onQuote(quoteOf(turn.id, "bot", text))
+                    : undefined
+                }
               />
             )}
           </article>

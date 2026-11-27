@@ -467,6 +467,8 @@ fn reply(
         _ => return None,
     };
     let done = turn.status == TurnStatus::Done;
+    // When a finished reply was said, and what it cost, for its actions row.
+    let mut said: Option<(i64, Option<String>)> = None;
     let mut reply = col()
         .key(format!("rd-reply-{}", turn.id))
         .w_full()
@@ -484,9 +486,10 @@ fn reply(
             )
         });
         // A job's post has no model call: it was said when it was posted.
-        let at = completed_at(&turn.id, activity)
-            .or((turn.work.is_some() || turn.scheduled.is_some()).then_some(turn.created_at));
-        reply = reply.child(signature(s, at, usage, look).key(format!("rd-meta-{}", turn.id)));
+        said = completed_at(&turn.id, activity)
+            .or((turn.work.is_some() || turn.scheduled.is_some()).then_some(turn.created_at))
+            .map(|at| (at, usage));
+        reply = reply.child(signature(s, None, None, look).key(format!("rd-meta-{}", turn.id)));
     }
     if let Some(tab) = work_tab::tab(turn, t) {
         reply = reply.child(tab);
@@ -528,21 +531,17 @@ fn reply(
     if done && let Some(notes) = self_updates::notes(s, steps, t) {
         reply = reply.child(notes);
     }
-    // Quote takes the whole reply, so it sits under it, while pointed at.
-    if done && !source.trim().is_empty() {
-        reply = reply.child(row().mt(4.0).child(super::quote::action(
-            format!("rd-quote-bot-{}", turn.id),
-            &turn.id,
-            QuoteAuthor::Bot,
-            source,
-            t,
-        )));
+    // Copy and Reply take the whole reply, so they sit under it, with when
+    // it was said, while it is pointed at.
+    if done {
+        reply = reply.child(super::quote::reply_actions(&turn.id, source, said, t));
     }
     Some(reply)
 }
 
-/// A reply's signature: the bot's face, its name and the time, with what the
-/// reply cost on hover when it is known.
+/// A reply's signature: the bot's face, its name and, when given, the time,
+/// with what the reply cost on hover when it is known. A finished reply
+/// shows its time under it instead, beside Copy and Reply.
 fn signature(s: &Ui, at: Option<i64>, usage: Option<String>, look: &Look) -> El {
     let t = &look.theme;
     let (id, name) = s.model.selected_bot().map_or(("default", "Raphie"), |bot| {

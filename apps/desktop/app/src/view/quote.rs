@@ -116,6 +116,75 @@ pub fn action(key: String, turn_id: &str, author: QuoteAuthor, text_: &str, t: &
     })
 }
 
+/// Under a finished reply, shown while it is pointed at: copy its text,
+/// reply to it (the next message quotes it), and when it was said, with what
+/// it cost on hover. A reply with no words has only its time. Mirrors
+/// `reply-actions.tsx` on the web.
+pub fn reply_actions(
+    turn_id: &str,
+    text_: &str,
+    said: Option<(i64, Option<String>)>,
+    t: &Theme,
+) -> El {
+    let button = |key: String, label: &'static str, glyph: &'static rune::Icon| {
+        row()
+            .key(key)
+            .role("button")
+            .label(label)
+            .help(label)
+            // The web's `icon-xs`: 24 px.
+            .size(24.0, 24.0)
+            .center()
+            .radius(7.0)
+            .hover(t.hover)
+            .focus_ring(2.0, 2.0, t.accent)
+            .child(icon(glyph, 12.0).color(t.muted_foreground).a11y_hidden())
+    };
+    let copied = text_.to_owned();
+    let (reply_id, reply_text) = (turn_id.to_owned(), text_.to_owned());
+    let mut actions = row()
+        .key(format!("rd-reply-actions-{turn_id}"))
+        .mt(6.0)
+        .ml(-4.0)
+        .gap(2.0)
+        .center_y()
+        // Hidden until the message is pointed at or focused.
+        .group_opacity(0.0, 1.0);
+    // A reply with no words has only its time.
+    if !text_.trim().is_empty() {
+        actions = actions
+            .child(
+                button(format!("rd-copy-bot-{turn_id}"), "Copy", &icons::COPY)
+                    .on_press_tx(move |_: &mut Ui, tx: &mut Tx| tx.copy(copied.clone())),
+            )
+            .child(
+                button(
+                    format!("rd-quote-bot-{turn_id}"),
+                    "Reply",
+                    &icons::CORNER_UP_LEFT,
+                )
+                // Replying puts the caret in the draft that will quote.
+                .on_press_tx(move |s: &mut Ui, tx: &mut Tx| {
+                    s.quote(&reply_id, QuoteAuthor::Bot, &reply_text);
+                    tx.focus("rd-composer", false);
+                }),
+            );
+    }
+    if let Some((at, usage)) = said {
+        let mut time = text(crate::format::clock(at))
+            .key(format!("rd-reply-time-{turn_id}"))
+            .font(font(11.5, 400.0))
+            .color(t.faint)
+            .single_line()
+            .ml(6.0);
+        if let Some(usage) = usage {
+            time = time.help(usage);
+        }
+        actions = actions.child(time);
+    }
+    actions
+}
+
 /// The message the draft will quote, above it, with a way to drop it.
 pub fn in_composer(s: &Ui, look: &Look) -> Option<El> {
     let t = &look.theme;
