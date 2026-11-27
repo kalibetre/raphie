@@ -8,6 +8,7 @@ import { CodingTools } from "@earendil-works/pi-durable/tools";
 
 import {
   activeCommandGrant,
+  commandMode,
   ToolApprovals,
   type ToolApprovalService,
 } from "../../approvals/infrastructure/pi-tool-approvals.ts";
@@ -78,8 +79,7 @@ export function createContainerTools(
                 !activeCommandGrant(state, item) ||
                 context.abortSignal?.aborted ||
                 (item.fullAccess &&
-                  state.commandModes?.[String(api.conversationId)] !==
-                    "full-access")
+                  (await commandMode(tx, api.conversationId)) !== "full-access")
               )
                 return false;
               if (item.execution !== "waiting") return false;

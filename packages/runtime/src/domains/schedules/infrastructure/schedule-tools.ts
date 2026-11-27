@@ -19,9 +19,14 @@ import {
 } from "@earendil-works/pi-schema";
 import type { SaveScheduledJob } from "@raphie/contracts";
 
+import { inOwnersChat } from "../../conversations/infrastructure/owner-chat.ts";
 import type { BotJobs } from "./bot-jobs.ts";
 
-type MutationResult = { text: string; retiredTaskId: TaskId | null };
+type MutationResult = {
+  text: string;
+  retiredTaskId: TaskId | null;
+  refused?: true;
+};
 
 const Receipt = defineDoc<{ result: MutationResult | null }>({
   kind: "raphie.schedule-mutation",
@@ -32,6 +37,9 @@ const Receipt = defineDoc<{ result: MutationResult | null }>({
 });
 
 /** Persist the result with the mutation, so recovery cannot recreate or repeat an edit. */
+const NOT_IN_CHAT =
+  "Scheduled jobs belong to your chat with the owner. Ask the owner to set this up there.";
+
 async function mutate(
   jobs: BotJobs,
   api: ToolExecutionApi,
@@ -41,12 +49,18 @@ async function mutate(
   const result = await api.commit(async (tx) => {
     const receipt = await tx.doc(Receipt, api.taskId);
     if (receipt.result) return { ...receipt.result };
-    receipt.result = await change(tx);
+    // Jobs run as the owner's background work, under the chat's mode.
+    receipt.result = (await inOwnersChat(tx, api.conversationId))
+      ? await change(tx)
+      : { text: NOT_IN_CHAT, retiredTaskId: null, refused: true };
     // Draft overlays expire when the transaction settles. Return detached values.
     return { ...receipt.result };
   }, ctx);
   if (result.retiredTaskId !== null) await jobs.retire(result.retiredTaskId);
-  return { output: [{ type: "text" as const, text: result.text }] };
+  return {
+    output: [{ type: "text" as const, text: result.text }],
+    ...(result.refused ? { isError: true } : {}),
+  };
 }
 
 const name = str({ minLength: 1, maxLength: 80 });
@@ -85,7 +99,7 @@ export function createScheduleTools(jobs: BotJobs) {
         if (!names.length) return;
         return [
           `Scheduling is enabled. Your available scheduling tools on this turn are: ${names.join(", ")}. These current capabilities supersede earlier assistant claims that a tool is missing.`,
-          "Manage this bot's schedules directly on the owner's request, without approval or another confirmation. Each run is a message in this bot's chat with the owner while the runtime is running, not a device push notification. External actions performed by a job still require approval.",
+          "Manage this bot's schedules directly on the owner's request, without approval or another confirmation. Each run is a message in this bot's chat with the owner while the runtime is running, not a device push notification. A job's tool calls follow the chat's permission mode: they ask for approval unless the chat is on Full access.",
           names.includes("schedule_list") &&
             "Use schedule_list to identify the owner's existing reminder before editing or deleting it.",
           names.includes("schedule_update") &&
@@ -103,7 +117,7 @@ export function createScheduleTools(jobs: BotJobs) {
       defineTool({
         name: "schedule_create",
         description:
-          "Create a NEW reminder or recurring prompt directly on the owner's request, without approval or confirmation. To edit an existing reminder, use schedule_update instead; do not delete and recreate it. Omit everyMinutes for a one-time reminder. The runtime must be running; each run is a message in the chat, not a device push notification. Only confirm success after saved:true. External actions performed by the job still require approval.",
+          "Create a NEW reminder or recurring prompt directly on the owner's request, without approval or confirmation. To edit an existing reminder, use schedule_update instead; do not delete and recreate it. Omit everyMinutes for a one-time reminder. The runtime must be running; each run is a message in the chat, not a device push notification. Only confirm success after saved:true. The job's tool calls follow the chat's permission mode.",
         parameters: obj({
           name,
           prompt,
@@ -222,9 +236,18 @@ export function createScheduleTools(jobs: BotJobs) {
         parameters: obj({}),
         replay: "safe",
         outputLimits: { maxBytes: 64000, maxLines: 1000 },
-        execute: async () => ({
-          output: [{ type: "text", text: JSON.stringify(await jobs.read()) }],
-        }),
+        // The owner's jobs and their prompts are private, like work items.
+        execute: async (_args, api, ctx) =>
+          (await api.commit((tx) => inOwnersChat(tx, api.conversationId), ctx))
+            ? {
+                output: [
+                  { type: "text", text: JSON.stringify(await jobs.read()) },
+                ],
+              }
+            : {
+                output: [{ type: "text", text: NOT_IN_CHAT }],
+                isError: true,
+              },
       }),
     ],
   });

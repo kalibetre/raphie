@@ -86,7 +86,11 @@ function tool(allowed: { personality: boolean; owner: boolean }) {
   return {
     run: async (args: Record<string, unknown>) =>
       (
-        (await update.execute(args as never, {} as never, {} as never)) as {
+        (await update.execute(
+          args as never,
+          { commit: async () => true } as never,
+          {} as never,
+        )) as {
           isError: boolean;
         }
       ).isError,

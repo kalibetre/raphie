@@ -17,7 +17,7 @@ import {
 import type { ChatService } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import { appsLine } from "../../settings/domain/connected-services.ts";
 import type { ToolApprovalService, ToolResult } from "./pi-tool-approvals.ts";
-import { ToolApprovals } from "./pi-tool-approvals.ts";
+import { commandMode, ToolApprovals } from "./pi-tool-approvals.ts";
 
 export type McpTools = {
   /** The owner's name for the connection. */
@@ -190,8 +190,7 @@ export function createMcpTools(
             item.fingerprint !== fingerprint ||
             item.status !== "approved" ||
             (item.fullAccess &&
-              state.commandModes?.[String(api.conversationId)] !==
-                "full-access") ||
+              (await commandMode(tx, api.conversationId)) !== "full-access") ||
             !!item.grantId
           )
             return { kind: "unauthorized" as const };
