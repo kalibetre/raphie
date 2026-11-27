@@ -43,7 +43,7 @@ w-14 Morning brief: job, next run Nov 27 07:00; last: sent Nov 26 07:02
 w-15 Venue research: waiting on Research
 ```
 
-One line each: the bot's own items first, then running jobs, then idle jobs, each newest activity first; at most 20 items and about 1,500 tokens; past that, the line says how many more and `work_list` shows them. Full notes and results are fetched with `work_read` only when needed. Instructions tell the bot to check this list before answering "what's going on?", to quote an item's source message when its result comes back, and not to open items for one-turn requests.
+One line each: the bot's own items first, then running jobs, then idle jobs, each newest activity first; at most 20 items and about 1,500 tokens; past that, the line says how many more, jobs counted apart, and `work_list` shows up to 50 in the same order, then finds the rest by `query`; `schedule_list` lists every job. Full notes and results are fetched with `work_read` only when needed. Instructions tell the bot to check this list before answering "what's going on?", to quote an item's source message when its result comes back, and not to open items for one-turn requests.
 
 ## Background sessions
 
