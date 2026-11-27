@@ -3,8 +3,18 @@ import { expect, test } from "bun:test";
 import type { SessionApproval, SessionAsk } from "@raphie/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { dockItems } from "../src/domains/conversations/application/dock";
+import {
+  arrangeDock,
+  dockItems,
+  dockLine,
+  foldDock,
+  openDock,
+  settleDock,
+  skipTop,
+  unfoldDock,
+} from "../src/domains/conversations/application/dock";
 import { AskMarker } from "../src/domains/conversations/presentation/ask-marker";
+import { QuestionDock } from "../src/domains/conversations/presentation/question-dock";
 import {
   waitingLine,
   waitingOnOwner,
@@ -154,4 +164,72 @@ test("the sidebar counts what a teammate waits on and opens its chat", () => {
   expect(group.session.sessionId).toBe("g");
   expect(group.title).toBe("Team group");
   expect(waitingOnOwner([session({})])).toBeUndefined();
+});
+
+const items = (ids: string[]) =>
+  dockItems(
+    {
+      asks: ids.map((id, i) => ask(id, i)),
+      toolApprovals: [],
+      background: [],
+    },
+    "chat",
+    "Raphie",
+    now,
+  );
+
+test("skipping sends the top item to the back, in the order skipped", () => {
+  const all = items(["a", "b", "c"]);
+  let view = openDock;
+  view = skipTop(view, arrangeDock(all, view).items);
+  expect(arrangeDock(all, view).items.map((i) => i.id)).toEqual([
+    "b",
+    "c",
+    "a",
+  ]);
+  view = skipTop(view, arrangeDock(all, view).items);
+  expect(arrangeDock(all, view).items.map((i) => i.id)).toEqual([
+    "c",
+    "a",
+    "b",
+  ]);
+  // A lone item has nowhere to go.
+  expect(skipTop(openDock, items(["a"]))).toBe(openDock);
+});
+
+test("a folded dock stays folded until something new arrives", () => {
+  const two = items(["a", "b"]);
+  const view = foldDock(openDock, two);
+  expect(arrangeDock(two, view).folded).toBe(true);
+  // Answering one keeps it folded.
+  expect(arrangeDock(items(["b"]), view).folded).toBe(true);
+  // A new question opens it, on top, for good: what was folded waits
+  // behind it, and answering the new one does not fold it again.
+  const three = items(["a", "b", "c"]);
+  expect(arrangeDock(three, view).folded).toBe(false);
+  const settled = settleDock(view, three)!;
+  expect(arrangeDock(three, settled).items.map((i) => i.id)).toEqual([
+    "c",
+    "a",
+    "b",
+  ]);
+  expect(arrangeDock(two, settled).folded).toBe(false);
+  expect(settleDock(view, two)).toBeUndefined();
+  expect(arrangeDock(two, unfoldDock(view)).folded).toBe(false);
+});
+
+test("the folded bar counts what waits and names the top item", () => {
+  const html = renderToStaticMarkup(
+    <QuestionDock items={items(["a", "b"])} folded />,
+  );
+  expect(html).toContain("2 waiting");
+  expect(html).toContain("Which one?");
+  expect(html).toContain('aria-expanded="false"');
+  expect(
+    dockLine({
+      ...items(["a"])[0]!,
+      ask: undefined,
+      approval: approval("p", 0),
+    }),
+  ).toBe("Run bash on workspace?");
 });

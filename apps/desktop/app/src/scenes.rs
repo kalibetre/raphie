@@ -83,6 +83,7 @@ pub const SCENES: &[Scene] = &[
     ("approval", approval),
     ("chat-background", chat_background),
     ("chat-dock", chat_dock),
+    ("chat-dock-folded", chat_dock_folded),
     ("ask", ask),
     ("ask-rows", ask_rows),
     ("ask-confirm", ask_confirm),
@@ -3101,6 +3102,14 @@ pub fn chat_dock(ui: &mut Ui) {
             session.pending = Some(3);
         }
     }
+}
+
+/// The dock folded to a bar: three wait, the composer is back to the chat.
+pub fn chat_dock_folded(ui: &mut Ui) {
+    chat_dock(ui);
+    ui.fold_dock();
+    // In a phone-width window, the chat rather than the roster.
+    ui.narrow_home = false;
 }
 
 /// A shell command waiting for approval, which can also be allowed for the

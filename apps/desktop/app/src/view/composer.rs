@@ -138,8 +138,8 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
     };
 
     // What waits on the owner, docked on top of the card.
-    let waiting = super::dock::items(s);
-    let dock = super::dock::dock(s, &waiting, look);
+    let (waiting, folded) = super::dock::items(s);
+    let dock = super::dock::dock(s, &waiting, folded, look);
     let mut card = col()
         .key("rd-composer-card")
         .w_full()
@@ -156,7 +156,7 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         .fill(t.card)
         // The border warms towards the accent while typing, as on the web.
         // The border turns to the accent while files are dragged over, and
-        // is amber under the dock.
+        // is amber under the dock, open or folded, so the two read as one.
         .border(
             1.0,
             if s.drop_hover {
