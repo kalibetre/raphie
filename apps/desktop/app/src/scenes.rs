@@ -2122,6 +2122,14 @@ pub fn inbox(ui: &mut Ui) {
             more: false,
         },
     });
+    // Two hours ago, or halfway back to midnight when that is sooner, so the
+    // run is always earlier today.
+    let midnight = chrono::Local::now()
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .and_then(|day| day.and_local_timezone(chrono::Local).earliest())
+        .map_or(now, |day| day.timestamp_millis());
+    let earlier_today = ((now - midnight) / 2).min(2 * 3_600_000);
     ui.model.apply(Event::JobUpdates {
         bot_id: "b-research".into(),
         updates: JobUpdates {
@@ -2129,7 +2137,7 @@ pub fn inbox(ui: &mut Ui) {
                 "run-1",
                 "Weekly digest",
                 "interrupted",
-                2 * 3_600_000,
+                earlier_today,
                 Some(("r-1", "rt-2")),
             )],
             total: 1,
