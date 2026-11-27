@@ -107,7 +107,7 @@ Connecting a server lets the bot see its tools; it does not let the bot run them
 
 - You decide in the web workspace or the desktop app (**Approve once** or **Reject**), in a private Telegram chat for turns started there, or in Discord by the user who started the turn (**Approve once** or **Decline**).
 - An approval expires after 10 minutes. The bot is told no call was sent.
-- In **Ask**, the default, approvals are per call; there is no "always allow" for an MCP tool. A conversation set to **Full access** runs MCP tools without asking. Set it in the composer; see [conversations](/guides/conversations/).
+- In **Ask**, the default, approvals are per call; there is no "always allow" for an MCP tool. A conversation set to **Full access** runs MCP tools without asking; the bot's chat also covers its background work and scheduled jobs. Set it in the composer; see [conversations](/guides/conversations/).
 - Arguments larger than 64 KiB are refused before an approval is created.
 - A call that gets no answer within 30 seconds fails. Results longer than 30,000 characters are cut short, and the bot is told to ask for less.
 - When a call fails, the bot is told what kind of failure it was. A server that rejects the tool or its arguments did not run the call: the bot gets the server's message and may correct the request. A server that reports another error, or does not answer in time, may have run it: the bot gets the message, or is told the server was silent, and is told not to repeat the call. For any other failure the bot is told only that the outcome is unknown. Saved secrets are removed from any message it is shown.
