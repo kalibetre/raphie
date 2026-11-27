@@ -185,6 +185,21 @@ export class PiClientQueries implements ClientQueries {
       .map((c) => {
         const turns = chats.turns.filter((t) => t.conversationId === c.id);
         const latest = turns.at(-1);
+        // What waits on the owner here: live approvals and open questions.
+        const approving = tools.approvals.filter(
+          (a) =>
+            a.conversationId === c.id &&
+            a.status === "pending" &&
+            a.expiresAt > Date.now(),
+        ).length;
+        const asking = asks.filter(
+          (a) =>
+            a.conversationId === c.id &&
+            waitingFor(
+              a,
+              turns.find((t) => t.id === a.turnId),
+            ),
+        ).length;
         return {
           id: c.sessionId,
           origin: turns[0]?.source ?? "web",
@@ -217,35 +232,10 @@ export class PiClientQueries implements ClientQueries {
           replyTurnId: turns.findLast(
             (t) => t.status === "done" && t.answer !== null,
           )?.id,
-          waiting: tools.approvals.some(
-            (a) =>
-              a.conversationId === c.id &&
-              a.status === "pending" &&
-              a.expiresAt > Date.now(),
-          ),
-          asking: asks.some(
-            (a) =>
-              a.conversationId === c.id &&
-              waitingFor(
-                a,
-                turns.find((t) => t.id === a.turnId),
-              ),
-          ),
-          pending:
-            tools.approvals.filter(
-              (a) =>
-                a.conversationId === c.id &&
-                a.status === "pending" &&
-                a.expiresAt > Date.now(),
-            ).length +
-            asks.filter(
-              (a) =>
-                a.conversationId === c.id &&
-                waitingFor(
-                  a,
-                  turns.find((t) => t.id === a.turnId),
-                ),
-            ).length,
+          waiting: approving > 0,
+          asking: asking > 0,
+          pending: approving + asking,
+          ...(c.work ? { work: c.work } : {}),
         };
       })
       // The chat first, so a client always has it on the first page.
@@ -466,6 +456,11 @@ export class PiClientQueries implements ClientQueries {
           ? { handedOffBy: { ...session.handedOffBy } }
           : {}),
         ...(session.chat ? { chat: true as const } : {}),
+        ...(session.work ? { work: session.work } : {}),
+        pending:
+          toolApprovals.filter(
+            (a) => a.status === "pending" && a.expiresAt > Date.now(),
+          ).length + asks.filter((a) => a.status === "pending").length,
         replyPreview:
           chats.turns
             .findLast(
