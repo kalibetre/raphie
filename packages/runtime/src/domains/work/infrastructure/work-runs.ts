@@ -16,7 +16,7 @@ import { WorkItems } from "./work-store.ts";
 /** A run's turn, as the item's session has it. */
 export type RunTurn = {
   status: "pending" | "done" | "error";
-  /** What the owner wrote, for a chat turn. */
+  /** What the owner wrote; absent on turns the owner didn't write. */
   text?: string;
   answer: string | null;
   cancelled?: boolean;
@@ -70,8 +70,13 @@ const REQUEST_EXCERPT = 80;
 /** The start of the owner's message, on one line, for a result's provenance. */
 export function requestExcerpt(text: string | undefined) {
   const line = (text ?? "").replace(/\s+/g, " ").trim();
-  return line.length > REQUEST_EXCERPT
-    ? `${line.slice(0, REQUEST_EXCERPT - 1).trimEnd()}…`
+  // By code point, so an emoji is never cut in half.
+  const chars = Array.from(line);
+  return chars.length > REQUEST_EXCERPT
+    ? `${chars
+        .slice(0, REQUEST_EXCERPT - 1)
+        .join("")
+        .trimEnd()}…`
     : line || undefined;
 }
 
@@ -368,18 +373,23 @@ export class WorkRuns {
             (i) => i.id === itemId,
           );
           let resultTurn: string | undefined;
+          // What the owner asked for, quoted with the result; a job's run
+          // answers no one's message. Only a nicety: a failed read quotes
+          // nothing rather than holding up the result.
+          const request =
+            item && !task.input.scheduled && item.sourceTurnId
+              ? requestExcerpt(
+                  (
+                    await this.options
+                      .turn(item.sourceTurnId)
+                      .catch(() => undefined)
+                  )?.text,
+                )
+              : undefined;
           // A closed item keeps its result but tells the chat nothing, except
           // a job's own run: a one-time job's item closes as it runs.
           if (item && (isOpen(item.status) || task.input.scheduled))
             try {
-              // What the owner asked for, quoted with the result; a job's
-              // run answers no one's message.
-              const request =
-                !task.input.scheduled && item.sourceTurnId
-                  ? requestExcerpt(
-                      (await this.options.turn(item.sourceTurnId))?.text,
-                    )
-                  : undefined;
               const work = {
                 itemId,
                 title: item.title,

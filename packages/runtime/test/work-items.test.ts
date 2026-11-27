@@ -524,6 +524,8 @@ test("background work runs in the item's own session and its result comes back t
     assert.equal(result.work?.outcome, "completed");
     // It quotes the owner's message that opened the item.
     assert.equal(result.work?.request, "open an item");
+    // A turn the owner didn't write is never quoted as their request.
+    assert.equal((await app.chats.turn(result.id))?.text, undefined);
     assert.equal(result.status, "done");
     assert.equal(item.result?.turnId, result.id);
     assert.match(item.result!.text, /Find three venues/);
@@ -634,6 +636,10 @@ test("a result quotes the start of the owner's request on one line", () => {
   const long = requestExcerpt("word ".repeat(40))!;
   assert.ok(long.length <= 80);
   assert.match(long, /…$/);
+  // An emoji on the cut stays whole.
+  const emoji = requestExcerpt(`${"a".repeat(78)}😀😀😀`)!;
+  assert.ok(emoji.isWellFormed());
+  assert.equal(Array.from(emoji).length, 80);
 });
 
 test("a long brief runs, and the bot closing a running item stops it quietly", async () => {
