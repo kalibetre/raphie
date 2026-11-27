@@ -628,6 +628,14 @@ export function Workspace({
                         dock={
                           docked.length > 0 && <QuestionDock items={docked} />
                         }
+                        answering={
+                          docked[0]?.ask
+                            ? (text) =>
+                                api(`/api/asks/${docked[0]!.ask!.id}`, {
+                                  text,
+                                })
+                            : undefined
+                        }
                         onManageSkills={() =>
                           void navigate({
                             to: "/",

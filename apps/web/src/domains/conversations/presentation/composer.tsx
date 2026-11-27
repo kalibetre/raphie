@@ -45,6 +45,7 @@ export function Composer({
   quote,
   onClearQuote,
   dock,
+  answering,
 }: {
   /** The bot this conversation is with, named in the empty field. */
   botName?: string;
@@ -81,6 +82,11 @@ export function Composer({
   onClearQuote?: () => void;
   /** What waits on the owner, docked on top of the composer. */
   dock?: ReactNode;
+  /**
+   * The dock's top item is a question: what is typed answers it in the
+   * owner's own words, rather than going to the chat.
+   */
+  answering?: (text: string) => Promise<unknown>;
 }) {
   const [permission, setPermission] = useState<{
     key: string;
@@ -232,6 +238,27 @@ export function Composer({
       draftMode,
       files.map((f) => f.id),
     ]);
+    // Typed words answer the question on top of the dock; files still go
+    // to the chat.
+    if (answering && !sentFiles.length) {
+      try {
+        await answering(sentDraft.trim());
+        if (activeKey.current === sentKey) {
+          writeLocal(sentKey, "");
+          setDraft("");
+          draftValue.current = "";
+        }
+      } catch (error) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : "The answer was not sent. Your draft is saved.",
+        );
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
     if (
       request.current?.text !== draft ||
       request.current.modelKey !== modelKey
@@ -311,7 +338,9 @@ export function Composer({
             ref={input}
             className="min-h-6 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[14.5px] leading-6 shadow-none focus-visible:ring-0 md:text-[14.5px] dark:bg-transparent"
             aria-label={`Message ${botName}`}
-            placeholder={`Message ${botName}…`}
+            placeholder={
+              answering ? "Or answer in your own words…" : `Message ${botName}…`
+            }
             value={draft}
             maxLength={4000}
             {...menuProps}

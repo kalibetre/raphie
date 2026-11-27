@@ -63,7 +63,7 @@ export function QuestionDock({ items }: { items: DockItem[] }) {
         </header>
         <ScrollArea className="question-dock-scroll">
           {top.ask ? (
-            <AskCard ask={top.ask} />
+            <AskCard ask={top.ask} ownWords={false} />
           ) : top.approval ? (
             <div className="question-dock-approval">
               <p className="question-dock-text">

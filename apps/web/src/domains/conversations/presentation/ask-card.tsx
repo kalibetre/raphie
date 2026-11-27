@@ -12,7 +12,14 @@ import { Input } from "../../../shared/ui/input";
  * answers as buttons, plus the owner's own words; afterwards it shows what
  * was answered.
  */
-export function AskCard({ ask }: { ask: SessionAsk }) {
+export function AskCard({
+  ask,
+  ownWords = true,
+}: {
+  ask: SessionAsk;
+  /** Offer a field for the owner's own words; the dock's is the composer. */
+  ownWords?: boolean;
+}) {
   const { workspace } = useBackend();
   const [writing, setWriting] = useState(false);
   const [text, setText] = useState("");
@@ -91,7 +98,7 @@ export function AskCard({ ask }: { ask: SessionAsk }) {
           ))}
         </div>
       )}
-      {writing ? (
+      {!ownWords ? null : writing ? (
         <form className="ask-own" onSubmit={submit}>
           <Input
             autoFocus
