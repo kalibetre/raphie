@@ -5,7 +5,7 @@
 //! Mirrors `apps/web/src/domains/conversations/presentation/work-tab.tsx`
 //! and its `.work-tab` rules in `bot-workspace.css`.
 
-use raphie_core::contracts::{HandoffOutcome, SessionTurn};
+use raphie_core::contracts::{HandoffOutcome, SessionTurn, TurnStatus};
 use rune::{El, Family, TextStyle, row, text};
 
 use crate::icons;
@@ -32,12 +32,13 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
         (None, Some(_)) => Some("scheduled".to_owned()),
         _ => None,
     };
+    // Only a finished message has an outcome to stamp.
     let (stamp, ink, fill) = match work.and_then(|w| w.outcome) {
-        Some(HandoffOutcome::Failed) => ("FAILED", t.error, t.error.alpha(0.13)),
-        Some(HandoffOutcome::Cancelled) => ("CANCELLED", t.muted_foreground, t.muted),
-        _ => ("DONE", t.accent, t.accent_soft),
+        _ if turn.status != TurnStatus::Done => (None, t.accent, t.accent_soft),
+        Some(HandoffOutcome::Failed) => (Some("FAILED"), t.error, t.error.alpha(0.13)),
+        Some(HandoffOutcome::Cancelled) => (Some("CANCELLED"), t.muted_foreground, t.muted),
+        _ => (Some("DONE"), t.accent, t.accent_soft),
     };
-    let edge = if stamp == "DONE" { t.accent } else { ink };
     let mut line = row()
         .min_w(0.0)
         .shrink()
@@ -53,7 +54,8 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
             text(title.to_owned())
                 .font(font(11.5, 600.0))
                 .color(t.foreground)
-                .single_line(),
+                .truncate()
+                .shrink(),
         );
     if let Some(from) = &from {
         line = line.child(
@@ -65,7 +67,7 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
         );
     }
     // As wide as it needs and no wider, cut to fit a narrow chat.
-    let tab = row()
+    let mut tab = row()
         .key(format!("rd-work-tab-{}", turn.id))
         .min_w(0.0)
         .shrink()
@@ -75,15 +77,17 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
         .gap(7.0)
         .center_y()
         .fill(fill)
-        .border_sides([0.0, 0.0, 0.0, 2.0], edge)
+        .border_sides([0.0, 0.0, 0.0, 2.0], ink)
         .corners([0.0, 6.0, 6.0, 0.0])
         .help(match &from {
             Some(from) => format!("{title} · {from}"),
             None => title.to_owned(),
         })
-        .child(line)
-        .child(
+        .child(line);
+    if let Some(stamp) = stamp {
+        tab = tab.child(
             row()
+                .label(format!("Run {}", stamp.to_lowercase()))
                 .px(4.0)
                 .radius(3.0)
                 .border(1.5, ink)
@@ -96,9 +100,11 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
                                 .lh(14.0),
                         )
                         .color(ink)
-                        .single_line(),
+                        .single_line()
+                        .a11y_hidden(),
                 ),
         );
+    }
     Some(row().w_full().mb(8.0).child(tab))
 }
 

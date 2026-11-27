@@ -731,7 +731,7 @@ fn failed_runs_of_a_scheduled_job_in_a_row_read_as_one() {
         assert!(rt.find("rd-scheduled-failure-t4").is_some());
         assert!(rt.find("rd-scheduled-failure-t2").is_none());
         assert!(rt.find("rd-turn-t3").is_none());
-        // The run that worked keeps its card, with the reply in it.
+        // The run that worked keeps its reply.
         assert!(rt.find("rd-reply-t1").is_some());
     }
 }
@@ -6694,4 +6694,89 @@ fn a_scheduled_post_says_scheduled_and_a_failed_run_is_stamped_failed() {
     let text = screen_text(&rt);
     assert!(text.contains("· scheduled"), "{text}");
     assert!(text.contains("FAILED"), "{text}");
+}
+
+/// The open conversation's last turn, made a background result with `edit`.
+fn last_result(
+    rt: &mut Runtime<Ui>,
+    edit: impl Fn(&mut raphie_core::contracts::SessionTurn),
+) -> String {
+    let mut id = String::new();
+    rt.update(|ui, _| {
+        let observation = ui
+            .model
+            .conversation
+            .as_mut()
+            .and_then(|c| c.observation.as_mut())
+            .unwrap();
+        let turn = observation.turns.last_mut().unwrap();
+        turn.work = Some(TurnWork {
+            item_id: "w-2".into(),
+            title: "Venue research".into(),
+            kind: TurnWorkKind::Result,
+            outcome: Some(HandoffOutcome::Completed),
+            request: Some("look into venues".into()),
+        });
+        edit(turn);
+        id = turn.id.clone();
+    });
+    settle(rt);
+    id
+}
+
+#[test]
+fn a_result_sits_one_gap_below_the_message_before_it() {
+    let mut rt = render(scenes::conversation, false);
+    let id = last_result(&mut rt, |_| {});
+    let ids: Vec<String> = rt
+        .state
+        .model
+        .conversation
+        .as_ref()
+        .and_then(|c| c.observation.as_ref())
+        .map(|o| o.turns.iter().map(|t| t.id.clone()).collect())
+        .unwrap();
+    let before = &ids[ids.len() - 2];
+    let above = element(&rt, &format!("rd-reply-{before}")).rect;
+    let reply = element(&rt, &format!("rd-reply-{id}")).rect;
+    let gap = reply[1] - (above[1] + above[3]);
+    assert!(gap < 30.0, "one gap, not two: {gap}");
+}
+
+#[test]
+fn a_result_still_being_written_is_not_stamped() {
+    let mut rt = render(scenes::conversation, false);
+    last_result(&mut rt, |turn| {
+        turn.status = raphie_core::contracts::TurnStatus::Pending;
+    });
+    rt.update(|ui, _| {
+        let observation = ui
+            .model
+            .conversation
+            .as_mut()
+            .and_then(|c| c.observation.as_mut())
+            .unwrap();
+        observation.live = Some(raphie_core::contracts::LiveConversation {
+            text: "Three venues so far".into(),
+            generating: true,
+        });
+    });
+    settle(&mut rt);
+    let text = screen_text(&rt);
+    assert!(text.contains("Venue research"), "{text}");
+    assert!(!text.contains("DONE"), "{text}");
+}
+
+#[test]
+fn a_result_that_failed_to_reply_keeps_its_tab_and_anchor() {
+    let mut rt = render(scenes::conversation, false);
+    let id = last_result(&mut rt, |turn| {
+        turn.status = raphie_core::contracts::TurnStatus::Error;
+        turn.answer = None;
+    });
+    let text = screen_text(&rt);
+    assert!(text.contains("Venue research"), "{text}");
+    assert!(text.contains("couldn’t finish this reply"), "{text}");
+    // A quote of it, or a job notice, still finds it.
+    assert!(rt.find(&format!("rd-reply-{id}")).is_some());
 }

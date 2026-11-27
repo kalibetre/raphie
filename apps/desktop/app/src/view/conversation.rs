@@ -148,7 +148,7 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             .is_some_and(|w| w.id == turn.id)
             .then_some(live)
             .flatten();
-        items.push(owner_turn(s, turn, steps, &asks, &cards, now, look));
+        items.extend(owner_turn(s, turn, steps, &asks, &cards, now, look));
         if let Some(reply) = reply(s, turn, steps, streaming, observation, now, look) {
             items.push(reply);
         }
@@ -220,50 +220,55 @@ fn owner_turn(
     cards: &[&SessionCard],
     now: i64,
     look: &Look,
-) -> El {
+) -> Option<El> {
     let t = &look.theme;
     // One file is saved at a time, so the buttons wait while one is.
     let can_save = s.model.saving_attachment.is_none();
-    let mut block = col().w_full().gap(14.0);
-    // A work item's run wasn't written by the owner: only the bot's reply
-    // shows, under its provenance tab.
-    if turn.work.is_none() && turn.scheduled.is_none() {
-        block = block.child(owner_message(s, turn, can_save, look));
-    }
-    if let Some(mode) = turn.queue_mode {
-        block = block.child(queue_controls(turn, mode, t));
-    }
+    let mut block: Vec<El> = Vec::new();
     let working = turn.status == TurnStatus::Pending;
     // A turn with a reply shows its tool work under the reply, signed by
     // the bot; one without shows it here.
     let in_reply = turn.status == TurnStatus::Done && turn.answer.is_some();
+    // A work item's run wasn't written by the owner: only the bot's reply
+    // shows, under its provenance tab. One that ended with no reply keeps
+    // its tab here, so it still says which work it was.
+    let work = turn.work.is_some() || turn.scheduled.is_some();
+    let unanswered = work && !working && !in_reply;
+    if !work {
+        block.push(owner_message(s, turn, can_save, look));
+    } else if unanswered && let Some(tab) = work_tab::tab(turn, t) {
+        block.push(tab);
+    }
+    if let Some(mode) = turn.queue_mode {
+        block.push(queue_controls(turn, mode, t));
+    }
     if !working && !in_reply && !steps.is_empty() {
         let run = Run {
             turn_id: &turn.id,
             steps,
             working: None,
         };
-        block = block.child(tool_steps(s, &run, now, look));
+        block.push(tool_steps(s, &run, now, look));
     }
     if !working
         && !in_reply
         && let Some(notes) = self_updates::notes(s, steps, t)
     {
-        block = block.child(notes);
+        block.push(notes);
     }
     if !working {
         for ask in asks {
-            block = block.child(asks::card(s, ask, look));
+            block.push(asks::card(s, ask, look));
         }
     }
     // A turn that ended without a reply still shows the cards it made.
     if !working && !in_reply {
         for shown in cards {
-            block = block.child(cards::card(s, shown, now, look));
+            block.push(cards::card(s, shown, now, look));
         }
     }
     if turn.cancelled == Some(true) {
-        block = block.child(
+        block.push(
             text("Stopped · message not completed")
                 .key(format!("rd-stopped-{}", turn.id))
                 .font(font(11.5, 400.0))
@@ -274,7 +279,7 @@ fn owner_turn(
             "Check Diagnostics, then send a new message to retry.",
             |failure| failure.message.as_str(),
         );
-        block = block.child(
+        block.push(
             col()
                 .w_full()
                 .gap(6.0)
@@ -287,11 +292,19 @@ fn owner_turn(
                 .children(failure_details(s, turn, look)),
         );
     }
-    block
+    if block.is_empty() {
+        return None;
+    }
+    let block = col().w_full().gap(14.0).children(block);
+    // A quote of it, or a job notice, finds it where the reply would be.
+    Some(if unanswered {
+        block.key(super::quote::message_key(&turn.id, QuoteAuthor::Bot))
+    } else {
+        block
+    })
 }
 
-/// The owner's message: a bubble on the right, or a centred marker when a
-/// scheduled job started the turn.
+/// The owner's message: a bubble on the right.
 fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El {
     let t = &look.theme;
     if let Some(handoff) = &turn.handoff {
