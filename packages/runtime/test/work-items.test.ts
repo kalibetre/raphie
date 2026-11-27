@@ -939,3 +939,115 @@ test("a question from background work shows in the chat until answered, then lea
     await done();
   }
 }, 30_000);
+
+test("background work that ends while the chat's reply waits on a tool reports after it", async () => {
+  const { app, say, done } = await bot({
+    ...runCalls,
+    "You are working": {
+      name: "workspace_exec",
+      args: { command: "echo venues" },
+    },
+    check: { name: "workspace_exec", args: { command: "echo calendar" } },
+  });
+  try {
+    await say("open an item");
+    await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "start",
+      text: "start it",
+    });
+    const pending = async (
+      conversation: (c: { chat?: boolean }) => boolean,
+    ) => {
+      const { conversations } = await app.chats.state();
+      const ids = new Set(conversations.filter(conversation).map((c) => c.id));
+      return (await app.toolApprovals.state()).approvals.find(
+        (a) => ids.has(a.conversationId) && a.status === "pending",
+      );
+    };
+    // The background run waits on its approval.
+    await until(async () => !!(await pending((c) => !c.chat)));
+    // The chat's own reply then calls a tool and waits too.
+    const reply = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "check",
+      text: "check the calendar",
+    });
+    await until(async () => !!(await pending((c) => !!c.chat)));
+    // Approving the background run ends it. Its result waits for the
+    // chat's reply rather than landing in the middle of it.
+    const background = (await pending((c) => !c.chat))!;
+    await app.toolApprovals.decide(background.id, "approved", "owner", "web");
+    const result = () =>
+      app.chats
+        .state()
+        .then((s) => s.turns.find((t) => t.work?.kind === "result"));
+    await until(async () => !!(await result()));
+    assert.equal((await result())!.status, "pending");
+    // The chat's reply then finishes as usual, and the result after it.
+    const own = (await pending((c) => !!c.chat))!;
+    await app.toolApprovals.decide(own.id, "approved", "owner", "web");
+    await until(async () => (await result())?.status === "done");
+    const { turns } = await app.chats.state();
+    const finished = turns.find((t) => t.id === reply.id)!;
+    assert.equal(finished.status, "done");
+    assert.match(finished.answer!, /calendar/);
+    assert.doesNotMatch(finished.answer!, /venues/);
+    assert.equal(turns.filter((t) => t.work?.kind === "result").length, 1);
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("a job's post during a reply that waits on a tool is read after the tool, and the reply finishes", async () => {
+  const { app, seen, done } = await bot({
+    check: { name: "workspace_exec", args: { command: "echo calendar" } },
+  });
+  try {
+    const reply = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "check",
+      text: "check the calendar",
+    });
+    const approval = async () =>
+      (await app.toolApprovals.state()).approvals.find(
+        (a) => a.status === "pending",
+      );
+    await until(async () => !!(await approval()));
+    // A scheduled job posts to the chat while the reply waits mid-run.
+    await app.chats.postWorkResult({
+      runKey: "job-run",
+      work: { itemId: "w-1", title: "Morning brief", kind: "result" },
+      scheduled: { name: "Morning brief" },
+      text: "You have two meetings today.",
+    });
+    await app.toolApprovals.decide(
+      (await approval())!.id,
+      "approved",
+      "owner",
+      "web",
+    );
+    await until(
+      async () =>
+        (await app.chats.state()).turns.find((t) => t.id === reply.id)
+          ?.status === "done",
+    );
+    const { turns } = await app.chats.state();
+    const finished = turns.find((t) => t.id === reply.id)!;
+    // The reply is whole: its tool's result, not the post.
+    assert.match(finished.answer!, /calendar/);
+    const post = turns.find((t) => t.scheduled?.name === "Morning brief")!;
+    assert.equal(post.status, "done");
+    assert.equal(post.answer, "You have two meetings today.");
+    // The model read the post at the next step, after the tool's result.
+    assert.ok(
+      seen.some((text) => text.includes('Your scheduled job "Morning brief"')),
+      JSON.stringify(seen),
+    );
+  } finally {
+    await done();
+  }
+}, 30_000);
