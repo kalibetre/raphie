@@ -404,6 +404,7 @@ export class ChatService implements ConversationCommands {
     return turn
       ? {
           status: turn.status,
+          text: turn.text,
           answer: turn.answer,
           ...(turn.cancelled ? { cancelled: true } : {}),
           ...(turn.failure ? { failure: { ...turn.failure } } : {}),

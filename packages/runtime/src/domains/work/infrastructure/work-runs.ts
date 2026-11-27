@@ -16,6 +16,8 @@ import { WorkItems } from "./work-store.ts";
 /** A run's turn, as the item's session has it. */
 export type RunTurn = {
   status: "pending" | "done" | "error";
+  /** What the owner wrote, for a chat turn. */
+  text?: string;
   answer: string | null;
   cancelled?: boolean;
   failure?: TurnFailure;
@@ -62,21 +64,39 @@ const MAX_ATTEMPTS = 4;
 const retryable = (error: unknown) =>
   !(error instanceof InputError) || error.status >= 500;
 
+/** How long a result's quote of the owner's request gets. */
+const REQUEST_EXCERPT = 80;
+
+/** The start of the owner's message, on one line, for a result's provenance. */
+export function requestExcerpt(text: string | undefined) {
+  const line = (text ?? "").replace(/\s+/g, " ").trim();
+  return line.length > REQUEST_EXCERPT
+    ? `${line.slice(0, REQUEST_EXCERPT - 1).trimEnd()}…`
+    : line || undefined;
+}
+
 /**
- * What a run says it came to, for the chat to read as data, cut to what a
- * result can hold with a note saying so.
+ * What a run says it came to, cut to what a result can hold with a note
+ * saying so. Background work's text is data for the bot to retell. A job's
+ * is posted to the owner as it is, so when it didn't finish it says so in
+ * the bot's own voice: `job` is its name.
  */
 export function outcomeText(
   outcome: Outcome,
   answer: string | null,
   why?: string,
+  job?: string,
 ) {
   const text =
     outcome === "completed"
       ? (answer ?? "")
-      : outcome === "cancelled"
-        ? "The run was cancelled."
-        : `The run failed${why ? `: ${why}` : "."}`;
+      : job
+        ? outcome === "cancelled"
+          ? `I didn't finish "${job}": the run was cancelled.`
+          : `I couldn't finish "${job}"${why ? `: ${why}` : "."}`
+        : outcome === "cancelled"
+          ? "The run was cancelled."
+          : `The run failed${why ? `: ${why}` : "."}`;
   if (text.length <= HANDOFF_RESULT_MAX_LENGTH) return text;
   const note =
     "\n\n[The reply was cut here: it was longer than a result can hold. The full reply is in the item's session.]";
@@ -299,6 +319,7 @@ export class WorkRuns {
                     "failed",
                     null,
                     `it could not start (${why})`,
+                    task.input.scheduled?.name,
                   ),
                 },
               }),
@@ -333,6 +354,7 @@ export class WorkRuns {
                   outcome,
                   turn?.answer ?? null,
                   turn ? turn.failure?.message : "its session is gone",
+                  task.input.scheduled?.name,
                 ),
               },
             }),
@@ -350,11 +372,20 @@ export class WorkRuns {
           // a job's own run: a one-time job's item closes as it runs.
           if (item && (isOpen(item.status) || task.input.scheduled))
             try {
+              // What the owner asked for, quoted with the result; a job's
+              // run answers no one's message.
+              const request =
+                !task.input.scheduled && item.sourceTurnId
+                  ? requestExcerpt(
+                      (await this.options.turn(item.sourceTurnId))?.text,
+                    )
+                  : undefined;
               const work = {
                 itemId,
                 title: item.title,
                 kind: "result" as const,
                 outcome: checkpoint.outcome,
+                ...(request ? { request } : {}),
               };
               // A job's result is the bot's message already: posted as it is.
               resultTurn = task.input.scheduled

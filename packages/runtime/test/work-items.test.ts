@@ -20,7 +20,10 @@ import {
   openWorkContext,
   workListText,
 } from "../src/domains/work/domain/work-item.ts";
-import { outcomeText } from "../src/domains/work/infrastructure/work-runs.ts";
+import {
+  outcomeText,
+  requestExcerpt,
+} from "../src/domains/work/infrastructure/work-runs.ts";
 import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
 import { workRoutes } from "../src/domains/work/presentation/http/routes.ts";
 import { InputError } from "../src/shared/application/input-error.ts";
@@ -519,6 +522,8 @@ test("background work runs in the item's own session and its result comes back t
       (t) => t.conversationId === chat.id && t.work?.kind === "result",
     )!;
     assert.equal(result.work?.outcome, "completed");
+    // It quotes the owner's message that opened the item.
+    assert.equal(result.work?.request, "open an item");
     assert.equal(result.status, "done");
     assert.equal(item.result?.turnId, result.id);
     assert.match(item.result!.text, /Find three venues/);
@@ -604,6 +609,31 @@ test("a long result is cut to what the chat can hold, with a note", () => {
   assert.ok(text.length <= 32_000);
   assert.match(text, /The reply was cut here/);
   assert.equal(outcomeText("completed", "Short."), "Short.");
+});
+
+test("a job that didn't finish says so in the bot's own words; background work's text stays data", () => {
+  assert.equal(
+    outcomeText("failed", null, "the calendar was down", "Morning brief"),
+    'I couldn\'t finish "Morning brief": the calendar was down',
+  );
+  assert.equal(
+    outcomeText("cancelled", null, undefined, "Morning brief"),
+    'I didn\'t finish "Morning brief": the run was cancelled.',
+  );
+  assert.equal(
+    outcomeText("failed", null, "the calendar was down"),
+    "The run failed: the calendar was down",
+  );
+  assert.equal(outcomeText("completed", "Done.", undefined, "Brief"), "Done.");
+});
+
+test("a result quotes the start of the owner's request on one line", () => {
+  assert.equal(requestExcerpt("Book\n  the   dentist"), "Book the dentist");
+  assert.equal(requestExcerpt("  "), undefined);
+  assert.equal(requestExcerpt(undefined), undefined);
+  const long = requestExcerpt("word ".repeat(40))!;
+  assert.ok(long.length <= 80);
+  assert.match(long, /…$/);
 });
 
 test("a long brief runs, and the bot closing a running item stops it quietly", async () => {
