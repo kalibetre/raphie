@@ -439,7 +439,12 @@ export function Chat({
             turn={turn}
             state={state}
             steps={steps.get(turn.id) ?? []}
-            asks={asks.filter((a) => a.turnId === turn.id)}
+            // A work card holds its own run's questions.
+            asks={
+              turn.work || turn.scheduled
+                ? []
+                : asks.filter((a) => a.turnId === turn.id)
+            }
             cards={cards.filter((c) => c.turnId === turn.id)}
           />
         ))}
@@ -467,9 +472,13 @@ export function Chat({
     const turnSteps = steps.get(turn.id) ?? [];
     const inReply = turn.status === "done" && replied.has(turn.id);
     const scheduled = !!turn.scheduled;
+    const turnAsks = asks.filter((a) => a.turnId === turn.id);
+    const asking = turnAsks.some((a) => a.status === "pending");
     const status: WorkCardStatus | undefined =
       turn.status === "pending"
-        ? "working"
+        ? asking
+          ? "needs-you"
+          : "working"
         : turn.cancelled
           ? "cancelled"
           : turn.status === "error"
@@ -531,6 +540,9 @@ export function Chat({
           <ToolSteps steps={turnSteps} working={false} />
         )}
         {inReply && <SelfUpdateNotes steps={turnSteps} />}
+        {/* While the reply waits on the owner, its question is here. */}
+        {turn.status === "pending" &&
+          turnAsks.map((ask) => <AskCard key={ask.id} ask={ask} />)}
         {turnWork(turn, turnSteps, true)}
       </WorkCard>
     );
