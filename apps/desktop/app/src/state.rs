@@ -363,6 +363,9 @@ pub struct Ui {
     /// there, and brought into view once the lists are in.
     pub work_focus: Option<String>,
     work_focus_shown: bool,
+    /// How the owner arranged the dock in each conversation: what they
+    /// skipped and whether they folded it.
+    dock_views: HashMap<String, raphie_core::dock::DockView>,
     /// Whether the bot roster on the left shows (⌘B).
     pub roster_open: bool,
     /// In a narrow window, where one column shows at a time: whether it is
@@ -597,6 +600,7 @@ impl Ui {
             quoting: None,
             reveal: None,
             work_focus: None,
+            dock_views: HashMap::new(),
             work_focus_shown: false,
             roster_open: true,
             narrow_home: true,
@@ -831,18 +835,68 @@ impl Ui {
         }
     }
 
-    /// The question on top of the dock, which typed words answer.
-    pub fn docked_question(&self) -> Option<String> {
-        let observation = self.model.conversation.as_ref()?.observation.as_ref()?;
+    /// What waits on the owner in the open conversation, arranged as the
+    /// owner left it there, and whether the dock is folded.
+    pub fn dock(&self) -> (Vec<raphie_core::dock::DockItem<'_>>, bool) {
+        let Some(conversation) = self.model.conversation.as_ref() else {
+            return (Vec::new(), false);
+        };
+        let Some(observation) = conversation.observation.as_ref() else {
+            return (Vec::new(), false);
+        };
         let name = self
             .model
             .selected_bot()
             .map_or("Raphie", |bot| bot.name.as_str());
         let items = raphie_core::dock::dock_items(observation, name, crate::format::now_ms());
+        match self.dock_views.get(&conversation.session_id) {
+            Some(view) => raphie_core::dock::arrange(items, view),
+            None => (items, false),
+        }
+    }
+
+    /// The question on top of the open dock, which typed words answer.
+    pub fn docked_question(&self) -> Option<String> {
+        let (items, folded) = self.dock();
+        if folded {
+            return None;
+        }
         match &items.first()?.waiting {
             raphie_core::dock::Waiting::Question(ask) => Some(ask.id.clone()),
             raphie_core::dock::Waiting::Approval(_) => None,
         }
+    }
+
+    /// Changes how the dock is arranged in the open conversation.
+    fn arrange_dock(
+        &mut self,
+        change: impl FnOnce(&mut raphie_core::dock::DockView, &[raphie_core::dock::DockItem]),
+    ) {
+        let Some(id) = self
+            .model
+            .conversation
+            .as_ref()
+            .map(|c| c.session_id.clone())
+        else {
+            return;
+        };
+        let mut view = self.dock_views.get(&id).cloned().unwrap_or_default();
+        change(&mut view, &self.dock().0);
+        self.dock_views.insert(id, view);
+    }
+
+    /// Sends the dock's top item to the back.
+    pub fn skip_docked(&mut self) {
+        self.arrange_dock(|view, items| view.skip_top(items));
+    }
+
+    /// Folds the dock to a bar until something new arrives.
+    pub fn fold_dock(&mut self) {
+        self.arrange_dock(|view, items| view.fold(items));
+    }
+
+    pub fn unfold_dock(&mut self) {
+        self.arrange_dock(|view, _| view.unfold());
     }
 
     pub fn send(&mut self) {

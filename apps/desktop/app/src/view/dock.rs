@@ -1,46 +1,38 @@
 //! What waits on the owner, docked on top of the composer: the oldest
 //! question or approval with its choices, the rest as edges peeking behind
-//! it. Answering one brings up the next.
+//! it. Answering one brings up the next. Skip sends the top one to the back;
+//! folding leaves one line on the composer until something new arrives.
 //!
 //! Mirrors `apps/web/src/domains/conversations/presentation/question-dock.tsx`
 //! and the `.question-dock` rules in `chat.css`.
 
 use std::f32::consts::FRAC_PI_2;
 
-use raphie_core::dock::{DockItem, Waiting, dock_items};
+use raphie_core::dock::{DockItem, Waiting, line};
 use raphie_core::projections::pretty;
 use rune::{El, ScrollSpec, Span, TextCase, col, el, icon, rich, row, text};
 
 use super::Look;
 use super::asks;
 use super::steps::{code_box, decision};
-use crate::format;
 use crate::icons;
 use crate::state::Ui;
 use crate::theme::{Theme, font, mono};
 
-/// What waits on the owner in the open conversation, oldest first.
-pub fn items(s: &Ui) -> Vec<DockItem<'_>> {
-    let Some(observation) = s
-        .model
-        .conversation
-        .as_ref()
-        .and_then(|conversation| conversation.observation.as_ref())
-    else {
-        return Vec::new();
-    };
-    let name = s
-        .model
-        .selected_bot()
-        .map_or("Raphie", |bot| bot.name.as_str());
-    dock_items(observation, name, format::now_ms())
+/// What waits on the owner in the open conversation, as the owner arranged
+/// it, and whether the dock is folded.
+pub fn items(s: &Ui) -> (Vec<DockItem<'_>>, bool) {
+    s.dock()
 }
 
 /// The dock for `items`, or nothing when none wait.
-pub fn dock(s: &Ui, items: &[DockItem], look: &Look) -> Option<El> {
+pub fn dock(s: &Ui, items: &[DockItem], folded: bool, look: &Look) -> Option<El> {
     let t = &look.theme;
     let top = items.first()?;
     let more = items.len() - 1;
+    if folded {
+        return Some(bar(top, items.len(), t));
+    }
     // The web's `max-height: min(46vh, 420px)`; the top scrolls past it.
     let tallest = if s.workspace_height > 0.0 {
         (s.workspace_height * 0.46).min(420.0)
@@ -181,9 +173,10 @@ fn header(top: &DockItem, more: usize, t: &Theme) -> El {
                 .border(1.0, t.attention)
                 .single_line(),
         );
+    // Pushed to the right end; the title gives up its room first.
+    header = header.child(el().grow(1.0));
     if !meta.is_empty() {
-        // Pushed to the right end; the title gives up its room first.
-        header = header.child(el().grow(1.0)).child(
+        header = header.child(
             text(meta)
                 .key("rd-dock-meta")
                 .font(mono(10.5))
@@ -191,7 +184,102 @@ fn header(top: &DockItem, more: usize, t: &Theme) -> El {
                 .single_line(),
         );
     }
-    header
+    if more > 0 {
+        header = header.child(
+            row()
+                .key("rd-dock-skip")
+                .role("button")
+                .label("Skip")
+                .h(21.0)
+                .px(7.0)
+                .mr(-4.0)
+                .center()
+                .radius(7.0)
+                .hover(t.attention.alpha(0.12))
+                .focus_ring(2.0, 2.0, t.accent)
+                .child(
+                    text("Skip")
+                        .font(font(10.5, 500.0))
+                        .color(t.attention)
+                        .single_line()
+                        .a11y_hidden(),
+                )
+                .on_press(|s: &mut Ui| s.skip_docked()),
+        );
+    }
+    header.child(
+        row()
+            .key("rd-dock-fold")
+            .role("button")
+            .label("Hide for now")
+            .help("Hide for now")
+            .size(21.0, 21.0)
+            .center()
+            .radius(7.0)
+            .hover(t.attention.alpha(0.12))
+            .focus_ring(2.0, 2.0, t.accent)
+            .child(
+                icon(&icons::CHEVRON_DOWN, 12.0)
+                    .color(t.attention)
+                    .a11y_hidden(),
+            )
+            .on_press(|s: &mut Ui| s.fold_dock()),
+    )
+}
+
+/// The folded dock: how many wait and the top one in a line. Pressing it
+/// opens the dock again.
+fn bar(top: &DockItem, count: usize, t: &Theme) -> El {
+    let title = top.title.to_owned();
+    let words = format!("{title} · {}", line(top));
+    let bold = Span::new(0, title.len()).weight(600.0);
+    col()
+        .key("rd-dock")
+        .role("region")
+        .label("Waiting on you")
+        .w_full()
+        .min_w(0.0)
+        .child(
+            row()
+                .key("rd-dock-bar")
+                .role("button")
+                .label(format!("{count} waiting: {words}. Show"))
+                .w_full()
+                .min_w(0.0)
+                .gap(8.0)
+                .center_y()
+                .py(7.0)
+                .px(12.0)
+                .fill(t.attention_soft)
+                .hover(t.attention.alpha(0.08))
+                .focus_ring(2.0, 2.0, t.accent)
+                // No bottom edge: the composer below closes the box.
+                .border_sides([1.0, 1.0, 0.0, 1.0], t.attention)
+                .corners([10.0, 10.0, 0.0, 0.0])
+                .child(
+                    text(format!("{count} waiting"))
+                        .font(font(12.0, 600.0))
+                        .color(t.attention)
+                        .single_line()
+                        .a11y_hidden(),
+                )
+                .child(
+                    rich(words, vec![bold])
+                        .font(font(12.0, 400.0))
+                        .color(t.foreground)
+                        .truncate()
+                        .shrink()
+                        .min_w(0.0)
+                        .grow(1.0)
+                        .a11y_hidden(),
+                )
+                .child(
+                    icon(&icons::CHEVRON_UP, 14.0)
+                        .color(t.attention)
+                        .a11y_hidden(),
+                )
+                .on_press(|s: &mut Ui| s.unfold_dock()),
+        )
 }
 
 /// One edge peeking above the top: inset `inset` from each side, `top` from

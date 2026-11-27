@@ -6696,6 +6696,35 @@ fn background_work_waiting_on_the_owner_is_marked_and_docked() {
 }
 
 #[test]
+fn skip_sends_the_top_item_back_and_folding_leaves_a_bar() {
+    let mut rt = render(scenes::chat_dock, false);
+    assert!(inside(&rt, "rd-ask-ask-1-0", "rd-dock"));
+    // Skipped, the bot's question goes to the back; three still wait.
+    click(&mut rt, "rd-dock-skip");
+    assert!(rt.find("rd-ask-ask-1-0").is_none());
+    assert!(
+        element(&rt, "rd-dock-meta")
+            .text
+            .as_deref()
+            .is_some_and(|meta| meta.starts_with("+2 waiting"))
+    );
+    // Folded, the composer is back to the chat and the bar counts them.
+    click(&mut rt, "rd-dock-fold");
+    assert!(rt.find("rd-dock-bar").is_some());
+    assert!(rt.find("rd-dock-header").is_none());
+    assert_eq!(rt.state.docked_question(), None);
+    let text = screen_text(&rt);
+    assert!(text.contains("3 waiting"), "{text}");
+    let bar = element(&rt, "rd-dock").rect;
+    let card = element(&rt, "rd-composer-card").rect;
+    assert!((bar[1] + bar[3] - card[1]).abs() < 0.5, "{bar:?} {card:?}");
+    // Pressing the bar brings the dock back, in the order left.
+    click(&mut rt, "rd-dock-bar");
+    assert!(rt.find("rd-dock-header").is_some());
+    assert!(rt.find("rd-ask-ask-1-0").is_none());
+}
+
+#[test]
 fn the_roster_counts_what_a_teammate_waits_on_and_opens_its_chat() {
     let mut rt = render(
         |ui| {
