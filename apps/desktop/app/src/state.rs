@@ -482,6 +482,8 @@ pub struct Ui {
     pub open_runs: HashSet<String>,
     /// Tool steps whose arguments and result are unfolded.
     pub open_steps: HashSet<String>,
+    /// Work cards in the chat whose long text is unfolded, by card key.
+    pub unfolded_work: HashSet<String>,
     /// Days of schedule cards whose events already over are unfolded.
     pub open_card_days: HashSet<String>,
     /// The frame clock (seconds) when the view last refreshed its "elapsed"
@@ -666,6 +668,7 @@ impl Ui {
             parked_profiles: HashMap::new(),
             open_runs: HashSet::new(),
             open_steps: HashSet::new(),
+            unfolded_work: HashSet::new(),
             open_card_days: HashSet::new(),
             ticked_at: 0.0,
             images: None,

@@ -10,6 +10,7 @@ use raphie_core::auth::Secret;
 use raphie_core::channels::{Channel, ChannelChange, ChannelOutcome};
 use raphie_core::contracts::ApprovalMode;
 use raphie_core::contracts::AskAnswer;
+use raphie_core::contracts::QuoteAuthor;
 use raphie_core::contracts::{
     BotProfile, ControlAction, Decision, MemoryPage, MemoryProvider, ModelSelection,
     SandboxProvider, Scope, TelegramPairingCode,
@@ -65,6 +66,17 @@ fn element(rt: &Runtime<Ui>, key: &str) -> ElementInfo {
 }
 
 /// All text on screen, joined, for "does it say X" checks.
+/// The id of the open conversation's `n`th turn.
+fn turn_id(rt: &Runtime<Ui>, n: usize) -> String {
+    rt.state
+        .model
+        .conversation
+        .as_ref()
+        .and_then(|c| c.observation.as_ref())
+        .map(|o| o.turns[n].id.clone())
+        .unwrap()
+}
+
 fn screen_text(rt: &Runtime<Ui>) -> String {
     rt.elements()
         .into_iter()
@@ -730,8 +742,8 @@ fn failed_runs_of_a_scheduled_job_in_a_row_read_as_one() {
         assert!(rt.find("rd-scheduled-failure-t4").is_some());
         assert!(rt.find("rd-scheduled-failure-t2").is_none());
         assert!(rt.find("rd-turn-t3").is_none());
-        // The run that worked keeps its marker and reply.
-        assert!(rt.find("rd-turn-t1").is_some() && rt.find("rd-reply-t1").is_some());
+        // The run that worked keeps its card, with the reply in it.
+        assert!(rt.find("rd-workcard-t1").is_some());
     }
 }
 
@@ -6591,8 +6603,9 @@ fn a_running_work_item_says_so_and_its_run_can_be_cancelled() {
 }
 
 #[test]
-fn background_work_coming_back_reads_as_a_marker_not_an_owner_message() {
+fn background_work_coming_back_reads_as_a_card_not_an_owner_message() {
     let mut rt = render(scenes::conversation, false);
+    let mut answer = String::new();
     rt.update(|ui, _| {
         let observation = ui
             .model
@@ -6608,11 +6621,86 @@ fn background_work_coming_back_reads_as_a_marker_not_an_owner_message() {
             kind: TurnWorkKind::Result,
             outcome: Some(HandoffOutcome::Cancelled),
         });
+        answer = turn.answer.clone().unwrap_or_default();
     });
     settle(&mut rt);
+    let id = turn_id(&rt, 0);
     let text = screen_text(&rt);
-    assert!(text.contains("Background work ·"));
-    assert!(text.contains("Venue research"));
-    assert!(text.contains("· Cancelled"));
+    // One card: the item and how its run ended, with the bot's reply in it.
+    assert!(rt.find(&format!("rd-workcard-{id}")).is_some());
+    assert!(text.contains("Background work"), "{text}");
+    assert!(text.contains("Venue research"), "{text}");
+    assert!(text.contains("w-2"), "{text}");
+    assert!(text.contains("Cancelled"), "{text}");
+    let first_line = answer.lines().next().unwrap_or_default().to_owned();
+    assert!(
+        text.contains(first_line.trim_start_matches(['#', ' '])),
+        "{text}"
+    );
     assert!(!text.contains("Your background work on w-2 ended"));
+    // Not an owner message, and the reply is not signed as a message.
+    assert!(rt.find(&format!("rd-turn-{id}")).is_none());
+    assert!(rt.find(&format!("rd-reply-{id}")).is_none());
+
+    // Quote quotes the bot's reply; Open item opens the bot's Work page.
+    click(&mut rt, &format!("rd-workcard-{id}-quote"));
+    assert_eq!(
+        rt.state.quoting.as_ref().map(|q| q.author),
+        Some(QuoteAuthor::Bot)
+    );
+    click(&mut rt, &format!("rd-workcard-{id}-open"));
+    assert_eq!(
+        rt.state.screen,
+        Screen::Settings(Page::Bot {
+            bot_id: "default".into(),
+            section: BotSection::Work,
+        })
+    );
+}
+
+#[test]
+fn a_long_result_folds_until_shown_in_full() {
+    let mut rt = render(scenes::conversation, false);
+    rt.update(|ui, _| {
+        let observation = ui
+            .model
+            .conversation
+            .as_mut()
+            .and_then(|c| c.observation.as_mut())
+            .unwrap();
+        let turn = &mut observation.turns[0];
+        turn.work = Some(TurnWork {
+            item_id: "w-2".into(),
+            title: "Venue research".into(),
+            kind: TurnWorkKind::Result,
+            outcome: Some(HandoffOutcome::Completed),
+        });
+        turn.answer = Some("Three venues are free in December. ".repeat(20));
+    });
+    settle(&mut rt);
+    let id = turn_id(&rt, 0);
+    let text_key = format!("rd-workcard-{id}-text");
+    let folded = element(&rt, &text_key).rect[3];
+    assert_eq!(
+        element(&rt, &format!("rd-workcard-{id}-more"))
+            .text
+            .as_deref(),
+        Some("Show more")
+    );
+    click(&mut rt, &format!("rd-workcard-{id}-more"));
+    assert!(element(&rt, &text_key).rect[3] > folded + 20.0);
+    assert_eq!(
+        element(&rt, &format!("rd-workcard-{id}-more"))
+            .text
+            .as_deref(),
+        Some("Show less")
+    );
+}
+
+#[test]
+fn background_work_waiting_on_the_owner_needs_you() {
+    let rt = render(scenes::chat_background, false);
+    let text = screen_text(&rt);
+    assert!(text.contains("Needs you"), "{text}");
+    assert!(text.contains("Open item"), "{text}");
 }

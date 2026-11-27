@@ -41,6 +41,7 @@ mod sign_in;
 mod steps;
 mod viewer;
 mod welcome;
+mod work_card;
 
 use std::path::PathBuf;
 
