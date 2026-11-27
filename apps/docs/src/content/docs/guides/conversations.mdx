@@ -221,7 +221,7 @@ When a bot wants to run something that needs your say-so, the turn pauses and an
 
 Each card shows when it expires; an expired request cannot be approved. A decision made in any client or channel settles the same request everywhere.
 
-**Permissions** apply to workspace commands and [MCP tools](/guides/tools/). **Full access** lets both run without asking in this chat. It does not change sandbox limits, and an MCP server with approvals of its own still asks for them. Switching back to **Ask** stops calls that have not started yet.
+**Permissions** apply to workspace commands and [MCP tools](/guides/tools/). **Full access** lets both run without asking in this chat and in the bot's background work: its work items and scheduled jobs follow the chat's setting. Tasks other bots hand this one always ask. It does not change sandbox limits, and an MCP server with approvals of its own still asks for them. Switching back to **Ask** stops calls that have not started yet.
 
 :::caution
 An action interrupted by a crash or restart is marked uncertain and is never repeated automatically, because it may already have taken effect. Check the result before asking again.
