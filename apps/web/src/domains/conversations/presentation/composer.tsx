@@ -1,5 +1,5 @@
 import type { Handoff, ModelSelection, Quote } from "@raphie/contracts";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import {
@@ -44,6 +44,7 @@ export function Composer({
   onManageSkills,
   quote,
   onClearQuote,
+  dock,
 }: {
   /** The bot this conversation is with, named in the empty field. */
   botName?: string;
@@ -78,6 +79,8 @@ export function Composer({
   /** The earlier message the next one quotes. */
   quote?: Quote;
   onClearQuote?: () => void;
+  /** What waits on the owner, docked on top of the composer. */
+  dock?: ReactNode;
 }) {
   const [permission, setPermission] = useState<{
     key: string;
@@ -277,8 +280,10 @@ export function Composer({
         </p>
       )}
       {handedOffBy && <HandoffNote from={handedOffBy} />}
+      {dock}
       <form
         className="composer"
+        data-docked={dock ? true : undefined}
         onSubmit={(event) => {
           event.preventDefault();
           void send();

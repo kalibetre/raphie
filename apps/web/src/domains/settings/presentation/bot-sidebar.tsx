@@ -4,7 +4,12 @@ import { Plus, Settings } from "lucide-react";
 import brandMark from "../../../shared/favicon.svg?inline";
 import { Button } from "../../../shared/ui/button";
 import { ScrollArea } from "../../../shared/ui/scroll-area";
-import { needsYou, presence, runtimePlace } from "../application/team-presence";
+import {
+  presence,
+  runtimePlace,
+  waitingLine,
+  waitingOnOwner,
+} from "../application/team-presence";
 import { BotAvatar } from "./bot-avatar";
 import { useBotStyle } from "./bot-tones";
 
@@ -38,29 +43,28 @@ export function BotSidebar({
   needsSetup?: boolean;
 }) {
   const botStyle = useBotStyle();
-  // Requests that wait on the owner, from every teammate, pinned on top.
+  // What waits on the owner, one line per teammate, pinned on top.
   const requests = bots
-    .flatMap((b) =>
-      (byBot.get(b.id) ?? []).filter(needsYou).map((s) => ({ bot: b, s })),
-    )
-    .sort((a, b) => b.s.lastAt - a.s.lastAt)
+    .flatMap((b) => {
+      const waiting = waitingOnOwner(byBot.get(b.id) ?? []);
+      return waiting ? [{ bot: b, ...waiting }] : [];
+    })
+    .sort((a, b) => b.lastAt - a.lastAt)
     .slice(0, 3);
   return (
     <div className="bot-roster">
       {requests.length > 0 && (
         <section className="roster-requests" aria-label="Needs you">
-          {requests.map(({ bot, s }) => (
+          {requests.map(({ bot, session: s, count, asking }) => (
             <button
-              key={s.id}
+              key={bot.id}
               className="roster-request"
               style={botStyle(bot.id)}
               onClick={() => onOpen(bot.id, s.sessionId)}
             >
               <BotAvatar id={bot.id} />
               <span className="roster-request-copy">
-                <strong>
-                  {bot.name} {s.asking ? "has a question" : "needs your OK"}
-                </strong>
+                <strong>{waitingLine(bot.name, count, asking)}</strong>
                 <span>{s.title}</span>
               </span>
             </button>

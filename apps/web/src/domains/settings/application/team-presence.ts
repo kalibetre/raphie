@@ -7,6 +7,30 @@ export type Presence =
 export const needsYou = (session: SessionSummary) =>
   session.waiting || !!session.asking;
 
+/**
+ * What waits on the owner from one teammate, for the sidebar: how many
+ * questions and approvals, whether one is a question, and the conversation
+ * to open, its chat when it has one, where the dock asks them all.
+ */
+export function waitingOnOwner(sessions: SessionSummary[]) {
+  const waiting = sessions.filter(needsYou);
+  if (!waiting.length) return undefined;
+  return {
+    count: waiting.reduce((sum, s) => sum + Math.max(s.pending ?? 1, 1), 0),
+    asking: waiting.some((s) => s.asking),
+    session:
+      sessions.find((s) => s.chat) ??
+      [...waiting].sort((a, b) => b.lastAt - a.lastAt)[0]!,
+    lastAt: Math.max(...waiting.map((s) => s.lastAt)),
+  };
+}
+
+/** The sidebar's line for what one teammate waits on the owner for. */
+export function waitingLine(name: string, count: number, asking: boolean) {
+  if (count > 1) return `${name} has ${count} questions`;
+  return `${name} ${asking ? "has a question" : "needs your OK"}`;
+}
+
 /** What a teammate is doing, from its open conversations. */
 export function presence(
   sessions: SessionSummary[],

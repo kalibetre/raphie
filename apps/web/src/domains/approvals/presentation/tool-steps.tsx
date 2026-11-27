@@ -52,18 +52,26 @@ export function ToolSteps({
   working,
   activeLabel,
   elapsed,
+  decide = true,
 }: {
   steps: ToolStep[];
   working: boolean;
   activeLabel?: string;
   elapsed?: string;
+  /**
+   * Whether a pending approval is decided here. In a chat, the dock on the
+   * composer decides it, and the steps only mark that it waits.
+   */
+  decide?: boolean;
 }) {
   const needsYou = steps.some((s) => stepState(s, working) === "pending");
   const [open, setOpen] = useState(false);
   const first = steps[0]?.startedAt;
   const last = Math.max(...steps.map((s) => s.doneAt ?? s.startedAt));
   const label = needsYou
-    ? "Waiting for your approval"
+    ? decide
+      ? "Waiting for your approval"
+      : "Needs your approval"
     : working
       ? (activeLabel ??
         (steps.length
@@ -72,7 +80,7 @@ export function ToolSteps({
       : // Settled work says what the bot did, in its words; the details
         // keep the tools, arguments and timings.
         stepsSummary(steps);
-  const expanded = open || needsYou;
+  const expanded = open || (needsYou && decide);
   return (
     <section
       className={`steps ${needsYou ? "steps-attention" : ""}`}
@@ -86,7 +94,7 @@ export function ToolSteps({
             : undefined
         }
         aria-expanded={expanded}
-        disabled={!steps.length || needsYou}
+        disabled={!steps.length || (needsYou && decide)}
         onClick={() => setOpen(!open)}
       >
         {working && !needsYou ? (
@@ -102,14 +110,14 @@ export function ToolSteps({
             {elapsed} elapsed
           </span>
         )}
-        {steps.length > 0 && !needsYou && (
+        {steps.length > 0 && !(needsYou && decide) && (
           <ChevronRight size={14} className="steps-chevron" />
         )}
       </button>
       {expanded && (
         <ol className="steps-list">
           {steps.map((step) => (
-            <Step key={step.id} step={step} working={working} />
+            <Step key={step.id} step={step} working={working} decide={decide} />
           ))}
         </ol>
       )}
@@ -117,14 +125,22 @@ export function ToolSteps({
   );
 }
 
-function Step({ step, working }: { step: ToolStep; working: boolean }) {
+function Step({
+  step,
+  working,
+  decide,
+}: {
+  step: ToolStep;
+  working: boolean;
+  decide: boolean;
+}) {
   const state = stepState(step, working);
   const approval = step.approval;
   const args = approval?.argumentsJson ?? step.args;
   return (
     <li className={`step step-${state}`}>
       <span className="step-icon">{icons[state]}</span>
-      <details className="step-body" open={state === "pending"}>
+      <details className="step-body" open={state === "pending" && decide}>
         <summary>
           <span className="step-name">
             <span className="step-phrase">{toolPhrase(step)}</span>
@@ -164,7 +180,9 @@ function Step({ step, working }: { step: ToolStep; working: boolean }) {
           </p>
         )}
       </details>
-      {state === "pending" && approval && <ToolDecision approval={approval} />}
+      {state === "pending" && approval && decide && (
+        <ToolDecision approval={approval} />
+      )}
     </li>
   );
 }

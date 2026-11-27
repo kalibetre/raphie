@@ -29,9 +29,9 @@ import {
 } from "../application/run-projection";
 import { chatAdapter } from "../infrastructure/chat-adapter";
 import { ActiveRun } from "./active-run";
-import { AskCard } from "./ask-card";
+import { AskMarker } from "./ask-marker";
 import { AttachmentCard } from "./attachment-card";
-import { BackgroundRequests } from "./background-requests";
+import { BackgroundMarkers } from "./background-requests";
 import { CompactionDivider } from "./compaction-divider";
 import { Conversation } from "./conversation";
 import {
@@ -447,7 +447,7 @@ export function Chat({
               <HandoffSources read={turn.readSessions ?? []} />
             )}
             {turn?.status === "done" && turnSteps.length > 0 && (
-              <ToolSteps steps={turnSteps} working={false} />
+              <ToolSteps steps={turnSteps} working={false} decide={false} />
             )}
             {turn?.status === "done" && <SelfUpdateNotes steps={turnSteps} />}
             {/* Quote takes the whole reply, so it sits under it. */}
@@ -469,12 +469,10 @@ export function Chat({
             steps={steps.get(turn.id) ?? []}
             asks={asks.filter((a) => a.turnId === turn.id)}
             cards={cards.filter((c) => c.turnId === turn.id)}
+            title={author.name}
           />
         ))}
-      <BackgroundRequests
-        requests={state.background ?? []}
-        onOpenItem={onOpenWorkItem}
-      />
+      <BackgroundMarkers requests={state.background ?? []} />
     </Conversation>
   );
 
@@ -486,13 +484,15 @@ export function Chat({
     return (
       <>
         {!working && !inReply && steps.length > 0 && (
-          <ToolSteps steps={steps} working={working} />
+          <ToolSteps steps={steps} working={working} decide={false} />
         )}
         {!working && !inReply && <SelfUpdateNotes steps={steps} />}
         {!working &&
           asks
             .filter((a) => a.turnId === turn.id)
-            .map((ask) => <AskCard key={ask.id} ask={ask} />)}
+            .map((ask) => (
+              <AskMarker key={ask.id} ask={ask} title={author.name} />
+            ))}
         {!working &&
           !inReply &&
           cards
