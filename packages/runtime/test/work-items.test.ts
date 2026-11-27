@@ -85,16 +85,27 @@ test("scheduled jobs come after the bot's own items, running ones first", () => 
     }),
     item(2, { title: "Venue research" }),
     job(3, { run: { id: "r-1", startedAt: 3 } }),
+    // Running or not, a handoff is the bot's own: ahead of any job.
+    item(0, {
+      title: "Handed to Ada",
+      origin: {
+        kind: "handoff-sent",
+        handoffId: "h-1",
+        bot: { id: "b", name: "Ada" },
+      },
+      run: { id: "handoff:h-1:0", startedAt: 0 },
+    }),
   ])
     .trimEnd()
     .split("\n");
-  assert.equal(listed[0], "[Open work (103); work_read shows one in full]");
+  assert.equal(listed[0], "[Open work (104); work_read shows one in full]");
   assert.match(listed[1]!, /^w-2 Venue research/);
   assert.match(listed[2]!, /^w-1 Flights to Lisbon/);
-  assert.match(listed[3]!, /^w-3 Job 3: .*working on it in the background/);
-  assert.match(listed[4]!, /^w-1099 Job 1099/);
+  assert.match(listed[3]!, /^w-0 Handed to Ada/);
+  assert.match(listed[4]!, /^w-3 Job 3: .*working on it in the background/);
+  assert.match(listed[5]!, /^w-1099 Job 1099/);
   assert.equal(listed.length, MAX_LISTED + 2);
-  assert.equal(listed.at(-1), "…and 83 more scheduled jobs: use work_list.");
+  assert.equal(listed.at(-1), "…and 84 more scheduled jobs: use work_list.");
 });
 
 test("the more line counts the bot's own items apart from jobs", () => {
@@ -103,7 +114,10 @@ test("the more line counts the bot's own items apart from jobs", () => {
     ...own,
     item(500, { origin: { kind: "job", jobId: "j" } }),
   ]);
-  assert.match(listed, /\n…and 2 more and 1 scheduled job: use work_list\.\n$/);
+  assert.match(
+    listed,
+    /\n…and 2 more of your own and 1 scheduled job: use work_list\.\n$/,
+  );
 });
 
 test("work_list puts jobs last among open items and says how many it left out", () => {
@@ -115,7 +129,15 @@ test("work_list puts jobs last among open items and says how many it left out", 
   }).split("\n");
   assert.match(open[0]!, /^w-1 Lisbon/);
   assert.equal(open.length, 51);
-  assert.equal(open.at(-1), "…and 11 more: narrow it with query.");
+  assert.equal(
+    open.at(-1),
+    "…and 11 more scheduled jobs: narrow it with query; schedule_list lists every job.",
+  );
+  // A job past the first 50 is found by its name.
+  assert.match(
+    workListText([...jobs, item(1)], { closed: false, query: "Item 100" }),
+    /^w-100 Item 100: active; scheduled job$/,
+  );
   const closed = workListText(
     [
       item(1, { status: "done" }),
