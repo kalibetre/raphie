@@ -155,7 +155,7 @@ Each item has a short id such as `w-12`, a title, and a status: **active** while
 
 - **Asking about them:** ask the bot what is going on, or about one thing by name. It answers from its open items, which it reads with each of your messages, and can read any item in full, closed ones included. Each message carries up to 20 open items: the bot's own come first, then running scheduled jobs, then its other jobs, so many jobs never push out what it is chasing for you.
 - **Only in your chat:** work items are yours. A Telegram group or Discord server channel with the bot never sees them, and the bot can't open or change them there. A [scheduled job](/guides/schedules/)'s run happens in the job's own session, so it isn't sent the list, can't use the work tools and doesn't read the chat; what it reads is the job's earlier runs. If its [home channel](/guides/schedules/#send-results-to-a-home-channel) is a group, those runs' replies go there too.
-- **Scheduled jobs** are items too, opened when the job is saved and closed when it is removed. Each run happens in the item's session, and its reply posts in the chat as the bot's message; see [Scheduled jobs](/guides/schedules/#how-schedules-work).
+- **Scheduled jobs** are items too, opened when the job is saved and closed when it is removed. Each run happens in the item's session, and its reply posts in the chat on a **Scheduled** card; see [Scheduled jobs](/guides/schedules/#how-schedules-work).
 - **Handoffs** are items on both sides: a task the bot hands another bot from your chat waits on that bot, and a task it receives runs in its own session; see [Handoffs](/guides/handoffs/#as-work-items).
 - **Closed items** are kept, listed apart from open ones.
 
@@ -166,9 +166,9 @@ The bot opens, updates and closes items itself. You can also see and change them
 For work that takes a while, such as research, comparing options or drafting something long, the bot can start it in the background instead of in its reply. The work runs in the item's own session, apart from your chat, so the chat stays quick and the item keeps its own context: a follow-up on the same item continues where the last run left off.
 
 - **While it runs:** the item shows **Working** under **Settings → Work**, and you can keep talking to the bot. **Stop** in the chat stops only the chat's reply; **Cancel run** on the item stops its background work.
-- **When it ends:** a **Background work** line appears in the chat with the item's title, and the bot tells you what came back, or that it was cancelled or failed. The item keeps the result as its latest.
+- **When it ends:** a **Background work** card appears in the chat with the item's title, marked **Failed** or **Cancelled** when the run didn't finish, and the bot tells you what came back on it. A long answer is folded to its first few lines, with **Show more**. **Quote** quotes it in your next message, and **Open item** opens **Settings → Work**. The item keeps the result as its latest.
 - **Closing a running item**, on the Work page or by asking the bot, stops its work, and the chat isn't told what came of it; the item still keeps the result.
-- **Approvals and questions** from background work show at the end of the chat, under a **Background work · title needs you** line, where you approve, reject or answer them without leaving the chat. They also show at the top of the sidebar, as the chat's do. This covers every open work item with a session of its own: background runs, scheduled jobs and tasks other bots hand this one.
+- **Approvals and questions** from background work show at the end of the chat, on a **Background work** card marked **Needs you**, where you approve, reject or answer them without leaving the chat. They also show at the top of the sidebar, as the chat's do. This covers every open work item with a session of its own: background runs, scheduled jobs and tasks other bots hand this one.
 - An item runs one piece of background work at a time. Its session is kept while the item exists.
 
 ## Long chats

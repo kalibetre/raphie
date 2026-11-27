@@ -6,8 +6,8 @@
 //! `active-run.tsx`, and the message rules in `chat.css`.
 
 use raphie_core::contracts::{
-    AskStatus, BackgroundRequest, ControlAction, QueueMode, QuoteAuthor, SessionActivity,
-    SessionAsk, SessionCard, SessionObservation, SessionTurn, TurnStatus,
+    AskStatus, BackgroundRequest, ControlAction, HandoffOutcome, QueueMode, QuoteAuthor,
+    SessionActivity, SessionAsk, SessionCard, SessionObservation, SessionTurn, TurnStatus,
 };
 use raphie_core::model::Conversation;
 use raphie_core::projections::{
@@ -25,6 +25,7 @@ use super::compaction;
 use super::handoffs;
 use super::self_updates;
 use super::steps::{Run, Working, code_box, tool_steps};
+use super::work_card::{self, Card, Kind as CardKind, Status};
 use crate::avatar::bot_avatar;
 use crate::format;
 use crate::icons;
@@ -142,11 +143,24 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             .iter()
             .filter(|card| card.turn_id == turn.id)
             .collect();
-        items.push(owner_turn(s, turn, steps, &asks, &cards, now, look));
         let streaming = writing
             .is_some_and(|w| w.id == turn.id)
             .then_some(live)
             .flatten();
+        // A work item's run reads as one card, with the bot's reply in it.
+        if turn.work.is_some() || turn.scheduled.is_some() {
+            items.push(work_turn(
+                s,
+                turn,
+                steps,
+                (&asks, &cards),
+                streaming,
+                now,
+                look,
+            ));
+            continue;
+        }
+        items.push(owner_turn(s, turn, steps, &asks, &cards, now, look));
         if let Some(reply) = reply(s, turn, steps, streaming, observation, now, look) {
             items.push(reply);
         }
@@ -164,74 +178,126 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
     items
 }
 
-/// A work item's line in the chat: "Background work · title", then `tail`
-/// and the time, when given. A long title is cut to fit.
-fn work_pill(item_id: &str, title: &str, tail: &str, at: Option<i64>, t: &Theme) -> El {
-    let mut pill = row()
-        .min_w(0.0)
-        .shrink()
-        .px(12.0)
-        .py(4.0)
-        .gap(7.0)
-        .center_y()
-        .radius(13.0)
-        .fill(t.accent_soft)
-        .help(format!("Work item {item_id}"))
-        .child(
-            icon(&icons::LIST_CHECKS, 13.0)
-                .color(t.accent)
-                .a11y_hidden(),
-        )
-        .child(
-            text("Background work ·")
-                .font(font(12.0, 400.0))
-                .color(t.accent)
-                .single_line(),
-        )
-        .child(
-            text(title.to_string())
-                .font(font(12.0, 600.0))
-                .color(t.accent)
-                .truncate()
-                .shrink(),
+/// A work item's run as a card: background work's result, which the bot
+/// tells in its reply, or a scheduled job's post.
+fn work_turn(
+    s: &Ui,
+    turn: &SessionTurn,
+    steps: &[ToolStep],
+    (asks, cards): (&[&SessionAsk], &[&SessionCard]),
+    live: Option<&str>,
+    now: i64,
+    look: &Look,
+) -> El {
+    let t = &look.theme;
+    let working = turn.status == TurnStatus::Pending;
+    // The reply, or while it is being written, what there is of it so far.
+    let answer = turn
+        .answer
+        .as_deref()
+        .or(live)
+        .filter(|a| !a.trim().is_empty());
+    let asking = asks.iter().any(|ask| ask.status == AskStatus::Pending);
+    let status = if working && asking {
+        Some(Status::NeedsYou)
+    } else if working {
+        Some(Status::Working)
+    } else if turn.cancelled == Some(true) {
+        Some(Status::Cancelled)
+    } else if turn.status == TurnStatus::Error {
+        Some(Status::Failed)
+    } else if turn.scheduled.is_some() {
+        None
+    } else {
+        // A run that simply finished needs no badge.
+        match turn.work.as_ref().and_then(|w| w.outcome) {
+            Some(HandoffOutcome::Cancelled) => Some(Status::Cancelled),
+            Some(HandoffOutcome::Failed) => Some(Status::Failed),
+            _ => None,
+        }
+    };
+    let mut extra = Vec::new();
+    // Tasks the reply handed off, and other bots' sessions it read.
+    if let Some(briefs) = handoffs::cards(s, &turn.id, look) {
+        extra.push(briefs);
+    }
+    if turn.status == TurnStatus::Done
+        && let Some(sources) = handoffs::sources(turn, look)
+    {
+        extra.push(sources);
+    }
+    if !working {
+        // Shown cards, then the tools the run used, as under a reply.
+        for shown in cards {
+            extra.push(cards::card(s, shown, now, look));
+        }
+        if !steps.is_empty() {
+            let run = Run {
+                turn_id: &turn.id,
+                steps,
+                working: None,
+            };
+            extra.push(tool_steps(s, &run, now, look));
+        }
+        if let Some(notes) = self_updates::notes(s, steps, t) {
+            extra.push(notes);
+        }
+    }
+    // Its questions, while the reply waits on the owner too.
+    for ask in asks {
+        extra.push(asks::card(s, ask, look));
+    }
+    if turn.status == TurnStatus::Error && turn.cancelled != Some(true) {
+        let reason = turn.failure.as_ref().map_or(
+            "Check Diagnostics, then send a new message to retry.",
+            |failure| failure.message.as_str(),
         );
-    if !tail.is_empty() {
-        pill = pill.child(
-            text(tail.to_string())
-                .font(font(12.0, 400.0))
-                .color(t.accent)
-                .single_line(),
+        extra.push(
+            col()
+                .w_full()
+                .gap(6.0)
+                .child(error_line(
+                    &format!("rd-failed-{}", turn.id),
+                    &format!("I couldn’t finish this reply. {reason}"),
+                    t,
+                ))
+                .children(failure_details(s, turn, look)),
         );
     }
-    if let Some(at) = at {
-        pill = pill.child(
-            text(format::clock(at))
-                .font(font(12.0, 400.0))
-                .color(t.muted_foreground)
-                .single_line(),
-        );
-    }
-    pill
+    work_card::card(
+        s,
+        Card {
+            // Where a quote of the reply, or a job notice, brings the reply.
+            key: super::quote::message_key(&turn.id, QuoteAuthor::Bot),
+            kind: if turn.scheduled.is_some() {
+                CardKind::Scheduled
+            } else {
+                CardKind::Background
+            },
+            title: turn
+                .scheduled
+                .as_ref()
+                .map(|job| job.name.as_str())
+                .or(turn.work.as_ref().map(|w| w.title.as_str()))
+                .unwrap_or("Work"),
+            item_id: turn.work.as_ref().map(|w| w.item_id.as_str()),
+            at: Some(turn.created_at),
+            status,
+            hint: (turn.scheduled.is_some() && !turn.text.is_empty())
+                .then(|| format!("Saved instruction: {}", turn.text)),
+            text: answer,
+            fold: !working,
+            turn_id: (turn.status == TurnStatus::Done).then_some(turn.id.as_str()),
+        },
+        extra,
+        look,
+    )
 }
 
-/// One work item's pending approvals and questions, decided here without
-/// opening the item's session.
+/// One work item's pending approvals and questions, as a card that needs
+/// the owner, decided here without opening the item's session.
 fn background_request(s: &Ui, request: &BackgroundRequest, now: i64, look: &Look) -> El {
-    let t = &look.theme;
-    let key = |part: &str| format!("bg-{}-{part}", request.item_id);
-    let mut block = col().key(key("block")).w_full().gap(10.0).child(
-        row()
-            .key(key("head"))
-            .w_full()
-            .justify_center()
-            .child(work_pill(
-                &request.item_id,
-                &request.title,
-                "needs you",
-                None,
-                t,
-            )),
-    );
+    let mut extra = Vec::new();
     if !request.tool_approvals.is_empty() {
         let steps: Vec<ToolStep> = request
             .tool_approvals
@@ -253,12 +319,28 @@ fn background_request(s: &Ui, request: &BackgroundRequest, now: i64, look: &Look
             steps: &steps,
             working: None,
         };
-        block = block.child(tool_steps(s, &run, now, look));
+        extra.push(tool_steps(s, &run, now, look));
     }
     for ask in &request.asks {
-        block = block.child(asks::card(s, ask, look));
+        extra.push(asks::card(s, ask, look));
     }
-    block
+    work_card::card(
+        s,
+        Card {
+            key: format!("bg-{}", request.item_id),
+            kind: CardKind::Background,
+            title: &request.title,
+            item_id: Some(&request.item_id),
+            at: None,
+            status: Some(Status::NeedsYou),
+            hint: None,
+            text: None,
+            fold: true,
+            turn_id: None,
+        },
+        extra,
+        look,
+    )
 }
 
 /// A turn Raphie is working on now (not one waiting in the queue).
@@ -352,55 +434,6 @@ fn owner_message(s: &Ui, turn: &SessionTurn, can_save: bool, look: &Look) -> El 
         return handoffs::turn(s, turn, handoff, look);
     }
     let key = format!("rd-turn-{}", turn.id);
-    // A work item's result: the bot's to tell, not an owner message.
-    // A job's posted result reads as the job, below.
-    if let Some(work) = turn.work.as_ref().filter(|_| turn.scheduled.is_none()) {
-        let how = match work.outcome {
-            Some(raphie_core::contracts::HandoffOutcome::Cancelled) => "· Cancelled",
-            Some(raphie_core::contracts::HandoffOutcome::Failed) => "· Failed",
-            _ => "",
-        };
-        return row().key(key).w_full().justify_center().child(work_pill(
-            &work.item_id,
-            &work.title,
-            how,
-            Some(turn.created_at),
-            t,
-        ));
-    }
-    if let Some(job) = &turn.scheduled {
-        return row().key(key).w_full().justify_center().child(
-            row()
-                .px(12.0)
-                .py(4.0)
-                .gap(7.0)
-                .center_y()
-                .radius(13.0)
-                .fill(t.accent_soft)
-                .help(if turn.text.is_empty() {
-                    // A job's posted result: its instruction is in its item.
-                    format!("Scheduled job {}", job.name)
-                } else {
-                    format!("Saved instruction: {}", turn.text)
-                })
-                .child(
-                    icon(&icons::CALENDAR_CLOCK, 13.0)
-                        .color(t.accent)
-                        .a11y_hidden(),
-                )
-                .child(text("Scheduled ·").font(font(12.0, 400.0)).color(t.accent))
-                .child(
-                    text(job.name.clone())
-                        .font(font(12.0, 600.0))
-                        .color(t.accent),
-                )
-                .child(
-                    text(format::clock(turn.created_at))
-                        .font(font(12.0, 400.0))
-                        .color(t.muted_foreground),
-                ),
-        );
-    }
     // A queued message is tinted until Raphie picks it up.
     let queued = turn.queue_mode.is_some();
     let (fill, border) = if queued {
@@ -864,8 +897,11 @@ fn active_run(
     {
         block = block.child(cards::card(s, shown, now, look));
     }
-    for ask in asks {
-        block = block.child(asks::card(s, ask, look));
+    // A work card holds its own run's questions.
+    if turn.work.is_none() && turn.scheduled.is_none() {
+        for ask in asks {
+            block = block.child(asks::card(s, ask, look));
+        }
     }
     block
 }

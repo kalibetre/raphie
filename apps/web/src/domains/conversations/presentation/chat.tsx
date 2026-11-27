@@ -5,7 +5,6 @@ import {
   CalendarClock,
   CircleAlert,
   CornerUpRight,
-  ListChecks,
   ListEnd,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -42,6 +41,7 @@ import {
 import { messageId, QuoteAction, QuoteBar, showMessage } from "./quote";
 import { SelfUpdateNotes } from "./self-update-notes";
 import { ShownCard } from "./shown-card";
+import { WorkCard, type WorkCardStatus } from "./work-card";
 
 const noBots: readonly { id: string; name: string }[] = [];
 const noSkills: readonly string[] = [];
@@ -91,6 +91,7 @@ export function Chat({
   skills = noSkills,
   author,
   onQuote,
+  onOpenWorkItem,
   reveal,
 }: {
   /** The bot replying here: its name and avatar sign each reply. */
@@ -110,6 +111,8 @@ export function Chat({
   onQuote?: (quote: Quote) => void;
   /** A turn whose message to bring into view once it is shown. */
   reveal?: string;
+  /** Opens a work item on the bot's Work page. */
+  onOpenWorkItem?: (itemId: string) => void;
 }) {
   const mentions = useMemo(
     () => ({
@@ -285,25 +288,13 @@ export function Chat({
             </div>
           );
         }
-        // A job's posted result reads as the job, below.
-        if (message.role === "user" && turn?.work && !turn.scheduled)
+        // A work item's run (background work's result or a scheduled job's
+        // post) reads as one card with the bot's reply in it.
+        if (message.role === "user" && turn && (turn.work || turn.scheduled))
           return (
             <div key={message.id} className="turn-user">
               {divider}
-              <WorkMarker work={turn.work} at={turn.createdAt} />
-              {turnWork(turn, steps.get(turn.id) ?? [])}
-            </div>
-          );
-        if (message.role === "user" && turn?.scheduled)
-          return (
-            <div key={message.id} className="turn-user">
-              {divider}
-              <ScheduledMarker
-                name={turn.scheduled.name}
-                at={turn.createdAt}
-                instruction={text}
-              />
-              {turnWork(turn, steps.get(turn.id) ?? [])}
+              {workCard(turn, text)}
             </div>
           );
         if (message.role === "user")
@@ -385,6 +376,8 @@ export function Chat({
               {turn && turnWork(turn, steps.get(turn.id) ?? [])}
             </div>
           );
+        // Shown in its work card, with the turn's owner side.
+        if (turn && (turn.work || turn.scheduled)) return null;
         const usage = turn && runUsage(turn.id, state.activity);
         const at = state.activity.findLast(
           (e) => e.runId === turnId && e.type === "model.completed",
@@ -446,17 +439,119 @@ export function Chat({
             turn={turn}
             state={state}
             steps={steps.get(turn.id) ?? []}
-            asks={asks.filter((a) => a.turnId === turn.id)}
+            // A work card holds its own run's questions.
+            asks={
+              turn.work || turn.scheduled
+                ? []
+                : asks.filter((a) => a.turnId === turn.id)
+            }
             cards={cards.filter((c) => c.turnId === turn.id)}
           />
         ))}
-      <BackgroundRequests requests={state.background ?? []} />
+      <BackgroundRequests
+        requests={state.background ?? []}
+        onOpenItem={onOpenWorkItem}
+      />
     </Conversation>
   );
 
   // A plain render helper, not a component: a component declared here would
   // remount on every snapshot and collapse open step details.
-  function turnWork(turn: Snapshot["turns"][number], steps: ToolStep[]) {
+  /**
+   * A work item's run as a card: background work's result, which the bot
+   * tells in its reply, or a scheduled job's post. `instruction` is the
+   * job's saved prompt, kept as the header's tooltip.
+   */
+  function workCard(turn: Turn, instruction: string) {
+    const reply = messages.find(
+      (m) => m.role === "assistant" && m.id === `${turn.id}:reply`,
+    );
+    const answer = (reply?.parts ?? [])
+      .flatMap((p) => (p.type === "text" ? [p.content] : []))
+      .join("");
+    const turnSteps = steps.get(turn.id) ?? [];
+    const inReply = turn.status === "done" && replied.has(turn.id);
+    const scheduled = !!turn.scheduled;
+    const turnAsks = asks.filter((a) => a.turnId === turn.id);
+    const asking = turnAsks.some((a) => a.status === "pending");
+    const status: WorkCardStatus | undefined =
+      turn.status === "pending"
+        ? asking
+          ? "needs-you"
+          : "working"
+        : turn.cancelled
+          ? "cancelled"
+          : turn.status === "error"
+            ? "failed"
+            : scheduled
+              ? undefined
+              : workStatus(turn.work);
+    const itemId = turn.work?.itemId;
+    return (
+      <WorkCard
+        kind={scheduled ? "scheduled" : "background"}
+        title={turn.scheduled?.name ?? turn.work?.title ?? "Work"}
+        at={turn.createdAt}
+        status={status}
+        hint={
+          scheduled && instruction
+            ? `Saved instruction: ${instruction}`
+            : undefined
+        }
+        id={messageId(turn.id, "bot")}
+        onQuote={
+          onQuote && turn.status === "done" && answer.trim()
+            ? () => onQuote(quoteOf(turn.id, "bot", answer))
+            : undefined
+        }
+        onOpenItem={
+          onOpenWorkItem && itemId ? () => onOpenWorkItem(itemId) : undefined
+        }
+        // A reply still being written shows as it streams, unfolded.
+        fold={turn.status !== "pending"}
+        text={
+          answer.trim() ? (
+            <div className="markdown">
+              <ReactMarkdown
+                components={mentions.components}
+                remarkPlugins={mentions.plugins}
+              >
+                {answer}
+              </ReactMarkdown>
+            </div>
+          ) : undefined
+        }
+      >
+        {/* Tasks the reply handed off, and other bots' sessions it read. */}
+        <HandoffCards
+          turnId={turn.id}
+          handoffs={handoffItems}
+          onCancel={(id) => onCancelHandoff?.(id) ?? Promise.resolve()}
+        />
+        {inReply &&
+          cards
+            .filter((c) => c.turnId === turn.id)
+            .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
+        {turn.status === "done" && (
+          <HandoffSources read={turn.readSessions ?? []} />
+        )}
+        {inReply && turnSteps.length > 0 && (
+          <ToolSteps steps={turnSteps} working={false} />
+        )}
+        {inReply && <SelfUpdateNotes steps={turnSteps} />}
+        {/* While the reply waits on the owner, its question is here. */}
+        {turn.status === "pending" &&
+          turnAsks.map((ask) => <AskCard key={ask.id} ask={ask} />)}
+        {turnWork(turn, turnSteps, true)}
+      </WorkCard>
+    );
+  }
+
+  function turnWork(
+    turn: Snapshot["turns"][number],
+    steps: ToolStep[],
+    inCard = false,
+  ) {
     const working = turn.status === "pending";
     const inReply = turn.status === "done" && replied.has(turn.id);
     return (
@@ -474,12 +569,12 @@ export function Chat({
           cards
             .filter((c) => c.turnId === turn.id)
             .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
-        {turn.cancelled && (
+        {turn.cancelled && !inCard && (
           <p className="message-meta">Stopped · message not completed</p>
         )}
         {turn.status === "error" && !turn.cancelled && (
           <div className="turn-failure" role="alert">
-            {signature(turn.createdAt)}
+            {!inCard && signature(turn.createdAt)}
             <p className="turn-error">
               <CircleAlert size={14} className="turn-error-icon" />
               <span>
@@ -545,49 +640,11 @@ function ScheduledFailure({
   );
 }
 
-/**
- * Where a work item's background run came back to the chat: its result is
- * the bot's to tell, not an owner message.
- */
-function WorkMarker({ work, at }: { work: TurnWork; at: number }) {
-  const how =
-    work.outcome === "cancelled"
-      ? " · Cancelled"
-      : work.outcome === "failed"
-        ? " · Failed"
-        : "";
-  return (
-    <p className="turn-scheduled" title={`Work item ${work.itemId}`}>
-      <ListChecks size={13} aria-hidden="true" />
-      <span>
-        Background work · <strong>{work.title}</strong>
-        {how}
-      </span>
-      <time dateTime={new Date(at).toISOString()}>{time(at)}</time>
-    </p>
-  );
-}
-
-/** A due job's delivery point: the saved instruction is not an owner message. */
-function ScheduledMarker({
-  name,
-  at,
-  instruction,
-}: {
-  name: string;
-  at: number;
-  instruction: string;
-}) {
-  return (
-    <p
-      className="turn-scheduled"
-      title={instruction ? `Saved instruction: ${instruction}` : undefined}
-    >
-      <CalendarClock size={13} aria-hidden="true" />
-      <span>
-        Scheduled · <strong>{name}</strong>
-      </span>
-      <time dateTime={new Date(at).toISOString()}>{time(at)}</time>
-    </p>
-  );
+/** A finished run's state, for its card: none when it simply finished. */
+function workStatus(work: TurnWork | undefined): WorkCardStatus | undefined {
+  return work?.outcome === "cancelled"
+    ? "cancelled"
+    : work?.outcome === "failed"
+      ? "failed"
+      : undefined;
 }

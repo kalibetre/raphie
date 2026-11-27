@@ -26,14 +26,16 @@ pub fn card(s: &Ui, ask: &SessionAsk, look: &Look) -> El {
             .child(
                 text(ask.question.clone())
                     .font(font(14.0, 400.0).lh(21.0))
-                    .color(t.muted_foreground),
+                    .color(t.muted_foreground)
+                    .wrap(),
             )
             .child(outcome(ask, answer, t));
     }
     card = card.role("group").label(ask.question.clone()).child(
         text(ask.question.clone())
             .font(font(14.0, 500.0).lh(21.0))
-            .color(t.foreground),
+            .color(t.foreground)
+            .wrap(),
     );
     // Answers with details read better as rows than as buttons in a line.
     card = card.child(if ask.options.iter().any(|o| o.detail.is_some()) {

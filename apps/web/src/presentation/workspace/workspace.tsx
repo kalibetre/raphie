@@ -566,6 +566,7 @@ export function Workspace({
                             handoffQuery.cancel.mutateAsync(id)
                           }
                           reveal={message}
+                          onOpenWorkItem={() => openSettings("work")}
                           onQuote={(next) =>
                             setQuoting({
                               ...next,
