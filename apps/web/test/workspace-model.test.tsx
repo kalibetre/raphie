@@ -36,6 +36,7 @@ const session: SessionSummary = {
   turnCount: 0,
   waiting: false,
   pending: 0,
+  questions: 0,
 };
 
 // Seed the real query/projection path and render Workspace's actual Composer.
