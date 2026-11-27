@@ -4,9 +4,15 @@ import {
   Reply,
   SquareArrowOutUpRight,
 } from "lucide-react";
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
-import { Button } from "@/shared/ui/button";
+import { Button } from "../../../shared/ui/button";
 
 /** Where a run's state shows in the card's header. */
 export type WorkCardStatus =
@@ -32,7 +38,7 @@ const time = (at: number) =>
  * a message: the header says which item produced it, the body holds what
  * came back (`text`, folded when long) and then anything else, such as the
  * run's tool steps or a question (`children`, never folded); the footer leads
- * to the item.
+ * to the item. A reply still being written shows in full (`fold` false).
  */
 export function WorkCard({
   kind,
@@ -46,6 +52,7 @@ export function WorkCard({
   onOpenItem,
   id,
   hint,
+  fold = true,
 }: {
   kind: "scheduled" | "background";
   title: string;
@@ -60,6 +67,7 @@ export function WorkCard({
   id?: string;
   /** The title's tooltip; the title itself when not given. */
   hint?: string;
+  fold?: boolean;
 }) {
   const Icon = kind === "scheduled" ? CalendarClock : ListChecks;
   const footer = onQuote || onOpenItem || (at && status);
@@ -82,16 +90,28 @@ export function WorkCard({
         {itemId && <span className="work-card-id">{itemId}</span>}
         {status ? (
           <span className="work-card-status" data-status={status}>
-            <span aria-hidden="true" />
+            <span className="work-card-status-dot" aria-hidden="true" />
             {statusLabel[status]}
           </span>
         ) : (
-          at && <time dateTime={new Date(at).toISOString()}>{time(at)}</time>
+          at && (
+            <time
+              className="work-card-time"
+              dateTime={new Date(at).toISOString()}
+            >
+              {time(at)}
+            </time>
+          )
         )}
       </header>
       {(text || children) && (
         <div className="work-card-body">
-          {text && <Folded>{text}</Folded>}
+          {text &&
+            (fold ? (
+              <Folded>{text}</Folded>
+            ) : (
+              <div className="work-card-content">{text}</div>
+            ))}
           {children}
         </div>
       )}
@@ -110,7 +130,12 @@ export function WorkCard({
             </Button>
           )}
           {status && at && (
-            <time dateTime={new Date(at).toISOString()}>{time(at)}</time>
+            <time
+              className="work-card-time"
+              dateTime={new Date(at).toISOString()}
+            >
+              {time(at)}
+            </time>
           )}
         </footer>
       )}
@@ -121,14 +146,18 @@ export function WorkCard({
 /** A body taller than about four lines folds, with a way to unfold it. */
 function Folded({ children }: { children: ReactNode }) {
   const body = useRef<HTMLDivElement>(null);
+  const id = useId();
   const [open, setOpen] = useState(false);
   const [tall, setTall] = useState(false);
+  // Measured only while folded: unfolded, nothing overflows, and the button
+  // must stay where it is.
+  const opened = useRef(false);
   useLayoutEffect(() => {
     const element = body.current;
     if (!element) return;
-    const measure = () =>
-      // The folded height, from the CSS, plus a line's slack.
-      setTall(element.scrollHeight > element.clientHeight + 4);
+    const measure = () => {
+      if (!opened.current) setTall(element.scrollHeight > element.clientHeight);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
@@ -138,21 +167,27 @@ function Folded({ children }: { children: ReactNode }) {
     <>
       <div
         ref={body}
+        id={id}
         className="work-card-content"
         data-folded={open ? undefined : true}
         data-overflow={tall ? true : undefined}
       >
         {children}
       </div>
-      {(tall || open) && (
-        <button
-          type="button"
-          className="work-card-more"
+      {tall && (
+        <Button
+          variant="link"
+          size="xs"
+          className="work-card-more h-auto px-0 text-[var(--accent)]"
           aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          aria-controls={id}
+          onClick={() => {
+            opened.current = !open;
+            setOpen(!open);
+          }}
         >
           {open ? "Show less" : "Show more"}
-        </button>
+        </Button>
       )}
     </>
   );

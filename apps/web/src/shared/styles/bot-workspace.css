@@ -1,28 +1,8 @@
 @layer components {
-  /* A scheduled job's delivery, shown in place of an owner message. */
-  .turn-scheduled {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    width: fit-content;
-    margin: 0 auto;
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--accent);
-    font-size: 12px;
-  }
-  .turn-scheduled strong {
-    font-weight: 600;
-  }
-  .turn-scheduled time {
-    flex: none;
-    white-space: nowrap;
-    color: var(--muted-foreground);
-  }
   /* A work item's run in the chat: a scheduled job's post, background
      work's result or what it waits on the owner for. Not a message. */
   .work-card {
+    container: work-card / inline-size;
     min-width: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
@@ -52,8 +32,9 @@
     color: var(--accent);
     font-weight: 500;
   }
-  /* On a phone the icon says what produced the card; the title needs the room. */
-  @media (max-width: 480px) {
+  /* In a narrow chat the icon says what produced the card; the title needs
+     the room. */
+  @container work-card (max-width: 480px) {
     .work-card-kind-label {
       display: none;
     }
@@ -76,8 +57,7 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
   }
-  .work-card-header time,
-  .work-card-footer time {
+  .work-card-time {
     flex: none;
     color: var(--muted-foreground);
     font-size: 12px;
@@ -95,7 +75,7 @@
     font-size: 11.5px;
     font-weight: 600;
   }
-  .work-card-status > span {
+  .work-card-status-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
@@ -113,7 +93,7 @@
     background: var(--muted);
     color: var(--muted-foreground);
   }
-  .work-card-status[data-status="working"] > span {
+  .work-card-status[data-status="working"] .work-card-status-dot {
     animation: work-card-pulse 1.4s ease-in-out infinite;
   }
   @keyframes work-card-pulse {
@@ -141,12 +121,11 @@
   }
   .work-card-more {
     align-self: flex-start;
-    color: var(--accent);
-    font-size: 12.5px;
-    font-weight: 500;
   }
-  .work-card-more:hover {
-    text-decoration: underline;
+  /* A quote's source, marked for a moment, as a message is. */
+  .work-card[data-quoted] {
+    outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    outline-offset: 4px;
   }
   .work-card-footer {
     display: flex;
@@ -154,7 +133,7 @@
     gap: 2px;
     padding: 0 10px 8px;
   }
-  .work-card-footer time {
+  .work-card-footer .work-card-time {
     margin-left: auto;
     padding-right: 4px;
   }

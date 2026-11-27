@@ -499,8 +499,10 @@ export function Chat({
         onOpenItem={
           onOpenWorkItem && itemId ? () => onOpenWorkItem(itemId) : undefined
         }
+        // A reply still being written shows as it streams, unfolded.
+        fold={turn.status !== "pending"}
         text={
-          answer.trim() && turn.status !== "pending" ? (
+          answer.trim() ? (
             <div className="markdown">
               <ReactMarkdown
                 components={mentions.components}
@@ -512,10 +514,19 @@ export function Chat({
           ) : undefined
         }
       >
+        {/* Tasks the reply handed off, and other bots' sessions it read. */}
+        <HandoffCards
+          turnId={turn.id}
+          handoffs={handoffItems}
+          onCancel={(id) => onCancelHandoff?.(id) ?? Promise.resolve()}
+        />
         {inReply &&
           cards
             .filter((c) => c.turnId === turn.id)
             .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
+        {turn.status === "done" && (
+          <HandoffSources read={turn.readSessions ?? []} />
+        )}
         {inReply && turnSteps.length > 0 && (
           <ToolSteps steps={turnSteps} working={false} />
         )}
