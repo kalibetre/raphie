@@ -1,20 +1,22 @@
 import type { BackgroundRequest } from "@raphie/contracts";
 
-import { ToolSteps } from "../../approvals/presentation/tool-steps";
-import { AskCard } from "./ask-card";
-import { NeedsYouCard } from "./work-card";
+import { AskMarker } from "./ask-marker";
+
+const time = (at: number) =>
+  new Date(at).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 /**
- * What the bot's background work waits on the owner for, shown at the end of
- * its chat: a card for each work item with its pending approvals and
- * questions, decided here without opening the item's session.
+ * What the bot's background work waits on the owner for, marked at the end
+ * of its chat: one line for each question or approval. The dock on the
+ * composer asks them.
  */
-export function BackgroundRequests({
+export function BackgroundMarkers({
   requests,
-  onOpenItem,
 }: {
   requests: BackgroundRequest[];
-  onOpenItem?: (itemId: string) => void;
 }) {
   if (!requests.length) return null;
   return (
@@ -22,29 +24,25 @@ export function BackgroundRequests({
       className="background-requests"
       aria-label="Background work needs you"
     >
-      {requests.map((request) => (
-        <NeedsYouCard
-          key={request.itemId}
-          title={request.title}
-          onOpenItem={onOpenItem && (() => onOpenItem(request.itemId))}
-        >
-          {request.toolApprovals.length > 0 && (
-            <ToolSteps
-              working
-              steps={request.toolApprovals.map((approval) => ({
-                id: approval.id,
-                server: approval.server,
-                tool: approval.tool,
-                startedAt: approval.createdAt,
-                approval,
-              }))}
-            />
-          )}
-          {request.asks.map((ask) => (
-            <AskCard key={ask.id} ask={ask} />
-          ))}
-        </NeedsYouCard>
-      ))}
+      {requests.flatMap((request) => [
+        ...request.asks.map((ask) => (
+          <AskMarker key={ask.id} ask={ask} title={request.title} />
+        )),
+        ...request.toolApprovals
+          .filter((a) => a.status === "pending" && a.expiresAt > Date.now())
+          .map((approval) => (
+            <p key={approval.id} className="ask-marker">
+              <span className="ask-marker-dot" aria-hidden="true" />
+              <span>
+                {request.title} needs approval to run{" "}
+                <code>{approval.tool}</code> ·{" "}
+                <time dateTime={new Date(approval.createdAt).toISOString()}>
+                  {time(approval.createdAt)}
+                </time>
+              </span>
+            </p>
+          )),
+      ])}
     </section>
   );
 }

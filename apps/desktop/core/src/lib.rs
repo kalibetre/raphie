@@ -7,6 +7,7 @@
 //! - [`auth`]: device sign-in rules and token storage.
 //! - [`model`]: client state and how each event changes it (pure, no I/O).
 //! - [`projections`]: tool steps, usage and labels worked out from activity.
+//! - [`dock`]: the questions and approvals waiting on the owner, oldest first.
 //! - [`model_library`]: filtering and labelling the models a bot can run.
 //! - [`mcp`]: what a new MCP connection carries, and its checks.
 //! - [`memory`]: what a save of a bot's memory settings carries, and its checks.
@@ -32,6 +33,7 @@ pub mod auth;
 pub mod cards;
 pub mod channels;
 pub mod contracts;
+pub mod dock;
 pub mod engine;
 pub mod flavor;
 pub mod handoffs;

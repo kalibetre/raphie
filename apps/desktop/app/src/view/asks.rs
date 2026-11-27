@@ -1,17 +1,117 @@
-//! A question a bot asked mid-turn, as the web's `AskCard` shows it: the
-//! answers as buttons (or rows, when they carry details) while the turn
-//! waits, then one line saying what was answered.
+//! A question a bot asked mid-turn. The dock on the composer asks it as the
+//! web's `AskCard` does: the answers as buttons (or rows, when they carry
+//! details) while the turn waits, then one line saying what was answered.
+//! The conversation marks where it was asked, then keeps a receipt of the
+//! answer (the web's `ask-marker.tsx` and `.ask-marker` rules).
 
 use raphie_core::contracts::{AskAnswer, AskStatus, SessionAsk};
-use rune::{El, TextEdit, Tx, col, icon, row, text};
+use rune::{El, Shadow, Span, col, icon, rich, row, text};
 
 use super::Look;
+use crate::format;
 use crate::icons;
 use crate::state::Ui;
 use crate::theme::{Theme, font};
-use crate::widgets::{Field, Kind, Size, button, pressable, text_field};
+use crate::widgets::{Kind, Size, button, pressable};
 
-pub fn card(s: &Ui, ask: &SessionAsk, look: &Look) -> El {
+/// Where `ask` was asked, in the conversation: a one-line marker while it
+/// waits, then a receipt of the answer. `title` is who asked.
+pub fn in_transcript(ask: &SessionAsk, title: &str, t: &Theme) -> El {
+    if ask.status == AskStatus::Pending {
+        return marker(
+            format!("rd-ask-marker-{}", ask.id),
+            format!(
+                "{title} asked you something · {}",
+                format::clock(ask.created_at)
+            ),
+            t,
+        )
+        .label(format!("{title} asked you something: {}", ask.question))
+        .help(ask.question.clone());
+    }
+    let (lead, value) = match &ask.answer {
+        Some(AskAnswer::Choice { choice }) => (
+            "You answered ",
+            ask.options
+                .get(*choice)
+                .map_or_else(String::new, |o| o.label.clone()),
+        ),
+        Some(AskAnswer::Text { text }) => ("You answered ", format!("“{text}”")),
+        None => ("No answer, so it went on without one", String::new()),
+    };
+    let words = format!(
+        "{lead}{value} · {title} · {}",
+        format::clock(ask.created_at)
+    );
+    let answer = Span::new(lead.len(), lead.len() + value.len())
+        .weight(600.0)
+        .color(t.foreground);
+    row()
+        .key(format!("rd-ask-receipt-{}", ask.id))
+        .w_full()
+        .min_w(0.0)
+        .my(4.0)
+        .gap(8.0)
+        .center_y()
+        .label(format!("{words}, to: {}", ask.question))
+        .help(ask.question.clone())
+        .child(
+            row()
+                .size(15.0, 15.0)
+                .center()
+                .radius(7.5)
+                .fill(t.accent_soft)
+                .child(icon(&icons::CHECK, 9.0).color(t.accent))
+                .a11y_hidden(),
+        )
+        .child(
+            rich(words, vec![answer])
+                .font(font(12.0, 400.0))
+                .color(t.muted_foreground)
+                .shrink()
+                .min_w(0.0),
+        )
+}
+
+/// A one-line marker of something waiting on the owner, in the attention
+/// colour: an amber dot with a soft ring, then `words`.
+pub fn marker(key: String, words: String, t: &Theme) -> El {
+    row()
+        .key(key)
+        .w_full()
+        .min_w(0.0)
+        .my(4.0)
+        .gap(8.0)
+        .center_y()
+        .child(
+            row()
+                .size(8.0, 8.0)
+                .radius(4.0)
+                .fill(t.attention)
+                // The web's `box-shadow: 0 0 0 3px var(--attention-soft)`.
+                .box_shadow(Shadow {
+                    x: 0.0,
+                    y: 0.0,
+                    blur: 0.0,
+                    spread: 3.0,
+                    color: t.attention_soft,
+                    inset: false,
+                })
+                .a11y_hidden(),
+        )
+        .child(
+            text(words)
+                .font(font(12.0, 400.0))
+                .color(t.attention)
+                .wrap()
+                .shrink()
+                .min_w(0.0),
+        )
+}
+
+/// A question in the dock: its choices, or once answered what was answered.
+/// The composer takes the owner's own words.
+pub fn dock_card(s: &Ui, ask: &SessionAsk, look: &Look) -> El {
     let t = &look.theme;
     let sending = s.model.answering.get(&ask.id);
     let answer = ask.answer.as_ref().or(sending);
@@ -43,7 +143,7 @@ pub fn card(s: &Ui, ask: &SessionAsk, look: &Look) -> El {
     } else {
         buttons(ask, t)
     });
-    card.child(own_words(s, ask, t))
+    card
 }
 
 /// "You picked Wed 14:00", "You answered …", or that nobody answered.
@@ -152,48 +252,4 @@ fn rows(ask: &SessionAsk, t: &Theme) -> El {
         }));
     }
     list
-}
-
-/// A link that opens a field for the owner's own answer, or the field.
-fn own_words(s: &Ui, ask: &SessionAsk, t: &Theme) -> El {
-    let Some((_, edit)) = s.own_answer.as_ref().filter(|(id, _)| *id == ask.id) else {
-        let id = ask.id.clone();
-        let key = format!("rd-ask-own-{}", ask.id);
-        return text("Answer in your own words")
-            .key(format!("rd-ask-own-open-{}", ask.id))
-            .role("button")
-            .font(font(12.5, 400.0))
-            .color(t.muted_foreground)
-            .on_press_tx(move |s: &mut Ui, tx: &mut Tx| {
-                s.own_answer = Some((id.clone(), TextEdit::new("")));
-                tx.focus(format!("{key}-input"), false);
-            });
-    };
-    let submit_id = ask.id.clone();
-    let send_id = ask.id.clone();
-    let empty = edit.text.trim().is_empty();
-    row()
-        .w_full()
-        .max_w(480.0)
-        .gap(6.0)
-        .center_y()
-        .child(col().grow(1.0).min_w(0.0).child(text_field(
-            t,
-            Field {
-                key: &format!("rd-ask-own-{}", ask.id),
-                label: "Your answer",
-                placeholder: "Your answer",
-                edit,
-                disabled: false,
-                compact: true,
-            },
-            |s: &mut Ui| &mut s.own_answer.as_mut().expect("an own answer is open").1,
-            move |s: &mut Ui, _: &mut Tx| s.answer_in_own_words(&submit_id),
-        )))
-        .child(pressable(
-            button(t, Kind::Primary, Size::Small, None, "Send")
-                .key(format!("rd-ask-send-{}", ask.id)),
-            !empty,
-            move |s: &mut Ui| s.answer_in_own_words(&send_id),
-        ))
 }

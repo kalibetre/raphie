@@ -8,7 +8,7 @@ import {
   formatDuration,
   type ToolStep,
 } from "../application/run-projection";
-import { AskCard } from "./ask-card";
+import { AskMarker } from "./ask-marker";
 import { ShownCard } from "./shown-card";
 
 export function ActiveRun({
@@ -17,6 +17,7 @@ export function ActiveRun({
   steps,
   asks = [],
   cards = [],
+  title,
 }: {
   turn: Snapshot["turns"][number];
   state: Snapshot;
@@ -25,8 +26,11 @@ export function ActiveRun({
   asks?: SessionAsk[];
   /** Cards this turn has shown so far. */
   cards?: SessionCard[];
+  /** Who asks its questions: the bot's name. */
+  title: string;
 }) {
   const [now, setNow] = useState(Date.now());
+  const asking = asks.some((a) => a.status === "pending");
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -37,25 +41,29 @@ export function ActiveRun({
       role="status"
       aria-label="Current agent activity"
     >
-      <ToolSteps
-        steps={steps}
-        working
-        activeLabel={
-          asks.some((a) => a.status === "pending")
-            ? "Waiting for your answer…"
-            : activeRunLabel(
-                state.live[turn.conversationId],
-                steps,
-                state.activity.filter((e) => e.runId === turn.id),
-              )
-        }
-        elapsed={formatDuration(now - turn.createdAt)}
-      />
+      {/* While it waits on a question the dock asks it: no spinner here. */}
+      {asking ? (
+        steps.length > 0 && (
+          <ToolSteps steps={steps} working={false} decide={false} />
+        )
+      ) : (
+        <ToolSteps
+          steps={steps}
+          working
+          decide={false}
+          activeLabel={activeRunLabel(
+            state.live[turn.conversationId],
+            steps,
+            state.activity.filter((e) => e.runId === turn.id),
+          )}
+          elapsed={formatDuration(now - turn.createdAt)}
+        />
+      )}
       {cards.map((shown) => (
         <ShownCard key={shown.id} shown={shown} />
       ))}
       {asks.map((ask) => (
-        <AskCard key={ask.id} ask={ask} />
+        <AskMarker key={ask.id} ask={ask} title={title} />
       ))}
     </div>
   );

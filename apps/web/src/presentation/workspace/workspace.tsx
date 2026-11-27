@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
+import { dockItems } from "../../domains/conversations/application/dock";
 import {
   contextTokens,
   runUsage,
@@ -18,6 +19,7 @@ import {
 import { useHandoffs } from "../../domains/conversations/infrastructure/use-handoffs";
 import { Chat } from "../../domains/conversations/presentation/chat";
 import { Composer } from "../../domains/conversations/presentation/composer";
+import { QuestionDock } from "../../domains/conversations/presentation/question-dock";
 import { lastSessionKey } from "../../domains/conversations/presentation/sessions/last-session";
 import { Welcome } from "../../domains/conversations/presentation/welcome";
 import { Diagnostics } from "../../domains/diagnostics/presentation/diagnostics";
@@ -144,6 +146,11 @@ export function Workspace({
   const [quoting, setQuoting] = useState<Quote & { sessionId: string }>();
   const quote =
     quoting && quoting.sessionId === sessionId ? quoting : undefined;
+  // What waits on the owner here, docked on the composer.
+  const docked =
+    data && conversation
+      ? dockItems(data, conversation.id, botProfile?.name ?? "Raphie")
+      : [];
   const handoffQuery = useHandoffs();
   const handoffs = handoffQuery.data?.items;
   // A handoff is saved inside its tool call, so once a tool step completes or
@@ -618,6 +625,17 @@ export function Workspace({
                         onSend={send}
                         quote={quote}
                         onClearQuote={() => setQuoting(undefined)}
+                        dock={
+                          docked.length > 0 && <QuestionDock items={docked} />
+                        }
+                        answering={
+                          docked[0]?.ask
+                            ? (text) =>
+                                api(`/api/asks/${docked[0]!.ask!.id}`, {
+                                  text,
+                                })
+                            : undefined
+                        }
                         onManageSkills={() =>
                           void navigate({
                             to: "/",

@@ -7,6 +7,34 @@ export type Presence =
 export const needsYou = (session: SessionSummary) =>
   session.waiting || !!session.asking;
 
+/**
+ * What waits on the owner from one teammate, for the sidebar: how many
+ * questions and approvals, whether one is a question, what the newest is
+ * about, and the conversation to open. That is the chat when its dock holds
+ * them all (its own and its work items'); otherwise the newest conversation
+ * it doesn't hold, such as a group's.
+ */
+export function waitingOnOwner(sessions: SessionSummary[]) {
+  const waiting = sessions.filter(needsYou).sort((a, b) => b.lastAt - a.lastAt);
+  const newest = waiting[0];
+  if (!newest) return undefined;
+  const chat = sessions.find((s) => s.chat);
+  const elsewhere = waiting.find((s) => !s.chat && !s.work);
+  return {
+    count: waiting.reduce((sum, s) => sum + Math.max(s.pending, 1), 0),
+    asking: waiting.some((s) => s.asking),
+    title: newest.title,
+    session: elsewhere ?? chat ?? newest,
+    lastAt: newest.lastAt,
+  };
+}
+
+/** The sidebar's line for what one teammate waits on the owner for. */
+export function waitingLine(name: string, count: number, asking: boolean) {
+  if (count > 1) return `${name} has ${count} questions`;
+  return `${name} ${asking ? "has a question" : "needs your OK"}`;
+}
+
 /** What a teammate is doing, from its open conversations. */
 export function presence(
   sessions: SessionSummary[],

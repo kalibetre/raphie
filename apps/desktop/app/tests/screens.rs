@@ -589,11 +589,15 @@ fn approvals_show_exact_arguments_and_send_one_decision() {
         let mut rt = render(scenes::approval, dark);
         let id = scenes::APPROVAL_ID;
         let text = screen_text(&rt);
-        assert!(text.contains("Waiting for your approval"));
-        assert!(text.contains("calendar") && text.contains("execute"));
+        // The chat marks it; the dock on the composer asks it.
+        assert!(text.contains("Needs your approval"), "{text}");
+        assert!(text.contains("Run execute on calendar?"), "{text}");
         assert!(text.contains("Expires "), "when the approval lapses");
+        // The exact arguments are one press away.
+        assert!(!text.contains("calendar.events.list"));
+        click(&mut rt, &format!("rd-dock-args-{id}"));
         assert!(
-            text.contains("calendar.events.list"),
+            screen_text(&rt).contains("calendar.events.list"),
             "exact arguments shown"
         );
 
@@ -627,6 +631,7 @@ fn only_command_approvals_offer_approve_for_session() {
     let mut rt = render(scenes::command_approval, false);
     let id = scenes::COMMAND_APPROVAL_ID;
     // A multi-line command is shown as written, not as an escaped string.
+    click(&mut rt, &format!("rd-dock-args-{id}"));
     let text = screen_text(&rt);
     assert!(text.contains("ls -la notes\nwc -l notes/*.md"), "{text}");
     click(&mut rt, &format!("rd-approve-session-{id}"));
@@ -5217,9 +5222,12 @@ fn a_bots_question_takes_one_press_and_sends_one_answer() {
     for dark in [false, true] {
         let mut rt = render(scenes::ask, dark);
         let text = screen_text(&rt);
-        assert!(text.contains("Waiting for your answer"));
+        // While it waits on the owner, the run shows no spinner or clock.
+        assert!(!text.contains("Waiting for your answer"), "{text}");
+        assert!(!text.contains("elapsed"), "{text}");
         assert!(text.contains("Dr. Amare has three openings next week. Which one?"));
-        assert!(text.contains("Answer in your own words"));
+        // The composer takes the owner's own words for the question on top.
+        assert_eq!(rt.state.docked_question().as_deref(), Some("ask-1"));
 
         click(&mut rt, "rd-ask-ask-1-1");
         assert_eq!(
@@ -5241,8 +5249,12 @@ fn a_bots_question_takes_one_press_and_sends_one_answer() {
 
 #[test]
 fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
-    let mut rt = render(scenes::ask_own_words, false);
-    click(&mut rt, "rd-ask-send-ask-1");
+    // Typed in the composer while the question is on top of the dock, the
+    // words answer it rather than going to the chat.
+    let mut rt = render(scenes::ask, false);
+    rt.update(|ui, _| ui.composer = TextEdit::new("Any morning works"));
+    settle(&mut rt);
+    click(&mut rt, "rd-send");
     assert_eq!(
         rt.state.sent.last(),
         Some(&Command::Answer {
@@ -5253,6 +5265,7 @@ fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
         })
     );
     assert!(screen_text(&rt).contains("You answered"));
+    assert!(rt.state.composer.text.is_empty());
 
     let rt = render(scenes::ask_rows, true);
     let text = screen_text(&rt);
@@ -5263,7 +5276,10 @@ fn a_question_takes_the_owners_own_words_and_confirms_with_the_action() {
     assert!(text.contains("Delete 214") && text.contains("Keep them"));
 
     let text = screen_text(&render(scenes::ask_answered, false));
-    assert!(text.contains("You picked") && text.contains("Wed 14:00"));
+    assert!(
+        text.contains("You answered Wed 14:00 · Raphie · "),
+        "{text}"
+    );
 }
 
 #[test]
@@ -6593,11 +6609,116 @@ fn a_running_work_item_says_so_and_its_run_can_be_cancelled() {
 }
 
 #[test]
-fn background_work_waiting_on_the_owner_needs_you() {
+fn a_pending_question_is_asked_in_the_dock_and_marked_in_the_chat() {
+    for (dark, size) in [(false, SIZE), (true, (390.0, 800.0))] {
+        let rt = render_sized(
+            |ui| {
+                scenes::ask(ui);
+                // In a phone-width window, the chat rather than the roster.
+                ui.narrow_home = false;
+            },
+            dark,
+            size,
+        );
+        // The dock sits on top of the composer, with the question's choices.
+        let dock = element(&rt, "rd-dock").rect;
+        let card = element(&rt, "rd-composer-card").rect;
+        assert!(
+            (dock[1] + dock[3] - card[1]).abs() < 0.5,
+            "{dock:?} {card:?}"
+        );
+        assert!(inside(&rt, "rd-ask-ask-1-0", "rd-dock"));
+        assert!(screen_text(&rt).contains("Question"));
+        // The chat has one line where it was asked, and no choices.
+        assert!(inside(&rt, "rd-ask-marker-ask-1", "rd-transcript"));
+        let text = screen_text(&rt);
+        assert!(text.contains("Raphie asked you something · "), "{text}");
+        assert!(inside(&rt, "rd-ask-ask-1", "rd-dock"));
+    }
+    // With nothing waiting, there is no dock.
+    let rt = render(scenes::conversation, false);
+    assert!(rt.find("rd-dock").is_none());
+}
+
+#[test]
+fn a_pending_approval_is_decided_in_the_dock_not_in_the_chat() {
+    let mut rt = render(scenes::approval, false);
+    let id = scenes::APPROVAL_ID;
+    assert!(inside(&rt, &format!("rd-approve-{id}"), "rd-dock"));
+    assert!(inside(&rt, &format!("rd-reject-{id}"), "rd-dock"));
+    // The chat's steps stay folded, and unfolding them offers no decision.
+    assert!(!screen_text(&rt).contains("needs approval"));
+    click(&mut rt, "rd-steps-toggle-t1");
+    assert!(screen_text(&rt).contains("needs approval"));
+    let approvals = rt
+        .elements()
+        .into_iter()
+        .filter(|e| e.key.as_deref() == Some(&format!("rd-approval-{id}")))
+        .count();
+    assert_eq!(approvals, 1, "one decision bar, in the dock");
+    assert!(inside(&rt, &format!("rd-approval-{id}"), "rd-dock"));
+}
+
+#[test]
+fn background_work_waiting_on_the_owner_is_marked_and_docked() {
     let rt = render(scenes::chat_background, false);
     let text = screen_text(&rt);
-    assert!(text.contains("Needs you"), "{text}");
-    assert!(text.contains("Open item"), "{text}");
+    assert!(!text.contains("Open item"), "{text}");
+    let title = "Tidy the reports folder and archive everything older than a quarter, by month";
+    assert!(
+        text.contains(&format!("{title} asked you something · ")),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("{title} needs approval to run bash · ")),
+        "{text}"
+    );
+    assert!(inside(&rt, "rd-background", "rd-transcript"));
+    // The older one, the approval, is on top; the question waits behind it.
+    assert!(inside(
+        &rt,
+        &format!("rd-approve-{}", scenes::APPROVAL_ID),
+        "rd-dock"
+    ));
+    assert_eq!(
+        element(&rt, "rd-dock-meta").text.as_deref(),
+        Some("+1 waiting · w-6")
+    );
+    assert!(rt.find("rd-ask-ask-bg-0").is_none());
+
+    // Three waiting: the bot's own question on top, two behind it.
+    let rt = render(scenes::chat_dock, false);
+    assert!(inside(&rt, "rd-ask-ask-1-0", "rd-dock"));
+    assert_eq!(
+        element(&rt, "rd-dock-meta").text.as_deref(),
+        Some("+2 waiting")
+    );
+}
+
+#[test]
+fn the_roster_counts_what_a_teammate_waits_on_and_opens_its_chat() {
+    let mut rt = render(
+        |ui| {
+            scenes::chat_dock(ui);
+            // What waits is in a work item's session, which the chat's dock
+            // holds: the line opens the chat.
+            for session in &mut ui.model.sessions {
+                session.chat = session.id == "s-1";
+                if session.id == "s-2" {
+                    session.work = Some("w-6".into());
+                }
+            }
+        },
+        false,
+    );
+    assert!(screen_text(&rt).contains("Raphie has 3 questions"));
+    click(&mut rt, "rd-request-default");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::SelectSession {
+            session_id: Some("s-1".into())
+        })
+    );
 }
 
 #[test]

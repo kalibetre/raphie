@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-The web workspace is the browser app where you talk to your bots. Each bot has one **chat** with you, like a direct message with a teammate: pick the bot in the sidebar, type in the composer, and the reply streams in as the bot works; tool steps and approval requests appear inline in the chat.
+The web workspace is the browser app where you talk to your bots. Each bot has one **chat** with you, like a direct message with a teammate: pick the bot in the sidebar, type in the composer, and the reply streams in as the bot works, with its tool steps inline. Approvals and questions that wait on you dock on top of the composer.
 
 The chat is stored by the runtime, not the browser. Closing the tab never cancels work, and the chat is the same in the desktop app and in your private Telegram or Discord chat with the bot.
 
@@ -23,7 +23,7 @@ Its address depends on how you installed Raphie:
 
 | Where                | What it does                                                                                                                                                                                                                       |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sidebar, top         | Requests waiting on you, from every bot: an approval to give or a question to answer. Choose one to open it.                                                                                                                       |
+| Sidebar, top         | What waits on you, one line per bot: _bot_ **has a question**, **needs your OK**, or **has 3 questions** when several wait. Choose one to open where they wait: the bot's chat, or a group's conversation the chat doesn't cover.  |
 | **Your team**        | Your bots, each with what it is doing: **Needs you**, **Needs setup**, **Working**, new replies or **Available**. Choosing one opens its chat. **Add a teammate** opens the flow that [creates a bot](/guides/bots/#create-a-bot). |
 | Sidebar, bottom      | Where Raphie runs (**This computer**, or the host's name) and the gear that opens Settings. **Reconnecting…** shows while the connection is down.                                                                                  |
 | Notifications (bell) | Replies, approval requests and finished scheduled jobs from every bot in one place.                                                                                                                                                |
@@ -168,7 +168,7 @@ For work that takes a while, such as research, comparing options or drafting som
 - **While it runs:** the item shows **Working** under **Settings → Work**, and you can keep talking to the bot. **Stop** in the chat stops only the chat's reply; **Cancel run** on the item stops its background work.
 - **When it ends:** the bot tells you what came back, in a message of its own. Under its name, a tab names the item and quotes the request that started it, with a stamp: **Done**, **Failed** or **Cancelled**. Pressing the tab opens that item under **Settings → Work**. **Quote**, under the message while you point at it, quotes the whole reply. The item keeps the result as its latest.
 - **Closing a running item**, on the Work page or by asking the bot, stops its work, and the chat isn't told what came of it; the item still keeps the result.
-- **Approvals and questions** from background work show at the end of the chat, on a **Background work** card marked **Needs you**, where you approve, reject or answer them without leaving the chat. They also show at the top of the sidebar, as the chat's do. This covers every open work item with a session of its own: background runs, scheduled jobs and tasks other bots hand this one.
+- **Approvals and questions** from background work dock on the composer with the chat's own, under the work item's title (see [Questions and approvals](#questions-and-approvals)), and the end of the chat marks each one. They also count at the top of the sidebar. This covers every open work item with a session of its own: background runs, scheduled jobs and tasks other bots hand this one.
 - An item runs one piece of background work at a time. Its session is kept while the item exists.
 
 ## Long chats
@@ -183,15 +183,22 @@ A chat can go on as long as you like. Every message you send makes the model rea
 
 A summary is a record of what was said, not new instructions. Whatever it says another bot, a tool or the web wrote is still data, and it never grants permissions or approves a tool call.
 
-## Questions from a bot
+## Questions and approvals
 
-When a bot needs you to decide something before it can go on, it asks with buttons instead of writing the question out. The turn waits, and **Waiting for your answer…** shows above the question; at the top of the sidebar it shows as _bot_ **has a question**.
+When a bot needs you to decide something before it can go on, it asks with buttons instead of writing the question out, or asks you to approve a tool call. The turn waits. Everything waiting on you in this chat, the bot's own and its [background work](#background-work)'s, sits in an amber dock on top of the composer, oldest first:
+
+- **The top one** shows who asks (the bot, or the work item's title), **Question** or **Approval**, how many more wait behind it, its work item's id, and its choices. More waiting show as edges behind it.
+- **Answering it** brings up the next; when nothing is left the dock goes away.
+- **In the chat**, where it was asked, a line says _bot_ **asked you something**, or that a tool step needs your approval. Once you answer, the line becomes a receipt: **You answered** and your answer.
+- **At the top of the sidebar** the bot shows as **has a question**, **needs your OK**, or **has 3 questions** when several wait.
+
+A question's choices work like this:
 
 - **Pick an answer** with one press. Answers that carry details, such as a time and a place, show as rows.
-- **Answer in your own words** opens a field for anything the buttons don't cover.
+- **Answer in your own words** in the message box: while a question is on top of the dock, it says **Or answer in your own words…**, and what you send answers the question instead of going to the chat.
 - **Before something that can't be taken back**, such as deleting or sending, the action itself is the red button and the way out sits beside it.
 
-Afterwards the question stays in the chat with what you answered. A question waits an hour; after that, or if you stop the turn, the bot goes on without an answer and says what it still needs.
+Afterwards the receipt stays in the chat with what you answered. A question waits an hour; after that, or if you stop the turn, the bot goes on without an answer and says what it still needs.
 
 When you wrote from Telegram or Discord, the question also arrives there, with a button per answer. Only you can press them, in the chat you wrote from; once answered, the message shows your answer and loses its buttons. To answer in your own words, use the web workspace or the desktop app. An answer from any of them settles the question everywhere.
 
