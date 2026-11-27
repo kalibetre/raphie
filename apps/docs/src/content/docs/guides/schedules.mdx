@@ -91,7 +91,7 @@ Open **Settings**, choose the bot, then **Channels**. Under **Home channel**, ch
 - The destination is fixed when each run starts. Changing home affects later runs only.
 - If home is disconnected, disabled or its account was revoked, runs stay web-only. Raphie does not fall back to another channel or resend missed notifications later.
 - Replying in a private home chat writes in the bot's [chat](/guides/conversations/); replying in a home group continues that group's session.
-- Approvals for a scheduled run are decided in the web workspace. Home receives only an "Approval needed" notice.
+- Approvals for a scheduled run are decided in the web workspace. Home receives only an "Approval needed" notice. With the chat on **Full access**, a run asks for none.
 
 :::caution
 Everyone in a group chosen as home can read every scheduled reply. Pick a group only for jobs whose output you would share there.
@@ -109,7 +109,7 @@ Timing is durable: jobs survive restarts without your doing anything.
 | Submitting the turn fails               | Raphie tries four times in all, waiting 1, 2 and 4 seconds between attempts. Then the run is recorded as failed and a recurring job schedules its next run. |
 | Raphie stops during a run               | The run's turn is recovered on the next start like any other turn. A run whose turn is stopped or aborted is recorded as interrupted.                       |
 
-Tool calls made by a scheduled prompt need the same approval as any other. A job never bypasses them.
+A scheduled prompt's tool calls follow the chat's permission mode: on **Ask** they need approval like any other; on **Full access** they run without asking. Only the bot's chat can create, change or delete a job, and only in a reply that stays private, so a group or a task from another bot can never schedule work that runs unasked.
 
 ## Limits
 
