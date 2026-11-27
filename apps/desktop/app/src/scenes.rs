@@ -3030,7 +3030,7 @@ pub fn chat_background(ui: &mut Ui) {
         vec![],
     );
     seen.background = from_json(json!([{
-        "itemId": "w-6", "title": "Tidy the reports folder", "sessionId": "s-work",
+        "itemId": "w-6", "title": "Tidy the reports folder and archive everything older than a quarter, by month", "sessionId": "s-work",
         "toolApprovals": [{
             "id": APPROVAL_ID, "conversationId": "s-work",
             "connectionIdentity": "raphie.workspace.command",
