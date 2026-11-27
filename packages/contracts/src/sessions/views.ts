@@ -31,6 +31,8 @@ export type SessionSummary = Omit<Session, "id" | "discordThreadId"> & {
   asking?: boolean;
   /** How many questions and approvals wait on the owner here. */
   pending: number;
+  /** How many of them are questions; the rest are approvals. */
+  questions: number;
   /** The work item whose own session this is; the chat's dock asks for it. */
   work?: string;
   /** The bot that handed this session's task off, and its session it came from. */
@@ -71,7 +73,8 @@ export type RunPhase =
 
 /**
  * What one piece of the bot's background work waits on the owner for: its
- * pending approvals and questions, with the work item it belongs to.
+ * pending approvals and questions, with the work item it belongs to. `asks`
+ * also holds the questions settled in the last day, for the chat's receipts.
  */
 export type BackgroundRequest = {
   itemId: string;

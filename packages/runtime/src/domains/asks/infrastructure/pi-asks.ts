@@ -189,6 +189,7 @@ export class AskService {
       const current = state.asks.find((a) => a.id === ask.id)!;
       if (current.status === "pending") {
         current.status = "expired";
+        current.settledAt = Date.now();
         notify(state, current, "resolved");
         record(await tx.doc(Activity), "ask.expired", "No answer in time", {
           conversationId: current.conversationId,
@@ -237,7 +238,9 @@ export class AskService {
       if (!valid)
         throw new InputError("That is not an answer to this question.");
       if (ask.status !== "pending") return ask.status;
-      ask.status = answerStatus(ask.status, ask.expiresAt, Date.now());
+      const now = Date.now();
+      ask.status = answerStatus(ask.status, ask.expiresAt, now);
+      ask.settledAt = now;
       if (ask.status !== "answered") return ask.status;
       ask.answer = valid;
       ask.answeredVia = via;

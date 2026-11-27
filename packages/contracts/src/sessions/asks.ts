@@ -25,6 +25,11 @@ export type SessionAsk = {
   expiresAt: number;
   /** "expired" also covers a turn that stopped before an answer. */
   status: AskStatus;
+  /**
+   * When it was answered or ran out of time; null while it waits, and for a
+   * question whose turn stopped before an answer.
+   */
+  settledAt: number | null;
   answer: AskAnswer | null;
   answeredVia: Channel | null;
   answeredApp?: "desktop";
