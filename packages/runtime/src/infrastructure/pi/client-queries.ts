@@ -231,6 +231,21 @@ export class PiClientQueries implements ClientQueries {
                 turns.find((t) => t.id === a.turnId),
               ),
           ),
+          pending:
+            tools.approvals.filter(
+              (a) =>
+                a.conversationId === c.id &&
+                a.status === "pending" &&
+                a.expiresAt > Date.now(),
+            ).length +
+            asks.filter(
+              (a) =>
+                a.conversationId === c.id &&
+                waitingFor(
+                  a,
+                  turns.find((t) => t.id === a.turnId),
+                ),
+            ).length,
         };
       })
       // The chat first, so a client always has it on the first page.

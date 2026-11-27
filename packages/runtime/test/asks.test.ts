@@ -74,6 +74,7 @@ test("a bot's question waits for the owner, survives a restart, and the choice g
     });
     const listed = await app.queries.sessions(owner);
     expect(listed.items[0]!.asking).toBe(true);
+    expect(listed.items[0]!.pending).toBe(1);
 
     expect((await answer(http.url, asked.id, { choice: 3 })).status).toBe(400);
     expect((await answer(http.url, asked.id, { text: " " })).status).toBe(400);
@@ -93,6 +94,7 @@ test("a bot's question waits for the owner, survives a restart, and the choice g
     expect(
       (await app.chats.state()).turns.find((t) => t.id === turn.id)!.answer,
     ).toBe("The owner chose: Wed 14:00");
+    expect((await app.queries.sessions(owner)).items[0]!.pending).toBe(0);
     const after = await app.queries.session(owner, turn.sessionId);
     expect(after.asks![0]).toMatchObject({
       status: "answered",
