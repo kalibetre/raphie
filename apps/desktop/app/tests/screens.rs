@@ -6634,7 +6634,7 @@ fn background_work_coming_back_reads_as_a_card_not_an_owner_message() {
     );
     assert!(text.contains("Background work"), "{text}");
     assert!(text.contains("Venue research"), "{text}");
-    assert!(text.contains("w-2"), "{text}");
+    assert!(!text.contains("w-2"), "no item id: {text}");
     assert!(text.contains("Cancelled"), "{text}");
     let first_line = answer.lines().next().unwrap_or_default().to_owned();
     assert!(

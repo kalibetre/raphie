@@ -14,7 +14,7 @@ use crate::format;
 use crate::icons;
 use crate::sections::{BotSection, Page};
 use crate::state::Ui;
-use crate::theme::{Theme, font, mono};
+use crate::theme::{Theme, font};
 use crate::widgets::{Kind as ButtonKind, Size, button};
 
 /// What produced the card.
@@ -28,7 +28,6 @@ pub enum Kind {
 #[derive(Clone, Copy, PartialEq)]
 pub enum Status {
     Working,
-    Done,
     Failed,
     Cancelled,
     NeedsYou,
@@ -73,7 +72,7 @@ pub fn card(s: &Ui, card: Card<'_>, extra: Vec<El>, look: &Look) -> El {
         .center_y()
         .child(kind_label(
             card.kind,
-            s.narrow() || s.main_width() < NARROW_CARD,
+            s.narrow() || chat_width(s) < NARROW_CARD,
             t,
         ))
         .child(
@@ -85,16 +84,6 @@ pub fn card(s: &Ui, card: Card<'_>, extra: Vec<El>, look: &Look) -> El {
                 .grow(1.0)
                 .help(card.hint.clone().unwrap_or_else(|| card.title.to_string())),
         );
-    if let Some(id) = card.item_id {
-        header = header.child(
-            row().px(6.0).py(1.0).radius(5.0).fill(t.muted).child(
-                text(id.to_string())
-                    .font(mono(11.0))
-                    .color(t.muted_foreground)
-                    .single_line(),
-            ),
-        );
-    }
     match (card.status, card.at) {
         (Some(status), _) => header = header.child(status_badge(status, t)),
         (None, Some(at)) => header = header.child(clock(at, t)),
@@ -113,7 +102,7 @@ pub fn card(s: &Ui, card: Card<'_>, extra: Vec<El>, look: &Look) -> El {
         has_body = true;
         let fold_id = card.key.clone();
         let open = s.unfolded_work.contains(&fold_id);
-        let tall = card.fold && is_tall(source, s.main_width());
+        let tall = card.fold && is_tall(source, chat_width(s));
         let mut content = col()
             .key(key("text"))
             .w_full()
@@ -247,7 +236,6 @@ fn kind_label(kind: Kind, narrow: bool, t: &Theme) -> El {
 fn status_badge(status: Status, t: &Theme) -> El {
     let (words, ink, fill) = match status {
         Status::Working => ("Working", t.accent, t.accent_soft),
-        Status::Done => ("Done", t.accent, t.accent_soft),
         Status::Failed => ("Failed", t.error, t.muted),
         Status::Cancelled => ("Cancelled", t.muted_foreground, t.muted),
         Status::NeedsYou => ("Needs you", t.attention, t.attention_soft),
@@ -268,6 +256,13 @@ fn clock(at: i64, t: &Theme) -> El {
         .font(font(12.0, 400.0))
         .color(t.muted_foreground)
         .single_line()
+}
+
+/// The chat column's width, or its widest before the window is first laid
+/// out (the width is 0 until then).
+fn chat_width(s: &Ui) -> f32 {
+    let width = s.main_width();
+    if width > 0.0 { width } else { 780.0 }
 }
 
 /// Whether a reply runs past about four lines of the card. The web measures

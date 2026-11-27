@@ -209,11 +209,12 @@ fn work_turn(
     } else if turn.scheduled.is_some() {
         None
     } else {
-        Some(match turn.work.as_ref().and_then(|w| w.outcome) {
-            Some(HandoffOutcome::Cancelled) => Status::Cancelled,
-            Some(HandoffOutcome::Failed) => Status::Failed,
-            _ => Status::Done,
-        })
+        // A run that simply finished needs no badge.
+        match turn.work.as_ref().and_then(|w| w.outcome) {
+            Some(HandoffOutcome::Cancelled) => Some(Status::Cancelled),
+            Some(HandoffOutcome::Failed) => Some(Status::Failed),
+            _ => None,
+        }
     };
     let mut extra = Vec::new();
     // Tasks the reply handed off, and other bots' sessions it read.
