@@ -266,6 +266,89 @@ test("a job's item changes only with its job, and waits for its own run", async 
   }
 }, 30_000);
 
+test("a card a job's run shows moves to the chat with its post", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-jobs-cards-"));
+  const seen: string[] = [];
+  const gateway = await Gateway.open({
+    directory,
+    ...chatModel({
+      toolFor: (text) =>
+        text.includes("Give me a brief")
+          ? {
+              name: "show_card",
+              args: {
+                kind: "list",
+                title: "Needs attention",
+                groups: [{ rows: [{ title: "PR #133 updated" }] }],
+              },
+            }
+          : undefined,
+      userMessages: (messages) =>
+        seen.push(
+          messages
+            .map((m) =>
+              typeof m.content === "string"
+                ? m.content
+                : m.content
+                    .flatMap((c) => (c.type === "text" ? [c.text] : []))
+                    .join(""),
+            )
+            .join("\n---\n"),
+        ),
+    }),
+  });
+  const actor = gateway.actors.establish("web");
+  const jobs = BotJobs.open({
+    root: gateway.root,
+    harness: gateway.harness,
+    install: (e) => gateway.install(e),
+    busy: async () =>
+      (await gateway.chats.state()).turns.some((t) => t.status === "pending"),
+    submit: (input) => gateway.sessions.submitScheduled(actor, input),
+    follow: (tx, itemId, run) => gateway.workRuns.follow(tx, itemId, run),
+  });
+  try {
+    await jobs.add({
+      name: "Brief",
+      prompt: "Give me a brief",
+      everyMinutes: 60,
+      firstRunAt: Date.now() + 50,
+    });
+    const post = async () =>
+      (await gateway.chats.state()).turns.find(
+        (t) => t.work?.kind === "result",
+      );
+    await until(async () => !!(await post()));
+    const { conversations } = await gateway.chats.state();
+    const chat = conversations.find((c) => c.chat)!;
+    // The owner sees the card under the post in the chat, and nowhere else.
+    const [card] = (await gateway.cards.state()).cards;
+    expect((await gateway.cards.state()).cards).toHaveLength(1);
+    expect(card).toMatchObject({
+      conversationId: chat.id,
+      turnId: (await post())!.id,
+      card: { title: "Needs attention" },
+    });
+    const views = await gateway.queries.session(actor, chat.sessionId);
+    expect(views.cards?.map((c) => c.turnId)).toEqual([(await post())!.id]);
+
+    // The chat's model reads the card's rows with the post.
+    await gateway.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "after",
+      text: "Thanks",
+    });
+    await until(async () =>
+      (await gateway.chats.state()).turns.every((t) => t.status !== "pending"),
+    );
+    expect(seen.at(-1)).toContain(card!.text);
+  } finally {
+    await gateway.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 30_000);
+
 test("posting one run's result twice posts it once", async () => {
   const directory = await mkdtemp(join(tmpdir(), "raphie-jobs-post-"));
   const gateway = await Gateway.open({ directory, ...chatModel() });
