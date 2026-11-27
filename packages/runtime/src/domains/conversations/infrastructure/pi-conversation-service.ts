@@ -1046,8 +1046,8 @@ export class ChatService implements ConversationCommands {
       if (existing) return existing.id;
       const id = crypto.randomUUID();
       const lead = input.scheduled
-        ? `Your scheduled job "${input.scheduled.name}" ran in the background, and at ${new Date().toISOString()} you posted this message to the owner:`
-        : `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and at ${new Date().toISOString()} you posted this message to the owner:`;
+        ? `Your scheduled job "${input.scheduled.name}" ran in the background, and you posted this message to the owner:`
+        : `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and you posted this message to the owner:`;
       const state = await tx.doc(Chats);
       const chat = state.conversations.find((c) => c.id === chatId)!;
       // The owner sees the post at once. The model reads it once the chat
@@ -1065,7 +1065,8 @@ export class ChatService implements ConversationCommands {
         answer: input.text,
         work: input.work,
         ...(input.scheduled ? { scheduled: input.scheduled } : {}),
-        held: `[${lead}]\n\n${input.text}`,
+        // When it was posted, since a later message may carry it.
+        held: `[${lead}]\n[Posted ${new Date().toISOString()}]\n\n${input.text}`,
       });
       await writeHeldPosts(
         tx,
