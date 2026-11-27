@@ -986,6 +986,7 @@ test("background work that ends while the chat's reply waits on a tool reports a
         .then((s) => s.turns.find((t) => t.work?.kind === "result"));
     await until(async () => !!(await result()));
     assert.equal((await result())!.status, "pending");
+    assert.equal((await result())!.queueMode, "followUp");
     // The chat's reply then finishes as usual, and the result after it.
     const own = (await pending((c) => !!c.chat))!;
     await app.toolApprovals.decide(own.id, "approved", "owner", "web");
@@ -1001,10 +1002,12 @@ test("background work that ends while the chat's reply waits on a tool reports a
   }
 }, 30_000);
 
-test("a job's post during a reply that waits on a tool is read after the tool, and the reply finishes", async () => {
-  const { app, seen, done } = await bot({
-    check: { name: "workspace_exec", args: { command: "echo calendar" } },
-  });
+test("a job's post during a reply that waits on a tool reaches the model after the tool's result", async () => {
+  const requests: { role: string; text: string }[][] = [];
+  const { app, done } = await bot(
+    { check: { name: "workspace_exec", args: { command: "echo calendar" } } },
+    { requests: (messages) => requests.push(messages) },
+  );
   try {
     const reply = await app.chats.send({
       source: "web",
@@ -1036,17 +1039,23 @@ test("a job's post during a reply that waits on a tool is read after the tool, a
           ?.status === "done",
     );
     const { turns } = await app.chats.state();
-    const finished = turns.find((t) => t.id === reply.id)!;
-    // The reply is whole: its tool's result, not the post.
-    assert.match(finished.answer!, /calendar/);
+    assert.equal(turns.find((t) => t.id === reply.id)!.status, "done");
     const post = turns.find((t) => t.scheduled?.name === "Morning brief")!;
     assert.equal(post.status, "done");
     assert.equal(post.answer, "You have two meetings today.");
-    // The model read the post at the next step, after the tool's result.
-    assert.ok(
-      seen.some((text) => text.includes('Your scheduled job "Morning brief"')),
-      JSON.stringify(seen),
+    // The post caused no request of its own. The reply's next request has
+    // the whole step first, the tool's call and result, then the post: the
+    // order a steer arrives in.
+    assert.equal(requests.length, 2);
+    const last = requests.at(-1)!.filter((m) => m.role !== "system");
+    assert.deepEqual(
+      last.slice(-4).map((m) => m.role),
+      ["user", "assistant", "toolResult", "user"],
     );
+    assert.match(last.at(-4)!.text, /check the calendar$/);
+    assert.equal(last.at(-3)!.text, "call workspace_exec");
+    assert.match(last.at(-2)!.text, /calendar/);
+    assert.match(last.at(-1)!.text, /^\[Your scheduled job "Morning brief"/);
   } finally {
     await done();
   }
