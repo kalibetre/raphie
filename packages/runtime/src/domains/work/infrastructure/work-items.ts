@@ -28,6 +28,7 @@ import {
   type WorkChange,
   workId,
   workLine,
+  workListText,
 } from "../domain/work-item.ts";
 import type { WorkRuns } from "./work-runs.ts";
 import { WorkItems, type WorkState } from "./work-store.ts";
@@ -449,7 +450,7 @@ export function createWorkTools(runs: WorkRuns) {
       defineTool({
         name: "work_list",
         description:
-          "List work items, one line each, newest activity first: open ones, or closed ones with closed: true. query keeps those whose id, title, notes or result contain it.",
+          "List work items, one line each: open ones (your own items first, then running jobs, then other scheduled jobs, each newest activity first), or closed ones with closed: true, newest first. query keeps those whose id, title, notes or result contain it.",
         parameters: obj({
           closed: opt(bool()),
           query: opt(str({ maxLength: 200 })),
@@ -458,13 +459,10 @@ export function createWorkTools(runs: WorkRuns) {
         execute: (args, api, ctx) =>
           mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
-            const items = listWork((await tx.doc(WorkItems)).items, {
-              open: !args.closed,
+            return workListText((await tx.doc(WorkItems)).items, {
+              closed: !!args.closed,
               query: args.query,
-            }).slice(0, 50);
-            return items.length
-              ? items.map(workLine).join("\n")
-              : `No ${args.closed ? "closed" : "open"} work items${args.query ? ` matching "${args.query}"` : ""}.`;
+            });
           }),
       }),
     ],
