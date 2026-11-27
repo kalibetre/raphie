@@ -190,6 +190,35 @@
       opacity: 1;
     }
   }
+  /* Under a finished reply: Copy, Reply and its time, while it is pointed
+     at or focused; always there without hover, as on a phone. */
+  .reply-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    width: fit-content;
+    margin: 6px 0 0 -4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .message-assistant:hover > .reply-actions,
+  .message-assistant:focus-within > .reply-actions {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .reply-actions {
+      opacity: 1;
+    }
+  }
+  .reply-action {
+    color: var(--muted-foreground);
+  }
+  .reply-time {
+    margin-left: 6px;
+    color: var(--faint);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
   .message-meta {
     display: flex;
     gap: 10px;
