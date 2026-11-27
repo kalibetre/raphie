@@ -76,10 +76,10 @@ function approvalView(a: StoredApproval, sessionId: string): SessionApproval {
   };
 }
 
-/** A question as clients see it, in session `sessionId`. */
 /** How long the chat keeps a receipt of a background question. */
 const RECEIPTS_FOR = 24 * 60 * 60 * 1000;
 
+/** A question as clients see it, in session `sessionId`. */
 function askView(
   a: Ask,
   sessionId: string,
@@ -386,7 +386,8 @@ export class PiClientQueries implements ClientQueries {
             a.expiresAt > Date.now(),
         )
         .map((a) => approvalView(a, sessionId));
-      // A finished item asks nothing more, but its receipts stay a day.
+      // A finished item asks nothing more, but its receipts stay a day. A
+      // question whose run was stopped was never settled: no receipt.
       const since = Date.now() - RECEIPTS_FOR;
       const shown = asks
         .filter((a) => a.conversationId === session.id)
@@ -394,7 +395,7 @@ export class PiClientQueries implements ClientQueries {
         .filter((a) =>
           a.status === "pending"
             ? isOpen(item.status)
-            : (a.settledAt ?? a.createdAt) > since,
+            : a.settledAt !== null && a.settledAt > since,
         );
       if (toolApprovals.length || shown.length)
         requests.push({
