@@ -1050,6 +1050,17 @@ export class ChatService implements ConversationCommands {
         : `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and you posted this message to the owner:`;
       const state = await tx.doc(Chats);
       const chat = state.conversations.find((c) => c.id === chatId)!;
+      // The run's cards move with its message: the owner reads the chat, not
+      // the item's session, and the model reads them after the post's text.
+      const cards = input.fromTurnId
+        ? (await tx.doc(Cards)).cards.filter(
+            (c) => c.turnId === input.fromTurnId,
+          )
+        : [];
+      for (const card of cards) {
+        card.conversationId = chat.id;
+        card.turnId = id;
+      }
       // The owner sees the post at once. The model reads it once the chat
       // isn't replying, so it never lands in the middle of a reply; held
       // posts go with it, oldest first.
@@ -1066,7 +1077,11 @@ export class ChatService implements ConversationCommands {
         work: input.work,
         ...(input.scheduled ? { scheduled: input.scheduled } : {}),
         // When it was posted, since a later message may carry it.
-        held: `[${lead}]\n[Posted ${new Date().toISOString()}]\n\n${input.text}`,
+        held: [
+          `[${lead}]\n[Posted ${new Date().toISOString()}]`,
+          input.text,
+          ...cards.map((c) => c.text),
+        ].join("\n\n"),
       });
       await writeHeldPosts(
         tx,
