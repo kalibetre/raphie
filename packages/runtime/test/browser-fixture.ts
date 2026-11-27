@@ -450,31 +450,35 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
   // "my schedule", "my week", "AF board", "my review", "fizzy board" and
   // "card 107" show the kinds of card.
   const card = fixtureCard(input);
-  // "dentist", "clinic" and "inbox" show the three kinds of question.
-  const ask: JsonObject | null = /dentist/i.test(input)
-    ? {
-        question: "Dr. Amare has three openings next week. Which one?",
-        options: [
-          { label: "Tue 9:30" },
-          { label: "Wed 14:00" },
-          { label: "Fri 11:15" },
-        ],
-      }
-    : /clinic/i.test(input)
+  // "dentist", "clinic" and "inbox" show the three kinds of question. A
+  // background run's report quotes its request, so it never asks again.
+  const report = /Your background work on w-\d+/.test(input);
+  const ask: JsonObject | null = report
+    ? null
+    : /dentist/i.test(input)
       ? {
-          question: "Which clinic should I book?",
+          question: "Dr. Amare has three openings next week. Which one?",
           options: [
-            { label: "Bole", detail: "Tue 9:30 · 12 minutes away" },
-            { label: "Kazanchis", detail: "Fri 11:15 · 25 minutes away" },
+            { label: "Tue 9:30" },
+            { label: "Wed 14:00" },
+            { label: "Fri 11:15" },
           ],
         }
-      : /inbox/i.test(input)
+      : /clinic/i.test(input)
         ? {
-            question: "214 newsletters are over a year old. Delete them?",
-            options: [{ label: "Delete 214" }, { label: "Keep them" }],
-            danger: true,
+            question: "Which clinic should I book?",
+            options: [
+              { label: "Bole", detail: "Tue 9:30 · 12 minutes away" },
+              { label: "Kazanchis", detail: "Fri 11:15 · 25 minutes away" },
+            ],
           }
-        : null;
+        : /inbox/i.test(input)
+          ? {
+              question: "214 newsletters are over a year old. Delete them?",
+              options: [{ label: "Delete 214" }, { label: "Keep them" }],
+              danger: true,
+            }
+          : null;
   const useTool =
     (/tool|approval/i.test(input) ||
       remember ||
@@ -912,6 +916,9 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
       item("w-6", "Tidy the reports folder", {
         notes: "Remove reports older than a month.",
       }),
+      item("w-11", "Clean up the inbox", {
+        notes: "Clear out old newsletters.",
+      }),
     );
     // Jobs that ran more recently than the items above: the Work page and
     // the bot's list still put them last, the running one first among them.
@@ -933,12 +940,18 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
         }),
       ),
     );
-    work.next = 7 + jobs.length;
+    work.next = 12;
     // A real run, which stops for an approval: the chat shows it.
     await app.workRuns.start(
       tx,
       "w-6",
       "Remove the reports older than a month from the reports folder.",
+    );
+    // And one that stops for a question: answered, it leaves a receipt.
+    await app.workRuns.start(
+      tx,
+      "w-11",
+      "Clean up the inbox: old newsletters can go.",
     );
   }, durableContext);
 }

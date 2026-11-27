@@ -9,7 +9,7 @@ export const needsYou = (session: SessionSummary) =>
 
 /**
  * What waits on the owner from one teammate, for the sidebar: how many
- * questions and approvals, whether one is a question, what the newest is
+ * questions and how many approvals, what the newest is
  * about, and the conversation to open. That is the chat when its dock holds
  * them all (its own and its work items'); otherwise the newest conversation
  * it doesn't hold, such as a group's.
@@ -21,8 +21,15 @@ export function waitingOnOwner(sessions: SessionSummary[]) {
   const chat = sessions.find((s) => s.chat);
   const elsewhere = waiting.find((s) => !s.chat && !s.work);
   return {
-    count: waiting.reduce((sum, s) => sum + Math.max(s.pending, 1), 0),
-    asking: waiting.some((s) => s.asking),
+    // A conversation that waits counts as at least one of its kind.
+    questions: waiting.reduce(
+      (sum, s) => sum + (s.asking ? Math.max(s.questions, 1) : 0),
+      0,
+    ),
+    approvals: waiting.reduce(
+      (sum, s) => sum + (s.waiting ? Math.max(s.pending - s.questions, 1) : 0),
+      0,
+    ),
     title: newest.title,
     session: elsewhere ?? chat ?? newest,
     lastAt: newest.lastAt,
@@ -30,9 +37,19 @@ export function waitingOnOwner(sessions: SessionSummary[]) {
 }
 
 /** The sidebar's line for what one teammate waits on the owner for. */
-export function waitingLine(name: string, count: number, asking: boolean) {
-  if (count > 1) return `${name} has ${count} questions`;
-  return `${name} ${asking ? "has a question" : "needs your OK"}`;
+export function waitingLine(
+  name: string,
+  { questions, approvals }: { questions: number; approvals: number },
+) {
+  if (!approvals)
+    return questions > 1
+      ? `${name} has ${questions} questions`
+      : `${name} has a question`;
+  if (!questions)
+    return approvals > 1
+      ? `${name} needs ${approvals} OKs`
+      : `${name} needs your OK`;
+  return `${name} needs you for ${questions + approvals} things`;
 }
 
 /** What a teammate is doing, from its open conversations. */

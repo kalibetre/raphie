@@ -83,6 +83,7 @@ pub const SCENES: &[Scene] = &[
     ("approval", approval),
     ("chat-background", chat_background),
     ("chat-dock", chat_dock),
+    ("chat-receipt", chat_receipt),
     ("chat-dock-folded", chat_dock_folded),
     ("ask", ask),
     ("ask-rows", ask_rows),
@@ -3068,6 +3069,25 @@ pub fn chat_background(ui: &mut Ui) {
     open(ui, "s-2", seen);
 }
 
+/// The chat after the owner answered its background work's question, before
+/// they last wrote: the receipt sits in the chat where it was answered.
+pub fn chat_receipt(ui: &mut Ui) {
+    chat_background(ui);
+    let now = now_ms();
+    if let Some(observation) = ui
+        .model
+        .conversation
+        .as_mut()
+        .and_then(|c| c.observation.as_mut())
+    {
+        observation.background[0].tool_approvals.clear();
+        let ask = &mut observation.background[0].asks[0];
+        ask.status = raphie_core::contracts::AskStatus::Answered;
+        ask.answer = Some(raphie_core::contracts::AskAnswer::Choice { choice: 0 });
+        ask.settled_at = Some(now - 200_000);
+    }
+}
+
 /// The chat with three things waiting on the owner: the bot's own question
 /// on top of the dock, and its background work's approval and question
 /// peeking behind it. The roster counts them on one line.
@@ -3098,8 +3118,11 @@ pub fn chat_dock(ui: &mut Ui) {
     }
     for session in &mut ui.model.sessions {
         if session.id == "s-2" {
+            // Two questions and an approval.
             session.asking = true;
+            session.waiting = true;
             session.pending = Some(3);
+            session.questions = Some(2);
         }
     }
 }

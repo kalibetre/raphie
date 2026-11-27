@@ -12,11 +12,10 @@ const time = (at: number) =>
  * it waits (the dock on the composer asks it), then a receipt of the answer.
  */
 export function AskMarker({ ask, title }: { ask: SessionAsk; title: string }) {
-  const at = (
-    <time dateTime={new Date(ask.createdAt).toISOString()}>
-      {time(ask.createdAt)}
-    </time>
-  );
+  // A marker says when it was asked; a receipt, when it was settled.
+  const when =
+    ask.status === "pending" ? ask.createdAt : (ask.settledAt ?? ask.createdAt);
+  const at = <time dateTime={new Date(when).toISOString()}>{time(when)}</time>;
   if (ask.status === "pending")
     return (
       <p className="ask-marker" title={ask.question}>

@@ -120,6 +120,7 @@ test("the sidebar counts what a teammate waits on and opens its chat", () => {
       lastAt: 1,
       waiting: false,
       pending: 0,
+      questions: 0,
       ...patch,
     }) as never;
   const waiting = waitingOnOwner([
@@ -138,17 +139,28 @@ test("the sidebar counts what a teammate waits on and opens its chat", () => {
       work: "w-7",
       asking: true,
       pending: 1,
+      questions: 1,
       lastAt: 3,
     }),
   ])!;
-  expect(waiting.count).toBe(3);
+  expect([waiting.questions, waiting.approvals]).toEqual([1, 2]);
   // Everything waits in the chat or a work item's session: the chat's dock.
   expect(waiting.session.sessionId).toBe("chat");
   expect(waiting.title).toBe("Untitled");
-  expect(waitingLine("Raphie", waiting.count, waiting.asking)).toBe(
-    "Raphie has 3 questions",
+  // Each kind is named; a mix is counted as things.
+  expect(waitingLine("Raphie", waiting)).toBe("Raphie needs you for 3 things");
+  expect(waitingLine("Raphie", { questions: 1, approvals: 0 })).toBe(
+    "Raphie has a question",
   );
-  expect(waitingLine("Raphie", 1, false)).toBe("Raphie needs your OK");
+  expect(waitingLine("Raphie", { questions: 2, approvals: 0 })).toBe(
+    "Raphie has 2 questions",
+  );
+  expect(waitingLine("Raphie", { questions: 0, approvals: 1 })).toBe(
+    "Raphie needs your OK",
+  );
+  expect(waitingLine("Raphie", { questions: 0, approvals: 2 })).toBe(
+    "Raphie needs 2 OKs",
+  );
   // A group's approval isn't in the chat's dock: the sidebar opens the group.
   const group = waitingOnOwner([
     session({ id: "chat", sessionId: "chat", chat: true }),

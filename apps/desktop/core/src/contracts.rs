@@ -636,6 +636,9 @@ pub struct SessionSummary {
     /// a runtime too old to count them.
     #[serde(default)]
     pub pending: Option<u32>,
+    /// How many of them are questions; the rest are approvals.
+    #[serde(default)]
+    pub questions: Option<u32>,
     /// The work item whose own session this is: the chat's dock asks for it.
     #[serde(default)]
     pub work: Option<String>,
@@ -1026,6 +1029,10 @@ pub struct SessionAsk {
     pub created_at: i64,
     pub expires_at: i64,
     pub status: AskStatus,
+    /// When it was answered or ran out of time; a receipt of it is placed
+    /// in the chat there.
+    #[serde(default)]
+    pub settled_at: Option<i64>,
     #[serde(default)]
     pub answer: Option<AskAnswer>,
 }

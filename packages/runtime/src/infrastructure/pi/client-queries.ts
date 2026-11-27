@@ -76,6 +76,9 @@ function approvalView(a: StoredApproval, sessionId: string): SessionApproval {
   };
 }
 
+/** How long the chat keeps a receipt of a background question. */
+const RECEIPTS_FOR = 24 * 60 * 60 * 1000;
+
 /** A question as clients see it, in session `sessionId`. */
 function askView(
   a: Ask,
@@ -100,6 +103,7 @@ function askView(
       )
         ? ("expired" as const)
         : a.status,
+    settledAt: a.settledAt ?? null,
     answer: a.answer ? { ...a.answer } : null,
     answeredVia: a.answeredVia,
     ...(a.answeredApp ? { answeredApp: a.answeredApp } : {}),
@@ -235,6 +239,7 @@ export class PiClientQueries implements ClientQueries {
           waiting: approving > 0,
           asking: asking > 0,
           pending: approving + asking,
+          questions: asking,
           ...(c.work ? { work: c.work } : {}),
         };
       })
@@ -351,8 +356,9 @@ export class PiClientQueries implements ClientQueries {
   }
 
   /**
-   * What the bot's open work items wait on the owner for in their own
-   * sessions: pending approvals and questions, newest item first. Reads each
+   * What the bot's work items wait on the owner for in their own sessions:
+   * pending approvals and questions, newest item first, with the questions
+   * settled in the last day so the chat keeps a receipt of each. Reads each
    * store once, whatever the number of items.
    */
   private async background(
@@ -360,7 +366,7 @@ export class PiClientQueries implements ClientQueries {
   ): Promise<BackgroundRequest[]> {
     const items = (
       (await this.app.harness.snapshot(WorkItems, context))?.items ?? []
-    ).filter((item) => isOpen(item.status) && item.sessionId);
+    ).filter((item) => item.sessionId);
     if (!items.length) return [];
     const approvals = (await this.app.toolApprovals.state()).approvals;
     const asks = (await this.app.asks.state()).asks;
@@ -374,22 +380,30 @@ export class PiClientQueries implements ClientQueries {
       const toolApprovals = approvals
         .filter(
           (a) =>
+            isOpen(item.status) &&
             a.conversationId === session.id &&
             a.status === "pending" &&
             a.expiresAt > Date.now(),
         )
         .map((a) => approvalView(a, sessionId));
-      const pending = asks
+      // A finished item asks nothing more, but its receipts stay a day. A
+      // question whose run was stopped was never settled: no receipt.
+      const since = Date.now() - RECEIPTS_FOR;
+      const shown = asks
         .filter((a) => a.conversationId === session.id)
         .map((a) => askView(a, sessionId, chats.turns))
-        .filter((a) => a.status === "pending");
-      if (toolApprovals.length || pending.length)
+        .filter((a) =>
+          a.status === "pending"
+            ? isOpen(item.status)
+            : a.settledAt !== null && a.settledAt > since,
+        );
+      if (toolApprovals.length || shown.length)
         requests.push({
           itemId: item.id,
           title: item.title,
           sessionId,
           toolApprovals,
-          asks: pending,
+          asks: shown,
         });
     }
     return requests;
@@ -461,6 +475,7 @@ export class PiClientQueries implements ClientQueries {
           toolApprovals.filter(
             (a) => a.status === "pending" && a.expiresAt > Date.now(),
           ).length + asks.filter((a) => a.status === "pending").length,
+        questions: asks.filter((a) => a.status === "pending").length,
         replyPreview:
           chats.turns
             .findLast(

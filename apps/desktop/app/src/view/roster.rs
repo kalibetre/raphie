@@ -70,8 +70,8 @@ pub fn needs_you(session: &SessionSummary) -> bool {
 /// them all (its own and its work items'); otherwise the newest conversation
 /// it doesn't hold, such as a group's.
 pub struct WaitingOnOwner<'a> {
-    pub count: u32,
-    pub asking: bool,
+    pub questions: u32,
+    pub approvals: u32,
     pub title: &'a str,
     pub session: &'a SessionSummary,
     pub last_at: i64,
@@ -90,11 +90,20 @@ pub fn waiting_on_owner<'a>(sessions: &[&'a SessionSummary]) -> Option<WaitingOn
         .copied()
         .max_by_key(|session| session.last_at)?;
     Some(WaitingOnOwner {
-        count: waiting
+        // A conversation that waits counts as at least one of its kind.
+        questions: waiting
             .iter()
-            .map(|session| session.pending.unwrap_or(1).max(1))
+            .filter(|session| session.asking)
+            .map(|session| session.questions.unwrap_or(1).max(1))
             .sum(),
-        asking: waiting.iter().any(|session| session.asking),
+        approvals: waiting
+            .iter()
+            .filter(|session| session.waiting)
+            .map(|session| {
+                let total = session.pending.unwrap_or(1);
+                total.saturating_sub(session.questions.unwrap_or(0)).max(1)
+            })
+            .sum(),
         title: &latest.title,
         session: waiting
             .iter()
@@ -108,13 +117,14 @@ pub fn waiting_on_owner<'a>(sessions: &[&'a SessionSummary]) -> Option<WaitingOn
 }
 
 /// The roster's line for what one teammate waits on the owner for.
-pub fn waiting_line(name: &str, count: u32, asking: bool) -> String {
-    if count > 1 {
-        format!("{name} has {count} questions")
-    } else if asking {
-        format!("{name} has a question")
-    } else {
-        format!("{name} needs your OK")
+/// Each kind is named; a mix is counted as things.
+pub fn waiting_line(name: &str, questions: u32, approvals: u32) -> String {
+    match (questions, approvals) {
+        (0 | 1, 0) => format!("{name} has a question"),
+        (n, 0) => format!("{name} has {n} questions"),
+        (0, 1) => format!("{name} needs your OK"),
+        (0, n) => format!("{name} needs {n} OKs"),
+        (q, a) => format!("{name} needs you for {} things", q + a),
     }
 }
 
@@ -214,7 +224,7 @@ fn requests(s: &Ui, look: &Look) -> Option<El> {
         .gap(6.0);
     for (bot, waiting) in waiting.into_iter().take(3) {
         let session = waiting.session;
-        let headline = waiting_line(&bot.name, waiting.count, waiting.asking);
+        let headline = waiting_line(&bot.name, waiting.questions, waiting.approvals);
         let card = row()
             .key(format!("rd-request-{}", bot.id))
             .role("button")
@@ -456,7 +466,7 @@ mod tests {
         let asking = session(
             "work",
             30,
-            serde_json::json!({ "asking": true, "pending": 2, "work": "w-6" }),
+            serde_json::json!({ "asking": true, "pending": 2, "questions": 2, "work": "w-6" }),
         );
         // A runtime that cannot count, or counts none, still counts one.
         let approval = session(
@@ -471,8 +481,7 @@ mod tests {
         );
         let waiting =
             waiting_on_owner(&[&chat, &asking, &approval, &empty]).expect("something waits");
-        assert_eq!(waiting.count, 4);
-        assert!(waiting.asking);
+        assert_eq!((waiting.questions, waiting.approvals), (2, 2));
         // All of it is the chat's or its work items': the chat's dock.
         assert_eq!(waiting.session.id, "chat");
         assert_eq!(waiting.title, "work");
@@ -486,8 +495,13 @@ mod tests {
         assert_eq!(waiting.session.id, "work");
         assert!(waiting_on_owner(&[&chat]).is_none());
 
-        assert_eq!(waiting_line("Raphie", 3, true), "Raphie has 3 questions");
-        assert_eq!(waiting_line("Raphie", 1, true), "Raphie has a question");
-        assert_eq!(waiting_line("Raphie", 1, false), "Raphie needs your OK");
+        assert_eq!(waiting_line("Raphie", 3, 0), "Raphie has 3 questions");
+        assert_eq!(waiting_line("Raphie", 1, 0), "Raphie has a question");
+        assert_eq!(waiting_line("Raphie", 0, 1), "Raphie needs your OK");
+        assert_eq!(waiting_line("Raphie", 0, 2), "Raphie needs 2 OKs");
+        assert_eq!(
+            waiting_line("Raphie", 1, 2),
+            "Raphie needs you for 3 things"
+        );
     }
 }

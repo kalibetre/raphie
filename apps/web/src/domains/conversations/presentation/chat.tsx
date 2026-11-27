@@ -21,6 +21,7 @@ import remarkGfm from "remark-gfm";
 import type { Snapshot } from "../../../infrastructure/http/api-client";
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { ToolSteps } from "../../approvals/presentation/tool-steps";
+import { placeReceipts, type Receipt } from "../application/receipts";
 import {
   formatCost,
   runUsage,
@@ -240,6 +241,20 @@ export function Chat({
     </header>
   );
 
+  // Receipts of the background work's settled questions, each placed in the
+  // conversation where it was settled.
+  const receipts = placeReceipts(
+    state.background ?? [],
+    messages.map((m) => ({
+      id: m.id,
+      at: turns.find((t) => t.id === m.id.replace(/:reply$/, ""))?.createdAt,
+    })),
+  );
+  const drawReceipts = (shown: Receipt[] = []) =>
+    shown.map(({ ask, title }) => (
+      <AskMarker key={`receipt-${ask.id}`} ask={ask} title={title} />
+    ));
+
   return (
     <Conversation onRead={onRead}>
       {controlError && (
@@ -247,226 +262,10 @@ export function Chat({
           {controlError}
         </p>
       )}
-      {messages.map((message) => {
-        const turnId = message.id.replace(/:reply$/, "");
-        const turn = turns.find((t) => t.id === turnId);
-        // Above the turn whose run summarized the messages before it.
-        const divider = turn?.compaction && (
-          <CompactionDivider compaction={turn.compaction} />
-        );
-        const text = message.parts
-          .flatMap((p) => (p.type === "text" ? [p.content] : []))
-          .join("");
-        if (message.role === "user" && turn?.handoff)
-          return (
-            <div key={message.id} className="turn-user">
-              {divider}
-              {turn.handoff.kind === "task" ? (
-                <HandoffBrief
-                  handoff={turn.handoff}
-                  text={turn.text}
-                  at={turn.createdAt}
-                  followUp={turns.some(
-                    (other) =>
-                      other.handoff?.kind === "task" &&
-                      other.createdAt < turn.createdAt,
-                  )}
-                />
-              ) : (
-                <HandoffResult
-                  handoff={turn.handoff}
-                  text={turn.text}
-                  at={turn.createdAt}
-                  record={handoffItems.find(
-                    (item) => item.id === turn.handoff?.id,
-                  )}
-                />
-              )}
-              {turnWork(turn, steps.get(turn.id) ?? [])}
-            </div>
-          );
-        if (message.role === "user" && turn?.scheduled && runs.has(turn.id)) {
-          const run = runs.get(turn.id);
-          return run === "hidden" || !run ? null : (
-            <div key={message.id} className="turn-user">
-              {divider}
-              <ScheduledFailure
-                turn={turn}
-                attempts={run.count}
-                first={run.first}
-                signature={signature(turn.createdAt)}
-              />
-            </div>
-          );
-        }
-        // A work item's run (background work's result or a scheduled job's
-        // post) was not written by the owner: only the bot's reply shows,
-        // under its provenance tab, and what became of the turn.
-        if (message.role === "user" && turn && (turn.work || turn.scheduled))
-          return turn.status !== "pending" && !replied.has(turn.id) ? (
-            // It ended with no reply (failed or stopped): its tab still says
-            // which work it was, and a quote or notice can find it here.
-            <div
-              key={message.id}
-              className="work-unanswered"
-              id={messageId(turn.id, "bot")}
-            >
-              {divider}
-              <WorkTab turn={turn} onOpen={openItem(turn.work?.itemId)} />
-              {turnWork(turn, steps.get(turn.id) ?? [])}
-            </div>
-          ) : (
-            <Fragment key={message.id}>
-              {divider}
-              {turnWork(turn, steps.get(turn.id) ?? [])}
-            </Fragment>
-          );
-        if (message.role === "user")
-          return (
-            <div key={message.id} className="turn-user">
-              {divider}
-              <article
-                className="message message-user"
-                id={turn ? messageId(turn.id, "owner") : undefined}
-                data-queued={turn?.queueMode ? true : undefined}
-              >
-                {turn?.quote && (
-                  <QuoteBar quote={turn.quote} botName={author.name} />
-                )}
-                <div className="markdown">
-                  <ReactMarkdown
-                    components={mentions.components}
-                    remarkPlugins={mentions.plugins}
-                  >
-                    {text}
-                  </ReactMarkdown>
-                </div>
-                {turn?.attachments?.length ? (
-                  <ul
-                    className="message-attachments"
-                    aria-label="Message attachments"
-                  >
-                    {turn.attachments.map((file) => (
-                      <li key={file.id}>
-                        <AttachmentCard
-                          file={file}
-                          workspace={workspace}
-                          onError={() =>
-                            setControlError(
-                              "Could not download this attachment. Please retry.",
-                            )
-                          }
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {turn && (
-                  <time dateTime={new Date(turn.createdAt).toISOString()}>
-                    {time(turn.createdAt)}
-                  </time>
-                )}
-                {turn && onQuote && text.trim() && !turn.queueMode && (
-                  <QuoteAction
-                    onQuote={() => onQuote(quoteOf(turn.id, "owner", text))}
-                  />
-                )}
-              </article>
-              {turn?.queueMode && (
-                <div className="message-queue-controls">
-                  <span>
-                    {turn.queueMode === "steer"
-                      ? "Steering after this step"
-                      : "Queued"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void control(
-                        turn.queueMode === "steer" ? "queue" : "steer",
-                        turn.id,
-                      );
-                    }}
-                  >
-                    {turn.queueMode === "steer" ? (
-                      <ListEnd size={14} aria-hidden="true" />
-                    ) : (
-                      <CornerUpRight size={14} aria-hidden="true" />
-                    )}
-                    {turn.queueMode === "steer" ? "Keep queued" : "Steer"}
-                  </button>
-                </div>
-              )}
-              {turn && turnWork(turn, steps.get(turn.id) ?? [])}
-            </div>
-          );
-        const usage = turn && runUsage(turn.id, state.activity);
-        // A job's post has no model call: it was said when it was posted.
-        const at =
-          state.activity.findLast(
-            (e) => e.runId === turnId && e.type === "model.completed",
-          )?.at ?? (turn?.work || turn?.scheduled ? turn.createdAt : undefined);
-        const itemId = turn?.work?.itemId;
-        const turnSteps = (turn && steps.get(turn.id)) ?? [];
-        return (
-          <article
-            key={message.id}
-            className="message message-assistant"
-            id={turn ? messageId(turn.id, "bot") : undefined}
-          >
-            {turn?.status === "done" && signature()}
-            {turn && (turn.work || turn.scheduled) && (
-              <WorkTab turn={turn} onOpen={openItem(itemId)} />
-            )}
-            {turn && (
-              <HandoffCards
-                turnId={turn.id}
-                handoffs={handoffItems}
-                onCancel={(id) => onCancelHandoff?.(id) ?? Promise.resolve()}
-              />
-            )}
-            <div className="markdown">
-              <ReactMarkdown
-                components={mentions.components}
-                remarkPlugins={mentions.plugins}
-              >
-                {text}
-              </ReactMarkdown>
-            </div>
-            {turn?.status === "done" &&
-              cards
-                .filter((c) => c.turnId === turnId)
-                .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
-            {turn?.status === "done" && (
-              <HandoffSources read={turn.readSessions ?? []} />
-            )}
-            {turn?.status === "done" && turnSteps.length > 0 && (
-              <ToolSteps steps={turnSteps} working={false} decide={false} />
-            )}
-            {turn?.status === "done" && <SelfUpdateNotes steps={turnSteps} />}
-            {/* Copy and Reply take the whole reply, so they sit under it,
-                with when it was said. */}
-            {turn?.status === "done" && (
-              <ReplyActions
-                text={text}
-                at={at}
-                time={at ? time(at) : undefined}
-                title={
-                  // Tokens and cost are for the curious, not the conversation.
-                  usage
-                    ? `${usage.tokens.toLocaleString()} tokens across ${usage.calls} model ${usage.calls === 1 ? "call" : "calls"} · ${formatCost(usage.cost)}, provider-reported`
-                    : undefined
-                }
-                onReply={
-                  onQuote
-                    ? () => onQuote(quoteOf(turn.id, "bot", text))
-                    : undefined
-                }
-              />
-            )}
-          </article>
-        );
-      })}
+      {messages.flatMap((message) => [
+        ...drawReceipts(receipts.above.get(message.id)),
+        renderMessage(message),
+      ])}
       {turns
         .filter((t) => t.status === "pending" && !t.queueMode)
         .map((turn) => (
@@ -480,9 +279,229 @@ export function Chat({
             title={author.name}
           />
         ))}
+      {drawReceipts(receipts.last)}
       <BackgroundMarkers requests={state.background ?? []} />
     </Conversation>
   );
+
+  // One message, as the chat draws it. A plain render helper, like
+  // `turnWork` below.
+  function renderMessage(message: (typeof messages)[number]) {
+    const turnId = message.id.replace(/:reply$/, "");
+    const turn = turns.find((t) => t.id === turnId);
+    // Above the turn whose run summarized the messages before it.
+    const divider = turn?.compaction && (
+      <CompactionDivider compaction={turn.compaction} />
+    );
+    const text = message.parts
+      .flatMap((p) => (p.type === "text" ? [p.content] : []))
+      .join("");
+    if (message.role === "user" && turn?.handoff)
+      return (
+        <div key={message.id} className="turn-user">
+          {divider}
+          {turn.handoff.kind === "task" ? (
+            <HandoffBrief
+              handoff={turn.handoff}
+              text={turn.text}
+              at={turn.createdAt}
+              followUp={turns.some(
+                (other) =>
+                  other.handoff?.kind === "task" &&
+                  other.createdAt < turn.createdAt,
+              )}
+            />
+          ) : (
+            <HandoffResult
+              handoff={turn.handoff}
+              text={turn.text}
+              at={turn.createdAt}
+              record={handoffItems.find((item) => item.id === turn.handoff?.id)}
+            />
+          )}
+          {turnWork(turn, steps.get(turn.id) ?? [])}
+        </div>
+      );
+    if (message.role === "user" && turn?.scheduled && runs.has(turn.id)) {
+      const run = runs.get(turn.id);
+      return run === "hidden" || !run ? null : (
+        <div key={message.id} className="turn-user">
+          {divider}
+          <ScheduledFailure
+            turn={turn}
+            attempts={run.count}
+            first={run.first}
+            signature={signature(turn.createdAt)}
+          />
+        </div>
+      );
+    }
+    // A work item's run (background work's result or a scheduled job's
+    // post) was not written by the owner: only the bot's reply shows,
+    // under its provenance tab, and what became of the turn.
+    if (message.role === "user" && turn && (turn.work || turn.scheduled))
+      return turn.status !== "pending" && !replied.has(turn.id) ? (
+        // It ended with no reply (failed or stopped): its tab still says
+        // which work it was, and a quote or notice can find it here.
+        <div
+          key={message.id}
+          className="work-unanswered"
+          id={messageId(turn.id, "bot")}
+        >
+          {divider}
+          <WorkTab turn={turn} onOpen={openItem(turn.work?.itemId)} />
+          {turnWork(turn, steps.get(turn.id) ?? [])}
+        </div>
+      ) : (
+        <Fragment key={message.id}>
+          {divider}
+          {turnWork(turn, steps.get(turn.id) ?? [])}
+        </Fragment>
+      );
+    if (message.role === "user")
+      return (
+        <div key={message.id} className="turn-user">
+          {divider}
+          <article
+            className="message message-user"
+            id={turn ? messageId(turn.id, "owner") : undefined}
+            data-queued={turn?.queueMode ? true : undefined}
+          >
+            {turn?.quote && (
+              <QuoteBar quote={turn.quote} botName={author.name} />
+            )}
+            <div className="markdown">
+              <ReactMarkdown
+                components={mentions.components}
+                remarkPlugins={mentions.plugins}
+              >
+                {text}
+              </ReactMarkdown>
+            </div>
+            {turn?.attachments?.length ? (
+              <ul
+                className="message-attachments"
+                aria-label="Message attachments"
+              >
+                {turn.attachments.map((file) => (
+                  <li key={file.id}>
+                    <AttachmentCard
+                      file={file}
+                      workspace={workspace}
+                      onError={() =>
+                        setControlError(
+                          "Could not download this attachment. Please retry.",
+                        )
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {turn && (
+              <time dateTime={new Date(turn.createdAt).toISOString()}>
+                {time(turn.createdAt)}
+              </time>
+            )}
+            {turn && onQuote && text.trim() && !turn.queueMode && (
+              <QuoteAction
+                onQuote={() => onQuote(quoteOf(turn.id, "owner", text))}
+              />
+            )}
+          </article>
+          {turn?.queueMode && (
+            <div className="message-queue-controls">
+              <span>
+                {turn.queueMode === "steer"
+                  ? "Steering after this step"
+                  : "Queued"}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  void control(
+                    turn.queueMode === "steer" ? "queue" : "steer",
+                    turn.id,
+                  );
+                }}
+              >
+                {turn.queueMode === "steer" ? (
+                  <ListEnd size={14} aria-hidden="true" />
+                ) : (
+                  <CornerUpRight size={14} aria-hidden="true" />
+                )}
+                {turn.queueMode === "steer" ? "Keep queued" : "Steer"}
+              </button>
+            </div>
+          )}
+          {turn && turnWork(turn, steps.get(turn.id) ?? [])}
+        </div>
+      );
+    const usage = turn && runUsage(turn.id, state.activity);
+    // A job's post has no model call: it was said when it was posted.
+    const at =
+      state.activity.findLast(
+        (e) => e.runId === turnId && e.type === "model.completed",
+      )?.at ?? (turn?.work || turn?.scheduled ? turn.createdAt : undefined);
+    const itemId = turn?.work?.itemId;
+    const turnSteps = (turn && steps.get(turn.id)) ?? [];
+    return (
+      <article
+        key={message.id}
+        className="message message-assistant"
+        id={turn ? messageId(turn.id, "bot") : undefined}
+      >
+        {turn?.status === "done" && signature()}
+        {turn && (turn.work || turn.scheduled) && (
+          <WorkTab turn={turn} onOpen={openItem(itemId)} />
+        )}
+        {turn && (
+          <HandoffCards
+            turnId={turn.id}
+            handoffs={handoffItems}
+            onCancel={(id) => onCancelHandoff?.(id) ?? Promise.resolve()}
+          />
+        )}
+        <div className="markdown">
+          <ReactMarkdown
+            components={mentions.components}
+            remarkPlugins={mentions.plugins}
+          >
+            {text}
+          </ReactMarkdown>
+        </div>
+        {turn?.status === "done" &&
+          cards
+            .filter((c) => c.turnId === turnId)
+            .map((shown) => <ShownCard key={shown.id} shown={shown} />)}
+        {turn?.status === "done" && (
+          <HandoffSources read={turn.readSessions ?? []} />
+        )}
+        {turn?.status === "done" && turnSteps.length > 0 && (
+          <ToolSteps steps={turnSteps} working={false} decide={false} />
+        )}
+        {turn?.status === "done" && <SelfUpdateNotes steps={turnSteps} />}
+        {/* Copy and Reply take the whole reply, so they sit under it,
+                with when it was said. */}
+        {turn?.status === "done" && (
+          <ReplyActions
+            text={text}
+            at={at}
+            time={at ? time(at) : undefined}
+            title={
+              // Tokens and cost are for the curious, not the conversation.
+              usage
+                ? `${usage.tokens.toLocaleString()} tokens across ${usage.calls} model ${usage.calls === 1 ? "call" : "calls"} · ${formatCost(usage.cost)}, provider-reported`
+                : undefined
+            }
+            onReply={
+              onQuote ? () => onQuote(quoteOf(turn.id, "bot", text)) : undefined
+            }
+          />
+        )}
+      </article>
+    );
+  }
 
   // A plain render helper, not a component: a component declared here would
   // remount on every snapshot and collapse open step details.

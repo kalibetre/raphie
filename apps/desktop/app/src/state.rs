@@ -363,6 +363,9 @@ pub struct Ui {
     /// there, and brought into view once the lists are in.
     pub work_focus: Option<String>,
     work_focus_shown: bool,
+    /// The reply whose text was just copied, and when: its Copy shows a
+    /// check for a moment.
+    pub copied: Option<(String, i64)>,
     /// How the owner arranged the dock in each conversation: what they
     /// skipped and whether they folded it.
     dock_views: HashMap<String, raphie_core::dock::DockView>,
@@ -600,6 +603,7 @@ impl Ui {
             quoting: None,
             reveal: None,
             work_focus: None,
+            copied: None,
             dock_views: HashMap::new(),
             work_focus_shown: false,
             roster_open: true,
@@ -853,6 +857,19 @@ impl Ui {
             Some(view) => raphie_core::dock::arrange(items, view),
             None => (items, false),
         }
+    }
+
+    /// Puts Copy back once its check has shown for a moment. Returns whether
+    /// it did, so the view is drawn again.
+    fn expire_copied(&mut self) -> bool {
+        let done = self
+            .copied
+            .as_ref()
+            .is_some_and(|(_, at)| crate::format::now_ms() - at >= COPIED_FOR_MS);
+        if done {
+            self.copied = None;
+        }
+        done
     }
 
     /// The question on top of the open dock, which typed words answer.
@@ -4325,9 +4342,12 @@ fn origin_argument(args: &[String]) -> Option<&str> {
 
 /// `AppSpec::poll`: runs before each frame. Applies whatever the engine
 /// reported; returns true when the view should be rebuilt.
+/// How long Copy under a reply shows its check, in milliseconds.
+pub const COPIED_FOR_MS: i64 = 1500;
+
 pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     // Before the engine check, so headless snapshots decode their pictures.
-    let decoded = ui.decode_previews();
+    let decoded = ui.decode_previews() | ui.expire_copied();
     let Some(client) = &ui.client else {
         return decoded;
     };

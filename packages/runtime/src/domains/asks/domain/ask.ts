@@ -26,6 +26,8 @@ export type Ask = {
   createdAt: number;
   expiresAt: number;
   status: AskStatus;
+  /** When it was answered or ran out of time; unset while it waits. */
+  settledAt?: number;
   answer: AskAnswer | null;
   answeredVia: Channel | null;
   answeredApp?: "desktop";

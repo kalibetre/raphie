@@ -893,7 +893,7 @@ test("what background work waits on the owner for shows in the chat, with its it
   }
 }, 30_000);
 
-test("a question from background work shows in the chat until it is answered", async () => {
+test("a question from background work shows in the chat until answered, then leaves a receipt", async () => {
   const { app, say, done } = await bot({
     ...runCalls,
     "You are working": {
@@ -920,8 +920,21 @@ test("a question from background work shows in the chat until it is answered", a
     assert.equal(request!.toolApprovals.length, 0);
     assert.equal(request!.asks.length, 1);
     assert.equal(request!.asks[0]!.question, "Which city first?");
+    const before = Date.now();
     await app.asks.answer(request!.asks[0]!.id, { choice: 1 }, "owner", "web");
-    await until(async () => !(await observe()).background?.length);
+    // Answered, it asks nothing more, and the chat keeps a receipt of it,
+    // stamped with when it was answered.
+    await until(
+      async () =>
+        (await observe()).background?.[0]?.asks[0]?.status === "answered",
+    );
+    const [receipt] = (await observe()).background![0]!.asks;
+    assert.deepEqual(receipt!.answer, { choice: 1 });
+    assert.ok(receipt!.settledAt! >= before);
+    assert.equal(
+      (await app.queries.sessions(owner)).items.find((s) => s.chat)!.pending,
+      0,
+    );
   } finally {
     await done();
   }
