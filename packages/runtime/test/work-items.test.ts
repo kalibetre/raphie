@@ -1232,3 +1232,50 @@ test("a held post carried by a message that Stop withdraws waits for the next on
     await done();
   }
 }, 30_000);
+
+test("background work follows the chat's Full access, and asks again when it is back on Ask", async () => {
+  const { app, say, done } = await bot({
+    ...runCalls,
+    "You are working": {
+      name: "workspace_exec",
+      args: { command: "echo venues" },
+    },
+  });
+  try {
+    await say("open an item");
+    const chat = (await app.chats.state()).conversations.find((c) => c.chat)!;
+    await app.toolApprovals.approvalMode(
+      "owner",
+      chat.sessionId,
+      "full-access",
+    );
+    const start = (eventId: string) =>
+      app.chats.send({
+        source: "web",
+        actor: "owner",
+        eventId,
+        text: "start it",
+      });
+    await start("start-1");
+    // The item's run calls a command in its own session: no question asked.
+    await until(async () =>
+      (await app.chats.state()).turns.some(
+        (t) => t.work?.kind === "result" && t.status === "done",
+      ),
+    );
+    const approvals = (await app.toolApprovals.state()).approvals;
+    assert.equal(approvals.length, 1);
+    assert.equal(approvals[0]!.status, "approved");
+    assert.equal(approvals[0]!.fullAccess, true);
+    // Back on Ask, the next run asks.
+    await app.toolApprovals.approvalMode("owner", chat.sessionId, "ask");
+    await start("start-2");
+    await until(async () =>
+      (await app.toolApprovals.state()).approvals.some(
+        (a) => a.status === "pending",
+      ),
+    );
+  } finally {
+    await done();
+  }
+}, 30_000);

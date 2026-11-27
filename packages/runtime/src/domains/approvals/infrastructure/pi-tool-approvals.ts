@@ -8,7 +8,7 @@ export type { ToolApproval, ToolResult } from "../domain/tool-approval.ts";
 import type { Context } from "@earendil-works/chord/context";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
-import { defineDoc } from "@earendil-works/pi-durable";
+import { defineDoc, type Tx } from "@earendil-works/pi-durable";
 
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
 import {
@@ -48,6 +48,25 @@ export const ToolApprovals = defineDoc<ApprovalState>({
   checkpointWhen: () => false,
   initial: () => ({ approvals: [], deliveries: [] }),
 });
+
+/**
+ * The approval mode in effect in a conversation. A work item's own session
+ * runs the bot's background work for the owner, so it follows the bot's
+ * chat. A task from another bot always asks.
+ */
+export async function commandMode(
+  tx: Tx,
+  conversationId: number,
+): Promise<"ask" | "full-access"> {
+  const modes = (await tx.doc(ToolApprovals)).commandModes;
+  const conversations = (await tx.doc(Chats)).conversations;
+  const conversation = conversations.find((c) => c.id === conversationId);
+  if (conversation?.handedOffBy) return "ask";
+  const chat = conversation?.work
+    ? conversations.find((c) => c.chat)
+    : undefined;
+  return modes?.[String((chat ?? conversation)?.id ?? conversationId)] ?? "ask";
+}
 
 export function supportsCommandGrant(
   item: Pick<
@@ -182,7 +201,7 @@ export class ToolApprovalService {
           ?.handedOffBy
       )
         item.eachCall = true;
-      if (state.commandModes?.[String(api.conversationId)] === "full-access") {
+      if ((await commandMode(tx, api.conversationId)) === "full-access") {
         item.status = "approved";
         item.fullAccess = true;
       }

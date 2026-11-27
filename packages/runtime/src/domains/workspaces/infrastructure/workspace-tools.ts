@@ -8,6 +8,7 @@ import { obj, str } from "@earendil-works/pi-schema";
 import { InputError } from "../../../shared/application/input-error.ts";
 import {
   activeCommandGrant,
+  commandMode,
   ToolApprovals,
   type ToolApprovalService,
 } from "../../approvals/infrastructure/pi-tool-approvals.ts";
@@ -80,7 +81,7 @@ export function createWorkspaceTools(
                   item.connectionIdentity === "raphie.workspace.command" &&
                   activeCommandGrant(state, item) &&
                   (!item.fullAccess ||
-                    state.commandModes?.[String(api.conversationId)] ===
+                    (await commandMode(tx, api.conversationId)) ===
                       "full-access") &&
                   !ctx.abortSignal?.aborted
                 );
