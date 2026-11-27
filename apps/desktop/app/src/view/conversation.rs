@@ -197,7 +197,10 @@ fn work_turn(
         .as_deref()
         .or(live)
         .filter(|a| !a.trim().is_empty());
-    let status = if working {
+    let asking = asks.iter().any(|ask| ask.status == AskStatus::Pending);
+    let status = if working && asking {
+        Some(Status::NeedsYou)
+    } else if working {
         Some(Status::Working)
     } else if turn.cancelled == Some(true) {
         Some(Status::Cancelled)
@@ -238,9 +241,10 @@ fn work_turn(
         if let Some(notes) = self_updates::notes(s, steps, t) {
             extra.push(notes);
         }
-        for ask in asks {
-            extra.push(asks::card(s, ask, look));
-        }
+    }
+    // Its questions, while the reply waits on the owner too.
+    for ask in asks {
+        extra.push(asks::card(s, ask, look));
     }
     if turn.status == TurnStatus::Error && turn.cancelled != Some(true) {
         let reason = turn.failure.as_ref().map_or(
@@ -892,8 +896,11 @@ fn active_run(
     {
         block = block.child(cards::card(s, shown, now, look));
     }
-    for ask in asks {
-        block = block.child(asks::card(s, ask, look));
+    // A work card holds its own run's questions.
+    if turn.work.is_none() && turn.scheduled.is_none() {
+        for ask in asks {
+            block = block.child(asks::card(s, ask, look));
+        }
     }
     block
 }

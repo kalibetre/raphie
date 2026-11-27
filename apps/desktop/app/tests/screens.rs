@@ -6762,3 +6762,37 @@ fn background_work_waiting_on_the_owner_needs_you() {
     assert!(text.contains("Needs you"), "{text}");
     assert!(text.contains("Open item"), "{text}");
 }
+
+#[test]
+fn a_question_asked_while_telling_a_result_sits_in_its_card() {
+    let mut rt = render(scenes::ask, false);
+    rt.update(|ui, _| {
+        let observation = ui
+            .model
+            .conversation
+            .as_mut()
+            .and_then(|c| c.observation.as_mut())
+            .unwrap();
+        observation.turns[0].work = Some(TurnWork {
+            item_id: "w-6".into(),
+            title: "Tidy the reports folder".into(),
+            kind: TurnWorkKind::Result,
+            outcome: Some(HandoffOutcome::Completed),
+        });
+    });
+    settle(&mut rt);
+    let text = screen_text(&rt);
+    assert!(text.contains("Needs you"), "{text}");
+    // Once, inside the card, not again under the running reply.
+    assert_eq!(
+        text.matches("Dr. Amare has three openings").count(),
+        1,
+        "{text}"
+    );
+    let card = element(&rt, "rd-reply-t1").rect;
+    let ask = element(&rt, "rd-ask-ask-1").rect;
+    assert!(
+        ask[1] >= card[1] && ask[1] + ask[3] <= card[1] + card[3],
+        "the question is inside the card"
+    );
+}
