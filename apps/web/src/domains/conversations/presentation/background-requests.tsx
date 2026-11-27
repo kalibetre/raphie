@@ -28,17 +28,20 @@ export function BackgroundMarkers({
         ...request.asks.map((ask) => (
           <AskMarker key={ask.id} ask={ask} title={request.title} />
         )),
-        ...request.toolApprovals.map((approval) => (
-          <p key={approval.id} className="ask-marker">
-            <span className="ask-marker-dot" aria-hidden="true" />
-            <span>
-              {request.title} needs approval ·{" "}
-              <time dateTime={new Date(approval.createdAt).toISOString()}>
-                {time(approval.createdAt)}
-              </time>
-            </span>
-          </p>
-        )),
+        ...request.toolApprovals
+          .filter((a) => a.status === "pending" && a.expiresAt > Date.now())
+          .map((approval) => (
+            <p key={approval.id} className="ask-marker">
+              <span className="ask-marker-dot" aria-hidden="true" />
+              <span>
+                {request.title} needs approval to run{" "}
+                <code>{approval.tool}</code> ·{" "}
+                <time dateTime={new Date(approval.createdAt).toISOString()}>
+                  {time(approval.createdAt)}
+                </time>
+              </span>
+            </p>
+          )),
       ])}
     </section>
   );

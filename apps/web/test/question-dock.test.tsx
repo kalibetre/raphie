@@ -103,17 +103,55 @@ test("a question waiting reads as a marker, then as a receipt of the answer", ()
 
 test("the sidebar counts what a teammate waits on and opens its chat", () => {
   const session = (patch: object) =>
-    ({ id: "x", sessionId: "x", lastAt: 1, waiting: false, ...patch }) as never;
+    ({
+      id: "x",
+      sessionId: "x",
+      title: "Untitled",
+      lastAt: 1,
+      waiting: false,
+      pending: 0,
+      ...patch,
+    }) as never;
   const waiting = waitingOnOwner([
     session({ id: "chat", sessionId: "chat", chat: true }),
-    session({ id: "w", sessionId: "w", waiting: true, pending: 2, lastAt: 5 }),
-    session({ id: "v", sessionId: "v", asking: true, lastAt: 3 }),
+    session({
+      id: "w",
+      sessionId: "w",
+      work: "w-6",
+      waiting: true,
+      pending: 2,
+      lastAt: 5,
+    }),
+    session({
+      id: "v",
+      sessionId: "v",
+      work: "w-7",
+      asking: true,
+      pending: 1,
+      lastAt: 3,
+    }),
   ])!;
   expect(waiting.count).toBe(3);
+  // Everything waits in the chat or a work item's session: the chat's dock.
   expect(waiting.session.sessionId).toBe("chat");
+  expect(waiting.title).toBe("Untitled");
   expect(waitingLine("Raphie", waiting.count, waiting.asking)).toBe(
     "Raphie has 3 questions",
   );
   expect(waitingLine("Raphie", 1, false)).toBe("Raphie needs your OK");
+  // A group's approval isn't in the chat's dock: the sidebar opens the group.
+  const group = waitingOnOwner([
+    session({ id: "chat", sessionId: "chat", chat: true }),
+    session({
+      id: "g",
+      sessionId: "g",
+      title: "Team group",
+      waiting: true,
+      pending: 1,
+      lastAt: 9,
+    }),
+  ])!;
+  expect(group.session.sessionId).toBe("g");
+  expect(group.title).toBe("Team group");
   expect(waitingOnOwner([session({})])).toBeUndefined();
 });

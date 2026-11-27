@@ -55,7 +55,7 @@ export function BotSidebar({
     <div className="bot-roster">
       {requests.length > 0 && (
         <section className="roster-requests" aria-label="Needs you">
-          {requests.map(({ bot, session: s, count, asking }) => (
+          {requests.map(({ bot, session: s, count, asking, title }) => (
             <button
               key={bot.id}
               className="roster-request"
@@ -65,7 +65,7 @@ export function BotSidebar({
               <BotAvatar id={bot.id} />
               <span className="roster-request-copy">
                 <strong>{waitingLine(bot.name, count, asking)}</strong>
-                <span>{s.title}</span>
+                <span>{title}</span>
               </span>
             </button>
           ))}

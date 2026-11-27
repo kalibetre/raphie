@@ -23,6 +23,7 @@ export function AskMarker({ ask, title }: { ask: SessionAsk; title: string }) {
         <span className="ask-marker-dot" aria-hidden="true" />
         <span>
           {title} asked you something · {at}
+          <span className="sr-only">: {ask.question}</span>
         </span>
       </p>
     );
@@ -46,6 +47,7 @@ export function AskMarker({ ask, title }: { ask: SessionAsk; title: string }) {
           "No answer, so it went on without one"
         )}{" "}
         · {title} · {at}
+        <span className="sr-only"> to: {ask.question}</span>
       </span>
     </p>
   );

@@ -9,19 +9,23 @@ export const needsYou = (session: SessionSummary) =>
 
 /**
  * What waits on the owner from one teammate, for the sidebar: how many
- * questions and approvals, whether one is a question, and the conversation
- * to open, its chat when it has one, where the dock asks them all.
+ * questions and approvals, whether one is a question, what the newest is
+ * about, and the conversation to open. That is the chat when its dock holds
+ * them all (its own and its work items'); otherwise the newest conversation
+ * it doesn't hold, such as a group's.
  */
 export function waitingOnOwner(sessions: SessionSummary[]) {
-  const waiting = sessions.filter(needsYou);
-  if (!waiting.length) return undefined;
+  const waiting = sessions.filter(needsYou).sort((a, b) => b.lastAt - a.lastAt);
+  const newest = waiting[0];
+  if (!newest) return undefined;
+  const chat = sessions.find((s) => s.chat);
+  const elsewhere = waiting.find((s) => !s.chat && !s.work);
   return {
-    count: waiting.reduce((sum, s) => sum + Math.max(s.pending ?? 1, 1), 0),
+    count: waiting.reduce((sum, s) => sum + Math.max(s.pending, 1), 0),
     asking: waiting.some((s) => s.asking),
-    session:
-      sessions.find((s) => s.chat) ??
-      [...waiting].sort((a, b) => b.lastAt - a.lastAt)[0]!,
-    lastAt: Math.max(...waiting.map((s) => s.lastAt)),
+    title: newest.title,
+    session: elsewhere ?? chat ?? newest,
+    lastAt: newest.lastAt,
   };
 }
 
