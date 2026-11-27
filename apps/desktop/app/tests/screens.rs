@@ -6749,10 +6749,13 @@ fn copying_a_reply_shows_a_check_for_a_moment() {
         Some("t1")
     );
     assert_eq!(element(&rt, key).label.as_deref(), Some("Copied"));
-    // Once the moment has passed, it says Copy again.
+    // Once the moment has passed, the next poll puts it back by itself.
     rt.state.copied.as_mut().unwrap().1 -= 2_000;
-    rt.invalidate();
-    rt.frame(1.0 / 60.0);
+    rt.update(|ui, tx| {
+        raphie_desktop::state::poll(ui, 0.0, tx);
+    });
+    settle(&mut rt);
+    assert!(rt.state.copied.is_none(), "poll cleared it");
     assert_eq!(element(&rt, key).label.as_deref(), Some("Copy"));
 }
 

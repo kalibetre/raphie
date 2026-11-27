@@ -116,9 +116,6 @@ pub fn action(key: String, turn_id: &str, author: QuoteAuthor, text_: &str, t: &
     })
 }
 
-/// How long Copy shows its check after copying, in milliseconds.
-const COPIED_FOR_MS: i64 = 1500;
-
 /// Under a finished reply, shown while it is pointed at: copy its text,
 /// reply to it (the next message quotes it), and when it was said, with what
 /// it cost on hover. A reply with no words has only its time. Mirrors
@@ -147,10 +144,9 @@ pub fn reply_actions(
     let copied = text_.to_owned();
     let copy_id = turn_id.to_owned();
     // Just copied: a check for a moment, as on the web.
-    let just_copied = s
-        .copied
-        .as_ref()
-        .is_some_and(|(id, at)| id == turn_id && crate::format::now_ms() - at < COPIED_FOR_MS);
+    let just_copied = s.copied.as_ref().is_some_and(|(id, at)| {
+        id == turn_id && crate::format::now_ms() - at < crate::state::COPIED_FOR_MS
+    });
     let (copy_label, copy_glyph) = if just_copied {
         ("Copied", &icons::CHECK)
     } else {
@@ -174,7 +170,9 @@ pub fn reply_actions(
                         tx.copy(copied.clone());
                         s.copied = Some((copy_id.clone(), crate::format::now_ms()));
                         // Back to Copy once the moment has passed.
-                        tx.wake_after(std::time::Duration::from_millis(COPIED_FOR_MS as u64 + 50));
+                        tx.wake_after(std::time::Duration::from_millis(
+                            crate::state::COPIED_FOR_MS as u64 + 50,
+                        ));
                     },
                 ),
             )

@@ -859,6 +859,19 @@ impl Ui {
         }
     }
 
+    /// Puts Copy back once its check has shown for a moment. Returns whether
+    /// it did, so the view is drawn again.
+    fn expire_copied(&mut self) -> bool {
+        let done = self
+            .copied
+            .as_ref()
+            .is_some_and(|(_, at)| crate::format::now_ms() - at >= COPIED_FOR_MS);
+        if done {
+            self.copied = None;
+        }
+        done
+    }
+
     /// The question on top of the open dock, which typed words answer.
     pub fn docked_question(&self) -> Option<String> {
         let (items, folded) = self.dock();
@@ -4329,9 +4342,12 @@ fn origin_argument(args: &[String]) -> Option<&str> {
 
 /// `AppSpec::poll`: runs before each frame. Applies whatever the engine
 /// reported; returns true when the view should be rebuilt.
+/// How long Copy under a reply shows its check, in milliseconds.
+pub const COPIED_FOR_MS: i64 = 1500;
+
 pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     // Before the engine check, so headless snapshots decode their pictures.
-    let decoded = ui.decode_previews();
+    let decoded = ui.decode_previews() | ui.expire_copied();
     let Some(client) = &ui.client else {
         return decoded;
     };

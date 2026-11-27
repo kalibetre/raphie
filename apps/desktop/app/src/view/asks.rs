@@ -39,9 +39,10 @@ pub fn in_transcript(ask: &SessionAsk, title: &str, t: &Theme) -> El {
         Some(AskAnswer::Text { text }) => ("You answered ", format!("“{text}”")),
         None => ("No answer, so it went on without one", String::new()),
     };
+    // A receipt says when it was settled.
     let words = format!(
         "{lead}{value} · {title} · {}",
-        format::clock(ask.created_at)
+        format::clock(ask.settled_at.unwrap_or(ask.created_at))
     );
     let answer = Span::new(lead.len(), lead.len() + value.len())
         .weight(600.0)
