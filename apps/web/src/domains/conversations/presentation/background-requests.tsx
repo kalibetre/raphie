@@ -1,18 +1,20 @@
 import type { BackgroundRequest } from "@raphie/contracts";
-import { ListChecks } from "lucide-react";
 
 import { ToolSteps } from "../../approvals/presentation/tool-steps";
 import { AskCard } from "./ask-card";
+import { WorkCard } from "./work-card";
 
 /**
  * What the bot's background work waits on the owner for, shown at the end of
- * its chat: each work item's pending approvals and questions, decided here
- * without opening the item's session.
+ * its chat: a card for each work item with its pending approvals and
+ * questions, decided here without opening the item's session.
  */
 export function BackgroundRequests({
   requests,
+  onOpenItem,
 }: {
   requests: BackgroundRequest[];
+  onOpenItem?: (itemId: string) => void;
 }) {
   if (!requests.length) return null;
   return (
@@ -21,13 +23,14 @@ export function BackgroundRequests({
       aria-label="Background work needs you"
     >
       {requests.map((request) => (
-        <div key={request.itemId} className="background-request">
-          <p className="turn-scheduled" title={`Work item ${request.itemId}`}>
-            <ListChecks size={13} aria-hidden="true" />
-            <span>
-              Background work · <strong>{request.title}</strong> needs you
-            </span>
-          </p>
+        <WorkCard
+          key={request.itemId}
+          kind="background"
+          title={request.title}
+          itemId={request.itemId}
+          status="needs-you"
+          onOpenItem={onOpenItem && (() => onOpenItem(request.itemId))}
+        >
           {request.toolApprovals.length > 0 && (
             <ToolSteps
               working
@@ -43,7 +46,7 @@ export function BackgroundRequests({
           {request.asks.map((ask) => (
             <AskCard key={ask.id} ask={ask} />
           ))}
-        </div>
+        </WorkCard>
       ))}
     </section>
   );
