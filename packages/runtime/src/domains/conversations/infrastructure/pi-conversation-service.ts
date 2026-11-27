@@ -158,13 +158,6 @@ export const chatWorkflow = defineTask<
             .join("\n") || null;
         const state = await tx.doc(Chats);
         const turn = state.turns.find((t) => t.id === task.input.turnId)!;
-        // Job posts held while this reply ran reach the model now.
-        await writeHeldPosts(
-          tx,
-          (entry) => conversation.submit(tx, { type: "write", entry }),
-          turn.conversationId,
-          turn.id,
-        );
         turn.cancelled =
           settled.status === "unanswered" && settled.reason === "aborted";
         turn.status = answer ? "done" : "error";
@@ -259,23 +252,10 @@ export const chatWorkflow = defineTask<
     },
   },
   abort: async (task, runtime, ctx) => {
-    const conversation = await runtime.conversation(
-      task.input.conversationId,
-      ctx,
-    );
     await runtime.commit(async (tx) => {
       const turn = (await tx.doc(Chats)).turns.find(
         (item) => item.id === task.input.turnId,
       );
-      if (turn)
-        await writeHeldPosts(
-          tx,
-          conversation
-            ? (entry) => conversation.submit(tx, { type: "write", entry })
-            : undefined,
-          turn.conversationId,
-          turn.id,
-        );
       if (turn?.status === "pending") {
         turn.status = "error";
         turn.failure = INTERRUPTED_REPLY;
@@ -294,22 +274,21 @@ export const chatWorkflow = defineTask<
 });
 
 /**
- * Writes the chat's held posts for the model, oldest first, once nothing in
- * `conversationId` is replying any more. One admission, so it comes before
- * the commit's own entries and tasks. `ending` is a turn this commit is
- * finishing, which no longer counts as replying.
+ * Writes the chat's held posts for the model, oldest first, when nothing in
+ * `conversationId` is replying. Otherwise they stay held, and the chat's
+ * next message takes them (see `send`). One admission, so it comes before
+ * the commit's own entries and tasks.
  */
 async function writeHeldPosts(
   tx: Tx,
-  write: ((entry: HeldPosts) => Promise<unknown>) | undefined,
+  write: (entry: HeldPosts) => Promise<unknown>,
   conversationId: number,
-  ending?: string,
 ) {
   const state = await tx.doc(Chats);
   const turns = state.turns.filter((t) => t.conversationId === conversationId);
-  if (turns.some((t) => t.status === "pending" && t.id !== ending)) return;
+  if (turns.some((t) => t.status === "pending")) return;
   const held = turns.filter((t) => t.held);
-  if (!held.length || !write) return;
+  if (!held.length) return;
   await write({
     kind: "raphie.work-result",
     data: { turnIds: held.map((t) => t.id) },
@@ -886,6 +865,13 @@ export class ChatService implements ConversationCommands {
           ...(input.work ? { work: input.work } : {}),
           ...(quote ? { quote } : {}),
         };
+        // Job posts held while the chat was replying go to the model with
+        // this message, ahead of it.
+        const held = state.turns.filter(
+          (t) => t.conversationId === conversation.id && t.held,
+        );
+        if (held.length) turn.carries = held.map((t) => t.held!);
+        for (const post of held) delete post.held;
         state.turns.push(turn);
         if (input.handoff?.kind === "task")
           await receiveHandoff(tx, {
@@ -915,6 +901,7 @@ export class ChatService implements ConversationCommands {
             turnId: turn.id,
             conversationId: conversation.id as ConversationId,
             text:
+              (turn.carries ? `${turn.carries.join("\n\n")}\n\n` : "") +
               messageContext(
                 turn.createdAt,
                 input.origin,

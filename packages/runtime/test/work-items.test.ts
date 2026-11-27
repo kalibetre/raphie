@@ -1002,7 +1002,7 @@ test("background work that ends while the chat's reply waits on a tool reports a
   }
 }, 30_000);
 
-test("a job's post during a reply waits for the reply to end before the model reads it", async () => {
+test("a job's post during a reply reaches the model with the chat's next message, not mid-reply", async () => {
   const requests: { role: string; text: string }[][] = [];
   const { app, say, done } = await bot(
     { check: { name: "workspace_exec", args: { command: "echo calendar" } } },
@@ -1052,19 +1052,25 @@ test("a job's post during a reply waits for the reply to end before the model re
       ["user", "assistant", "toolResult"],
     );
     assert.ok(!during.some((m) => m.text.includes("Morning brief")));
-    // Once the reply ended, the post was written for the model.
+    // The owner's next message takes it to the model, once, ahead of
+    // their words.
+    assert.ok((await posted()).held);
+    const next = await say("thanks");
     assert.equal((await posted()).held, undefined);
-    // The next message reads it, before the owner's new words.
-    await say("thanks");
+    assert.equal(next.carries?.length, 1);
     const after = requests.at(-1)!.filter((m) => m.role !== "system");
-    assert.match(after.at(-2)!.text, /^\[Your scheduled job "Morning brief"/);
-    assert.match(after.at(-1)!.text, /thanks$/);
+    assert.match(
+      after.at(-1)!.text,
+      /^\[Your scheduled job "Morning brief"[^]*two meetings today\.\n\n[^]*thanks$/,
+    );
+    const mentions = after.filter((m) => m.text.includes("Morning brief"));
+    assert.equal(mentions.length, 1);
   } finally {
     await done();
   }
 }, 30_000);
 
-test("stopping a reply still hands the model the post it held", async () => {
+test("a post held when a reply is stopped goes with the next message", async () => {
   const requests: { role: string; text: string }[][] = [];
   const { app, say, done } = await bot(
     { check: { name: "workspace_exec", args: { command: "echo calendar" } } },
@@ -1095,18 +1101,78 @@ test("stopping a reply still hands the model the post it held", async () => {
         (await app.chats.state()).turns.find((t) => t.id === reply.id)
           ?.status !== "pending",
     );
+    await say("thanks");
+    assert.equal(
+      (await app.chats.state()).turns.find((t) => t.id === postId)!.held,
+      undefined,
+    );
+    const after = requests.at(-1)!.filter((m) => m.role !== "system");
+    const mentions = after.filter((m) => m.text.includes("Morning brief"));
+    assert.equal(mentions.length, 1, JSON.stringify(after));
+    assert.match(
+      mentions[0]!.text,
+      /^\[Your scheduled job "Morning brief"[^]*thanks$/,
+    );
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("a message sent while a reply runs takes the job's posts held meanwhile", async () => {
+  const requests: { role: string; text: string }[][] = [];
+  const { app, done } = await bot(
+    { check: { name: "workspace_exec", args: { command: "echo calendar" } } },
+    { requests: (messages) => requests.push(messages) },
+  );
+  try {
+    await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "check",
+      text: "check the calendar",
+    });
+    const approval = async () =>
+      (await app.toolApprovals.state()).approvals.find(
+        (a) => a.status === "pending",
+      );
+    await until(async () => !!(await approval()));
+    // Two posts arrive mid-reply, then the owner asks about them.
+    for (const [key, text] of [
+      ["a", "You have two meetings today."],
+      ["b", "Flights to Lisbon dropped to 180."],
+    ] as const)
+      await app.chats.postWorkResult({
+        runKey: `job-${key}`,
+        work: { itemId: `w-${key}`, title: "Morning brief", kind: "result" },
+        scheduled: { name: "Morning brief" },
+        text,
+      });
+    const asked = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "asked",
+      text: "what did the brief say?",
+    });
+    await app.toolApprovals.decide(
+      (await approval())!.id,
+      "approved",
+      "owner",
+      "web",
+    );
     await until(
       async () =>
-        !(await app.chats.state()).turns.find((t) => t.id === postId)!.held,
+        (await app.chats.state()).turns.find((t) => t.id === asked.id)
+          ?.status === "done",
     );
-    await say("thanks");
-    const after = requests.at(-1)!.filter((m) => m.role !== "system");
-    assert.ok(
-      after.some((m) =>
-        m.text.startsWith('[Your scheduled job "Morning brief"'),
-      ),
-      JSON.stringify(after.map((m) => m.role)),
+    // Its request has both posts, oldest first, ahead of the question.
+    const sent = requests.at(-1)!.filter((m) => m.role !== "system");
+    assert.match(
+      sent.at(-1)!.text,
+      /two meetings today\.[^]*Lisbon dropped to 180\.[^]*what did the brief say\?$/,
     );
+    // And none of the reply that was running when they came.
+    for (const request of requests.slice(0, -1))
+      assert.ok(!request.some((m) => m.text.includes("Morning brief")));
   } finally {
     await done();
   }
