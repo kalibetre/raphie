@@ -70,6 +70,18 @@ function dayFromNow(days: number) {
   return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
 }
 
+/**
+ * What the fixture's bot says after a tool returns: an answer to its question
+ * in its own words, as a real model would, and any other result as it is.
+ */
+function spokenResult(result: string) {
+  const chose = /^The owner chose: (.+)$/s.exec(result);
+  if (chose) return `Okay, I'll go with “${chose[1]}”.`;
+  const own = /^The owner answered in their own words: (.+)$/s.exec(result);
+  if (own) return `Got it: “${own[1]}”. I'll do that.`;
+  return result;
+}
+
 /** The card a message asks for, and the short reply that goes with it. */
 function fixtureCard(
   input: string,
@@ -475,9 +487,11 @@ const reply: Provider["streamSimple"] = (_model, context, options) => {
     toolResult?.role === "toolResult" && card
       ? card.reply
       : toolResult?.role === "toolResult"
-        ? toolResult.content
-            .flatMap((p) => (p.type === "text" ? [p.text] : []))
-            .join("")
+        ? spokenResult(
+            toolResult.content
+              .flatMap((p) => (p.type === "text" ? [p.text] : []))
+              .join(""),
+          )
         : `Let’s make some room for the day.\n\n1. **Choose one priority.** Start with the work that matters most.\n2. **Leave a little breathing room.** Keep a gap between meetings.\n3. **Close the loop.** Write down your next step before you finish.\n\nWhat would you like to focus on first?`;
   const message: AssistantMessage = {
     role: "assistant",
@@ -778,6 +792,7 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
         itemId: string;
         title: string;
         outcome: "completed" | "cancelled";
+        request?: string;
       },
     ) =>
       state.turns.push({
@@ -803,14 +818,27 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
       now - 300_000,
       "Your background work on w-2 ended.",
       "Three venues have the second week of December free: two in Lisbon and one in Porto. The Porto one is cheapest and has a meeting room for 30.",
-      { itemId: "w-2", title: "Venue research", outcome: "completed" },
+      {
+        itemId: "w-2",
+        title: "Venue research",
+        outcome: "completed",
+        request:
+          "Can you look into venues for the offsite, and check the catering quotes?",
+      },
     );
     turn(
       "work-catering",
       now - 120_000,
       "Your background work on w-3 ended.",
       "I stopped the catering comparison, as you asked. Nothing was booked.",
-      { itemId: "w-3", title: "Catering quotes", outcome: "cancelled" },
+      {
+        itemId: "w-3",
+        title: "Catering quotes",
+        outcome: "cancelled",
+        // Both opened by the same message.
+        request:
+          "Can you look into venues for the offsite, and check the catering quotes?",
+      },
     );
     // A scheduled job's run, posted to the chat as the bot's message.
     state.turns.push({
@@ -885,7 +913,27 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
         notes: "Remove reports older than a month.",
       }),
     );
-    work.next = 7;
+    // Jobs that ran more recently than the items above: the Work page and
+    // the bot's list still put them last, the running one first among them.
+    const jobs = [
+      "Newsletter digest",
+      "Backup check",
+      "Price watch: flights to Lisbon",
+      "Weekly expenses",
+    ];
+    jobs.forEach((title, n) =>
+      work.items.push(
+        item(`w-${7 + n}`, title, {
+          origin: { kind: "job", jobId: `fixture-job-${n}` },
+          nextAt: now + (n + 1) * 3_600_000,
+          updatedAt: now - n * 1_000,
+          ...(n === 2
+            ? { run: { id: "fixture-job-run", startedAt: now - 5_000 } }
+            : {}),
+        }),
+      ),
+    );
+    work.next = 7 + jobs.length;
     // A real run, which stops for an approval: the chat shows it.
     await app.workRuns.start(
       tx,

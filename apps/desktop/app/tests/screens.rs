@@ -6620,6 +6620,7 @@ fn background_work_coming_back_reads_as_a_card_not_an_owner_message() {
             title: "Venue research".into(),
             kind: TurnWorkKind::Result,
             outcome: Some(HandoffOutcome::Cancelled),
+            request: None,
         });
         answer = turn.answer.clone().unwrap_or_default();
     });
@@ -6678,6 +6679,7 @@ fn a_long_result_folds_until_shown_in_full() {
             title: "Venue research".into(),
             kind: TurnWorkKind::Result,
             outcome: Some(HandoffOutcome::Completed),
+            request: None,
         });
         turn.answer = Some("Three venues are free in December. ".repeat(20));
     });
@@ -6713,6 +6715,7 @@ fn a_short_result_in_paragraphs_does_not_fold() {
             title: "Venue research".into(),
             kind: TurnWorkKind::Result,
             outcome: Some(HandoffOutcome::Completed),
+            request: None,
         });
         turn.answer = Some("Lisbon.\n\nPorto.\n\nBraga.".into());
     });
@@ -6738,6 +6741,7 @@ fn a_result_being_written_shows_in_its_card() {
             title: "Venue research".into(),
             kind: TurnWorkKind::Result,
             outcome: Some(HandoffOutcome::Completed),
+            request: None,
         });
         turn.status = raphie_core::contracts::TurnStatus::Pending;
         turn.answer = None;
@@ -6778,6 +6782,7 @@ fn a_question_asked_while_telling_a_result_sits_in_its_card() {
             title: "Tidy the reports folder".into(),
             kind: TurnWorkKind::Result,
             outcome: Some(HandoffOutcome::Completed),
+            request: None,
         });
     });
     settle(&mut rt);

@@ -165,6 +165,11 @@ export type TurnWork = {
   kind: "brief" | "result";
   /** How the run ended. Only on results. */
   outcome?: "completed" | "failed" | "cancelled";
+  /**
+   * The start of the owner's message that opened the item, one line, when it
+   * came from the chat. Only on results; never on a scheduled job's.
+   */
+  request?: string;
 };
 
 export type ConversationDelivery = {

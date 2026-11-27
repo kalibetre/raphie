@@ -404,6 +404,11 @@ export class ChatService implements ConversationCommands {
     return turn
       ? {
           status: turn.status,
+          // Only what the owner wrote: a result, a job's run or a handoff
+          // carries someone else's words.
+          ...(turn.work || turn.scheduled || turn.handoff
+            ? {}
+            : { text: turn.text }),
           answer: turn.answer,
           ...(turn.cancelled ? { cancelled: true } : {}),
           ...(turn.failure ? { failure: { ...turn.failure } } : {}),

@@ -1064,15 +1064,24 @@ pub fn conversation_work(ui: &mut Ui) {
         return;
     };
     use raphie_core::contracts::{HandoffOutcome, TurnWork, TurnWorkKind};
-    for (turn, (title, outcome)) in observation.turns.iter_mut().zip([
-        ("Venue research", HandoffOutcome::Completed),
-        ("Catering quotes", HandoffOutcome::Cancelled),
+    for (turn, (title, outcome, request)) in observation.turns.iter_mut().zip([
+        (
+            "Venue research",
+            HandoffOutcome::Completed,
+            "look into venues for the offsite",
+        ),
+        (
+            "Catering quotes",
+            HandoffOutcome::Cancelled,
+            "compare catering quotes",
+        ),
     ]) {
         turn.work = Some(TurnWork {
             item_id: "w-2".into(),
             title: title.into(),
             kind: TurnWorkKind::Result,
             outcome: Some(outcome),
+            request: Some(request.into()),
         });
     }
 }

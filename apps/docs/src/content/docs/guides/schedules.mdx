@@ -51,7 +51,7 @@ The interval is elapsed time, not a calendar rule: "every 1,440 minutes" drifts 
 
 When a job is due, its prompt runs as a **scheduled** turn in the job's own session, apart from your chat, the way [background work](/guides/conversations/#background-work) does. The session is kept while the job exists, so each run can build on the job's earlier runs; it doesn't read your chat. If the bot is replying in the chat, or the job's previous run is still going, the run waits until it is free; background work on other items doesn't hold it back.
 
-When the run ends, its reply is posted in the chat on a **Scheduled** card with the job's name and work item, exactly as the run wrote it. A long reply is folded to its first few lines, with **Show more**; **Quote** quotes it in your next message and **Open item** opens **Settings → Work**, where the job has its item. The bot reads it with your next message, so you can reply to it like any other. If the run fails, the post says it failed and why, or that it was cancelled.
+When the run ends, its reply is posted in the chat on a **Scheduled** card with the job's name and work item, exactly as the run wrote it. A long reply is folded to its first few lines, with **Show more**; **Quote** quotes it in your next message and **Open item** opens **Settings → Work**, where the job has its item. The bot reads it with your next message, so you can reply to it like any other. If the run fails or is cancelled, the post says so in the bot's words, such as `I couldn't finish "Morning brief": the calendar was down`, with the reason when there is one.
 
 ## Manage jobs
 

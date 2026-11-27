@@ -2140,6 +2140,10 @@ pub struct TurnWork {
     /// How the run ended. Only on results.
     #[serde(default)]
     pub outcome: Option<HandoffOutcome>,
+    /// The start of the owner's message that opened the item, on results
+    /// from the chat.
+    #[serde(default)]
+    pub request: Option<String>,
 }
 
 /// The brief sent to the item's session, or the result back in the chat.
