@@ -19,6 +19,8 @@ import {
 } from "@earendil-works/pi-schema";
 import type { SaveScheduledJob } from "@raphie/contracts";
 
+import { isPrivateDestination } from "../../channels/domain/binding.ts";
+import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
 import type { BotJobs } from "./bot-jobs.ts";
 
 type MutationResult = { text: string; retiredTaskId: TaskId | null };
@@ -32,6 +34,26 @@ const Receipt = defineDoc<{ result: MutationResult | null }>({
 });
 
 /** Persist the result with the mutation, so recovery cannot recreate or repeat an edit. */
+const NOT_IN_CHAT =
+  "Scheduled jobs belong to your chat with the owner. Ask the owner to set this up there.";
+
+/**
+ * Jobs run as the owner's background work and follow the chat's permission
+ * mode, so only the bot's chat makes or changes them, in a turn whose reply
+ * stays private. A task from another bot, or a group, never can.
+ */
+async function inPrivateChat(tx: Tx, api: ToolExecutionApi) {
+  const chats = await tx.doc(Chats);
+  const conversation = chats.conversations.find(
+    (c) => c.id === api.conversationId,
+  );
+  if (!conversation?.chat || conversation.handedOffBy) return false;
+  const turn = chats.turns.find(
+    (t) => t.conversationId === conversation.id && t.status === "pending",
+  );
+  return !turn?.replyTo || isPrivateDestination(turn.replyTo);
+}
+
 async function mutate(
   jobs: BotJobs,
   api: ToolExecutionApi,
@@ -41,7 +63,9 @@ async function mutate(
   const result = await api.commit(async (tx) => {
     const receipt = await tx.doc(Receipt, api.taskId);
     if (receipt.result) return { ...receipt.result };
-    receipt.result = await change(tx);
+    receipt.result = (await inPrivateChat(tx, api))
+      ? await change(tx)
+      : { text: NOT_IN_CHAT, retiredTaskId: null };
     // Draft overlays expire when the transaction settles. Return detached values.
     return { ...receipt.result };
   }, ctx);
@@ -85,7 +109,7 @@ export function createScheduleTools(jobs: BotJobs) {
         if (!names.length) return;
         return [
           `Scheduling is enabled. Your available scheduling tools on this turn are: ${names.join(", ")}. These current capabilities supersede earlier assistant claims that a tool is missing.`,
-          "Manage this bot's schedules directly on the owner's request, without approval or another confirmation. Each run is a message in this bot's chat with the owner while the runtime is running, not a device push notification. External actions performed by a job still require approval.",
+          "Manage this bot's schedules directly on the owner's request, without approval or another confirmation. Each run is a message in this bot's chat with the owner while the runtime is running, not a device push notification. A job's tool calls follow the chat's permission mode: they ask for approval unless the chat is on Full access.",
           names.includes("schedule_list") &&
             "Use schedule_list to identify the owner's existing reminder before editing or deleting it.",
           names.includes("schedule_update") &&
@@ -103,7 +127,7 @@ export function createScheduleTools(jobs: BotJobs) {
       defineTool({
         name: "schedule_create",
         description:
-          "Create a NEW reminder or recurring prompt directly on the owner's request, without approval or confirmation. To edit an existing reminder, use schedule_update instead; do not delete and recreate it. Omit everyMinutes for a one-time reminder. The runtime must be running; each run is a message in the chat, not a device push notification. Only confirm success after saved:true. External actions performed by the job still require approval.",
+          "Create a NEW reminder or recurring prompt directly on the owner's request, without approval or confirmation. To edit an existing reminder, use schedule_update instead; do not delete and recreate it. Omit everyMinutes for a one-time reminder. The runtime must be running; each run is a message in the chat, not a device push notification. Only confirm success after saved:true. The job's tool calls follow the chat's permission mode.",
         parameters: obj({
           name,
           prompt,

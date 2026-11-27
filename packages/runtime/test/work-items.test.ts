@@ -1263,18 +1263,25 @@ test("background work follows the chat's Full access, and asks again when it is 
         (t) => t.work?.kind === "result" && t.status === "done",
       ),
     );
+    const item = (await app.work.get("w-1"))!;
+    const session = (await app.chats.state()).conversations.find(
+      (c) => c.sessionId === item.sessionId,
+    )!;
     const approvals = (await app.toolApprovals.state()).approvals;
     assert.equal(approvals.length, 1);
+    assert.equal(approvals[0]!.conversationId, session.id);
     assert.equal(approvals[0]!.status, "approved");
     assert.equal(approvals[0]!.fullAccess, true);
-    // Back on Ask, the next run asks.
+    // Back on Ask, the next run in that session asks.
     await app.toolApprovals.approvalMode("owner", chat.sessionId, "ask");
     await start("start-2");
-    await until(async () =>
-      (await app.toolApprovals.state()).approvals.some(
-        (a) => a.status === "pending",
-      ),
+    await until(
+      async () => (await app.toolApprovals.state()).approvals.length === 2,
     );
+    const asked = (await app.toolApprovals.state()).approvals[1]!;
+    assert.equal(asked.conversationId, session.id);
+    assert.equal(asked.status, "pending");
+    assert.ok(!asked.fullAccess);
   } finally {
     await done();
   }

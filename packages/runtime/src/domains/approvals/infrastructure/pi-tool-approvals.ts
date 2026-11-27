@@ -436,6 +436,12 @@ export class ToolApprovalService {
           "Tasks from other bots always ask before acting. Full access is unavailable here.",
           409,
         );
+      // A work item's session follows the bot's chat; change it there.
+      if (mode !== undefined && conversation.work)
+        throw new InputError(
+          "Background work follows the chat's permission mode. Change it in the chat.",
+          409,
+        );
       const state = await tx.doc(ToolApprovals);
       if (mode !== undefined) {
         state.commandModes = {
@@ -452,7 +458,7 @@ export class ToolApprovalService {
           },
         );
       }
-      return state.commandModes?.[String(conversation.id)] ?? "ask";
+      return commandMode(tx, conversation.id);
     }, context);
   }
 
