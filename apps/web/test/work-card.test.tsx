@@ -6,14 +6,12 @@ import { WorkCard } from "../src/domains/conversations/presentation/work-card";
 
 const at = Date.UTC(2026, 10, 27, 12, 39);
 
-test("background work's result: its item, how the run ended, folded text and the item's actions", () => {
+test("background work's result: its title and time, folded text and the item's actions", () => {
   const html = renderToStaticMarkup(
     <WorkCard
       kind="background"
       title="Tidy the reports folder"
-      itemId="w-6"
       at={at}
-      status="done"
       text={<p>Deleted 214 newsletters.</p>}
       onQuote={() => {}}
       onOpenItem={() => {}}
@@ -25,15 +23,16 @@ test("background work's result: its item, how the run ended, folded text and the
     'aria-label="Background work: Tidy the reports folder"',
     "Background work",
     "Tidy the reports folder",
-    "w-6",
-    'data-status="done"',
-    "Done",
     "Deleted 214 newsletters.",
     "A step",
     "Quote",
     "Open item",
   ])
     expect(html).toContain(text);
+  // A run that simply finished has no badge and no item id, only its time.
+  expect(html).not.toContain("data-status");
+  expect(html).not.toContain("w-6");
+  expect(html).toMatch(/<header[^]*<time/);
   // The text folds; what follows it does not.
   expect(html).toMatch(/data-folded="true"[^>]*><p>Deleted 214/);
   expect(html).not.toMatch(/data-folded="true"[^>]*><p>A step/);
@@ -44,7 +43,6 @@ test("a scheduled job's post has its time in the header and no status", () => {
     <WorkCard
       kind="scheduled"
       title="Morning brief"
-      itemId="w-4"
       at={at}
       hint="Saved instruction: Summarise today"
       text={<p>Good morning.</p>}

@@ -491,7 +491,6 @@ export function Chat({
       <WorkCard
         kind={scheduled ? "scheduled" : "background"}
         title={turn.scheduled?.name ?? turn.work?.title ?? "Work"}
-        itemId={itemId}
         at={turn.createdAt}
         status={status}
         hint={
@@ -641,11 +640,11 @@ function ScheduledFailure({
   );
 }
 
-/** A finished run's state, for its card. */
-function workStatus(work: TurnWork | undefined): WorkCardStatus {
+/** A finished run's state, for its card: none when it simply finished. */
+function workStatus(work: TurnWork | undefined): WorkCardStatus | undefined {
   return work?.outcome === "cancelled"
     ? "cancelled"
     : work?.outcome === "failed"
       ? "failed"
-      : "done";
+      : undefined;
 }

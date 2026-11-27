@@ -15,12 +15,10 @@ import {
 import { Button } from "../../../shared/ui/button";
 
 /** Where a run's state shows in the card's header. */
-export type WorkCardStatus =
-  "working" | "done" | "failed" | "cancelled" | "needs-you";
+export type WorkCardStatus = "working" | "failed" | "cancelled" | "needs-you";
 
 const statusLabel: Record<WorkCardStatus, string> = {
   working: "Working",
-  done: "Done",
   failed: "Failed",
   cancelled: "Cancelled",
   "needs-you": "Needs you",
@@ -43,7 +41,6 @@ const time = (at: number) =>
 export function WorkCard({
   kind,
   title,
-  itemId,
   at,
   status,
   text,
@@ -56,7 +53,6 @@ export function WorkCard({
 }: {
   kind: "scheduled" | "background";
   title: string;
-  itemId?: string;
   at?: number;
   status?: WorkCardStatus;
   text?: ReactNode;
@@ -87,7 +83,6 @@ export function WorkCard({
         <strong className="work-card-title" title={hint ?? title}>
           {title}
         </strong>
-        {itemId && <span className="work-card-id">{itemId}</span>}
         {status ? (
           <span className="work-card-status" data-status={status}>
             <span className="work-card-status-dot" aria-hidden="true" />

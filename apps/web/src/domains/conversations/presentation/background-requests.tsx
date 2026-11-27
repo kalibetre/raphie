@@ -27,7 +27,6 @@ export function BackgroundRequests({
           key={request.itemId}
           kind="background"
           title={request.title}
-          itemId={request.itemId}
           status="needs-you"
           onOpenItem={onOpenItem && (() => onOpenItem(request.itemId))}
         >
