@@ -42,6 +42,7 @@ mod steps;
 mod viewer;
 mod welcome;
 mod work_card;
+mod work_tab;
 
 use std::path::PathBuf;
 
