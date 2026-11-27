@@ -15,6 +15,7 @@ import { ToolApprovals } from "../src/domains/approvals/infrastructure/pi-tool-a
 import { ChannelBindings } from "../src/domains/channels/infrastructure/pi-bindings.ts";
 import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
 import {
+  listWork,
   MAX_LISTED,
   openWorkContext,
   workListText,
@@ -149,6 +150,28 @@ test("work_list puts jobs last among open items and says how many it left out", 
   assert.equal(
     workListText([], { closed: false, query: "x" }),
     'No open work items matching "x".',
+  );
+});
+
+test("the Work page lists open items in the bot's order, closed ones newest first", () => {
+  const items = [
+    item(5, { origin: { kind: "job", jobId: "j-5" } }),
+    item(4, {
+      origin: { kind: "job", jobId: "j-4" },
+      run: { id: "r", startedAt: 4 },
+    }),
+    item(1, { title: "Lisbon" }),
+    item(2, { title: "Venue" }),
+    item(6, { status: "done", origin: { kind: "job", jobId: "j-6" } }),
+    item(3, { status: "done" }),
+  ];
+  assert.deepEqual(
+    listWork(items, { open: true }).map((i) => i.id),
+    ["w-2", "w-1", "w-4", "w-5"],
+  );
+  assert.deepEqual(
+    listWork(items, { open: false }).map((i) => i.id),
+    ["w-6", "w-3"],
   );
 });
 
