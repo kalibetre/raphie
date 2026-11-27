@@ -156,12 +156,12 @@ pub fn composer(s: &Ui, look: &Look, overlays: &mut Vec<El>) -> El {
         .fill(t.card)
         // The border warms towards the accent while typing, as on the web.
         // The border turns to the accent while files are dragged over, and
-        // is amber under the open dock; folded, only the bar is.
+        // is amber under the dock, open or folded, so the two read as one.
         .border(
             1.0,
             if s.drop_hover {
                 t.accent
-            } else if dock.is_some() && !folded {
+            } else if dock.is_some() {
                 t.attention
             } else if s.composer.focused {
                 t.border.mix(t.accent, 0.4)

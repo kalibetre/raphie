@@ -899,6 +899,43 @@ impl Ui {
         self.arrange_dock(|view, _| view.unfold());
     }
 
+    /// Something new at a folded dock opens it for good, the new item on top.
+    fn settle_dock(&mut self) {
+        let Some(id) = self
+            .model
+            .conversation
+            .as_ref()
+            .map(|c| c.session_id.clone())
+        else {
+            return;
+        };
+        let Some(mut view) = self.dock_views.get(&id).cloned() else {
+            return;
+        };
+        let changed = {
+            let Some(observation) = self
+                .model
+                .conversation
+                .as_ref()
+                .and_then(|c| c.observation.as_ref())
+            else {
+                return;
+            };
+            let name = self
+                .model
+                .selected_bot()
+                .map_or("Raphie", |bot| bot.name.as_str());
+            view.settle(raphie_core::dock::dock_items(
+                observation,
+                name,
+                crate::format::now_ms(),
+            ))
+        };
+        if changed {
+            self.dock_views.insert(id, view);
+        }
+    }
+
     pub fn send(&mut self) {
         let text = self.composer.text.trim().to_owned();
         let bot_id = self.model.bot_id.clone();
@@ -4490,6 +4527,7 @@ pub fn receive(ui: &mut Ui, events: Vec<Event>, tx: &mut Tx) -> bool {
     ui.ensure_self_update_sources();
     ui.ensure_command_mode();
     ui.ensure_chat();
+    ui.settle_dock();
     ui.ask_previews();
     ui.open_announced_sign_in_page(tx);
     // A reply that arrived while its conversation is on screen is read.

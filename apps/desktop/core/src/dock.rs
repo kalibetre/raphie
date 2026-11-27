@@ -136,6 +136,26 @@ impl DockView {
     pub fn unfold(&mut self) {
         self.folded_with = None;
     }
+
+    /// Once something new arrives at a folded dock, the dock opens for good
+    /// with the new item on top: what it held when folded waits behind it,
+    /// as if skipped. Returns whether anything changed.
+    pub fn settle(&mut self, items: Vec<DockItem>) -> bool {
+        let Some(held) = self.folded_with.take() else {
+            return false;
+        };
+        let (arranged, folded) = arrange(items, self);
+        if folded {
+            self.folded_with = Some(held);
+            return false;
+        }
+        self.skipped = arranged
+            .iter()
+            .filter(|item| held.iter().any(|id| id == item.id))
+            .map(|item| item.id.to_owned())
+            .collect();
+        true
+    }
 }
 
 /// The dock's top item in one line, for the folded bar.
@@ -250,8 +270,15 @@ mod tests {
         // Answering one keeps it folded.
         let one = observation(json!({ "asks": [ask("b", 2, "pending")] }));
         assert!(arrange(dock_items(&one, "Raphie", 0), &view).1);
-        // A new question opens it.
-        assert!(!arrange(dock_items(&three(), "Raphie", 0), &view).1);
+        // A new question opens it, on top, for good: what was folded waits
+        // behind it, and answering the new one does not fold it again.
+        let seen = three();
+        assert!(!arrange(dock_items(&seen, "Raphie", 0), &view).1);
+        let mut settled = view.clone();
+        assert!(settled.settle(dock_items(&seen, "Raphie", 0)));
+        let (items, folded) = arrange(dock_items(&seen, "Raphie", 0), &settled);
+        assert_eq!((ids(&items), folded), (vec!["c", "a", "b"], false));
+        assert!(!arrange(dock_items(&two, "Raphie", 0), &settled).1);
         view.unfold();
         assert!(!arrange(dock_items(&two, "Raphie", 0), &view).1);
     }
