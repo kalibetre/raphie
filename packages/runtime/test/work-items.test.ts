@@ -1177,3 +1177,58 @@ test("a message sent while a reply runs takes the job's posts held meanwhile", a
     await done();
   }
 }, 30_000);
+
+test("a held post carried by a message that Stop withdraws waits for the next one", async () => {
+  const requests: { role: string; text: string }[][] = [];
+  const { app, say, done } = await bot(
+    { check: { name: "workspace_exec", args: { command: "echo calendar" } } },
+    { requests: (messages) => requests.push(messages) },
+  );
+  try {
+    const reply = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "check",
+      text: "check the calendar",
+    });
+    await until(
+      async () =>
+        !!(await app.toolApprovals.state()).approvals.find(
+          (a) => a.status === "pending",
+        ),
+    );
+    await app.chats.postWorkResult({
+      runKey: "job-run",
+      work: { itemId: "w-1", title: "Morning brief", kind: "result" },
+      scheduled: { name: "Morning brief" },
+      text: "You have two meetings today.",
+    });
+    // A message queued behind the reply takes the post; Stop withdraws it
+    // before the model reads it.
+    const queued = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "queued",
+      text: "and the weather?",
+    });
+    await until(
+      async () =>
+        !!(await app.chats.state()).turns.find((t) => t.id === queued.id)
+          ?.queueMode,
+    );
+    await app.chats.control(reply.sessionId, "stop");
+    await until(async () =>
+      (await app.chats.state()).turns
+        .filter((t) => t.id === reply.id || t.id === queued.id)
+        .every((t) => t.status !== "pending"),
+    );
+    // The next message takes it to the model, once.
+    await say("thanks");
+    const after = requests.at(-1)!.filter((m) => m.role !== "system");
+    const mentions = after.filter((m) => m.text.includes("Morning brief"));
+    assert.equal(mentions.length, 1, JSON.stringify(after));
+    assert.match(mentions[0]!.text, /two meetings today\.[^]*thanks$/);
+  } finally {
+    await done();
+  }
+}, 30_000);

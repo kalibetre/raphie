@@ -158,6 +158,10 @@ export const chatWorkflow = defineTask<
             .join("\n") || null;
         const state = await tx.doc(Chats);
         const turn = state.turns.find((t) => t.id === task.input.turnId)!;
+        // Withdrawn before it reached the model (a queued message stopped):
+        // the posts it carried wait for the next message again.
+        if (settled.status === "unanswered" && !settled.entry)
+          returnCarries(turn);
         turn.cancelled =
           settled.status === "unanswered" && settled.reason === "aborted";
         turn.status = answer ? "done" : "error";
@@ -259,6 +263,8 @@ export const chatWorkflow = defineTask<
       if (turn?.status === "pending") {
         turn.status = "error";
         turn.failure = INTERRUPTED_REPLY;
+        // Never submitted: the posts it carried wait for the next message.
+        if (!turn.submissionId) returnCarries(turn);
       }
       if (turn?.scheduled)
         await finishJobRun(tx, task.input.turnId, "interrupted");
@@ -272,6 +278,13 @@ export const chatWorkflow = defineTask<
     }, ctx);
   },
 });
+
+/** Hands a turn's carried posts back, held, when its message never reached the model. */
+function returnCarries(turn: ChatTurn) {
+  if (!turn.carries?.length) return;
+  turn.held = turn.carries.join("\n\n");
+  delete turn.carries;
+}
 
 /**
  * Writes the chat's held posts for the model, oldest first, when nothing in
@@ -866,10 +879,14 @@ export class ChatService implements ConversationCommands {
           ...(quote ? { quote } : {}),
         };
         // Job posts held while the chat was replying go to the model with
-        // this message, ahead of it.
-        const held = state.turns.filter(
-          (t) => t.conversationId === conversation.id && t.held,
-        );
+        // this message, ahead of it, unless its reply may go where others
+        // read it: they wait for the next private one.
+        const held =
+          !destination || isPrivateDestination(destination)
+            ? state.turns.filter(
+                (t) => t.conversationId === conversation.id && t.held,
+              )
+            : [];
         if (held.length) turn.carries = held.map((t) => t.held!);
         for (const post of held) delete post.held;
         state.turns.push(turn);
@@ -1029,8 +1046,8 @@ export class ChatService implements ConversationCommands {
       if (existing) return existing.id;
       const id = crypto.randomUUID();
       const lead = input.scheduled
-        ? `Your scheduled job "${input.scheduled.name}" ran in the background, and you posted this message to the owner:`
-        : `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and you posted this message to the owner:`;
+        ? `Your scheduled job "${input.scheduled.name}" ran in the background, and at ${new Date().toISOString()} you posted this message to the owner:`
+        : `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and at ${new Date().toISOString()} you posted this message to the owner:`;
       const state = await tx.doc(Chats);
       const chat = state.conversations.find((c) => c.id === chatId)!;
       // The owner sees the post at once. The model reads it once the chat
