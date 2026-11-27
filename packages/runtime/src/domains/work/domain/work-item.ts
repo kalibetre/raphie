@@ -115,7 +115,10 @@ export function openWorkContext(items: readonly WorkItem[]) {
   );
 }
 
-/** Open or closed items, newest activity first, those matching `query` when given. */
+/**
+ * Open items in `byAttention` order, or closed ones newest activity first,
+ * those matching `query` when given. The bot and the Work page see one order.
+ */
 export function listWork(
   items: readonly WorkItem[],
   filter: { open: boolean; query?: string },
@@ -130,7 +133,7 @@ export function listWork(
           .toLowerCase()
           .includes(query),
     )
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+    .sort(filter.open ? byAttention : (a, b) => b.updatedAt - a.updatedAt);
 }
 
 /** The most items `work_list` shows at once. */
@@ -146,7 +149,6 @@ export function workListText(
   filter: { closed: boolean; query?: string },
 ) {
   const all = listWork(items, { open: !filter.closed, query: filter.query });
-  if (!filter.closed) all.sort(byAttention);
   const shown = all.slice(0, MAX_TOOL_LISTED);
   const left = all.slice(shown.length);
   if (!shown.length)
