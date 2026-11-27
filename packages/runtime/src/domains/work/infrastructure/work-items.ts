@@ -66,7 +66,7 @@ export class WorkService {
     );
   }
 
-  /** Open items, the bot's own ahead of jobs, or closed ones newest first, optionally matching `query`. */
+  /** Open items in `byAttention` order, or closed ones newest first, optionally matching `query`. */
   async list(filter: { open: boolean; query?: string }) {
     return listWork((await this.state()).items, filter);
   }

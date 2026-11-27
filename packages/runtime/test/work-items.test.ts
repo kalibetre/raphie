@@ -161,12 +161,13 @@ test("the Work page lists open items in the bot's order, closed ones newest firs
       run: { id: "r", startedAt: 4 },
     }),
     item(1, { title: "Lisbon" }),
+    item(2, { title: "Venue" }),
     item(6, { status: "done", origin: { kind: "job", jobId: "j-6" } }),
     item(3, { status: "done" }),
   ];
   assert.deepEqual(
     listWork(items, { open: true }).map((i) => i.id),
-    ["w-1", "w-4", "w-5"],
+    ["w-2", "w-1", "w-4", "w-5"],
   );
   assert.deepEqual(
     listWork(items, { open: false }).map((i) => i.id),
