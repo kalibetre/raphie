@@ -15,6 +15,7 @@ export function ReplyActions({
   title,
   onReply,
 }: {
+  /** The reply's words; with none, only the time shows. */
   text: string;
   at?: number;
   /** `at` as the conversation shows times. */
@@ -31,22 +32,21 @@ export function ReplyActions({
   }, [copied]);
   return (
     <div className="reply-actions">
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="reply-action"
-        aria-label={copied ? "Copied" : "Copy"}
-        title={copied ? "Copied" : "Copy"}
-        onClick={() => {
-          void navigator.clipboard
-            ?.writeText(text)
-            .then(() => setCopied(true))
-            .catch(() => undefined);
-        }}
-      >
-        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-      </Button>
-      {onReply && (
+      {text.trim() && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="reply-action"
+          aria-label={copied ? "Copied" : "Copy"}
+          title={copied ? "Copied" : "Copy"}
+          onClick={() => {
+            void copyText(text).then(setCopied);
+          }}
+        >
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+        </Button>
+      )}
+      {onReply && text.trim() && (
         <Button
           variant="ghost"
           size="icon-xs"
@@ -69,4 +69,28 @@ export function ReplyActions({
       )}
     </div>
   );
+}
+
+/**
+ * Puts `text` on the clipboard. Over plain HTTP away from localhost the
+ * browser has no clipboard API, so it falls back to the older copy command.
+ * Resolves whether it worked.
+ */
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.setAttribute("readonly", "");
+    field.style.position = "fixed";
+    field.style.opacity = "0";
+    document.body.append(field);
+    field.select();
+    // oxlint-disable-next-line typescript/no-deprecated -- the only copy without the clipboard API
+    const done = document.execCommand("copy");
+    field.remove();
+    return done;
+  }
 }

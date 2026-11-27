@@ -446,7 +446,7 @@ export function Chat({
             {turn?.status === "done" && <SelfUpdateNotes steps={turnSteps} />}
             {/* Copy and Reply take the whole reply, so they sit under it,
                 with when it was said. */}
-            {turn?.status === "done" && text.trim() && (
+            {turn?.status === "done" && (
               <ReplyActions
                 text={text}
                 at={at}

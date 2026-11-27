@@ -165,15 +165,6 @@
     opacity: 0;
     transition: opacity 0.15s;
   }
-  /* On the bot's message, under it: Quote takes the whole reply. */
-  .message-assistant > .message-actions {
-    position: static;
-    width: fit-content;
-    margin-top: 2px;
-    border: 0;
-    box-shadow: none;
-    background: transparent;
-  }
   .message:hover > .message-actions,
   .message:focus-within > .message-actions {
     opacity: 1;

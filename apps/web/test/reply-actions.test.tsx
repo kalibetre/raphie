@@ -26,3 +26,17 @@ test("without a way to quote, there is no Reply", () => {
   expect(html).not.toContain("Reply");
   expect(html).not.toContain("<time");
 });
+
+test("a reply with no words still says when it was said", () => {
+  const html = renderToStaticMarkup(
+    <ReplyActions
+      text={"\n"}
+      at={Date.UTC(2026, 10, 27, 15, 30)}
+      time="3:30 PM"
+      onReply={() => undefined}
+    />,
+  );
+  expect(html).toContain(">3:30 PM</time>");
+  expect(html).not.toContain("Copy");
+  expect(html).not.toContain("Reply");
+});
