@@ -14,6 +14,8 @@ export const Route = createFileRoute("/sessions/$sessionId")({
     section?: Section;
     bot?: string;
     message?: string;
+    /** A work item to show under Settings → Work. */
+    item?: string;
   } => ({
     bot:
       typeof search.bot === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(search.bot)
@@ -37,6 +39,12 @@ export const Route = createFileRoute("/sessions/$sessionId")({
         : isSection(search.section)
           ? search.section
           : undefined,
+    item:
+      search.section === "work" &&
+      typeof search.item === "string" &&
+      /^w-[0-9]{1,9}$/.test(search.item)
+        ? search.item
+        : undefined,
   }),
   component: SessionPage,
 });

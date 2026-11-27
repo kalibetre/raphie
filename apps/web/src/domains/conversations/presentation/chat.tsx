@@ -6,7 +6,6 @@ import {
   CircleAlert,
   CornerUpRight,
   ListEnd,
-  SquareArrowOutUpRight,
 } from "lucide-react";
 import {
   Fragment,
@@ -21,7 +20,6 @@ import remarkGfm from "remark-gfm";
 
 import type { Snapshot } from "../../../infrastructure/http/api-client";
 import { useBackend } from "../../../infrastructure/http/backend-context";
-import { Button } from "../../../shared/ui/button";
 import { ToolSteps } from "../../approvals/presentation/tool-steps";
 import {
   formatCost,
@@ -226,6 +224,9 @@ export function Chat({
     author,
     excerpt: text.trim().replace(/\s+/g, " ").slice(0, 280),
   });
+  /** Opens a work item on the Work page, when the workspace can. */
+  const openItem = (id: string | undefined) =>
+    id && onOpenWorkItem ? () => onOpenWorkItem(id) : undefined;
   const signature = (at?: number, title?: string) => (
     <header className="message-author">
       {author.avatar}
@@ -310,7 +311,7 @@ export function Chat({
               id={messageId(turn.id, "bot")}
             >
               {divider}
-              <WorkTab turn={turn} />
+              <WorkTab turn={turn} onOpen={openItem(turn.work?.itemId)} />
               {turnWork(turn, steps.get(turn.id) ?? [])}
             </div>
           ) : (
@@ -412,23 +413,6 @@ export function Chat({
             className="message message-assistant"
             id={turn ? messageId(turn.id, "bot") : undefined}
           >
-            {turn?.status === "done" && onQuote && text.trim() && (
-              <QuoteAction
-                onQuote={() => onQuote(quoteOf(turn.id, "bot", text))}
-              >
-                {itemId && onOpenWorkItem && (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onOpenWorkItem(itemId)}
-                  >
-                    <SquareArrowOutUpRight aria-hidden="true" />
-                    Open item
-                  </Button>
-                )}
-                {itemId && <span className="message-action-id">{itemId}</span>}
-              </QuoteAction>
-            )}
             {turn?.status === "done" &&
               signature(
                 at,
@@ -437,7 +421,9 @@ export function Chat({
                   ? `${usage.tokens.toLocaleString()} tokens across ${usage.calls} model ${usage.calls === 1 ? "call" : "calls"} · ${formatCost(usage.cost)}, provider-reported`
                   : undefined,
               )}
-            {turn && (turn.work || turn.scheduled) && <WorkTab turn={turn} />}
+            {turn && (turn.work || turn.scheduled) && (
+              <WorkTab turn={turn} onOpen={openItem(itemId)} />
+            )}
             {turn && (
               <HandoffCards
                 turnId={turn.id}
@@ -464,6 +450,12 @@ export function Chat({
               <ToolSteps steps={turnSteps} working={false} />
             )}
             {turn?.status === "done" && <SelfUpdateNotes steps={turnSteps} />}
+            {/* Quote takes the whole reply, so it sits under it. */}
+            {turn?.status === "done" && onQuote && text.trim() && (
+              <QuoteAction
+                onQuote={() => onQuote(quoteOf(turn.id, "bot", text))}
+              />
+            )}
           </article>
         );
       })}

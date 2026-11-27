@@ -14,6 +14,33 @@
     color: var(--muted-foreground);
     font-size: 11.5px;
   }
+  /* A tab that opens its item: it shows the way on hover or focus. */
+  .work-tab-link {
+    cursor: pointer;
+    text-align: left;
+  }
+  .work-tab-link:hover {
+    filter: brightness(0.97);
+  }
+  .work-tab-link:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .work-tab-open {
+    flex: none;
+    margin-left: -2px;
+    color: var(--muted-foreground);
+    opacity: 0;
+  }
+  .work-tab-link:hover .work-tab-open,
+  .work-tab-link:focus-visible .work-tab-open {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .work-tab-open {
+      opacity: 1;
+    }
+  }
   .work-tab-title {
     color: var(--foreground);
     font-weight: 600;
@@ -52,19 +79,16 @@
   .work-tab[data-outcome="cancelled"] .work-tab-stamp {
     color: var(--muted-foreground);
   }
+  /* A work item a link asked for, marked for a moment on the Work page. */
+  .work-item[data-focused] {
+    outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    outline-offset: 3px;
+  }
   /* A work turn that ended with no reply: its tab, then why. */
   .work-unanswered {
     display: flex;
     flex-direction: column;
     gap: 6px;
-  }
-  /* A work item's id beside a message's actions. */
-  .message-action-id {
-    align-self: center;
-    padding: 0 6px;
-    color: var(--muted-foreground);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 10.5px;
   }
   /* A work item's run in the chat: a scheduled job's post, background
      work's result or what it waits on the owner for. Not a message. */

@@ -1,6 +1,5 @@
 import type { Quote } from "@raphie/contracts";
 import { Reply, X } from "lucide-react";
-import type { ReactNode } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import { sessionPreview } from "../application/session-summaries";
@@ -51,21 +50,14 @@ export function QuoteBar({
   );
 }
 
-/** A message's actions: Quote, then any the message adds (`children`). */
-export function QuoteAction({
-  onQuote,
-  children,
-}: {
-  onQuote: () => void;
-  children?: ReactNode;
-}) {
+/** The action that quotes a message, shown while it is pointed at. */
+export function QuoteAction({ onQuote }: { onQuote: () => void }) {
   return (
     <div className="message-actions">
       <Button variant="ghost" size="xs" onClick={onQuote}>
         <Reply aria-hidden="true" />
         Quote
       </Button>
-      {children}
     </div>
   );
 }

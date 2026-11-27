@@ -15,6 +15,8 @@ export const Route = createFileRoute("/")({
     section?: Section;
     /** A skill to open under Settings → Skills. */
     skill?: string;
+    /** A work item to show under Settings → Work. */
+    item?: string;
     bot?: string;
   } => ({
     bot:
@@ -47,6 +49,12 @@ export const Route = createFileRoute("/")({
       typeof search.skill === "string" &&
       /^[a-z0-9-]{1,64}$/.test(search.skill)
         ? search.skill
+        : undefined,
+    item:
+      search.section === "work" &&
+      typeof search.item === "string" &&
+      /^w-[0-9]{1,9}$/.test(search.item)
+        ? search.item
         : undefined,
   }),
   component: IndexPage,

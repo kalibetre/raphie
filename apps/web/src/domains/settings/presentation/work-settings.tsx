@@ -1,6 +1,6 @@
 import type { WorkItem } from "@raphie/contracts";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "../../../shared/ui/button";
 import {
@@ -24,12 +24,26 @@ import {
 } from "../infrastructure/use-work-items";
 import { Group } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
-import { WorkItemCard } from "./work-item-card";
+import { workItemAnchor, WorkItemCard } from "./work-item-card";
 
-/** A bot's work items: open ones first, then those it closed. */
-export function WorkSettings({ bot }: { bot: string }) {
+/**
+ * A bot's work items: open ones first, then those it closed. `focus` is an
+ * item a link asked for: once it is drawn, it is brought into view and
+ * marked for a moment.
+ */
+export function WorkSettings({ bot, focus }: { bot: string; focus?: string }) {
   const open = useWorkItems(false);
   const closed = useWorkItems(true);
+  const loaded = !!open.data && !!closed.data;
+  useEffect(() => {
+    if (!focus || !loaded) return;
+    const target = document.getElementById(workItemAnchor(focus));
+    if (!target) return;
+    target.scrollIntoView({ block: "center" });
+    target.dataset.focused = "true";
+    const timer = window.setTimeout(() => delete target.dataset.focused, 1600);
+    return () => window.clearTimeout(timer);
+  }, [focus, loaded]);
   const change = useWorkChange();
   const cancel = useWorkCancel();
   const [draft, setDraft] = useState<Draft>();

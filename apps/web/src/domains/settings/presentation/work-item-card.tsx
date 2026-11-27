@@ -16,6 +16,9 @@ const when = (at: number) =>
     timeStyle: "short",
   });
 
+/** Where an item is drawn on the Work page, so a link can bring it into view. */
+export const workItemAnchor = (id: string) => `work-item-${id}`;
+
 /** One work item: where it stands, the bot's notes, its latest result. */
 export function WorkItemCard({
   item,
@@ -42,7 +45,11 @@ export function WorkItemCard({
   const handoff = !!item.origin?.kind.startsWith("handoff");
   const by = (actor: "bot" | "owner") => (actor === "bot" ? bot : "you");
   return (
-    <article className="automation-job work-item" aria-label={item.title}>
+    <article
+      className="automation-job work-item"
+      id={workItemAnchor(item.id)}
+      aria-label={item.title}
+    >
       <div className="automation-job-heading">
         <h3>{item.title}</h3>
         <span
