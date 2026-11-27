@@ -70,7 +70,6 @@ function dayFromNow(days: number) {
   return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
 }
 
-/** The card a message asks for, and the short reply that goes with it. */
 /**
  * What the fixture's bot says after a tool returns: an answer to its question
  * in its own words, as a real model would, and any other result as it is.
@@ -83,6 +82,7 @@ function spokenResult(result: string) {
   return result;
 }
 
+/** The card a message asks for, and the short reply that goes with it. */
 function fixtureCard(
   input: string,
 ): { arguments: JsonObject; reply: string } | null {
@@ -822,7 +822,8 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
         itemId: "w-2",
         title: "Venue research",
         outcome: "completed",
-        request: "Can you look into venues for the offsite, and check the…",
+        request:
+          "Can you look into venues for the offsite, and check the catering quotes?",
       },
     );
     turn(
@@ -834,7 +835,9 @@ if (process.env.RAPHIE_FIXTURE_WORK === "true") {
         itemId: "w-3",
         title: "Catering quotes",
         outcome: "cancelled",
-        request: "Can you look into venues for the offsite, and check the…",
+        // Both opened by the same message.
+        request:
+          "Can you look into venues for the offsite, and check the catering quotes?",
       },
     );
     // A scheduled job's run, posted to the chat as the bot's message.
