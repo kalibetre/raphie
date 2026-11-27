@@ -359,6 +359,10 @@ pub struct Ui {
     pub quoting: Option<Quote>,
     /// A turn whose message to bring into view once it is shown.
     pub reveal: Option<String>,
+    /// The work item a link from the chat opened the Work page at: marked
+    /// there, and brought into view once the lists are in.
+    pub work_focus: Option<String>,
+    work_focus_shown: bool,
     /// Whether the bot roster on the left shows (⌘B).
     pub roster_open: bool,
     /// In a narrow window, where one column shows at a time: whether it is
@@ -592,6 +596,8 @@ impl Ui {
             drop_hover: false,
             quoting: None,
             reveal: None,
+            work_focus: None,
+            work_focus_shown: false,
             roster_open: true,
             narrow_home: true,
             settings_nav_home: false,
@@ -1449,6 +1455,39 @@ impl Ui {
 
     /// Brings the message an inbox entry led to into view, once the open
     /// session has loaded the turn it belongs to.
+    /// Opens the selected bot's Work page at one item.
+    pub fn open_work_item(&mut self, item_id: &str) {
+        let bot_id = self
+            .model
+            .bot_id
+            .clone()
+            .unwrap_or_else(|| "default".into());
+        self.open_settings(Some(Page::Bot {
+            bot_id,
+            section: BotSection::Work,
+        }));
+        self.work_focus = Some(item_id.to_owned());
+        self.work_focus_shown = false;
+    }
+
+    /// Brings the item a link asked for into view, once the Work page has it.
+    fn reveal_work_item(&mut self, tx: &mut Tx) {
+        let (Some(id), false) = (&self.work_focus, self.work_focus_shown) else {
+            return;
+        };
+        let loaded = self.model.work.values().any(|lists| {
+            lists
+                .open
+                .iter()
+                .chain(&lists.closed)
+                .any(|item| &item.id == id)
+        });
+        if loaded {
+            tx.scroll_into_view(format!("rd-work-{id}"));
+            self.work_focus_shown = true;
+        }
+    }
+
     fn reveal_message(&mut self, tx: &mut Tx) {
         let Some(turn_id) = &self.reveal else {
             return;
@@ -1972,6 +2011,8 @@ impl Ui {
 
     /// Opens Settings on `page`, or on the selected bot's Profile.
     pub fn open_settings(&mut self, page: Option<Page>) {
+        // A link to one item sets it again after this.
+        self.work_focus = None;
         // In a narrow window, the gear opens on the navigation; a link to
         // one page opens that page.
         self.settings_nav_home = page.is_none();
@@ -4172,6 +4213,7 @@ pub fn poll(ui: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     };
     let events = client.drain();
     ui.reveal_message(tx);
+    ui.reveal_work_item(tx);
     // A search box has no "changed" handler, so each frame looks at it.
     let searched = ui.watch_memory_query(clock);
     if ui.memories.search_pending() {

@@ -6343,7 +6343,8 @@ fn a_bots_own_instructions_are_edited_on_its_profile() {
 fn a_message_is_quoted_from_its_action_and_sent_with_the_quote() {
     use raphie_core::contracts::{QuoteAuthor, QuoteRef};
     for dark in [false, true] {
-        let mut rt = render(scenes::conversation, dark);
+        // Tall enough that the first message sits clear of the header.
+        let mut rt = render_sized(scenes::conversation, dark, (1280.0, 1400.0));
         let first = rt
             .state
             .model
@@ -6652,13 +6653,14 @@ fn background_work_coming_back_reads_as_the_bot_s_message_with_its_tab() {
         "the tab sits under the name"
     );
 
-    // Quote quotes the reply; Open item opens the bot's Work page.
+    // Quote, under the reply, quotes it.
     click(&mut rt, &format!("rd-quote-bot-{id}"));
     assert_eq!(
         rt.state.quoting.as_ref().map(|q| q.author),
         Some(QuoteAuthor::Bot)
     );
-    click(&mut rt, &format!("rd-open-item-{id}"));
+    // The tab is the link to its item: the Work page, at that item.
+    click(&mut rt, &format!("rd-work-tab-{id}"));
     assert_eq!(
         rt.state.screen,
         Screen::Settings(Page::Bot {
@@ -6666,6 +6668,7 @@ fn background_work_coming_back_reads_as_the_bot_s_message_with_its_tab() {
             section: BotSection::Work,
         })
     );
+    assert_eq!(rt.state.work_focus.as_deref(), Some("w-2"));
 }
 
 #[test]

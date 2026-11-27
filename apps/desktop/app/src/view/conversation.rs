@@ -467,21 +467,6 @@ fn reply(
         .w_full()
         .px(2.0)
         .hover_group();
-    // Quoting it, level with the bot's name while it is pointed at, and
-    // for a work item's run, opening the item.
-    if done && !source.trim().is_empty() {
-        let mut actions = row().gap(4.0).center_y().child(super::quote::action(
-            format!("rd-quote-bot-{}", turn.id),
-            &turn.id,
-            QuoteAuthor::Bot,
-            source,
-            t,
-        ));
-        if let Some(work) = &turn.work {
-            actions = actions.children(work_tab::actions(&turn.id, &work.item_id, t));
-        }
-        reply = reply.child(actions.pin(None, Some(0.0), Some(0.0), None));
-    }
     if done {
         // Tokens and cost are for the curious, not the conversation.
         let usage = run_usage(&turn.id, activity).map(|usage| {
@@ -536,6 +521,16 @@ fn reply(
     }
     if done && let Some(notes) = self_updates::notes(s, steps, t) {
         reply = reply.child(notes);
+    }
+    // Quote takes the whole reply, so it sits under it, while pointed at.
+    if done && !source.trim().is_empty() {
+        reply = reply.child(row().mt(4.0).child(super::quote::action(
+            format!("rd-quote-bot-{}", turn.id),
+            &turn.id,
+            QuoteAuthor::Bot,
+            source,
+            t,
+        )));
     }
     Some(reply)
 }

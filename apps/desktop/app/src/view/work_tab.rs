@@ -1,18 +1,16 @@
 //! Where a bot's message came from, when a work item's run brought it: a tab
 //! under the bot's name with the item, the owner's request that started it
-//! and a stamp with how the run ended, and the item's actions beside Quote.
+//! and a stamp with how the run ended. Pressing it opens the item.
 //!
 //! Mirrors `apps/web/src/domains/conversations/presentation/work-tab.tsx`
 //! and its `.work-tab` rules in `bot-workspace.css`.
 
 use raphie_core::contracts::{HandoffOutcome, SessionTurn, TurnStatus};
-use rune::{El, Family, TextStyle, row, text};
+use rune::{El, Family, TextStyle, icon, row, text};
 
 use crate::icons;
-use crate::sections::{BotSection, Page};
 use crate::state::Ui;
-use crate::theme::{Theme, font, mono};
-use crate::widgets::{Kind, Size, button};
+use crate::theme::{Theme, font};
 
 /// The tab under a work item's message, or none for an ordinary reply.
 pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
@@ -79,10 +77,6 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
         .fill(fill)
         .border_sides([0.0, 0.0, 0.0, 2.0], ink)
         .corners([0.0, 6.0, 6.0, 0.0])
-        .help(match &from {
-            Some(from) => format!("{title} · {from}"),
-            None => title.to_owned(),
-        })
         .child(line);
     if let Some(stamp) = stamp {
         tab = tab.child(
@@ -105,32 +99,34 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
                 ),
         );
     }
-    Some(row().w_full().mb(8.0).child(tab))
-}
-
-/// Open item and the item's id, beside Quote while the message is pointed at.
-pub fn actions(turn_id: &str, item_id: &str, t: &Theme) -> Vec<El> {
-    vec![
-        button(
-            t,
-            Kind::Ghost,
-            Size::Tiny,
-            Some(&icons::EXTERNAL_LINK),
-            "Open item",
-        )
-        .key(format!("rd-open-item-{turn_id}"))
-        .group_opacity(0.0, 1.0)
-        .on_press(|s: &mut Ui| {
-            let bot_id = s.model.bot_id.clone().unwrap_or_else(|| "default".into());
-            s.open_settings(Some(Page::Bot {
-                bot_id,
-                section: BotSection::Work,
-            }));
-        }),
-        text(item_id.to_owned())
-            .font(mono(10.5))
-            .color(t.muted_foreground)
-            .single_line()
-            .group_opacity(0.0, 1.0),
+    // The tab is the link to its item: the way there shows when pointed at.
+    let tip = [
+        work.map(|w| w.item_id.as_str()),
+        Some(title),
+        from.as_deref(),
     ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ");
+    let tab = match work {
+        Some(work) => {
+            let id = work.item_id.clone();
+            tab.role("button")
+                .label(format!("Open {tip}"))
+                .help(format!("Open {tip}"))
+                .hover(fill.mix(t.foreground, 0.04))
+                .focus_ring(2.0, 2.0, t.accent)
+                .hover_group()
+                .child(
+                    icon(&icons::EXTERNAL_LINK, 11.0)
+                        .color(t.muted_foreground)
+                        .group_opacity(0.0, 1.0)
+                        .a11y_hidden(),
+                )
+                .on_press(move |s: &mut Ui| s.open_work_item(&id))
+        }
+        None => tab.help(tip),
+    };
+    Some(row().w_full().mb(8.0).child(tab))
 }
