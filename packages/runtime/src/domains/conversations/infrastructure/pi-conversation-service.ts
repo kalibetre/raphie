@@ -5,6 +5,7 @@ import type {
   ConversationId,
   ModelRef,
   TaskId,
+  Tx,
 } from "@earendil-works/pi-durable";
 import {
   configure,
@@ -157,6 +158,10 @@ export const chatWorkflow = defineTask<
             .join("\n") || null;
         const state = await tx.doc(Chats);
         const turn = state.turns.find((t) => t.id === task.input.turnId)!;
+        // Withdrawn before it reached the model (a queued message stopped):
+        // the posts it carried wait for the next message again.
+        if (settled.status === "unanswered" && !settled.entry)
+          returnCarries(turn);
         turn.cancelled =
           settled.status === "unanswered" && settled.reason === "aborted";
         turn.status = answer ? "done" : "error";
@@ -258,6 +263,8 @@ export const chatWorkflow = defineTask<
       if (turn?.status === "pending") {
         turn.status = "error";
         turn.failure = INTERRUPTED_REPLY;
+        // Never submitted: the posts it carried wait for the next message.
+        if (!turn.submissionId) returnCarries(turn);
       }
       if (turn?.scheduled)
         await finishJobRun(tx, task.input.turnId, "interrupted");
@@ -271,6 +278,48 @@ export const chatWorkflow = defineTask<
     }, ctx);
   },
 });
+
+/** Hands a turn's carried posts back, held, when its message never reached the model. */
+function returnCarries(turn: ChatTurn) {
+  if (!turn.carries?.length) return;
+  turn.held = turn.carries.join("\n\n");
+  delete turn.carries;
+}
+
+/**
+ * Writes the chat's held posts for the model, oldest first, when nothing in
+ * `conversationId` is replying. Otherwise they stay held, and the chat's
+ * next message takes them (see `send`). One admission, so it comes before
+ * the commit's own entries and tasks.
+ */
+async function writeHeldPosts(
+  tx: Tx,
+  write: (entry: HeldPosts) => Promise<unknown>,
+  conversationId: number,
+) {
+  const state = await tx.doc(Chats);
+  const turns = state.turns.filter((t) => t.conversationId === conversationId);
+  if (turns.some((t) => t.status === "pending")) return;
+  const held = turns.filter((t) => t.held);
+  if (!held.length) return;
+  await write({
+    kind: "raphie.work-result",
+    data: { turnIds: held.map((t) => t.id) },
+    model: held.map((t) => ({
+      role: "user",
+      content: t.held!,
+      timestamp: t.createdAt,
+    })),
+  });
+  for (const turn of held) delete turn.held;
+}
+
+/** The entry that hands the model the chat's held posts. */
+type HeldPosts = {
+  kind: "raphie.work-result";
+  data: { turnIds: string[] };
+  model: { role: "user"; content: string; timestamp: number }[];
+};
 
 /** Covers aborted/faulted reply workflows as well as normal turn settlement. */
 export const watchJobRun = defineTask<
@@ -829,6 +878,17 @@ export class ChatService implements ConversationCommands {
           ...(input.work ? { work: input.work } : {}),
           ...(quote ? { quote } : {}),
         };
+        // Job posts held while the chat was replying go to the model with
+        // this message, ahead of it, unless its reply may go where others
+        // read it: they wait for the next private one.
+        const held =
+          !destination || isPrivateDestination(destination)
+            ? state.turns.filter(
+                (t) => t.conversationId === conversation.id && t.held,
+              )
+            : [];
+        if (held.length) turn.carries = held.map((t) => t.held!);
+        for (const post of held) delete post.held;
         state.turns.push(turn);
         if (input.handoff?.kind === "task")
           await receiveHandoff(tx, {
@@ -858,6 +918,7 @@ export class ChatService implements ConversationCommands {
             turnId: turn.id,
             conversationId: conversation.id as ConversationId,
             text:
+              (turn.carries ? `${turn.carries.join("\n\n")}\n\n` : "") +
               messageContext(
                 turn.createdAt,
                 input.origin,
@@ -987,22 +1048,11 @@ export class ChatService implements ConversationCommands {
       const lead = input.scheduled
         ? `Your scheduled job "${input.scheduled.name}" ran in the background, and you posted this message to the owner:`
         : `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and you posted this message to the owner:`;
-      await conversation!.submit(tx, {
-        type: "write",
-        entry: {
-          kind: "raphie.work-result",
-          data: { turnId: id },
-          model: [
-            {
-              role: "user",
-              content: `[${lead}]\n\n${input.text}`,
-              timestamp: Date.now(),
-            },
-          ],
-        },
-      });
       const state = await tx.doc(Chats);
       const chat = state.conversations.find((c) => c.id === chatId)!;
+      // The owner sees the post at once. The model reads it once the chat
+      // isn't replying, so it never lands in the middle of a reply; held
+      // posts go with it, oldest first.
       state.turns.push({
         id,
         requestKey,
@@ -1015,7 +1065,14 @@ export class ChatService implements ConversationCommands {
         answer: input.text,
         work: input.work,
         ...(input.scheduled ? { scheduled: input.scheduled } : {}),
+        // When it was posted, since a later message may carry it.
+        held: `[${lead}]\n[Posted ${new Date().toISOString()}]\n\n${input.text}`,
       });
+      await writeHeldPosts(
+        tx,
+        (entry) => conversation!.submit(tx, { type: "write", entry }),
+        chat.id,
+      );
       // The job's run now opens the chat at this message.
       if (input.fromTurnId)
         for (const run of (await tx.doc(JobRuns)).items)

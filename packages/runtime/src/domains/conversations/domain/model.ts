@@ -79,6 +79,14 @@ export type ChatTurn = {
   compaction?: TurnCompaction;
   /** The earlier message the owner's message quotes. */
   quote?: Quote;
+  /**
+   * A job's post that arrived while the chat was replying: what the model
+   * reads of it, held for the chat's next message so it never lands
+   * mid-reply.
+   */
+  held?: string;
+  /** The held posts this turn's message took to the model, ahead of it. */
+  carries?: string[];
 };
 
 export type ChatDelivery = {
