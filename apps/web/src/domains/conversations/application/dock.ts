@@ -137,6 +137,23 @@ export const unfoldDock = (view: DockView): DockView => ({
   skipped: view.skipped,
 });
 
+/**
+ * Once something new arrives at a folded dock, the dock opens for good with
+ * the new item on top: what it held when folded waits behind it, as if
+ * skipped. Returns the settled view, or `undefined` when nothing changes.
+ */
+export function settleDock(
+  view: DockView,
+  items: readonly DockItem[],
+): DockView | undefined {
+  const held = view.foldedWith;
+  if (!held || arrangeDock(items, view).folded) return undefined;
+  const behind = arrangeDock(items, view)
+    .items.filter((item) => held.includes(item.id))
+    .map((item) => item.id);
+  return { skipped: behind };
+}
+
 /** The dock's top item in one line, for the folded bar. */
 export function dockLine(item: DockItem) {
   if (item.ask) return item.ask.question;

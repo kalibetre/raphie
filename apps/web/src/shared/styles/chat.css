@@ -741,13 +741,6 @@
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
-  /* Folded, the composer is back to the chat: only the bar stays amber. */
-  .question-dock[data-folded] + .composer[data-docked] {
-    border-color: var(--border);
-  }
-  .question-dock[data-folded] + .composer[data-docked]:focus-within {
-    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-  }
   .question-dock-skip,
   .question-dock-fold {
     flex: none;

@@ -9,6 +9,7 @@ import {
   dockLine,
   foldDock,
   openDock,
+  settleDock,
   skipTop,
   unfoldDock,
 } from "../src/domains/conversations/application/dock";
@@ -202,8 +203,18 @@ test("a folded dock stays folded until something new arrives", () => {
   expect(arrangeDock(two, view).folded).toBe(true);
   // Answering one keeps it folded.
   expect(arrangeDock(items(["b"]), view).folded).toBe(true);
-  // A new question opens it.
-  expect(arrangeDock(items(["a", "b", "c"]), view).folded).toBe(false);
+  // A new question opens it, on top, for good: what was folded waits
+  // behind it, and answering the new one does not fold it again.
+  const three = items(["a", "b", "c"]);
+  expect(arrangeDock(three, view).folded).toBe(false);
+  const settled = settleDock(view, three)!;
+  expect(arrangeDock(three, settled).items.map((i) => i.id)).toEqual([
+    "c",
+    "a",
+    "b",
+  ]);
+  expect(arrangeDock(two, settled).folded).toBe(false);
+  expect(settleDock(view, two)).toBeUndefined();
   expect(arrangeDock(two, unfoldDock(view)).folded).toBe(false);
 });
 

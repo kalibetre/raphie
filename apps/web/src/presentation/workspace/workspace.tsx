@@ -8,6 +8,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import { BotActivity } from "../../domains/activity/presentation/bot-activity";
@@ -17,9 +18,11 @@ import {
   type DockView,
   foldDock,
   openDock,
+  settleDock,
   skipTop,
   unfoldDock,
 } from "../../domains/conversations/application/dock";
+import { dockViews } from "../../domains/conversations/application/dock-views";
 import {
   contextTokens,
   runUsage,
@@ -156,23 +159,29 @@ export function Workspace({
     quoting && quoting.sessionId === sessionId ? quoting : undefined;
   // What waits on the owner here, docked on the composer, arranged as the
   // owner left it in this conversation.
-  const [dockViews, setDockViews] = useState<Record<string, DockView>>({});
-  const dockView = (conversation && dockViews[conversation.id]) || openDock;
-  const dock = arrangeDock(
+  const views = useSyncExternalStore(
+    dockViews.subscribe,
+    dockViews.get,
+    dockViews.get,
+  );
+  const waiting =
     data && conversation
       ? dockItems(data, conversation.id, botProfile?.name ?? "Raphie")
-      : [],
-    dockView,
+      : [];
+  const dock = arrangeDock(
+    waiting,
+    (conversation && views[conversation.id]) || openDock,
   );
   const docked = dock.items;
   const arrange = (change: (view: DockView) => DockView) => {
-    if (!conversation) return;
-    const id = conversation.id;
-    setDockViews((views) => ({
-      ...views,
-      [id]: change(views[id] ?? openDock),
-    }));
+    if (conversation) dockViews.set(conversation.id, change);
   };
+  // Something new at a folded dock opens it for good, the new item on top.
+  // A cheap check after every render; it writes only when the dock settles.
+  useEffect(() => {
+    if (!conversation) return;
+    dockViews.set(conversation.id, (view) => settleDock(view, docked) ?? view);
+  });
   const handoffQuery = useHandoffs();
   const handoffs = handoffQuery.data?.items;
   // A handoff is saved inside its tool call, so once a tool step completes or
