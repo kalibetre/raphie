@@ -533,7 +533,7 @@ fn reply(
     }
     // Copy and Reply take the whole reply, so they sit under it, with when
     // it was said, while it is pointed at.
-    if done && !source.trim().is_empty() {
+    if done {
         reply = reply.child(super::quote::reply_actions(&turn.id, source, said, t));
     }
     Some(reply)

@@ -118,7 +118,8 @@ pub fn action(key: String, turn_id: &str, author: QuoteAuthor, text_: &str, t: &
 
 /// Under a finished reply, shown while it is pointed at: copy its text,
 /// reply to it (the next message quotes it), and when it was said, with what
-/// it cost on hover. Mirrors `reply-actions.tsx` on the web.
+/// it cost on hover. A reply with no words has only its time. Mirrors
+/// `reply-actions.tsx` on the web.
 pub fn reply_actions(
     turn_id: &str,
     text_: &str,
@@ -131,7 +132,8 @@ pub fn reply_actions(
             .role("button")
             .label(label)
             .help(label)
-            .size(21.0, 21.0)
+            // The web's `icon-xs`: 24 px.
+            .size(24.0, 24.0)
             .center()
             .radius(7.0)
             .hover(t.hover)
@@ -147,23 +149,27 @@ pub fn reply_actions(
         .gap(2.0)
         .center_y()
         // Hidden until the message is pointed at or focused.
-        .group_opacity(0.0, 1.0)
-        .child(
-            button(format!("rd-copy-bot-{turn_id}"), "Copy", &icons::COPY)
-                .on_press_tx(move |_: &mut Ui, tx: &mut Tx| tx.copy(copied.clone())),
-        )
-        .child(
-            button(
-                format!("rd-quote-bot-{turn_id}"),
-                "Reply",
-                &icons::CORNER_UP_LEFT,
+        .group_opacity(0.0, 1.0);
+    // A reply with no words has only its time.
+    if !text_.trim().is_empty() {
+        actions = actions
+            .child(
+                button(format!("rd-copy-bot-{turn_id}"), "Copy", &icons::COPY)
+                    .on_press_tx(move |_: &mut Ui, tx: &mut Tx| tx.copy(copied.clone())),
             )
-            // Replying puts the caret in the draft that will quote.
-            .on_press_tx(move |s: &mut Ui, tx: &mut Tx| {
-                s.quote(&reply_id, QuoteAuthor::Bot, &reply_text);
-                tx.focus("rd-composer", false);
-            }),
-        );
+            .child(
+                button(
+                    format!("rd-quote-bot-{turn_id}"),
+                    "Reply",
+                    &icons::CORNER_UP_LEFT,
+                )
+                // Replying puts the caret in the draft that will quote.
+                .on_press_tx(move |s: &mut Ui, tx: &mut Tx| {
+                    s.quote(&reply_id, QuoteAuthor::Bot, &reply_text);
+                    tx.focus("rd-composer", false);
+                }),
+            );
+    }
     if let Some((at, usage)) = said {
         let mut time = text(crate::format::clock(at))
             .key(format!("rd-reply-time-{turn_id}"))
