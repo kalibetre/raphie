@@ -2,6 +2,10 @@ import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { arr, obj, opt, str } from "@earendil-works/pi-schema";
 
 import {
+  inOwnersChat,
+  ONLY_IN_OWNERS_CHAT,
+} from "../../conversations/infrastructure/owner-chat.ts";
+import {
   DESCRIPTION_LIMIT,
   NAME_LIMIT,
   SKILL_LIMITS,
@@ -86,7 +90,15 @@ export function createSkillWriter(
           ),
         }),
         replay: "safe",
-        execute: async (args, api) => {
+        execute: async (args, api, ctx) => {
+          // A skill lasts and reaches every session: the owner's chat only.
+          if (
+            !(await api.commit(
+              (tx) => inOwnersChat(tx, api.conversationId),
+              ctx,
+            ))
+          )
+            return text(ONLY_IN_OWNERS_CHAT, true);
           if (!allowed())
             return text(
               "The owner has not allowed you to write skills. They can allow it in Settings → Profile.",

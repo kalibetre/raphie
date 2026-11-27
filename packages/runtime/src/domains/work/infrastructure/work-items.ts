@@ -275,11 +275,14 @@ async function chatTurn(tx: Tx, api: ToolExecutionApi) {
     (c) => c.id === api.conversationId,
   );
   if (!conversation?.chat) return undefined;
-  const turn = chats.turns.find(
+  const pending = chats.turns.filter(
     (t) => t.conversationId === conversation.id && t.status === "pending",
   );
-  if (turn?.replyTo && !isPrivateDestination(turn.replyTo)) return undefined;
-  return { turnId: turn?.id };
+  // A call can't tell which pending turn it serves: refuse if any may reply
+  // where others read it.
+  if (pending.some((t) => t.replyTo && !isPrivateDestination(t.replyTo)))
+    return undefined;
+  return { turnId: pending[0]?.id };
 }
 
 function find(state: WorkState, id: string) {

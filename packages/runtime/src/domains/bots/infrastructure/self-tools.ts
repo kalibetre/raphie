@@ -7,6 +7,10 @@ import type {
 } from "@raphie/contracts";
 
 import {
+  inOwnersChat,
+  ONLY_IN_OWNERS_CHAT,
+} from "../../conversations/infrastructure/owner-chat.ts";
+import {
   editInstructions,
   MAX_INSTRUCTIONS_LENGTH,
 } from "../domain/instructions.ts";
@@ -46,7 +50,15 @@ export function createSelfTools(self: SelfProfile) {
           personality: str({ minLength: 1, maxLength: 16000 }),
         }),
         replay: "safe",
-        execute: async (args) => {
+        execute: async (args, api, ctx) => {
+          // What it saves lasts and reaches every session: the owner's chat only.
+          if (
+            !(await api.commit(
+              (tx) => inOwnersChat(tx, api.conversationId),
+              ctx,
+            ))
+          )
+            return text(ONLY_IN_OWNERS_CHAT, true);
           if (!self.profile().selfUpdates.personality)
             return text(
               "The owner has not allowed you to change your personality. They can allow it in Settings → Profile.",
@@ -71,7 +83,15 @@ export function createSelfTools(self: SelfProfile) {
           about: opt(str({ maxLength: 2000 })),
         }),
         replay: "safe",
-        execute: async (args) => {
+        execute: async (args, api, ctx) => {
+          // What it saves lasts and reaches every session: the owner's chat only.
+          if (
+            !(await api.commit(
+              (tx) => inOwnersChat(tx, api.conversationId),
+              ctx,
+            ))
+          )
+            return text(ONLY_IN_OWNERS_CHAT, true);
           if (!self.profile().selfUpdates.owner)
             return text(
               "The owner has not allowed you to update their profile. They can allow it in Settings → Profile.",
@@ -105,7 +125,15 @@ export function createSelfTools(self: SelfProfile) {
           instructions: opt(str({ maxLength: MAX_INSTRUCTIONS_LENGTH })),
         }),
         replay: "safe",
-        execute: async (args) => {
+        execute: async (args, api, ctx) => {
+          // What it saves lasts and reaches every session: the owner's chat only.
+          if (
+            !(await api.commit(
+              (tx) => inOwnersChat(tx, api.conversationId),
+              ctx,
+            ))
+          )
+            return text(ONLY_IN_OWNERS_CHAT, true);
           const allowed = self.profile().selfUpdates;
           if (!allowed.personality)
             return text(

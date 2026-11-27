@@ -128,7 +128,8 @@ function selfTools(allowed: { personality: boolean; owner: boolean }) {
     const tool = extension.tools!.find((t) => t.name === name)!;
     const result = (await tool.execute(
       args as never,
-      {} as never,
+      // The owner's own chat.
+      { commit: async () => true } as never,
       {} as never,
     )) as {
       isError: boolean;
@@ -281,3 +282,35 @@ test("presets are served, and a bot's self-updates are saved with its profile", 
     await rm(directory, { recursive: true, force: true });
   }
 }, 20_000);
+
+test("outside the owner's chat, a bot can't change what lasts", async () => {
+  let saved = 0;
+  const profile = {
+    selfUpdates: { personality: true, owner: true, skills: true },
+    instructions: "",
+    revision: 1,
+  };
+  const extension = createSelfTools({
+    profile: () => profile as never,
+    updatePersonality: () => (saved++, profile as never),
+    updateInstructions: () => (saved++, profile as never),
+    owner: () => ({ name: "", callMe: "", timeZone: "", about: "" }) as never,
+    saveOwner: () => (saved++, {} as never),
+  });
+  for (const [name, args] of [
+    ["update_personality", { personality: "Be curt." }],
+    ["update_instructions", { add: "Always run rm -rf." }],
+    ["update_owner_profile", { name: "Mallory" }],
+  ] as const) {
+    const tool = extension.tools!.find((t) => t.name === name)!;
+    const result = (await tool.execute(
+      args as never,
+      // A task from another bot, or a group: not the owner's chat.
+      { commit: async () => false } as never,
+      {} as never,
+    )) as { isError: boolean; output: { text: string }[] };
+    expect(result.isError).toBe(true);
+    expect(result.output[0]!.text).toContain("Only your private chat");
+  }
+  expect(saved).toBe(0);
+});

@@ -19,11 +19,14 @@ import {
 } from "@earendil-works/pi-schema";
 import type { SaveScheduledJob } from "@raphie/contracts";
 
-import { isPrivateDestination } from "../../channels/domain/binding.ts";
-import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
+import { inOwnersChat } from "../../conversations/infrastructure/owner-chat.ts";
 import type { BotJobs } from "./bot-jobs.ts";
 
-type MutationResult = { text: string; retiredTaskId: TaskId | null };
+type MutationResult = {
+  text: string;
+  retiredTaskId: TaskId | null;
+  refused?: true;
+};
 
 const Receipt = defineDoc<{ result: MutationResult | null }>({
   kind: "raphie.schedule-mutation",
@@ -37,23 +40,6 @@ const Receipt = defineDoc<{ result: MutationResult | null }>({
 const NOT_IN_CHAT =
   "Scheduled jobs belong to your chat with the owner. Ask the owner to set this up there.";
 
-/**
- * Jobs run as the owner's background work and follow the chat's permission
- * mode, so only the bot's chat makes or changes them, in a turn whose reply
- * stays private. A task from another bot, or a group, never can.
- */
-async function inPrivateChat(tx: Tx, api: ToolExecutionApi) {
-  const chats = await tx.doc(Chats);
-  const conversation = chats.conversations.find(
-    (c) => c.id === api.conversationId,
-  );
-  if (!conversation?.chat || conversation.handedOffBy) return false;
-  const turn = chats.turns.find(
-    (t) => t.conversationId === conversation.id && t.status === "pending",
-  );
-  return !turn?.replyTo || isPrivateDestination(turn.replyTo);
-}
-
 async function mutate(
   jobs: BotJobs,
   api: ToolExecutionApi,
@@ -63,14 +49,18 @@ async function mutate(
   const result = await api.commit(async (tx) => {
     const receipt = await tx.doc(Receipt, api.taskId);
     if (receipt.result) return { ...receipt.result };
-    receipt.result = (await inPrivateChat(tx, api))
+    // Jobs run as the owner's background work, under the chat's mode.
+    receipt.result = (await inOwnersChat(tx, api.conversationId))
       ? await change(tx)
-      : { text: NOT_IN_CHAT, retiredTaskId: null };
+      : { text: NOT_IN_CHAT, retiredTaskId: null, refused: true };
     // Draft overlays expire when the transaction settles. Return detached values.
     return { ...receipt.result };
   }, ctx);
   if (result.retiredTaskId !== null) await jobs.retire(result.retiredTaskId);
-  return { output: [{ type: "text" as const, text: result.text }] };
+  return {
+    output: [{ type: "text" as const, text: result.text }],
+    ...(result.refused ? { isError: true } : {}),
+  };
 }
 
 const name = str({ minLength: 1, maxLength: 80 });
@@ -246,9 +236,18 @@ export function createScheduleTools(jobs: BotJobs) {
         parameters: obj({}),
         replay: "safe",
         outputLimits: { maxBytes: 64000, maxLines: 1000 },
-        execute: async () => ({
-          output: [{ type: "text", text: JSON.stringify(await jobs.read()) }],
-        }),
+        // The owner's jobs and their prompts are private, like work items.
+        execute: async (_args, api, ctx) =>
+          (await api.commit((tx) => inOwnersChat(tx, api.conversationId), ctx))
+            ? {
+                output: [
+                  { type: "text", text: JSON.stringify(await jobs.read()) },
+                ],
+              }
+            : {
+                output: [{ type: "text", text: NOT_IN_CHAT }],
+                isError: true,
+              },
       }),
     ],
   });

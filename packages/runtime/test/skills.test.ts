@@ -416,7 +416,7 @@ test("a bot writes and improves skills with save_skill, and the owner can undo e
     const from = Date.now();
     const result = (await tool.execute(
       args as never,
-      { callId } as never,
+      { callId, commit: async () => true } as never,
       {} as never,
     )) as { isError: boolean; output: { text: string }[] };
     // The reply finds the change by its call and when the call ran.
