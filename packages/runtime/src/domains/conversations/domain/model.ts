@@ -79,6 +79,11 @@ export type ChatTurn = {
   compaction?: TurnCompaction;
   /** The earlier message the owner's message quotes. */
   quote?: Quote;
+  /**
+   * A job's post that arrived while the chat was replying: what the model
+   * reads of it, held until the reply ends so it never lands mid-reply.
+   */
+  held?: string;
 };
 
 export type ChatDelivery = {

@@ -1002,9 +1002,9 @@ test("background work that ends while the chat's reply waits on a tool reports a
   }
 }, 30_000);
 
-test("a job's post during a reply that waits on a tool reaches the model after the tool's result", async () => {
+test("a job's post during a reply waits for the reply to end before the model reads it", async () => {
   const requests: { role: string; text: string }[][] = [];
-  const { app, done } = await bot(
+  const { app, say, done } = await bot(
     { check: { name: "workspace_exec", args: { command: "echo calendar" } } },
     { requests: (messages) => requests.push(messages) },
   );
@@ -1020,13 +1020,19 @@ test("a job's post during a reply that waits on a tool reaches the model after t
         (a) => a.status === "pending",
       );
     await until(async () => !!(await approval()));
-    // A scheduled job posts to the chat while the reply waits mid-run.
-    await app.chats.postWorkResult({
+    // A scheduled job posts to the chat while the reply waits mid-run. The
+    // owner sees it at once; the model doesn't yet.
+    const postId = await app.chats.postWorkResult({
       runKey: "job-run",
       work: { itemId: "w-1", title: "Morning brief", kind: "result" },
       scheduled: { name: "Morning brief" },
       text: "You have two meetings today.",
     });
+    const posted = () =>
+      app.chats.state().then((s) => s.turns.find((t) => t.id === postId)!);
+    assert.equal((await posted()).status, "done");
+    assert.equal((await posted()).answer, "You have two meetings today.");
+    assert.ok((await posted()).held);
     await app.toolApprovals.decide(
       (await approval())!.id,
       "approved",
@@ -1038,24 +1044,69 @@ test("a job's post during a reply that waits on a tool reaches the model after t
         (await app.chats.state()).turns.find((t) => t.id === reply.id)
           ?.status === "done",
     );
-    const { turns } = await app.chats.state();
-    assert.equal(turns.find((t) => t.id === reply.id)!.status, "done");
-    const post = turns.find((t) => t.scheduled?.name === "Morning brief")!;
-    assert.equal(post.status, "done");
-    assert.equal(post.answer, "You have two meetings today.");
-    // The post caused no request of its own. The reply's next request has
-    // the whole step first, the tool's call and result, then the post: the
-    // order a steer arrives in.
+    // The reply's last request ended with its tool's result: no post in it.
     assert.equal(requests.length, 2);
-    const last = requests.at(-1)!.filter((m) => m.role !== "system");
+    const during = requests.at(-1)!.filter((m) => m.role !== "system");
     assert.deepEqual(
-      last.slice(-4).map((m) => m.role),
-      ["user", "assistant", "toolResult", "user"],
+      during.slice(-3).map((m) => m.role),
+      ["user", "assistant", "toolResult"],
     );
-    assert.match(last.at(-4)!.text, /check the calendar$/);
-    assert.equal(last.at(-3)!.text, "call workspace_exec");
-    assert.match(last.at(-2)!.text, /calendar/);
-    assert.match(last.at(-1)!.text, /^\[Your scheduled job "Morning brief"/);
+    assert.ok(!during.some((m) => m.text.includes("Morning brief")));
+    // Once the reply ended, the post was written for the model.
+    assert.equal((await posted()).held, undefined);
+    // The next message reads it, before the owner's new words.
+    await say("thanks");
+    const after = requests.at(-1)!.filter((m) => m.role !== "system");
+    assert.match(after.at(-2)!.text, /^\[Your scheduled job "Morning brief"/);
+    assert.match(after.at(-1)!.text, /thanks$/);
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("stopping a reply still hands the model the post it held", async () => {
+  const requests: { role: string; text: string }[][] = [];
+  const { app, say, done } = await bot(
+    { check: { name: "workspace_exec", args: { command: "echo calendar" } } },
+    { requests: (messages) => requests.push(messages) },
+  );
+  try {
+    const reply = await app.chats.send({
+      source: "web",
+      actor: "owner",
+      eventId: "check",
+      text: "check the calendar",
+    });
+    await until(
+      async () =>
+        !!(await app.toolApprovals.state()).approvals.find(
+          (a) => a.status === "pending",
+        ),
+    );
+    const postId = await app.chats.postWorkResult({
+      runKey: "job-run",
+      work: { itemId: "w-1", title: "Morning brief", kind: "result" },
+      scheduled: { name: "Morning brief" },
+      text: "You have two meetings today.",
+    });
+    await app.chats.control(reply.sessionId, "stop");
+    await until(
+      async () =>
+        (await app.chats.state()).turns.find((t) => t.id === reply.id)
+          ?.status !== "pending",
+    );
+    await until(
+      async () =>
+        !(await app.chats.state()).turns.find((t) => t.id === postId)!.held,
+    );
+    await say("thanks");
+    const after = requests.at(-1)!.filter((m) => m.role !== "system");
+    assert.ok(
+      after.some((m) =>
+        m.text.startsWith('[Your scheduled job "Morning brief"'),
+      ),
+      JSON.stringify(after.map((m) => m.role)),
+    );
   } finally {
     await done();
   }
