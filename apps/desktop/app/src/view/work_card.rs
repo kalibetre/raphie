@@ -54,7 +54,9 @@ pub struct Card<'a> {
     /// The title's tooltip; the title itself when not given.
     pub hint: Option<String>,
     pub text: Option<&'a str>,
-    /// The turn whose reply the text is, for quoting it.
+    /// False while the reply is still being written: it shows in full.
+    pub fold: bool,
+    /// The turn whose finished reply the text is, for quoting it.
     pub turn_id: Option<&'a str>,
 }
 
@@ -111,7 +113,7 @@ pub fn card(s: &Ui, card: Card<'_>, extra: Vec<El>, look: &Look) -> El {
         has_body = true;
         let fold_id = card.key.clone();
         let open = s.unfolded_work.contains(&fold_id);
-        let tall = is_tall(source);
+        let tall = card.fold && is_tall(source, s.main_width());
         let mut content = col()
             .key(key("text"))
             .w_full()
@@ -126,6 +128,7 @@ pub fn card(s: &Ui, card: Card<'_>, extra: Vec<El>, look: &Look) -> El {
                 text(if open { "Show less" } else { "Show more" })
                     .key(key("more"))
                     .role("button")
+                    .expanded(open)
                     .font(font(12.5, 500.0))
                     .color(t.accent)
                     .focus_ring(2.0, 2.0, t.accent)
@@ -151,7 +154,6 @@ pub fn card(s: &Ui, card: Card<'_>, extra: Vec<El>, look: &Look) -> El {
         .center_y();
     let mut has_footer = false;
     if let (Some(turn_id), Some(source)) = (card.turn_id, card.text)
-        && card.status != Some(Status::Working)
         && !source.trim().is_empty()
     {
         has_footer = true;
@@ -268,8 +270,16 @@ fn clock(at: i64, t: &Theme) -> El {
         .single_line()
 }
 
-/// Whether a reply runs past about four lines of the card: the web measures
-/// it; here a long text or one of many lines folds.
-fn is_tall(source: &str) -> bool {
-    source.trim().chars().count() > 360 || source.trim().lines().count() > 4
+/// Whether a reply runs past about four lines of the card. The web measures
+/// it; here each paragraph's wrapped lines are estimated from the chat's
+/// width (about 7.5 points a character), and blank lines don't count.
+fn is_tall(source: &str, width: f32) -> bool {
+    // The card's text column: the chat less its padding and the card's.
+    let per_line = ((width.min(780.0) - 84.0) / 7.5).max(20.0) as usize;
+    let lines: usize = source
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.chars().count().div_ceil(per_line).max(1))
+        .sum();
+    lines > 4
 }

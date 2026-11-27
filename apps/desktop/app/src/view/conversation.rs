@@ -143,16 +143,24 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             .iter()
             .filter(|card| card.turn_id == turn.id)
             .collect();
-        // A work item's run reads as one card, with the bot's reply in it.
-        if turn.work.is_some() || turn.scheduled.is_some() {
-            items.push(work_turn(s, turn, steps, &asks, &cards, now, look));
-            continue;
-        }
-        items.push(owner_turn(s, turn, steps, &asks, &cards, now, look));
         let streaming = writing
             .is_some_and(|w| w.id == turn.id)
             .then_some(live)
             .flatten();
+        // A work item's run reads as one card, with the bot's reply in it.
+        if turn.work.is_some() || turn.scheduled.is_some() {
+            items.push(work_turn(
+                s,
+                turn,
+                steps,
+                (&asks, &cards),
+                streaming,
+                now,
+                look,
+            ));
+            continue;
+        }
+        items.push(owner_turn(s, turn, steps, &asks, &cards, now, look));
         if let Some(reply) = reply(s, turn, steps, streaming, observation, now, look) {
             items.push(reply);
         }
@@ -176,14 +184,19 @@ fn work_turn(
     s: &Ui,
     turn: &SessionTurn,
     steps: &[ToolStep],
-    asks: &[&SessionAsk],
-    cards: &[&SessionCard],
+    (asks, cards): (&[&SessionAsk], &[&SessionCard]),
+    live: Option<&str>,
     now: i64,
     look: &Look,
 ) -> El {
     let t = &look.theme;
     let working = turn.status == TurnStatus::Pending;
-    let answer = turn.answer.as_deref().filter(|a| !a.trim().is_empty());
+    // The reply, or while it is being written, what there is of it so far.
+    let answer = turn
+        .answer
+        .as_deref()
+        .or(live)
+        .filter(|a| !a.trim().is_empty());
     let status = if working {
         Some(Status::Working)
     } else if turn.cancelled == Some(true) {
@@ -200,6 +213,15 @@ fn work_turn(
         })
     };
     let mut extra = Vec::new();
+    // Tasks the reply handed off, and other bots' sessions it read.
+    if let Some(briefs) = handoffs::cards(s, &turn.id, look) {
+        extra.push(briefs);
+    }
+    if turn.status == TurnStatus::Done
+        && let Some(sources) = handoffs::sources(turn, look)
+    {
+        extra.push(sources);
+    }
     if !working {
         // Shown cards, then the tools the run used, as under a reply.
         for shown in cards {
@@ -240,7 +262,8 @@ fn work_turn(
     work_card::card(
         s,
         Card {
-            key: format!("rd-workcard-{}", turn.id),
+            // Where a quote of the reply, or a job notice, brings the reply.
+            key: super::quote::message_key(&turn.id, QuoteAuthor::Bot),
             kind: if turn.scheduled.is_some() {
                 CardKind::Scheduled
             } else {
@@ -257,8 +280,9 @@ fn work_turn(
             status,
             hint: (turn.scheduled.is_some() && !turn.text.is_empty())
                 .then(|| format!("Saved instruction: {}", turn.text)),
-            text: if working { None } else { answer },
-            turn_id: Some(&turn.id),
+            text: answer,
+            fold: !working,
+            turn_id: (turn.status == TurnStatus::Done).then_some(turn.id.as_str()),
         },
         extra,
         look,
@@ -306,6 +330,7 @@ fn background_request(s: &Ui, request: &BackgroundRequest, now: i64, look: &Look
             status: Some(Status::NeedsYou),
             hint: None,
             text: None,
+            fold: true,
             turn_id: None,
         },
         extra,
