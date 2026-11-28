@@ -26,6 +26,8 @@ type Bridge = ReturnType<typeof createSlackBridge>;
 export type SlackAdapters = {
   identity: typeof resolveSlackIdentity;
   create: typeof createSlackBridge;
+  /** How long a save waits for Slack to accept the connection. */
+  connectTimeoutMs?: number;
 };
 
 const conflict =
@@ -59,6 +61,7 @@ export class SlackConnections {
 export class BotSlack {
   private config: Stored | null = null;
   private bridge?: Bridge;
+  private connected = false;
   private timer?: ReturnType<typeof setInterval>;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly db: Database;
@@ -120,14 +123,9 @@ export class BotSlack {
           console.error(
             "Slack app is configured for multiple bots; this bot will not connect.",
           );
-        else
-          try {
-            await service.start(stored);
-          } catch {
-            console.error(
-              "Slack channel could not connect. Check this bot's channel settings.",
-            );
-          }
+        // Connects in the background: an unreachable Slack must not hold up
+        // the runtime starting.
+        else service.start(stored);
       }
       return service;
     } catch (error) {
@@ -146,7 +144,7 @@ export class BotSlack {
   acceptsHome(address: ReplyDestination & { userId: string }) {
     if (
       !this.config ||
-      !this.bridge ||
+      !this.connected ||
       address.provider !== "slack" ||
       address.connectionId !== this.config.connectionId ||
       !this.config.allowedUserIds.includes(address.userId)
@@ -165,7 +163,7 @@ export class BotSlack {
             allowedUserIds: this.config.allowedUserIds,
             channelId: this.config.channelId ?? "",
             teamName: this.config.teamName,
-            connected: !!this.bridge,
+            connected: this.connected,
             tokenConfigured: true,
             conflict: this.connections.conflicts(
               this.config.connectionId,
@@ -176,24 +174,53 @@ export class BotSlack {
     };
   }
 
-  private async start(config: SlackBridgeConfig) {
+  /**
+   * Starts the bridge and opens its Socket Mode connection, which the SDK
+   * keeps retrying and reconnects on its own. Returns at once, or with `wait`,
+   * once Slack accepts the connection, failing after that many milliseconds.
+   */
+  private start(config: SlackBridgeConfig): void;
+  private start(config: SlackBridgeConfig, wait: number): Promise<void>;
+  private start(config: SlackBridgeConfig, wait?: number) {
     const bridge = this.adapters.create(this.app, config);
-    // Opens the Socket Mode connection; the SDK reconnects on its own.
-    await bridge.chat.initialize();
     this.bridge = bridge;
+    this.connected = false;
     this.timer = setInterval(() => {
+      if (!this.connected || this.bridge !== bridge) return;
       void bridge
         .flush()
         .catch(() => console.error("Slack delivery pump failed."));
     }, 1000);
+    const opening = bridge.connect().then(() => {
+      if (this.bridge === bridge) this.connected = true;
+    });
+    if (wait === undefined) {
+      void opening.catch(() =>
+        console.error(
+          "Slack channel could not connect. Check this bot's channel settings.",
+        ),
+      );
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
+      opening,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Slack did not answer.")),
+          wait,
+        );
+      }),
+    ]).finally(() => clearTimeout(timer));
   }
 
   private async stop() {
     if (this.timer) clearInterval(this.timer);
     const bridge = this.bridge;
     this.bridge = undefined;
+    this.connected = false;
     this.timer = undefined;
-    await bridge?.chat.shutdown();
+    await bridge?.close();
   }
 
   save(input: SaveSlackChannel) {
@@ -233,13 +260,13 @@ export class BotSlack {
       throw new InputError(conflict, 409);
     try {
       await this.stop();
-      await this.start(next);
+      await this.start(next, this.adapters.connectTimeoutMs ?? 15_000);
     } catch {
       await this.stop();
-      if (this.config) await this.start(this.config).catch(() => {});
+      if (this.config) this.start(this.config);
       if (!previouslyOwned) this.connections.release(next.connectionId, this);
       throw new InputError(
-        "Slack connection failed. Check the app-level token and that Socket Mode is on.",
+        "Slack connection failed. Check the app-level token, that Socket Mode is on, and that Slack is reachable.",
       );
     }
     try {
@@ -254,7 +281,7 @@ export class BotSlack {
       this.config = next;
     } catch (error) {
       await this.stop();
-      if (this.config) await this.start(this.config).catch(() => {});
+      if (this.config) this.start(this.config);
       if (!previouslyOwned) this.connections.release(next.connectionId, this);
       throw error;
     }

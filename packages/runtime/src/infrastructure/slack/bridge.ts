@@ -103,6 +103,9 @@ export function createSlackBridge(
     logger,
     concurrency: "concurrent",
   });
+  // Set once the bridge is closed. A connection still being opened when it
+  // closes may finish later; nothing it delivers is handled.
+  let closed = false;
   const authorized = (userId: string, threadId: string) =>
     slackAuthorized(
       userId,
@@ -110,6 +113,37 @@ export function createSlackBridge(
       adapter.decodeThreadId(threadId).channel,
       config.channelId,
     );
+  /**
+   * A button press names the card's own timestamp as its thread when the card
+   * is not in a thread, but the card was posted to the conversation's top
+   * level. Rebuild the conversation the card was sent to from the payload.
+   */
+  const pressedIn = (event: { threadId: string; raw: unknown }) => {
+    const raw = event.raw as {
+      message?: { thread_ts?: string };
+      container?: { thread_ts?: string };
+    };
+    return adapter.encodeThreadId({
+      channel: adapter.decodeThreadId(event.threadId).channel,
+      threadTs: raw?.message?.thread_ts ?? raw?.container?.thread_ts ?? "",
+    });
+  };
+  const mention = new RegExp(`^\\s*<@${config.botUserId}(?:\\|[^>]*)?>`);
+
+  /**
+   * The adapter renders the bot's @mention as its display name, which may
+   * contain spaces; strip exactly that, never the first word of the prompt.
+   */
+  async function promptText(message: Message) {
+    const raw = (message.raw as { text?: string } | undefined)?.text ?? "";
+    if (!mention.test(raw)) return message.text.trim();
+    const name = (await adapter.getUser(config.botUserId))?.userName;
+    for (const rendered of [name, config.botUserId])
+      if (rendered && message.text.startsWith(`@${rendered}`))
+        return message.text.slice(rendered.length + 1).trim();
+    return message.text.trim();
+  }
+
   const establish = (
     threadId: string,
     userId: string,
@@ -124,6 +158,7 @@ export function createSlackBridge(
     );
 
   chat.onSlashCommand("/home", async (event) => {
+    if (closed) return;
     let reply: string;
     try {
       // A command arrives for the channel, not a thread: home is its top level.
@@ -151,28 +186,27 @@ export function createSlackBridge(
           ? error.message
           : "I could not set the home channel. Please try again.";
     }
-    await event.channel.postEphemeral(
-      event.user,
-      { raw: reply },
-      {
-        fallbackToDM: false,
-      },
-    );
+    await event.channel
+      .postEphemeral(event.user, { raw: reply }, { fallbackToDM: false })
+      .catch(() => console.error("Slack /home confirmation failed."));
   });
 
   async function receive(thread: Thread, message: Message) {
-    if (!authorized(message.author.userId, thread.id) || message.author.isBot)
+    if (
+      closed ||
+      !authorized(message.author.userId, thread.id) ||
+      message.author.isBot
+    )
       return;
     try {
       if (message.attachments.length)
         throw new InputError("Chat in Slack currently accepts text only.");
-      // A channel message starts with the bot's @mention; drop it.
-      const text = (
-        message.isMention ? message.text.replace(/^@\S+\s*/, "") : message.text
-      ).trim();
+      const text = await promptText(message);
+      // A message timestamp is unique only within its channel.
+      const channel = adapter.decodeThreadId(thread.id).channel;
       await app.sessions.submit(
         establish(thread.id, message.author.userId, { messageId: message.id }),
-        { eventId: message.id, text },
+        { eventId: `${channel}:${message.id}`, text },
       );
       // Later replies in a channel thread reach the bot without another @mention.
       if (message.isMention && !adapter.isDM(thread.id))
@@ -192,9 +226,15 @@ export function createSlackBridge(
   chat.onDirectMessage(receive);
   chat.onSubscribedMessage(receive);
   chat.onAction([ASK_ACTION], async (event) => {
-    if (!authorized(event.user.userId, event.threadId) || !event.value) return;
+    if (
+      closed ||
+      !authorized(event.user.userId, event.threadId) ||
+      !event.value
+    )
+      return;
+    const threadId = pressedIn(event);
     const [id, choice] = event.value.split(":");
-    const who = establish(event.threadId, event.user.userId);
+    const who = establish(threadId, event.user.userId);
     // A settled question keeps its first answer; a refused press changes nothing.
     await app.asks
       .answer(
@@ -204,7 +244,7 @@ export function createSlackBridge(
         who.source,
         undefined,
         {
-          threadId: event.threadId,
+          threadId,
           connectionId: config.connectionId,
           userId: event.user.userId,
         },
@@ -214,10 +254,14 @@ export function createSlackBridge(
   chat.onAction(
     ["raphie-tool-approve", "raphie-tool-reject"],
     async (event) => {
-      if (!authorized(event.user.userId, event.threadId) || !event.value)
+      if (
+        closed ||
+        !authorized(event.user.userId, event.threadId) ||
+        !event.value
+      )
         return;
       await app.sessions.decide(
-        establish(event.threadId, event.user.userId),
+        establish(pressedIn(event), event.user.userId),
         event.value,
         event.actionId === "raphie-tool-approve" ? "approved" : "rejected",
       );
@@ -241,5 +285,24 @@ export function createSlackBridge(
     app.telemetry,
   );
 
-  return { adapter, chat, flush };
+  /**
+   * Opens the Socket Mode connection. The SDK retries an unreachable Slack for
+   * a long time, so callers never block startup on this.
+   */
+  function connect() {
+    const opening = chat.initialize();
+    // A connection that opens after close is shut down again.
+    void opening.then(
+      () => (closed ? adapter.disconnect() : undefined),
+      () => {},
+    );
+    return opening;
+  }
+
+  async function close() {
+    closed = true;
+    await chat.shutdown().catch(() => {});
+  }
+
+  return { adapter, chat, flush, connect, close };
 }

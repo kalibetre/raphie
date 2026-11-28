@@ -1817,6 +1817,7 @@ pub struct TelegramPairingCode {
 #[serde(rename_all = "lowercase")]
 pub enum ChannelPlatform {
     Discord,
+    Slack,
     Telegram,
 }
 

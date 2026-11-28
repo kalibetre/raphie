@@ -623,7 +623,7 @@ fn home(s: &Ui, bot_id: &str, t: &Theme) -> El {
     let mut body = panel(t, "rd-home-settings").gap(14.0).child(line(
         t,
         "Home channel",
-        "Scheduled updates go here, wherever the job was created. Use /home in a verified Discord or Telegram conversation to select it. Web chat has no /home command.",
+        "Scheduled updates go here, wherever the job was created. Use /home in a verified Discord, Slack or Telegram conversation to select it. Web chat has no /home command.",
         None,
     ));
     match s.model.channel_home.get(bot_id) {
@@ -686,6 +686,7 @@ fn home_choices(s: &Ui, body: El, settings: &ChannelHomeSettings, t: &Theme) -> 
             match destination.platform {
                 ChannelPlatform::Telegram => "Telegram",
                 ChannelPlatform::Discord => "Discord",
+                ChannelPlatform::Slack => "Slack",
             },
             &format!(
                 "{} · owner {}",

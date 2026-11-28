@@ -92,6 +92,18 @@ function fakeSlack() {
           channel: body.channel,
           ts: `1700000100.00000${++posted}`,
         });
+      if (method === "users.info")
+        return Response.json({
+          ok: true,
+          user: {
+            id: body.user,
+            name: body.user === "U0BOT" ? "raphie" : "owner",
+            // A display name with a space, as the guide suggests renaming it.
+            profile: {
+              display_name: body.user === "U0BOT" ? "Raphie Bot" : "Owner",
+            },
+          },
+        });
       if (method === "chat.postEphemeral")
         return Response.json({ ok: true, message_ts: "1700000200.000001" });
       return Response.json({ ok: true });
@@ -272,6 +284,8 @@ test("Slack over Socket Mode: allow-listed DMs reach the bot, replies post back,
     );
     const [turn] = (await app.chats.state()).turns;
     assert.equal(turn?.source, "slack");
+    // A timestamp is unique only per channel, so the event ID carries both.
+    assert.ok(turn?.requestKey.endsWith(`${DM}:1700000000.000002`));
     assert.deepEqual(turn?.replyTo, {
       provider: "slack",
       owner: "owner",
@@ -286,6 +300,84 @@ test("Slack over Socket Mode: allow-listed DMs reach the bot, replies post back,
     const reply = slack.calls.find((c) => c.method === "chat.postMessage")!;
     assert.equal(reply.body.channel, DM);
     assert.equal(typeof reply.body.markdown_text, "string");
+
+    // A button on a card at the DM's top level: the press names the card's
+    // own timestamp, but it must count for the conversation it was posted to.
+    const decide = spyOn(app.sessions, "decide").mockResolvedValue(
+      "approved" as never,
+    );
+    const answer = spyOn(app.asks, "answer").mockResolvedValue(
+      "answered" as never,
+    );
+    const press = (user: string, action_id: string, value: string) =>
+      slack.send("interactive", {
+        type: "block_actions",
+        user: { id: user, username: user },
+        team: { id: "T0TEAM" },
+        channel: { id: DM, name: "directmessage" },
+        container: {
+          type: "message",
+          message_ts: "1700000100.000001",
+          channel_id: DM,
+          is_ephemeral: false,
+        },
+        message: { type: "message", ts: "1700000100.000001", text: "card" },
+        trigger_id: "trigger-press",
+        response_url: `${slack.apiUrl}response`,
+        actions: [
+          {
+            type: "button",
+            action_id,
+            block_id: "actions",
+            value,
+            action_ts: "1700000200.000001",
+          },
+        ],
+      });
+    const stranger = press("U0STRANGER", "raphie-tool-approve", "approval-1");
+    await until(
+      () => slack.acks.includes(stranger),
+      "ack of a stranger's press",
+    );
+    await delay(50);
+    assert.equal(decide.mock.calls.length, 0);
+    press(OWNER, "raphie-tool-approve", "approval-1");
+    await until(() => decide.mock.calls.length === 1, "the approval press");
+    assert.equal(decide.mock.calls[0]![0].threadId, `slack:${DM}:`);
+    assert.equal(decide.mock.calls[0]![2], "approved");
+    press(OWNER, "raphie-ask", "ask-1:0");
+    await until(() => answer.mock.calls.length === 1, "the question press");
+    assert.equal(answer.mock.calls[0]![5]?.threadId, `slack:${DM}:`);
+    decide.mockRestore();
+    answer.mockRestore();
+
+    // In a channel, the bot's own @mention is dropped even when its display
+    // name has a space; the rest of the prompt is kept whole.
+    const mention = slack.send("events_api", {
+      type: "event_callback",
+      team_id: "T0TEAM",
+      api_app_id: "A0APP",
+      event_id: "EvMention",
+      event_time: 1700000000,
+      event: {
+        type: "app_mention",
+        channel: "C0CHAN",
+        user: OWNER,
+        text: "<@U0BOT> do the thing",
+        ts: "1700000000.000003",
+      },
+    });
+    await until(() => slack.acks.includes(mention), "ack of the mention");
+    await until(
+      async () => (await app.chats.state()).turns.length === 2,
+      "the mention's turn",
+    );
+    const mentioned = (await app.chats.state()).turns.at(-1)!;
+    assert.equal(mentioned.text, "do the thing");
+    assert.equal(
+      mentioned.replyTo?.conversation,
+      "slack:C0CHAN:1700000000.000003",
+    );
 
     const home = slack.send("slash_commands", {
       command: "/home",
@@ -308,7 +400,7 @@ test("Slack over Socket Mode: allow-listed DMs reach the bot, replies post back,
       `slack:${DM}:`,
     );
   } finally {
-    await bridge.chat.shutdown();
+    await bridge.close();
     await app.close();
     fetchSpy.mockRestore();
     await slack.server.stop(true);
@@ -330,11 +422,9 @@ test("Slack settings are encrypted, survive a restart, keep saved tokens and sta
     create: ((_app, config) => {
       starts.push(`${config.botToken} ${config.appToken}`);
       return {
-        chat: {
-          initialize: async () => {},
-          shutdown: async () => {
-            stopped++;
-          },
+        connect: async () => {},
+        close: async () => {
+          stopped++;
         },
         flush: async () => {},
       } as unknown as ReturnType<typeof createSlackBridge>;
@@ -370,6 +460,8 @@ test("Slack settings are encrypted, survive a restart, keep saved tokens and sta
     await first.close();
     first = await BotSlack.open(path, app, store, adapters, connections);
     assert.equal(first.read().slack?.channelId, "");
+    // A restart connects in the background.
+    await until(() => first.read().slack?.connected === true, "reconnect");
     assert.deepEqual(
       new Set(starts),
       new Set([`${input.botToken} ${input.appToken}`]),
@@ -408,6 +500,58 @@ test("Slack settings are encrypted, survive a restart, keep saved tokens and sta
   } finally {
     await first.close();
     await second.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("An unreachable Slack never holds up startup, and a save gives up", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-slack-down-"));
+  const store = keyStore();
+  let reachable = true;
+  let closed = 0;
+  const adapters = {
+    identity: async () => ({
+      connectionId: "slack:T0TEAM:U0BOT",
+      teamName: "Fixture",
+      botUserId: "U0BOT",
+    }),
+    create: (() =>
+      ({
+        // The SDK keeps retrying an unreachable Slack: it never settles.
+        connect: () =>
+          reachable ? Promise.resolve() : new Promise<void>(() => {}),
+        close: async () => {
+          closed++;
+        },
+        flush: async () => {},
+      }) as unknown as ReturnType<
+        typeof createSlackBridge
+      >) as typeof createSlackBridge,
+    connectTimeoutMs: 50,
+  };
+  const app = {} as ChannelServices;
+  const path = join(directory, "slack.sqlite");
+  const input = {
+    botToken: "xoxb-private-bot-token",
+    appToken: "xapp-private-app-token",
+    allowedUserIds: [OWNER],
+  };
+  let bot = await BotSlack.open(path, app, store, adapters);
+  try {
+    await bot.save(input);
+    await bot.close();
+
+    reachable = false;
+    bot = await BotSlack.open(path, app, store, adapters);
+    assert.equal(bot.read().slack?.connected, false);
+
+    await assert.rejects(bot.save(input), /Slack is reachable/);
+    assert.equal(bot.read().slack?.connected, false);
+    // Neither the failed save nor a hanging connection blocks removing it.
+    assert.equal((await bot.remove()).slack, null);
+    assert.ok(closed >= 2);
+  } finally {
+    await bot.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

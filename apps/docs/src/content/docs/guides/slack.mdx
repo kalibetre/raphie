@@ -24,7 +24,7 @@ Only Slack members whose IDs you list can talk to the bot. Messages from anyone 
 
 </Steps>
 
-Raphie checks the bot token with Slack, encrypts both tokens, and opens the Socket Mode connection. Slack reconnects it on its own after a network drop.
+Raphie checks the bot token with Slack, encrypts both tokens, and opens the Socket Mode connection. Saving fails if Slack doesn't accept the connection within 15 seconds. When Raphie starts, it connects in the background and keeps retrying, so an unreachable Slack never holds up the runtime; Settings shows Slack as disconnected until it connects. Slack reconnects on its own after a network drop.
 
 One Slack app can serve one Raphie bot. Slack shares a Socket Mode app's events across every open connection, so connecting it to a second bot is refused. Create one Slack app per Raphie bot.
 
@@ -95,13 +95,13 @@ To send [scheduled job](/guides/schedules/) results to Slack, run `/home` in the
 
 ## Limits
 
-| Topic          | Behaviour                                                                                           |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| Message length | Replies are split into chunks of up to 10,000 characters.                                           |
-| Formatting     | Replies are sent as Markdown, which Slack renders.                                                  |
-| Attachments    | Files sent to the bot are refused with a reply saying only text is supported.                       |
-| Send failures  | A failed or interrupted send leaves that chunk **uncertain**; it is not resent, in case it arrived. |
-| Restarts       | Threads you were following without a mention need a fresh @mention after Raphie restarts.           |
+| Topic             | Behaviour                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Message length    | Replies are split into chunks of up to 10,000 characters.                                                          |
+| Formatting        | Replies are sent as Markdown, which Slack renders.                                                                 |
+| Attachments       | Files sent to the bot are refused with a reply saying only text is supported.                                      |
+| Send failures     | A failed or interrupted send leaves that chunk **uncertain**; it is not resent, in case it arrived.                |
+| Following threads | After Raphie restarts or you save Slack settings, a thread needs a fresh @mention before the bot follows it again. |
 
 ## Security notes
 
