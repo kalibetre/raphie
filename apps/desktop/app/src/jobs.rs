@@ -32,7 +32,7 @@ pub struct JobForm {
 
 /// The local date and time of `at` (milliseconds since the Unix epoch) as
 /// the form's two fields hold them.
-fn local_fields(at: i64) -> (String, String) {
+pub(crate) fn local_fields(at: i64) -> (String, String) {
     match Local.timestamp_millis_opt(at).single() {
         Some(local) => (
             format!(
@@ -49,7 +49,7 @@ fn local_fields(at: i64) -> (String, String) {
 
 /// The moment a local `YYYY-MM-DD` date and `HH:MM` time name, in
 /// milliseconds since the Unix epoch.
-fn local_moment(date: &str, time: &str) -> Option<i64> {
+pub(crate) fn local_moment(date: &str, time: &str) -> Option<i64> {
     // `?` leaves with `None` as soon as a part is missing or not a number.
     let mut date = date.trim().splitn(3, '-');
     let year: i32 = date.next()?.parse().ok()?;

@@ -9,6 +9,8 @@ import { Steps, TabItem, Tabs } from "@astrojs/starlight/components";
 
 A scheduled job sends a saved prompt to its bot once or at a fixed interval. Each job is a [work item](/guides/conversations/#work-items) of the bot's, and every run's result posts in the bot's [chat](/guides/conversations/), wherever the job was created. Jobs run only while Raphie is running; overdue work runs once when it comes back.
 
+For a one-time nudge about something in your backlog, set a [work item reminder](/guides/conversations/#reminders-for-work-items).
+
 Results always appear in the chat. You can also send them to one home channel per bot, such as a Telegram chat.
 
 ## Create a job

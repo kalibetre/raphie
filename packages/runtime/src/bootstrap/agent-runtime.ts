@@ -83,6 +83,7 @@ import {
   createWorkTools,
   WorkService,
 } from "../domains/work/infrastructure/work-items.ts";
+import { WORK_REMINDER_TASK } from "../domains/work/infrastructure/work-reminders.ts";
 import { WorkRuns } from "../domains/work/infrastructure/work-runs.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
 import { createDocumentTools } from "../domains/workspaces/infrastructure/document-tools.ts";
@@ -208,7 +209,9 @@ export class Gateway {
     this.toolApprovals = new ToolApprovalService(this);
     this.asks = new AskService(this);
     this.cards = new CardService(this);
-    this.work = new WorkService(this);
+    this.work = new WorkService(this, (key, prepare) =>
+      this.chats.postWorkMessage(key, prepare),
+    );
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
     this.queries = new PiClientQueries(this);
@@ -280,7 +283,8 @@ export class Gateway {
       );
     registry.install(createWebSearchTools(() => app.models, options.webFetch));
     registry.install(chatSummaries);
-    registry.install(createWorkTools(app.workRuns));
+    registry.install(createWorkTools(app.work, app.workRuns));
+    registry.install(app.work.reminderExtension());
     registry.install(app.workRuns.extension());
     registry.install(createAskTools(app.asks));
     registry.install(
@@ -296,6 +300,15 @@ export class Gateway {
         registry,
         now: options.now,
         models: app.models,
+        onReport(report) {
+          if (
+            report.kind === "task_faulted" &&
+            report.task.kind === WORK_REMINDER_TASK
+          ) {
+            // A shutdown can interrupt this commit. Startup checks the durable task outcome.
+            void app.work.clearFaultedReminder(report.task.id).catch(() => {});
+          }
+        },
         settings: {
           followUpMode: "one-at-a-time",
           stream: { timeoutMs: 120_000 },
@@ -309,6 +322,7 @@ export class Gateway {
       context,
     );
     app.root = await app.harness.root(context);
+    await app.work.recoverReminders();
     app.workspace = await RuntimeWorkspace.open({
       directory: options.directory,
       workspaceId: options.identity!.id,

@@ -100,6 +100,7 @@ export function createScheduleTools(jobs: BotJobs) {
         return [
           `Scheduling is enabled. Your available scheduling tools on this turn are: ${names.join(", ")}. These current capabilities supersede earlier assistant claims that a tool is missing.`,
           "Manage this bot's schedules directly on the owner's request, without approval or another confirmation. Each run is a message in this bot's chat with the owner while the runtime is running, not a device push notification. A job's tool calls follow the chat's permission mode: they ask for approval unless the chat is on Full access.",
+          "For a one-time reminder about a work item, use work_open or work_update with reminderAt. Use scheduled jobs for recurring reminders and for prompts the bot should run later.",
           names.includes("schedule_list") &&
             "Use schedule_list to identify the owner's existing reminder before editing or deleting it.",
           names.includes("schedule_update") &&

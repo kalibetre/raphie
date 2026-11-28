@@ -3215,7 +3215,7 @@ impl Ui {
         }
     }
 
-    /// Saves the dialog: a new item, or the edited title and notes.
+    /// Saves a new item or the fields the owner edited.
     pub fn save_work_form(&mut self) {
         let Some(bot_id) = self.work_bot() else {
             return;
@@ -3227,10 +3227,17 @@ impl Ui {
             self.work_form.error = Some(problem);
             return;
         }
+        let reminder_at = match self.work_form.reminder_change(now_ms()) {
+            Ok(reminder_at) => reminder_at,
+            Err(problem) => {
+                self.work_form.error = Some(problem);
+                return;
+            }
+        };
         self.work_form.error = None;
         let command = match self.work_form.id.clone() {
             // Only what the owner changed, so the bot's later edits stay.
-            Some(id) => match self.work_form.change() {
+            Some(id) => match self.work_form.change(reminder_at) {
                 Some(change) => Command::ChangeWork { bot_id, id, change },
                 None => {
                     self.work_form = WorkForm::default();
@@ -3241,6 +3248,8 @@ impl Ui {
                 bot_id,
                 title: self.work_form.title.text.trim().to_owned(),
                 notes: self.work_form.notes.text.trim().to_owned(),
+                status: self.work_form.deferred.then_some(WorkStatus::Deferred),
+                reminder_at: reminder_at.flatten(),
             },
         };
         if self.model.begin_change_work() {

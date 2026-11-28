@@ -11,10 +11,18 @@ import {
   DialogTitle,
 } from "../../../shared/ui/dialog";
 import { Input } from "../../../shared/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
 import {
   changed,
   type Draft,
+  reminderInput,
   type WorkChange,
 } from "../application/work-draft";
 import {
@@ -77,14 +85,18 @@ export function WorkSettings({ bot, focus }: { bot: string; focus?: string }) {
       item={item}
       bot={bot}
       pending={pending}
-      onEdit={() =>
+      onEdit={() => {
+        const reminder = item.origin
+          ? undefined
+          : reminderInput(item.reminderAt);
         setDraft({
           id: item.id,
           title: item.title,
           notes: item.notes,
-          started: { title: item.title, notes: item.notes },
-        })
-      }
+          reminder,
+          started: { title: item.title, notes: item.notes, reminder },
+        });
+      }}
       onChange={(input) => void save(item.id, input)}
       onCancel={() =>
         void cancel
@@ -103,10 +115,13 @@ export function WorkSettings({ bot, focus }: { bot: string; focus?: string }) {
     <>
       <Group
         title="Open"
-        note={`${bot} updates these as it works. Ask about any of them in the chat, or change one here.`}
+        note={`Ask ${bot} about any of these items in the chat, or change one here.`}
         action={
-          <Button size="sm" onClick={() => setDraft({ title: "", notes: "" })}>
-            <Plus size={15} /> New item
+          <Button
+            size="sm"
+            onClick={() => setDraft({ title: "", notes: "", reminder: "" })}
+          >
+            <Plus size={15} aria-hidden="true" /> New item
           </Button>
         }
       >
@@ -148,7 +163,7 @@ export function WorkSettings({ bot, focus }: { bot: string; focus?: string }) {
             <DialogTitle>{draft?.id ? "Edit item" : "New item"}</DialogTitle>
             <DialogDescription>
               {draft?.id
-                ? `${bot} reads the title and notes the next time it works on this.`
+                ? `Update what ${bot} is keeping track of.`
                 : `Something for ${bot} to keep track of. It sees new items with your next message.`}
             </DialogDescription>
           </DialogHeader>
@@ -160,6 +175,19 @@ export function WorkSettings({ bot, focus }: { bot: string; focus?: string }) {
               const change = changed(draft);
               // Nothing changed: nothing to send, so the bot's edits stay.
               if (!change) return setDraft(undefined);
+              if (typeof change.reminderAt === "number") {
+                if (
+                  !Number.isFinite(change.reminderAt) ||
+                  reminderInput(change.reminderAt) !== draft.reminder
+                ) {
+                  setError("Choose a valid local reminder time.");
+                  return;
+                }
+                if (change.reminderAt <= Date.now()) {
+                  setError("Choose a reminder time in the future.");
+                  return;
+                }
+              }
               void save(draft.id, change).then(
                 (saved) => saved && setDraft(undefined),
               );
@@ -186,6 +214,59 @@ export function WorkSettings({ bot, focus }: { bot: string; focus?: string }) {
               maxLength={2000}
               placeholder="What it is about, and anything to keep in mind."
             />
+            {draft && !draft.id && (
+              <>
+                <label htmlFor="work-status">Status</label>
+                <Select
+                  value={draft.deferred ? "deferred" : "active"}
+                  onValueChange={(value) =>
+                    setDraft(
+                      (d) => d && { ...d, deferred: value === "deferred" },
+                    )
+                  }
+                >
+                  <SelectTrigger id="work-status">
+                    <SelectValue>
+                      {draft.deferred ? "Deferred" : "Active"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="deferred">Deferred</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+            {draft?.reminder !== undefined && (
+              <>
+                <label htmlFor="work-reminder">Reminder (optional)</label>
+                <Input
+                  id="work-reminder"
+                  name="reminder"
+                  type="datetime-local"
+                  aria-describedby="work-reminder-help"
+                  value={draft.reminder}
+                  onChange={(e) =>
+                    setDraft((d) => d && { ...d, reminder: e.target.value })
+                  }
+                />
+                <p id="work-reminder-help" className="automation-note">
+                  Uses your device’s time zone. The reminder appears in your
+                  private chat.
+                </p>
+                {draft.reminder && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => setDraft((d) => d && { ...d, reminder: "" })}
+                  >
+                    Clear reminder
+                  </Button>
+                )}
+              </>
+            )}
             {error && (
               <p role="alert" className="settings-error">
                 {error}

@@ -986,6 +986,7 @@ pub fn work_items() -> raphie_core::model::WorkLists {
             item(json!({
                 "id": "w-1", "title": "Flights to Lisbon", "status": "waiting",
                 "waitingOn": "you to pick a date",
+                "reminderAt": 1_794_690_000_000_i64,
                 "notes": "Two direct options for the first week of December. Prices hold until Friday.",
                 "opened": { "at": 1_794_500_000_000_i64, "by": "bot" },
                 "updatedAt": 1_794_640_000_000_i64,
@@ -1054,8 +1055,7 @@ pub fn settings_work_running(ui: &mut Ui) {
     }
 }
 
-/// The chat with two background results come back: one completed, one
-/// cancelled.
+/// The chat with two background results and a work item reminder.
 pub fn conversation_work(ui: &mut Ui) {
     conversation(ui);
     let Some(observation) = ui
@@ -1087,6 +1087,19 @@ pub fn conversation_work(ui: &mut Ui) {
             request: Some(request.into()),
         });
     }
+    let mut reminder = turn(
+        "t3",
+        -60_000,
+        "",
+        Some("Reminder: Flights to Lisbon"),
+        "done",
+    );
+    reminder["work"] = json!({
+        "itemId": "w-1",
+        "title": "Flights to Lisbon",
+        "kind": "reminder",
+    });
+    observation.turns.push(from_json(reminder));
 }
 
 /// Work with an item open in the "Edit item" dialog.

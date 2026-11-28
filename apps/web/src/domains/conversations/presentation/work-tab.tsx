@@ -22,9 +22,12 @@ export function WorkTab({
 }) {
   const work = turn.work;
   const title = turn.scheduled?.name ?? work?.title ?? "Work";
+  const reminder = work?.kind === "reminder";
   // Only a finished message has an outcome to stamp.
   const outcome =
-    turn.status === "done" ? (work?.outcome ?? "completed") : undefined;
+    !reminder && turn.status === "done"
+      ? (work?.outcome ?? "completed")
+      : undefined;
   const from = work?.request
     ? `“${work.request}”`
     : turn.scheduled
@@ -34,7 +37,9 @@ export function WorkTab({
     <>
       <span className="work-tab-text">
         <span aria-hidden="true">↳ </span>
-        <strong className="work-tab-title">{title}</strong>
+        <strong className="work-tab-title">
+          {reminder ? "Open work item" : title}
+        </strong>
         {from && ` · ${from}`}
       </span>
       {outcome && (
@@ -52,6 +57,7 @@ export function WorkTab({
       className="work-tab work-tab-link"
       data-outcome={outcome}
       title={`Open ${tip}`}
+      aria-label={reminder ? `Open ${title}` : undefined}
       onClick={onOpen}
     >
       {content}

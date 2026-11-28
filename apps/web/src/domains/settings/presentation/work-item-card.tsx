@@ -6,6 +6,7 @@ import type { WorkChange } from "../application/work-draft";
 const statusLabel: Record<WorkItem["status"], string> = {
   active: "Active",
   waiting: "Waiting",
+  deferred: "Deferred",
   done: "Done",
   dropped: "Dropped",
 };
@@ -37,7 +38,7 @@ export function WorkItemCard({
   /** Stops its running background work. */
   onCancel: () => void;
 }) {
-  const open = item.status === "active" || item.status === "waiting";
+  const open = item.status !== "done" && item.status !== "dropped";
   const running = !!item.run;
   // A scheduled job's item follows the job; it is changed there.
   const job = item.origin?.kind === "job";
@@ -62,6 +63,9 @@ export function WorkItemCard({
         <p className="automation-note work-item-waiting">
           Waiting on {item.waitingOn}
         </p>
+      )}
+      {item.reminderAt !== undefined && (
+        <p className="automation-note">Reminder · {when(item.reminderAt)}</p>
       )}
       {job && (
         <p className="automation-note">
@@ -121,6 +125,21 @@ export function WorkItemCard({
               >
                 Edit
               </Button>
+              {!handoff && !running && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() =>
+                    onChange({
+                      status:
+                        item.status === "deferred" ? "active" : "deferred",
+                    })
+                  }
+                >
+                  {item.status === "deferred" ? "Make active" : "Defer"}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

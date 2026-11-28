@@ -1,7 +1,11 @@
-import { defineDoc } from "@earendil-works/pi-durable";
+import { defineDoc, type TaskId } from "@earendil-works/pi-durable";
 import type { WorkItem } from "@raphie/contracts";
 
-export type WorkState = { items: WorkItem[]; next: number };
+export type WorkState = {
+  items: WorkItem[];
+  next: number;
+  reminderTasks?: Record<string, TaskId>;
+};
 
 /** A bot's work items, open and closed. */
 export const WorkItems = defineDoc<WorkState>({

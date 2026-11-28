@@ -5,7 +5,7 @@
 //! Mirrors `apps/web/src/domains/conversations/presentation/work-tab.tsx`
 //! and its `.work-tab` rules in `bot-workspace.css`.
 
-use raphie_core::contracts::{HandoffOutcome, SessionTurn, TurnStatus};
+use raphie_core::contracts::{HandoffOutcome, SessionTurn, TurnStatus, TurnWorkKind};
 use rune::{El, Family, TextStyle, icon, row, text};
 
 use crate::icons;
@@ -24,6 +24,8 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
         .map(|job| job.name.as_str())
         .or(work.map(|w| w.title.as_str()))
         .unwrap_or("Work");
+    let reminder = work.is_some_and(|w| w.kind == TurnWorkKind::Reminder);
+    let unknown = work.is_some_and(|w| w.kind == TurnWorkKind::Unknown);
     // A scheduled job answers no one's message.
     let from = match (work.and_then(|w| w.request.as_deref()), &turn.scheduled) {
         (Some(request), _) => Some(format!("“{request}”")),
@@ -32,7 +34,9 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
     };
     // Only a finished message has an outcome to stamp.
     let (stamp, ink, fill) = match work.and_then(|w| w.outcome) {
-        _ if turn.status != TurnStatus::Done => (None, t.accent, t.accent_soft),
+        _ if reminder || unknown || turn.status != TurnStatus::Done => {
+            (None, t.accent, t.accent_soft)
+        }
         Some(HandoffOutcome::Failed) => (Some("FAILED"), t.error, t.error.alpha(0.13)),
         Some(HandoffOutcome::Cancelled) => (Some("CANCELLED"), t.muted_foreground, t.muted),
         _ => (Some("DONE"), t.accent, t.accent_soft),
@@ -49,7 +53,7 @@ pub fn tab(turn: &SessionTurn, t: &Theme) -> Option<El> {
                 .a11y_hidden(),
         )
         .child(
-            text(title.to_owned())
+            text(if reminder { "Open work item" } else { title }.to_owned())
                 .font(font(11.5, 600.0))
                 .color(t.foreground)
                 .truncate()

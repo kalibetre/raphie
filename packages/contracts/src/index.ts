@@ -104,7 +104,7 @@ export type Turn = {
   scheduled?: { name: string };
   /** Set when another bot, not the owner, started this turn. */
   handoff?: TurnHandoff;
-  /** Set when a work item's background run, not the owner, started this turn. */
+  /** Set on a work item's brief, result or reminder. */
   work?: TurnWork;
   /** Other bots' sessions this turn's reply read, for tasks it handed off. */
   readSessions?: ReadSession[];
@@ -161,13 +161,12 @@ export type TurnHandoff = {
 };
 
 /**
- * A turn of a work item's background run: the brief the bot sent to the
- * item's own session, or the result it brought back to the chat.
+ * A work item's brief, result or reminder in the chat transcript.
  */
 export type TurnWork = {
   itemId: string;
   title: string;
-  kind: "brief" | "result";
+  kind: "brief" | "result" | "reminder";
   /** How the run ended. Only on results. */
   outcome?: "completed" | "failed" | "cancelled";
   /**

@@ -14,7 +14,7 @@ export const LIMITS = {
 };
 
 export function isOpen(status: WorkStatus) {
-  return status === "active" || status === "waiting";
+  return status === "active" || status === "waiting" || status === "deferred";
 }
 
 /** The next id after every one given so far: "w-1", "w-2", … */
@@ -44,6 +44,9 @@ export function workLine(item: WorkItem) {
     ? `; last: ${clip(item.result.text.replace(/\s+/g, " "), 100)} (${day(item.result.at)})`
     : "";
   const running = item.run ? "; working on it in the background" : "";
+  const reminder = item.reminderAt
+    ? `; reminder at ${new Date(item.reminderAt).toISOString()}`
+    : "";
   const job =
     item.origin?.kind === "job"
       ? `; scheduled job${item.nextAt ? `, next run ${new Date(item.nextAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}`
@@ -54,11 +57,12 @@ export function workLine(item: WorkItem) {
       : item.origin?.kind === "handoff-received"
         ? `; a task from ${item.origin.bot.name}`
         : "";
-  return `${item.id} ${flat(item.title)}: ${where}${job}${handoff}${running}${last}`;
+  return `${item.id} ${flat(item.title)}: ${where}${job}${handoff}${running}${reminder}${last}`;
 }
 
-/** 0 for the bot's own items, 1 for a job's running item, 2 for an idle job's. */
+/** Put in-flight work first and deferred items after scheduled jobs. */
 function rank(item: WorkItem) {
+  if (item.status === "deferred") return 3;
   if (item.origin?.kind !== "job") return 0;
   return item.run ? 1 : 2;
 }
@@ -66,8 +70,7 @@ function rank(item: WorkItem) {
 /**
  * Open items in the order the bot should see them: its own requests, waits
  * and handoffs first, then jobs that are running, then the rest of its
- * scheduled jobs, each newest activity first. A bot with many jobs still sees
- * what it is chasing for the owner.
+ * scheduled jobs, then deferred items, each newest activity first.
  */
 export function byAttention(a: WorkItem, b: WorkItem) {
   return rank(a) - rank(b) || b.updatedAt - a.updatedAt;
@@ -121,11 +124,12 @@ export function openWorkContext(items: readonly WorkItem[]) {
  */
 export function listWork(
   items: readonly WorkItem[],
-  filter: { open: boolean; query?: string },
+  filter: { open: boolean; deferred?: boolean; query?: string },
 ) {
   const query = filter.query?.trim().toLowerCase();
   return items
     .filter((item) => isOpen(item.status) === filter.open)
+    .filter((item) => !filter.deferred || item.status === "deferred")
     .filter(
       (item) =>
         !query ||
@@ -146,13 +150,13 @@ const MAX_TOOL_LISTED = 50;
  */
 export function workListText(
   items: readonly WorkItem[],
-  filter: { closed: boolean; query?: string },
+  filter: { closed: boolean; deferred?: boolean; query?: string },
 ) {
-  const all = listWork(items, { open: !filter.closed, query: filter.query });
+  const all = listWork(items, { ...filter, open: !filter.closed });
   const shown = all.slice(0, MAX_TOOL_LISTED);
   const left = all.slice(shown.length);
   if (!shown.length)
-    return `No ${filter.closed ? "closed" : "open"} work items${filter.query ? ` matching "${filter.query}"` : ""}.`;
+    return `No ${filter.closed ? "closed" : filter.deferred ? "deferred" : "open"} work items${filter.query ? ` matching "${filter.query}"` : ""}.`;
   return (
     shown.map(workLine).join("\n") +
     (left.length
@@ -168,7 +172,13 @@ export type WorkChange = {
   waitingOn?: string;
   notes?: string;
   result?: string;
+  reminderAt?: number | null;
 };
+
+export function reminderIssue(at: number, now: number) {
+  if (!Number.isSafeInteger(at) || at > 8.64e15 || at <= now)
+    return "Choose a reminder time in the future.";
+}
 
 /**
  * Applies `change` to `item` as `by` makes it, or says why not. A closed item
@@ -197,6 +207,16 @@ export function changeWork(
     return by === "owner"
       ? `${item.id} is ${item.status}. Reopen it to change it.`
       : `${item.id} is ${item.status}. Open a new item if the work starts again.`;
+  if (change.status === "deferred" && (item.origin || item.run))
+    return `${item.id} can be deferred only when it belongs to this chat and has no background run in progress.`;
+  if (change.reminderAt !== undefined && item.origin)
+    return `${item.id} follows a handoff. Reminders belong to the chat's own work items.`;
+  if (typeof change.reminderAt === "number") {
+    if (!isOpen(change.status ?? item.status))
+      return "A reminder needs an open work item.";
+    const issue = reminderIssue(change.reminderAt, now);
+    if (issue) return issue;
+  }
   if (change.title !== undefined) {
     const title = clip(change.title, LIMITS.title);
     if (!title) return "A work item needs a title.";
@@ -212,6 +232,9 @@ export function changeWork(
     item.result = { text: clip(change.result, LIMITS.result), at: now };
   if (isOpen(item.status)) delete item.closed;
   else if (!item.closed) item.closed = { at: now, by };
+  if (!isOpen(item.status) || change.reminderAt === null)
+    delete item.reminderAt;
+  else if (change.reminderAt !== undefined) item.reminderAt = change.reminderAt;
   item.updatedAt = now;
   return undefined;
 }

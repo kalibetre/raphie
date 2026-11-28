@@ -893,8 +893,7 @@ pub struct SessionTurn {
     /// handed off, or the result of one coming back.
     #[serde(default)]
     pub handoff: Option<TurnHandoff>,
-    /// Set when a work item's background run started the turn: its brief,
-    /// or its result coming back to the chat.
+    /// Set on a work item's brief, result or reminder.
     #[serde(default)]
     pub work: Option<TurnWork>,
     /// Other bots' sessions the reply read, for tasks it handed off.
@@ -2134,20 +2133,26 @@ pub(crate) struct JobActionBody {
 }
 
 /// `WorkStatus` in `packages/contracts/src/bots/work.ts`: `Active` while
-/// the bot works on it, `Waiting` while it is blocked, `Done` or `Dropped`
-/// once closed.
+/// the bot works on it, `Waiting` while blocked, `Deferred` while parked,
+/// and `Done` or `Dropped` once closed.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WorkStatus {
     Active,
     Waiting,
+    Deferred,
     Done,
     Dropped,
+    #[serde(other)]
+    Unknown,
 }
 
 impl WorkStatus {
     pub fn is_open(self) -> bool {
-        matches!(self, WorkStatus::Active | WorkStatus::Waiting)
+        matches!(
+            self,
+            WorkStatus::Active | WorkStatus::Waiting | WorkStatus::Deferred
+        )
     }
 }
 
@@ -2168,12 +2173,15 @@ pub struct TurnWork {
     pub request: Option<String>,
 }
 
-/// The brief sent to the item's session, or the result back in the chat.
+/// The work item's brief, result or reminder.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum TurnWorkKind {
     Brief,
     Result,
+    Reminder,
+    #[serde(other)]
+    Unknown,
 }
 
 /// A work item's run in progress.
@@ -2244,6 +2252,9 @@ pub struct WorkItem {
     /// When it next wakes on its own: a job's next run.
     #[serde(default)]
     pub next_at: Option<i64>,
+    /// When to remind the owner about this item.
+    #[serde(default)]
+    pub reminder_at: Option<i64>,
 }
 
 /// `WorkItem["origin"]`: the scheduled job an item follows, or the task it
@@ -2273,6 +2284,10 @@ pub(crate) struct WorkList {
 pub(crate) struct OpenWorkBody<'a> {
     pub title: &'a str,
     pub notes: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<WorkStatus>,
+    #[serde(rename = "reminderAt", skip_serializing_if = "Option::is_none")]
+    pub reminder_at: Option<i64>,
 }
 
 /// The body of `PATCH /api/work-items/:id`: only what changes.
@@ -2284,6 +2299,9 @@ pub struct WorkChange {
     pub notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<WorkStatus>,
+    /// Omitted preserves the reminder. An explicit null clears it.
+    #[serde(rename = "reminderAt", skip_serializing_if = "Option::is_none")]
+    pub reminder_at: Option<Option<i64>>,
 }
 
 /// A span's outcome.
@@ -2447,6 +2465,28 @@ pub(crate) struct DeleteBotBody<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn work_list_and_chat_accept_future_work_enum_values() {
+        let work: WorkList = serde_json::from_value(serde_json::json!({
+            "items": [{
+                "id": "w-1", "title": "Design doc", "status": "paused",
+                "opened": { "at": 1, "by": "owner" }, "updatedAt": 2
+            }]
+        }))
+        .expect("the work list parses");
+        assert_eq!(work.items[0].status, WorkStatus::Unknown);
+        assert!(!work.items[0].status.is_open());
+
+        let turn: SessionTurn = serde_json::from_value(serde_json::json!({
+            "id": "t-1", "source": "web", "text": "", "createdAt": 2,
+            "status": "done", "answer": "Design doc",
+            "work": { "itemId": "w-1", "title": "Design doc", "kind": "update" }
+        }))
+        .expect("the chat turn parses");
+        assert_eq!(turn.work.unwrap().kind, TurnWorkKind::Unknown);
+        assert_eq!(turn.answer.as_deref(), Some("Design doc"));
+    }
 
     #[test]
     fn questions_and_answers_read_and_write_as_the_runtime_sends_them() {

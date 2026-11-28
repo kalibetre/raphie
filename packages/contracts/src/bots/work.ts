@@ -3,9 +3,10 @@ export type WorkActor = "bot" | "owner";
 
 /**
  * Where a work item stands: `active` while the bot works on it, `waiting`
- * while it is blocked on `waitingOn`, and `done` or `dropped` once closed.
+ * while blocked on `waitingOn`, `deferred` while parked, and `done` or
+ * `dropped` once closed.
  */
-export type WorkStatus = "active" | "waiting" | "done" | "dropped";
+export type WorkStatus = "active" | "waiting" | "deferred" | "done" | "dropped";
 
 /** Something a bot is keeping track of for longer than one turn. */
 export type WorkItem = {
@@ -35,6 +36,8 @@ export type WorkItem = {
       };
   /** When it next wakes on its own: a job's next run. */
   nextAt?: number;
+  /** When to remind the owner about this item, in epoch milliseconds. */
+  reminderAt?: number;
   /** Its own background session, once work has run there. */
   sessionId?: string;
   /** The run in progress, if any: which, since when, and its turn once delivered. */
