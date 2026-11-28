@@ -82,6 +82,10 @@ _Avoid_: Task, which named handoffs before; thread; conversation.
 The bot keeps its context and waits for the owner to ask to start or resume it.
 The backlog is the bot's list of deferred work items.
 
+**Work item reminder**: A one-time message in the bot's private chat that
+brings an open work item back to the owner's attention at a chosen time.
+The item keeps its status when the reminder arrives.
+
 **Rewind**: Taking a chat back to just before one of the owner's messages,
 to edit and send it again. Only the chat goes back: the later messages stay in
 the transcript marked as rewound, and the bot is told what they did outside

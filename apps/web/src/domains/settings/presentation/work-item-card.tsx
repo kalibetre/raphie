@@ -64,6 +64,9 @@ export function WorkItemCard({
           Waiting on {item.waitingOn}
         </p>
       )}
+      {item.reminderAt !== undefined && (
+        <p className="automation-note">Reminder · {when(item.reminderAt)}</p>
+      )}
       {job && (
         <p className="automation-note">
           Scheduled job

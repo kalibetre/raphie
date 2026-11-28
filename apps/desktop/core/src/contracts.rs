@@ -893,8 +893,7 @@ pub struct SessionTurn {
     /// handed off, or the result of one coming back.
     #[serde(default)]
     pub handoff: Option<TurnHandoff>,
-    /// Set when a work item's background run started the turn: its brief,
-    /// or its result coming back to the chat.
+    /// Set on a work item's brief, result or reminder.
     #[serde(default)]
     pub work: Option<TurnWork>,
     /// Other bots' sessions the reply read, for tasks it handed off.
@@ -2167,12 +2166,13 @@ pub struct TurnWork {
     pub request: Option<String>,
 }
 
-/// The brief sent to the item's session, or the result back in the chat.
+/// The work item's brief, result or reminder.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum TurnWorkKind {
     Brief,
     Result,
+    Reminder,
 }
 
 /// A work item's run in progress.
@@ -2243,6 +2243,9 @@ pub struct WorkItem {
     /// When it next wakes on its own: a job's next run.
     #[serde(default)]
     pub next_at: Option<i64>,
+    /// When to remind the owner about this item.
+    #[serde(default)]
+    pub reminder_at: Option<i64>,
 }
 
 /// `WorkItem["origin"]`: the scheduled job an item follows, or the task it
@@ -2272,6 +2275,10 @@ pub(crate) struct WorkList {
 pub(crate) struct OpenWorkBody<'a> {
     pub title: &'a str,
     pub notes: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<WorkStatus>,
+    #[serde(rename = "reminderAt", skip_serializing_if = "Option::is_none")]
+    pub reminder_at: Option<i64>,
 }
 
 /// The body of `PATCH /api/work-items/:id`: only what changes.
@@ -2283,6 +2290,9 @@ pub struct WorkChange {
     pub notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<WorkStatus>,
+    /// Omitted preserves the reminder. An explicit null clears it.
+    #[serde(rename = "reminderAt", skip_serializing_if = "Option::is_none")]
+    pub reminder_at: Option<Option<i64>>,
 }
 
 /// A span's outcome.

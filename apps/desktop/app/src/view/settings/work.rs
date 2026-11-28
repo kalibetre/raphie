@@ -8,7 +8,7 @@
 
 use raphie_core::contracts::{WorkActor, WorkItem, WorkStatus};
 use raphie_core::engine::Command;
-use rune::{El, Tx, col, row, text, text_input};
+use rune::{El, TextEdit, Tx, col, row, text, text_input};
 use rune_kit::Dialog;
 
 use super::parts::{Scope, group_with, page, status};
@@ -139,9 +139,7 @@ fn open_group(items: &[WorkItem], bot: &str, busy: bool, focus: Option<&str>, t:
     group_with(
         t,
         "Open",
-        &format!(
-            "{bot} updates these as it works. Ask about any of them in the chat, or change one here."
-        ),
+        &format!("Ask {bot} about any of these items in the chat, or change one here."),
         Some(add),
         rows,
     )
@@ -234,6 +232,9 @@ fn card(item: &WorkItem, bot: &str, busy: bool, focused: bool, t: &Theme) -> El 
                 .color(t.attention)
                 .wrap(),
         );
+    }
+    if let Some(at) = item.reminder_at {
+        card = card.child(note(t, format!("Reminder · {}", date_time(at))).key(key("reminder")));
     }
     // A scheduled job's item follows the job; it is changed there.
     let job = item.origin.as_ref().is_some_and(|o| o.kind == "job");
@@ -362,7 +363,7 @@ fn card(item: &WorkItem, bot: &str, busy: bool, focused: bool, t: &Theme) -> El 
     card
 }
 
-/// "New item" or "Edit item": a title and notes in a modal.
+/// The work item form, with an optional reminder for items from this chat.
 fn dialog(s: &Ui, bot: &str, look: &Look, overlays: &mut Vec<El>) {
     let t = &look.theme;
     let form = &s.work_form;
@@ -423,6 +424,62 @@ fn dialog(s: &Ui, bot: &str, look: &Look, overlays: &mut Vec<El>) {
         ))
         .child(caption("Notes"))
         .child(notes_box);
+    if !editing {
+        let kind = |deferred| {
+            if deferred == form.deferred {
+                Kind::Primary
+            } else {
+                Kind::Outline
+            }
+        };
+        body = body.child(caption("Status")).child(
+            row()
+                .gap(8.0)
+                .flex_wrap()
+                .child(pressable(
+                    button(t, kind(false), Size::Small, None, "Active")
+                        .key("rd-work-status-active"),
+                    !busy,
+                    |s: &mut Ui| s.work_form.deferred = false,
+                ))
+                .child(pressable(
+                    button(t, kind(true), Size::Small, None, "Deferred")
+                        .key("rd-work-status-deferred"),
+                    !busy,
+                    |s: &mut Ui| s.work_form.deferred = true,
+                )),
+        );
+    }
+    if form.can_remind {
+        const REMINDER: &str = "Reminder (optional)";
+        body = body
+            .child(caption(REMINDER))
+            .child(text_field(
+                t,
+                Field {
+                    key: "rd-work-reminder",
+                    label: REMINDER,
+                    placeholder: "YYYY-MM-DD HH:MM",
+                    edit: &form.reminder,
+                    disabled: busy,
+                    compact: true,
+                },
+                |s: &mut Ui| &mut s.work_form.reminder,
+                |s: &mut Ui, _: &mut Tx| s.save_work_form(),
+            ))
+            .child(note(
+                t,
+                "Uses your device’s time zone. The reminder appears in your private chat.",
+            ));
+        if !form.reminder.text.is_empty() {
+            body = body.child(pressable(
+                button(t, Kind::Ghost, Size::Small, None, "Clear reminder")
+                    .key("rd-work-clear-reminder"),
+                !busy,
+                |s: &mut Ui| s.work_form.reminder = TextEdit::new(""),
+            ));
+        }
+    }
     // What is wrong with the form first, then what the runtime refused.
     let error = form
         .error
@@ -457,7 +514,7 @@ fn dialog(s: &Ui, bot: &str, look: &Look, overlays: &mut Vec<El>) {
     );
 
     let description = if editing {
-        format!("{bot} reads the title and notes the next time it works on this.")
+        format!("Update what {bot} is keeping track of.")
     } else {
         format!("Something for {bot} to keep track of. It sees new items with your next message.")
     };

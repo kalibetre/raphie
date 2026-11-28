@@ -208,7 +208,9 @@ export class Gateway {
     this.toolApprovals = new ToolApprovalService(this);
     this.asks = new AskService(this);
     this.cards = new CardService(this);
-    this.work = new WorkService(this);
+    this.work = new WorkService(this, (key, prepare) =>
+      this.chats.postWorkMessage(key, prepare),
+    );
     this.observations = new Observations(this);
     this.deliveries = new PiDeliveryQueue(this);
     this.queries = new PiClientQueries(this);
@@ -280,7 +282,8 @@ export class Gateway {
       );
     registry.install(createWebSearchTools(() => app.models, options.webFetch));
     registry.install(chatSummaries);
-    registry.install(createWorkTools(app.workRuns));
+    registry.install(createWorkTools(app.work, app.workRuns));
+    registry.install(app.work.reminderExtension());
     registry.install(app.workRuns.extension());
     registry.install(createAskTools(app.asks));
     registry.install(

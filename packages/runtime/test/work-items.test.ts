@@ -196,11 +196,13 @@ async function bot(
   calls: Record<string, { name: string; args: JsonObject }>,
   model: Parameters<typeof chatModel>[0] = {},
   existing?: string,
+  now?: () => number,
 ) {
   const directory = existing ?? (await mkdtemp(join(tmpdir(), "raphie-work-")));
   const seen: string[] = [];
   const app = await Gateway.open({
     directory,
+    now,
     ...chatModel({
       ...model,
       toolFor: (text) =>
@@ -240,6 +242,171 @@ async function bot(
     },
   };
 }
+
+test("a work reminder survives restart and posts once without a model turn", async () => {
+  const at = Date.now() + 60_000;
+  let now = at - 60_000;
+  const first = await bot(
+    {
+      park: {
+        name: "work_open",
+        args: {
+          title: "Write the design doc",
+          status: "deferred",
+          notes: "Low priority, requested by my manager",
+          reminderAt: new Date(at).toISOString(),
+        },
+      },
+      start: { name: "work_start", args: { id: "w-1", brief: "Write it" } },
+    },
+    {},
+    undefined,
+    () => now,
+  );
+  try {
+    const parked = await first.say("park the design doc");
+    assert.match(
+      parked.answer!,
+      /w-1 Write the design doc: deferred; reminder at/,
+    );
+    const refused = await first.say("start the item without activating it");
+    assert.match(refused.answer!, /is deferred/);
+    assert.equal((await first.app.work.get("w-1"))?.reminderAt, at);
+    assert.equal(
+      (await first.app.chats.state()).turns.some(
+        (t) => t.work?.kind === "reminder",
+      ),
+      false,
+    );
+  } finally {
+    await first.close();
+  }
+
+  now = at + 1000;
+  const later = at + 60_000;
+  const recovered = await bot(
+    {
+      snooze: {
+        name: "work_update",
+        args: { id: "w-1", reminderAt: new Date(later).toISOString() },
+      },
+      clear: { name: "work_update", args: { id: "w-1", reminderAt: null } },
+    },
+    {},
+    first.directory,
+    () => now,
+  );
+  try {
+    await waitForReminders(recovered.app, now);
+    const state = await recovered.app.chats.state();
+    const posted = state.turns.filter((t) => t.work?.kind === "reminder");
+    assert.equal(posted.length, 1);
+    assert.equal(posted[0]?.answer, "Reminder: Write the design doc");
+    assert.equal(
+      posted[0]?.conversationId,
+      state.conversations.find((c) => c.chat)?.id,
+    );
+    assert.equal(state.conversations.length, 1);
+    assert.equal(state.deliveries.length, 0);
+    assert.deepEqual(recovered.seen, []);
+    const item = (await recovered.app.work.get("w-1"))!;
+    assert.equal(item.status, "deferred");
+    assert.equal(item.reminderAt, undefined);
+    assert.equal(item.run, undefined);
+    assert.equal(item.notes, "Low priority, requested by my manager");
+    await recovered.say("What did you remind me about?");
+    assert.match(recovered.seen.at(-1) ?? "", /Write the design doc: deferred/);
+    assert.match(
+      (await recovered.say("snooze until later")).answer!,
+      /reminder at/,
+    );
+    assert.equal((await recovered.app.work.get("w-1"))?.reminderAt, later);
+    assert.doesNotMatch(
+      (await recovered.say("clear the reminder")).answer!,
+      /reminder at/,
+    );
+    assert.equal((await recovered.app.work.get("w-1"))?.reminderAt, undefined);
+  } finally {
+    await recovered.close();
+  }
+  const reopened = await bot({}, {}, first.directory, () => now);
+  try {
+    await waitForReminders(reopened.app, now);
+    assert.equal(
+      (await reopened.app.chats.state()).turns.filter(
+        (t) => t.work?.kind === "reminder",
+      ).length,
+      1,
+    );
+  } finally {
+    await reopened.done();
+  }
+});
+
+async function waitForReminders(app: Gateway, now: number) {
+  const { tasks } = await app.harness.inspect(context);
+  await Promise.all(
+    tasks
+      .filter(
+        ({ record }) =>
+          record.kind === "raphie.work-reminder" &&
+          (record.input as { at: number }).at <= now,
+      )
+      .map(async ({ record }) => {
+        const settled = await app.harness.waitForTask(record.id, context);
+        assert.equal(settled.state.outcome.status, "completed");
+      }),
+  );
+}
+
+test("only the current reminder fires after snoozing, removing and finishing work", async () => {
+  const base = Date.now();
+  const at = base + 60_000;
+  let now = base;
+  const { app, done } = await bot({}, {}, undefined, () => now);
+  try {
+    const first = await app.work.open({
+      title: "Outdated title",
+      reminderAt: at,
+    });
+    const second = await app.work.open({ title: "Removed", reminderAt: at });
+    const third = await app.work.open({ title: "Finished", reminderAt: at });
+    assert(
+      typeof first !== "string" &&
+        typeof second !== "string" &&
+        typeof third !== "string",
+    );
+    const refused = await app.work.change(first.id, {
+      title: "Unwanted edit",
+      reminderAt: base - 1000,
+    });
+    assert.equal(refused, "Choose a reminder time in the future.");
+    assert.equal((await app.work.get(first.id))?.title, "Outdated title");
+    await app.work.change(first.id, {
+      title: "Updated [title]",
+      reminderAt: at + 60_000,
+    });
+    await app.work.change(second.id, { reminderAt: null });
+    await app.work.change(third.id, { status: "done" });
+    await app.work.change(third.id, { status: "active" });
+    now = at + 1000;
+    app.harness.resume();
+    await waitForReminders(app, now);
+    assert.equal((await app.chats.state()).turns.length, 0);
+    now = at + 61_000;
+    app.harness.resume();
+    await waitForReminders(app, now);
+    const turns = (await app.chats.state()).turns;
+    assert.deepEqual(
+      turns.map((turn) => turn.answer),
+      ["Reminder: Updated \\[title\\]"],
+    );
+    assert.equal((await app.work.get(second.id))?.reminderAt, undefined);
+    assert.equal((await app.work.get(third.id))?.reminderAt, undefined);
+  } finally {
+    await done();
+  }
+});
 
 test("the bot opens, updates and closes a work item from its chat", async () => {
   const { app, say, seen, done } = await bot({
@@ -357,6 +524,13 @@ test("the owner reads work items over the API", async () => {
 test("a group never sees or changes the owner's work items", async () => {
   const { app, say, seen, done } = await bot({
     open: { name: "work_open", args: { title: "Private plan" } },
+    remind: {
+      name: "work_update",
+      args: {
+        id: "w-1",
+        reminderAt: new Date(Date.now() + 60_000).toISOString(),
+      },
+    },
   });
   try {
     await say("open in the chat");
@@ -370,6 +544,11 @@ test("a group never sees or changes the owner's work items", async () => {
     assert.match(refused.answer!, /belong to your chat with the owner/);
     assert.equal((await app.work.list({ open: true })).length, 1);
     assert.doesNotMatch(seen.at(-1)!, /Open work|Private plan/);
+    assert.match(
+      (await say("remind from the group", group)).answer!,
+      /belong to your chat with the owner/,
+    );
+    assert.equal((await app.work.get("w-1"))?.reminderAt, undefined);
   } finally {
     await done();
   }

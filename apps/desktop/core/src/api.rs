@@ -39,7 +39,7 @@ use crate::contracts::{AnswerSignInBody, ProviderSignIn, StartSignInBody};
 use crate::contracts::{ApprovalMode, ApprovalModeBody};
 use crate::contracts::{BotHistory, BotRevision, DeleteBotBody, NewBot};
 use crate::contracts::{JobActionBody, JobList, JobRun, SaveJobBody, ScheduledJob};
-use crate::contracts::{OpenWorkBody, WorkChange, WorkItem, WorkList};
+use crate::contracts::{OpenWorkBody, WorkChange, WorkItem, WorkList, WorkStatus};
 use crate::contracts::{OwnerProfile, SaveOwnerProfile};
 use crate::contracts::{PersonalityPreset, PersonalityPresetList};
 use crate::contracts::{SaveSkill, SkillDetail, SkillImport, SkillList, SkillSummary};
@@ -700,10 +700,17 @@ impl ApiClient {
         bot_id: &str,
         title: &str,
         notes: &str,
+        status: Option<WorkStatus>,
+        reminder_at: Option<i64>,
     ) -> Result<WorkItem, ApiError> {
         self.post_json(
             &bot_path(bot_id, "/api/work-items"),
-            &OpenWorkBody { title, notes },
+            &OpenWorkBody {
+                title,
+                notes,
+                status,
+                reminder_at,
+            },
         )
         .await
     }

@@ -36,6 +36,8 @@ export type WorkItem = {
       };
   /** When it next wakes on its own: a job's next run. */
   nextAt?: number;
+  /** When to remind the owner about this item, in epoch milliseconds. */
+  reminderAt?: number;
   /** Its own background session, once work has run there. */
   sessionId?: string;
   /** The run in progress, if any: which, since when, and its turn once delivered. */

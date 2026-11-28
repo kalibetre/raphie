@@ -8,8 +8,16 @@ import {
   type ToolExecutionApi,
   type Tx,
 } from "@earendil-works/pi-durable";
-import { bool, obj, oneOf, opt, str } from "@earendil-works/pi-schema";
+import {
+  bool,
+  nullable,
+  obj,
+  oneOf,
+  opt,
+  str,
+} from "@earendil-works/pi-schema";
 import type { WorkActor, WorkItem } from "@raphie/contracts";
+import { z } from "zod";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
@@ -25,11 +33,13 @@ import {
   isOpen,
   LIMITS,
   listWork,
+  reminderIssue,
   type WorkChange,
   workId,
   workLine,
   workListText,
 } from "../domain/work-item.ts";
+import { cancelReminder, createWorkReminderTask } from "./work-reminders.ts";
 import type { WorkRuns } from "./work-runs.ts";
 import { WorkItems, type WorkState } from "./work-store.ts";
 
@@ -47,6 +57,7 @@ type OpenWork = {
   status?: "active" | "waiting" | "deferred";
   waitingOn?: string;
   notes?: string;
+  reminderAt?: number;
 };
 
 export class WorkService {
@@ -54,8 +65,69 @@ export class WorkService {
   /** The background runs, once the bot has them. */
   runs?: WorkRuns;
 
-  constructor(app: DurableContext) {
+  private reminder: ReturnType<typeof createWorkReminderTask>;
+
+  constructor(
+    app: DurableContext,
+    post: Parameters<typeof createWorkReminderTask>[0],
+  ) {
     this.app = app;
+    this.reminder = createWorkReminderTask(post);
+  }
+
+  reminderExtension() {
+    return defineExtension({
+      name: "raphie.work-reminders",
+      tasks: [this.reminder],
+    });
+  }
+
+  private async scheduleReminder(tx: Tx, id: string, at: number) {
+    const state = await tx.doc(WorkItems);
+    state.reminderTasks ??= {};
+    state.reminderTasks[id] = await tx.createTask(
+      this.reminder,
+      { id, at },
+      {
+        conversationId: this.app.root.id,
+        ownership: { kind: "conversation" },
+        background: true,
+      },
+    );
+  }
+
+  async openIn(
+    tx: Tx,
+    input: OpenWork,
+    by: WorkActor,
+    from?: { conversationId: number; turnId?: string },
+  ) {
+    const item = await openWork(tx, input, by, from);
+    if (typeof item !== "string" && item.reminderAt !== undefined)
+      await this.scheduleReminder(tx, item.id, item.reminderAt);
+    return item;
+  }
+
+  async changeIn(
+    tx: Tx,
+    id: string,
+    input: WorkChange,
+    by: WorkActor,
+    conversationId?: number,
+  ) {
+    const state = await tx.doc(WorkItems);
+    const previous = find(state, id)?.reminderAt;
+    const item = await changeWorkItem(tx, id, input, by, conversationId);
+    if (typeof item !== "string" && item.reminderAt !== previous) {
+      const taskId = state.reminderTasks?.[item.id];
+      if (taskId !== undefined) {
+        await cancelReminder(tx, taskId);
+        delete state.reminderTasks?.[item.id];
+      }
+      if (item.reminderAt !== undefined)
+        await this.scheduleReminder(tx, item.id, item.reminderAt);
+    }
+    return item;
   }
 
   /** Stops an item's running background work. */
@@ -84,7 +156,13 @@ export class WorkService {
 
   /** The owner opens an item. */
   async open(input: OpenWork) {
-    return this.app.root.commit((tx) => openWork(tx, input, "owner"), context);
+    const item = await this.app.root.commit(
+      (tx) => this.openIn(tx, input, "owner"),
+      context,
+    );
+    if (typeof item !== "string" && item.reminderAt !== undefined)
+      this.app.harness.resume();
+    return item;
   }
 
   /**
@@ -93,11 +171,13 @@ export class WorkService {
    */
   async change(id: string, change: WorkChange) {
     const item = await this.app.root.commit(
-      (tx) => changeWorkItem(tx, id, change, "owner"),
+      (tx) => this.changeIn(tx, id, change, "owner"),
       context,
     );
     if (typeof item !== "string" && !isOpen(item.status) && item.run?.turnId)
       await this.runs?.cancel(item).catch(() => {});
+    if (typeof item !== "string" && typeof change.reminderAt === "number")
+      this.app.harness.resume();
     return item;
   }
 }
@@ -117,8 +197,12 @@ async function openWork(
   const sourceTurnId = from?.turnId;
   const title = clip(input.title, LIMITS.title);
   if (!title) return "A work item needs a title.";
-  const state = await tx.doc(WorkItems);
   const now = Date.now();
+  if (input.reminderAt !== undefined) {
+    const issue = reminderIssue(input.reminderAt, now);
+    if (issue) return issue;
+  }
+  const state = await tx.doc(WorkItems);
   const status = input.status ?? "active";
   const item: WorkItem = {
     id: workId(state.next),
@@ -128,6 +212,7 @@ async function openWork(
       ? { waitingOn: clip(input.waitingOn, LIMITS.waitingOn) }
       : {}),
     ...(sourceTurnId ? { sourceTurnId } : {}),
+    ...(input.reminderAt === undefined ? {} : { reminderAt: input.reminderAt }),
     notes: clip(input.notes ?? "", LIMITS.notes),
     opened: { at: now, by },
     updatedAt: now,
@@ -315,9 +400,19 @@ const result = str({
   maxLength: 8_000,
   description: "Its latest result, as you would tell the owner.",
 });
+const reminderAt = str({
+  maxLength: 40,
+  description:
+    "A future ISO 8601 date and time with UTC offset (YYYY-MM-DDTHH:MM:SS+03:00). Use the owner's time zone.",
+});
+const reminderDate = z.iso.datetime({ offset: true });
+
+function parseReminder(value: string): number {
+  return reminderDate.safeParse(value).success ? Date.parse(value) : NaN;
+}
 
 /** The tools and instructions that let a bot keep its work items. */
-export function createWorkTools(runs: WorkRuns) {
+export function createWorkTools(work: WorkService, runs: WorkRuns) {
   return defineExtension({
     name: "raphie.work-items",
     sections: [
@@ -326,6 +421,7 @@ export function createWorkTools(runs: WorkRuns) {
           "You keep work items: your record of each thing you are tracking for the owner for longer than one turn, such as a request you are still chasing, something you promised to come back to, or a decision you are waiting on. Your open items come with each of the owner's messages under [Open work].",
           "Open one with work_open when something will outlive this turn. Never open one for a request you settle in the same reply, and check the open items first so you do not open the same thing twice.",
           "When the owner asks you to save something for later, open or update it with status deferred and keep its context in the notes. Leave it deferred until the owner asks you to start. Use work_list with deferred: true when asked what is parked or in the backlog. To start again, set it active before doing the work.",
+          "When the owner asks to be reminded about a work item, set reminderAt on that item with work_open or work_update. If it does not exist and they want to do the work later, open it deferred. Do not create a scheduled job for this. If the time is unclear, ask when. Confirm the exact time after the tool succeeds. Snooze by replacing reminderAt and remove a reminder by passing null to work_update. A reminder posts to this chat without starting work.",
           "Keep an item current with work_update as it changes: active while you work on it, waiting while it is blocked, and deferred while deliberately parked. Close it with work_close, done or dropped, as soon as it is finished or the owner no longer wants it.",
           "When the owner asks what is going on, answer from your work items, not from memory of the chat. Use work_read for one item's notes, and work_list for closed items or more than the message lists.",
           "For work that takes a while, such as research, comparisons or drafting something long, start it in the background with work_start instead of doing it in this reply: it runs in the item's own session, keeps that context for follow-ups, and its result comes back to this chat as a new message. Tell the owner you are on it; don't wait for it or invent its result. Send a follow-up to the same item with work_start again once its run has ended.",
@@ -343,16 +439,26 @@ export function createWorkTools(runs: WorkRuns) {
           status: opt(oneOf(["active", "waiting", "deferred"])),
           waitingOn: opt(waitingOn),
           notes: opt(notes),
+          reminderAt: opt(reminderAt),
         }),
         replay: "safe",
         execute: (args, api, ctx) =>
           mutate(api, ctx, async (tx) => {
             const chat = await chatTurn(tx, api);
             if (!chat) return { error: NOT_IN_CHAT };
-            const item = await openWork(tx, args, "bot", {
-              conversationId: api.conversationId,
-              turnId: chat.turnId,
-            });
+            const { reminderAt: at, ...input } = args;
+            const item = await work.openIn(
+              tx,
+              {
+                ...input,
+                reminderAt: at === undefined ? undefined : parseReminder(at),
+              },
+              "bot",
+              {
+                conversationId: api.conversationId,
+                turnId: chat.turnId,
+              },
+            );
             if (typeof item === "string") return { error: item };
             return JSON.stringify({ opened: true, item: workLine(item) });
           }),
@@ -360,7 +466,7 @@ export function createWorkTools(runs: WorkRuns) {
       defineTool({
         name: "work_update",
         description:
-          "Change an open work item: its title, status, what it waits on, your notes or its latest result. Pass only what changes.",
+          "Change an open work item's title, status, what it waits on, notes, result or reminder time. Pass null to remove a reminder and omit unchanged fields.",
         parameters: obj({
           id,
           title: opt(title),
@@ -368,16 +474,20 @@ export function createWorkTools(runs: WorkRuns) {
           waitingOn: opt(waitingOn),
           notes: opt(notes),
           result: opt(result),
+          reminderAt: opt(nullable(reminderAt)),
         }),
         replay: "safe",
         execute: (args, api, ctx) =>
           mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
-            const { id: itemId, ...change } = args;
-            const item = await changeWorkItem(
+            const { id: itemId, reminderAt: at, ...change } = args;
+            const item = await work.changeIn(
               tx,
               itemId,
-              change,
+              {
+                ...change,
+                reminderAt: typeof at === "string" ? parseReminder(at) : at,
+              },
               "bot",
               api.conversationId,
             );
@@ -398,7 +508,7 @@ export function createWorkTools(runs: WorkRuns) {
         execute: async (args, api, ctx) => {
           const result = await mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
-            const item = await changeWorkItem(
+            const item = await work.changeIn(
               tx,
               args.id,
               { status: args.outcome, result: args.result },

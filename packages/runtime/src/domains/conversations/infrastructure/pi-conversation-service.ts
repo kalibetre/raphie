@@ -90,6 +90,13 @@ type ChatState = {
   deliveries: ChatDelivery[];
 };
 
+type WorkPost = {
+  work: TurnWork;
+  text: string;
+  scheduled?: { name: string };
+  fromTurnId?: string;
+};
+
 export const Chats = defineDoc<ChatState>({
   kind: "raphie.chats",
   version: 1,
@@ -1008,15 +1015,21 @@ export class ChatService implements ConversationCommands {
    * write into the chat's context so the bot knows it said it. The job's
    * run then links to it. Posting the same run twice posts once.
    */
-  async postWorkResult(input: {
-    runKey: string;
-    work: TurnWork;
-    scheduled?: { name: string };
-    text: string;
-    /** The run's turn in the item's session, whose job run moves here. */
-    fromTurnId?: string;
-  }) {
-    const requestKey = `work:${input.runKey}:post`;
+  async postWorkResult(
+    input: WorkPost & {
+      runKey: string;
+    },
+  ) {
+    // This post is unconditional; it always returns a turn ID.
+    return (await this.postWorkMessage(input.runKey, () => input))!;
+  }
+
+  /** Posts fixed work text and applies any state change in the same commit. */
+  async postWorkMessage(
+    key: string,
+    prepare: (tx: Tx) => WorkPost | undefined | Promise<WorkPost | undefined>,
+  ) {
+    const requestKey = `work:${key}:post`;
     // A bot with no chat yet gets one first: a write must come before any
     // other change in its commit.
     await this.app.root.commit(async (tx) => {
@@ -1044,10 +1057,14 @@ export class ChatService implements ConversationCommands {
         (t) => t.requestKey === requestKey,
       );
       if (existing) return existing.id;
+      const input = await prepare(tx);
+      if (!input) return undefined;
       const id = crypto.randomUUID();
-      const lead = input.scheduled
-        ? `Your scheduled job "${input.scheduled.name}" ran in the background, and you posted this message to the owner:`
-        : `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and you posted this message to the owner:`;
+      let lead = `Your background work on ${input.work.itemId} ("${input.work.title}") ended, and you posted this message to the owner:`;
+      if (input.scheduled)
+        lead = `Your scheduled job "${input.scheduled.name}" ran in the background, and you posted this message to the owner:`;
+      else if (input.work.kind === "reminder")
+        lead = `You reminded the owner about ${input.work.itemId}. The reminder did not start any work.`;
       const state = await tx.doc(Chats);
       const chat = state.conversations.find((c) => c.id === chatId)!;
       // The run's cards move with its message: the owner reads the chat, not

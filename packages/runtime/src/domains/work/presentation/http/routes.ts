@@ -10,6 +10,7 @@ import type { WorkService } from "../../infrastructure/work-items.ts";
 
 /** What the owner sends; the runtime cuts text that is too long. */
 const text = (max: number) => z.string().max(max);
+const reminderAt = z.number().int().max(8.64e15);
 
 /** The owner reads and keeps a bot's work items. */
 export function workRoutes(work: WorkService) {
@@ -46,6 +47,7 @@ export function workRoutes(work: WorkService) {
             title: text(400).min(1),
             notes: text(8_000).optional(),
             status: z.enum(["active", "deferred"]).optional(),
+            reminderAt: reminderAt.optional(),
           })
           .strict(),
       ),
@@ -69,6 +71,7 @@ export function workRoutes(work: WorkService) {
               .optional(),
             waitingOn: text(400).optional(),
             notes: text(8_000).optional(),
+            reminderAt: reminderAt.nullable().optional(),
           })
           .strict(),
       ),

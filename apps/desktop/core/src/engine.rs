@@ -381,6 +381,8 @@ pub enum Command {
         bot_id: String,
         title: String,
         notes: String,
+        status: Option<crate::contracts::WorkStatus>,
+        reminder_at: Option<i64>,
     },
     /// Stop one work item's running background work.
     CancelWork {
@@ -888,13 +890,16 @@ impl Engine {
                 bot_id,
                 title,
                 notes,
+                status,
+                reminder_at,
             } => self.save_work(
                 bot_id,
                 None,
                 WorkChange {
                     title: Some(title),
                     notes: Some(notes),
-                    status: None,
+                    status,
+                    reminder_at: reminder_at.map(Some),
                 },
             ),
             Command::ChangeWork { bot_id, id, change } => self.save_work(bot_id, Some(id), change),
@@ -2259,6 +2264,8 @@ impl Engine {
                         &bot_id,
                         change.title.as_deref().unwrap_or_default(),
                         change.notes.as_deref().unwrap_or_default(),
+                        change.status,
+                        change.reminder_at.flatten(),
                     )
                     .await
                 }

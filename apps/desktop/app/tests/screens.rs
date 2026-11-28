@@ -6522,8 +6522,18 @@ fn a_work_item_is_opened_and_edited_in_a_dialog() {
     rt.update(|ui, _| {
         ui.work_form.title = TextEdit::new("  Quarterly tax filing ");
         ui.work_form.notes = TextEdit::new("Receipts to the accountant.");
+        ui.work_form.reminder = TextEdit::new("2099-12-01 15:00");
     });
     settle(&mut rt);
+    click(&mut rt, "rd-work-status-deferred");
+    let expected_reminder = chrono::NaiveDate::from_ymd_opt(2099, 12, 1)
+        .unwrap()
+        .and_hms_opt(15, 0, 0)
+        .unwrap()
+        .and_local_timezone(chrono::Local)
+        .earliest()
+        .unwrap()
+        .timestamp_millis();
     click(&mut rt, "rd-work-save");
     assert_eq!(
         rt.state.sent.last(),
@@ -6531,6 +6541,8 @@ fn a_work_item_is_opened_and_edited_in_a_dialog() {
             bot_id: "default".into(),
             title: "Quarterly tax filing".into(),
             notes: "Receipts to the accountant.".into(),
+            status: Some(WorkStatus::Deferred),
+            reminder_at: Some(expected_reminder),
         })
     );
     deliver(
@@ -6555,6 +6567,7 @@ fn a_work_item_is_opened_and_edited_in_a_dialog() {
             if id == "w-1"
                 && change.title.as_deref() == Some("Flights to Porto")
                 && change.notes.is_none()
+                && change.reminder_at.is_none()
     ));
     deliver(
         &mut rt,
@@ -6570,8 +6583,24 @@ fn a_work_item_is_opened_and_edited_in_a_dialog() {
     assert_eq!(rt.state.sent.len(), sent);
     assert!(rt.find("rd-work-form").is_none());
 
+    click(&mut rt, "rd-work-w-1-edit");
+    click(&mut rt, "rd-work-clear-reminder");
+    click(&mut rt, "rd-work-save");
+    assert!(matches!(
+        rt.state.sent.last(),
+        Some(Command::ChangeWork { id, change, .. })
+            if id == "w-1" && change.reminder_at == Some(None)
+    ));
+    deliver(
+        &mut rt,
+        Event::WorkSaved {
+            bot_id: "default".into(),
+        },
+    );
+
     // Too long to save, as the web's inputs don't allow it either.
     click(&mut rt, "rd-work-new");
+    let sent = rt.state.sent.len();
     rt.update(|ui, _| ui.work_form.title = TextEdit::new("x".repeat(81)));
     settle(&mut rt);
     click(&mut rt, "rd-work-save");

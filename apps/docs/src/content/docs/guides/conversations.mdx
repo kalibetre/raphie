@@ -5,6 +5,8 @@ sidebar:
   order: 1
 ---
 
+import { Sequence } from "~/components/diagram";
+
 The web workspace is the browser app where you talk to your bots. Each bot has one **chat** with you, like a direct message with a teammate: pick the bot in the sidebar, type in the composer, and the reply streams in as the bot works, with its tool steps inline. Approvals and questions that wait on you dock on top of the composer.
 
 The chat is stored by the runtime, not the browser. Closing the tab never cancels work, and the chat is the same in the desktop app and in your private Telegram or Discord chat with the bot.
@@ -162,7 +164,25 @@ Each item has a short id such as `w-12`, a title, and a status. It is **active**
 - **Handoffs** are items on both sides: a task the bot hands another bot from your chat waits on that bot, and a task it receives runs in its own session; see [Handoffs](/guides/handoffs/#as-work-items).
 - **Closed items** are kept, listed apart from open ones.
 
-The bot opens, updates and closes items itself. You can also see and change them under **Settings → Work** for that bot, where open items are in the order the bot sees them, scheduled jobs last: add an item, edit its title and notes, mark it done, drop it, or reopen a closed one. A scheduled job's item changes only with its job, under **Scheduled jobs**, and a handoff's item reopens only when the bot sends a follow-up. The bot reads your changes with your next message.
+The bot opens, updates and closes items itself. Under **Settings → Work**, you can add an item, edit its title and notes, mark it done, drop it, or reopen a closed one. A scheduled job's item changes only with its job under **Scheduled jobs**. A handoff's item reopens when the bot sends a follow-up. The bot reads your changes with your next message.
+
+### Reminders for work items
+
+Say “Remind me about the design doc Friday at 3 pm.” The bot saves a one-time reminder on the work item and confirms the time. You can also set the reminder when adding or editing the item in **Settings → Work** in the web workspace or desktop app. The reminder field uses your device's time zone.
+
+The reminder appears as a message in your private chat in the web workspace and desktop app. If Raphie was offline when it was due, it posts the reminder when it comes back. The work item stays open in its current status. Ask the bot to start when you're ready.
+
+<Sequence
+  actors={["You", "Raphie"]}
+  steps={[
+    ["You", "Raphie", "Save the design doc for later and remind me Friday"],
+    ["Raphie", "You", "Saved as deferred with a Friday reminder", "reply"],
+    ["Raphie", "You", "Friday: Reminder to write the design doc", "reply"],
+    ["You", "Raphie", "Let's work on the design doc"],
+  ]}
+/>
+
+Say “Snooze the design doc reminder until Monday at 9 am” to move the reminder, or ask the bot to remove it. To do either from **Settings → Work**, edit the item to change the time or choose **Clear reminder** and save. Finishing or dropping the item also clears its pending reminder.
 
 ### Background work
 

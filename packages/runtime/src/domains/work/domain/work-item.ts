@@ -44,6 +44,9 @@ export function workLine(item: WorkItem) {
     ? `; last: ${clip(item.result.text.replace(/\s+/g, " "), 100)} (${day(item.result.at)})`
     : "";
   const running = item.run ? "; working on it in the background" : "";
+  const reminder = item.reminderAt
+    ? `; reminder at ${new Date(item.reminderAt).toISOString()}`
+    : "";
   const job =
     item.origin?.kind === "job"
       ? `; scheduled job${item.nextAt ? `, next run ${new Date(item.nextAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}`
@@ -54,7 +57,7 @@ export function workLine(item: WorkItem) {
       : item.origin?.kind === "handoff-received"
         ? `; a task from ${item.origin.bot.name}`
         : "";
-  return `${item.id} ${flat(item.title)}: ${where}${job}${handoff}${running}${last}`;
+  return `${item.id} ${flat(item.title)}: ${where}${job}${handoff}${running}${reminder}${last}`;
 }
 
 /** Put in-flight work first and deferred items after scheduled jobs. */
@@ -169,7 +172,13 @@ export type WorkChange = {
   waitingOn?: string;
   notes?: string;
   result?: string;
+  reminderAt?: number | null;
 };
+
+export function reminderIssue(at: number, now: number) {
+  if (!Number.isSafeInteger(at) || at > 8.64e15 || at <= now)
+    return "Choose a reminder time in the future.";
+}
 
 /**
  * Applies `change` to `item` as `by` makes it, or says why not. A closed item
@@ -200,6 +209,14 @@ export function changeWork(
       : `${item.id} is ${item.status}. Open a new item if the work starts again.`;
   if (change.status === "deferred" && (item.origin || item.run))
     return `${item.id} can be deferred only when it belongs to this chat and has no background run in progress.`;
+  if (change.reminderAt !== undefined && item.origin)
+    return `${item.id} follows a handoff. Reminders belong to the chat's own work items.`;
+  if (typeof change.reminderAt === "number") {
+    if (!isOpen(change.status ?? item.status))
+      return "A reminder needs an open work item.";
+    const issue = reminderIssue(change.reminderAt, now);
+    if (issue) return issue;
+  }
   if (change.title !== undefined) {
     const title = clip(change.title, LIMITS.title);
     if (!title) return "A work item needs a title.";
@@ -215,6 +232,9 @@ export function changeWork(
     item.result = { text: clip(change.result, LIMITS.result), at: now };
   if (isOpen(item.status)) delete item.closed;
   else if (!item.closed) item.closed = { at: now, by };
+  if (!isOpen(item.status) || change.reminderAt === null)
+    delete item.reminderAt;
+  else if (change.reminderAt !== undefined) item.reminderAt = change.reminderAt;
   item.updatedAt = now;
   return undefined;
 }
