@@ -52,11 +52,20 @@ export function createWorkReminderTask(post: Post) {
     name: "raphie.work-reminder",
     version: 1,
     initial: () => ({ phase: "wait" }),
-    abort: (_, runtime, ctx) =>
-      runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "aborted" } }),
-        ctx,
-      ),
+    abort: (task, runtime, ctx) =>
+      runtime.commit(async (tx) => {
+        const { id } = task.input;
+        const state = await tx.doc(WorkItems);
+        if (state.reminderTasks?.[id] === task.id) {
+          delete state.reminderTasks[id];
+          const item = state.items.find((item) => item.id === id);
+          if (item) {
+            delete item.reminderAt;
+            item.updatedAt = runtime.now();
+          }
+        }
+        return { status: "terminal", outcome: { status: "aborted" } };
+      }, ctx),
     phases: {
       wait: (task, runtime, ctx) =>
         runtime.commit(

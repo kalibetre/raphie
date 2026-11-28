@@ -15,6 +15,7 @@ import { ToolApprovals } from "../src/domains/approvals/infrastructure/pi-tool-a
 import { ChannelBindings } from "../src/domains/channels/infrastructure/pi-bindings.ts";
 import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
 import {
+  changeWork,
   listWork,
   MAX_LISTED,
   openWorkContext,
@@ -358,6 +359,133 @@ async function waitForReminders(app: Gateway, now: number) {
       }),
   );
 }
+
+test("job, handoff and running work items keep their lifecycle restrictions", () => {
+  const now = Date.now();
+  const reminderAt = now + 60_000;
+  const job = item(1, { origin: { kind: "job", jobId: "j-1" } });
+  const handoff = item(2, {
+    origin: {
+      kind: "handoff-sent",
+      handoffId: "h-1",
+      bot: { id: "research", name: "Research" },
+    },
+  });
+  const running = item(3, { run: { startedAt: now } });
+  for (const entry of [job, handoff, running]) {
+    assert.ok(changeWork(entry, { status: "deferred" }, "owner", now));
+    assert.equal(entry.status, "active");
+  }
+  for (const entry of [job, handoff]) {
+    assert.ok(changeWork(entry, { reminderAt }, "owner", now));
+    assert.equal(entry.reminderAt, undefined);
+  }
+});
+
+test("clearing and resetting a reminder for the same time keeps the new timer", async () => {
+  let now = Date.now();
+  const at = now + 60_000;
+  const { app, done } = await bot({}, {}, undefined, () => now);
+  try {
+    const opened = await app.work.open({ title: "Design doc", reminderAt: at });
+    assert(typeof opened !== "string");
+    const original = (await app.work.state()).reminderTasks?.[opened.id];
+    assert(original !== undefined);
+    // Hold both changes in one commit so the old timer wakes after both.
+    await app.root.commit(async (tx) => {
+      assert.notEqual(
+        typeof (await app.work.changeIn(
+          tx,
+          opened.id,
+          { reminderAt: null },
+          "owner",
+        )),
+        "string",
+      );
+      assert.notEqual(
+        typeof (await app.work.changeIn(
+          tx,
+          opened.id,
+          { reminderAt: at },
+          "owner",
+        )),
+        "string",
+      );
+    }, context);
+    await app.harness.waitForTask(original, context);
+    assert.equal((await app.chats.state()).turns.length, 0);
+    assert.equal((await app.work.get(opened.id))?.reminderAt, at);
+
+    now = at;
+    app.harness.resume();
+    await waitForReminders(app, now);
+    assert.deepEqual(
+      (await app.chats.state()).turns.map((turn) => turn.answer),
+      ["Reminder: Design doc"],
+    );
+  } finally {
+    await done();
+  }
+});
+
+test("snoozing after a timer wakes prevents it from posting", async () => {
+  let now = Date.now();
+  const at = now + 60_000;
+  const later = at + 60_000;
+  const { app, done } = await bot({}, {}, undefined, () => now);
+  const posting = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const post = app.chats.postWorkMessage.bind(app.chats);
+  app.chats.postWorkMessage = async (...args) => {
+    posting.resolve();
+    await release.promise;
+    return post(...args);
+  };
+  try {
+    const opened = await app.work.open({ title: "Design doc", reminderAt: at });
+    assert(typeof opened !== "string");
+    const original = (await app.work.state()).reminderTasks?.[opened.id];
+    assert(original !== undefined);
+    now = at;
+    app.harness.resume();
+    await posting.promise;
+    await app.work.change(opened.id, { reminderAt: later });
+    release.resolve();
+    await app.harness.waitForTask(original, context);
+    assert.equal((await app.chats.state()).turns.length, 0);
+    assert.equal((await app.work.get(opened.id))?.reminderAt, later);
+  } finally {
+    release.resolve();
+    await done();
+  }
+});
+
+test("aborting a reminder clears its time and leaves the deferred item", async () => {
+  const { app, done } = await bot({});
+  try {
+    const opened = await app.work.open({
+      title: "Design doc",
+      status: "deferred",
+      reminderAt: Date.now() + 60_000,
+    });
+    assert(typeof opened !== "string");
+    const taskId = (await app.work.state()).reminderTasks?.[opened.id];
+    assert(taskId !== undefined);
+    await app.harness.abortTask(taskId, context);
+    const task = await app.harness.waitForTask(taskId, context);
+    assert.equal(task.state.outcome.status, "aborted");
+    const stored = await app.work.get(opened.id);
+    assert.equal(stored?.status, "deferred");
+    assert.equal(stored?.reminderAt, undefined);
+    assert.equal(
+      (await app.work.state()).reminderTasks?.[opened.id],
+      undefined,
+    );
+    assert.equal((await app.chats.state()).turns.length, 0);
+  } finally {
+    await done();
+  }
+});
 
 test("only the current reminder fires after snoozing, removing and finishing work", async () => {
   const base = Date.now();
