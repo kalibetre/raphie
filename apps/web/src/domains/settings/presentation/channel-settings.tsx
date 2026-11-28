@@ -17,7 +17,7 @@ type Discord = DiscordChannel;
 
 type Channels = ChannelSettings;
 
-export function ChannelSettings() {
+export function ChannelSettings({ bot }: { bot?: string }) {
   const { workspace } = useBackend();
   const client = useQueryClient();
   const query = useQuery({
@@ -305,7 +305,7 @@ export function ChannelSettings() {
           </form>
         </div>
       )}
-      <SlackSettings saved={query.data.slack ?? null} />
+      <SlackSettings saved={query.data.slack ?? null} bot={bot} />
       <TelegramSettings saved={query.data.telegram ?? null} />
       <HomeChannelSettings />
     </Group>

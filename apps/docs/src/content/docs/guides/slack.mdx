@@ -15,12 +15,13 @@ Only Slack members whose IDs you list can talk to the bot. Messages from anyone 
 
 <Steps>
 
-1. Open [api.slack.com/apps](https://api.slack.com/apps), choose **Create New App**, then **From a manifest**, pick your workspace, and paste the [manifest below](#app-manifest).
-2. Under **Basic Information**, in **App-Level Tokens**, choose **Generate Token and Scopes**, add the `connections:write` scope, and copy the token. It starts with `xapp-`.
-3. Under **Install App**, install the app to your workspace and copy the **Bot User OAuth Token**. It starts with `xoxb-`.
-4. Find your member ID: in Slack, open your profile, choose the **⋮** menu, then **Copy member ID**. It looks like `U012AB3CD`.
-5. In Raphie, open **Settings**, choose the bot, then **Channels**. Under **Slack**, choose **Connect**, paste both tokens, add your member ID, and choose **Save and connect**.
-6. Open the app in Slack's sidebar and send it a direct message. It goes to the bot's [chat](/guides/conversations/), the same one you see in the web workspace and the desktop app.
+1. In Raphie, open **Settings**, choose the bot, then **Channels**. Under **Slack**, choose **Connect**, then **Copy app manifest**. The manifest is named after the bot; the [manifest below](#app-manifest) is the same with the name Raphie.
+2. Open [api.slack.com/apps](https://api.slack.com/apps), choose **Create New App**, then **From a manifest**, pick your workspace, and paste the manifest.
+3. Under **Basic Information**, in **App-Level Tokens**, choose **Generate Token and Scopes**, add the `connections:write` scope, and copy the token. It starts with `xapp-`.
+4. Under **Install App**, install the app to your workspace and copy the **Bot User OAuth Token**. It starts with `xoxb-`.
+5. Find your member ID: in Slack, open your profile, choose the **⋮** menu, then **Copy member ID**. It looks like `U012AB3CD`.
+6. Back in Raphie, paste both tokens, add your member ID, and choose **Save and connect**.
+7. Open the app in Slack's sidebar and send it a direct message. It goes to the bot's [chat](/guides/conversations/), the same one you see in the web workspace and the desktop app.
 
 </Steps>
 
@@ -73,7 +74,7 @@ settings:
   socket_mode_enabled: true
 ```
 
-Change `name` and `display_name` to your bot's name. Each Raphie bot needs its own app.
+**Copy app manifest** fills in the bot's name for you; if you paste this one, change `name` and `display_name`. Each Raphie bot needs its own app.
 
 ## Direct messages and channels
 

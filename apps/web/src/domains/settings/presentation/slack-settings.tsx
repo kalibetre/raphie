@@ -4,12 +4,14 @@ import type {
   SlackChannel,
 } from "@raphie/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Hash } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy, Hash } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
+import { copyText } from "../../../shared/browser/clipboard";
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
+import { slackManifest } from "../application/slack-manifest";
 import { ChannelAlert } from "./channel-alert";
 import { Row } from "./settings-group";
 import { useSettingsGuard } from "./use-settings-guard";
@@ -23,7 +25,14 @@ function describe(saved: SlackChannel | null) {
   return saved.teamName ? `Connected to ${saved.teamName}` : "Connected";
 }
 
-export function SlackSettings({ saved }: { saved: SlackChannel | null }) {
+export function SlackSettings({
+  saved,
+  bot,
+}: {
+  saved: SlackChannel | null;
+  /** The bot's name, used for the Slack app the manifest creates. */
+  bot?: string;
+}) {
   const { workspace } = useBackend();
   const client = useQueryClient();
   const mutation = useMutation({
@@ -39,6 +48,12 @@ export function SlackSettings({ saved }: { saved: SlackChannel | null }) {
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
   const guard = useSettingsGuard(
     Object.keys(draft).length > 0,
     mutation.isPending,
@@ -128,11 +143,9 @@ export function SlackSettings({ saved }: { saved: SlackChannel | null }) {
             }}
           >
             <div className="channel-field channel-field-wide">
-              <label htmlFor="slack-bot-token">
-                Bot token {saved ? "(leave blank to keep)" : ""}
-              </label>
+              <label>Slack app</label>
               <p className="automation-note">
-                Create an app at{" "}
+                At{" "}
                 <a
                   className="underline underline-offset-4"
                   href="https://api.slack.com/apps"
@@ -142,8 +155,44 @@ export function SlackSettings({ saved }: { saved: SlackChannel | null }) {
                 >
                   api.slack.com/apps
                 </a>
-                , install it to your workspace, then copy its bot token
-                (xoxb-…).
+                , choose Create New App, then From a manifest, and paste this
+                manifest. It turns on Socket Mode, the /home command, and the
+                scopes and events Raphie needs.
+              </p>
+              <div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    void copyText(slackManifest(bot)).then((done) => {
+                      setCopied(done);
+                      if (!done)
+                        setError(
+                          "Could not copy the manifest. Copy it from the Slack guide instead.",
+                        );
+                    })
+                  }
+                >
+                  {copied ? (
+                    <Check aria-hidden="true" />
+                  ) : (
+                    <Copy aria-hidden="true" />
+                  )}
+                  {copied ? "Copied" : "Copy app manifest"}
+                </Button>
+                <span role="status" className="sr-only">
+                  {copied ? "App manifest copied." : ""}
+                </span>
+              </div>
+            </div>
+            <div className="channel-field channel-field-wide">
+              <label htmlFor="slack-bot-token">
+                Bot token {saved ? "(leave blank to keep)" : ""}
+              </label>
+              <p className="automation-note">
+                Install the app to your workspace, then copy its Bot User OAuth
+                Token (xoxb-…).
               </p>
               <Input
                 id="slack-bot-token"
