@@ -170,6 +170,7 @@ fn status_label(status: WorkStatus) -> &'static str {
         WorkStatus::Deferred => "Deferred",
         WorkStatus::Done => "Done",
         WorkStatus::Dropped => "Dropped",
+        WorkStatus::Unknown => "Unknown",
     }
 }
 
@@ -292,10 +293,10 @@ fn card(item: &WorkItem, bot: &str, busy: bool, focused: bool, t: &Theme) -> El 
         date_time(item.opened.at)
     );
     if let Some(closed) = &item.closed {
-        let how = if item.status == WorkStatus::Done {
-            "Done"
-        } else {
-            "Dropped"
+        let how = match item.status {
+            WorkStatus::Done => "Done",
+            WorkStatus::Dropped => "Dropped",
+            _ => "Closed",
         };
         meta.push_str(&format!(
             " · {how} by {}, {}",
@@ -314,6 +315,7 @@ fn card(item: &WorkItem, bot: &str, busy: bool, focused: bool, t: &Theme) -> El 
             move |s: &mut Ui| s.cancel_work(&id),
         ));
     }
+    let can_reopen = !handoff && matches!(item.status, WorkStatus::Done | WorkStatus::Dropped);
     if job {
         // Nothing to do here but cancel a run.
     } else if item.status.is_open() {
@@ -346,14 +348,14 @@ fn card(item: &WorkItem, bot: &str, busy: bool, focused: bool, t: &Theme) -> El 
                 set(status),
             ));
         }
-    } else if !handoff {
+    } else if can_reopen {
         buttons = buttons.child(pressable(
             button(t, Kind::Ghost, Size::Small, None, "Reopen").key(key("reopen")),
             !busy,
             set(WorkStatus::Active),
         ));
     }
-    if running || (!job && (item.status.is_open() || !handoff)) {
+    if running || (!job && (item.status.is_open() || can_reopen)) {
         card = card.child(buttons);
     }
     // The item a link from the chat asked for, marked.

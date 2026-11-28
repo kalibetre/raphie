@@ -6511,6 +6511,28 @@ fn work_items_are_listed_and_the_owner_changes_them() {
 }
 
 #[test]
+fn a_future_work_status_displays_without_offering_a_status_change() {
+    let mut rt = render_sized(scenes::settings_work, false, (1280.0, 1400.0));
+    let mut lists = scenes::work_items();
+    lists.open[0].status = WorkStatus::Unknown;
+    deliver(
+        &mut rt,
+        Event::Work {
+            bot_id: "default".into(),
+            open: lists.open,
+            closed: lists.closed,
+        },
+    );
+    assert_eq!(
+        element(&rt, "rd-work-w-2-badge").text.as_deref(),
+        Some("Unknown")
+    );
+    for action in ["done", "drop", "defer", "reopen"] {
+        assert!(rt.find(&format!("rd-work-w-2-{action}")).is_none());
+    }
+}
+
+#[test]
 fn a_work_item_is_opened_and_edited_in_a_dialog() {
     let mut rt = render_sized(scenes::settings_work, false, (1280.0, 1400.0));
     click(&mut rt, "rd-work-new");

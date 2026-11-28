@@ -2138,6 +2138,8 @@ pub enum WorkStatus {
     Deferred,
     Done,
     Dropped,
+    #[serde(other)]
+    Unknown,
 }
 
 impl WorkStatus {
@@ -2173,6 +2175,8 @@ pub enum TurnWorkKind {
     Brief,
     Result,
     Reminder,
+    #[serde(other)]
+    Unknown,
 }
 
 /// A work item's run in progress.
@@ -2456,6 +2460,28 @@ pub(crate) struct DeleteBotBody<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn work_list_and_chat_accept_future_work_enum_values() {
+        let work: WorkList = serde_json::from_value(serde_json::json!({
+            "items": [{
+                "id": "w-1", "title": "Design doc", "status": "paused",
+                "opened": { "at": 1, "by": "owner" }, "updatedAt": 2
+            }]
+        }))
+        .expect("the work list parses");
+        assert_eq!(work.items[0].status, WorkStatus::Unknown);
+        assert!(!work.items[0].status.is_open());
+
+        let turn: SessionTurn = serde_json::from_value(serde_json::json!({
+            "id": "t-1", "source": "web", "text": "", "createdAt": 2,
+            "status": "done", "answer": "Design doc",
+            "work": { "itemId": "w-1", "title": "Design doc", "kind": "update" }
+        }))
+        .expect("the chat turn parses");
+        assert_eq!(turn.work.unwrap().kind, TurnWorkKind::Unknown);
+        assert_eq!(turn.answer.as_deref(), Some("Design doc"));
+    }
 
     #[test]
     fn questions_and_answers_read_and_write_as_the_runtime_sends_them() {
