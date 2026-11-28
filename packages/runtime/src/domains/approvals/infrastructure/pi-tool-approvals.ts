@@ -359,7 +359,7 @@ export class ToolApprovalService {
         );
       const destination =
         state.deliveries.find((d) => d.approvalId === id)?.threadId ?? null;
-      const names = channelNames(via === "telegram" ? "telegram" : "discord");
+      const names = channelNames(via === "web" ? "discord" : via);
       if (
         via !== "web" &&
         item.replyTo &&

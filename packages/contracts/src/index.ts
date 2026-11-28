@@ -1,4 +1,6 @@
 /** Public read models. No runtime, framework, or persistence dependencies. */
+import type { ChannelPlatform } from "./bots/channels.ts";
+
 export type {
   BotMcpConnection,
   SaveMcpConnection,
@@ -8,6 +10,7 @@ export type {
 } from "./bots/automation.ts";
 
 export type {
+  ChannelPlatform,
   ChannelSettings,
   DiscordChannel,
   SaveTelegramChannel,
@@ -48,7 +51,7 @@ export type {
 
 export type { DiagnosticSpan, TraceDiagnostics } from "./diagnostics/views.ts";
 
-export type Channel = "web" | "discord" | "telegram";
+export type Channel = "web" | ChannelPlatform;
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";
 

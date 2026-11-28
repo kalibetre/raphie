@@ -1,15 +1,61 @@
+import type { ChannelPlatform } from "@raphie/contracts";
+
 export type ReplyDestination = {
-  provider: "discord" | "telegram";
+  provider: ChannelPlatform;
   connectionId: string;
   owner: "owner";
   conversation: string;
 };
 
-/** User-facing names for refusal messages; Discord's wording is unchanged. */
-export function channelNames(provider: ReplyDestination["provider"]) {
-  return provider === "telegram"
-    ? { name: "Telegram", place: "chat" }
-    : { name: "Discord", place: "thread" };
+const platforms: Record<
+  ChannelPlatform,
+  {
+    /** User-facing names for refusal messages. */
+    name: string;
+    place: string;
+    /** Splits a conversation ID into the platform's own identifiers. */
+    parse(conversation: string): {
+      channelId: string;
+      guildId?: string;
+      threadId?: string;
+    };
+    /** A conversation only the owner reads. */
+    private(conversation: string): boolean;
+  }
+> = {
+  // "discord:<guild or @me>:<channel>[:<thread>]"
+  discord: {
+    name: "Discord",
+    place: "thread",
+    parse(conversation) {
+      const [, guildId, channelId, threadId] = conversation.split(":");
+      return {
+        channelId: channelId!,
+        guildId,
+        ...(threadId ? { threadId } : {}),
+      };
+    },
+    private: (conversation) => conversation.startsWith("discord:@me:"),
+  },
+  // "telegram:<chat>"; private-user IDs are positive, groups negative.
+  telegram: {
+    name: "Telegram",
+    place: "chat",
+    parse: (conversation) => ({ channelId: conversation.split(":")[1]! }),
+    private: (conversation) => /^telegram:[1-9]\d*$/.test(conversation),
+  },
+};
+
+export function channelNames(provider: ChannelPlatform) {
+  const { name, place } = platforms[provider];
+  return { name, place };
+}
+
+export function parseConversation(
+  provider: ChannelPlatform,
+  conversation: string,
+) {
+  return platforms[provider].parse(conversation);
 }
 
 export type ChannelBinding = ReplyDestination & { sessionId: string };
@@ -24,19 +70,17 @@ export function sameDestination(a: ReplyDestination, b: ReplyDestination) {
 }
 
 /**
- * A chat only the owner reads: a private Telegram chat or a Discord direct
- * message. It joins the owner's one chat with the bot; a group or a server
+ * A chat only the owner reads, such as a private Telegram chat or a Discord
+ * direct message. It joins the owner's one chat with the bot; a group or a server
  * channel, which others read, keeps its own.
  */
 export function isPrivateDestination(
   destination:
     Pick<ReplyDestination, "provider" | "conversation"> | null | undefined,
 ) {
-  if (destination?.provider === "telegram")
-    return /^telegram:[1-9]\d*$/.test(destination.conversation);
   return (
-    destination?.provider === "discord" &&
-    destination.conversation.startsWith("discord:@me:")
+    !!destination &&
+    platforms[destination.provider].private(destination.conversation)
   );
 }
 

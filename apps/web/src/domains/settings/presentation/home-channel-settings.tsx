@@ -1,9 +1,14 @@
-import type { ChannelHomeSettings } from "@raphie/contracts";
+import type { ChannelHomeSettings, ChannelPlatform } from "@raphie/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Row } from "./settings-group";
+
+const platformNames: Record<ChannelPlatform, string> = {
+  discord: "Discord",
+  telegram: "Telegram",
+};
 
 export function HomeChannelSettings() {
   const { workspace } = useBackend();
@@ -48,7 +53,7 @@ export function HomeChannelSettings() {
           {query.data.destinations.map((item) => (
             <Row
               key={item.id}
-              title={item.platform === "telegram" ? "Telegram" : "Discord"}
+              title={platformNames[item.platform]}
               description={`${item.conversationId} · owner ${item.userId}`}
             >
               <Button

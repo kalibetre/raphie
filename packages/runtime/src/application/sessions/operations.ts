@@ -9,6 +9,7 @@ import type {
   FileApprovalCommands,
   ToolApprovalCommands,
 } from "../../domains/approvals/application/ports.ts";
+import { channelNames } from "../../domains/channels/domain/binding.ts";
 import type {
   ConversationCommands,
   SendMessage,
@@ -20,10 +21,13 @@ export type MessageReceipt = { id: string; sessionId: string };
 
 type FileCommands = Pick<FileApprovalCommands, "accept" | "decide">;
 
-/** The file-copy experiment predates Telegram; fail closed rather than skip its Discord checks. */
+/** The file-copy experiment is Discord-only; fail closed rather than skip its Discord checks. */
 function fileSource(actor: ActorContext) {
-  if (actor.source === "telegram")
-    throw new InputError("File approvals are not available in Telegram.", 403);
+  if (actor.source !== "web" && actor.source !== "discord")
+    throw new InputError(
+      `File approvals are not available in ${channelNames(actor.source).name}.`,
+      403,
+    );
   return actor.source;
 }
 

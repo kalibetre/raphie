@@ -1,5 +1,6 @@
 import type { Channel, ChannelOrigin } from "@raphie/contracts";
 
+import { parseConversation } from "../../domains/channels/domain/binding.ts";
 import { InputError } from "../../shared/application/input-error.ts";
 
 export type ActorContext = Readonly<{
@@ -46,19 +47,8 @@ export class ActorAuthority {
               platform: source,
               connectionId,
               conversationId: threadId,
-              channelId:
-                source === "discord"
-                  ? threadId.split(":")[2]!
-                  : threadId.split(":")[1]!,
+              ...parseConversation(source, threadId),
               userId: discordUserId,
-              ...(source === "discord"
-                ? {
-                    guildId: threadId.split(":")[1],
-                    ...(threadId.split(":")[3]
-                      ? { threadId: threadId.split(":")[3] }
-                      : {}),
-                  }
-                : {}),
               ...message,
             }),
           }

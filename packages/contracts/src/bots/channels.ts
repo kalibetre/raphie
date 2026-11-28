@@ -1,3 +1,6 @@
+/** Every external messaging platform a bot can be reached through. */
+export type ChannelPlatform = "discord" | "telegram";
+
 export type DiscordChannel = {
   allowedUserIds: string[];
   channelId: string;
@@ -34,7 +37,7 @@ export type ChannelSettings = {
 
 /** Trusted adapter metadata captured with an admitted channel turn. */
 export type ChannelOrigin = {
-  platform: "discord" | "telegram";
+  platform: ChannelPlatform;
   connectionId: string;
   conversationId: string;
   channelId: string;
@@ -48,7 +51,7 @@ export type ChannelOrigin = {
 
 export type HomeDestination = {
   id: string;
-  platform: "discord" | "telegram";
+  platform: ChannelPlatform;
   conversationId: string;
   userId: string;
 };
