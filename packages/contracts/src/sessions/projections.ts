@@ -5,6 +5,9 @@ import type {
 
 export type ToolStep = {
   id: string;
+  /** The saved MCP connection the tool came from, by its id. */
+  connection?: string;
+  /** The namespace of a connection set in the environment. */
   server?: string;
   tool: string;
   startedAt: number;
@@ -19,6 +22,8 @@ export function activeRunLabel(
   live: { generating: boolean; text: string } | undefined,
   steps: ToolStep[],
   activity: ActivityEvent[],
+  /** What a running step is doing, in words; by default its tool. */
+  doing?: (step: ToolStep) => string,
 ) {
   const latest = activity.findLast(
     (e) =>
@@ -33,6 +38,7 @@ export function activeRunLabel(
   if (latest?.type === "model.retry") return "Retrying model…";
   if (latest?.type === "tool.started") {
     const step = steps.find((s) => s.id === latest.operationId);
+    if (step && doing) return `${doing(step)}…`;
     return step
       ? `Running ${step.server ? `${step.server} · ` : ""}${step.tool}…`
       : "Running tool…";
@@ -66,11 +72,14 @@ export function toolSteps(
   for (const event of activity) {
     if (event.runId === runId && event.type === "tool.started") {
       const name = event.summary.replace(/ started$/, "");
-      const mcp = /^mcp_([^_]+)_(.+)$/.exec(name);
+      // A saved connection's tools are named for its id: mcp_c_<id>_<tool>.
+      const saved = /^mcp_c_([0-9a-f]{32})_(.+)$/.exec(name);
+      const mcp = saved ? undefined : /^mcp_([^_]+)_(.+)$/.exec(name);
       steps.push({
         id: event.operationId ?? String(event.id),
+        connection: saved ? connectionId(saved[1]) : undefined,
         server: mcp?.[1],
-        tool: mcp?.[2] ?? name,
+        tool: saved?.[2] ?? mcp?.[2] ?? name,
         startedAt: event.at,
         args: event.detailsJson === "{}" ? undefined : event.detailsJson,
       });
@@ -91,6 +100,11 @@ export function toolSteps(
     }
   }
   return steps;
+}
+
+/** A connection's id as saved, from the hyphenless form in a tool name. */
+function connectionId(hex: string) {
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 export function runUsage(runId: string, activity: ActivityEvent[]) {

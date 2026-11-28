@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 
 import type { Snapshot } from "../../../infrastructure/http/api-client";
 import { ToolSteps } from "../../approvals/presentation/tool-steps";
+import { useConnectionNames } from "../../settings/infrastructure/use-bot-automation";
 import {
   activeRunLabel,
   formatDuration,
   type ToolStep,
 } from "../application/run-projection";
+import { toolDoing } from "../application/tool-phrases";
 import { AskMarker } from "./ask-marker";
 import { ShownCard } from "./shown-card";
 
@@ -29,6 +31,7 @@ export function ActiveRun({
   /** Who asks its questions: the bot's name. */
   title: string;
 }) {
+  const names = useConnectionNames();
   const [now, setNow] = useState(Date.now());
   const asking = asks.some((a) => a.status === "pending");
   useEffect(() => {
@@ -55,6 +58,11 @@ export function ActiveRun({
             state.live[turn.conversationId],
             steps,
             state.activity.filter((e) => e.runId === turn.id),
+            (step) =>
+              toolDoing(
+                step,
+                step.connection ? names.get(step.connection) : undefined,
+              ),
           )}
           elapsed={formatDuration(now - turn.createdAt)}
         />

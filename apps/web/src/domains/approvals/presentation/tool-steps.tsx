@@ -1,5 +1,7 @@
-// Disclosure of observed tool work inside one reply. Settled work stays collapsed; a
-// pending approval forces it open because it needs the owner.
+// Disclosure of observed tool work inside one reply. Settled work is one quiet
+// line in the bot's words; opening it lists what the bot did, and the tools,
+// arguments and timings wait behind "Technical details". A pending approval
+// forces it open because it needs the owner.
 import {
   Check,
   ChevronRight,
@@ -17,9 +19,13 @@ import {
   type ToolStep,
 } from "../../conversations/application/run-projection";
 import {
+  isPlumbing,
+  serviceName,
   stepsSummary,
   toolPhrase,
+  toolWords,
 } from "../../conversations/application/tool-phrases";
+import { useConnectionNames } from "../../settings/infrastructure/use-bot-automation";
 import { ToolDecision } from "./tool-decision";
 
 function approvalState(approval: Approval) {
@@ -64,8 +70,17 @@ export function ToolSteps({
    */
   decide?: boolean;
 }) {
+  const names = useConnectionNames();
+  const service = (step: ToolStep) =>
+    step.connection ? names.get(step.connection) : undefined;
   const needsYou = steps.some((s) => stepState(s, working) === "pending");
   const [open, setOpen] = useState(false);
+  const [technical, setTechnical] = useState(false);
+  // How the bot works shows only in the details, unless it went wrong.
+  const did = steps.filter(
+    (s) => !isPlumbing(s) || stepState(s, working) !== "done",
+  );
+  if (!working && !needsYou && !did.length) return null;
   const first = steps[0]?.startedAt;
   const last = Math.max(...steps.map((s) => s.doneAt ?? s.startedAt));
   const label = needsYou
@@ -73,13 +88,8 @@ export function ToolSteps({
       ? "Waiting for your approval"
       : "Needs your approval"
     : working
-      ? (activeLabel ??
-        (steps.length
-          ? `Working · ${steps.length} ${steps.length === 1 ? "step" : "steps"}`
-          : "Waiting for model…"))
-      : // Settled work says what the bot did, in its words; the details
-        // keep the tools, arguments and timings.
-        stepsSummary(steps);
+      ? (activeLabel ?? "Working on it…")
+      : stepsSummary(did, service);
   const expanded = open || (needsYou && decide);
   return (
     <section
@@ -102,7 +112,7 @@ export function ToolSteps({
         ) : needsYou ? (
           <ShieldQuestion size={14} />
         ) : (
-          <Check size={14} className="steps-done" />
+          <span className="steps-dot" aria-hidden="true" />
         )}
         <span className={working && !needsYou ? "shimmer" : ""}>{label}</span>
         {working && elapsed && (
@@ -114,14 +124,121 @@ export function ToolSteps({
           <ChevronRight size={14} className="steps-chevron" />
         )}
       </button>
-      {expanded && (
-        <ol className="steps-list">
-          {steps.map((step) => (
-            <Step key={step.id} step={step} working={working} decide={decide} />
-          ))}
-        </ol>
-      )}
+      {expanded &&
+        (needsYou && decide ? (
+          <TechnicalSteps
+            steps={steps}
+            working={working}
+            decide={decide}
+            service={service}
+          />
+        ) : (
+          <div className="steps-detail">
+            {did.length > 0 && (
+              <ul className="steps-did">
+                {did.map((step) => (
+                  <li
+                    key={step.id}
+                    className={`did did-${stepState(step, working)}`}
+                  >
+                    {/* One thing done is already the header's line. */}
+                    {did.length > 1 && (
+                      <span className="did-what">
+                        {toolPhrase(step, service(step))}
+                      </span>
+                    )}
+                    <DidNote
+                      step={step}
+                      working={working}
+                      service={service(step)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              className="steps-technical"
+              aria-expanded={technical}
+              onClick={() => setTechnical(!technical)}
+            >
+              {technical ? "Hide technical details" : "Technical details"}
+            </button>
+            {technical && (
+              <TechnicalSteps
+                steps={steps}
+                working={working}
+                decide={decide}
+                service={service}
+              />
+            )}
+          </div>
+        ))}
     </section>
+  );
+}
+
+/**
+ * What the owner may want to know about one thing the bot did: the service
+ * and tool it used, and anything about it that was not routine.
+ */
+function DidNote({
+  step,
+  working,
+  service,
+}: {
+  step: ToolStep;
+  working: boolean;
+  service?: string;
+}) {
+  const state = stepState(step, working);
+  const approval = step.approval;
+  const notes = [
+    step.server || step.connection
+      ? `${serviceName(step, service)} · ${toolWords(step)}`
+      : undefined,
+    state === "pending"
+      ? "needs your approval"
+      : state === "uncertain"
+        ? "outcome unknown"
+        : state === "rejected"
+          ? approval && approvalState(approval) === "expired"
+            ? "approval expired"
+            : "you declined"
+          : state === "running"
+            ? "in progress"
+            : // Only a decision the owner made is worth repeating to them.
+              approval?.decidedVia || approval?.decidedApp
+              ? "you approved"
+              : undefined,
+  ].filter(Boolean);
+  return notes.length ? (
+    <span className="did-note">{notes.join(" · ")}</span>
+  ) : null;
+}
+
+function TechnicalSteps({
+  steps,
+  working,
+  decide,
+  service,
+}: {
+  steps: ToolStep[];
+  working: boolean;
+  decide: boolean;
+  service: (step: ToolStep) => string | undefined;
+}) {
+  return (
+    <ol className="steps-list">
+      {steps.map((step) => (
+        <Step
+          key={step.id}
+          step={step}
+          working={working}
+          decide={decide}
+          service={service(step)}
+        />
+      ))}
+    </ol>
   );
 }
 
@@ -129,10 +246,12 @@ function Step({
   step,
   working,
   decide,
+  service,
 }: {
   step: ToolStep;
   working: boolean;
   decide: boolean;
+  service?: string;
 }) {
   const state = stepState(step, working);
   const approval = step.approval;
@@ -143,8 +262,9 @@ function Step({
       <details className="step-body" open={state === "pending" && decide}>
         <summary>
           <span className="step-name">
-            <span className="step-phrase">{toolPhrase(step)}</span>
-            {step.server && <span>{step.server}</span>}
+            {(step.server || step.connection) && (
+              <span>{serviceName(step, service)}</span>
+            )}
             <code>{step.tool}</code>
           </span>
           <span className="step-status">
