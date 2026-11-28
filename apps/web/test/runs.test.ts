@@ -118,6 +118,39 @@ test("tool steps join the journal with approvals and post-decision results", () 
   assert.equal(steps[0].args, '{"name":"x"}');
 });
 
+test("a saved connection's tools are named for it, not for its namespace", () => {
+  const steps = toolSteps(
+    "run",
+    [
+      event(
+        "tool.started",
+        "run",
+        "t1",
+        "mcp_c_f382d156e9b74bbe85a947e01f779a98_t3_thread_list started",
+      ),
+    ],
+    [],
+  );
+  assert.deepEqual(
+    steps.map((s) => [s.connection, s.server, s.tool]),
+    [["f382d156-e9b7-4bbe-85a9-47e01f779a98", undefined, "t3_thread_list"]],
+  );
+});
+
+test("a running step can be put in words", () => {
+  const start = event(
+    "tool.started",
+    "run",
+    "tool",
+    "mcp_calendar_list started",
+  );
+  const steps = toolSteps("run", [start], []);
+  assert.equal(
+    activeRunLabel(undefined, steps, [start], () => "Checking Calendar"),
+    "Checking Calendar…",
+  );
+});
+
 test("run usage sums provider-reported tokens and cost per run", () => {
   const usage = (tokens: number, cost: number) =>
     JSON.stringify({ usage: { totalTokens: tokens, cost: { total: cost } } });

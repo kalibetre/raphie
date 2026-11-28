@@ -435,8 +435,61 @@
     color: var(--attention);
     font-weight: 560;
   }
-  .steps-done {
-    color: var(--accent);
+  .steps-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin: 0 4px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .steps-detail {
+    display: grid;
+    justify-items: start;
+    gap: 8px;
+    margin: 4px 0 0 7px;
+    padding-left: 13px;
+    border-left: 1px solid var(--border);
+  }
+  .steps-did {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .did {
+    display: grid;
+    gap: 1px;
+  }
+  .did-what {
+    color: var(--foreground);
+  }
+  .did-note {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .did-pending .did-note {
+    color: var(--attention);
+  }
+  .did-uncertain .did-note,
+  .did-rejected .did-note {
+    color: var(--error);
+  }
+  .steps-technical {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .steps-technical:hover {
+    color: var(--foreground);
+  }
+  .steps-detail .steps-list {
+    justify-self: stretch;
   }
   .message-assistant .steps {
     display: block;
