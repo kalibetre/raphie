@@ -2129,20 +2129,24 @@ pub(crate) struct JobActionBody {
 }
 
 /// `WorkStatus` in `packages/contracts/src/bots/work.ts`: `Active` while
-/// the bot works on it, `Waiting` while it is blocked, `Done` or `Dropped`
-/// once closed.
+/// the bot works on it, `Waiting` while blocked, `Deferred` while parked,
+/// and `Done` or `Dropped` once closed.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WorkStatus {
     Active,
     Waiting,
+    Deferred,
     Done,
     Dropped,
 }
 
 impl WorkStatus {
     pub fn is_open(self) -> bool {
-        matches!(self, WorkStatus::Active | WorkStatus::Waiting)
+        matches!(
+            self,
+            WorkStatus::Active | WorkStatus::Waiting | WorkStatus::Deferred
+        )
     }
 }
 

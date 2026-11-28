@@ -3,9 +3,10 @@ export type WorkActor = "bot" | "owner";
 
 /**
  * Where a work item stands: `active` while the bot works on it, `waiting`
- * while it is blocked on `waitingOn`, and `done` or `dropped` once closed.
+ * while blocked on `waitingOn`, `deferred` while parked, and `done` or
+ * `dropped` once closed.
  */
-export type WorkStatus = "active" | "waiting" | "done" | "dropped";
+export type WorkStatus = "active" | "waiting" | "deferred" | "done" | "dropped";
 
 /** Something a bot is keeping track of for longer than one turn. */
 export type WorkItem = {

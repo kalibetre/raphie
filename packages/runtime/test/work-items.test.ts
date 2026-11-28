@@ -60,6 +60,19 @@ test("the open work sent with a message: newest first, closed ones left out", ()
   );
 });
 
+test("deferred items stay open and are listed separately on request", () => {
+  const parked = item(3, { status: "deferred" });
+  const items = [item(1), item(2, { status: "done" }), parked];
+  assert.deepEqual(
+    listWork(items, { open: true }).map((entry) => entry.id),
+    ["w-1", "w-3"],
+  );
+  assert.equal(
+    workListText(items, { closed: false, deferred: true }),
+    "w-3 Item 3: deferred",
+  );
+});
+
 test("a long list stops at its limit and says how many more there are", () => {
   const items = Array.from({ length: MAX_LISTED + 5 }, (_, n) => item(n + 1));
   const listed = openWorkContext(items).trimEnd().split("\n");

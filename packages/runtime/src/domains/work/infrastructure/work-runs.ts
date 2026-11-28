@@ -142,6 +142,8 @@ export class WorkRuns {
       return `${item.id} is a task from ${item.origin.bot.name}; it continues when ${item.origin.bot.name} follows up.`;
     if (!isOpen(item.status))
       return `${item.id} is ${item.status}. Open a new item if the work starts again.`;
+    if (item.status === "deferred")
+      return `${item.id} is deferred. Set it active when the owner asks to start.`;
     if (item.run)
       return `${item.id} is already running. Wait for its result, or ask the owner to cancel it.`;
     const now = Date.now();

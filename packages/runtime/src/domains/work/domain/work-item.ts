@@ -14,7 +14,7 @@ export const LIMITS = {
 };
 
 export function isOpen(status: WorkStatus) {
-  return status === "active" || status === "waiting";
+  return status === "active" || status === "waiting" || status === "deferred";
 }
 
 /** The next id after every one given so far: "w-1", "w-2", … */
@@ -57,8 +57,9 @@ export function workLine(item: WorkItem) {
   return `${item.id} ${flat(item.title)}: ${where}${job}${handoff}${running}${last}`;
 }
 
-/** 0 for the bot's own items, 1 for a job's running item, 2 for an idle job's. */
+/** Put in-flight work first and deferred items after scheduled jobs. */
 function rank(item: WorkItem) {
+  if (item.status === "deferred") return 3;
   if (item.origin?.kind !== "job") return 0;
   return item.run ? 1 : 2;
 }
@@ -66,8 +67,7 @@ function rank(item: WorkItem) {
 /**
  * Open items in the order the bot should see them: its own requests, waits
  * and handoffs first, then jobs that are running, then the rest of its
- * scheduled jobs, each newest activity first. A bot with many jobs still sees
- * what it is chasing for the owner.
+ * scheduled jobs, then deferred items, each newest activity first.
  */
 export function byAttention(a: WorkItem, b: WorkItem) {
   return rank(a) - rank(b) || b.updatedAt - a.updatedAt;
@@ -121,11 +121,12 @@ export function openWorkContext(items: readonly WorkItem[]) {
  */
 export function listWork(
   items: readonly WorkItem[],
-  filter: { open: boolean; query?: string },
+  filter: { open: boolean; deferred?: boolean; query?: string },
 ) {
   const query = filter.query?.trim().toLowerCase();
   return items
     .filter((item) => isOpen(item.status) === filter.open)
+    .filter((item) => !filter.deferred || item.status === "deferred")
     .filter(
       (item) =>
         !query ||
@@ -146,13 +147,13 @@ const MAX_TOOL_LISTED = 50;
  */
 export function workListText(
   items: readonly WorkItem[],
-  filter: { closed: boolean; query?: string },
+  filter: { closed: boolean; deferred?: boolean; query?: string },
 ) {
-  const all = listWork(items, { open: !filter.closed, query: filter.query });
+  const all = listWork(items, { ...filter, open: !filter.closed });
   const shown = all.slice(0, MAX_TOOL_LISTED);
   const left = all.slice(shown.length);
   if (!shown.length)
-    return `No ${filter.closed ? "closed" : "open"} work items${filter.query ? ` matching "${filter.query}"` : ""}.`;
+    return `No ${filter.closed ? "closed" : filter.deferred ? "deferred" : "open"} work items${filter.query ? ` matching "${filter.query}"` : ""}.`;
   return (
     shown.map(workLine).join("\n") +
     (left.length
@@ -197,6 +198,8 @@ export function changeWork(
     return by === "owner"
       ? `${item.id} is ${item.status}. Reopen it to change it.`
       : `${item.id} is ${item.status}. Open a new item if the work starts again.`;
+  if (change.status === "deferred" && (item.origin || item.run))
+    return `${item.id} can be deferred only when it belongs to this chat and has no background run in progress.`;
   if (change.title !== undefined) {
     const title = clip(change.title, LIMITS.title);
     if (!title) return "A work item needs a title.";

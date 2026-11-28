@@ -9,7 +9,7 @@ import {
   type Tx,
 } from "@earendil-works/pi-durable";
 import { bool, obj, oneOf, opt, str } from "@earendil-works/pi-schema";
-import type { WorkActor, WorkItem, WorkStatus } from "@raphie/contracts";
+import type { WorkActor, WorkItem } from "@raphie/contracts";
 
 import { InputError } from "../../../shared/application/input-error.ts";
 import type { DurableContext } from "../../../shared/infrastructure/durable-context.ts";
@@ -41,6 +41,13 @@ const Receipt = defineDoc<{ text: string | null; error?: true }>({
   checkpointWhen: () => false,
   initial: () => ({ text: null }),
 });
+
+type OpenWork = {
+  title: string;
+  status?: "active" | "waiting" | "deferred";
+  waitingOn?: string;
+  notes?: string;
+};
 
 export class WorkService {
   app: DurableContext;
@@ -76,7 +83,7 @@ export class WorkService {
   }
 
   /** The owner opens an item. */
-  async open(input: { title: string; notes?: string }) {
+  async open(input: OpenWork) {
     return this.app.root.commit((tx) => openWork(tx, input, "owner"), context);
   }
 
@@ -103,12 +110,7 @@ function detached(item: WorkItem): WorkItem {
 /** Opens an item as `by` opens it, or says why not. */
 async function openWork(
   tx: Tx,
-  input: {
-    title: string;
-    status?: WorkStatus;
-    waitingOn?: string;
-    notes?: string;
-  },
+  input: OpenWork,
   by: WorkActor,
   from?: { conversationId: number; turnId?: string },
 ): Promise<WorkItem | string> {
@@ -117,7 +119,7 @@ async function openWork(
   if (!title) return "A work item needs a title.";
   const state = await tx.doc(WorkItems);
   const now = Date.now();
-  const status = input.status === "waiting" ? "waiting" : "active";
+  const status = input.status ?? "active";
   const item: WorkItem = {
     id: workId(state.next),
     title,
@@ -323,7 +325,8 @@ export function createWorkTools(runs: WorkRuns) {
         [
           "You keep work items: your record of each thing you are tracking for the owner for longer than one turn, such as a request you are still chasing, something you promised to come back to, or a decision you are waiting on. Your open items come with each of the owner's messages under [Open work].",
           "Open one with work_open when something will outlive this turn. Never open one for a request you settle in the same reply, and check the open items first so you do not open the same thing twice.",
-          "Keep an item current with work_update as it changes: its status (active while you work on it, waiting while it is blocked, with what it waits on), short notes, and its latest result. Close it with work_close, done or dropped, as soon as it is finished or the owner no longer wants it.",
+          "When the owner asks you to save something for later, open or update it with status deferred and keep its context in the notes. Leave it deferred until the owner asks you to start. Use work_list with deferred: true when asked what is parked or in the backlog. To start again, set it active before doing the work.",
+          "Keep an item current with work_update as it changes: active while you work on it, waiting while it is blocked, and deferred while deliberately parked. Close it with work_close, done or dropped, as soon as it is finished or the owner no longer wants it.",
           "When the owner asks what is going on, answer from your work items, not from memory of the chat. Use work_read for one item's notes, and work_list for closed items or more than the message lists.",
           "For work that takes a while, such as research, comparisons or drafting something long, start it in the background with work_start instead of doing it in this reply: it runs in the item's own session, keeps that context for follow-ups, and its result comes back to this chat as a new message. Tell the owner you are on it; don't wait for it or invent its result. Send a follow-up to the same item with work_start again once its run has ended.",
           "Work items are only for your chat with the owner; never mention them anywhere else.",
@@ -337,7 +340,7 @@ export function createWorkTools(runs: WorkRuns) {
           "Open a work item for something you will keep track of beyond this turn. Returns its id.",
         parameters: obj({
           title,
-          status: opt(oneOf(["active", "waiting"])),
+          status: opt(oneOf(["active", "waiting", "deferred"])),
           waitingOn: opt(waitingOn),
           notes: opt(notes),
         }),
@@ -361,7 +364,7 @@ export function createWorkTools(runs: WorkRuns) {
         parameters: obj({
           id,
           title: opt(title),
-          status: opt(oneOf(["active", "waiting"])),
+          status: opt(oneOf(["active", "waiting", "deferred"])),
           waitingOn: opt(waitingOn),
           notes: opt(notes),
           result: opt(result),
@@ -453,9 +456,10 @@ export function createWorkTools(runs: WorkRuns) {
       defineTool({
         name: "work_list",
         description:
-          "List work items, one line each: open ones (your own items first, then running jobs, then other scheduled jobs, each newest activity first), or closed ones with closed: true, newest first. query keeps those whose id, title, notes or result contain it.",
+          "List work items, one line each. Set deferred: true for the backlog, or closed: true for closed items. query keeps those whose id, title, notes or result contain it.",
         parameters: obj({
           closed: opt(bool()),
+          deferred: opt(bool()),
           query: opt(str({ maxLength: 200 })),
         }),
         replay: "safe",
@@ -463,7 +467,8 @@ export function createWorkTools(runs: WorkRuns) {
           mutate(api, ctx, async (tx) => {
             if (!(await chatTurn(tx, api))) return { error: NOT_IN_CHAT };
             return workListText((await tx.doc(WorkItems)).items, {
-              closed: !!args.closed,
+              closed: !!args.closed && !args.deferred,
+              deferred: args.deferred,
               query: args.query,
             });
           }),

@@ -78,6 +78,10 @@ become work items. The owner mostly asks the bot about its work items; they
 are also listed on the bot's Work page, never beside the chat.
 _Avoid_: Task, which named handoffs before; thread; conversation.
 
+**Deferred work item**: An open work item the owner has deliberately parked.
+The bot keeps its context and waits for the owner to ask to start or resume it.
+The backlog is the bot's list of deferred work items.
+
 **Rewind**: Taking a chat back to just before one of the owner's messages,
 to edit and send it again. Only the chat goes back: the later messages stay in
 the transcript marked as rewound, and the bot is told what they did outside

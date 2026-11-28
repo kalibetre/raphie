@@ -169,6 +169,7 @@ fn status_label(status: WorkStatus) -> &'static str {
     match status {
         WorkStatus::Active => "Active",
         WorkStatus::Waiting => "Waiting",
+        WorkStatus::Deferred => "Deferred",
         WorkStatus::Done => "Done",
         WorkStatus::Dropped => "Dropped",
     }
@@ -332,6 +333,18 @@ fn card(item: &WorkItem, bot: &str, busy: bool, focused: bool, t: &Theme) -> El 
                 !busy,
                 set(WorkStatus::Dropped),
             ));
+        if !handoff && !running {
+            let (label, status) = if item.status == WorkStatus::Deferred {
+                ("Make active", WorkStatus::Active)
+            } else {
+                ("Defer", WorkStatus::Deferred)
+            };
+            buttons = buttons.child(pressable(
+                button(t, Kind::Ghost, Size::Small, None, label).key(key("defer")),
+                !busy,
+                set(status),
+            ));
+        }
     } else if !handoff {
         buttons = buttons.child(pressable(
             button(t, Kind::Ghost, Size::Small, None, "Reopen").key(key("reopen")),
