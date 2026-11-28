@@ -5,6 +5,7 @@ import { approvalRoutes } from "../domains/approvals/presentation/http/routes.ts
 import { askRoutes } from "../domains/asks/presentation/http/routes.ts";
 import { attachmentRoutes } from "../domains/attachments/presentation/http/routes.ts";
 import type { BotChannels } from "../domains/channels/infrastructure/bot-channels.ts";
+import type { BotSlack } from "../domains/channels/infrastructure/bot-slack.ts";
 import type { BotTelegram } from "../domains/channels/infrastructure/bot-telegram.ts";
 import { homeRoutes } from "../domains/channels/presentation/http/home-routes.ts";
 import { channelRoutes } from "../domains/channels/presentation/http/routes.ts";
@@ -32,6 +33,7 @@ import type { Gateway } from "./agent-runtime.ts";
 
 export type RuntimeHttpOptions = {
   channels?: BotChannels;
+  slack?: BotSlack;
   telegram?: BotTelegram;
   mcp?: BotMcp;
   jobs?: BotJobs;
@@ -70,7 +72,7 @@ export function runtimeRoutes(
   if (options.channels)
     app.route(
       "/api/channels",
-      channelRoutes(options.channels, options.telegram),
+      channelRoutes(options.channels, options.telegram, options.slack),
     );
   if (options.mcp) app.route("/api/mcp", mcpRoutes(options.mcp));
   if (options.jobs) app.route("/api/jobs", jobRoutes(options.jobs));

@@ -7,7 +7,7 @@ sidebar:
 
 import { Arrow, Box, Flow, Row } from "~/components/diagram";
 
-Raphie is a single-owner, self-hosted assistant platform. One long-running **runtime** process owns every bot, session, tool call and side effect. Everything else (the web host, the desktop app, the Discord and Telegram bridges) is a thin adapter that calls the runtime's application operations.
+Raphie is a single-owner, self-hosted assistant platform. One long-running **runtime** process owns every bot, session, tool call and side effect. Everything else (the web host, the desktop app, the Discord, Slack and Telegram bridges) is a thin adapter that calls the runtime's application operations.
 
 ## The whole system
 
@@ -46,7 +46,7 @@ Raphie is a single-owner, self-hosted assistant platform. One long-running **run
 | **Desktop app**         | Its sign-in token (in the OS credential store) and local preferences such as appearance        | Anything durable: it talks to the web host like the browser does                       |
 | **Channel bridges**     | Their connection settings; they run inside the runtime, one per bot connection                 | Session state, which stays in the bot's store                                          |
 
-The two server processes share one [data directory](/architecture/storage-and-telemetry/) and talk only over loopback HTTP. Runtime work, including Discord, Telegram and schedules, continues when every client disconnects. They are not independent in an installed copy, though: `raphie start` runs both, and when either process exits it stops the other.
+The two server processes share one [data directory](/architecture/storage-and-telemetry/) and talk only over loopback HTTP. Runtime work, including Discord, Slack, Telegram and schedules, continues when every client disconnects. They are not independent in an installed copy, though: `raphie start` runs both, and when either process exits it stops the other.
 
 A release is one executable, `raphie`. The runtime and the web host are built into it, and `raphie start` runs each as a process of that same file, so a release carries one copy of Bun instead of three. On Linux, the archive also has two small scripts, `raphie-runtime` and `raphie-web`, that hand over to it, because a system service installed before this layout checks that an update contains them.
 
@@ -84,7 +84,7 @@ Six constraints shape the code. Each one has a concrete mechanism.
 | Runtime transport | Hono 4.13 on `Bun.serve`, zod 4                                                                                               | HTTP routes, SSE, input validation, secure headers                                  |
 | Runtime lifecycle | Effect 4.1                                                                                                                    | Scoped startup and shutdown, OTLP trace export                                      |
 | Agent core        | Pi Durable 1.5 (`pi-durable`, `pi-ai`, `pi-mcp`, `pi-schema`, `chord`)                                                        | Durable harness, documents, tasks, tools, model catalogue, MCP client               |
-| Channels          | Chat SDK with its Discord adapter; Telegram Bot API over plain `fetch` with long polling                                      | Messaging bridges                                                                   |
+| Channels          | Chat SDK with its Discord and Slack adapters; Telegram Bot API over plain `fetch` with long polling                           | Messaging bridges                                                                   |
 | Execution         | just-bash 3.6 in a worker thread; the `docker` CLI (or `RAPHIE_CONTAINER_BINARY`); `anydoc-wasm` and `pdfjs-dist` in a worker | Workspace commands, the opt-in container sandbox, document reading                  |
 | Storage           | SQLite through `bun:sqlite` (WAL for most stores), FTS5, AES-256-GCM, `Bun.secrets`                                           | Every store, memory search, encrypted provider keys, the OS credential store        |
 | Desktop           | Rust, the Rune UI toolkit, `reqwest` on Tokio                                                                                 | The desktop app in `apps/desktop`, shipped with each release for Apple Silicon Macs |
@@ -155,7 +155,7 @@ It is a static import check, not proof that two modules are semantically indepen
 
 - **The browser depends on `@raphie/contracts` only.** It holds framework-free wire types (session summaries, observations, history pages, settings) and pure run, tool and usage projections under `@raphie/contracts/projections`. No web module may import runtime internals.
 - **The desktop app shares no code.** It is a separate Rust workspace (a UI-free `core` crate and a Rune `app` crate) that mirrors the same JSON contracts and calls the web host's authenticated `/api` with a device token.
-- **Channels are adapters, not clients.** The Discord and Telegram bridges run inside the runtime and receive an explicit channel-services port. They never import the process host.
+- **Channels are adapters, not clients.** The Discord, Slack and Telegram bridges run inside the runtime and receive an explicit channel-services port. They never import the process host.
 
 ## Related
 

@@ -1,9 +1,15 @@
-import type { ChannelHomeSettings } from "@raphie/contracts";
+import type { ChannelHomeSettings, ChannelPlatform } from "@raphie/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Row } from "./settings-group";
+
+const platformNames: Record<ChannelPlatform, string> = {
+  discord: "Discord",
+  slack: "Slack",
+  telegram: "Telegram",
+};
 
 export function HomeChannelSettings() {
   const { workspace } = useBackend();
@@ -22,7 +28,7 @@ export function HomeChannelSettings() {
     <div className="channel-settings">
       <Row
         title="Home channel"
-        description="Scheduled updates go here, wherever the job was created. Use /home in a verified Discord or Telegram conversation to select it. Web chat has no /home command."
+        description="Scheduled updates go here, wherever the job was created. Use /home in a verified Discord, Slack or Telegram conversation to select it. Web chat has no /home command."
       />
       {!query.data ? (
         <p role="status" className="automation-note">
@@ -48,7 +54,7 @@ export function HomeChannelSettings() {
           {query.data.destinations.map((item) => (
             <Row
               key={item.id}
-              title={item.platform === "telegram" ? "Telegram" : "Discord"}
+              title={platformNames[item.platform]}
               description={`${item.conversationId} · owner ${item.userId}`}
             >
               <Button

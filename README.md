@@ -43,7 +43,7 @@ Open **http://127.0.0.1:24320** (or the port the installer printed), sign in, an
 - **Keep the thread.** Return to conversations and see activity as work progresses.
 - **Stay in control.** Review tool requests and connect the services you choose.
 
-Raphie can also connect bots to Telegram, Discord and MCP tools, and run scheduled prompts. Bots share a runtime; their separate configuration does not provide isolation from the host owner.
+Raphie can also connect bots to Telegram, Discord, Slack and MCP tools, and run scheduled prompts. Bots share a runtime; their separate configuration does not provide isolation from the host owner.
 
 ## Need a hand?
 

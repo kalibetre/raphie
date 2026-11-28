@@ -13,7 +13,7 @@ import type { ChannelServices } from "../../application/channels/ports.ts";
 import { InputError } from "../../domains/approvals/infrastructure/pi-file-approvals.ts";
 import { MAX_FILE_BYTES } from "../../domains/attachments/infrastructure/local-attachment-store.ts";
 import { createDeliveryWorker } from "../../domains/delivery/application/worker.ts";
-import { ASK_ACTION } from "./cards.ts";
+import { ASK_ACTION } from "../chat-sdk/cards.ts";
 import { registerDiscordCommands } from "./commands.ts";
 import { decodeDiscordOperation, discordRenderer } from "./delivery.ts";
 

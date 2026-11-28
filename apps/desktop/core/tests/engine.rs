@@ -1419,10 +1419,17 @@ fn sandbox_settings_load_save_and_notice_a_change_elsewhere() {
 fn channels_connect_pair_and_choose_a_home() {
     let host = FakeHost::start();
     host.with(|h| {
-        h.home_destinations = vec![serde_json::json!({
-            "id": "telegram:42", "platform": "telegram",
-            "conversationId": "telegram:42", "userId": "42",
-        })];
+        h.home_destinations = vec![
+            serde_json::json!({
+                "id": "telegram:42", "platform": "telegram",
+                "conversationId": "telegram:42", "userId": "42",
+            }),
+            // A Slack home must not stop the list loading.
+            serde_json::json!({
+                "id": "slack:D0OWNER", "platform": "slack",
+                "conversationId": "slack:D0OWNER:", "userId": "U0OWNER",
+            }),
+        ];
     });
     let (mut driver, _) = signed_in(&host);
     let bot_id = || "default".to_owned();

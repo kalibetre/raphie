@@ -17,6 +17,10 @@ import {
   DiscordApplications,
 } from "../domains/channels/infrastructure/bot-channels.ts";
 import {
+  BotSlack,
+  SlackConnections,
+} from "../domains/channels/infrastructure/bot-slack.ts";
+import {
   BotTelegram,
   TelegramConnections,
   type TelegramOptions,
@@ -52,6 +56,7 @@ export type BotRuntime = {
   jobs?: BotJobs;
   handoffs?: BotHandoffs;
   channels?: BotChannels;
+  slack?: BotSlack;
   telegram?: BotTelegram;
   close(): Promise<void>;
 };
@@ -73,6 +78,7 @@ export class BotHost implements BotProfiles {
   private readonly profiles: BotProfileStore;
   private readonly runtimes = new Map<string, BotRuntime>();
   private readonly discordApplications = new DiscordApplications();
+  private readonly slackConnections = new SlackConnections();
   private readonly telegramConnections = new TelegramConnections();
 
   private readonly directory: string;
@@ -403,6 +409,7 @@ export class BotHost implements BotProfiles {
     if (!this.automation) return runtime;
     let mcp: BotMcp | undefined;
     let channels: BotChannels | undefined;
+    let slack: BotSlack | undefined;
     let telegram: BotTelegram | undefined;
     try {
       const busy = async () =>
@@ -422,6 +429,13 @@ export class BotHost implements BotProfiles {
         undefined,
         this.discordApplications,
       );
+      slack = await BotSlack.open(
+        join(directory, "slack.sqlite"),
+        gateway,
+        this.automation.keyStore,
+        undefined,
+        this.slackConnections,
+      );
       telegram = await BotTelegram.open(
         join(directory, "telegram.sqlite"),
         gateway,
@@ -430,7 +444,11 @@ export class BotHost implements BotProfiles {
         this.telegramConnections,
       );
       gateway.home.available = (address) =>
-        !!(channels?.acceptsHome(address) || telegram?.acceptsHome(address));
+        !!(
+          channels?.acceptsHome(address) ||
+          slack?.acceptsHome(address) ||
+          telegram?.acceptsHome(address)
+        );
       const actor = gateway.actors.establish("web");
       const jobs = BotJobs.open({
         root: gateway.root,
@@ -469,6 +487,7 @@ export class BotHost implements BotProfiles {
         jobs,
         handoffs,
         channels,
+        slack,
         telegram,
         close: async () => {
           try {
@@ -476,7 +495,11 @@ export class BotHost implements BotProfiles {
               try {
                 await telegram?.close();
               } finally {
-                await channels?.close();
+                try {
+                  await slack?.close();
+                } finally {
+                  await channels?.close();
+                }
               }
             } finally {
               await runtime.close();
@@ -488,6 +511,7 @@ export class BotHost implements BotProfiles {
       };
     } catch (error) {
       await telegram?.close();
+      await slack?.close();
       await channels?.close();
       await mcp?.close();
       await runtime.close();

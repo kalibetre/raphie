@@ -44,14 +44,14 @@ A bot is the ownership boundary for configuration, sessions, memory, tools and f
 
 ### What is and isn't isolated
 
-| Property                                                    | Holds?  | Mechanism                                                                                                                                      |
-| ----------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Separate sessions, approvals, activity                      | Yes     | One `gateway.sqlite` and harness per bot                                                                                                       |
-| Separate provider keys, memory, MCP grants, channel config  | Yes     | Per-bot stores; each ciphertext is bound to its record                                                                                         |
-| Model cannot select another bot                             | Yes     | Tools close over their bot when they are built; bot identity never comes from tool arguments                                                   |
-| A Discord application or Telegram bot serves one Raphie bot | Yes     | The host reserves it before connecting. In older data with duplicates, the first bot to attach (the default bot, then profile order) keeps it. |
-| Concurrency                                                 | Per bot | Each bot has its own configuration gate and workspace queue; different bots run in parallel                                                    |
-| Process and OS isolation                                    | No      | Same process, OS user, filesystem permissions and network. A bug in shared code, or the owner, crosses bots.                                   |
+| Property                                                               | Holds?  | Mechanism                                                                                                                                      |
+| ---------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Separate sessions, approvals, activity                                 | Yes     | One `gateway.sqlite` and harness per bot                                                                                                       |
+| Separate provider keys, memory, MCP grants, channel config             | Yes     | Per-bot stores; each ciphertext is bound to its record                                                                                         |
+| Model cannot select another bot                                        | Yes     | Tools close over their bot when they are built; bot identity never comes from tool arguments                                                   |
+| A Discord application, Slack app or Telegram bot serves one Raphie bot | Yes     | The host reserves it before connecting. In older data with duplicates, the first bot to attach (the default bot, then profile order) keeps it. |
+| Concurrency                                                            | Per bot | Each bot has its own configuration gate and workspace queue; different bots run in parallel                                                    |
+| Process and OS isolation                                               | No      | Same process, OS user, filesystem permissions and network. A bug in shared code, or the owner, crosses bots.                                   |
 
 Bot management (create, edit, delete) is an owner HTTP surface only. No model tool can change a bot profile. See [security](/architecture/security/) for the trust boundaries around this.
 
@@ -172,6 +172,7 @@ Saving sandbox settings runs under the workspace gate and is refused (409) while
 | `memory.sqlite`               | Memory configuration, built-in evidence and search indexes                                                                          |
 | `mcp.sqlite`                  | Encrypted MCP connections, including tokens and OAuth grants                                                                        |
 | `channels.sqlite`             | Encrypted Discord configuration, including its token                                                                                |
+| `slack.sqlite`                | Encrypted Slack configuration, including its bot and app-level tokens                                                               |
 | `telegram.sqlite`             | Encrypted Telegram configuration and the durable polling position                                                                   |
 | `files/`                      | Content-addressed uploaded originals                                                                                                |
 | `workspace/checkpoint.sqlite` | Sandbox settings, the just-bash checkpoint and execution receipts                                                                   |

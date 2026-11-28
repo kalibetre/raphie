@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@chat-adapter/discord": "4.45.0",
+    "@chat-adapter/slack": "4.45.0",
     "@chat-adapter/state-memory": "4.45.0",
     "@earendil-works/pi-durable": "1.6.0",
     "@earendil-works/pi-mcp": "1.6.0",

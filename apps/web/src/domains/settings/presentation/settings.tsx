@@ -130,7 +130,7 @@ export function Settings({
             leaveRef={leaveSkillRef}
           />
         ) : section === "channels" ? (
-          <ChannelSettings />
+          <ChannelSettings bot={profile?.name} />
         ) : section === "sandbox" ? (
           <SandboxSettings onBrowse={() => onParent("workspace")} />
         ) : section === "workspace" ? (

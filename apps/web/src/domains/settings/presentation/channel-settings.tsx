@@ -1,14 +1,15 @@
 import type { ChannelSettings, DiscordChannel } from "@raphie/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
+import { ChannelAlert } from "./channel-alert";
 import { HomeChannelSettings } from "./home-channel-settings";
 import { Group, Row } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
+import { SlackSettings } from "./slack-settings";
 import { TelegramSettings } from "./telegram-settings";
 import { useSettingsGuard } from "./use-settings-guard";
 
@@ -16,21 +17,7 @@ type Discord = DiscordChannel;
 
 type Channels = ChannelSettings;
 
-function ChannelAlert({ title, message }: { title: string; message: string }) {
-  return (
-    <div role="alert" className="channel-alert">
-      <span className="channel-alert-icon" aria-hidden="true">
-        <TriangleAlert size={18} />
-      </span>
-      <div className="channel-alert-copy">
-        <strong>{title}</strong>
-        <p>{message}</p>
-      </div>
-    </div>
-  );
-}
-
-export function ChannelSettings() {
+export function ChannelSettings({ bot }: { bot?: string }) {
   const { workspace } = useBackend();
   const client = useQueryClient();
   const query = useQuery({
@@ -42,8 +29,12 @@ export function ChannelSettings() {
   });
   const mutation = useMutation({
     mutationFn: ({ path, input }: { path: string; input: unknown }) =>
-      workspace.api<Channels>(path, input),
-    onSuccess: (data) => client.setQueryData(["channels"], data),
+      workspace.api<Pick<Channels, "discord">>(path, input),
+    // Each call returns only Discord's settings; keep the other channels cached.
+    onSuccess: ({ discord }) =>
+      client.setQueryData<Channels>(["channels"], (current) =>
+        current ? { ...current, discord } : current,
+      ),
   });
   const [draft, setDraft] = useState<Partial<Discord> & { botToken?: string }>(
     {},
@@ -314,6 +305,7 @@ export function ChannelSettings() {
           </form>
         </div>
       )}
+      <SlackSettings saved={query.data.slack ?? null} bot={bot} />
       <TelegramSettings saved={query.data.telegram ?? null} />
       <HomeChannelSettings />
     </Group>
