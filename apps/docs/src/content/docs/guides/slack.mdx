@@ -27,7 +27,7 @@ Only Slack members whose IDs you list can talk to the bot. Messages from anyone 
 
 Raphie checks the bot token with Slack, encrypts both tokens, and opens the Socket Mode connection. Saving fails if Slack doesn't accept the connection within 15 seconds. When Raphie starts, it connects in the background and keeps retrying, so an unreachable Slack never holds up the runtime; Settings shows Slack as disconnected until it connects. Slack reconnects on its own after a network drop.
 
-One Slack app can serve one Raphie bot. Slack shares a Socket Mode app's events across every open connection, so connecting it to a second bot is refused. Create one Slack app per Raphie bot.
+One Slack app can serve one Raphie bot. Slack shares a Socket Mode app's events across every open connection, so connecting the same app to a second bot is refused, even with a different bot token. Raphie also refuses a bot token and an app-level token that come from different apps. Create one Slack app per Raphie bot.
 
 | Setting                | Effect                                                                                                  |
 | ---------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -80,7 +80,7 @@ settings:
 
 Your direct message with the app is the bot's one chat with you: what you write in Slack shows in the web workspace too, and each reply goes back where its message came from.
 
-In a channel, invite the app (`/invite @Raphie`) and @mention it. Raphie replies in a thread, and later messages in that thread reach the bot without another mention. Each thread has its own session.
+In a channel, invite the app (`/invite @Raphie`) and @mention it. Raphie replies in a thread, and later messages in that thread reach the bot without another mention, also after Raphie restarts. Raphie remembers the 500 threads it was most recently mentioned in. Each thread has its own session.
 
 :::caution[A channel shares the bot's memory]
 A thread's session is separate, but the bot's memory and tools are shared across all its sessions. Treat everything the bot says in a channel, including scheduled output, as visible to every member of it.
@@ -96,13 +96,12 @@ To send [scheduled job](/guides/schedules/) results to Slack, run `/home` in the
 
 ## Limits
 
-| Topic             | Behaviour                                                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Message length    | Replies are split into chunks of up to 10,000 characters.                                                          |
-| Formatting        | Replies are sent as Markdown, which Slack renders.                                                                 |
-| Attachments       | Files sent to the bot are refused with a reply saying only text is supported.                                      |
-| Send failures     | A failed or interrupted send leaves that chunk **uncertain**; it is not resent, in case it arrived.                |
-| Following threads | After Raphie restarts or you save Slack settings, a thread needs a fresh @mention before the bot follows it again. |
+| Topic          | Behaviour                                                                                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Message length | Replies are split into chunks of up to 10,000 characters, at a line break where possible. A code block that spans two chunks is closed at the end of one and reopened at the start of the next. |
+| Formatting     | Replies are sent as Markdown, which Slack renders.                                                                                                                                              |
+| Attachments    | Files sent to the bot are refused with a reply saying only text is supported.                                                                                                                   |
+| Send failures  | A failed or interrupted send leaves that chunk **uncertain**; it is not resent, in case it arrived.                                                                                             |
 
 ## Security notes
 

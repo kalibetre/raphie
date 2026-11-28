@@ -8,6 +8,7 @@ import type { ChannelServices } from "../../../application/channels/ports.ts";
 import {
   createSlackBridge,
   resolveSlackIdentity,
+  slackAppId,
   type SlackBridgeConfig,
 } from "../../../infrastructure/slack/bridge.ts";
 import { InputError } from "../../../shared/application/input-error.ts";
@@ -19,7 +20,24 @@ import {
 } from "../../settings/infrastructure/credential-cipher.ts";
 import type { ReplyDestination } from "../domain/binding.ts";
 
-type Stored = SlackBridgeConfig & { teamName: string };
+type Stored = Omit<SlackBridgeConfig, "followed" | "onFollow"> & {
+  teamName: string;
+  /** The Slack app both tokens belong to, when it is known. */
+  appId?: string;
+};
+
+/** How many followed threads are remembered; the oldest go first. */
+const FOLLOWED_LIMIT = 500;
+
+/**
+ * What one bot reserves. Socket Mode events are split across every
+ * connection of one Slack app, so the app is what two bots must not share.
+ * Settings saved before the app was recorded fall back to the bot user.
+ */
+function appKey(config: Stored) {
+  const app = config.appId ?? slackAppId(config.appToken);
+  return app ? `app:${app}` : config.connectionId;
+}
 
 type Bridge = ReturnType<typeof createSlackBridge>;
 
@@ -34,8 +52,9 @@ const conflict =
   "This Slack app is already connected to another bot. Remove it from that bot first.";
 
 /**
- * One Slack app per bot: Slack spreads Socket Mode events across every open
- * connection, so two bots sharing an app would each miss messages.
+ * One Slack app per bot, keyed by the app (see `appKey`): Slack spreads
+ * Socket Mode events across every open connection, so two bots sharing an
+ * app would each miss messages.
  */
 export class SlackConnections {
   private owners = new Map<string, BotSlack>();
@@ -102,6 +121,11 @@ export class BotSlack {
       db.exec(
         "CREATE TABLE IF NOT EXISTS slack (id INTEGER PRIMARY KEY CHECK(id=1), key_id TEXT NOT NULL, value TEXT NOT NULL)",
       );
+      // Channel threads the bot follows without a mention. Thread IDs only;
+      // no message content.
+      db.exec(
+        "CREATE TABLE IF NOT EXISTS followed (thread TEXT PRIMARY KEY, at INTEGER NOT NULL)",
+      );
       const row = db
         .query<{ key_id: string; value: string }, []>(
           "SELECT key_id,value FROM slack WHERE id=1",
@@ -119,7 +143,7 @@ export class BotSlack {
         service.config = stored;
         registerRedactionSecret(stored.botToken);
         registerRedactionSecret(stored.appToken);
-        if (!connections.claim(stored.connectionId, service))
+        if (!connections.claim(appKey(stored), service))
           console.error(
             "Slack app is configured for multiple bots; this bot will not connect.",
           );
@@ -165,10 +189,7 @@ export class BotSlack {
             teamName: this.config.teamName,
             connected: this.connected,
             tokenConfigured: true,
-            conflict: this.connections.conflicts(
-              this.config.connectionId,
-              this,
-            ),
+            conflict: this.connections.conflicts(appKey(this.config), this),
           }
         : null,
     };
@@ -179,10 +200,14 @@ export class BotSlack {
    * keeps retrying and reconnects on its own. Returns at once, or with `wait`,
    * once Slack accepts the connection, failing after that many milliseconds.
    */
-  private start(config: SlackBridgeConfig): void;
-  private start(config: SlackBridgeConfig, wait: number): Promise<void>;
-  private start(config: SlackBridgeConfig, wait?: number) {
-    const bridge = this.adapters.create(this.app, config);
+  private start(config: Stored): void;
+  private start(config: Stored, wait: number): Promise<void>;
+  private start(config: Stored, wait?: number) {
+    const bridge = this.adapters.create(this.app, {
+      ...config,
+      followed: this.followed(),
+      onFollow: (thread) => this.follow(thread),
+    });
     this.bridge = bridge;
     this.connected = false;
     this.timer = setInterval(() => {
@@ -212,6 +237,30 @@ export class BotSlack {
         );
       }),
     ]).finally(() => clearTimeout(timer));
+  }
+
+  private followed() {
+    return this.db
+      .query<{ thread: string }, [number]>(
+        "SELECT thread FROM followed ORDER BY at DESC LIMIT ?",
+      )
+      .all(FOLLOWED_LIMIT)
+      .map((row) => row.thread);
+  }
+
+  private follow(thread: string) {
+    try {
+      this.db
+        .query("INSERT OR REPLACE INTO followed(thread,at) VALUES(?,?)")
+        .run(thread, Date.now());
+      this.db
+        .query(
+          "DELETE FROM followed WHERE thread NOT IN (SELECT thread FROM followed ORDER BY at DESC LIMIT ?)",
+        )
+        .run(FOLLOWED_LIMIT);
+    } catch {
+      // Closed while a reply was in flight: the thread is followed until restart.
+    }
   }
 
   private async stop() {
@@ -246,6 +295,13 @@ export class BotSlack {
       throw new InputError(
         "Use the same Slack app or remove the existing connection first.",
       );
+    // Tokens from two apps would connect one app's events to another's bot.
+    const tokenApp = slackAppId(appToken);
+    if (tokenApp && identity.appId && tokenApp !== identity.appId)
+      throw new InputError(
+        "The bot token and the app-level token come from different Slack apps. Use both from the same app.",
+      );
+    const appId = tokenApp ?? identity.appId;
     const next: Stored = {
       botToken,
       appToken,
@@ -254,17 +310,19 @@ export class BotSlack {
       teamName: identity.teamName,
       allowedUserIds: input.allowedUserIds,
       channelId: input.channelId || undefined,
+      ...(appId ? { appId } : {}),
     };
-    const previouslyOwned = !!this.config;
-    if (!this.connections.claim(next.connectionId, this))
-      throw new InputError(conflict, 409);
+    const key = appKey(next);
+    const previous = this.config ? appKey(this.config) : undefined;
+    const heldBefore = previous === key;
+    if (!this.connections.claim(key, this)) throw new InputError(conflict, 409);
     try {
       await this.stop();
       await this.start(next, this.adapters.connectTimeoutMs ?? 15_000);
     } catch {
       await this.stop();
       if (this.config) this.start(this.config);
-      if (!previouslyOwned) this.connections.release(next.connectionId, this);
+      if (!heldBefore) this.connections.release(key, this);
       throw new InputError(
         "Slack connection failed. Check the app-level token, that Socket Mode is on, and that Slack is reachable.",
       );
@@ -282,9 +340,11 @@ export class BotSlack {
     } catch (error) {
       await this.stop();
       if (this.config) this.start(this.config);
-      if (!previouslyOwned) this.connections.release(next.connectionId, this);
+      if (!heldBefore) this.connections.release(key, this);
       throw error;
     }
+    // Settings saved before the app was recorded held the bot user instead.
+    if (previous && !heldBefore) this.connections.release(previous, this);
     return this.read();
   }
 
@@ -292,7 +352,8 @@ export class BotSlack {
     return this.serialize(async () => {
       await this.stop();
       this.db.query("DELETE FROM slack WHERE id=1").run();
-      if (this.config) this.connections.release(this.config.connectionId, this);
+      this.db.query("DELETE FROM followed").run();
+      if (this.config) this.connections.release(appKey(this.config), this);
       this.config = null;
       return this.read();
     });
@@ -301,7 +362,7 @@ export class BotSlack {
   close() {
     return this.serialize(async () => {
       await this.stop();
-      if (this.config) this.connections.release(this.config.connectionId, this);
+      if (this.config) this.connections.release(appKey(this.config), this);
       this.cipher.close();
       this.db.close();
     });

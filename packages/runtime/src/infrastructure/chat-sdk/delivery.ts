@@ -3,6 +3,7 @@ import type { AdapterPostableMessage, CardElement } from "chat";
 import type { AttachmentStore } from "../../domains/attachments/application/ports.ts";
 import type { RenderDelivery } from "../../domains/delivery/application/worker.ts";
 import { approvalCard, askCard, toolApprovalCard } from "./cards.ts";
+import { splitMarkdown } from "./split-markdown.ts";
 
 type ChatSdkOperation = {
   threadId: string;
@@ -15,8 +16,9 @@ type ChatSdkOperation = {
 
 /**
  * Store complete platform payloads before network I/O; bytes survive a restart
- * too. A reply is split into chunks the platform accepts, sent as raw text
- * (Discord renders Markdown itself) or as Markdown for the adapter to convert.
+ * too. A reply is split into chunks the platform accepts, without leaving a
+ * code block open across them, and sent as raw text (Discord renders
+ * Markdown itself) or as Markdown for the adapter to convert.
  */
 export function chatSdkRenderer(
   files: AttachmentStore,
@@ -25,15 +27,9 @@ export function chatSdkRenderer(
   return async (intent) => {
     const base = { threadId: intent.threadId };
     if (intent.source === "chat") {
-      const parts = [];
-      for (let offset = 0; offset < intent.text.length; offset += reply.chunk)
-        parts.push(
-          JSON.stringify({
-            ...base,
-            [reply.format]: intent.text.slice(offset, offset + reply.chunk),
-          }),
-        );
-      return parts;
+      return splitMarkdown(intent.text, reply.chunk).map((part) =>
+        JSON.stringify({ ...base, [reply.format]: part }),
+      );
     }
     const messageId =
       intent.kind === "resolved"
