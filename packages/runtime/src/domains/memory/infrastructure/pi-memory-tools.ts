@@ -2,7 +2,14 @@ import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { obj, oneOf, type Schema, str } from "@earendil-works/pi-schema";
 
 import { InputError } from "../../../shared/application/input-error.ts";
+import {
+  inOwnersChat,
+  ONLY_IN_OWNERS_CHAT,
+} from "../../conversations/infrastructure/owner-chat.ts";
 import type { MemoryService, TurnProvenance } from "../application/ports.ts";
+
+/** Memory every later session reads: only the owner's chat may change it. */
+const WRITES = new Set(["memory_retain", "memory_revise", "memory_forget"]);
 
 /** Scope and provenance are supplied by the host, never by model arguments. */
 export function createMemoryTools(
@@ -54,7 +61,17 @@ export function createMemoryTools(
       // A crash must not reroute an external write or resurrect corrected/deleted memory.
       replay: "unsafe",
       outputLimits: { maxBytes: 80_000, maxLines: 2000 },
-      execute: async (args, api) => {
+      execute: async (args, api, ctx) => {
+        // A group or another bot could otherwise plant "facts" the owner's
+        // chat later trusts, or erase ones the owner stated.
+        if (
+          WRITES.has(tool.name) &&
+          !(await api.commit((tx) => inOwnersChat(tx, api.conversationId), ctx))
+        )
+          return {
+            output: [{ type: "text" as const, text: ONLY_IN_OWNERS_CHAT }],
+            isError: true,
+          };
         try {
           let result: unknown;
           if (tool.name === "memory_retain") {
