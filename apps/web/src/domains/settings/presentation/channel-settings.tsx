@@ -29,8 +29,12 @@ export function ChannelSettings() {
   });
   const mutation = useMutation({
     mutationFn: ({ path, input }: { path: string; input: unknown }) =>
-      workspace.api<Channels>(path, input),
-    onSuccess: (data) => client.setQueryData(["channels"], data),
+      workspace.api<Pick<Channels, "discord">>(path, input),
+    // Each call returns only Discord's settings; keep the other channels cached.
+    onSuccess: ({ discord }) =>
+      client.setQueryData<Channels>(["channels"], (current) =>
+        current ? { ...current, discord } : current,
+      ),
   });
   const [draft, setDraft] = useState<Partial<Discord> & { botToken?: string }>(
     {},
