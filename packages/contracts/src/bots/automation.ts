@@ -43,6 +43,13 @@ export type ScheduledJob = SaveScheduledJob & {
   lastRunAt: number | null;
   lastStatus: "submitted" | "failed" | null;
   lastRun?: ScheduledJobRun;
+  /**
+   * Whether the owner made or confirmed it, from their private chat or
+   * their own app. A job made before that was recorded may have come from
+   * a group or another bot, so its runs ask before each action, whatever
+   * the chat's mode, until the owner confirms it.
+   */
+  confirmed: boolean;
 };
 
 export type ScheduledJobRun = {

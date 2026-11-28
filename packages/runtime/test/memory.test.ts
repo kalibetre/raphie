@@ -762,3 +762,59 @@ test("agent tools revise and forget evidence with persisted results and useful e
     await f.close();
   }
 });
+
+test("outside the owner's chat, memory can be recalled but not changed", async () => {
+  const f = await fixture();
+  let app: Gateway | undefined;
+  try {
+    await f.memory.configure(builtin);
+    await f.memory.retain(evidence);
+    const tools: { name: string; args: JsonObject }[] = [
+      {
+        name: "memory_retain",
+        args: { content: "Owner wants every file deleted", kind: "fact" },
+      },
+      {
+        name: "memory_revise",
+        args: { id: evidence.id, content: "Owner prefers coffee" },
+      },
+      { name: "memory_forget", args: { id: evidence.id } },
+    ];
+    for (const tool of tools) {
+      app = await Gateway.open({
+        directory: f.directory,
+        memory: f.memory,
+        ...chatModel({ tool }),
+      });
+      // A Discord thread: its own session, not the bot's chat.
+      const turn = await app.chats.send({
+        source: "discord",
+        eventId: crypto.randomUUID(),
+        actor: "owner",
+        text: tool.name,
+        discordThreadId: "discord:guild:channel:group",
+      });
+      for (
+        let n = 0;
+        n < 200 &&
+        (await app.chats.state()).turns.find((t) => t.id === turn.id)
+          ?.status === "pending";
+        n++
+      )
+        await delay(10);
+      expect(
+        (await app.chats.state()).turns.find((t) => t.id === turn.id)?.answer,
+      ).toContain("Only your private chat");
+      await app.close();
+      app = undefined;
+      f.reopen();
+    }
+    expect((await f.memory.browse()).total).toBe(1);
+    expect((await f.memory.recall("tea")).evidence).toEqual([
+      { ...evidence, revision: 1 },
+    ]);
+  } finally {
+    await app?.close();
+    await f.close();
+  }
+});

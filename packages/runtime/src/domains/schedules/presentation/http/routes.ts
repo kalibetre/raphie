@@ -46,7 +46,9 @@ export function jobRoutes(jobs: BotJobs) {
       limitBody(1024),
       jsonInput(
         z
-          .object({ action: z.enum(["enable", "disable", "remove", "run"]) })
+          .object({
+            action: z.enum(["enable", "disable", "remove", "run", "confirm"]),
+          })
           .strict(),
       ),
       async (c) =>

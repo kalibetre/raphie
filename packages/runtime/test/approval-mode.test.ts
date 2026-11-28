@@ -8,8 +8,12 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
-import { BotJobs } from "../src/domains/schedules/infrastructure/bot-jobs.ts";
+import {
+  BotJobs,
+  Jobs,
+} from "../src/domains/schedules/infrastructure/bot-jobs.ts";
 import { createScheduleTools } from "../src/domains/schedules/infrastructure/schedule-tools.ts";
+import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
 import { chatModel } from "./chat-model.ts";
 
 async function until(check: () => Promise<boolean>) {
@@ -133,6 +137,151 @@ test("a work item's session reports the chat's mode and can't be set on its own"
     expect(
       gateway.toolApprovals.approvalMode("owner", "work-session", "ask"),
     ).rejects.toThrow("follows the chat's permission mode");
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("a job saved before it was known who made it asks until the owner confirms it", async () => {
+  const { gateway, actor, jobs, done } = await bot(() => undefined);
+  try {
+    const hello = await gateway.sessions.submit(actor, {
+      eventId: "hi",
+      text: "hello",
+    });
+    await until(async () =>
+      (await gateway.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    await gateway.toolApprovals.approvalMode(
+      "owner",
+      hello.sessionId,
+      "full-access",
+    );
+    const [job] = await jobs.add({
+      name: "Brief",
+      prompt: "Summarize my morning.",
+      everyMinutes: 1440,
+      firstRunAt: Date.now() + 3_600_000,
+    });
+    expect(job!.confirmed).toBe(true);
+    // As saved by an earlier version: nothing says who made it. Its run
+    // goes to its work item's own session.
+    await gateway.root.commit(async (tx) => {
+      const stored = (await tx.doc(Jobs)).items.find((j) => j.id === job!.id)!;
+      delete stored.confirmed;
+      const item = (await tx.doc(WorkItems)).items.find(
+        (i) => i.origin?.kind === "job" && i.origin.jobId === job!.id,
+      )!;
+      const created = await tx.createConversation({
+        ownership: { kind: "ownerless" },
+      });
+      (await tx.doc(Chats)).conversations.push({
+        id: created.id,
+        sessionId: "job-session",
+        title: "Brief",
+        createdAt: Date.now(),
+        work: item.id,
+      });
+    }, context);
+    expect((await jobs.read())[0]!.confirmed).toBe(false);
+    expect(
+      await gateway.toolApprovals.approvalMode("owner", "job-session"),
+    ).toBe("ask");
+    await jobs.change(job!.id, "confirm");
+    expect((await jobs.read())[0]!.confirmed).toBe(true);
+    expect(
+      await gateway.toolApprovals.approvalMode("owner", "job-session"),
+    ).toBe("full-access");
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("an older job with no work item runs in an item of its own, not the chat, and asks", async () => {
+  const { gateway, actor, jobs, done } = await bot(() => undefined);
+  try {
+    const hello = await gateway.sessions.submit(actor, {
+      eventId: "hi",
+      text: "hello",
+    });
+    await until(async () =>
+      (await gateway.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    await gateway.toolApprovals.approvalMode(
+      "owner",
+      hello.sessionId,
+      "full-access",
+    );
+    const [job] = await jobs.add({
+      name: "Digest",
+      prompt: "Summarize the week.",
+      everyMinutes: 10080,
+      // Due shortly: a timed run, since Run now remakes the item itself.
+      firstRunAt: Date.now() + 1_000,
+    });
+    // As saved before jobs had work items, or who made them was recorded.
+    await gateway.root.commit(async (tx) => {
+      delete (await tx.doc(Jobs)).items.find((j) => j.id === job!.id)!
+        .confirmed;
+      const work = await tx.doc(WorkItems);
+      work.items = work.items.filter(
+        (i) => !(i.origin?.kind === "job" && i.origin.jobId === job!.id),
+      );
+    }, context);
+    await until(async () =>
+      (await gateway.chats.state()).turns.some((t) => t.scheduled),
+    );
+    const state = await gateway.chats.state();
+    const run = state.turns.find((t) => t.scheduled)!;
+    const session = state.conversations.find(
+      (c) => c.id === run.conversationId,
+    )!;
+    expect(session.chat).toBeUndefined();
+    expect(session.work).toBeDefined();
+    expect(
+      await gateway.toolApprovals.approvalMode("owner", session.sessionId),
+    ).toBe("ask");
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("only Confirm or a new prompt confirms an older job, not a new time, a pause or Resume", async () => {
+  const { gateway, jobs, done } = await bot(() => undefined);
+  try {
+    const [job] = await jobs.add({
+      name: "Digest",
+      prompt: "Summarize the week.",
+      everyMinutes: 10080,
+      firstRunAt: Date.now() + 3_600_000,
+    });
+    const unconfirm = () =>
+      gateway.root.commit(async (tx) => {
+        delete (await tx.doc(Jobs)).items.find((j) => j.id === job!.id)!
+          .confirmed;
+      }, context);
+    const confirmed = async () =>
+      (await jobs.read()).find((j) => j.id === job!.id)!.confirmed;
+    await unconfirm();
+    for (const patch of [
+      { enabled: false },
+      { firstRunAt: Date.now() + 7_200_000 },
+    ])
+      await gateway.root.commit(
+        (tx) => jobs.update(tx, job!.id, patch),
+        context,
+      );
+    expect(await confirmed()).toBe(false);
+    await jobs.change(job!.id, "enable");
+    expect(await confirmed()).toBe(false);
+    await gateway.root.commit(
+      (tx) => jobs.update(tx, job!.id, { prompt: "Summarize the month." }),
+      context,
+    );
+    expect(await confirmed()).toBe(true);
+    await unconfirm();
+    await jobs.change(job!.id, "confirm");
+    expect(await confirmed()).toBe(true);
   } finally {
     await done();
   }

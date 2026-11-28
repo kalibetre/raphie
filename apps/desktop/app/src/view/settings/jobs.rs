@@ -142,7 +142,7 @@ fn scheduled(s: &Ui, jobs: &[ScheduledJob], t: &Theme) -> El {
     group_with(
         t,
         "Scheduled prompts",
-        "Every run posts in the bot's chat, whether the job was made here or in the chat. The runtime must be running; tool actions still need approval.",
+        "Every run posts in the bot's chat, whether the job was made here or in the chat. The runtime must be running; runs follow the chat's permission mode.",
         Some(create),
         rows,
     )
@@ -177,8 +177,15 @@ fn card(job: &ScheduledJob, busy: bool, t: &Theme) -> El {
     };
 
     let history = job.id.clone();
-    let mut buttons = actions()
-        .mt(12.0)
+    let mut buttons = actions().mt(12.0);
+    if !job.confirmed {
+        buttons = buttons.child(pressable(
+            button(t, Kind::Primary, Size::Small, None, "Confirm").key(key("confirm")),
+            !busy,
+            act(JobAction::Confirm),
+        ));
+    }
+    buttons = buttons
         .child(pressable(
             button(t, Kind::Ghost, Size::Small, None, "Run history").key(key("history")),
             true,
@@ -237,8 +244,14 @@ fn card(job: &ScheduledJob, busy: bool, t: &Theme) -> El {
         )
         .child(note(t, schedule))
         .child(note(t, last).key(key("last")))
+        .children(
+            (!job.confirmed).then(|| note(t, UNCONFIRMED.to_string()).key(key("unconfirmed"))),
+        )
         .child(buttons)
 }
+
+/// Under a job saved before Raphie recorded who makes one.
+const UNCONFIRMED: &str = "Saved before Raphie recorded who makes a job, so it may have come from a group or another bot. Its runs ask before each action until you confirm it.";
 
 /// "Run history": recent runs, every job's or one job's, with no card
 /// around them.

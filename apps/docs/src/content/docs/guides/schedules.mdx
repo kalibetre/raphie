@@ -63,6 +63,7 @@ Each job card in **Scheduled jobs** shows its state and last run.
 | **Pause**   | Stops future runs. A run already submitted continues.                                                                           |
 | **Resume**  | Restarts the job; an overdue job runs straight away.                                                                            |
 | **Remove**  | Stops future runs. Its earlier runs stay in the chat.                                                                           |
+| **Confirm** | Shown only on a job saved before Raphie recorded who makes a job. Its runs then follow the chat's permission mode.              |
 
 Pausing or removing a job does not cancel a run already in progress or undo actions it took. A run doesn't use the chat, so **Stop** in the chat leaves it running; **Cancel run** on the job's item under **Settings → Work** stops it.
 
@@ -110,6 +111,8 @@ Timing is durable: jobs survive restarts without your doing anything.
 | Raphie stops during a run               | The run's turn is recovered on the next start like any other turn. A run whose turn is stopped or aborted is recorded as interrupted.                       |
 
 A scheduled prompt's tool calls follow the chat's permission mode: on **Ask** they need approval like any other; on **Full access** they run without asking. Only the bot's chat can create, change or delete a job, and only in a reply that stays private, so a group or a task from another bot can never schedule work that runs unasked.
+
+Jobs saved before Raphie recorded who makes a job may have come from a group or another bot. Their runs ask before each action, whatever the chat's mode, until you press **Confirm** on the job's card. Rewriting its prompt from the chat confirms it too; a new time, a pause or **Resume** does not, since none of them shows you what it will run.
 
 ## Limits
 

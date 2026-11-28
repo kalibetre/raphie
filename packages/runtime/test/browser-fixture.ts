@@ -23,6 +23,7 @@ import { Chats } from "../src/domains/conversations/infrastructure/pi-conversati
 import { newSessionId } from "../src/domains/conversations/infrastructure/session-id.ts";
 import { openLocalOtlp } from "../src/domains/diagnostics/infrastructure/local-otlp.ts";
 import { RuntimeMemory } from "../src/domains/memory/infrastructure/runtime-memory.ts";
+import { Jobs } from "../src/domains/schedules/infrastructure/bot-jobs.ts";
 import { BackendSettings } from "../src/domains/settings/infrastructure/runtime-settings.ts";
 import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
 import { createTelemetry } from "../src/infrastructure/observability/effect-telemetry.ts";
@@ -1017,6 +1018,21 @@ const bots = await BotHost.open(
     telegram: { apiBase: telegram.url, pollSeconds: 1 },
   },
 );
+// A job saved before Raphie recorded who makes a job: Settings asks the
+// owner to confirm it.
+{
+  const jobs = bots.runtime("default").jobs!;
+  const [legacy] = await jobs.add({
+    name: "Morning brief",
+    prompt: "Summarize my calendar and unread mail.",
+    everyMinutes: 1440,
+    firstRunAt: Date.now() + 6 * 3_600_000,
+  });
+  await app.root.commit(async (tx) => {
+    delete (await tx.doc(Jobs)).items.find((j) => j.id === legacy!.id)!
+      .confirmed;
+  }, durableContext);
+}
 // Override the ports to run beside a real runtime.
 const server = await startServer(app, {
   bots,

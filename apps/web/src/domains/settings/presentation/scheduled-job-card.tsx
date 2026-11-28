@@ -13,7 +13,7 @@ export function ScheduledJobCard({
   pending: boolean;
   onChange: (
     id: string,
-    action: "enable" | "disable" | "remove" | "run",
+    action: "enable" | "disable" | "remove" | "run" | "confirm",
   ) => void;
   onHistory: () => void;
 }) {
@@ -53,7 +53,23 @@ export function ScheduledJobCard({
             ? `${job.lastStatus === "submitted" ? "Earlier prompt submitted · completion not tracked" : "Last submission failed · check the bot's model connection"}: ${new Date(job.lastRunAt).toLocaleString()}`
             : "No runs yet"}
       </p>
+      {!job.confirmed && (
+        <p className="automation-note">
+          Saved before Raphie recorded who makes a job, so it may have come from
+          a group or another bot. Its runs ask before each action until you
+          confirm it.
+        </p>
+      )}
       <div className="automation-actions">
+        {!job.confirmed && (
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => onChange(job.id, "confirm")}
+          >
+            Confirm
+          </Button>
+        )}
         <Button variant="ghost" size="sm" onClick={onHistory}>
           Run history
         </Button>

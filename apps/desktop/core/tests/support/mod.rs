@@ -507,7 +507,7 @@ async fn add_job(
             "id": id, "name": body["name"], "prompt": body["prompt"],
             "everyMinutes": body["everyMinutes"], "firstRunAt": body["firstRunAt"],
             "enabled": true, "nextRunAt": body["firstRunAt"], "sessionId": null,
-            "lastRunAt": null, "lastStatus": null,
+            "lastRunAt": null, "lastStatus": null, "confirmed": true,
         }));
     }
     let mut response = jobs_json(&fake);
@@ -542,6 +542,7 @@ async fn change_job(
             }
             Some("disable") => host.jobs[index]["enabled"] = json!(false),
             Some("enable") => host.jobs[index]["enabled"] = json!(true),
+            Some("confirm") => host.jobs[index]["confirmed"] = json!(true),
             Some("run") => {
                 let run = json!({
                     "id": format!("run-{}", host.job_runs.len() + 1), "jobId": id,

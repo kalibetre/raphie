@@ -56,6 +56,9 @@ pub enum JobAction {
     Remove,
     /// Run it now, whatever its schedule.
     Run,
+    /// Stand behind a job saved before Raphie recorded who makes one, so
+    /// its runs follow the chat's permission mode.
+    Confirm,
 }
 
 /// Whether a one-time job has had its run: it is neither active nor
@@ -288,6 +291,7 @@ mod tests {
             last_run_at: None,
             last_status: None,
             last_run: None,
+            confirmed: true,
         }
     }
 

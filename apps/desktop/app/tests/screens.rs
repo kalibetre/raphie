@@ -2647,6 +2647,19 @@ fn jobs_are_listed_with_their_state_and_what_can_be_done() {
 
     // A job has no conversation of its own: its runs post in the chat.
     assert!(rt.find("rd-job-job-brief-open").is_none());
+
+    // One saved before Raphie recorded who makes a job asks to be confirmed.
+    assert!(rt.find("rd-job-job-brief-confirm").is_none());
+    assert!(rt.find("rd-job-job-digest-unconfirmed").is_some());
+    click(&mut rt, "rd-job-job-digest-confirm");
+    assert_eq!(
+        rt.state.sent.last(),
+        Some(&Command::ChangeJob {
+            bot_id: "default".into(),
+            id: "job-digest".into(),
+            action: JobAction::Confirm,
+        })
+    );
 }
 
 /// The ticket of the runs load the page last asked for.

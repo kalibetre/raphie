@@ -173,6 +173,12 @@ fn items(s: &Ui, conversation: &Conversation, look: &Look) -> Vec<El> {
             .flatten();
         items.extend(owner_turn(s, turn, steps, &asks, &cards, now, look));
         if let Some(reply) = reply(s, turn, steps, streaming, observation, now, look) {
+            // A reply goes by when it was said, not when the owner asked:
+            // one written after an answer belongs below that answer's receipt.
+            let said = completed_at(&turn.id, &observation.activity).unwrap_or(turn.created_at);
+            while let Some((ask, title, _)) = receipts.next_if(|(_, _, at)| *at <= said) {
+                items.push(asks::in_transcript(ask, title, t));
+            }
             items.push(reply);
         }
     }
