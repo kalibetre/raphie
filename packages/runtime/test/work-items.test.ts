@@ -6,7 +6,11 @@ import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { UserMessage } from "@earendil-works/pi-ai";
-import type { JsonObject } from "@earendil-works/pi-durable";
+import {
+  defineExtension,
+  defineTask,
+  type JsonObject,
+} from "@earendil-works/pi-durable";
 import type { WorkItem } from "@raphie/contracts";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
@@ -21,6 +25,7 @@ import {
   openWorkContext,
   workListText,
 } from "../src/domains/work/domain/work-item.ts";
+import { WORK_REMINDER_TASK } from "../src/domains/work/infrastructure/work-reminders.ts";
 import {
   outcomeText,
   requestExcerpt,
@@ -350,7 +355,7 @@ async function waitForReminders(app: Gateway, now: number) {
     tasks
       .filter(
         ({ record }) =>
-          record.kind === "raphie.work-reminder" &&
+          record.kind === WORK_REMINDER_TASK &&
           (record.input as { at: number }).at <= now,
       )
       .map(async ({ record }) => {
@@ -483,6 +488,169 @@ test("aborting a reminder clears its time and leaves the deferred item", async (
     );
     assert.equal((await app.chats.state()).turns.length, 0);
   } finally {
+    await done();
+  }
+});
+
+function faultReminderTasks(app: Gateway) {
+  const fault = Promise.withResolvers<void>();
+  app.install(
+    defineExtension({
+      name: "raphie.work-reminders",
+      tasks: [
+        defineTask<{ id: string; at: number }, { phase: "wait" }, null>({
+          name: WORK_REMINDER_TASK,
+          version: 1,
+          initial: () => ({ phase: "wait" }),
+          abort: (_, runtime, ctx) =>
+            runtime.commit(
+              () => ({ status: "terminal", outcome: { status: "aborted" } }),
+              ctx,
+            ),
+          phases: {
+            wait: async () => {
+              await fault.promise;
+              throw new Error("Fault the reminder timer for this test");
+            },
+          },
+        }),
+      ],
+    }),
+  );
+  return fault.resolve;
+}
+
+test("a scheduler fault clears the reminder without closing work or posting", async () => {
+  const { app, done } = await bot({});
+  const fault = faultReminderTasks(app);
+  const cleared = Promise.withResolvers<void>();
+  const clear = app.work.clearFaultedReminder.bind(app.work);
+  app.work.clearFaultedReminder = async (id) => {
+    await clear(id);
+    cleared.resolve();
+  };
+  try {
+    const at = Date.now() + 60_000;
+    const item = await app.work.open({
+      title: "Design doc",
+      status: "deferred",
+      reminderAt: at,
+    });
+    assert(typeof item !== "string");
+    const timer = (await app.work.state()).reminderTasks?.[item.id];
+    assert(timer !== undefined);
+    fault();
+    assert.equal(
+      (await app.harness.waitForTask(timer, context)).state.outcome.status,
+      "faulted",
+    );
+    await cleared.promise;
+    const stored = await app.work.get(item.id);
+    assert.equal(stored?.status, "deferred");
+    assert.equal(stored?.reminderAt, undefined);
+    assert.equal((await app.work.state()).reminderTasks?.[item.id], undefined);
+    assert.equal((await app.chats.state()).turns.length, 0);
+
+    app.install(app.work.reminderExtension());
+    const rescheduled = await app.work.change(item.id, { reminderAt: at });
+    assert(typeof rescheduled !== "string");
+    assert.equal(rescheduled.reminderAt, at);
+    assert.notEqual((await app.work.state()).reminderTasks?.[item.id], timer);
+  } finally {
+    fault();
+    await done();
+  }
+});
+
+test("startup clears a persisted fault and keeps a pending reminder", async () => {
+  const first = await bot({});
+  const fault = faultReminderTasks(first.app);
+  const at = Date.now() + 60_000;
+  let faultedId: string;
+  let pendingId: string;
+  try {
+    // Simulate shutdown after the scheduler commits the fault and before cleanup.
+    first.app.work.clearFaultedReminder = async () => {};
+    const faulted = await first.app.work.open({
+      title: "Design doc",
+      reminderAt: at,
+    });
+    assert(typeof faulted !== "string");
+    const timer = (await first.app.work.state()).reminderTasks?.[faulted.id];
+    assert(timer !== undefined);
+    fault();
+    assert.equal(
+      (await first.app.harness.waitForTask(timer, context)).state.outcome
+        .status,
+      "faulted",
+    );
+    assert.equal((await first.app.work.get(faulted.id))?.reminderAt, at);
+    faultedId = faulted.id;
+
+    first.app.install(first.app.work.reminderExtension());
+    const pending = await first.app.work.open({
+      title: "Review notes",
+      reminderAt: at,
+    });
+    assert(typeof pending !== "string");
+    pendingId = pending.id;
+  } finally {
+    fault();
+    await first.close();
+  }
+
+  const reopened = await bot({}, {}, first.directory);
+  try {
+    assert.equal(
+      (await reopened.app.work.get(faultedId))?.reminderAt,
+      undefined,
+    );
+    assert.equal(
+      (await reopened.app.work.state()).reminderTasks?.[faultedId],
+      undefined,
+    );
+    assert.equal((await reopened.app.work.get(pendingId))?.reminderAt, at);
+    assert.equal((await reopened.app.chats.state()).turns.length, 0);
+  } finally {
+    await reopened.done();
+  }
+});
+
+test("retrying the same reminder time before fault cleanup keeps the replacement", async () => {
+  const { app, done } = await bot({});
+  const fault = faultReminderTasks(app);
+  const cleaning = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const cleaned = Promise.withResolvers<void>();
+  const clear = app.work.clearFaultedReminder.bind(app.work);
+  app.work.clearFaultedReminder = async (id) => {
+    cleaning.resolve();
+    await release.promise;
+    await clear(id);
+    cleaned.resolve();
+  };
+  try {
+    const at = Date.now() + 60_000;
+    const item = await app.work.open({ title: "Design doc", reminderAt: at });
+    assert(typeof item !== "string");
+    const oldTimer = (await app.work.state()).reminderTasks?.[item.id];
+    assert(oldTimer !== undefined);
+    fault();
+    await cleaning.promise;
+
+    app.install(app.work.reminderExtension());
+    const retried = await app.work.change(item.id, { reminderAt: at });
+    assert(typeof retried !== "string");
+    const newTimer = (await app.work.state()).reminderTasks?.[item.id];
+    assert(newTimer !== undefined);
+    assert.notEqual(newTimer, oldTimer);
+    release.resolve();
+    await cleaned.promise;
+    assert.equal((await app.work.get(item.id))?.reminderAt, at);
+    assert.equal((await app.work.state()).reminderTasks?.[item.id], newTimer);
+  } finally {
+    fault();
+    release.resolve();
     await done();
   }
 });

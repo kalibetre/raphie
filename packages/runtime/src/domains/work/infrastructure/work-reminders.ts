@@ -10,6 +10,8 @@ import type { TurnWork } from "@raphie/contracts";
 import { isOpen } from "../domain/work-item.ts";
 import { WorkItems, type WorkState } from "./work-store.ts";
 
+export const WORK_REMINDER_TASK = "raphie.work-reminder";
+
 type Post = (
   key: string,
   prepare: (tx: Tx) => Promise<{ work: TurnWork; text: string } | undefined>,
@@ -28,6 +30,22 @@ const reminderCancelled = defineSignal({
 
 export async function cancelReminder(tx: Tx, taskId: TaskId) {
   await tx.signal(taskId, reminderCancelled, "cancel", true);
+}
+
+/** A timer may clear only the reminder it still owns. */
+export function clearReminder(
+  state: WorkState,
+  id: string,
+  taskId: TaskId,
+  now: number,
+) {
+  if (state.reminderTasks?.[id] !== taskId) return;
+  delete state.reminderTasks[id];
+  const item = state.items.find((item) => item.id === id);
+  if (item) {
+    delete item.reminderAt;
+    item.updatedAt = now;
+  }
 }
 
 function due(
@@ -49,21 +67,17 @@ export function createWorkReminderTask(post: Post) {
     { phase: "wait" } | { phase: "post" },
     null
   >({
-    name: "raphie.work-reminder",
+    name: WORK_REMINDER_TASK,
     version: 1,
     initial: () => ({ phase: "wait" }),
     abort: (task, runtime, ctx) =>
       runtime.commit(async (tx) => {
-        const { id } = task.input;
-        const state = await tx.doc(WorkItems);
-        if (state.reminderTasks?.[id] === task.id) {
-          delete state.reminderTasks[id];
-          const item = state.items.find((item) => item.id === id);
-          if (item) {
-            delete item.reminderAt;
-            item.updatedAt = runtime.now();
-          }
-        }
+        clearReminder(
+          await tx.doc(WorkItems),
+          task.input.id,
+          task.id,
+          runtime.now(),
+        );
         return { status: "terminal", outcome: { status: "aborted" } };
       }, ctx),
     phases: {

@@ -83,6 +83,7 @@ import {
   createWorkTools,
   WorkService,
 } from "../domains/work/infrastructure/work-items.ts";
+import { WORK_REMINDER_TASK } from "../domains/work/infrastructure/work-reminders.ts";
 import { WorkRuns } from "../domains/work/infrastructure/work-runs.ts";
 import { createContainerTools } from "../domains/workspaces/infrastructure/container-tools.ts";
 import { createDocumentTools } from "../domains/workspaces/infrastructure/document-tools.ts";
@@ -299,6 +300,15 @@ export class Gateway {
         registry,
         now: options.now,
         models: app.models,
+        onReport(report) {
+          if (
+            report.kind === "task_faulted" &&
+            report.task.kind === WORK_REMINDER_TASK
+          ) {
+            // A shutdown can interrupt this commit. Startup checks the durable task outcome.
+            void app.work.clearFaultedReminder(report.task.id).catch(() => {});
+          }
+        },
         settings: {
           followUpMode: "one-at-a-time",
           stream: { timeoutMs: 120_000 },
@@ -312,6 +322,7 @@ export class Gateway {
       context,
     );
     app.root = await app.harness.root(context);
+    await app.work.recoverReminders();
     app.workspace = await RuntimeWorkspace.open({
       directory: options.directory,
       workspaceId: options.identity!.id,

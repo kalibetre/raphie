@@ -5,6 +5,7 @@ import {
   defineExtension,
   defineTool,
   section,
+  type TaskId,
   type ToolExecutionApi,
   type Tx,
 } from "@earendil-works/pi-durable";
@@ -39,7 +40,11 @@ import {
   workLine,
   workListText,
 } from "../domain/work-item.ts";
-import { cancelReminder, createWorkReminderTask } from "./work-reminders.ts";
+import {
+  cancelReminder,
+  clearReminder,
+  createWorkReminderTask,
+} from "./work-reminders.ts";
 import type { WorkRuns } from "./work-runs.ts";
 import { WorkItems, type WorkState } from "./work-store.ts";
 
@@ -82,6 +87,30 @@ export class WorkService {
     });
   }
 
+  /** The scheduler reports faults after it has committed the task's outcome. */
+  async clearFaultedReminder(taskId: TaskId) {
+    await this.app.root.commit(async (tx) => {
+      const state = await tx.doc(WorkItems);
+      const owner = Object.entries(state.reminderTasks ?? {}).find(
+        ([, timer]) => timer === taskId,
+      );
+      if (owner) clearReminder(state, owner[0], taskId, Date.now());
+    }, context);
+  }
+
+  /** Recover if the process stopped after a task ended but before cleanup. */
+  async recoverReminders() {
+    if (!Object.keys((await this.state()).reminderTasks ?? {}).length) return;
+    await this.app.root.commit(async (tx) => {
+      const state = await tx.doc(WorkItems);
+      for (const [id, taskId] of Object.entries(state.reminderTasks ?? {})) {
+        const task = await tx.task(taskId);
+        if (!task || task.state.status === "terminal")
+          clearReminder(state, id, taskId, Date.now());
+      }
+    }, context);
+  }
+
   private async scheduleReminder(tx: Tx, id: string, at: number) {
     const state = await tx.doc(WorkItems);
     state.reminderTasks ??= {};
@@ -118,13 +147,22 @@ export class WorkService {
     const state = await tx.doc(WorkItems);
     const previous = find(state, id)?.reminderAt;
     const item = await changeWorkItem(tx, id, input, by, conversationId);
-    if (typeof item !== "string" && item.reminderAt !== previous) {
-      const taskId = state.reminderTasks?.[item.id];
+    if (typeof item === "string") return item;
+    const taskId = state.reminderTasks?.[item.id];
+    if (item.reminderAt !== previous) {
       if (taskId !== undefined) {
         await cancelReminder(tx, taskId);
         delete state.reminderTasks?.[item.id];
       }
       if (item.reminderAt !== undefined)
+        await this.scheduleReminder(tx, item.id, item.reminderAt);
+    } else if (
+      item.reminderAt !== undefined &&
+      input.reminderAt === item.reminderAt
+    ) {
+      // An explicit retry can arrive after the fault but before its cleanup.
+      const task = taskId === undefined ? undefined : await tx.task(taskId);
+      if (!task || task.state.status === "terminal")
         await this.scheduleReminder(tx, item.id, item.reminderAt);
     }
     return item;
