@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 
-import type { BackgroundRequest, SessionAsk } from "@raphie/contracts";
+import type {
+  ActivityEvent,
+  BackgroundRequest,
+  SessionAsk,
+  Turn,
+} from "@raphie/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { placeReceipts } from "../src/domains/conversations/application/receipts";
@@ -30,6 +35,12 @@ const request = (asks: SessionAsk[]): BackgroundRequest => ({
   asks,
 });
 
+const turn = (id: string, createdAt: number) =>
+  ({ id, createdAt, status: "done" }) as Turn;
+
+const said = (runId: string, at: number) =>
+  ({ runId, at, type: "model.completed" }) as ActivityEvent;
+
 test("a receipt sits above the first message after it was settled", () => {
   const { above, last } = placeReceipts(
     [
@@ -39,18 +50,29 @@ test("a receipt sits above the first message after it was settled", () => {
         ask("waiting", { status: "pending", answer: null }),
       ]),
     ],
-    [
-      { id: "t1", at: 200 },
-      { id: "t1:reply", at: 200 },
-      { id: "t2", at: 300 },
-      { id: "t2:reply", at: 300 },
-    ],
+    ["t1", "t1:reply", "t2", "t2:reply"],
+    [turn("t1", 200), turn("t2", 300)],
+    [said("t1", 210), said("t2", 310)],
   );
   expect([...above].map(([id, r]) => [id, r.map((x) => x.ask.id)])).toEqual([
     ["t2", ["early"]],
   ]);
   // Settled after the last message: at the end. A waiting one is no receipt.
   expect(last.map((r) => r.ask.id)).toEqual(["late"]);
+});
+
+test("a reply written after the answer goes below its receipt", () => {
+  // Asked at 200, answered in the background at 250, replied at 400.
+  const { above, last } = placeReceipts(
+    [request([ask("answered", { settledAt: 250 })])],
+    ["t1", "t1:reply"],
+    [turn("t1", 200)],
+    [said("t1", 400)],
+  );
+  expect([...above].map(([id, r]) => [id, r.map((x) => x.ask.id)])).toEqual([
+    ["t1:reply", ["answered"]],
+  ]);
+  expect(last).toEqual([]);
 });
 
 test("the end of the chat marks only what still waits", () => {

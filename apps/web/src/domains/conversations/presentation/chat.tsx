@@ -21,7 +21,7 @@ import remarkGfm from "remark-gfm";
 import type { Snapshot } from "../../../infrastructure/http/api-client";
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { ToolSteps } from "../../approvals/presentation/tool-steps";
-import { placeReceipts, type Receipt } from "../application/receipts";
+import { placeReceipts, type Receipt, saidAt } from "../application/receipts";
 import {
   formatCost,
   runUsage,
@@ -245,10 +245,9 @@ export function Chat({
   // conversation where it was settled.
   const receipts = placeReceipts(
     state.background ?? [],
-    messages.map((m) => ({
-      id: m.id,
-      at: turns.find((t) => t.id === m.id.replace(/:reply$/, ""))?.createdAt,
-    })),
+    messages.map((m) => m.id),
+    turns,
+    state.activity,
   );
   const drawReceipts = (shown: Receipt[] = []) =>
     shown.map(({ ask, title }) => (
@@ -438,11 +437,7 @@ export function Chat({
         </div>
       );
     const usage = turn && runUsage(turn.id, state.activity);
-    // A job's post has no model call: it was said when it was posted.
-    const at =
-      state.activity.findLast(
-        (e) => e.runId === turnId && e.type === "model.completed",
-      )?.at ?? (turn?.work || turn?.scheduled ? turn.createdAt : undefined);
+    const at = turn && saidAt(turn, state.activity);
     const itemId = turn?.work?.itemId;
     const turnSteps = (turn && steps.get(turn.id)) ?? [];
     return (

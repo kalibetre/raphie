@@ -1,17 +1,53 @@
-import type { BackgroundRequest, SessionAsk } from "@raphie/contracts";
+import type {
+  ActivityEvent,
+  BackgroundRequest,
+  SessionAsk,
+  Turn,
+} from "@raphie/contracts";
 
 /** A receipt of a background question the owner answered, or that lapsed. */
+/** What placing a reply needs of its turn. */
+type SaidTurn = Pick<Turn, "id" | "createdAt" | "work" | "scheduled">;
+
 export type Receipt = { ask: SessionAsk; title: string; at: number };
+
+/**
+ * When a turn's reply was said: its last model call. A job's post has no
+ * model call: it was said when it was posted.
+ */
+export function saidAt(
+  turn: SaidTurn,
+  activity: readonly Pick<ActivityEvent, "at" | "runId" | "type">[],
+) {
+  return (
+    activity.findLast(
+      (e) => e.runId === turn.id && e.type === "model.completed",
+    )?.at ?? (turn.work || turn.scheduled ? turn.createdAt : undefined)
+  );
+}
 
 /**
  * Where each receipt of the background work's settled questions goes in
  * the conversation: above the first message said at or after it was
- * settled, by message id, and the rest after the last message.
+ * settled, by message id, and the rest after the last message. The owner's
+ * message was said when it was sent, and the reply when it was written, so
+ * a reply written after an answer goes below that answer's receipt.
  */
 export function placeReceipts(
   background: readonly BackgroundRequest[],
-  messages: readonly { id: string; at?: number }[],
+  messageIds: readonly string[],
+  turns: readonly SaidTurn[],
+  activity: readonly Pick<ActivityEvent, "at" | "runId" | "type">[],
 ) {
+  const messages = messageIds.map((id) => {
+    const turn = turns.find((t) => t.id === id.replace(/:reply$/, ""));
+    const at =
+      turn &&
+      (id.endsWith(":reply")
+        ? (saidAt(turn, activity) ?? turn.createdAt)
+        : turn.createdAt);
+    return { id, at };
+  });
   const receipts: Receipt[] = background
     .flatMap((request) =>
       request.asks
