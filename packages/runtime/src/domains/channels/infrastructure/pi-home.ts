@@ -54,7 +54,7 @@ export class PiChannelHome implements ChannelHome {
       !verified.discordUserId
     )
       throw new InputError(
-        "Use /home in a verified Discord or Telegram conversation.",
+        "Use /home in a verified Discord, Slack or Telegram conversation.",
         403,
       );
     const address: HomeAddress = {

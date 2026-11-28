@@ -6,6 +6,7 @@ import {
   limitBody,
 } from "../../../../infrastructure/http/validation.ts";
 import type { BotChannels } from "../../infrastructure/bot-channels.ts";
+import type { BotSlack } from "../../infrastructure/bot-slack.ts";
 import type { BotTelegram } from "../../infrastructure/bot-telegram.ts";
 
 const id = z
@@ -23,6 +24,49 @@ const discord = z
         "User IDs must be unique.",
       ),
     channelId: z.union([id, z.literal("")]).optional(),
+  })
+  .strict();
+
+const slackUser = z
+  .string()
+  .trim()
+  .regex(/^[UW][A-Z0-9]{2,32}$/, "Enter Slack member IDs, such as U012AB3CD.");
+const slack = z
+  .object({
+    botToken: z
+      .string()
+      .trim()
+      .regex(/^xoxb-[A-Za-z0-9-]{10,500}$/, "Enter a bot token (xoxb-…).")
+      .optional()
+      .or(z.literal("")),
+    appToken: z
+      .string()
+      .trim()
+      .regex(
+        /^xapp-[A-Za-z0-9-]{10,500}$/,
+        "Enter an app-level token (xapp-…).",
+      )
+      .optional()
+      .or(z.literal("")),
+    allowedUserIds: z
+      .array(slackUser)
+      .max(100)
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        "User IDs must be unique.",
+      ),
+    channelId: z
+      .union([
+        z
+          .string()
+          .trim()
+          .regex(
+            /^[CG][A-Z0-9]{2,32}$/,
+            "Enter a channel ID, such as C012AB3CD.",
+          ),
+        z.literal(""),
+      ])
+      .optional(),
   })
   .strict();
 
@@ -45,15 +89,29 @@ const telegramUser = z
   })
   .strict();
 
-export function channelRoutes(channels: BotChannels, bot?: BotTelegram) {
+export function channelRoutes(
+  channels: BotChannels,
+  bot?: BotTelegram,
+  slackBot?: BotSlack,
+) {
   const routes = new Hono()
     .get("/", (c) =>
-      c.json({ ...channels.read(), telegram: bot?.read().telegram ?? null }),
+      c.json({
+        ...channels.read(),
+        slack: slackBot?.read().slack ?? null,
+        telegram: bot?.read().telegram ?? null,
+      }),
     )
     .post("/discord", limitBody(4096), jsonInput(discord), async (c) =>
       c.json(await channels.save(c.req.valid("json"))),
     )
     .post("/discord/remove", async (c) => c.json(await channels.remove()));
+  if (slackBot)
+    routes
+      .post("/slack", limitBody(4096), jsonInput(slack), async (c) =>
+        c.json(await slackBot.save(c.req.valid("json"))),
+      )
+      .post("/slack/remove", async (c) => c.json(await slackBot.remove()));
   if (bot)
     routes
       .post("/telegram", limitBody(4096), jsonInput(telegram), async (c) =>

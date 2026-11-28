@@ -37,6 +37,17 @@ const platforms: Record<
     },
     private: (conversation) => conversation.startsWith("discord:@me:"),
   },
+  // "slack:<channel>:<thread ts>"; the ts is empty at a DM's top level.
+  slack: {
+    name: "Slack",
+    place: "thread",
+    parse(conversation) {
+      const [, channelId, threadId] = conversation.split(":");
+      return { channelId: channelId!, ...(threadId ? { threadId } : {}) };
+    },
+    // Direct-message channel IDs start with "D".
+    private: (conversation) => /^slack:D[A-Z0-9]+:/.test(conversation),
+  },
   // "telegram:<chat>"; private-user IDs are positive, groups negative.
   telegram: {
     name: "Telegram",

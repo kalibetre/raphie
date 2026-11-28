@@ -7,6 +7,7 @@ import { Row } from "./settings-group";
 
 const platformNames: Record<ChannelPlatform, string> = {
   discord: "Discord",
+  slack: "Slack",
   telegram: "Telegram",
 };
 
@@ -27,7 +28,7 @@ export function HomeChannelSettings() {
     <div className="channel-settings">
       <Row
         title="Home channel"
-        description="Scheduled updates go here, wherever the job was created. Use /home in a verified Discord or Telegram conversation to select it. Web chat has no /home command."
+        description="Scheduled updates go here, wherever the job was created. Use /home in a verified Discord, Slack or Telegram conversation to select it. Web chat has no /home command."
       />
       {!query.data ? (
         <p role="status" className="automation-note">

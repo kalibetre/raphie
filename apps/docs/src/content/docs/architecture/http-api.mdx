@@ -161,8 +161,9 @@ Secrets are write-only: keys and tokens are accepted but never returned.
 | GET       | `/skills/changes?call=&from=&to=`                         | The change a `save_skill` call made while it ran (404 if none)                |
 | GET       | `/skills/changes/:id`                                     | One change the bot made with `save_skill`                                     |
 | POST      | `/skills/changes/:id/undo`                                | Undo the bot's change (409 if the skill changed since)                        |
-| GET       | `/channels`                                               | Discord and Telegram settings for the bot                                     |
+| GET       | `/channels`                                               | Discord, Slack and Telegram settings for the bot                              |
 | POST      | `/channels/discord`, `/channels/discord/remove`           | Save or remove the Discord connection                                         |
+| POST      | `/channels/slack`, `/channels/slack/remove`               | Save or remove the Slack connection                                           |
 | POST      | `/channels/telegram`, `/channels/telegram/remove`         | Save or remove the Telegram connection                                        |
 | POST      | `/channels/telegram/pairing`, `/channels/telegram/unpair` | Create a pairing code; unpair a user                                          |
 | GET, POST | `/channels/home`                                          | Read destinations; select one with `{ id }`, or `{ id: null }` for web only   |

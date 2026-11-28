@@ -15,7 +15,7 @@ Raphie is a single-owner system. Authority comes from trusted adapters (a signed
   <Row label="Clients and channels">
     <Box title="Browser" tone="person" />
     <Box title="Desktop app" tone="person" />
-    <Box title="Telegram · Discord" tone="person" />
+    <Box title="Telegram · Discord · Slack" tone="person" />
   </Row>
   <Arrow />
   <Row>
@@ -58,7 +58,7 @@ The runtime also sets a strict Content Security Policy, sends `Cache-Control: no
 
 **Actors cannot be forged.** Each bot has its own issuer. An owner context is a frozen object the issuer records when it creates it, and operations reject any context the issuer did not create. A context cannot be built from JSON, replayed from another bot or chosen by a request. Web routes get one owner context per bot; channel bridges create one per message, bound to the conversation and the verified sender.
 
-**Channels enter at gate 4.** A Telegram message counts only when its sender has paired with the bot using a code from Settings. In groups, unverified text never reaches the model and tool approvals are web-only. Discord accepts only allow-listed users, and an approval must come from the same conversation. See [Telegram](/guides/telegram/).
+**Channels enter at gate 4.** A Telegram message counts only when its sender has paired with the bot using a code from Settings. In groups, unverified text never reaches the model and tool approvals are web-only. Discord and Slack accept only allow-listed users, and an approval must come from the same conversation. See [Telegram](/guides/telegram/) and [Slack](/guides/slack/).
 
 **Other bots are not the owner.** Any bot may [hand a task](/guides/handoffs/) to another of the owner's bots. The runtime delivers it, names the sending bot, and keeps the receiving session in Ask mode, so a brief can neither approve an action, turn on Full access, nor schedule a job, which would run under the chat's mode. Only the bot's chat with the owner, in a reply that stays private, can change what lasts: jobs, work items, the bot's instructions, personality and skills, and the owner's profile. Approvals there are once only: the runtime refuses a session grant, so approving one command never lets the other bot repeat it unasked. Only the sending bot can add to that session, and a handed-off task cannot be handed on.
 

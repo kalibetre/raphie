@@ -1,6 +1,6 @@
 ---
 title: Extensions and channels
-description: The three plugin surfaces and their limits, how replies reach Discord and Telegram without silent duplicates, and why schedules are durable tasks rather than timers.
+description: The three plugin surfaces and their limits, how replies reach Discord, Slack and Telegram without silent duplicates, and why schedules are durable tasks rather than timers.
 sidebar:
   order: 5
 ---
@@ -72,15 +72,15 @@ A UI plugin declares an ID, a version, `hostApiVersion: 1`, a name, a descriptio
 
 ## Channels
 
-A channel is an external messaging platform (Discord, Telegram); a client is an application (web, desktop). Both reach the same application operations and differ only in how identity is established and how output is delivered.
+A channel is an external messaging platform (Discord, Slack, Telegram); a client is an application (web, desktop). Both reach the same application operations and differ only in how identity is established and how output is delivered.
 
-|                 | Discord                                                          | Telegram                                                                                                         |
-| --------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Ingress         | Gateway events through the Chat SDK; HTTP webhooks are rejected  | Bot API long polling, with the update offset stored durably                                                      |
-| Who may talk    | Allow-listed user IDs, in the configured channel when one is set | Paired users; in groups, only by @mention or a `/command@BotName`                                                |
-| Idempotency key | The platform message ID                                          | The platform update                                                                                              |
-| Reply chunks    | 1,900 characters                                                 | 4,000 characters                                                                                                 |
-| Approvals       | Buttons on a card; the card is edited when the approval resolves | Inline buttons in a private chat; the message is edited when the approval resolves. Group approvals are web-only |
+|                 | Discord                                                          | Slack                                                               | Telegram                                                                                                         |
+| --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Ingress         | Gateway events through the Chat SDK; HTTP webhooks are rejected  | Socket Mode through the Chat SDK; no request URL                    | Bot API long polling, with the update offset stored durably                                                      |
+| Who may talk    | Allow-listed user IDs, in the configured channel when one is set | Allow-listed member IDs, in the configured channel when one is set  | Paired users; in groups, only by @mention or a `/command@BotName`                                                |
+| Idempotency key | The platform message ID                                          | The message timestamp; the SDK drops Slack's redeliveries           | The platform update                                                                                              |
+| Reply chunks    | 1,900 characters                                                 | 10,000 characters of Markdown                                       | 4,000 characters                                                                                                 |
+| Approvals       | Buttons on a card; the card is edited when the approval resolves | Block Kit buttons; the message is edited when the approval resolves | Inline buttons in a private chat; the message is edited when the approval resolves. Group approvals are web-only |
 
 A **channel binding** associates one external conversation with exactly one session. Message text can never name a session ID, and there is no operation that links a channel conversation to a web session. Each admitted channel turn freezes its **reply destination**, so a later configuration change cannot redirect a reply. Web turns have no destination; clients observe them instead.
 

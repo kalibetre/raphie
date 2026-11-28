@@ -1,34 +1,21 @@
 import type { ChannelSettings, DiscordChannel } from "@raphie/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import { useBackend } from "../../../infrastructure/http/backend-context";
 import { Button } from "../../../shared/ui/button";
 import { Input } from "../../../shared/ui/input";
+import { ChannelAlert } from "./channel-alert";
 import { HomeChannelSettings } from "./home-channel-settings";
 import { Group, Row } from "./settings-group";
 import { SettingsStatus } from "./settings-status";
+import { SlackSettings } from "./slack-settings";
 import { TelegramSettings } from "./telegram-settings";
 import { useSettingsGuard } from "./use-settings-guard";
 
 type Discord = DiscordChannel;
 
 type Channels = ChannelSettings;
-
-function ChannelAlert({ title, message }: { title: string; message: string }) {
-  return (
-    <div role="alert" className="channel-alert">
-      <span className="channel-alert-icon" aria-hidden="true">
-        <TriangleAlert size={18} />
-      </span>
-      <div className="channel-alert-copy">
-        <strong>{title}</strong>
-        <p>{message}</p>
-      </div>
-    </div>
-  );
-}
 
 export function ChannelSettings() {
   const { workspace } = useBackend();
@@ -314,6 +301,7 @@ export function ChannelSettings() {
           </form>
         </div>
       )}
+      <SlackSettings saved={query.data.slack ?? null} />
       <TelegramSettings saved={query.data.telegram ?? null} />
       <HomeChannelSettings />
     </Group>

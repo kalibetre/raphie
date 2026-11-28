@@ -1,0 +1,111 @@
+---
+title: Slack
+description: Talk to a bot from Slack in a direct message or a channel thread, set up the Slack app, and know what Slack can and cannot carry.
+sidebar:
+  order: 9
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+You can reach a bot through your own Slack app, in a direct message or by @mentioning it in a channel. Raphie connects to Slack through Socket Mode, an outbound WebSocket, so nothing on your machine needs to be reachable from the internet.
+
+Only Slack members whose IDs you list can talk to the bot. Messages from anyone else are ignored.
+
+## Set up
+
+<Steps>
+
+1. Open [api.slack.com/apps](https://api.slack.com/apps), choose **Create New App**, then **From a manifest**, pick your workspace, and paste the [manifest below](#app-manifest).
+2. Under **Basic Information**, in **App-Level Tokens**, choose **Generate Token and Scopes**, add the `connections:write` scope, and copy the token. It starts with `xapp-`.
+3. Under **Install App**, install the app to your workspace and copy the **Bot User OAuth Token**. It starts with `xoxb-`.
+4. Find your member ID: in Slack, open your profile, choose the **⋮** menu, then **Copy member ID**. It looks like `U012AB3CD`.
+5. In Raphie, open **Settings**, choose the bot, then **Channels**. Under **Slack**, choose **Connect**, paste both tokens, add your member ID, and choose **Save and connect**.
+6. Open the app in Slack's sidebar and send it a direct message. It goes to the bot's [chat](/guides/conversations/), the same one you see in the web workspace and the desktop app.
+
+</Steps>
+
+Raphie checks the bot token with Slack, encrypts both tokens, and opens the Socket Mode connection. Slack reconnects it on its own after a network drop.
+
+One Slack app can serve one Raphie bot. Slack shares a Socket Mode app's events across every open connection, so connecting it to a second bot is refused. Create one Slack app per Raphie bot.
+
+| Setting                | Effect                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Allowed member IDs** | Only these members can message the bot or press its buttons. An empty list lets nobody in.              |
+| **Channel ID**         | Optional. When set, the bot answers only in that channel and its threads, and not in direct messages.   |
+| **Remove Slack**       | Disconnects and deletes both tokens and the settings for this bot. The Slack app itself stays in Slack. |
+
+### App manifest
+
+```yaml
+display_information:
+  name: Raphie
+features:
+  app_home:
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Raphie
+    always_online: true
+  slash_commands:
+    - command: /home
+      description: Send this bot's scheduled updates here
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - channels:history
+      - chat:write
+      - commands
+      - files:write
+      - groups:history
+      - im:history
+      - users:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  interactivity:
+    is_enabled: true
+  socket_mode_enabled: true
+```
+
+Change `name` and `display_name` to your bot's name. Each Raphie bot needs its own app.
+
+## Direct messages and channels
+
+Your direct message with the app is the bot's one chat with you: what you write in Slack shows in the web workspace too, and each reply goes back where its message came from.
+
+In a channel, invite the app (`/invite @Raphie`) and @mention it. Raphie replies in a thread, and later messages in that thread reach the bot without another mention. Each thread has its own session.
+
+:::caution[A channel shares the bot's memory]
+A thread's session is separate, but the bot's memory and tools are shared across all its sessions. Treat everything the bot says in a channel, including scheduled output, as visible to every member of it.
+:::
+
+## Approvals, questions and home
+
+A tool approval shows the server and tool with **Approve once** and **Decline** buttons, and the exact arguments as an attached JSON file. Only the member who started the turn can decide in Slack; you can always decide in the web workspace instead. The first decision wins.
+
+When a bot needs you to decide something, its [question](/guides/conversations/#questions-and-approvals) arrives with one button per answer. Only the member who started the turn can answer there.
+
+To send [scheduled job](/guides/schedules/) results to Slack, run `/home` in the direct message or channel. Slack shows the confirmation only to you.
+
+## Limits
+
+| Topic          | Behaviour                                                                                           |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| Message length | Replies are split into chunks of up to 10,000 characters.                                           |
+| Formatting     | Replies are sent as Markdown, which Slack renders.                                                  |
+| Attachments    | Files sent to the bot are refused with a reply saying only text is supported.                       |
+| Send failures  | A failed or interrupted send leaves that chunk **uncertain**; it is not resent, in case it arrived. |
+| Restarts       | Threads you were following without a mention need a fresh @mention after Raphie restarts.           |
+
+## Security notes
+
+- **The tokens are the app.** They are encrypted at rest and never shown again, but anyone with the Raphie host account and its credential key can use them. See [credentials](/operate/credentials/).
+- **Slack sees your messages.** Prompts, replies and approval arguments pass through Slack's servers and follow your workspace's retention settings.
+- **An allowed member can approve actions.** List only your own member IDs, and turn on two-factor authentication in Slack.
+- **Traffic is outbound only.** Raphie connects to `slack.com` over HTTPS and a WebSocket. It needs no request URL or signing secret.

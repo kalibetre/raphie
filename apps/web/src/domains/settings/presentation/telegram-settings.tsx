@@ -72,6 +72,7 @@ export function TelegramSettings({ saved }: { saved: TelegramChannel | null }) {
   const update = (message: string) => (result: { telegram?: unknown }) => {
     client.setQueryData<ChannelSettings>(["channels"], (current) => ({
       discord: current?.discord ?? null,
+      slack: current?.slack ?? null,
       telegram: (result as ChannelSettings).telegram,
     }));
     setMessage(message);

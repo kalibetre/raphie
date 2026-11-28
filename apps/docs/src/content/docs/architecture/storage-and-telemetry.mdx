@@ -74,22 +74,22 @@ Ownership is taken before any product store is opened, which is what prevents tw
 
 </FileTree>
 
-| Store                                | Scope    | Contents                                                                                     | Notes                                                      |
-| ------------------------------------ | -------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `runtime-owner.sqlite`               | Host     | Owning process ID and token                                                                  | Liveness-checked ownership lock                            |
-| `workspace-identity.json`            | Host     | Stable installation ID                                                                       | Restore it from backup; never reset it                     |
-| `bots.sqlite`                        | Host     | Bot registry, profile revisions and the owner profile                                        | `synchronous=FULL`                                         |
-| `traces.sqlite`                      | Host     | OTLP trace spans                                                                             | Best-effort; may be lost                                   |
-| `auth.sqlite`, `auth.secret`         | Web host | Administrator, sessions, passkeys, devices; the session signing secret                       | Only the web host opens these                              |
-| `gateway.sqlite`                     | Per bot  | Pi Durable journal and every `raphie.*` document                                             | One writer connection, WAL                                 |
-| `settings.sqlite`                    | Per bot  | Provider connections, default model, encrypted keys; the telemetry switch (default bot only) | `secure_delete` on, rollback journal (not WAL)             |
-| `memory.sqlite`                      | Per bot  | Memory configuration, built-in evidence, FTS5 indexes                                        | `secure_delete` on, WAL                                    |
-| `mcp.sqlite`                         | Per bot  | Encrypted MCP connections, tokens and OAuth grants                                           | `secure_delete` on                                         |
-| `channels.sqlite`, `telegram.sqlite` | Per bot  | Encrypted Discord and Telegram configuration; Telegram's polling position                    |                                                            |
-| `files/`                             | Per bot  | Content-addressed upload originals (SHA-256 IDs)                                             | Originals stay downloadable after the working copy changes |
-| `workspace/checkpoint.sqlite`        | Per bot  | Sandbox settings, just-bash checkpoint, execution receipts                                   | Outside the container mount                                |
-| `workspace/container.sqlite`         | Per bot  | Container lease and command journal                                                          | Outside the container mount                                |
-| `workspace/files/`                   | Per bot  | The disk view of the bot's `/workspace`                                                      | The only path a container sees                             |
+| Store                                                | Scope    | Contents                                                                                     | Notes                                                      |
+| ---------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `runtime-owner.sqlite`                               | Host     | Owning process ID and token                                                                  | Liveness-checked ownership lock                            |
+| `workspace-identity.json`                            | Host     | Stable installation ID                                                                       | Restore it from backup; never reset it                     |
+| `bots.sqlite`                                        | Host     | Bot registry, profile revisions and the owner profile                                        | `synchronous=FULL`                                         |
+| `traces.sqlite`                                      | Host     | OTLP trace spans                                                                             | Best-effort; may be lost                                   |
+| `auth.sqlite`, `auth.secret`                         | Web host | Administrator, sessions, passkeys, devices; the session signing secret                       | Only the web host opens these                              |
+| `gateway.sqlite`                                     | Per bot  | Pi Durable journal and every `raphie.*` document                                             | One writer connection, WAL                                 |
+| `settings.sqlite`                                    | Per bot  | Provider connections, default model, encrypted keys; the telemetry switch (default bot only) | `secure_delete` on, rollback journal (not WAL)             |
+| `memory.sqlite`                                      | Per bot  | Memory configuration, built-in evidence, FTS5 indexes                                        | `secure_delete` on, WAL                                    |
+| `mcp.sqlite`                                         | Per bot  | Encrypted MCP connections, tokens and OAuth grants                                           | `secure_delete` on                                         |
+| `channels.sqlite`, `slack.sqlite`, `telegram.sqlite` | Per bot  | Encrypted Discord, Slack and Telegram configuration; Telegram's polling position             |                                                            |
+| `files/`                                             | Per bot  | Content-addressed upload originals (SHA-256 IDs)                                             | Originals stay downloadable after the working copy changes |
+| `workspace/checkpoint.sqlite`                        | Per bot  | Sandbox settings, just-bash checkpoint, execution receipts                                   | Outside the container mount                                |
+| `workspace/container.sqlite`                         | Per bot  | Container lease and command journal                                                          | Outside the container mount                                |
+| `workspace/files/`                                   | Per bot  | The disk view of the bot's `/workspace`                                                      | The only path a container sees                             |
 
 Provider keys, channel configuration and MCP credentials are encrypted with AES-256-GCM under a master key held in the OS credential store or, when `RAPHIE_CREDENTIAL_KEY_FILE` is set, in an owner-only (`0600`, in a `0700` folder) key file. The runtime refuses to start if that file is inside the data directory. See [credentials](/operate/credentials/) and [security](/architecture/security/).
 
