@@ -109,7 +109,7 @@ export function JobSettings() {
 
   async function change(
     id: string,
-    action: "enable" | "disable" | "remove" | "run",
+    action: "enable" | "disable" | "remove" | "run" | "confirm",
   ) {
     setError("");
     setMessage("");
@@ -149,7 +149,7 @@ export function JobSettings() {
             <Plus size={15} /> Create job
           </Button>
         }
-        note="Every run posts in the bot's chat, whether the job was made here or in the chat. The runtime must be running; tool actions still need approval."
+        note="Every run posts in the bot's chat, whether the job was made here or in the chat. The runtime must be running; runs follow the chat's permission mode."
       >
         {data.data.items.length ? (
           data.data.items.map((job) => (

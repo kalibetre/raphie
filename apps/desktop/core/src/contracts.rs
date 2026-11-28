@@ -2039,6 +2039,10 @@ pub struct ScheduledJob {
     pub last_status: Option<LastStatus>,
     #[serde(default)]
     pub last_run: Option<JobRun>,
+    /// Whether the owner made or confirmed it. A job saved before that was
+    /// recorded asks before each action until the owner confirms it.
+    #[serde(default)]
+    pub confirmed: bool,
 }
 
 /// Where a run stands.

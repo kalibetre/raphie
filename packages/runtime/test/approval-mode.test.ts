@@ -8,8 +8,12 @@ import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 
 import { Gateway } from "../src/bootstrap/agent-runtime.ts";
 import { Chats } from "../src/domains/conversations/infrastructure/pi-conversation-service.ts";
-import { BotJobs } from "../src/domains/schedules/infrastructure/bot-jobs.ts";
+import {
+  BotJobs,
+  Jobs,
+} from "../src/domains/schedules/infrastructure/bot-jobs.ts";
 import { createScheduleTools } from "../src/domains/schedules/infrastructure/schedule-tools.ts";
+import { WorkItems } from "../src/domains/work/infrastructure/work-store.ts";
 import { chatModel } from "./chat-model.ts";
 
 async function until(check: () => Promise<boolean>) {
@@ -133,6 +137,61 @@ test("a work item's session reports the chat's mode and can't be set on its own"
     expect(
       gateway.toolApprovals.approvalMode("owner", "work-session", "ask"),
     ).rejects.toThrow("follows the chat's permission mode");
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("a job saved before it was known who made it asks until the owner confirms it", async () => {
+  const { gateway, actor, jobs, done } = await bot(() => undefined);
+  try {
+    const hello = await gateway.sessions.submit(actor, {
+      eventId: "hi",
+      text: "hello",
+    });
+    await until(async () =>
+      (await gateway.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    await gateway.toolApprovals.approvalMode(
+      "owner",
+      hello.sessionId,
+      "full-access",
+    );
+    const [job] = await jobs.add({
+      name: "Brief",
+      prompt: "Summarize my morning.",
+      everyMinutes: 1440,
+      firstRunAt: Date.now() + 3_600_000,
+    });
+    expect(job!.confirmed).toBe(true);
+    // As saved by an earlier version: nothing says who made it. Its run
+    // goes to its work item's own session.
+    await gateway.root.commit(async (tx) => {
+      const stored = (await tx.doc(Jobs)).items.find((j) => j.id === job!.id)!;
+      delete stored.confirmed;
+      const item = (await tx.doc(WorkItems)).items.find(
+        (i) => i.origin?.kind === "job" && i.origin.jobId === job!.id,
+      )!;
+      const created = await tx.createConversation({
+        ownership: { kind: "ownerless" },
+      });
+      (await tx.doc(Chats)).conversations.push({
+        id: created.id,
+        sessionId: "job-session",
+        title: "Brief",
+        createdAt: Date.now(),
+        work: item.id,
+      });
+    }, context);
+    expect((await jobs.read())[0]!.confirmed).toBe(false);
+    expect(
+      await gateway.toolApprovals.approvalMode("owner", "job-session"),
+    ).toBe("ask");
+    await jobs.change(job!.id, "confirm");
+    expect((await jobs.read())[0]!.confirmed).toBe(true);
+    expect(
+      await gateway.toolApprovals.approvalMode("owner", "job-session"),
+    ).toBe("full-access");
   } finally {
     await done();
   }

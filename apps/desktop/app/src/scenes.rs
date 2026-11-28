@@ -871,7 +871,7 @@ pub fn settings_activity_loading(ui: &mut Ui) {
 
 /// Made-up jobs in the states a card can show: recurring and active with a
 /// finished run, a one-time reminder that failed, and a paused job that
-/// never ran.
+/// never ran, saved before Raphie recorded who makes a job.
 pub fn scheduled_jobs() -> Vec<ScheduledJob> {
     serde_json::from_value(json!([
         {
@@ -879,7 +879,7 @@ pub fn scheduled_jobs() -> Vec<ScheduledJob> {
             "prompt": "Summarize the project's open tasks and suggest today's priorities.",
             "everyMinutes": 1440, "firstRunAt": 1_794_200_400_000_i64,
             "enabled": true, "nextRunAt": 1_794_718_800_000_i64,
-            "lastRunAt": 1_794_632_400_000_i64, "lastStatus": "submitted",
+            "lastRunAt": 1_794_632_400_000_i64, "lastStatus": "submitted", "confirmed": true,
             "lastRun": {
                 "id": "run-104", "jobId": "job-brief", "name": "Morning project brief",
                 "scheduledFor": 1_794_632_400_000_i64, "startedAt": 1_794_632_400_000_i64,
@@ -893,7 +893,7 @@ pub fn scheduled_jobs() -> Vec<ScheduledJob> {
             "prompt": "Remind me to renew the domain before it lapses.",
             "everyMinutes": null, "firstRunAt": 1_794_546_000_000_i64,
             "enabled": false, "nextRunAt": 1_794_546_000_000_i64,
-            "lastRunAt": 1_794_546_000_000_i64, "lastStatus": "failed",
+            "lastRunAt": 1_794_546_000_000_i64, "lastStatus": "failed", "confirmed": true,
             "lastRun": {
                 "id": "run-101", "jobId": "job-renewal", "name": "Renew the domain",
                 "scheduledFor": 1_794_546_000_000_i64, "startedAt": 1_794_546_000_000_i64,

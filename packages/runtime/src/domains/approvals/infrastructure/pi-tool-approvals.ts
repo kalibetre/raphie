@@ -20,6 +20,8 @@ import {
   isSharedTelegramDestination,
 } from "../../channels/domain/binding.ts";
 import { Chats } from "../../conversations/infrastructure/pi-conversation-service.ts";
+import { jobConfirmed } from "../../schedules/infrastructure/bot-jobs.ts";
+import { WorkItems } from "../../work/infrastructure/work-store.ts";
 import { InputError } from "./pi-file-approvals.ts";
 
 type Grant = {
@@ -52,7 +54,8 @@ export const ToolApprovals = defineDoc<ApprovalState>({
 /**
  * The approval mode in effect in a conversation. A work item's own session
  * runs the bot's background work for the owner, so it follows the bot's
- * chat. A task from another bot always asks.
+ * chat, except a job the owner hasn't confirmed. A task from another bot
+ * always asks.
  */
 export async function commandMode(
   tx: Tx,
@@ -62,6 +65,13 @@ export async function commandMode(
   const conversations = (await tx.doc(Chats)).conversations;
   const conversation = conversations.find((c) => c.id === conversationId);
   if (conversation?.handedOffBy) return "ask";
+  // A job's run follows the chat only once the owner stands behind the job.
+  const origin = conversation?.work
+    ? (await tx.doc(WorkItems)).items.find((i) => i.id === conversation.work)
+        ?.origin
+    : undefined;
+  if (origin?.kind === "job" && !(await jobConfirmed(tx, origin.jobId)))
+    return "ask";
   const chat = conversation?.work
     ? conversations.find((c) => c.chat)
     : undefined;

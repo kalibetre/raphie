@@ -42,7 +42,18 @@ type Submission = { eventId: string; text: string; sessionId?: string | null };
 const jobItem = (items: WorkItem[] | undefined, id: string) =>
   items?.find((i) => i.origin?.kind === "job" && i.origin.jobId === id);
 
-type StoredJob = ScheduledJob & { taskId: TaskId };
+/** Jobs saved before `confirmed` was recorded have none: not confirmed. */
+type StoredJob = Omit<ScheduledJob, "confirmed" | "lastRun"> & {
+  confirmed?: boolean;
+  taskId: TaskId;
+};
+
+/** Whether job `id` runs with the chat's mode, or asks before each action. */
+export async function jobConfirmed(tx: Tx, id: string) {
+  return (
+    (await tx.doc(Jobs)).items.find((j) => j.id === id)?.confirmed === true
+  );
+}
 
 export const Jobs = defineDoc<{ items: StoredJob[] }>({
   kind: "raphie.scheduled-jobs",
@@ -107,6 +118,7 @@ export class BotJobs {
       (await this.options.harness.snapshot(Jobs, context))?.items ?? []
     ).map(({ taskId: _, ...job }) => ({
       ...job,
+      confirmed: job.confirmed === true,
       lastRun: runs.findLast((run) => run.jobId === job.id),
     }));
   }
@@ -167,7 +179,7 @@ export class BotJobs {
     input: SaveScheduledJob,
     id: string = crypto.randomUUID(),
     by: WorkActor = "bot",
-  ): Promise<ScheduledJob> {
+  ): Promise<StoredJob> {
     const jobs = await tx.doc(Jobs);
     const existing = jobs.items.find((job) => job.id === id);
     if (existing) return existing;
@@ -190,6 +202,8 @@ export class BotJobs {
       nextRunAt: input.firstRunAt,
       lastRunAt: null,
       lastStatus: null,
+      // Only the owner's chat or app can make one.
+      confirmed: true,
     };
     jobs.items.push(job);
     // Every job is a work item, so "what's going on?" includes it.
@@ -205,7 +219,8 @@ export class BotJobs {
     const job = (await tx.doc(Jobs)).items.find((item) => item.id === id);
     if (!job) throw new InputError("Scheduled job not found.", 404);
     const retiredTaskId = job.taskId;
-    Object.assign(job, patch);
+    // Only the owner's chat can change one, and what it saves is theirs.
+    Object.assign(job, patch, { confirmed: true });
     if (patch.firstRunAt !== undefined) {
       job.nextRunAt = patch.firstRunAt;
       job.enabled = patch.enabled ?? true;
@@ -237,7 +252,10 @@ export class BotJobs {
     await this.options.harness.abortTask(taskId, context);
   }
 
-  async change(id: string, action: "enable" | "disable" | "remove" | "run") {
+  async change(
+    id: string,
+    action: "enable" | "disable" | "remove" | "run" | "confirm",
+  ) {
     let abort: TaskId | undefined;
     await this.gate.run(async () => {
       if (action === "run" && (await this.options.busy()))
@@ -257,6 +275,8 @@ export class BotJobs {
             "This job is still running. Wait for it to finish, or cancel the run under Work.",
             409,
           );
+        // Turning a job back on is the owner standing behind it too.
+        if (action === "confirm" || action === "enable") job.confirmed = true;
         if (action === "run") {
           await tx.createTask(
             this.task,
@@ -290,7 +310,11 @@ export class BotJobs {
     return this.read();
   }
 
-  private async markWaiting(job: ScheduledJob, id: string, at: number) {
+  private async markWaiting(
+    job: Pick<ScheduledJob, "id" | "name">,
+    id: string,
+    at: number,
+  ) {
     const current = (
       await this.options.harness.snapshot(JobRuns, context)
     )?.items.find((run) => run.id === id);
