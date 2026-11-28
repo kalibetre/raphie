@@ -219,8 +219,10 @@ export class BotJobs {
     const job = (await tx.doc(Jobs)).items.find((item) => item.id === id);
     if (!job) throw new InputError("Scheduled job not found.", 404);
     const retiredTaskId = job.taskId;
-    // Only the owner's chat can change one, and what it saves is theirs.
-    Object.assign(job, patch, { confirmed: true });
+    Object.assign(job, patch);
+    // Only the owner's chat can change one, but a new time or a pause
+    // doesn't show the owner the prompt: only rewriting it confirms it.
+    if (patch.prompt !== undefined) job.confirmed = true;
     if (patch.firstRunAt !== undefined) {
       job.nextRunAt = patch.firstRunAt;
       job.enabled = patch.enabled ?? true;
@@ -275,8 +277,7 @@ export class BotJobs {
             "This job is still running. Wait for it to finish, or cancel the run under Work.",
             409,
           );
-        // Turning a job back on is the owner standing behind it too.
-        if (action === "confirm" || action === "enable") job.confirmed = true;
+        if (action === "confirm") job.confirmed = true;
         if (action === "run") {
           await tx.createTask(
             this.task,
@@ -433,7 +434,7 @@ export class BotJobs {
               return;
             }
             // The job's previous run, still going in its item, holds this one back.
-            const item = jobItem(
+            let item = jobItem(
               (await runtime.snapshot(WorkItems, ctx))?.items,
               job.id,
             );
@@ -474,8 +475,17 @@ export class BotJobs {
                 run.startedAt = Date.now();
                 run.late = run.startedAt - run.scheduledFor > LATE_AFTER_MS;
               }
+              // A job saved before jobs had items gets one now: its run must
+              // go to the item's own session, never into the chat, where it
+              // would act under the chat's mode whether confirmed or not.
+              if (!jobItem((await tx.doc(WorkItems)).items, job.id))
+                await syncJobItem(tx, job.id, job, "bot");
               return { status: "running", checkpoint: task.state.checkpoint };
             }, ctx);
+            item = jobItem(
+              (await runtime.snapshot(WorkItems, ctx))?.items,
+              job.id,
+            );
             // The run goes to the job's work item's own session; only its
             // result is posted to the chat. A retry goes where the first
             // attempt went, even if the item has a session by now.

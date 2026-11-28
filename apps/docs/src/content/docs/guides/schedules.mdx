@@ -112,7 +112,7 @@ Timing is durable: jobs survive restarts without your doing anything.
 
 A scheduled prompt's tool calls follow the chat's permission mode: on **Ask** they need approval like any other; on **Full access** they run without asking. Only the bot's chat can create, change or delete a job, and only in a reply that stays private, so a group or a task from another bot can never schedule work that runs unasked.
 
-Jobs saved before Raphie recorded who makes a job may have come from a group or another bot. Their runs ask before each action, whatever the chat's mode, until you press **Confirm** on the job's card. Resuming a paused job, or changing it from the chat, confirms it too.
+Jobs saved before Raphie recorded who makes a job may have come from a group or another bot. Their runs ask before each action, whatever the chat's mode, until you press **Confirm** on the job's card. Rewriting its prompt from the chat confirms it too; a new time, a pause or **Resume** does not, since none of them shows you what it will run.
 
 ## Limits
 

@@ -5,10 +5,10 @@ import type {
   Turn,
 } from "@raphie/contracts";
 
-/** A receipt of a background question the owner answered, or that lapsed. */
 /** What placing a reply needs of its turn. */
 type SaidTurn = Pick<Turn, "id" | "createdAt" | "work" | "scheduled">;
 
+/** A receipt of a background question the owner answered, or that lapsed. */
 export type Receipt = { ask: SessionAsk; title: string; at: number };
 
 /**

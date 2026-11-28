@@ -196,3 +196,93 @@ test("a job saved before it was known who made it asks until the owner confirms 
     await done();
   }
 }, 30_000);
+
+test("an older job with no work item runs in an item of its own, not the chat, and asks", async () => {
+  const { gateway, actor, jobs, done } = await bot(() => undefined);
+  try {
+    const hello = await gateway.sessions.submit(actor, {
+      eventId: "hi",
+      text: "hello",
+    });
+    await until(async () =>
+      (await gateway.chats.state()).turns.every((t) => t.status === "done"),
+    );
+    await gateway.toolApprovals.approvalMode(
+      "owner",
+      hello.sessionId,
+      "full-access",
+    );
+    const [job] = await jobs.add({
+      name: "Digest",
+      prompt: "Summarize the week.",
+      everyMinutes: 10080,
+      // Due shortly: a timed run, since Run now remakes the item itself.
+      firstRunAt: Date.now() + 1_000,
+    });
+    // As saved before jobs had work items, or who made them was recorded.
+    await gateway.root.commit(async (tx) => {
+      delete (await tx.doc(Jobs)).items.find((j) => j.id === job!.id)!
+        .confirmed;
+      const work = await tx.doc(WorkItems);
+      work.items = work.items.filter(
+        (i) => !(i.origin?.kind === "job" && i.origin.jobId === job!.id),
+      );
+    }, context);
+    await until(async () =>
+      (await gateway.chats.state()).turns.some((t) => t.scheduled),
+    );
+    const state = await gateway.chats.state();
+    const run = state.turns.find((t) => t.scheduled)!;
+    const session = state.conversations.find(
+      (c) => c.id === run.conversationId,
+    )!;
+    expect(session.chat).toBeUndefined();
+    expect(session.work).toBeDefined();
+    expect(
+      await gateway.toolApprovals.approvalMode("owner", session.sessionId),
+    ).toBe("ask");
+  } finally {
+    await done();
+  }
+}, 30_000);
+
+test("only Confirm or a new prompt confirms an older job, not a new time, a pause or Resume", async () => {
+  const { gateway, jobs, done } = await bot(() => undefined);
+  try {
+    const [job] = await jobs.add({
+      name: "Digest",
+      prompt: "Summarize the week.",
+      everyMinutes: 10080,
+      firstRunAt: Date.now() + 3_600_000,
+    });
+    const unconfirm = () =>
+      gateway.root.commit(async (tx) => {
+        delete (await tx.doc(Jobs)).items.find((j) => j.id === job!.id)!
+          .confirmed;
+      }, context);
+    const confirmed = async () =>
+      (await jobs.read()).find((j) => j.id === job!.id)!.confirmed;
+    await unconfirm();
+    for (const patch of [
+      { enabled: false },
+      { firstRunAt: Date.now() + 7_200_000 },
+    ])
+      await gateway.root.commit(
+        (tx) => jobs.update(tx, job!.id, patch),
+        context,
+      );
+    expect(await confirmed()).toBe(false);
+    await jobs.change(job!.id, "enable");
+    expect(await confirmed()).toBe(false);
+    await gateway.root.commit(
+      (tx) => jobs.update(tx, job!.id, { prompt: "Summarize the month." }),
+      context,
+    );
+    expect(await confirmed()).toBe(true);
+    await unconfirm();
+    await jobs.change(job!.id, "confirm");
+    expect(await confirmed()).toBe(true);
+  } finally {
+    await done();
+  }
+}, 30_000);

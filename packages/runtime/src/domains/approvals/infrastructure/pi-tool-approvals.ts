@@ -66,6 +66,7 @@ export async function commandMode(
   const conversation = conversations.find((c) => c.id === conversationId);
   if (conversation?.handedOffBy) return "ask";
   // A job's run follows the chat only once the owner stands behind the job.
+  // A job removed mid-run counts as unconfirmed: its run asks.
   const origin = conversation?.work
     ? (await tx.doc(WorkItems)).items.find((i) => i.id === conversation.work)
         ?.origin

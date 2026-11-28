@@ -541,10 +541,7 @@ async fn change_job(
                 host.jobs.remove(index);
             }
             Some("disable") => host.jobs[index]["enabled"] = json!(false),
-            Some("enable") => {
-                host.jobs[index]["enabled"] = json!(true);
-                host.jobs[index]["confirmed"] = json!(true);
-            }
+            Some("enable") => host.jobs[index]["enabled"] = json!(true),
             Some("confirm") => host.jobs[index]["confirmed"] = json!(true),
             Some("run") => {
                 let run = json!({
