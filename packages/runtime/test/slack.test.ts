@@ -15,6 +15,7 @@ import {
 } from "../src/domains/channels/domain/binding.ts";
 import {
   BotSlack,
+  type SlackAdapters,
   SlackConnections,
 } from "../src/domains/channels/infrastructure/bot-slack.ts";
 import {
@@ -24,6 +25,7 @@ import {
 import {
   createSlackBridge,
   resolveSlackIdentity,
+  slackAppId,
   slackAuthorized,
 } from "../src/infrastructure/slack/bridge.ts";
 import { chatModel } from "./chat-model.ts";
@@ -207,12 +209,49 @@ test("Slack identity comes from auth.test and rejects anything else", async () =
     teamName: "Fixture",
     botUserId: "U0BOT",
   });
+  // The app comes from auth.test, or else from the bot's own record.
+  const named = async () =>
+    Response.json({
+      ok: true,
+      team_id: "T0TEAM",
+      user_id: "U0BOT",
+      app_id: "A0APP",
+    });
+  assert.equal(
+    (await resolveSlackIdentity("xoxb-fixture", named)).appId,
+    "A0APP",
+  );
+  const asked: string[] = [];
+  const viaBot = async (input: Parameters<typeof fetch>[0]) => {
+    const url =
+      input instanceof Request ? input.url : (input as string | URL).toString();
+    asked.push(url);
+    return url.includes("bots.info")
+      ? Response.json({ ok: true, bot: { id: "B0BOT", app_id: "A0OTHER" } })
+      : Response.json({
+          ok: true,
+          team_id: "T0TEAM",
+          user_id: "U0BOT",
+          bot_id: "B0BOT",
+        });
+  };
+  assert.equal(
+    (await resolveSlackIdentity("xoxb-fixture", viaBot)).appId,
+    "A0OTHER",
+  );
+  assert.ok(asked.some((url) => url.endsWith("bots.info?bot=B0BOT")));
   await assert.rejects(
     resolveSlackIdentity("xoxb-fixture", async () =>
       Response.json({ ok: false, error: "invalid_auth" }),
     ),
     /Invalid Slack identity/,
   );
+});
+
+test("An app-level token names its app", () => {
+  assert.equal(slackAppId("xapp-1-A0APP123-4567890123-abcdef0123"), "A0APP123");
+  assert.equal(slackAppId("xapp-private-app-token"), undefined);
+  assert.equal(slackAppId("xoxb-1-A0APP123-1-x"), undefined);
 });
 
 test("Slack replies are Markdown in chunks Slack accepts", async () => {
@@ -253,6 +292,7 @@ test("Slack over Socket Mode: allow-listed DMs reach the bot, replies post back,
   );
   const directory = await mkdtemp(join(tmpdir(), "raphie-slack-"));
   const app = await Gateway.open({ directory, ...chatModel() });
+  const follows: string[] = [];
   const bridge = createSlackBridge(app, {
     botToken: "xoxb-fixture-token",
     appToken: "xapp-fixture-token",
@@ -260,9 +300,12 @@ test("Slack over Socket Mode: allow-listed DMs reach the bot, replies post back,
     botUserId: "U0BOT",
     allowedUserIds: [OWNER],
     apiUrl: slack.apiUrl,
+    // A thread the bot followed before a restart.
+    followed: ["slack:C0CHAN:1699999999.000001"],
+    onFollow: (thread) => follows.push(thread),
   });
   try {
-    await bridge.chat.initialize();
+    await bridge.connect();
     await until(slack.connected, "Socket Mode connection");
 
     const denied = slack.send(
@@ -377,6 +420,43 @@ test("Slack over Socket Mode: allow-listed DMs reach the bot, replies post back,
     assert.equal(
       mentioned.replyTo?.conversation,
       "slack:C0CHAN:1700000000.000003",
+    );
+    // The mentioned thread is followed, and remembered across restarts.
+    await until(
+      () => follows.includes("slack:C0CHAN:1700000000.000003"),
+      "the thread followed",
+    );
+
+    // A thread remembered from before reaches the bot without a mention.
+    const threadReply = slack.send("events_api", {
+      type: "event_callback",
+      team_id: "T0TEAM",
+      api_app_id: "A0APP",
+      event_id: "EvFollowed",
+      event_time: 1700000000,
+      event: {
+        type: "message",
+        channel: "C0CHAN",
+        channel_type: "channel",
+        user: OWNER,
+        text: "and one more thing",
+        ts: "1700000000.000004",
+        thread_ts: "1699999999.000001",
+      },
+    });
+    await until(
+      () => slack.acks.includes(threadReply),
+      "ack of the thread reply",
+    );
+    await until(
+      async () => (await app.chats.state()).turns.length === 3,
+      "the remembered thread's turn",
+    );
+    const followed = (await app.chats.state()).turns.at(-1)!;
+    assert.equal(followed.text, "and one more thing");
+    assert.equal(
+      followed.replyTo?.conversation,
+      "slack:C0CHAN:1699999999.000001",
     );
 
     const home = slack.send("slash_commands", {
@@ -552,6 +632,87 @@ test("An unreachable Slack never holds up startup, and a save gives up", async (
     assert.ok(closed >= 2);
   } finally {
     await bot.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("One Slack app serves one bot, whatever bot token each bot is given", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "raphie-slack-app-"));
+  const store = keyStore();
+  const followed: string[][] = [];
+  let follow: ((thread: string) => void) | undefined;
+  // Each bot token is a different bot user; the app comes from the token.
+  const adapters: SlackAdapters = {
+    identity: async (botToken) => ({
+      connectionId: `slack:T0TEAM:${botToken.includes("two") ? "U0TWO" : "U0ONE"}`,
+      teamName: "Fixture",
+      botUserId: botToken.includes("two") ? "U0TWO" : "U0ONE",
+      appId: botToken.includes("other") ? "A0OTHER" : "A0APP",
+    }),
+    create: ((_app, config) => {
+      followed.push(config.followed ?? []);
+      follow = config.onFollow;
+      return {
+        connect: async () => {},
+        close: async () => {},
+        flush: async () => {},
+      } as unknown as ReturnType<typeof createSlackBridge>;
+    }) as typeof createSlackBridge,
+  };
+  const connections = new SlackConnections();
+  const app = {} as ChannelServices;
+  const appToken = "xapp-1-A0APP-1700000000000-secret";
+  const path = join(directory, "one.sqlite");
+  let one = await BotSlack.open(path, app, store, adapters, connections);
+  const two = await BotSlack.open(
+    join(directory, "two.sqlite"),
+    app,
+    store,
+    adapters,
+    connections,
+  );
+  try {
+    await one.save({ botToken: "xoxb-one", appToken, allowedUserIds: [OWNER] });
+    // A different bot token, but the same app-level token: refused.
+    await assert.rejects(
+      two.save({ botToken: "xoxb-two", appToken, allowedUserIds: [OWNER] }),
+      /already connected to another bot/,
+    );
+    // A bot token from another app than the app-level token: refused.
+    await assert.rejects(
+      two.save({
+        botToken: "xoxb-two-other",
+        appToken,
+        allowedUserIds: [OWNER],
+      }),
+      /different Slack apps/,
+    );
+    assert.equal(two.read().slack, null);
+
+    // Followed threads survive a restart, newest first, and go with Remove.
+    follow!("slack:C0CHAN:1.000001");
+    await Bun.sleep(2);
+    follow!("slack:C0CHAN:2.000002");
+    await one.close();
+    one = await BotSlack.open(path, app, store, adapters, connections);
+    assert.deepEqual(followed.at(-1), [
+      "slack:C0CHAN:2.000002",
+      "slack:C0CHAN:1.000001",
+    ]);
+    // A restarted bot holds its app again; the other still cannot take it.
+    assert.equal(two.read().slack, null);
+    await assert.rejects(
+      two.save({ botToken: "xoxb-two", appToken, allowedUserIds: [OWNER] }),
+      /already connected to another bot/,
+    );
+    await one.remove();
+    await one.close();
+    one = await BotSlack.open(path, app, store, adapters, connections);
+    await one.save({ botToken: "xoxb-one", appToken, allowedUserIds: [OWNER] });
+    assert.deepEqual(followed.at(-1), []);
+  } finally {
+    await one.close();
+    await two.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

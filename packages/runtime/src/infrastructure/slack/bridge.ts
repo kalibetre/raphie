@@ -21,9 +21,22 @@ export type SlackIdentity = {
   connectionId: string;
   teamName: string;
   botUserId: string;
+  /** The Slack app the bot belongs to, when Slack reports it. */
+  appId?: string;
 };
 
-/** Discover the workspace and bot user behind a bot token. */
+const APP_ID = /^A[A-Z0-9]{2,32}$/;
+
+/**
+ * The Slack app an app-level token belongs to. Slack writes it into the
+ * token itself: `xapp-<version>-<app ID>-<number>-<secret>`.
+ */
+export function slackAppId(appToken: string) {
+  const id = /^xapp-\d+-(A[A-Z0-9]{2,32})-/.exec(appToken)?.[1];
+  return id && APP_ID.test(id) ? id : undefined;
+}
+
+/** Discover the workspace, bot user and Slack app behind a bot token. */
 export async function resolveSlackIdentity(
   botToken: string,
   lookup: FetchRequest = fetch,
@@ -39,6 +52,8 @@ export async function resolveSlackIdentity(
     team_id?: unknown;
     team?: unknown;
     user_id?: unknown;
+    bot_id?: unknown;
+    app_id?: unknown;
   };
   if (
     !result.ok ||
@@ -48,10 +63,31 @@ export async function resolveSlackIdentity(
     !/^[UW][A-Z0-9]{2,32}$/.test(result.user_id)
   )
     throw new Error("Invalid Slack identity.");
+  let appId =
+    typeof result.app_id === "string" && APP_ID.test(result.app_id)
+      ? result.app_id
+      : undefined;
+  // auth.test may leave the app out; the bot's own record names it.
+  if (!appId && typeof result.bot_id === "string")
+    appId = await lookup(
+      `https://slack.com/api/bots.info?bot=${encodeURIComponent(result.bot_id)}`,
+      {
+        headers: { Authorization: `Bearer ${botToken}` },
+        signal: AbortSignal.timeout(15_000),
+      },
+    )
+      .then((reply) => reply.json() as Promise<{ bot?: { app_id?: unknown } }>)
+      .then(({ bot }) =>
+        typeof bot?.app_id === "string" && APP_ID.test(bot.app_id)
+          ? bot.app_id
+          : undefined,
+      )
+      .catch(() => undefined);
   return {
     connectionId: `slack:${result.team_id}:${result.user_id}`,
     teamName: typeof result.team === "string" ? result.team : "",
     botUserId: result.user_id,
+    ...(appId ? { appId } : {}),
   };
 }
 
@@ -74,6 +110,10 @@ export type SlackBridgeConfig = {
   botUserId: string;
   allowedUserIds: string[];
   channelId?: string;
+  /** Threads the bot followed before: it follows them again on connecting. */
+  followed?: string[];
+  /** Called when the bot starts following a thread, to keep it across restarts. */
+  onFollow?: (threadId: string) => void;
   /** Tests point the Web API and Socket Mode handshake at a fixture. */
   apiUrl?: string;
 };
@@ -96,10 +136,11 @@ export function createSlackBridge(
     ...(config.apiUrl ? { apiUrl: config.apiUrl } : {}),
     logger,
   });
+  const state = createMemoryState();
   const chat = new Chat({
     userName: "raphie",
     adapters: { slack: adapter },
-    state: createMemoryState(),
+    state,
     logger,
     concurrency: "concurrent",
   });
@@ -210,7 +251,10 @@ export function createSlackBridge(
       );
       // Later replies in a channel thread reach the bot without another @mention.
       if (message.isMention && !adapter.isDM(thread.id))
-        await thread.subscribe().catch(() => {});
+        await thread
+          .subscribe()
+          .then(() => config.onFollow?.(thread.id))
+          .catch(() => {});
     } catch (error) {
       const text =
         error instanceof InputError
@@ -290,7 +334,13 @@ export function createSlackBridge(
    * a long time, so callers never block startup on this.
    */
   function connect() {
-    const opening = chat.initialize();
+    // Follow the remembered threads before any event can arrive.
+    const opening = state
+      .connect()
+      .then(() =>
+        Promise.all((config.followed ?? []).map((id) => state.subscribe(id))),
+      )
+      .then(() => chat.initialize());
     // A connection that opens after close is shut down again.
     void opening.then(
       () => (closed ? adapter.disconnect() : undefined),
